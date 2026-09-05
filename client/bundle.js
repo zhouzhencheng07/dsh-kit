@@ -1357,11 +1357,15 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-jobs-count{font-weight:400;color:var(--dsw-alias-label-tertiary);font-size:11px}
 .dshk-jobs-close{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:14px;line-height:1;width:22px;height:22px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
 .dshk-jobs-close:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-/* 右坞常置（2026-09-06）：坞头「+」打开标签菜单（空态选择器同清单）；
-   文件预览是被动标签，不设入口 */
-.dshk-jobs-head{position:relative}
+/* 右坞常置（2026-09-06）：坞头左组=标签条+紧邻的「+」（用户定稿：+ 显示在标签
+   旁边）；菜单锚在 + 的定位包裹层下缘、右对齐（往左展开不出屏）。空态选择器
+   卡片与 + 菜单同一份 openable 清单；文件预览是被动标签，不设入口 */
+.dshk-jobs-headleft{display:flex;align-items:center;gap:2px;min-width:0;flex:1 1 auto}
+.dshk-dock-addwrap{position:relative;display:inline-flex;flex:none}
+.dshk-dock-add{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:14px;line-height:1;width:22px;height:22px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.dshk-dock-add:hover,.dshk-dock-add[aria-expanded]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-dock-backdrop{position:fixed;inset:0;z-index:5}
-.dshk-dock-menu{position:absolute;top:calc(100% - 4px);right:12px;z-index:6;min-width:170px;padding:4px;display:flex;flex-direction:column;gap:2px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.dshk-dock-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:6;min-width:170px;padding:4px;display:flex;flex-direction:column;gap:2px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
 .dshk-dock-menu-item{appearance:none;border:0;background:none;font:inherit;font-size:12px;color:var(--dsw-alias-label-primary);display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer}
 .dshk-dock-menu-item:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-dock-menu-label{flex:1;text-align:left}
@@ -6933,47 +6937,85 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
           jsxRuntime.jsxs("div", {
             className: "dshk-jobs-head",
             children: [
-              jsxRuntime.jsx("span", {
-                className: "dshk-tabs",
-                children: tabDefs.map((d) =>
-                  jsxRuntime.jsxs("span", {
-                    className: `dshk-tab${d.id === tab ? " dshk-tab-on" : ""}`,
-                    onClick: () => switchTab(d.id),
-                    children: [
-                      jsxRuntime.jsx("span", { className: "dshk-tab-label", children: d.label }),
-                      d.badge > 0
-                        ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(d.badge) })
-                        : null,
-                      jsxRuntime.jsx("button", {
-                        type: "button",
-                        className: "dshk-tab-x",
-                        "aria-label": t("dockClose"),
-                        title: t("dockClose"),
-                        onClick: (e) => {
-                          e.stopPropagation();
-                          closeTab(d.id);
-                        },
-                        children: "✕",
-                      }),
-                    ],
-                  }, d.id),
-                ),
+              // 左组：标签条 + 紧随其后的「+」（用户定稿 2026-09-06：+ 显示在
+              // 标签旁边）。下拉菜单挂在 + 的定位包裹层上——.dshk-tabs 有
+              // overflow:hidden，菜单放里面会被裁掉
+              jsxRuntime.jsxs("span", {
+                className: "dshk-jobs-headleft",
+                children: [
+                  jsxRuntime.jsx("span", {
+                    className: "dshk-tabs",
+                    children: tabDefs.map((d) =>
+                      jsxRuntime.jsxs("span", {
+                        className: `dshk-tab${d.id === tab ? " dshk-tab-on" : ""}`,
+                        onClick: () => switchTab(d.id),
+                        children: [
+                          jsxRuntime.jsx("span", { className: "dshk-tab-label", children: d.label }),
+                          d.badge > 0
+                            ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(d.badge) })
+                            : null,
+                          jsxRuntime.jsx("button", {
+                            type: "button",
+                            className: "dshk-tab-x",
+                            "aria-label": t("dockClose"),
+                            title: t("dockClose"),
+                            onClick: (e) => {
+                              e.stopPropagation();
+                              closeTab(d.id);
+                            },
+                            children: "✕",
+                          }),
+                        ],
+                      }, d.id),
+                    ),
+                  }),
+                  openable.length > 0
+                    ? jsxRuntime.jsxs("span", { className: "dshk-dock-addwrap", children: [
+                        jsxRuntime.jsx("button", {
+                          type: "button",
+                          className: "dshk-dock-add",
+                          "aria-label": t("dockAdd"),
+                          title: t("dockAdd"),
+                          "aria-expanded": menuOpen || undefined,
+                          onClick: () => setMenuOpen(!menuOpen),
+                          children: "+",
+                        }),
+                        menuOpen
+                          ? jsxRuntime.jsx("div", {
+                              className: "dshk-dock-menu",
+                              role: "menu",
+                              children: openable.map((m) =>
+                                jsxRuntime.jsxs(
+                                  "button",
+                                  {
+                                    type: "button",
+                                    className: "dshk-dock-menu-item",
+                                    role: "menuitem",
+                                    onClick: () => {
+                                      setMenuOpen(false);
+                                      openTab(m.id);
+                                    },
+                                    children: [
+                                      jsxRuntime.jsx(m.icon, {}),
+                                      jsxRuntime.jsx("span", { className: "dshk-dock-menu-label", children: m.label }),
+                                      m.badge > 0
+                                        ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(m.badge) })
+                                        : null,
+                                    ],
+                                  },
+                                  m.id,
+                                ),
+                              ),
+                            })
+                          : null,
+                      ] })
+                    : null,
+                ],
               }),
-              // 快捷控制：「+」打开标签（菜单列出 cfg 未关的入口类型）+ 全部关闭 +
-              // 暂时收起（存在性保留，右缘竖条恢复）
+              // 右组：全部关闭 + 暂时收起（存在性保留，右缘竖条恢复）
               jsxRuntime.jsxs("span", {
                 className: "dshk-jobs-headside",
                 children: [
-                  openable.length > 0
-                    ? jsxRuntime.jsx("button", {
-                        type: "button",
-                        className: "dshk-jobs-close",
-                        "aria-label": t("dockAdd"),
-                        title: t("dockAdd"),
-                        onClick: () => setMenuOpen(!menuOpen),
-                        children: "+",
-                      })
-                    : null,
                   jsxRuntime.jsx("button", {
                     type: "button",
                     className: "dshk-jobs-close",
@@ -7002,37 +7044,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
                 ],
               }),
               menuOpen
-                ? jsxRuntime.jsxs(jsxRuntime.Fragment, {
-                    children: [
-                      jsxRuntime.jsx("div", { className: "dshk-dock-backdrop", onClick: () => setMenuOpen(false) }),
-                      jsxRuntime.jsx("div", {
-                        className: "dshk-dock-menu",
-                        role: "menu",
-                        children: openable.map((m) =>
-                          jsxRuntime.jsxs(
-                            "button",
-                            {
-                              type: "button",
-                              className: "dshk-dock-menu-item",
-                              role: "menuitem",
-                              onClick: () => {
-                                setMenuOpen(false);
-                                openTab(m.id);
-                              },
-                              children: [
-                                jsxRuntime.jsx(m.icon, {}),
-                                jsxRuntime.jsx("span", { className: "dshk-dock-menu-label", children: m.label }),
-                                m.badge > 0
-                                  ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(m.badge) })
-                                  : null,
-                              ],
-                            },
-                            m.id,
-                          ),
-                        ),
-                      }),
-                    ],
-                  })
+                ? jsxRuntime.jsx("div", { className: "dshk-dock-backdrop", onClick: () => setMenuOpen(false) })
                 : null,
             ],
           }),
