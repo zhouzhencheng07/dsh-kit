@@ -2706,12 +2706,10 @@ export async function apply(ctx) {
                     if (root === null)
                         return;
                     void schedReadBody(req).then((body) => {
-                        try {
-                            vaultJson(res, 200, action(body, root) ?? { ok: true });
-                        }
-                        catch (error) {
-                            vaultJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
-                        }
+                        void Promise.resolve()
+                            .then(() => action(body, root))
+                            .then((result) => vaultJson(res, 200, result ?? { ok: true }))
+                            .catch((error) => vaultJson(res, 400, { error: error instanceof Error ? error.message : String(error) }));
                     });
                 });
             };
@@ -2761,6 +2759,82 @@ export async function apply(ctx) {
                     return { modified: true, mtimeMs: stat.mtimeMs };
                 fs.writeFileSync(resolved, content, 'utf8');
                 return { ok: true, mtimeMs: fs.statSync(resolved).mtimeMs };
+            });
+            // 删除（含孤儿级联，客户端算清单）：每页移入回收站（失败退回直接删除）；
+            // 若 vault 是 git 仓库，删除完成后 add+commit 单提交（用户定稿：一个提交
+            // 即可整体撤回）。git 不可用（未装/未配置 user）不阻断删除本身。
+            vaultPost('/dsh-kit/vault/delete', async (body, root) => {
+                const paths = Array.isArray(body.paths) ? body.paths.map((p) => String(p)) : [];
+                if (paths.length === 0)
+                    throw new Error('缺少 paths');
+                const resolvedSet = new Set();
+                for (const rawPath of paths) {
+                    const resolved = path.resolve(rawPath);
+                    const rel = path.relative(root, resolved);
+                    if (rel.startsWith('..') || path.isAbsolute(rel) || rel === '')
+                        throw new Error(`页面不在 vault 内：${rawPath}`);
+                    if (!/\.md$/i.test(resolved))
+                        throw new Error(`只允许删 md 文件：${resolved}`);
+                    resolvedSet.add(resolved);
+                }
+                let deleted = 0;
+                for (const resolved of resolvedSet) {
+                    try {
+                        fs.accessSync(resolved);
+                    }
+                    catch {
+                        continue;
+                    }
+                    const recycled = await recycleDelete(resolved, false);
+                    if (recycled === false) {
+                        try {
+                            fs.rmSync(resolved);
+                        }
+                        catch { }
+                    }
+                    deleted += 1;
+                }
+                let committed = false;
+                try {
+                    fs.accessSync(path.join(root, '.git'));
+                }
+                catch {
+                    return { deleted, committed };
+                }
+                const runGitVault = (args) => new Promise((resolve) => {
+                    const child = spawn('git', ['-C', root, ...args], { windowsHide: true });
+                    let settled = false;
+                    const finish = (ok) => {
+                        if (!settled) {
+                            settled = true;
+                            resolve(ok);
+                        }
+                    };
+                    const timer = setTimeout(() => {
+                        try {
+                            child.kill();
+                        }
+                        catch { }
+                        finish(false);
+                    }, 15000);
+                    child.on('exit', (code) => {
+                        clearTimeout(timer);
+                        finish(code === 0);
+                    });
+                    child.on('error', () => {
+                        clearTimeout(timer);
+                        finish(false);
+                    });
+                });
+                const addOk = await runGitVault(['add', '-A']);
+                if (addOk) {
+                    committed = await runGitVault([
+                        '-c', 'user.name=dsh-kit',
+                        '-c', 'user.email=dsh-kit@local',
+                        'commit', '-m', `dsh-kit: 删除 ${deleted} 页（含孤儿级联）`,
+                    ]);
+                }
+                return { deleted, committed };
             });
             return () => {
                 disposeVendor();

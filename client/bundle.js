@@ -774,6 +774,21 @@ window.__ModuleLoader__.load({
       vaultEmptySpace: "此库还没有页面",
       vaultPickPage: "从左侧选择一页开始阅读",
       vaultPageGone: "页面不存在（可能已被移动或删除）",
+      vaultDelBtn: "删除",
+      vaultDelConfirm: "确认删除以下页面？（移入回收站；vault 为 git 仓库时自动生成一个提交，可整体撤回）",
+      vaultDeleted: "已删除",
+      vmenuH2: "二级标题",
+      vmenuUl: "无序列表",
+      vmenuTodo: "待办",
+      vmenuQuote: "引用",
+      vmenuFold: "折叠块",
+      vmenuCode: "代码块",
+      vmenuTable: "表格",
+      vmenuHr: "分割线",
+      vtbBold: "加粗",
+      vtbItalic: "斜体",
+      vtbCode: "行内代码",
+      vtbLink: "链接",
       cfgTerminalShortcut: "终端快捷键",
       cfgFileTreeShortcut: "文件树快捷键",
       cfgSidebarShortcut: "侧边栏展开/收起快捷键",
@@ -1133,6 +1148,21 @@ window.__ModuleLoader__.load({
       vaultEmptySpace: "No pages in this space yet",
       vaultPickPage: "Pick a page on the left to start reading",
       vaultPageGone: "Page not found (it may have been moved or deleted)",
+      vaultDelBtn: "Delete",
+      vaultDelConfirm: "Delete these pages? (Moved to recycle bin; if the vault is a git repo one commit is created so this is fully revertible)",
+      vaultDeleted: "Deleted",
+      vmenuH2: "Heading",
+      vmenuUl: "Bullet list",
+      vmenuTodo: "To-do",
+      vmenuQuote: "Quote",
+      vmenuFold: "Fold block",
+      vmenuCode: "Code block",
+      vmenuTable: "Table",
+      vmenuHr: "Divider",
+      vtbBold: "Bold",
+      vtbItalic: "Italic",
+      vtbCode: "Inline code",
+      vtbLink: "Link",
     };
     /** 语言判定：只认 DSH 的 locale 权威 —— <html lang> 由 dsh-client-locale 的
      *  syncDocumentLanguage 在启动与每次切换时同步（设置→通用→语言），页面内
@@ -1486,6 +1516,18 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-vault-wl{color:var(--dsw-alias-brand-primary);text-decoration:underline dotted}
 .dshk-vault-wl-broken{color:var(--dsw-alias-label-tertiary);text-decoration:underline wavy}
 .dshk-vault-toast{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:var(--dsw-alias-bg-layer-3);border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary);font-size:12px;padding:6px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+/* 编辑增强（wangshu 特性筛选）：格式工具栏 + 斜杠菜单 + callout 折叠卡 */
+.dshk-vault-tbsep{flex:none;width:1px;height:16px;background:var(--dsw-alias-border-l2);margin:0 2px}
+.dshk-vault-tbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;min-width:24px;height:22px;padding:0 5px;border-radius:6px;cursor:pointer}
+.dshk-vault-tbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-vault-slashmenu{position:fixed;z-index:60;min-width:180px;max-height:220px;overflow:auto;padding:4px;display:flex;flex-direction:column;gap:1px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.dshk-vault-slashitem{padding:7px 10px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer}
+.dshk-vault-slashitem:hover,.dshk-vault-slashitem.is-active{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-vault-callout{margin:.6em 0;border:1px solid var(--dsw-alias-border-l2);border-left:3px solid var(--dsw-alias-brand-primary);border-radius:8px;background:var(--dsw-alias-bg-layer-3);padding:6px 10px;font-size:12.5px}
+.dshk-vault-callout summary{cursor:pointer;font-weight:600;color:var(--dsw-alias-label-primary)}
+.dshk-vault-callout.is-warn,.dshk-vault-callout.is-warning{border-left-color:var(--dsw-alias-warning,#e8a13c)}
+.dshk-vault-callout.is-tip{border-left-color:#37b24d}
+.dshk-vault-callout.is-danger{border-left-color:var(--dsw-alias-danger,#cd3131)}
 /* 日程模块：中心区第三 tab——周时间网格 + 待办/统计侧栏；计时芯片挂输入区 dock */
 .dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
 .dshk-sched-head{flex:none;display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--dsw-alias-border-l2)}
@@ -6944,17 +6986,67 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
     // 前进后退历史，页尾反链，碎链点击即建页）。编辑 = CodeMirror 源码编辑 +
     // vault 写端点 mtime CAS（WYSIWYG 明确不做）。搜索走宿主全文端点。
 
-    /** [[目标]] / [[目标|别名]] → [别名](#vault:目标)，先于 marked 解析；目标经
-     *  encodeURIComponent 进片段锚点——DOMPurify 默认放行片段链接，不需加白 */
+    /** [[目标]] / [[目标#锚]] / [[目标|别名]] → [别名](#vault:目标[#h:锚])，先于
+     *  marked 解析；目标/锚 encodeURIComponent 进片段锚点——DOMPurify 默认放行
+     *  片段链接，不需加白。空目标（[[#锚]]）= 同页定位 */
     function vaultTransformWikiLinks(md) {
       return String(md ?? "").replace(/\[\[([^\[\]]+)\]\]/g, (whole, inner) => {
         const text = String(inner);
         const bar = text.indexOf("|");
-        const target = (bar >= 0 ? text.slice(0, bar) : text).split("#")[0].trim();
+        const head = bar >= 0 ? text.slice(0, bar) : text;
         const alias = bar >= 0 ? text.slice(bar + 1).trim() : "";
-        if (target === "") return whole;
-        return `[${alias || target}](#vault:${encodeURIComponent(target)})`;
+        const hashAt = head.indexOf("#");
+        const target = (hashAt >= 0 ? head.slice(0, hashAt) : head).trim();
+        const anchor = hashAt >= 0 ? head.slice(hashAt + 1).trim() : "";
+        if (target === "" && anchor === "") return whole;
+        let href = `#vault:${encodeURIComponent(target)}`;
+        if (anchor !== "") href += `#${encodeURIComponent(anchor)}`;
+        return `[${alias || anchor || target}](${href})`;
       });
+    }
+
+    /** 标题锚 slug：压空白为 -（中英混排原样保留，仅保证 id/锚一致） */
+    function vaultHeadingSlug(text) {
+      return String(text ?? "").trim().replace(/\s+/g, "-");
+    }
+
+    /** 孤儿级联（用户定稿：删除时同步删掉因此变孤儿的页，git 单提交可整体撤回）。
+     *  返回应删页面清单：目标自身 + 「全部反链都在删除集内」的递归闭包；删除前
+     *  就已零入链的页不动（那是既有状态，不连坐）；根 AGENTS.md 约定文件受保护 */
+    function vaultCascadeDelete(pages, targetPath) {
+      const current = pages.find((p) => p.path === targetPath);
+      if (!current) return [];
+      const linkers = new Map(); // 页面 path → 引用它的页面 path 集合
+      for (const p of pages) {
+        for (const l of p.links) {
+          const hit = resolveVaultLink(pages, l);
+          if (!hit) continue;
+          if (!linkers.has(hit.path)) linkers.set(hit.path, new Set());
+          linkers.get(hit.path).add(p.path);
+        }
+      }
+      const doomed = new Set([targetPath]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const p of pages) {
+          if (doomed.has(p.path)) continue;
+          const bl = linkers.get(p.path);
+          if (!bl || bl.size === 0) continue;
+          let allDoomed = true;
+          for (const src of bl) {
+            if (!doomed.has(src)) {
+              allDoomed = false;
+              break;
+            }
+          }
+          if (allDoomed) {
+            doomed.add(p.path);
+            changed = true;
+          }
+        }
+      }
+      return pages.filter((p) => doomed.has(p.path) && p.rel.toUpperCase() !== "AGENTS");
     }
 
     /** wikilink 目标 → 页面：rel 全等 > rel 尾段 > 标题 > 文件名（均不分大小写） */
@@ -6997,6 +7089,18 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       });
     }
 
+    /** 斜杠菜单项：label 走 i18n，match 是中英过滤词；insert 为 md 模板 */
+    const VAULT_MENU_ITEMS = [
+      { key: "h2", labelKey: "vmenuH2", match: "h2 heading 标题 标题", insert: "## " },
+      { key: "ul", labelKey: "vmenuUl", match: "ul bullet list 列表 列表 无序", insert: "- " },
+      { key: "todo", labelKey: "vmenuTodo", match: "todo task 待办 任务", insert: "- [ ] " },
+      { key: "quote", labelKey: "vmenuQuote", match: "quote blockquote 引用", insert: "> " },
+      { key: "fold", labelKey: "vmenuFold", match: "fold collapsible 折叠 折叠块", insert: "> [!fold] 标题\n>\n> 内容" },
+      { key: "code", labelKey: "vmenuCode", match: "code block fence 代码块", insert: "```\n\n```" },
+      { key: "table", labelKey: "vmenuTable", match: "table 表格", insert: "| 列 | 列 |\n| --- | --- |\n|  |  |" },
+      { key: "hr", labelKey: "vmenuHr", match: "hr divider 分割线", insert: "\n---\n" },
+    ];
+
     function VaultView() {
       const cfg = cfgFromSnapshot(getCfgSnapshot());
       if (cfg.vaultEnabled === false || cfg.vaultRoot === "") {
@@ -7028,6 +7132,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       const [searchRes, setSearchRes] = react.useState(null);
       const [searching, setSearching] = react.useState(false);
       const [toast, setToast] = react.useState("");
+      // 斜杠菜单：{query, x, y} | null（行首 / 触发，键入过滤，Esc/失焦关）
+      const [menu, setMenu] = react.useState(null);
+      const [menuIdx, setMenuIdx] = react.useState(0);
+      // 跳页后待滚动的标题锚（双链 [[页#标题]] 落点）
+      const [pendingAnchor, setPendingAnchor] = react.useState("");
       const readerRef = react.useRef(null);
       const editHostRef = react.useRef(null);
       const cmRef = react.useRef(null);
@@ -7069,7 +7178,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
         void fetchDir(treeRoot);
       }, [treeRoot, fetchDir]);
 
-      const openPath = react.useCallback((path) => {
+      const openPath = react.useCallback((path, anchor) => {
+        setPendingAnchor(typeof anchor === "string" ? anchor : "");
         setHist((h) => {
           const stack = h.stack.slice(0, h.idx + 1);
           if (stack[stack.length - 1] === path) return { stack, idx: stack.length - 1 };
@@ -7121,48 +7231,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
         };
       }, [page]);
 
-      // 渲染后处理：#vault: 锚点 → 双链点击（可解析跳页 / 碎链建页）；外链新窗
-      react.useEffect(() => {
-        const host = readerRef.current;
-        if (!host || html === null) return undefined;
-        const indexNow = index;
-        for (const a of host.querySelectorAll("a")) {
-          const href = a.getAttribute("href") ?? "";
-          if (href.startsWith("#vault:")) {
-            const target = decodeURIComponent(href.slice(7));
-            const resolved = indexNow ? resolveVaultLink(indexNow.pages, target) : null;
-            if (resolved) {
-              a.classList.add("dshk-vault-wl");
-              a.title = resolved.rel;
-              a.addEventListener("click", (e) => {
-                e.preventDefault();
-                openPath(resolved.path);
-              });
-            } else {
-              a.classList.add("dshk-vault-wl-broken");
-              a.title = `${t("vaultBroken")}：${target}`;
-              a.addEventListener("click", (e) => {
-                e.preventDefault();
-                void createInSpace(target);
-              });
-            }
-          } else if (/^https?:/i.test(href)) {
-            a.target = "_blank";
-            a.rel = "noreferrer";
-          } else if (href !== "" && !href.startsWith("#")) {
-            a.addEventListener("click", (e) => {
-              e.preventDefault();
-              // 相对链接按当前页目录解析（vault 内 md 跳页，外部路径放行系统打开）
-              const dir = current.split(/[\\/]/).slice(0, -1).join("\\");
-              const joined = `${dir}\\${href.split(/[?#]/, 1)[0]}`;
-              if (/\.md$/i.test(joined)) openPath(joined);
-              else window.open(`http://${location.host}/dsh-kit/read?path=${encodeURIComponent(joined)}`);
-            });
-          }
-        }
-        return undefined;
-      }, [html, index, current, openPath]);
-
       const createInSpace = react.useCallback(
         async (title) => {
           const trimmed = String(title ?? "").trim();
@@ -7184,19 +7252,260 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
         [space, loadIndex, openPath],
       );
 
+      // 渲染后处理：标题锚 id → callout 折叠块 → 双链/碎链/同页锚点击 →
+      // attachments 图片解析 → 待滚锚点。onclick 用属性赋值保证幂等（同 html
+      // 复渲染时 effect 重跑不叠加监听器）
+      react.useEffect(() => {
+        const host = readerRef.current;
+        if (!host || html === null) return undefined;
+        const indexNow = index;
+        const scrollAnchor = (anchorRaw) => {
+          const id = "vh-" + encodeURIComponent(vaultHeadingSlug(anchorRaw));
+          const el = host.querySelector(`#${CSS.escape(id)}`);
+          if (el) el.scrollIntoView({ block: "start" });
+        };
+        // 标题锚 id（[[页#锚]] / [[#锚]] 的落点；重复标题追加序号）
+        const seenSlugs = new Set();
+        for (const h of host.querySelectorAll("h1, h2, h3, h4")) {
+          const slug = "vh-" + encodeURIComponent(vaultHeadingSlug(h.textContent));
+          let id = slug;
+          let n = 2;
+          while (seenSlugs.has(id)) {
+            id = `${slug}-${n}`;
+            n += 1;
+          }
+          seenSlugs.add(id);
+          h.id = id;
+        }
+        // callout：`> [!kind] 标题` 引用块 → details 卡片（fold 默认收起，其余展开）。
+        // breaks:true 下标记行与内容可能同段（<br> 分隔）——按 <br> 切首段，
+        // 标记行进 summary，其余留在正文，绝不丢内容
+        for (const bq of Array.from(host.querySelectorAll("blockquote"))) {
+          const firstP = bq.querySelector("p");
+          if (!firstP) continue;
+          const segs = firstP.innerHTML.split(/<br\s*\/?>/i);
+          const marker = /^\s*\[!(\w+)\]\s*((?:[\s\S](?!<br))*)/.exec(segs[0] ?? "");
+          if (!marker) continue;
+          const kind = (marker[1] ?? "").toLowerCase();
+          const tmp = document.createElement("div");
+          tmp.innerHTML = marker[2] ?? "";
+          const title = (tmp.textContent || kind).trim();
+          const details = document.createElement("details");
+          details.className = `dshk-vault-callout is-${kind}`;
+          if (kind !== "fold") details.open = true;
+          const summary = document.createElement("summary");
+          summary.textContent = title;
+          details.appendChild(summary);
+          // 首段整行是标题行（[!kind] 标题），其余段才是正文
+          const restHtml = segs
+            .slice(1)
+            .filter((s) => s.replace(/<[^>]*>/g, "").trim() !== "")
+            .join("<br>");
+          firstP.remove();
+          if (restHtml !== "") {
+            const bodyP = document.createElement("p");
+            bodyP.innerHTML = restHtml;
+            details.appendChild(bodyP);
+          }
+          while (bq.firstChild) details.appendChild(bq.firstChild);
+          bq.replaceWith(details);
+        }
+        // 图片：attachments/ 前缀从 vault 根解析，其余按当前页目录；都走 /raw
+        const pageDir = current ? current.split(/[\\/]/).slice(0, -1).join("/") : "";
+        for (const img of host.querySelectorAll("img")) {
+          const src = img.getAttribute("src") ?? "";
+          if (src === "" || /^(https?:|data:)/i.test(src)) continue;
+          const abs = /^attachments\//i.test(src) ? `${root}/${src}` : `${pageDir}/${src}`;
+          img.src = `/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
+        }
+        for (const a of host.querySelectorAll("a")) {
+          const href = a.getAttribute("href") ?? "";
+          if (href.startsWith("#vault:")) {
+            const rawText = decodeURIComponent(href.slice(7));
+            const hash = rawText.indexOf("#");
+            const target = (hash >= 0 ? rawText.slice(0, hash) : rawText).trim();
+            const anchor = hash >= 0 ? rawText.slice(hash + 1) : "";
+            const resolved = target === "" ? null : indexNow ? resolveVaultLink(indexNow.pages, target) : null;
+            a.classList.add("dshk-vault-wl");
+            a.onclick = (e) => {
+              e.preventDefault();
+              if (target !== "" && !resolved) {
+                void createInSpace(target);
+                return;
+              }
+              if (target === "") {
+                if (anchor !== "") scrollAnchor(anchor);
+                return;
+              }
+              openPath(resolved.path, anchor);
+            };
+            if (resolved) a.title = resolved.rel;
+            else {
+              a.classList.add("dshk-vault-wl-broken");
+              a.title = `${t("vaultBroken")}：${target}`;
+            }
+          } else if (/^https?:/i.test(href)) {
+            a.target = "_blank";
+            a.rel = "noreferrer";
+          } else if (href !== "" && !href.startsWith("#")) {
+            a.onclick = (e) => {
+              e.preventDefault();
+              // 相对链接按当前页目录解析（vault 内 md 跳页，外部路径放行系统打开）
+              const dir = current.split(/[\\/]/).slice(0, -1).join("\\");
+              const joined = `${dir}\\${href.split(/[?#]/, 1)[0]}`;
+              if (/\.md$/i.test(joined)) openPath(joined);
+              else window.open(`http://${location.host}/dsh-kit/read?path=${encodeURIComponent(joined)}`);
+            };
+          }
+        }
+        if (pendingAnchor !== "") {
+          scrollAnchor(pendingAnchor);
+          setPendingAnchor("");
+        }
+        return undefined;
+      }, [html, index, current, openPath, pendingAnchor, root, createInSpace]);
+
       const enterEdit = () => {
         setDraft(page?.content ?? "");
         setEditing(true);
         void ensureCmLib().then(() => setCmReady(true));
       };
-      // 编辑器挂载（与预览编辑同款：实例写 ref，文档变更回写 draft）
+      // ── 编辑增强（wangshu 特性筛选定稿：工具栏 + 斜杠菜单 + 图片粘贴 +
+      // 折叠块/块级链接；泡泡菜单与工具栏重复不做，WYSIWYG 不做）──
+      const cmView = () => cmRef.current?.view ?? null;
+      /** 选中文字两侧包一层语法（加粗/斜体/行内代码/链接） */
+      const cmWrap = (before, after) => {
+        const v = cmView();
+        if (!v) return;
+        const sel = v.state.selection.main;
+        const text = v.state.doc.sliceString(sel.from, sel.to);
+        v.dispatch({
+          changes: { from: sel.from, to: sel.to, insert: before + text + after },
+          selection: { anchor: sel.from + before.length, head: sel.from + before.length + text.length },
+        });
+        v.focus();
+      };
+      /** 选中的行统一换行前缀（标题/列表/待办/引用互切，原有前缀先剥掉） */
+      const cmLinePrefix = (prefix) => {
+        const v = cmView();
+        if (!v) return;
+        const sel = v.state.selection.main;
+        const from = v.state.doc.lineAt(sel.from).number;
+        const to = v.state.doc.lineAt(sel.to).number;
+        const changes = [];
+        for (let n = from; n <= to; n++) {
+          const line = v.state.doc.line(n);
+          const stripped = line.text.replace(/^(#{1,6}\s+|-\s\[[ x]\]\s+|-\s+|>\s?)/, "");
+          changes.push({ from: line.from, to: line.to, insert: prefix + stripped });
+        }
+        v.dispatch({ changes });
+        v.focus();
+      };
+      const cmInsert = (text) => {
+        const v = cmView();
+        if (!v) return;
+        const pos = v.state.selection.main.head;
+        v.dispatch({ changes: { from: pos, insert: text }, selection: { anchor: pos + text.length } });
+        v.focus();
+      };
+      // 斜杠菜单：行首 / 触发；键入过滤；Enter 应用激活项，Esc 关，方向键移动。
+      // keydown 用捕获阶段拦 Enter/Esc——CM 已把按键吃进文档，冒泡阶段拦不住。
+      // ref 镜像 state：capture 监听读 ref，直接读 state 会停在旧渲染的闭包里
+      const menuRef = react.useRef(menu);
+      const menuIdxRef = react.useRef(menuIdx);
+      menuRef.current = menu;
+      menuIdxRef.current = menuIdx;
+      const menuFiltered = () => {
+        const q = (menuRef.current?.query ?? "").toLowerCase();
+        return VAULT_MENU_ITEMS.filter((item) => q === "" || item.match.includes(q));
+      };
+      const applyMenuTemplate = (item) => {
+        const v = cmView();
+        if (!v) return;
+        const pos = v.state.selection.main.head;
+        const line = v.state.doc.lineAt(pos);
+        const before = line.text.slice(0, pos - line.from);
+        const slash = before.lastIndexOf("/");
+        setMenu(null);
+        v.focus();
+        if (slash < 0) return;
+        v.dispatch({
+          changes: { from: line.from + slash, to: pos, insert: item.insert },
+          selection: { anchor: line.from + slash + item.insert.length },
+        });
+      };
+      // 编辑器挂载（与预览编辑同款：实例写 ref，文档变更回写 draft + 刷新斜杠
+      // 菜单 query；capture keydown 管菜单键位与图片粘贴）
       react.useEffect(() => {
         const host = editHostRef.current;
         if (!cmReady || !editing || !host) return undefined;
         const h = window.CM6.create(host, { doc: draft, readOnly: false, language: "md" });
         cmRef.current = h;
-        h.onDocChanged((text) => setDraft(text));
+        // 文档变化 → 回写 draft + 斜杠菜单同步：光标行前缀 /xxx 即开/刷新菜单，
+        // 前缀破坏即关。放 docChanged 而非 keydown 是为了覆盖全部输入路径
+        //（真实键入 / execCommand / IME 组合输入）。
+        const syncSlashMenu = (view) => {
+          const pos = view.state.selection.main.head;
+          const line = view.state.doc.lineAt(pos);
+          const before = line.text.slice(0, pos - line.from);
+          const m = /^\/(\S*)$/.exec(before);
+          if (m) {
+            const coords = view.coordsAtPos(pos);
+            setMenu({ query: m[1] ?? "", x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4 });
+            setMenuIdx((i) => i);
+          } else if (menuRef.current !== null) {
+            setMenu(null);
+          }
+        };
+        h.onDocChanged((text) => {
+          setDraft(text);
+          syncSlashMenu(h.view);
+        });
+        const onKeyDown = (e) => {
+          if (menuRef.current !== null) {
+            const filtered = menuFiltered();
+            if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenu(null);
+              return;
+            }
+            if (e.key === "Enter" && filtered.length > 0) {
+              e.preventDefault();
+              e.stopPropagation();
+              applyMenuTemplate(filtered[Math.min(menuIdxRef.current, filtered.length - 1)]);
+              return;
+            }
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              e.stopPropagation();
+              menuIdxRef.current = e.key === "ArrowDown"
+                ? Math.min(menuIdxRef.current + 1, filtered.length - 1)
+                : Math.max(0, menuIdxRef.current - 1);
+              setMenuIdx(menuIdxRef.current);
+              return;
+            }
+          }
+          if (e.key === "/") {
+            // CM 先处理按键，稍后读光标行前缀判断是否行首 /
+            setTimeout(() => {
+              const view = cmRef.current?.view;
+              if (!view) return;
+              const pos = view.state.selection.main.head;
+              const line = view.state.doc.lineAt(pos);
+              const before = line.text.slice(0, pos - line.from);
+              if (/^\/\S*$/.test(before)) {
+                const coords = view.coordsAtPos(pos);
+                setMenu({ query: before.slice(1), x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4 });
+                menuIdxRef.current = 0;
+                setMenuIdx(0);
+              }
+            }, 20);
+          }
+        };
+        host.addEventListener("keydown", onKeyDown, true);
         return () => {
+          host.removeEventListener("keydown", onKeyDown, true);
           h.destroy();
           cmRef.current = null;
         };
@@ -7221,6 +7530,51 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
           await loadIndex();
         } catch (error) {
           setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
+        }
+      };
+      const deleteCurrent = async () => {
+        if (current === null || !index) return;
+        const doomed = vaultCascadeDelete(index.pages, current);
+        const list = doomed.map((p) => `· ${p.title}`).join("\n");
+        if (!window.confirm(`${t("vaultDelConfirm")}\n${list}`)) return;
+        try {
+          const body = await schedFetch("/dsh-kit/vault/delete", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ paths: doomed.map((p) => p.path) }),
+          });
+          setToast(`${t("vaultDeleted")} ×${String(body.deleted ?? "")}${body.committed === true ? " · git" : ""}`);
+          const gone = new Set(doomed.map((p) => p.path));
+          setHist((h) => {
+            const stack = h.stack.filter((p) => !gone.has(p));
+            return { stack, idx: Math.max(-1, Math.min(h.idx, stack.length - 1)) };
+          });
+          await loadIndex();
+        } catch (error) {
+          setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
+        }
+      };
+      /** 编辑态粘贴截图：图片文件上传到 vault attachments/，光标处插入 md 链接 */
+      const onEditPaste = (e) => {
+        const files = Array.from(e.clipboardData?.files ?? []).filter((f) => /^image\//i.test(f.type));
+        if (files.length === 0) return;
+        e.preventDefault();
+        for (const f of files) {
+          const fd = new FormData();
+          fd.append("file", f, f.name || "paste.png");
+          fetch(`/dsh-kit/upload?dir=${encodeURIComponent(`${root}/attachments`)}`, { method: "POST", body: fd })
+            .then((r) => r.json())
+            .then((body) => {
+              const name = body?.saved?.[0]?.name;
+              if (!name) throw new Error(body?.warning || "upload failed");
+              const h = cmRef.current;
+              if (h?.view) {
+                const pos = h.view.state.selection.main.head;
+                const insert = `![](attachments/${name})`;
+                h.view.dispatch({ changes: { from: pos, insert }, selection: { anchor: pos + insert.length } });
+              }
+            })
+            .catch(() => setToast(t("vaultSaveFail")));
         }
       };
       const runSearch = async () => {
@@ -7363,15 +7717,58 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
                 : page?.gone === true
                   ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPageGone") })
                   : editing
-                    ? jsxRuntime.jsxs("div", { className: "dshk-vault-editwrap", children: [
+                    ? jsxRuntime.jsxs("div", { className: "dshk-vault-editwrap", onPaste: onEditPaste, children: [
                         jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", disabled: false, onClick: () => void saveEdit(), children: t("vaultSave") }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void saveEdit(), children: t("vaultSave") }),
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setEditing(false), children: t("vaultCancel") }),
+                          jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbBold"), onClick: () => cmWrap("**", "**"), children: "B" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbItalic"), onClick: () => cmWrap("*", "*"), children: "I" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbCode"), onClick: () => cmWrap("`", "`"), children: "‹›" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuH2"), onClick: () => cmLinePrefix("## "), children: "H2" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuUl"), onClick: () => cmLinePrefix("- "), children: "•" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuTodo"), onClick: () => cmLinePrefix("- [ ] "), children: "☑" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuQuote"), onClick: () => cmLinePrefix("> "), children: "❝" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbLink"), onClick: () => cmWrap("[", "](https://)"), children: "🔗" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuFold"), onClick: () => cmInsert("> [!fold] 标题\n>\n> 内容"), children: "▸" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuTable"), onClick: () => cmInsert("| 列 | 列 |\n| --- | --- |\n|  |  |"), children: "▦" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuCode"), onClick: () => cmInsert("```\n\n```"), children: "{}" }),
                         ] }),
                         jsxRuntime.jsx("div", { className: "dshk-vault-cmhost dshk-md", ref: editHostRef }),
+                        menu !== null
+                          ? jsxRuntime.jsx(
+                              "div",
+                              {
+                                className: "dshk-vault-slashmenu",
+                                style: { left: menu.x, top: menu.y },
+                                children: (() => {
+                                  const filtered = menuFiltered();
+                                  if (filtered.length === 0) return jsxRuntime.jsx("div", { className: "dshk-vault-slashitem", children: t("vaultSearchEmpty") });
+                                  return filtered.map((item, i) =>
+                                    jsxRuntime.jsx(
+                                      "div",
+                                      {
+                                        className: `dshk-vault-slashitem${i === menuIdx ? " is-active" : ""}`,
+                                        onMouseDown: (e) => {
+                                          e.preventDefault();
+                                          applyMenuTemplate(item);
+                                        },
+                                        children: t(item.labelKey),
+                                      },
+                                      item.key,
+                                    ),
+                                  );
+                                })(),
+                              },
+                              "slashmenu",
+                            )
+                          : null,
                       ] })
                     : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-                        jsxRuntime.jsx("div", { className: "dshk-vault-pagebar", children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: enterEdit, children: t("vaultEdit") }) }),
+                        jsxRuntime.jsxs("div", { className: "dshk-vault-pagebar", children: [
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: enterEdit, children: t("vaultEdit") }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void deleteCurrent(), children: t("vaultDelBtn") }),
+                        ] }),
                         jsxRuntime.jsx("div", { className: "dshk-md", dangerouslySetInnerHTML: { __html: html } }),
                         backlinksOf.length > 0
                           ? jsxRuntime.jsxs("div", { className: "dshk-vault-backlinks", children: [

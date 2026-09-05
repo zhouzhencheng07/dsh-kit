@@ -11,6 +11,14 @@ const RAW_TYPES = new Map([
   ['xlsm', 'application/vnd.ms-excel.sheet.macroEnabled.12'],
   ['xls', 'application/vnd.ms-excel'],
   ['docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  // 图片（vault 笔记粘贴截图/插图走 /dsh-kit/raw 渲染）
+  ['png', 'image/png'],
+  ['jpg', 'image/jpeg'],
+  ['jpeg', 'image/jpeg'],
+  ['webp', 'image/webp'],
+  ['gif', 'image/gif'],
+  ['svg', 'image/svg+xml'],
+  ['bmp', 'image/bmp'],
 ])
 
 /** 取小写扩展名：`a.PDF` → pdf；无点/点文件 → '' */
