@@ -62,7 +62,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes, VaultView, vaultTransformWikiLinks, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug };",
+  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes, VaultView, vaultTransformWikiLinks, vaultTransformMath, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug };",
 );
 const harness = new Function("require", wrapper);
 const comps = harness((name) => {
@@ -72,7 +72,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RightDock", "DockStub", "openDockTab", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes", "VaultView", "vaultTransformWikiLinks", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug"];
+const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RightDock", "DockStub", "openDockTab", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes", "VaultView", "vaultTransformWikiLinks", "vaultTransformMath", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -519,6 +519,15 @@ check("vaultBacklinks：links 解析命中当前页（1 条）", backlinksHit.le
 const anchored = comps.vaultTransformWikiLinks("见 [[页#小节]] 与 [[#本页锚]] 和 [[B|别]]");
 check("wikilink 锚点变换：页#锚与同页锚", anchored.includes("(#vault:%E9%A1%B5#%E5%B0%8F%E8%8A%82)") && anchored.includes("(#vault:#%E6%9C%AC%E9%A1%B5%E9%94%9A)") && anchored.includes("别](#vault:B)"));
 check("vaultHeadingSlug：空白压成 -", comps.vaultHeadingSlug("  Some 标题 two  ") === "Some-标题-two");
+
+// 6.8) 数学预处理：块级 $$..$$ / 行内 $..$ → 占位元素（data-tex 编码），
+// 围栏与行内代码里的 $ 不动，"$5 与 $6" 价签不误配
+const mathOut = comps.vaultTransformMath("前文\n\n$$\na_1 + b^2\n$$\n\n中 $x^2$ 与 $5 美元 和 $6 元\n\n```js\nconst s = `$x$`;\n```\n\n行内码 `$y$` 结尾");
+check("math：块级占位 data-display", mathOut.includes('<div class="dshk-math" data-display="1" data-tex="' + encodeURIComponent("a_1 + b^2") + '"'));
+check("math：行内占位", mathOut.includes(`<span class="dshk-math" data-tex="${encodeURIComponent("x^2")}"></span>`));
+check("math：价签不误配", !mathOut.includes("5 美元 和") || !mathOut.includes("dshk-math\" data-tex=\"" + encodeURIComponent("5 美元 和 ")));
+check("math：围栏内 $ 原样", mathOut.includes("const s = `$x$`;"));
+check("math：行内码 $ 原样", mathOut.includes("`$y$` 结尾"));
 {
   const pages = [
     { path: "D:/v/AGENTS.md", rel: "AGENTS", title: "vault 约定", links: [] },
