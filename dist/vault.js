@@ -21,6 +21,17 @@ export function sanitizePageTitle(raw) {
         .slice(0, 120);
     return cleaned;
 }
+/** 建页相对路径净化：标题允许带 `/` 指子目录（建页时顺带递归建目录）。
+ *  每段各自过 sanitizePageTitle（`..` 会被剥成空段，天然防穿越），空段丢弃，
+ *  最多 8 段防路径爆炸；返回 `a/b/c` 形式，'' 表示无有效段 */
+export function sanitizePageRel(raw) {
+    const segs = String(raw ?? '')
+        .split(/[\\/]+/)
+        .map((seg) => sanitizePageTitle(seg))
+        .filter((seg) => seg !== '')
+        .slice(0, 8);
+    return segs.join('/');
+}
 /** 最小 frontmatter 解析：只认 `---` 包裹块内的 `tags:` 行（内联数组或逗号分隔）。
  *  其余 yaml 一律不解析——解析失败按无 frontmatter，绝不丢弃内容。 */
 export function parseFrontmatterTags(content) {
