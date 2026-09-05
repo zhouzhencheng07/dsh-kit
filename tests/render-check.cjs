@@ -62,7 +62,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserEntry, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes };",
+  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes };",
 );
 const harness = new Function("require", wrapper);
 const comps = harness((name) => {
@@ -72,7 +72,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserEntry", "BrowserPanel", "RightDock", "DockStub", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes"];
+const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RightDock", "DockStub", "openDockTab", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -242,10 +242,12 @@ check("FileTreeEntry 渲染无异常", !!out && typeof out === "object");
 callLog = [];
 out = comps.ScmEntry({});
 check("ScmEntry 渲染无异常", !!out && typeof out === "object");
-// 7.1) 后台任务面板：无 hooks（jobsBySession 未达 → 空列表）与有任务两种
-callLog = [];
-out = comps.JobsEntry({});
-check("JobsEntry 无hooks渲染无异常", !!out && typeof out === "object");
+// 7.1) 后台任务面板：无 hooks（jobsBySession 未达 → 空列表）与有任务两种；
+// 入口已迁右坞（JobsEntry 已删），openDockTab 纯补丁与坞内徽标在这里覆盖
+const otj = comps.openDockTab({ previews: [], jobsOpen: false, browserOpen: false, dockTab: null, dockCollapsed: true }, "jobs");
+check("openDockTab 任务：置存在+激活+展开收起态", otj.jobsOpen === true && otj.dockTab === "jobs" && otj.dockCollapsed === false);
+const otb = comps.openDockTab({ previews: [], jobsOpen: true, browserOpen: false, dockTab: "jobs", dockCollapsed: false }, "browser");
+check("openDockTab 浏览器：纯补丁不触碰任务标签（合并保留）", otb.browserOpen === true && otb.dockTab === "browser" && otb.jobsOpen === undefined);
 callLog = [];
 out = comps.JobsPanel({});
 check("JobsPanel 无hooks渲染无异常(空列表)", !!out && typeof out === "object");
@@ -263,8 +265,15 @@ const jobsHooks = {
     }),
   useWorkspaces: () => undefined,
 };
-out = comps.JobsEntry(jobsHooks);
-check("JobsEntry 带运行中任务渲染无异常", !!out && typeof out === "object");
+comps.setKitUi({ jobsOpen: true, dockTab: "jobs", dockCollapsed: false });
+callLog = [];
+out = comps.RightDock({ props: jobsHooks, cwd: "C:/x" });
+check("RightDock 带运行中任务渲染无异常", !!out && typeof out === "object");
+const jobsTabBadge = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-term-badge" && c[2].children === "2");
+check("RightDock 任务标签带运行中计数徽标(2)", !!jobsTabBadge);
+const dockAddBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["打开标签", "Open a tab"].includes(c[2]["aria-label"]));
+check("RightDock 坞头渲染 + 号打开标签按钮", !!dockAddBtn);
+comps.setKitUi({ jobsOpen: false, dockTab: null });
 callLog = [];
 out = comps.JobsPanel(jobsHooks);
 check("JobsPanel 带运行中任务渲染无异常", !!out && typeof out === "object");
@@ -330,10 +339,8 @@ callLog = [];
 out = comps.PhoneSection({});
 check("PhoneSection loading 渲染无异常", !!out && typeof out === "object");
 
-// 7.2) 内置浏览器：入口 + 面板（未运行态：canvas + 输入处理器就位）
-callLog = [];
-out = comps.BrowserEntry({});
-check("BrowserEntry 渲染无异常", !!out && typeof out === "object");
+// 7.2) 内置浏览器：面板（未运行态：canvas + 输入处理器就位）；入口已迁右坞，
+// 「+」菜单项/空态卡片在 RightDock 用例覆盖
 callLog = [];
 out = comps.BrowserPanel({});
 const canvasHost = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-brw-canvas"));
@@ -458,6 +465,28 @@ out = comps.DockStub({});
 const stubBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["展开面板", "Expand panel"].includes(c[2]["aria-label"]));
 check("DockStub 直调渲染展开按钮", !!out && typeof out === "object" && !!stubBtn);
 comps.setKitUi({ browserOpen: false, dockTab: null, dockCollapsed: false });
+
+// 7.2.4b) 常置（2026-09-06）：0 标签、未收起时 KitSurfaces 仍挂 RightDock——
+// 空态渲染「打开标签页」选择器（标题/提示 + 任务/浏览器卡片，cfg 走默认全开），
+// 不再随「最后一个标签关闭」消失；DockStub 0 标签显示通用「侧边面板」文案
+comps.setKitUi({ previews: [], activePreview: null, jobsOpen: false, browserOpen: false, dockTab: null, dockCollapsed: false });
+callLog = [];
+out = comps.KitSurfaces({});
+const dockMounted = callLog.find((c) => c[1] === comps.RightDock);
+check("KitSurfaces 常置：0 标签仍挂 RightDock", !!dockMounted);
+callLog = [];
+out = comps.RightDock({ props: {}, cwd: "C:/x" });
+const emptyTitle = callLog.find((c) => (c[0] === "jsx") && c[2] && (c[2].children === "打开标签页" || c[2].children === "Open tabs"));
+const emptyHint = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("选择要在侧边面板") || c[2].children.startsWith("Choose a tab")));
+const emptyCards = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-dock-empty-card");
+check("RightDock 常置空态渲染选择器标题与提示", !!emptyTitle && !!emptyHint);
+check("RightDock 空态渲染任务/浏览器两张卡片", emptyCards.length === 2);
+comps.setKitUi({ dockCollapsed: true });
+callLog = [];
+out = comps.DockStub({});
+const stubPanel = callLog.find((c) => (c[0] === "jsx") && c[2] && ["侧边面板", "Side panel"].includes(c[2].children));
+check("DockStub 0 标签显示通用侧边面板文案", !!stubPanel);
+comps.setKitUi({ dockCollapsed: false });
 
 // 7.2.3) 预览标签 LRU 纯逻辑：默认上限 8，超限开新文件逐出 usedAt 最小者；
 // 重开已存在文件置顶激活不逐出自身；关闭激活文件激活位顺延邻居
