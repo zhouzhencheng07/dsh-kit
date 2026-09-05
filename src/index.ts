@@ -67,6 +67,7 @@ import { multipartBoundary, parseMultipart, safeUploadName, dedupeName } from '.
 import { BrowserService } from './browser.ts'
 import { loadToolsModule, buildBrowserTools } from './browser-tools.ts'
 import { getScheduleStore, buildScheduleTools, isDateStr, todayStr } from './schedule.ts'
+import { VaultScanner, sanitizePageTitle } from './vault.ts'
 
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在设置里改（phonePort，1-65535） */
 const PHONE_PORT = 3090
@@ -515,6 +516,11 @@ export async function apply(ctx: KitCtx): Promise<void> {
     phonePort: z.number().step(1).min(1).max(65535).default(3090),
     phoneKeepGatewayOn: z.boolean().default(false),
     jobsEnabled: z.boolean().default(true),
+    // 知识库（vault）：vaultEnabled = 右坞「知识库」标签入口可见性；vaultRoot =
+    // 知识库根目录（绝对路径，空 = 未配置，前端渲染引导）。宿主据此提供索引/
+    // 搜索/建页/写回端点，数据契约见 src/vault.ts 头注释。
+    vaultEnabled: z.boolean().default(true),
+    vaultRoot: z.string().default(''),
     // 内置浏览器总开关（默认开）：关=不注册 browser_* 工具（重启生效）；浏览器
     // 半边入口按钮与面板同步隐藏。execute 内另有守卫兜底（注册期竞态时挡调用）。
     // 自动切面板与画面跟随 agent 是恒定行为（用户定稿，无开关）——人为切走浏览器
@@ -2618,6 +2624,122 @@ export async function apply(ctx: KitCtx): Promise<void> {
       )
       schedRoute('/dsh-kit/schedule/timer-stop', (req, res) => schedPost(req, res, () => scheduleStore.timerStop()))
 
+      // ── 知识库（vault，src/vault.ts）──
+      // vaultRoot 是设置卡配置的绝对目录，在工作区外——read 端点本就通配绝对
+      // 路径可直接读页，但 write 强制 cwd 子树内，故 vault 的写回走自己的端点。
+      // 全部端点在 vaultRoot 未配置/不存在时回 400 vault-not-configured。
+      const vaultScanner = new VaultScanner(() => {
+        try {
+          return String(readSettings().vaultRoot ?? '')
+        } catch {
+          return ''
+        }
+      })
+      const disposeVault: Array<() => void> = []
+      const vaultRoute = (
+        path: string,
+        handler: (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => void,
+      ) => {
+        disposeVault.push(
+          webCtx.webServer.register({
+            kind: 'exact',
+            path,
+            handler: (req, res) => {
+              handler(req, res, new URL(req.url ?? '/', 'http://dsh-kit.local'))
+            },
+          }),
+        )
+      }
+      const vaultGuard = (res: http.ServerResponse): string | null => {
+        const root = vaultScanner.root()
+        if (root === null) {
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' })
+          res.end(JSON.stringify({ error: 'vault-not-configured' }))
+          return null
+        }
+        return root
+      }
+      const vaultJson = (res: http.ServerResponse, code: number, obj: unknown) => {
+        res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' })
+        res.end(JSON.stringify(obj))
+      }
+      vaultRoute('/dsh-kit/vault/index', (req, res) => {
+        if (req.method !== 'GET') return vaultJson(res, 405, { error: 'method not allowed' })
+        const root = vaultGuard(res)
+        if (root === null) return
+        void vaultScanner
+          .ensureAgentsMd()
+          .catch(() => {})
+          .then(() => vaultScanner.scan())
+          .then((index) => vaultJson(res, 200, index ?? { root: null, spaces: [], pages: [] }))
+          .catch((error) => vaultJson(res, 500, { error: error instanceof Error ? error.message : String(error) }))
+      })
+      vaultRoute('/dsh-kit/vault/search', (req, res, url) => {
+        if (req.method !== 'GET') return vaultJson(res, 405, { error: 'method not allowed' })
+        const root = vaultGuard(res)
+        if (root === null) return
+        const q = (url.searchParams.get('q') ?? '').slice(0, 200)
+        void vaultScanner
+          .search(q, 20)
+          .then((result) => vaultJson(res, 200, result ?? { root, results: [] }))
+          .catch((error) => vaultJson(res, 500, { error: error instanceof Error ? error.message : String(error) }))
+      })
+      const vaultPost = (
+        path: string,
+        action: (body: Record<string, unknown>, root: string) => unknown,
+      ) => {
+        vaultRoute(path, (req, res) => {
+          if (req.method !== 'POST') return vaultJson(res, 405, { error: 'method not allowed' })
+          if (!sameOrigin(req)) return vaultJson(res, 403, { error: 'cross-origin denied' })
+          const root = vaultGuard(res)
+          if (root === null) return
+          void schedReadBody(req).then((body) => {
+            try {
+              vaultJson(res, 200, action(body, root) ?? { ok: true })
+            } catch (error) {
+              vaultJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
+            }
+          })
+        })
+      }
+      // 建页：title 清洗成文件名，space（顶层目录，已存在）可选；已存在回 409
+      vaultPost('/dsh-kit/vault/page', (body, root) => {
+        const space = sanitizePageTitle(String(body.space ?? ''))
+        const title = sanitizePageTitle(String(body.title ?? ''))
+        if (title === '') throw new Error('缺少页面标题')
+        const dir = space === '' ? root : path.join(root, space)
+        if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new Error(`库目录不存在：${space}`)
+        const file = path.join(dir, `${title}.md`)
+        if (fs.existsSync(file)) return { exists: true, path: file, mtimeMs: fs.statSync(file).mtimeMs }
+        const today = new Date()
+        const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+        const template = `---\ntags: []\ncreated: ${dateStr}\n---\n\n# ${title}\n\n`
+        fs.writeFileSync(file, template, 'utf8')
+        return { path: file, mtimeMs: fs.statSync(file).mtimeMs }
+      })
+      // 写回：路径必须落在 vault 根内且是 md；mtime CAS 同 /dsh-kit/write 语义
+      vaultPost('/dsh-kit/vault/write', (body, root) => {
+        const rawPath = String(body.path ?? '')
+        const resolved = path.resolve(rawPath)
+        const rel = path.relative(root, resolved)
+        if (rel.startsWith('..') || path.isAbsolute(rel) || rel === '') throw new Error('页面不在 vault 内')
+        if (!/\.md$/i.test(resolved)) throw new Error('只允许写 md 文件')
+        const content = body.content
+        if (typeof content !== 'string') throw new Error('缺少 content')
+        if (Buffer.byteLength(content, 'utf8') > 512 * 1024) throw new Error('内容超过 512KB 上限')
+        const baseMtime = Number(body.baseMtime)
+        if (!Number.isFinite(baseMtime)) throw new Error('缺少 baseMtime')
+        let stat: fs.Stats
+        try {
+          stat = fs.statSync(resolved)
+        } catch (error) {
+          throw new Error(`读取文件失败：${error instanceof Error ? error.message : error}`)
+        }
+        if (stat.mtimeMs !== baseMtime) return { modified: true, mtimeMs: stat.mtimeMs }
+        fs.writeFileSync(resolved, content, 'utf8')
+        return { ok: true, mtimeMs: fs.statSync(resolved).mtimeMs }
+      })
+
       return () => {
         disposeVendor()
         disposeTree()
@@ -2642,6 +2764,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
         disposeJobsKill()
         disposeJobsOutput()
         for (const dispose of disposeSchedule) dispose()
+        for (const dispose of disposeVault) dispose()
         if (phoneGw) phoneGw.close()
       }
     }, 'dsh-kit: terminal/vendor/tree/read/write/upload/fs-op/git/phone endpoints')
