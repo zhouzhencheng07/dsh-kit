@@ -244,8 +244,10 @@ out = comps.ScmEntry({});
 check("ScmEntry 渲染无异常", !!out && typeof out === "object");
 // 7.1) 后台任务面板：无 hooks（jobsBySession 未达 → 空列表）与有任务两种；
 // 入口已迁右坞（JobsEntry 已删），openDockTab 纯补丁与坞内徽标在这里覆盖
-const otj = comps.openDockTab({ previews: [], jobsOpen: false, browserOpen: false, dockTab: null, dockCollapsed: true }, "jobs");
+const otj = comps.openDockTab({ previews: [], jobsOpen: false, browserOpen: false, schedOpen: false, dockTab: null, dockCollapsed: true }, "jobs");
 check("openDockTab 任务：置存在+激活+展开收起态", otj.jobsOpen === true && otj.dockTab === "jobs" && otj.dockCollapsed === false);
+const ots = comps.openDockTab({ previews: [], jobsOpen: false, browserOpen: false, schedOpen: false, dockTab: null, dockCollapsed: false }, "schedule");
+check("openDockTab 日程：置存在+激活（右坞第四标签）", ots.schedOpen === true && ots.dockTab === "schedule" && ots.jobsOpen === undefined);
 const otb = comps.openDockTab({ previews: [], jobsOpen: true, browserOpen: false, dockTab: "jobs", dockCollapsed: false }, "browser");
 check("openDockTab 浏览器：纯补丁不触碰任务标签（合并保留）", otb.browserOpen === true && otb.dockTab === "browser" && otb.jobsOpen === undefined);
 callLog = [];
@@ -469,7 +471,7 @@ comps.setKitUi({ browserOpen: false, dockTab: null, dockCollapsed: false });
 // 7.2.4b) 常置（2026-09-06）：0 标签、未收起时 KitSurfaces 仍挂 RightDock——
 // 空态渲染「打开标签页」选择器（标题/提示 + 任务/浏览器卡片，cfg 走默认全开），
 // 不再随「最后一个标签关闭」消失；DockStub 0 标签显示通用「侧边面板」文案
-comps.setKitUi({ previews: [], activePreview: null, jobsOpen: false, browserOpen: false, dockTab: null, dockCollapsed: false });
+comps.setKitUi({ previews: [], activePreview: null, jobsOpen: false, browserOpen: false, schedOpen: false, dockTab: null, dockCollapsed: false });
 callLog = [];
 out = comps.KitSurfaces({});
 const dockMounted = callLog.find((c) => c[1] === comps.RightDock);
@@ -480,7 +482,14 @@ const emptyTitle = callLog.find((c) => (c[0] === "jsx") && c[2] && (c[2].childre
 const emptyHint = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("选择要在侧边面板") || c[2].children.startsWith("Choose a tab")));
 const emptyCards = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-dock-empty-card");
 check("RightDock 常置空态渲染选择器标题与提示", !!emptyTitle && !!emptyHint);
-check("RightDock 空态渲染任务/浏览器两张卡片", emptyCards.length === 2);
+check("RightDock 空态渲染后台任务/日程/浏览器三张卡片", emptyCards.length === 3);
+comps.setKitUi({ schedOpen: true, dockTab: "schedule" });
+callLog = [];
+out = comps.RightDock({ props: {}, cwd: "C:/x" });
+const schedOn = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-tab dshk-tab-on");
+const schedElem = callLog.find((c) => c[1] === comps.ScheduleView);
+check("RightDock 日程标签激活并挂 ScheduleView", !!schedOn && !!schedElem);
+comps.setKitUi({ schedOpen: false, dockTab: null });
 comps.setKitUi({ dockCollapsed: true });
 callLog = [];
 out = comps.DockStub({});
