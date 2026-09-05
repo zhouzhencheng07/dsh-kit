@@ -50,13 +50,13 @@ window.__ModuleLoader__.load({
     // 槽位组件，状态必须跨槽共享：模块级不可变快照 + useSyncExternalStore 订阅
     // （getSnapshot 返回模块绑定值，恒定引用直到 set 替换）。
     // 右侧标签页容器（ZCode 式，2026-09-06 定稿常置）：previews（文件预览标签
-    // 数组，二级标签——预览大标签内套文件小标签）/jobsOpen/browserOpen/schedOpen
-    // 是「标签存在性」，dockTab 是当前激活大标签，activePreview 是预览内激活的
-    // 文件；打开某功能 = 确保标签存在并激活，互斥清场废除（切走不丢状态）。
+    // 数组，二级标签——预览大标签内套文件小标签）/jobsOpen/browserOpen/schedOpen/
+    // vaultOpen 是「标签存在性」，dockTab 是当前激活大标签，activePreview 是预览
+    // 内激活的文件；打开某功能 = 确保标签存在并激活，互斥清场废除（切走不丢状态）。
     // 容器本身常置：不再随「最后一个标签关闭」而消失，0 标签时渲染空态选择器
     // （打开标签页卡片）；dockCollapsed = 暂时收起成右缘竖条（存在性保留；视为
     // 人为退出——agent 导航不再弹回），收起态写 localStorage，刷新后仍保持收起。
-    let kitUi = { treeOpen: false, gitOpen: false, previews: [], activePreview: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, dockTab: null, dockCollapsed: false };
+    let kitUi = { treeOpen: false, gitOpen: false, previews: [], activePreview: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, dockTab: null, dockCollapsed: false };
     const kitUiListeners = new Set();
     /** dockCollapsed 的 localStorage 持久化（读失败/无 localStorage 环境静默回退） */
     const dockCollapsedStore = {
@@ -114,7 +114,7 @@ window.__ModuleLoader__.load({
       return Math.max(1, Number.isInteger(v) ? v : PREVIEW_MAX_DEFAULT);
     }
     /** 右侧标签页共存的活性判定（渲染右坞与否） */
-    const dockAlive = (ui) => (ui.previews?.length ?? 0) > 0 || ui.jobsOpen === true || ui.browserOpen === true || ui.schedOpen === true;
+    const dockAlive = (ui) => (ui.previews?.length ?? 0) > 0 || ui.jobsOpen === true || ui.browserOpen === true || ui.schedOpen === true || ui.vaultOpen === true;
     /** 打开/激活文件预览标签：已存在则置顶激活（usedAt 刷新，deleted/untracked
      *  同步为本次状态）；超过上限按 LRU 逐出最久未用的（绝不含本次）；顺带取消
      *  最小化态并激活预览大标签。deleted=已删除文件，预览只承载删除 diff。 */
@@ -159,12 +159,14 @@ window.__ModuleLoader__.load({
         patch.activePreview = null;
       } else if (tab === "jobs") patch.jobsOpen = false;
       else if (tab === "schedule") patch.schedOpen = false;
+      else if (tab === "vault") patch.vaultOpen = false;
       else patch.browserOpen = false;
       if (ui.dockTab === tab) {
         const remaining = [];
         if (tab !== "preview" && (ui.previews?.length ?? 0) > 0) remaining.push("preview");
         if (tab !== "jobs" && ui.jobsOpen) remaining.push("jobs");
         if (tab !== "schedule" && ui.schedOpen) remaining.push("schedule");
+        if (tab !== "vault" && ui.vaultOpen) remaining.push("vault");
         if (tab !== "browser" && ui.browserOpen) remaining.push("browser");
         patch.dockTab = remaining[0] ?? null;
       }
@@ -175,6 +177,7 @@ window.__ModuleLoader__.load({
     function openDockTab(ui, tab) {
       if (tab === "jobs") return { jobsOpen: true, dockTab: "jobs", dockCollapsed: false };
       if (tab === "schedule") return { schedOpen: true, dockTab: "schedule", dockCollapsed: false };
+      if (tab === "vault") return { vaultOpen: true, dockTab: "vault", dockCollapsed: false };
       return { browserOpen: true, dockTab: "browser", dockCollapsed: false };
     }
 
@@ -230,6 +233,8 @@ window.__ModuleLoader__.load({
       phoneKeepGatewayOn: false,
       jobsEnabled: true,
       browserEnabled: true,
+      vaultEnabled: true,
+      vaultRoot: "",
       terminalShortcut: "Ctrl+/",
       fileTreeShortcut: "Ctrl+,",
       scShortcut: "Ctrl+Alt+.",
@@ -296,6 +301,8 @@ window.__ModuleLoader__.load({
         phoneRemoteDomain: typeof v.phoneRemoteDomain === "string" ? v.phoneRemoteDomain : "",
         jobsEnabled: v.jobsEnabled !== false,
         browserEnabled: v.browserEnabled !== false,
+        vaultEnabled: v.vaultEnabled !== false,
+        vaultRoot: typeof v.vaultRoot === "string" ? v.vaultRoot : "",
         terminalShortcut:
           typeof v.terminalShortcut === "string" && parseCombo(v.terminalShortcut)
             ? v.terminalShortcut
@@ -739,6 +746,34 @@ window.__ModuleLoader__.load({
       schedDelDone: "已删除",
       schedSaved: "已保存",
       schedOpFail: "操作失败：{error}",
+      cfgVaultEnabled: "启用知识库",
+      cfgVaultEnabledHint: "右坞「知识库」标签：浏览、编辑、双链跳转 vault 笔记（目录未配置时标签内显示引导）",
+      cfgVaultRoot: "知识库目录",
+      cfgVaultRootHint: "vault 根目录绝对路径（如 D:\\notes）。其内一切 md 即页面；attachments/ 与点前缀目录不进索引，根目录自动生成 AGENTS.md 约定",
+      vaultTitle: "知识库",
+      vaultNotConfigured: "未配置知识库目录",
+      vaultNotConfiguredHint: "在 设置 → 插件 → dsh-kit 里填写「知识库目录」后即可使用：目录内一切 md 文件即页面，支持双链跳转与全文搜索",
+      vaultIndexFail: "索引失败：{error}",
+      vaultHistBack: "后退",
+      vaultHistFwd: "前进",
+      vaultSpaceAll: "全部",
+      vaultSearchPh: "搜索笔记，回车执行",
+      vaultSearchEmpty: "无结果",
+      vaultSearchFail: "搜索失败：{error}",
+      vaultNewPage: "新建页面",
+      vaultNewPagePh: "页面标题，回车创建",
+      vaultCreate: "创建",
+      vaultCancel: "取消",
+      vaultEdit: "编辑",
+      vaultSave: "保存",
+      vaultSaved: "已保存",
+      vaultSaveFail: "保存失败：{error}",
+      vaultConflict: "页面已被外部修改——已加载最新版，请重试",
+      vaultBacklinks: "反链",
+      vaultBroken: "页面不存在，点击创建",
+      vaultEmptySpace: "此库还没有页面",
+      vaultPickPage: "从左侧选择一页开始阅读",
+      vaultPageGone: "页面不存在（可能已被移动或删除）",
       cfgTerminalShortcut: "终端快捷键",
       cfgFileTreeShortcut: "文件树快捷键",
       cfgSidebarShortcut: "侧边栏展开/收起快捷键",
@@ -1070,6 +1105,34 @@ window.__ModuleLoader__.load({
       schedDelDone: "Deleted",
       schedSaved: "Saved",
       schedOpFail: "Operation failed: {error}",
+      cfgVaultEnabled: "Enable knowledge base",
+      cfgVaultEnabledHint: "The Knowledge base tab in the dock: browse, edit and wiki-link vault notes (shows setup hint until a directory is configured)",
+      cfgVaultRoot: "Knowledge base directory",
+      cfgVaultRootHint: "Absolute path of the vault root (e.g. D:\\notes). Every md file inside is a page; attachments/ and dot-directories are not indexed; an AGENTS.md convention file is generated at the root",
+      vaultTitle: "Knowledge base",
+      vaultNotConfigured: "Knowledge base directory not configured",
+      vaultNotConfiguredHint: "Set the knowledge base directory in Settings → Plugins → dsh-kit: every md file inside becomes a page, with wiki-links and full-text search",
+      vaultIndexFail: "Index failed: {error}",
+      vaultHistBack: "Back",
+      vaultHistFwd: "Forward",
+      vaultSpaceAll: "All",
+      vaultSearchPh: "Search notes, Enter to run",
+      vaultSearchEmpty: "No results",
+      vaultSearchFail: "Search failed: {error}",
+      vaultNewPage: "New page",
+      vaultNewPagePh: "Page title, Enter to create",
+      vaultCreate: "Create",
+      vaultCancel: "Cancel",
+      vaultEdit: "Edit",
+      vaultSave: "Save",
+      vaultSaved: "Saved",
+      vaultSaveFail: "Save failed: {error}",
+      vaultConflict: "Page changed externally — latest version loaded, please retry",
+      vaultBacklinks: "Backlinks",
+      vaultBroken: "Page does not exist, click to create",
+      vaultEmptySpace: "No pages in this space yet",
+      vaultPickPage: "Pick a page on the left to start reading",
+      vaultPageGone: "Page not found (it may have been moved or deleted)",
     };
     /** 语言判定：只认 DSH 的 locale 权威 —— <html lang> 由 dsh-client-locale 的
      *  syncDocumentLanguage 在启动与每次切换时同步（设置→通用→语言），页面内
@@ -1389,6 +1452,40 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-jobs-btn-kill{border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);color:var(--dsw-alias-danger,#cd3131)}
 .dshk-jobs-output{margin-top:2px;padding:6px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-3);font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;word-break:break-all;max-height:180px;overflow:auto;user-select:text}
 .dshk-jobs-empty{padding:10px 8px;font-size:12px;color:var(--dsw-alias-label-tertiary);text-align:center}
+/* 知识库（vault，右坞标签）：上工具条（历史/空间/搜索/新建），下左树右阅读。
+   「选库进入阅读」——空间=顶层目录，树懒加载，[[wikilink]] 页内跳转带历史 */
+.dshk-vault{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
+.dshk-vault-hinttitle{font-size:16px;font-weight:600;color:var(--dsw-alias-label-primary);padding:24px 16px 0;text-align:center}
+.dshk-vault-hint{padding:10px 16px;color:var(--dsw-alias-label-tertiary);font-size:12px;text-align:center;line-height:1.7}
+.dshk-vault-toolbar{flex:none;display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--dsw-alias-border-l2)}
+.dshk-vault-spacesel{flex:none;max-width:140px;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;padding:5px 6px;border-radius:6px}
+.dshk-vault-search{flex:1 1 auto;min-width:60px;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 8px;border-radius:6px}
+.dshk-vault-createrow{flex:none;display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-vault-searchres{flex:none;max-height:200px;overflow:auto;border-bottom:1px solid var(--dsw-alias-border-l2);padding:4px 6px;display:flex;flex-direction:column;gap:2px}
+.dshk-vault-hitrow{display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:6px;cursor:pointer}
+.dshk-vault-hitrow:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-vault-hittitle{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)}
+.dshk-vault-hitsnippet{font-size:11px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-vault-main{flex:1 1 auto;min-height:0;display:flex}
+.dshk-vault-rail{flex:none;width:216px;border-right:1px solid var(--dsw-alias-border-l2);overflow:auto;padding:6px 4px}
+.dshk-vault-treerow{display:flex;align-items:center;gap:4px;padding:3px 4px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden}
+.dshk-vault-treerow:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-vault-treerow.is-active{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-label-primary)}
+.dshk-vault-twist{flex:none;display:inline-block;transition:transform .12s var(--ds-ease-in-out);font-size:10px;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-twist.is-open{transform:rotate(90deg)}
+.dshk-vault-treename{overflow:hidden;text-overflow:ellipsis}
+.dshk-vault-treeload{padding:3px 4px;color:var(--dsw-alias-label-tertiary);font-size:11px}
+.dshk-vault-reader{flex:1 1 auto;min-width:0;overflow:auto;display:flex;flex-direction:column}
+.dshk-vault-pagebar{flex:none;display:flex;justify-content:flex-end;padding:6px 10px 0}
+.dshk-vault-editwrap{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding:8px 10px}
+.dshk-vault-editbar{flex:none;display:flex;gap:6px;padding-bottom:6px}
+.dshk-vault-cmhost{flex:1 1 auto;min-height:0;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;overflow:hidden}
+.dshk-vault-backlinks{border-top:1px dashed var(--dsw-alias-border-l2);margin:16px 0 4px;padding:8px 2px 12px;display:flex;flex-direction:column;gap:4px}
+.dshk-vault-blrow{appearance:none;text-align:left;border:0;background:none;font:inherit;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:2px 4px;border-radius:5px}
+.dshk-vault-blrow:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-vault-wl{color:var(--dsw-alias-brand-primary);text-decoration:underline dotted}
+.dshk-vault-wl-broken{color:var(--dsw-alias-label-tertiary);text-decoration:underline wavy}
+.dshk-vault-toast{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:var(--dsw-alias-bg-layer-3);border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary);font-size:12px;padding:6px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
 /* 日程模块：中心区第三 tab——周时间网格 + 待办/统计侧栏；计时芯片挂输入区 dock */
 .dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
 .dshk-sched-head{flex:none;display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--dsw-alias-border-l2)}
@@ -2785,6 +2882,28 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
           children: [
             jsxRuntime.jsx("rect", { x: 2.8, y: 3.6, width: 10.4, height: 9.6, rx: 1.6 }),
             jsxRuntime.jsx("path", { d: "M5.4 2.2v2.6M10.6 2.2v2.6M2.8 7h10.4" }),
+          ],
+        },
+      );
+    }
+
+    /** 知识库图标：书堆（三枚书脊，第三本微倾斜），与终端/任务描边体系一致 */
+    function VaultIcon() {
+      return jsxRuntime.jsxs(
+        "svg",
+        {
+          width: 15,
+          height: 15,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.2,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          children: [
+            jsxRuntime.jsx("path", { d: "M3 2.6v10.8M6.6 2.6v10.8" }),
+            jsxRuntime.jsx("rect", { x: 9.4, y: 2.6, width: 3.4, height: 10.8, rx: 0.9 }),
           ],
         },
       );
@@ -6818,7 +6937,458 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       });
     }
 
-    // ─────────── 右侧标签页容器（预览 / 任务 / 浏览器共存切换）───────────
+    // ─────────── 知识库（vault，右坞标签）───────────
+    // vault = 设置卡配置的绝对目录，其内一切 md 即页面（数据契约见 src/vault.ts）。
+    // 布局「选库进入阅读」（用户定稿 2026-09-06）：左窄条 = 空间（顶层目录）+
+    // 懒加载目录树；右 = 阅读区（marked+DOMPurify 渲染，[[wikilink]] 页内跳转带
+    // 前进后退历史，页尾反链，碎链点击即建页）。编辑 = CodeMirror 源码编辑 +
+    // vault 写端点 mtime CAS（WYSIWYG 明确不做）。搜索走宿主全文端点。
+
+    /** [[目标]] / [[目标|别名]] → [别名](#vault:目标)，先于 marked 解析；目标经
+     *  encodeURIComponent 进片段锚点——DOMPurify 默认放行片段链接，不需加白 */
+    function vaultTransformWikiLinks(md) {
+      return String(md ?? "").replace(/\[\[([^\[\]]+)\]\]/g, (whole, inner) => {
+        const text = String(inner);
+        const bar = text.indexOf("|");
+        const target = (bar >= 0 ? text.slice(0, bar) : text).split("#")[0].trim();
+        const alias = bar >= 0 ? text.slice(bar + 1).trim() : "";
+        if (target === "") return whole;
+        return `[${alias || target}](#vault:${encodeURIComponent(target)})`;
+      });
+    }
+
+    /** wikilink 目标 → 页面：rel 全等 > rel 尾段 > 标题 > 文件名（均不分大小写） */
+    function resolveVaultLink(pages, target) {
+      const t = String(target ?? "").trim().replace(/\.md$/i, "").replace(/\\/g, "/").toLowerCase();
+      if (t === "") return null;
+      const base = t.split("/").pop() ?? t;
+      let rel = null;
+      let suffix = null;
+      let title = null;
+      let baseName = null;
+      for (const p of pages) {
+        const relLower = p.rel.toLowerCase();
+        if (rel === null && relLower === t) rel = p;
+        if (suffix === null && t.includes("/") && relLower.endsWith("/" + t)) suffix = p;
+        if (title === null && p.title.toLowerCase() === t) title = p;
+        const b = relLower.split("/").pop() ?? relLower;
+        if (baseName === null && b === base) baseName = p;
+      }
+      return rel ?? suffix ?? title ?? baseName ?? null;
+    }
+
+    /** 反链：links 能解析到当前页的其它页面（O(页数×链接数)，键集一次构建） */
+    function vaultBacklinks(pages, currentPath) {
+      const current = pages.find((p) => p.path === currentPath);
+      if (!current) return [];
+      const keys = new Set();
+      const add = (s) => keys.add(String(s ?? "").replace(/\.md$/i, "").toLowerCase());
+      add(current.rel);
+      add(current.title);
+      const base = current.rel.split("/").pop() ?? "";
+      add(base);
+      return pages.filter((p) => {
+        if (p.path === currentPath) return false;
+        return p.links.some((l) => {
+          const t = String(l ?? "").trim().replace(/\.md$/i, "").replace(/\\/g, "/").toLowerCase();
+          if (keys.has(t)) return true;
+          return keys.has(t.split("/").pop() ?? "");
+        });
+      });
+    }
+
+    function VaultView() {
+      const cfg = cfgFromSnapshot(getCfgSnapshot());
+      if (cfg.vaultEnabled === false || cfg.vaultRoot === "") {
+        return jsxRuntime.jsxs("div", { className: "dshk-vault", children: [
+          jsxRuntime.jsx("div", { className: "dshk-vault-hinttitle", children: t("vaultNotConfigured") }),
+          jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultNotConfiguredHint") }),
+        ] });
+      }
+      return jsxRuntime.jsx(VaultRootView, { root: cfg.vaultRoot });
+    }
+
+    function VaultRootView({ root }) {
+      const [index, setIndex] = react.useState(null);
+      const [indexErr, setIndexErr] = react.useState("");
+      const [space, setSpace] = react.useState(""); // '' = 全部库
+      // 目录树：path → entries|null(加载中)；expanded: path → bool
+      const [treeDirs, setTreeDirs] = react.useState({});
+      const [expanded, setExpanded] = react.useState({});
+      // 阅读历史：stack 存绝对路径，idx 是当前位（后退/前进改 idx 不重压栈）
+      const [hist, setHist] = react.useState({ stack: [], idx: -1 });
+      const [page, setPage] = react.useState(null); // { content, mtimeMs, loading }
+      const [html, setHtml] = react.useState(null);
+      const [editing, setEditing] = react.useState(false);
+      const [draft, setDraft] = react.useState("");
+      const [cmReady, setCmReady] = react.useState(false);
+      const [creating, setCreating] = react.useState(false);
+      const [createTitle, setCreateTitle] = react.useState("");
+      const [searchQ, setSearchQ] = react.useState("");
+      const [searchRes, setSearchRes] = react.useState(null);
+      const [searching, setSearching] = react.useState(false);
+      const [toast, setToast] = react.useState("");
+      const readerRef = react.useRef(null);
+      const editHostRef = react.useRef(null);
+      const cmRef = react.useRef(null);
+
+      const current = hist.idx >= 0 ? hist.stack[hist.idx] : null;
+      const treeRoot = root + (space === "" ? "" : "/" + space);
+
+      const loadIndex = react.useCallback(async () => {
+        try {
+          const body = await schedFetch("/dsh-kit/vault/index");
+          setIndex(body);
+          setIndexErr(body && body.root ? "" : "vault-not-configured");
+        } catch (error) {
+          setIndexErr(String(error?.message ?? error));
+        }
+      }, []);
+      react.useEffect(() => {
+        void loadIndex();
+      }, [loadIndex]);
+
+      const fetchDir = react.useCallback(async (dir) => {
+        setTreeDirs((d) => ({ ...d, [dir]: null }));
+        try {
+          const body = await schedFetch(`/dsh-kit/tree?path=${encodeURIComponent(dir)}`);
+          const usable = (body.entries ?? []).filter((e) => {
+            if (e.dir) return !e.name.startsWith(".") && !["attachments", "node_modules"].includes(e.name);
+            return /\.md$/i.test(e.name);
+          });
+          setTreeDirs((d) => ({ ...d, [dir]: usable }));
+        } catch {
+          setTreeDirs((d) => ({ ...d, [dir]: [] }));
+        }
+      }, []);
+
+      // 空间切换：树状态清空并展开根层
+      react.useEffect(() => {
+        setTreeDirs({});
+        setExpanded({ [treeRoot]: true });
+        void fetchDir(treeRoot);
+      }, [treeRoot, fetchDir]);
+
+      const openPath = react.useCallback((path) => {
+        setHist((h) => {
+          const stack = h.stack.slice(0, h.idx + 1);
+          if (stack[stack.length - 1] === path) return { stack, idx: stack.length - 1 };
+          stack.push(path);
+          return { stack, idx: stack.length - 1 };
+        });
+      }, []);
+
+      // 当前页变化 → 拉内容（历史前进后退同样走这里）
+      react.useEffect(() => {
+        if (current === null) {
+          setPage(null);
+          setHtml(null);
+          return undefined;
+        }
+        setEditing(false);
+        setPage({ loading: true, content: "", mtimeMs: 0 });
+        let alive = true;
+        void (async () => {
+          try {
+            const body = await schedFetch(`/dsh-kit/read?path=${encodeURIComponent(current)}`);
+            if (!alive) return;
+            setPage({ loading: false, content: body.binary ? "" : (body.content ?? ""), mtimeMs: body.mtimeMs ?? 0, binary: body.binary === true, gone: false });
+          } catch {
+            if (!alive) return;
+            setPage({ loading: false, content: "", mtimeMs: 0, gone: true });
+          }
+        })();
+        return () => {
+          alive = false;
+        };
+      }, [current]);
+
+      // 内容 → 剥 frontmatter → wikilink 预变换 → marked → DOMPurify → 渲染 HTML
+      react.useEffect(() => {
+        if (!page || page.loading || page.gone || page.binary) {
+          setHtml(null);
+          return undefined;
+        }
+        let alive = true;
+        void ensureMdLibs().then(() => {
+          if (!alive) return;
+          const stripped = page.content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+          const raw = window.marked.parse(vaultTransformWikiLinks(stripped), { async: false, gfm: true, breaks: true });
+          setHtml(window.DOMPurify.sanitize(raw));
+        });
+        return () => {
+          alive = false;
+        };
+      }, [page]);
+
+      // 渲染后处理：#vault: 锚点 → 双链点击（可解析跳页 / 碎链建页）；外链新窗
+      react.useEffect(() => {
+        const host = readerRef.current;
+        if (!host || html === null) return undefined;
+        const indexNow = index;
+        for (const a of host.querySelectorAll("a")) {
+          const href = a.getAttribute("href") ?? "";
+          if (href.startsWith("#vault:")) {
+            const target = decodeURIComponent(href.slice(7));
+            const resolved = indexNow ? resolveVaultLink(indexNow.pages, target) : null;
+            if (resolved) {
+              a.classList.add("dshk-vault-wl");
+              a.title = resolved.rel;
+              a.addEventListener("click", (e) => {
+                e.preventDefault();
+                openPath(resolved.path);
+              });
+            } else {
+              a.classList.add("dshk-vault-wl-broken");
+              a.title = `${t("vaultBroken")}：${target}`;
+              a.addEventListener("click", (e) => {
+                e.preventDefault();
+                void createInSpace(target);
+              });
+            }
+          } else if (/^https?:/i.test(href)) {
+            a.target = "_blank";
+            a.rel = "noreferrer";
+          } else if (href !== "" && !href.startsWith("#")) {
+            a.addEventListener("click", (e) => {
+              e.preventDefault();
+              // 相对链接按当前页目录解析（vault 内 md 跳页，外部路径放行系统打开）
+              const dir = current.split(/[\\/]/).slice(0, -1).join("\\");
+              const joined = `${dir}\\${href.split(/[?#]/, 1)[0]}`;
+              if (/\.md$/i.test(joined)) openPath(joined);
+              else window.open(`http://${location.host}/dsh-kit/read?path=${encodeURIComponent(joined)}`);
+            });
+          }
+        }
+        return undefined;
+      }, [html, index, current, openPath]);
+
+      const createInSpace = react.useCallback(
+        async (title) => {
+          const trimmed = String(title ?? "").trim();
+          if (trimmed === "") return;
+          try {
+            const body = await schedFetch("/dsh-kit/vault/page", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ space, title: trimmed }),
+            });
+            setCreating(false);
+            setCreateTitle("");
+            await loadIndex();
+            if (body.path) openPath(body.path);
+          } catch (error) {
+            setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
+          }
+        },
+        [space, loadIndex, openPath],
+      );
+
+      const enterEdit = () => {
+        setDraft(page?.content ?? "");
+        setEditing(true);
+        void ensureCmLib().then(() => setCmReady(true));
+      };
+      // 编辑器挂载（与预览编辑同款：实例写 ref，文档变更回写 draft）
+      react.useEffect(() => {
+        const host = editHostRef.current;
+        if (!cmReady || !editing || !host) return undefined;
+        const h = window.CM6.create(host, { doc: draft, readOnly: false, language: "md" });
+        cmRef.current = h;
+        h.onDocChanged((text) => setDraft(text));
+        return () => {
+          h.destroy();
+          cmRef.current = null;
+        };
+      }, [cmReady, editing, current]);
+      const saveEdit = async () => {
+        if (current === null) return;
+        try {
+          const body = await schedFetch("/dsh-kit/vault/write", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ path: current, content: draft, baseMtime: page?.mtimeMs ?? 0 }),
+          });
+          if (body.modified === true) {
+            setToast(t("vaultConflict"));
+            setEditing(false);
+            await loadIndex();
+            return;
+          }
+          setEditing(false);
+          setToast(t("vaultSaved"));
+          setPage((p) => (p ? { ...p, content: draft, mtimeMs: body.mtimeMs ?? p.mtimeMs } : p));
+          await loadIndex();
+        } catch (error) {
+          setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
+        }
+      };
+      const runSearch = async () => {
+        const q = searchQ.trim();
+        if (q === "") {
+          setSearchRes(null);
+          return;
+        }
+        setSearching(true);
+        try {
+          const body = await schedFetch(`/dsh-kit/vault/search?q=${encodeURIComponent(q)}`);
+          setSearchRes(body.results ?? []);
+        } catch (error) {
+          setToast(`${t("vaultSearchFail")} ${String(error?.message ?? error)}`);
+        }
+        setSearching(false);
+      };
+
+      // toast 自动消隐
+      react.useEffect(() => {
+        if (toast === "") return undefined;
+        const timer = setTimeout(() => setToast(""), 2600);
+        return () => clearTimeout(timer);
+      }, [toast]);
+
+      const indexPages = index?.pages ?? [];
+      const backlinks = current && index ? vaultBacklinks(index.pages, current) : [];
+      const histBack = () => setHist((h) => ({ ...h, idx: Math.max(0, h.idx - 1) }));
+      const histFwd = () => setHist((h) => ({ ...h, idx: Math.min(h.stack.length - 1, h.idx + 1) }));
+      const toggleDir = (dir) => {
+        const opening = expanded[dir] !== true;
+        setExpanded((e) => ({ ...e, [dir]: opening }));
+        if (opening) void fetchDir(dir);
+      };
+      const renderDir = (dirPath, depth) => {
+        if (expanded[dirPath] !== true) return null;
+        const entries = treeDirs[dirPath];
+        if (!entries) return jsxRuntime.jsx("div", { className: "dshk-vault-treeload", style: { paddingLeft: 10 + depth * 14 }, children: "…" }, `${dirPath}#load`);
+        return entries.map((e) => {
+          if (e.dir) {
+            return jsxRuntime.jsxs(
+              "div",
+              {
+                children: [
+                  jsxRuntime.jsxs("div", {
+                    className: "dshk-vault-treerow",
+                    style: { paddingLeft: 10 + depth * 14 },
+                    onClick: () => toggleDir(e.path),
+                    children: [
+                      jsxRuntime.jsx("span", { className: `dshk-vault-twist${expanded[e.path] === true ? " is-open" : ""}`, children: "▸" }),
+                      jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
+                    ],
+                  }),
+                  renderDir(e.path, depth + 1),
+                ],
+              },
+              e.path,
+            );
+          }
+          return jsxRuntime.jsx(
+            "div",
+            {
+              className: `dshk-vault-treerow${e.path === current ? " is-active" : ""}`,
+              style: { paddingLeft: 10 + (depth + 1) * 14 },
+              onClick: () => openPath(e.path),
+              title: e.path,
+              children: jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name.replace(/\.(md|markdown)$/i, "") }),
+            },
+            e.path,
+          );
+        });
+      };
+
+      const backlinksOf = backlinks;
+      return jsxRuntime.jsxs("div", { className: "dshk-vault", children: [
+        jsxRuntime.jsxs("div", { className: "dshk-vault-toolbar", children: [
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistBack"), title: t("vaultHistBack"), disabled: hist.idx <= 0, onClick: histBack, children: "←" }),
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistFwd"), title: t("vaultHistFwd"), disabled: hist.idx >= hist.stack.length - 1, onClick: histFwd, children: "→" }),
+          jsxRuntime.jsxs("select", {
+            className: "dshk-vault-spacesel",
+            value: space,
+            onChange: (e) => setSpace(e.target.value),
+            children: [
+              jsxRuntime.jsx("option", { value: "", children: t("vaultSpaceAll") }),
+              (index?.spaces ?? []).map((s) => jsxRuntime.jsx("option", { value: s, children: s }, s)),
+            ],
+          }),
+          jsxRuntime.jsx("input", {
+            className: "dshk-vault-search",
+            value: searchQ,
+            placeholder: t("vaultSearchPh"),
+            onChange: (e) => setSearchQ(e.target.value),
+            onKeyDown: (e) => {
+              if (e.key === "Enter") void runSearch();
+            },
+          }),
+          creating
+            ? null
+            : jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => { setCreating(true); setCreateTitle(""); }, children: t("vaultNewPage") }),
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultTitle"), title: t("vaultTitle"), onClick: () => void loadIndex(), children: "↻" }),
+        ] }),
+        creating
+          ? jsxRuntime.jsxs("div", { className: "dshk-vault-createrow", children: [
+              jsxRuntime.jsx("input", {
+                className: "dshk-vault-search",
+                autoFocus: true,
+                value: createTitle,
+                placeholder: t("vaultNewPagePh"),
+                onChange: (e) => setCreateTitle(e.target.value),
+                onKeyDown: (e) => {
+                  if (e.key === "Enter" && createTitle.trim() !== "") void createInSpace(createTitle.trim());
+                  if (e.key === "Escape") setCreating(false);
+                },
+              }),
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", disabled: createTitle.trim() === "", onClick: () => void createInSpace(createTitle.trim()), children: t("vaultCreate") }),
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setCreating(false), children: t("vaultCancel") }),
+            ] })
+          : null,
+        searchRes !== null
+          ? jsxRuntime.jsxs("div", { className: "dshk-vault-searchres", children: [
+              searchRes.length === 0 ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultSearchEmpty") }) : null,
+              searchRes.map((r) =>
+                jsxRuntime.jsxs("div", { className: "dshk-vault-hitrow", onClick: () => { setSearchRes(null); openPath(r.path); }, children: [
+                  jsxRuntime.jsx("span", { className: "dshk-vault-hittitle", children: r.title }),
+                  jsxRuntime.jsx("span", { className: "dshk-vault-hitsnippet", children: r.snippet }),
+                ] }, r.path),
+              ),
+            ] })
+          : null,
+        indexErr !== ""
+          ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: indexErr === "vault-not-configured" ? t("vaultNotConfiguredHint") : `${t("vaultIndexFail")} ${indexErr}` })
+          : null,
+        jsxRuntime.jsxs("div", { className: "dshk-vault-main", children: [
+          jsxRuntime.jsx("div", { className: "dshk-vault-rail", children: renderDir(treeRoot, 0) }),
+          jsxRuntime.jsxs("div", { className: "dshk-vault-reader", ref: readerRef, children: [
+            current === null
+              ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPickPage") })
+              : page?.loading === true || html === null
+                ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("contentLoading") })
+                : page?.gone === true
+                  ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPageGone") })
+                  : editing
+                    ? jsxRuntime.jsxs("div", { className: "dshk-vault-editwrap", children: [
+                        jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", disabled: false, onClick: () => void saveEdit(), children: t("vaultSave") }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setEditing(false), children: t("vaultCancel") }),
+                        ] }),
+                        jsxRuntime.jsx("div", { className: "dshk-vault-cmhost dshk-md", ref: editHostRef }),
+                      ] })
+                    : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                        jsxRuntime.jsx("div", { className: "dshk-vault-pagebar", children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: enterEdit, children: t("vaultEdit") }) }),
+                        jsxRuntime.jsx("div", { className: "dshk-md", dangerouslySetInnerHTML: { __html: html } }),
+                        backlinksOf.length > 0
+                          ? jsxRuntime.jsxs("div", { className: "dshk-vault-backlinks", children: [
+                              jsxRuntime.jsxs("span", { className: "dshk-sched-cardtitle", children: [t("vaultBacklinks"), " (", String(backlinksOf.length), ")"] }),
+                              backlinksOf.map((p) =>
+                                jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-blrow", onClick: () => openPath(p.path), children: p.title }, p.path),
+                              ),
+                            ] })
+                          : null,
+                      ] }),
+          ] }),
+        ] }),
+        toast !== "" ? jsxRuntime.jsx("div", { className: "dshk-vault-toast", role: "status", children: toast }) : null,
+      ] });
+    }
+
+    // ─────────── 右侧标签页容器（预览 / 任务 / 日程 / 知识库 / 浏览器共存切换）───────────
     // ZCode 式布局：三个面板共居一个右坞，标签存在性（previews/jobsOpen/
     // browserOpen）与激活位（dockTab）分离；打开某功能=确保标签存在并激活，
     // 互斥清场废除——切到浏览器看 agent 干活，文件预览的滚动位置还在。非激活
@@ -6840,8 +7410,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       if (ui.dockTab === "jobs" && ui.jobsOpen) label = t("dockJobs");
       else if (ui.dockTab === "browser" && ui.browserOpen) label = t("dockBrowser");
       else if (ui.dockTab === "schedule" && ui.schedOpen) label = t("schedTab");
+      else if (ui.dockTab === "vault" && ui.vaultOpen) label = t("vaultTitle");
       else if ((ui.previews?.length ?? 0) > 1) label = `${t("dockPreview")} (${ui.previews.length})`;
-      else if ((ui.previews?.length ?? 0) === 0 && !ui.jobsOpen && !ui.browserOpen && !ui.schedOpen) label = t("dockPanel");
+      else if ((ui.previews?.length ?? 0) === 0 && !ui.jobsOpen && !ui.browserOpen && !ui.schedOpen && !ui.vaultOpen) label = t("dockPanel");
       return jsxRuntime.jsx("button", {
         type: "button",
         className: "dshk-dock-stub",
@@ -6857,7 +7428,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       // 激活位必须指向「仍存在」的标签：dockTab 失效（配置门控清场等）时落回
       // 第一个存在的标签，没有则 tab=null → 渲染空态选择器（常置坞的 0 标签态）
       const previewCount = ui.previews?.length ?? 0;
-      const exists = { preview: previewCount > 0, jobs: ui.jobsOpen === true, schedule: ui.schedOpen === true, browser: ui.browserOpen === true };
+      const exists = { preview: previewCount > 0, jobs: ui.jobsOpen === true, schedule: ui.schedOpen === true, vault: ui.vaultOpen === true, browser: ui.browserOpen === true };
       const tab = ui.dockTab && exists[ui.dockTab]
         ? ui.dockTab
         : exists.preview
@@ -6866,9 +7437,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
             ? "jobs"
             : exists.schedule
               ? "schedule"
-              : exists.browser
-                ? "browser"
-                : null;
+              : exists.vault
+                ? "vault"
+                : exists.browser
+                  ? "browser"
+                  : null;
       const widthRef = react.useRef(0);
       const dragRef = react.useRef(null);
       const [dragging, setDragging] = react.useState(false);
@@ -6883,6 +7456,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       const openable = [];
       if (cfg.jobsEnabled !== false) openable.push({ id: "jobs", label: t("dockJobs"), icon: JobsIcon, badge: liveJobs });
       openable.push({ id: "schedule", label: t("schedTab"), icon: SchedIcon });
+      if (cfg.vaultEnabled !== false) openable.push({ id: "vault", label: t("vaultTitle"), icon: VaultIcon });
       if (cfg.browserEnabled !== false) openable.push({ id: "browser", label: t("dockBrowser"), icon: BrowserIcon });
       const openTab = (id) => {
         if (id === "browser") autoOpenSuppressed = false; // 手动点开=解除自动打开抑制
@@ -6936,6 +7510,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       }
       if (ui.jobsOpen) tabDefs.push({ id: "jobs", label: t("dockJobs"), badge: liveJobs });
       if (ui.schedOpen) tabDefs.push({ id: "schedule", label: t("schedTab") });
+      if (ui.vaultOpen) tabDefs.push({ id: "vault", label: t("vaultTitle") });
       if (ui.browserOpen) tabDefs.push({ id: "browser", label: t("dockBrowser") });
       const switchTab = (id) => {
         // 人为离开浏览器标签 → 抑制自动拽回；点回浏览器标签 → 解除
@@ -6954,7 +7529,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
         className: "dshk-pane",
         "data-dragging": dragging || undefined,
         role: "dialog",
-        "aria-label": ({ preview: t("dockPreview"), jobs: t("dockJobs"), schedule: t("schedTab"), browser: t("dockBrowser") })[tab] ?? t("dockPanel"),
+        "aria-label": ({ preview: t("dockPreview"), jobs: t("dockJobs"), schedule: t("schedTab"), vault: t("vaultTitle"), browser: t("dockBrowser") })[tab] ?? t("dockPanel"),
         children: [
           jsxRuntime.jsx("div", { className: "dshk-pane-handle", onPointerDown: onHandleDown }),
           jsxRuntime.jsxs("div", {
@@ -7047,7 +7622,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
                     onClick: () => {
                       // 全部关闭=人为清场：抑制浏览器自动弹回（+ 菜单重开浏览器解除）
                       autoOpenSuppressed = true;
-                      setKitUi({ previews: [], activePreview: null, jobsOpen: false, browserOpen: false, schedOpen: false, dockTab: null });
+                      setKitUi({ previews: [], activePreview: null, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, dockTab: null });
                     },
                     children: "✕",
                   }),
@@ -7139,6 +7714,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
             className: "dshk-pane-view",
             style: { display: tab === "schedule" ? "flex" : "none" },
             children: ui.schedOpen ? jsxRuntime.jsx(ScheduleView, {}) : null,
+          }),
+          jsxRuntime.jsx("div", {
+            className: "dshk-pane-view",
+            style: { display: tab === "vault" ? "flex" : "none" },
+            children: ui.vaultOpen ? jsxRuntime.jsx(VaultView, {}) : null,
           }),
           // 常置空态（0 标签）：「打开标签页」选择器——标题/提示 + 可开类型卡片
           //（与 + 菜单同一份 openable 清单；文件预览被动打开，不设卡片）
@@ -7248,7 +7828,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
         // 配置门控清场走 closeDockTab：清存在性的同时把激活位顺延到剩余标签
         if (!cfg.jobsEnabled && ui.jobsOpen) setKitUi(closeDockTab(kitUi, "jobs"));
         if (!cfg.browserEnabled && ui.browserOpen) setKitUi(closeDockTab(kitUi, "browser"));
-      }, [cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.sourceControlEnabled, cfg.jobsEnabled, cfg.browserEnabled]);
+        if (!cfg.vaultEnabled && ui.vaultOpen) setKitUi(closeDockTab(kitUi, "vault"));
+      }, [cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.sourceControlEnabled, cfg.jobsEnabled, cfg.browserEnabled, cfg.vaultEnabled]);
 
       // 侧边栏浏览区占用：文件树与「更改」视图互斥共享 sidebar.workspaces 单槽
       // （gitOpen 时切换到更改页，✕ 关闭回到仍处打开状态的文件树）。
@@ -7341,7 +7922,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
               if (kitUi.dockTab === "preview" && kitUi.activePreview) {
                 setKitUi(closePreviewTab(kitUi, kitUi.activePreview));
               } else {
-                const tab = kitUi.dockTab ?? ((kitUi.previews?.length ?? 0) > 0 ? "preview" : kitUi.jobsOpen ? "jobs" : kitUi.schedOpen ? "schedule" : "browser");
+                const tab = kitUi.dockTab ?? ((kitUi.previews?.length ?? 0) > 0 ? "preview" : kitUi.jobsOpen ? "jobs" : kitUi.schedOpen ? "schedule" : kitUi.vaultOpen ? "vault" : "browser");
                 if (tab === "browser") autoOpenSuppressed = true; // 人为关浏览器标签，同 closeTab
                 setKitUi(closeDockTab(kitUi, tab));
               }
@@ -7815,6 +8396,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       { key: "phoneKeepGatewayOn", kind: "bool" },
       { key: "jobsEnabled", kind: "bool" },
       { key: "browserEnabled", kind: "bool" },
+      { key: "vaultEnabled", kind: "bool" },
+      { key: "vaultRoot", kind: "text" },
       { key: "sidebarShortcutEnabled", kind: "bool" },
       { key: "terminalShortcut", kind: "combo" },
       { key: "fileTreeShortcut", kind: "combo" },
@@ -7831,6 +8414,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       { switchKey: "sourceControlEnabled", fields: ["scShortcut"] },
       { switchKey: "jobsEnabled", fields: [] },
       { switchKey: "browserEnabled", fields: [] },
+      { switchKey: "vaultEnabled", fields: ["vaultRoot"] },
       { switchKey: "terminalEnabled", fields: ["terminalShortcut"] },
       { switchKey: "skillsPageEnabled", fields: [] },
       { switchKey: "searchEnabled", fields: ["searchMaxResults"] },

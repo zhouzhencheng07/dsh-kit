@@ -62,7 +62,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes };",
+  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes, VaultView, vaultTransformWikiLinks, resolveVaultLink, vaultBacklinks };",
 );
 const harness = new Function("require", wrapper);
 const comps = harness((name) => {
@@ -72,7 +72,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RightDock", "DockStub", "openDockTab", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes"];
+const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RightDock", "DockStub", "openDockTab", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes", "VaultView", "vaultTransformWikiLinks", "resolveVaultLink", "vaultBacklinks"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -482,7 +482,7 @@ const emptyTitle = callLog.find((c) => (c[0] === "jsx") && c[2] && (c[2].childre
 const emptyHint = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("选择要在侧边面板") || c[2].children.startsWith("Choose a tab")));
 const emptyCards = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-dock-empty-card");
 check("RightDock 常置空态渲染选择器标题与提示", !!emptyTitle && !!emptyHint);
-check("RightDock 空态渲染后台任务/日程/浏览器三张卡片", emptyCards.length === 3);
+check("RightDock 空态渲染后台任务/日程/知识库/浏览器四张卡片", emptyCards.length === 4);
 comps.setKitUi({ schedOpen: true, dockTab: "schedule" });
 callLog = [];
 out = comps.RightDock({ props: {}, cwd: "C:/x" });
@@ -490,6 +490,30 @@ const schedOn = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className 
 const schedElem = callLog.find((c) => c[1] === comps.ScheduleView);
 check("RightDock 日程标签激活并挂 ScheduleView", !!schedOn && !!schedElem);
 comps.setKitUi({ schedOpen: false, dockTab: null });
+comps.setKitUi({ vaultOpen: true, dockTab: "vault" });
+callLog = [];
+out = comps.RightDock({ props: {}, cwd: "C:/x" });
+const vaultElem = callLog.find((c) => c[1] === comps.VaultView);
+check("RightDock 知识库标签挂 VaultView", !!vaultElem);
+comps.setKitUi({ vaultOpen: false, dockTab: null });
+
+// 6.6) 知识库纯函数：wikilink 预变换 / 解析优先级 / 反链
+const transformed = comps.vaultTransformWikiLinks("见 [[Python 基础]] 与 [[git|版本控制]] 和 [[x#锚]]");
+check("wikilink 预变换产出 #vault: 锚点链接", transformed.includes("(#vault:Python%20%E5%9F%BA%E7%A1%80)") && transformed.includes("[[git|版本控制]]") === false && transformed.includes("版本控制") && !transformed.includes("[[x"));
+const vaultPages = [
+  { path: "D:/v/wiki/Python/基础.md", rel: "wiki/Python/基础", title: "Python 基础", links: [] },
+  { path: "D:/v/wiki/git.md", rel: "wiki/git", title: "版本控制", links: [] },
+];
+check("resolveVaultLink：标题命中", comps.resolveVaultLink(vaultPages, "Python 基础")?.path === "D:/v/wiki/Python/基础.md");
+check("resolveVaultLink：rel 全等优先", comps.resolveVaultLink(vaultPages, "wiki/git")?.path === "D:/v/wiki/git.md");
+check("resolveVaultLink：.md 后缀容忍", comps.resolveVaultLink(vaultPages, "git.md")?.path === "D:/v/wiki/git.md");
+check("resolveVaultLink：未命中回 null", comps.resolveVaultLink(vaultPages, "不存在") === null);
+const backlinksHit = comps.vaultBacklinks([
+  { path: "D:/v/a.md", rel: "a", title: "A", links: ["B"] },
+  { path: "D:/v/b.md", rel: "b", title: "B", links: [] },
+  { path: "D:/v/c.md", rel: "c", title: "C", links: ["别的"] },
+], "D:/v/b.md");
+check("vaultBacklinks：links 解析命中当前页（1 条）", backlinksHit.length === 1 && backlinksHit[0].path === "D:/v/a.md");
 comps.setKitUi({ dockCollapsed: true });
 callLog = [];
 out = comps.DockStub({});
