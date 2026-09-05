@@ -1526,6 +1526,12 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-vault-editwrap{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding:8px 10px}
 .dshk-vault-editbar{flex:none;display:flex;gap:6px;padding-bottom:6px}
 .dshk-vault-cmhost{flex:1 1 auto;min-height:0;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;overflow:hidden}
+/* 高度约束必须显式给：没有它 cm-scroller 随内容长高、CM 初始视口永不延展，
+   视口外的行永远够不着（估算高度又恰好≈面板高度时连滚动条都不出现）。
+   行高也要显式：CM 用探针行估总高，继承来的排版会让估算失真、虚拟滚动错乱 */
+.dshk-vault-cmhost .cm-editor{height:100%}
+.dshk-vault-cmhost .cm-scroller{overflow:auto;height:100%;font-size:13px;line-height:1.7}
+.dshk-vault-cmhost .cm-content{min-height:100%}
 .dshk-vault-backlinks{border-top:1px dashed var(--dsw-alias-border-l2);margin:16px 0 4px;padding:8px 2px 12px;display:flex;flex-direction:column;gap:4px}
 .dshk-vault-blrow{appearance:none;text-align:left;border:0;background:none;font:inherit;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:2px 4px;border-radius:5px}
 .dshk-vault-blrow:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
@@ -1691,6 +1697,8 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-cm-host .cm-content{min-height:100%}
 .dshk-cm-scope{--dshk-tok-keyword:#953800;--dshk-tok-string:#0a3069;--dshk-tok-comment:#697077;--dshk-tok-number:#0550ae;--dshk-tok-fn:#8250df;--dshk-tok-type:#0550ae;--dshk-tok-operator:#953800;--dshk-tok-meta:#6639ba;--dshk-tok-link:#0550ae;--dshk-tok-heading:#0550ae}
 body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-string:#a5d6ff;--dshk-tok-comment:#8b949e;--dshk-tok-number:#79c0ff;--dshk-tok-fn:#d2a8ff;--dshk-tok-type:#ffa657;--dshk-tok-operator:#ff7b72;--dshk-tok-meta:#79c0ff;--dshk-tok-link:#a5d6ff;--dshk-tok-heading:#f0883e}
+/* Live Preview 调色板（亮色兜底在 vendor 主题里，这里只补暗色） */
+body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:#58a6ff;--dshk-lp-co-blue-bg:rgba(88,166,255,.13);--dshk-lp-co-teal:#39c5cf;--dshk-lp-co-teal-bg:rgba(57,197,207,.12);--dshk-lp-co-green:#3fb950;--dshk-lp-co-green-bg:rgba(63,185,80,.13);--dshk-lp-co-orange:#e0823d;--dshk-lp-co-orange-bg:rgba(224,130,61,.13);--dshk-lp-co-red:#f85149;--dshk-lp-co-red-bg:rgba(248,81,73,.13);--dshk-lp-co-purple:#d2a8ff;--dshk-lp-co-purple-bg:rgba(210,168,255,.13);--dshk-lp-co-gray:#8b949e;--dshk-lp-co-gray-bg:rgba(139,148,158,.15)}
 .dshk-editarea.dshk-cm-host{min-height:280px}
 /* git 状态徽标与 diff 着色 */
 .dshk-gitbadge{flex:none;margin-left:auto;font-size:10px;line-height:14px;padding:0 5px;border-radius:6px;font-family:ui-monospace,Consolas,monospace;border:1px solid currentColor}
@@ -7002,8 +7010,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
     // vault = 设置卡配置的绝对目录，其内一切 md 即页面（数据契约见 src/vault.ts）。
     // 布局「选库进入阅读」（用户定稿 2026-09-06）：左窄条 = 空间（顶层目录）+
     // 懒加载目录树；右 = 阅读区（marked+DOMPurify 渲染，[[wikilink]] 页内跳转带
-    // 前进后退历史，页尾反链，碎链点击即建页）。编辑 = CodeMirror 源码编辑 +
-    // vault 写端点 mtime CAS（WYSIWYG 明确不做）。搜索走宿主全文端点。
+    // 前进后退历史，页尾反链，碎链点击即建页）。编辑 = CodeMirror + Live
+    // Preview（vendor 内建装饰引擎，语法隐藏/光标现形，表格保持源码）+ vault
+    // 写端点 mtime CAS；完整 WYSIWYG（富文本往返）不做。搜索走宿主全文端点。
 
     /** [[目标]] / [[目标#锚]] / [[目标|别名]] → [别名](#vault:目标[#h:锚])，先于
      *  marked 解析；目标/锚 encodeURIComponent 进片段锚点——DOMPurify 默认放行
@@ -7411,7 +7420,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
         void ensureCmLib().then(() => setCmReady(true));
       };
       // ── 编辑增强（wangshu 特性筛选定稿：工具栏 + 斜杠菜单 + 图片粘贴 +
-      // 折叠块/块级链接；泡泡菜单与工具栏重复不做，WYSIWYG 不做）──
+      // 折叠块/块级链接 + Live Preview；泡泡菜单与工具栏重复不做，富文本
+      // 往返式 WYSIWYG 不做）──
       const cmView = () => cmRef.current?.view ?? null;
       /** 选中文字两侧包一层语法（加粗/斜体/行内代码/链接） */
       const cmWrap = (before, after) => {
@@ -7493,11 +7503,48 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
         });
       };
       // 编辑器挂载（与预览编辑同款：实例写 ref，文档变更回写 draft + 刷新斜杠
-      // 菜单 query；capture keydown 管菜单键位与图片粘贴）
+      // 菜单 query；capture keydown 管菜单键位与图片粘贴）。live=Live Preview
+      // 引擎（vendor 内建）：处理器的解析语义与 reader 后处理逐一对应——wikilink
+      // ctrl+点 跳页/建页/同页锚，相对链接按页目录分流，图片按 attachments 约定
+      // 换 raw 直链。index 走 ref 镜像：handler 在编辑器实例里闭包，读 state
+      // 会停在挂载时刻
+      const indexRef = react.useRef(index);
+      indexRef.current = index;
       react.useEffect(() => {
         const host = editHostRef.current;
         if (!cmReady || !editing || !host) return undefined;
-        const h = window.CM6.create(host, { doc: draft, readOnly: false, language: "md" });
+        const pageDir = () => current.split(/[\\/]/).slice(0, -1).join("\\");
+        const h = window.CM6.create(host, {
+          doc: draft,
+          readOnly: false,
+          language: "md",
+          live: {
+            onWikiLink: (target, anchor) => {
+              if (target === "") {
+                if (anchor !== "") scrollAnchor(anchor);
+                return;
+              }
+              const pages = indexRef.current?.pages ?? [];
+              const resolved = resolveVaultLink(pages, target);
+              if (resolved) openPath(resolved.path, anchor);
+              else void createInSpace(target);
+            },
+            onOpenLink: (href) => {
+              if (/^https?:/i.test(href)) {
+                window.open(href);
+                return;
+              }
+              const joined = `${pageDir()}\\${href.split(/[?#]/, 1)[0]}`;
+              if (/\.md$/i.test(joined)) openPath(joined);
+              else window.open(`http://${location.host}/dsh-kit/read?path=${encodeURIComponent(joined)}`);
+            },
+            resolveSrc: (src) => {
+              if (/^(https?:|data:)/i.test(src)) return src;
+              const abs = /^attachments\//i.test(src) ? `${root}/${src}` : `${pageDir()}/${src}`;
+              return `http://${location.host}/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
+            },
+          },
+        });
         cmRef.current = h;
         // 文档变化 → 回写 draft + 斜杠菜单同步：光标行前缀 /xxx 即开/刷新菜单，
         // 前缀破坏即关。放 docChanged 而非 keydown 是为了覆盖全部输入路径
@@ -7822,7 +7869,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuTable"), onClick: () => cmInsert("| 列 | 列 |\n| --- | --- |\n|  |  |"), children: "▦" }),
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuCode"), onClick: () => cmInsert("```\n\n```"), children: "{}" }),
                         ] }),
-                        jsxRuntime.jsx("div", { className: "dshk-vault-cmhost dshk-md", ref: editHostRef }),
+                        jsxRuntime.jsx("div", { className: "dshk-vault-cmhost", ref: editHostRef }),
                         menu !== null
                           ? jsxRuntime.jsx(
                               "div",

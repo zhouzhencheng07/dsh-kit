@@ -1,15 +1,18 @@
 // CodeMirror 6 vendor 构建脚本（一次性工程动作，产物提交入库）。
 // 产出 client/vendor/codemirror.bundle.js：IIFE 单文件，暴露 window.CM6 工厂。
-// 运行时零构建；仅升级 CM 时重跑本脚本：node scripts/build-vendor.mjs
+// 源码在 scripts/vendor-src/（entry.js + live-preview.js），改完重跑：
+// node scripts/build-vendor.mjs
 //
 // 依赖临时安装到系统临时目录，不进项目 package.json（保持插件零 dependencies 声明）。
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import url from 'node:url'
 import { execSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 
-const root = process.cwd()
+const root = path.dirname(path.dirname(url.fileURLToPath(import.meta.url)))
+const srcDir = path.join(root, 'scripts', 'vendor-src')
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cm6-vendor-'))
 const PKGS = [
   'esbuild@0.24.2',
@@ -29,120 +32,19 @@ const PKGS = [
   '@codemirror/legacy-modes',
 ]
 
-const ENTRY = `
-import { EditorView, keymap, drawSelection } from "@codemirror/view";
-import { EditorState, Compartment } from "@codemirror/state";
-import { basicSetup } from "codemirror";
-import { HighlightStyle, syntaxHighlighting, StreamLanguage } from "@codemirror/language";
-import { tags as tg } from "@lezer/highlight";
-import { javascript } from "@codemirror/lang-javascript";
-import { python } from "@codemirror/lang-python";
-import { css } from "@codemirror/lang-css";
-import { html } from "@codemirror/lang-html";
-import { json } from "@codemirror/lang-json";
-import { markdown } from "@codemirror/lang-markdown";
-import { xml } from "@codemirror/lang-xml";
-import { sql } from "@codemirror/lang-sql";
-import { yaml } from "@codemirror/legacy-modes/mode/yaml";
-import { toml } from "@codemirror/legacy-modes/mode/toml";
-import { shell } from "@codemirror/legacy-modes/mode/shell";
-import { lua } from "@codemirror/legacy-modes/mode/lua";
-import { ruby } from "@codemirror/legacy-modes/mode/ruby";
-import { go } from "@codemirror/legacy-modes/mode/go";
-import { rust } from "@codemirror/legacy-modes/mode/rust";
-
-const kitHighlight = HighlightStyle.define([
-  { tag: tg.keyword, color: "var(--dshk-tok-keyword)" },
-  { tag: [tg.string, tg.special(tg.string)], color: "var(--dshk-tok-string)" },
-  { tag: [tg.comment, tg.quote], color: "var(--dshk-tok-comment)", fontStyle: "italic" },
-  { tag: [tg.number, tg.bool, tg.null], color: "var(--dshk-tok-number)" },
-  { tag: [tg.function(tg.variableName), tg.function(tg.propertyName)], color: "var(--dshk-tok-fn)" },
-  { tag: [tg.typeName, tg.className, tg.namespace], color: "var(--dshk-tok-type)" },
-  { tag: [tg.operator], color: "var(--dshk-tok-operator)" },
-  { tag: [tg.meta, tg.processingInstruction], color: "var(--dshk-tok-meta)" },
-  { tag: tg.link, color: "var(--dshk-tok-link)", textDecoration: "underline" },
-  { tag: tg.heading, color: "var(--dshk-tok-heading)", fontWeight: "600" },
-  { tag: tg.invalid, color: "#f85149" },
-]);
-
-const js = () => javascript();
-const jsx = () => javascript({ jsx: true });
-const ts = () => javascript({ typescript: true });
-const tsx = () => javascript({ typescript: true, jsx: true });
-
-const EXT_LANGS = {
-  js, mjs: js, cjs: js, jsx,
-  ts, tsx,
-  py: () => python(), pyw: () => python(),
-  css: () => css(),
-  html: () => html(), htm: () => html(),
-  json: () => json(),
-  md: () => markdown(), markdown: () => markdown(),
-  xml: () => xml(), svg: () => xml(),
-  sql: () => sql(),
-  yml: () => StreamLanguage.define(yaml), yaml: () => StreamLanguage.define(yaml),
-  toml: () => StreamLanguage.define(toml),
-  sh: () => StreamLanguage.define(shell), bash: () => StreamLanguage.define(shell), zsh: () => StreamLanguage.define(shell),
-  lua: () => StreamLanguage.define(lua),
-  ruby: () => StreamLanguage.define(ruby), rb: () => StreamLanguage.define(ruby),
-  go: () => StreamLanguage.define(go),
-  rs: () => StreamLanguage.define(rust),
-};
-
-function resolveLang(ext) {
-  const factory = EXT_LANGS[String(ext || "").toLowerCase()];
-  if (!factory) return [];
-  try { return [factory()]; } catch { return []; }
-}
-
-/** 创建编辑器实例。返回句柄供宿主薄层调用。未知扩展名（txt/ini/log 等）
- *  自动换行——不产生横向滚动条，观感与旧纯文本预览一致；带语言的代码文件
- *  保持不换行（横向滚动条由宿主 CSS 钉底）。 */
-function create(container, opts) {
-  const o = opts || {};
-  const langComp = new Compartment();
-  const roComp = new Compartment();
-  let onChangeCb = null;
-  const langs = resolveLang(o.language);
-  const view = new EditorView({
-    state: EditorState.create({
-      doc: String(o.doc ?? ""),
-      extensions: [
-        basicSetup,
-        syntaxHighlighting(kitHighlight),
-        langComp.of(langs.length > 0 ? langs : [EditorView.lineWrapping]),
-        roComp.of(o.readOnly ? EditorView.editable.of(false) : []),
-        EditorView.updateListener.of((u) => {
-          if (u.docChanged && typeof onChangeCb === "function") onChangeCb(view.state.doc.toString());
-        }),
-      ],
-    }),
-    parent: container,
-  });
-  view.dom.classList.add("dshk-cm", "dshk-cm-scope");
-  return {
-    view,
-    setEditable(next) { view.dispatch({ effects: roComp.reconfigure(next ? [] : EditorView.editable.of(false)) }); },
-    getDoc() { return view.state.doc.toString(); },
-    setDoc(text) { view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: String(text) } }); },
-    onDocChanged(fn) { onChangeCb = fn; },
-    destroy() { view.destroy(); },
-  };
-}
-
-window.CM6 = { create };
-`
-
 try {
   console.log('临时环境:', tmp)
   fs.writeFileSync(path.join(tmp, 'package.json'), '{}')
-  fs.writeFileSync(path.join(tmp, 'entry-cm6.mjs'), ENTRY)
+  // 源码拷进临时目录再打包（esbuild 解析相对 import 需要同目录）
+  for (const name of fs.readdirSync(srcDir)) {
+    if (name.endsWith('.js')) fs.copyFileSync(path.join(srcDir, name), path.join(tmp, name))
+  }
   console.log('npm install 中…')
   execSync(`npm install --no-audit --no-fund --loglevel=error ${PKGS.join(' ')}`, { cwd: tmp, stdio: 'inherit' })
   console.log('esbuild 打包中…')
   const esbuild = createRequire(path.join(tmp, 'node_modules', 'esbuild', 'package.json'))('esbuild')
   await esbuild.build({
-    entryPoints: [path.join(tmp, 'entry-cm6.mjs')],
+    entryPoints: [path.join(tmp, 'entry.js')],
     bundle: true,
     minify: true,
     format: 'iife',
