@@ -777,8 +777,16 @@ window.__ModuleLoader__.load({
       vaultDelBtn: "删除",
       vaultDelConfirm: "确认删除以下页面？（移入回收站；vault 为 git 仓库时自动生成一个提交，可整体撤回）",
       vaultDeleted: "已删除",
+      vmenuHeading: "标题",
+      vmenuH1: "一级标题",
       vmenuH2: "二级标题",
+      vmenuH3: "三级标题",
+      vmenuH4: "四级标题",
+      vmenuH5: "五级标题",
+      vmenuH6: "六级标题",
+      vmenuList: "列表",
       vmenuUl: "无序列表",
+      vmenuOl: "有序列表",
       vmenuTodo: "待办",
       vmenuQuote: "引用",
       vmenuFold: "折叠块",
@@ -1151,8 +1159,16 @@ window.__ModuleLoader__.load({
       vaultDelBtn: "Delete",
       vaultDelConfirm: "Delete these pages? (Moved to recycle bin; if the vault is a git repo one commit is created so this is fully revertible)",
       vaultDeleted: "Deleted",
-      vmenuH2: "Heading",
+      vmenuHeading: "Heading",
+      vmenuH1: "Heading 1",
+      vmenuH2: "Heading 2",
+      vmenuH3: "Heading 3",
+      vmenuH4: "Heading 4",
+      vmenuH5: "Heading 5",
+      vmenuH6: "Heading 6",
+      vmenuList: "List",
       vmenuUl: "Bullet list",
+      vmenuOl: "Ordered list",
       vmenuTodo: "To-do",
       vmenuQuote: "Quote",
       vmenuFold: "Fold block",
@@ -1520,9 +1536,12 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-vault-tbsep{flex:none;width:1px;height:16px;background:var(--dsw-alias-border-l2);margin:0 2px}
 .dshk-vault-tbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;min-width:24px;height:22px;padding:0 5px;border-radius:6px;cursor:pointer}
 .dshk-vault-tbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-vault-slashmenu{position:fixed;z-index:60;min-width:180px;max-height:220px;overflow:auto;padding:4px;display:flex;flex-direction:column;gap:1px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
-.dshk-vault-slashitem{padding:7px 10px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer}
+.dshk-vault-slashmenu{position:fixed;z-index:60;min-width:180px;max-height:260px;overflow:auto;padding:4px;display:flex;flex-direction:column;gap:1px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.dshk-vault-slashitem{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer}
 .dshk-vault-slashitem:hover,.dshk-vault-slashitem.is-active{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-vault-slashback{padding:4px 10px 6px;font-size:11px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-bottom:1px dashed var(--dsw-alias-border-l1);margin-bottom:2px}
+.dshk-vault-slashback:hover{color:var(--dsw-alias-label-primary)}
+.dshk-vault-slashmore{font-size:10px;color:var(--dsw-alias-label-tertiary)}
 .dshk-vault-callout{margin:.6em 0;border:1px solid var(--dsw-alias-border-l2);border-left:3px solid var(--dsw-alias-brand-primary);border-radius:8px;background:var(--dsw-alias-bg-layer-3);padding:6px 10px;font-size:12.5px}
 .dshk-vault-callout summary{cursor:pointer;font-weight:600;color:var(--dsw-alias-label-primary)}
 .dshk-vault-callout.is-warn,.dshk-vault-callout.is-warning{border-left-color:var(--dsw-alias-warning,#e8a13c)}
@@ -7089,11 +7108,32 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       });
     }
 
-    /** 斜杠菜单项：label 走 i18n，match 是中英过滤词；insert 为 md 模板 */
-    const VAULT_MENU_ITEMS = [
-      { key: "h2", labelKey: "vmenuH2", match: "h2 heading 标题 标题", insert: "## " },
-      { key: "ul", labelKey: "vmenuUl", match: "ul bullet list 列表 列表 无序", insert: "- " },
-      { key: "todo", labelKey: "vmenuTodo", match: "todo task 待办 任务", insert: "- [ ] " },
+    /** 斜杠菜单：两级（wangshu 同款）——根级为分组（标题/列表含子级，多级标题
+     *  快速插），叶级为插入模板。label 走 i18n，match 是中英过滤词 */
+    const VAULT_MENU = [
+      {
+        key: "heading",
+        labelKey: "vmenuHeading",
+        match: "heading h1 h2 h3 h4 h5 h6 标题 一级 二级 三级",
+        children: [
+          { key: "h1", labelKey: "vmenuH1", match: "h1 一级", insert: "# " },
+          { key: "h2", labelKey: "vmenuH2", match: "h2 二级", insert: "## " },
+          { key: "h3", labelKey: "vmenuH3", match: "h3 三级", insert: "### " },
+          { key: "h4", labelKey: "vmenuH4", match: "h4 四级", insert: "#### " },
+          { key: "h5", labelKey: "vmenuH5", match: "h5 五级", insert: "##### " },
+          { key: "h6", labelKey: "vmenuH6", match: "h6 六级", insert: "###### " },
+        ],
+      },
+      {
+        key: "list",
+        labelKey: "vmenuList",
+        match: "list bullet ordered 列表 无序 有序",
+        children: [
+          { key: "ul", labelKey: "vmenuUl", match: "ul bullet 无序", insert: "- " },
+          { key: "ol", labelKey: "vmenuOl", match: "ol ordered 有序", insert: "1. " },
+          { key: "todo", labelKey: "vmenuTodo", match: "todo task 待办 任务", insert: "- [ ] " },
+        ],
+      },
       { key: "quote", labelKey: "vmenuQuote", match: "quote blockquote 引用", insert: "> " },
       { key: "fold", labelKey: "vmenuFold", match: "fold collapsible 折叠 折叠块", insert: "> [!fold] 标题\n>\n> 内容" },
       { key: "code", labelKey: "vmenuCode", match: "code block fence 代码块", insert: "```\n\n```" },
@@ -7415,9 +7455,27 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       const menuIdxRef = react.useRef(menuIdx);
       menuRef.current = menu;
       menuIdxRef.current = menuIdx;
-      const menuFiltered = () => {
-        const q = (menuRef.current?.query ?? "").toLowerCase();
-        return VAULT_MENU_ITEMS.filter((item) => q === "" || item.match.includes(q));
+      const menuFiltered = () => menuRows();
+      // 当前层可见行：sub 空且无 query = 根级分组；有 query = 跨组扁平搜叶项；
+      // sub 指向分组 = 该组子级
+      const menuRows = () => {
+        const mn = menuRef.current ?? { query: "", sub: null };
+        const q = (mn.query ?? "").toLowerCase();
+        if (mn.sub) {
+          const group = VAULT_MENU.find((g) => g.key === mn.sub);
+          const kids = group ? group.children : [];
+          return q === "" ? kids : kids.filter((k) => (k.labelKey + k.match).toLowerCase().includes(q));
+        }
+        if (q !== "") {
+          const out = [];
+          for (const g of VAULT_MENU) {
+            for (const k of g.children ?? [g]) {
+              if ((g.labelKey + k.labelKey + g.match + k.match).toLowerCase().includes(q)) out.push(k);
+            }
+          }
+          return out;
+        }
+        return VAULT_MENU;
       };
       const applyMenuTemplate = (item) => {
         const v = cmView();
@@ -7463,26 +7521,56 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
         });
         const onKeyDown = (e) => {
           if (menuRef.current !== null) {
-            const filtered = menuFiltered();
+            const rows = menuRows();
+            const idx = rows.length === 0 ? 0 : Math.min(menuIdxRef.current, rows.length - 1);
+            const row = rows[idx];
             if (e.key === "Escape") {
               e.preventDefault();
               e.stopPropagation();
               setMenu(null);
               return;
             }
-            if (e.key === "Enter" && filtered.length > 0) {
-              e.preventDefault();
-              e.stopPropagation();
-              applyMenuTemplate(filtered[Math.min(menuIdxRef.current, filtered.length - 1)]);
-              return;
-            }
             if (e.key === "ArrowDown" || e.key === "ArrowUp") {
               e.preventDefault();
               e.stopPropagation();
-              menuIdxRef.current = e.key === "ArrowDown"
-                ? Math.min(menuIdxRef.current + 1, filtered.length - 1)
-                : Math.max(0, menuIdxRef.current - 1);
+              menuIdxRef.current = rows.length === 0
+                ? 0
+                : e.key === "ArrowDown"
+                  ? Math.min(idx + 1, rows.length - 1)
+                  : Math.max(0, idx - 1);
               setMenuIdx(menuIdxRef.current);
+              return;
+            }
+            if (e.key === "ArrowRight" && row && row.children) {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenu({ ...menuRef.current, sub: row.key });
+              menuIdxRef.current = 0;
+              setMenuIdx(0);
+              return;
+            }
+            if (e.key === "ArrowLeft" && menuRef.current.sub) {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenu({ ...menuRef.current, sub: null });
+              menuIdxRef.current = 0;
+              setMenuIdx(0);
+              return;
+            }
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!row) {
+                setMenu(null);
+                return;
+              }
+              if (row.children) {
+                setMenu({ ...menuRef.current, sub: row.key });
+                menuIdxRef.current = 0;
+                setMenuIdx(0);
+                return;
+              }
+              applyMenuTemplate(row);
               return;
             }
           }
@@ -7496,7 +7584,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
               const before = line.text.slice(0, pos - line.from);
               if (/^\/\S*$/.test(before)) {
                 const coords = view.coordsAtPos(pos);
-                setMenu({ query: before.slice(1), x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4 });
+                setMenu({ query: before.slice(1), sub: null, x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4 });
                 menuIdxRef.current = 0;
                 setMenuIdx(0);
               }
@@ -7742,22 +7830,42 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
                                 className: "dshk-vault-slashmenu",
                                 style: { left: menu.x, top: menu.y },
                                 children: (() => {
-                                  const filtered = menuFiltered();
-                                  if (filtered.length === 0) return jsxRuntime.jsx("div", { className: "dshk-vault-slashitem", children: t("vaultSearchEmpty") });
-                                  return filtered.map((item, i) =>
-                                    jsxRuntime.jsx(
-                                      "div",
-                                      {
-                                        className: `dshk-vault-slashitem${i === menuIdx ? " is-active" : ""}`,
+                                  const rows = menuRows();
+                                  const group = menu.sub ? VAULT_MENU.find((g) => g.key === menu.sub) : null;
+                                  const backRow = group
+                                    ? jsxRuntime.jsxs("div", {
+                                        className: "dshk-vault-slashback",
                                         onMouseDown: (e) => {
                                           e.preventDefault();
-                                          applyMenuTemplate(item);
+                                          setMenu({ ...menuRef.current, sub: null });
+                                          menuIdxRef.current = 0;
+                                          setMenuIdx(0);
                                         },
-                                        children: t(item.labelKey),
-                                      },
-                                      item.key,
-                                    ),
-                                  );
+                                        children: ["‹ ", t(group.labelKey)],
+                                      }, "back")
+                                    : null;
+                                  const rowsJsx = rows.length === 0
+                                    ? [jsxRuntime.jsx("div", { className: "dshk-vault-slashitem", children: t("vaultSearchEmpty") }, "empty")]
+                                    : rows.map((row, i) => {
+                                        const isGroup = !!row.children;
+                                        return jsxRuntime.jsxs(
+                                          "div",
+                                          {
+                                            className: `dshk-vault-slashitem${i === menuIdx ? " is-active" : ""}`,
+                                            onMouseDown: (e) => {
+                                              e.preventDefault();
+                                              if (isGroup) {
+                                                setMenu({ ...menuRef.current, sub: row.key });
+                                                menuIdxRef.current = 0;
+                                                setMenuIdx(0);
+                                              } else applyMenuTemplate(row);
+                                            },
+                                            children: [t(row.labelKey), isGroup ? jsxRuntime.jsx("span", { className: "dshk-vault-slashmore", children: "▸" }) : null],
+                                          },
+                                          (menu.sub ? menu.sub + "-" : "") + row.key,
+                                        );
+                                      });
+                                  return [backRow, ...rowsJsx];
                                 })(),
                               },
                               "slashmenu",
