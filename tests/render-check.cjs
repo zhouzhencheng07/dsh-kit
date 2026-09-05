@@ -34,6 +34,7 @@ const reactStub = {
   useLayoutEffect: () => undefined,
   useCallback: (fn) => fn,
   useRef: (v) => ({ current: v }),
+  useMemo: (fn) => fn(),
   useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
   Fragment: function Fragment() {},
 };
@@ -61,7 +62,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserEntry, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm };",
+  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserEntry, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes };",
 );
 const harness = new Function("require", wrapper);
 const comps = harness((name) => {
@@ -71,7 +72,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserEntry", "BrowserPanel", "RightDock", "DockStub", "dockBounds"];
+const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserEntry", "BrowserPanel", "RightDock", "DockStub", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -301,6 +302,28 @@ comps.setKitUi({ jobsOpen: true });
 out = comps.KitSurfaces({ ...jobsHooks });
 check("KitSurfaces 带jobsOpen渲染无异常", !!out && typeof out === "object");
 comps.setKitUi({ jobsOpen: false });
+
+// 6.4) 日程模块：ScheduleView 初始态 / 弹窗两态 / 计时芯片空闲态 / 并行分列纯函数
+callLog = [];
+out = comps.ScheduleView({});
+check("ScheduleView 初始态渲染无异常（周网格+待办+统计）", !!out && typeof out === "object");
+out = comps.ScheduleModal({ modal: { id: null, kind: "event", values: { title: "", description: "", location: "", start: "2026-09-08T09:00", end: "2026-09-08T10:00", allDay: false, recurrence: null, color: "#228be6" } }, onClose: () => {}, onSave: () => {}, onDelete: () => {} });
+check("ScheduleModal 事件新建态渲染无异常", !!out && typeof out === "object");
+out = comps.ScheduleModal({ modal: { id: "t1", kind: "task", values: { title: "交报告", due: "2026-09-10", completedAt: null } }, onClose: () => {}, onSave: () => {}, onDelete: () => {} });
+check("ScheduleModal 待办编辑态渲染无异常", !!out && typeof out === "object");
+out = comps.ScheduleTimerChip({});
+check("TimerChip 空闲态渲染无异常", !!out && typeof out === "object");
+{
+  const lanes = comps.schedAssignLanes([
+    { baseId: "a", startMins: 540, endMins: 600 },
+    { baseId: "b", startMins: 560, endMins: 620 },
+    { baseId: "c", startMins: 700, endMins: 760 },
+  ]);
+  const a = lanes.find((x) => x.baseId === "a");
+  const b = lanes.find((x) => x.baseId === "b");
+  const c = lanes.find((x) => x.baseId === "c");
+  check("并行事件分列：重叠异泳道、不重叠复用泳道", a.lanes === 2 && b.lanes === 2 && a.lane !== b.lane && c.lanes === 2 && c.lane === a.lane);
+}
 
 // 6.5) PhoneSection：数据未达（fetch/effect 被桩跳过 → 纯 loading 分支）
 callLog = [];
