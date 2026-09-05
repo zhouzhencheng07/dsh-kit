@@ -731,9 +731,7 @@ window.__ModuleLoader__.load({
       schedStatsEvents: "事件",
       schedStatsDone: "已完成",
       schedStatsOpen: "待办",
-      schedStatsDay: "日",
-      schedStatsWeek: "周",
-      schedStatsMonth: "月",
+      schedStatsTitle: "本周统计",
       schedEmptyWeek: "本周暂无日程安排",
       schedPickTimer: "选择要计时的待办",
       schedTimerStandalone: "独立计时（不挂待办）",
@@ -1064,9 +1062,7 @@ window.__ModuleLoader__.load({
       schedStatsEvents: "Events",
       schedStatsDone: "Done",
       schedStatsOpen: "Open",
-      schedStatsDay: "Day",
-      schedStatsWeek: "Week",
-      schedStatsMonth: "Month",
+      schedStatsTitle: "This week",
       schedEmptyWeek: "No events this week",
       schedPickTimer: "Pick a task to time",
       schedTimerStandalone: "Standalone timer (no task)",
@@ -1401,11 +1397,7 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-sched-weeklabel{min-width:104px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:12px}
 .dshk-sched-navbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
 .dshk-sched-navbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-sched-statsscope{margin-left:auto;display:flex;gap:4px}
-.dshk-sched-chip{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;padding:4px 10px;border-radius:999px;cursor:pointer}
-.dshk-sched-chip:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-sched-chip.is-active{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:#fff}
-.dshk-sched-body{flex:1 1 auto;min-height:0;display:flex}
+.dshk-sched-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
 .dshk-sched-gridwrap{flex:1 1 auto;min-width:0;overflow:auto}
 .dshk-sched-grid{display:grid;grid-template-columns:52px repeat(7,minmax(0,1fr));min-width:700px}
 .dshk-sched-corner{position:sticky;top:0;z-index:3;background:var(--dsw-alias-bg-base)}
@@ -1425,9 +1417,13 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-sched-event:hover{filter:brightness(1.08)}
 .dshk-sched-evtime{display:block;font-size:10px;opacity:.85;white-space:nowrap}
 .dshk-sched-evtitle{display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
-.dshk-sched-side{flex:none;width:208px;border-left:1px solid var(--dsw-alias-border-l2);overflow:auto;display:flex;flex-direction:column;gap:10px;padding:10px}
+/* 上条下网（用户定稿 2026-09-06）：待办/统计横条在上，周网格在下吃满坞宽 */
+.dshk-sched-side{flex:none;display:flex;flex-direction:row;align-items:flex-start;gap:10px;padding:10px;border-bottom:1px solid var(--dsw-alias-border-l2);overflow:auto}
+.dshk-sched-card.is-tasks{flex:1 1 auto;min-width:0}
+.dshk-sched-card.is-stats{flex:none;width:230px}
 .dshk-sched-card{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-3)}
 .dshk-sched-cardtitle{font-weight:600;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshk-sched-cardhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}
 .dshk-sched-taskadd{display:flex;gap:6px}
 .dshk-sched-taskinput{flex:1;min-width:0;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 8px;border-radius:6px}
 .dshk-sched-taskdue{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;padding:4px 6px;border-radius:6px}
@@ -1474,7 +1470,7 @@ textarea.dshk-sched-input{resize:vertical}
 @keyframes dshk-sched-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .dshk-sched-timertitle{max-width:180px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:12px;color:var(--dsw-alias-label-primary)}
 .dshk-sched-timerelapsed{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dsw-alias-label-secondary)}
-.dshk-sched-timerpick{position:absolute;bottom:26px;left:0;z-index:60;min-width:200px;max-height:240px;overflow:auto;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 28px color-mix(in srgb,#000 25%,transparent);display:flex;flex-direction:column;padding:4px}
+.dshk-sched-timerpick{position:absolute;top:26px;right:0;z-index:60;min-width:200px;max-height:240px;overflow:auto;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 28px color-mix(in srgb,#000 25%,transparent);display:flex;flex-direction:column;padding:4px}
 .dshk-sched-timerpickitem{appearance:none;border:none;background:none;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;text-align:left;padding:7px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:320px}
 .dshk-sched-timerpickitem:hover{background:var(--dsw-alias-interactive-bg-hover)}
 /* 内置浏览器面板：右侧停靠（复用 .dshk-pane）；URL 栏 + 实时画面 canvas（人机共驾） */
@@ -5960,7 +5956,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
     function ScheduleView() {
       const [weekStart, setWeekStart] = react.useState(() => schedMondayOf(schedToday()));
       const [data, setData] = react.useState(() => ({ events: [], occurrences: [], runningTimer: null }));
-      const [statsScope, setStatsScope] = react.useState("week");
+      // 统计口径固定周（用户定稿 2026-09-06：日/月视图先不做）——agent 侧
+      // schedule_query 仍支持 day/month 汇总，此处只砍 UI 切换
       const [stats, setStats] = react.useState(null);
       const [modal, setModal] = react.useState(null); // { id?, values, kind: 'event'|'task' }
       const [taskInput, setTaskInput] = react.useState("");
@@ -5990,20 +5987,19 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
         }
       }, [weekStart]);
 
-      const fetchStats = react.useCallback(async (scope) => {
+      const fetchStats = react.useCallback(async () => {
         try {
-          setStats(await schedFetch(`/dsh-kit/schedule/stats?scope=${scope}&date=${encodeURIComponent(schedToday())}`));
+          setStats(await schedFetch(`/dsh-kit/schedule/stats?scope=week&date=${encodeURIComponent(schedToday())}`));
         } catch {
           setStats(null);
         }
       }, []);
-
       react.useEffect(() => {
         void fetchData();
       }, [fetchData]);
       react.useEffect(() => {
-        void fetchStats(statsScope);
-      }, [fetchStats, statsScope]);
+        void fetchStats();
+      }, [fetchStats]);
       // 可见时 30s 轮询（agent 经 schedule_create 建的条目靠它进面板）+ 每分钟走当前时刻线
       react.useEffect(() => {
         const timer = setInterval(() => {
@@ -6032,12 +6028,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
           try {
             await schedFetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });
             await fetchData();
-            void fetchStats(statsScope);
+            void fetchStats();
           } catch (error) {
             flashToast(tf("schedOpFail", { error: String(error?.message ?? error) }));
           }
         },
-        [fetchData, fetchStats, statsScope],
+        [fetchData, fetchStats],
       );
 
       const tasks = react.useMemo(
@@ -6097,16 +6093,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
             jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setWeekStart((s) => schedAddDays(s, 7)), children: "›" }),
             jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setWeekStart(schedMondayOf(schedToday())), children: t("schedToday") }),
           ] }),
-          jsxRuntime.jsxs("span", { className: "dshk-sched-statsscope", children: [
-            ["day", "schedStatsDay"], ["week", "schedStatsWeek"], ["month", "schedStatsMonth"],
-          ].map(([scope, key]) =>
-            jsxRuntime.jsx("button", {
-              type: "button",
-              className: `dshk-sched-chip${statsScope === scope ? " is-active" : ""}`,
-              onClick: () => setStatsScope(scope),
-              children: t(key),
-            }, scope),
-          ) }),
         ],
       });
 
@@ -6114,18 +6100,20 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
         className: "dshk-sched-grid",
         children: [
           jsxRuntime.jsx("div", { className: "dshk-sched-corner" }),
+          // key 必须带前缀区分：日期头与日列同用裸日期曾致同级 key 冲突——React
+          // 错配复用元素，切周时旧列不卸载不断往下叠加
           ...weekDates.map((date, i) =>
             jsxRuntime.jsxs("div", { className: `dshk-sched-dayhead${date === today ? " is-today" : ""}`, children: [
               jsxRuntime.jsx("span", { className: "dshk-sched-wd", children: schedWeekdays()[i] }),
               jsxRuntime.jsx("span", { className: "dshk-sched-dnum", children: Number(date.slice(8, 10)) }),
-            ] }, date),
+            ] }, `hd-${date}`),
           ),
           ...allDayOcc.map((o) =>
             jsxRuntime.jsx("div", { className: "dshk-sched-allday", style: { gridColumn: (weekDates.indexOf(o.date) + 2) || 1 }, children: o.title }, `ad-${o.baseId}-${o.date}`),
           ),
           jsxRuntime.jsx("div", { className: "dshk-sched-timeline", children: hours.map((h) =>
             jsxRuntime.jsx("div", { className: "dshk-sched-hourlabel", children: `${schedPad2(h)}:00` }, h),
-          ) }),
+          ) }, "tl"),
           ...weekDates.map((date) => {
             const inWeek = gridOcc.filter((o) => o.date === date);
             return jsxRuntime.jsxs("div", { className: "dshk-sched-daycol", "data-date": date, children: [
@@ -6160,14 +6148,20 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
                   ],
                 }, `${o.baseId}@${o.date}`),
               ),
-            ] }, date);
+            ] }, `dc-${date}`);
           }),
         ],
       });
 
-      const rightCol = jsxRuntime.jsxs("div", { className: "dshk-sched-side", children: [
-        jsxRuntime.jsxs("div", { className: "dshk-sched-card", children: [
-          jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedTasks") }),
+      // 上条下网（用户定稿 2026-09-06）：窄坞里左右分栏会挤得周网格只剩横向
+      // 滚动的窄窗——改为待办/统计条在上、网格在下吃满坞宽。计时芯片入待办卡头
+      // （用户定稿：输入区旁太丑，归属右坞）
+      const topCol = jsxRuntime.jsxs("div", { className: "dshk-sched-side", children: [
+        jsxRuntime.jsxs("div", { className: "dshk-sched-card is-tasks", children: [
+          jsxRuntime.jsxs("div", { className: "dshk-sched-cardhead", children: [
+            jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedTasks") }),
+            jsxRuntime.jsx(ScheduleTimerChip, {}),
+          ] }),
           jsxRuntime.jsxs("div", { className: "dshk-sched-taskadd", children: [
             jsxRuntime.jsx("input", {
               className: "dshk-sched-taskinput",
@@ -6204,8 +6198,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
               }),
         ] }),
         stats
-          ? jsxRuntime.jsxs("div", { className: "dshk-sched-card", children: [
-              jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedStatsTimed") }),
+          ? jsxRuntime.jsxs("div", { className: "dshk-sched-card is-stats", children: [
+              jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedStatsTitle") }),
               jsxRuntime.jsxs("div", { className: "dshk-sched-statsgrid", children: [
                 jsxRuntime.jsxs("div", { className: "dshk-sched-stat", children: [jsxRuntime.jsx("b", { children: schedFmtDur(stats.timedMs) }), jsxRuntime.jsx("span", { children: t("schedStatsTimed") })] }),
                 jsxRuntime.jsxs("div", { className: "dshk-sched-stat", children: [jsxRuntime.jsx("b", { children: String(stats.eventCount) }), jsxRuntime.jsx("span", { children: t("schedStatsEvents") })] }),
@@ -6219,8 +6213,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       return jsxRuntime.jsxs("div", { className: "dshk-sched-root", children: [
         head,
         jsxRuntime.jsxs("div", { className: "dshk-sched-body", children: [
+          topCol,
           jsxRuntime.jsx("div", { className: "dshk-sched-gridwrap", ref: gridRef, children: jsxRuntime.jsx("div", { className: "dshk-sched-gridinner", children: grid }) }),
-          rightCol,
         ] }),
         modal
           ? jsxRuntime.jsx(ScheduleModal, {
@@ -8232,14 +8226,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
           ),
         );
       }
-      // 日程：右坞标签（用户定稿 2026-09-06：日程放中心区既挤对话输入口又与
-      // 对话绑定奇怪，迁入右坞与任务/浏览器同列）；输入区计时芯片保留原位。
-      // 芯片组件内部拉 /dsh-kit/schedule/* 数据，与 session 无关。
-      if (ctx.slots && typeof ctx.slots.inject === "function") {
-        ctx.slots.inject("conversation.composer.dock", () =>
-          ctx.slots.register({ name: "conversation.composer.dock", id: "dsh-kit-timer", order: 5 }, ScheduleTimerChip),
-        );
-      }
+      // 计时芯片原挂 conversation.composer.dock（输入区上方），用户定稿
+      // 2026-09-06「太丑」移入右坞日程视图的待办卡头——随 ScheduleView 渲染，
+      // 无需独立槽位注册。组件内部拉 /dsh-kit/schedule/* 数据，与 session 无关。
       // 导航图标替换是点击驱动的轻量方案：打开设置/面板内切换都源于一次 click
       document.addEventListener("click", scheduleSkillIconSwap, true);
       // 对话文件点击接管（默认关闭：设置卡 chatOpenFilePreview 开启才生效）
