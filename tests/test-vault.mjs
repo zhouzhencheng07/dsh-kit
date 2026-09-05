@@ -6,6 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   sanitizePageTitle,
+  sanitizePageRel,
   parseFrontmatterTags,
   extractTitle,
   extractWikiLinks,
@@ -28,6 +29,15 @@ await test('sanitizePageTitle 清洗 Windows 非法字符与首尾点空格', ()
   assert.equal(sanitizePageTitle(' a/b*c?d '), 'a-b-c-d')
   assert.equal(sanitizePageTitle('..隐藏.'), '隐藏')
   assert.equal(sanitizePageTitle(''), '')
+})
+
+await test('sanitizePageRel 分段净化，支持子目录且防穿越', () => {
+  assert.equal(sanitizePageRel('Python/基础 笔记'), 'Python/基础 笔记')
+  assert.equal(sanitizePageRel('日记\\2026\\九月'), '日记/2026/九月') // 反斜杠也当分隔
+  assert.equal(sanitizePageRel('a/../b'), 'a/b') // .. 段剥成空被丢弃，防穿越
+  assert.equal(sanitizePageRel('/头部斜杠//压缩/'), '头部斜杠/压缩')
+  assert.equal(sanitizePageRel('///..//'), '') // 无有效段 → 空（端点报缺标题）
+  assert.equal(sanitizePageRel('1/2/3/4/5/6/7/8/9/10').split('/').length <= 8, true) // 最多 8 段
 })
 
 await test('parseFrontmatterTags 只认 tags 行，内联数组与逗号两可', () => {

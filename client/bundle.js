@@ -761,7 +761,7 @@ window.__ModuleLoader__.load({
       vaultSearchEmpty: "无结果",
       vaultSearchFail: "搜索失败：{error}",
       vaultNewPage: "新建页面",
-      vaultNewPagePh: "页面标题，回车创建",
+      vaultNewPagePh: "标题，可含 / 建子目录，回车创建",
       vaultCreate: "创建",
       vaultCancel: "取消",
       vaultEdit: "编辑",
@@ -1145,7 +1145,7 @@ window.__ModuleLoader__.load({
       vaultSearchEmpty: "No results",
       vaultSearchFail: "Search failed: {error}",
       vaultNewPage: "New page",
-      vaultNewPagePh: "Page title, Enter to create",
+      vaultNewPagePh: "Title, / for subfolders, Enter to create",
       vaultCreate: "Create",
       vaultCancel: "Cancel",
       vaultEdit: "Edit",
@@ -7233,6 +7233,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
       const [cmReady, setCmReady] = react.useState(false);
       const [creating, setCreating] = react.useState(false);
       const [createTitle, setCreateTitle] = react.useState("");
+      // 建页跳转 → 内容到手直接进编辑态（ref：跨 effect 传递，state 会闭包过期）
+      const autoEditRef = react.useRef(false);
       const [searchQ, setSearchQ] = react.useState("");
       const [searchRes, setSearchRes] = react.useState(null);
       const [searching, setSearching] = react.useState(false);
@@ -7293,7 +7295,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
         });
       }, []);
 
-      // 当前页变化 → 拉内容（历史前进后退同样走这里）
+      // 当前页变化 → 拉内容（历史前进后退同样走这里）。建页跳转时
+      // autoEditRef 置位：内容到手即直接进编辑态（建页即编辑，用户定稿）
       react.useEffect(() => {
         if (current === null) {
           setPage(null);
@@ -7308,8 +7311,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
             const body = await schedFetch(`/dsh-kit/read?path=${encodeURIComponent(current)}`);
             if (!alive) return;
             setPage({ loading: false, content: body.binary ? "" : (body.content ?? ""), mtimeMs: body.mtimeMs ?? 0, binary: body.binary === true, gone: false });
+            if (autoEditRef.current && body.binary !== true) {
+              autoEditRef.current = false;
+              setDraft(body.content ?? "");
+              setEditing(true);
+              void ensureCmLib().then(() => setCmReady(true));
+            }
           } catch {
             if (!alive) return;
+            autoEditRef.current = false;
             setPage({ loading: false, content: "", mtimeMs: 0, gone: true });
           }
         })();
@@ -7349,12 +7359,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
             setCreating(false);
             setCreateTitle("");
             await loadIndex();
-            if (body.path) openPath(body.path);
+            if (body.path) {
+              autoEditRef.current = body.path !== current; // 同页（已存在）不折腾
+              openPath(body.path);
+            }
           } catch (error) {
             setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
           }
         },
-        [space, loadIndex, openPath],
+        [space, current, loadIndex, openPath],
       );
 
       // 渲染后处理：标题锚 id → callout 折叠块 → 双链/碎链/同页锚点击 →

@@ -72,7 +72,7 @@ import { multipartBoundary, parseMultipart, safeUploadName, dedupeName } from ".
 import { BrowserService } from "./browser.js";
 import { loadToolsModule, buildBrowserTools } from "./browser-tools.js";
 import { getScheduleStore, buildScheduleTools, isDateStr, todayStr } from "./schedule.js";
-import { VaultScanner, sanitizePageTitle } from "./vault.js";
+import { VaultScanner, sanitizePageTitle, sanitizePageRel } from "./vault.js";
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在设置里改（phonePort，1-65535） */
 const PHONE_PORT = 3090;
 export const name = 'dsh-kit';
@@ -2725,18 +2725,19 @@ export async function apply(ctx) {
             // 建页：title 清洗成文件名，space（顶层目录，已存在）可选；已存在回 409
             vaultPost('/dsh-kit/vault/page', (body, root) => {
                 const space = sanitizePageTitle(String(body.space ?? ''));
-                const title = sanitizePageTitle(String(body.title ?? ''));
-                if (title === '')
+                const rel = sanitizePageRel(String(body.title ?? ''));
+                if (rel === '')
                     throw new Error('缺少页面标题');
-                const dir = space === '' ? root : path.join(root, space);
-                if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory())
-                    throw new Error(`库目录不存在：${space}`);
-                const file = path.join(dir, `${title}.md`);
+                // 标题可带 `/` 指子目录，目录不存在则递归创建（碎链建页同走此路）
+                const segs = rel.split('/');
+                const dir = path.join(root, ...(space === '' ? [] : [space]), ...segs.slice(0, -1));
+                fs.mkdirSync(dir, { recursive: true });
+                const file = path.join(dir, `${segs[segs.length - 1] ?? ''}.md`);
                 if (fs.existsSync(file))
                     return { exists: true, path: file, mtimeMs: fs.statSync(file).mtimeMs };
                 const today = new Date();
                 const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-                const template = `---\ntags: []\ncreated: ${dateStr}\n---\n\n# ${title}\n\n`;
+                const template = `---\ntags: []\ncreated: ${dateStr}\n---\n\n# ${segs[segs.length - 1] ?? ''}\n\n`;
                 fs.writeFileSync(file, template, 'utf8');
                 return { path: file, mtimeMs: fs.statSync(file).mtimeMs };
             });
