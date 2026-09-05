@@ -50,13 +50,13 @@ window.__ModuleLoader__.load({
     // 槽位组件，状态必须跨槽共享：模块级不可变快照 + useSyncExternalStore 订阅
     // （getSnapshot 返回模块绑定值，恒定引用直到 set 替换）。
     // 右侧标签页容器（ZCode 式，2026-09-06 定稿常置）：previews（文件预览标签
-    // 数组，二级标签——预览大标签内套文件小标签）/jobsOpen/browserOpen 是「标签
-    // 存在性」，dockTab 是当前激活大标签，activePreview 是预览内激活的文件；打开
-    // 某功能 = 确保标签存在并激活，互斥清场废除（切走不丢状态）。容器本身常置：
-    // 不再随「最后一个标签关闭」而消失，0 标签时渲染空态选择器（打开标签页卡片）；
-    // dockCollapsed = 暂时收起成右缘竖条（存在性保留；视为人为退出——agent 导航
-    // 不再弹回），收起态写 localStorage，刷新后仍保持收起。
-    let kitUi = { treeOpen: false, gitOpen: false, previews: [], activePreview: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, dockTab: null, dockCollapsed: false };
+    // 数组，二级标签——预览大标签内套文件小标签）/jobsOpen/browserOpen/schedOpen
+    // 是「标签存在性」，dockTab 是当前激活大标签，activePreview 是预览内激活的
+    // 文件；打开某功能 = 确保标签存在并激活，互斥清场废除（切走不丢状态）。
+    // 容器本身常置：不再随「最后一个标签关闭」而消失，0 标签时渲染空态选择器
+    // （打开标签页卡片）；dockCollapsed = 暂时收起成右缘竖条（存在性保留；视为
+    // 人为退出——agent 导航不再弹回），收起态写 localStorage，刷新后仍保持收起。
+    let kitUi = { treeOpen: false, gitOpen: false, previews: [], activePreview: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, dockTab: null, dockCollapsed: false };
     const kitUiListeners = new Set();
     /** dockCollapsed 的 localStorage 持久化（读失败/无 localStorage 环境静默回退） */
     const dockCollapsedStore = {
@@ -114,7 +114,7 @@ window.__ModuleLoader__.load({
       return Math.max(1, Number.isInteger(v) ? v : PREVIEW_MAX_DEFAULT);
     }
     /** 右侧标签页共存的活性判定（渲染右坞与否） */
-    const dockAlive = (ui) => (ui.previews?.length ?? 0) > 0 || ui.jobsOpen === true || ui.browserOpen === true;
+    const dockAlive = (ui) => (ui.previews?.length ?? 0) > 0 || ui.jobsOpen === true || ui.browserOpen === true || ui.schedOpen === true;
     /** 打开/激活文件预览标签：已存在则置顶激活（usedAt 刷新，deleted/untracked
      *  同步为本次状态）；超过上限按 LRU 逐出最久未用的（绝不含本次）；顺带取消
      *  最小化态并激活预览大标签。deleted=已删除文件，预览只承载删除 diff。 */
@@ -158,22 +158,24 @@ window.__ModuleLoader__.load({
         patch.previews = [];
         patch.activePreview = null;
       } else if (tab === "jobs") patch.jobsOpen = false;
+      else if (tab === "schedule") patch.schedOpen = false;
       else patch.browserOpen = false;
       if (ui.dockTab === tab) {
         const remaining = [];
         if (tab !== "preview" && (ui.previews?.length ?? 0) > 0) remaining.push("preview");
         if (tab !== "jobs" && ui.jobsOpen) remaining.push("jobs");
+        if (tab !== "schedule" && ui.schedOpen) remaining.push("schedule");
         if (tab !== "browser" && ui.browserOpen) remaining.push("browser");
         patch.dockTab = remaining[0] ?? null;
       }
       return patch;
     }
-    /** 打开/激活一个右坞标签（坞头 + 菜单与空态选择器卡片共用）：确保存在并激活、
-     *  展开收起态；不清别的标签。浏览器的抑制解除是副作用，留在调用点 */
+    /** 打开/激活一个右坞标签（标签旁「+」菜单与空态选择器卡片共用）：确保存在并
+     *  激活、展开收起态；不清别的标签。浏览器的抑制解除是副作用，留在调用点 */
     function openDockTab(ui, tab) {
-      return tab === "jobs"
-        ? { jobsOpen: true, dockTab: "jobs", dockCollapsed: false }
-        : { browserOpen: true, dockTab: "browser", dockCollapsed: false };
+      if (tab === "jobs") return { jobsOpen: true, dockTab: "jobs", dockCollapsed: false };
+      if (tab === "schedule") return { schedOpen: true, dockTab: "schedule", dockCollapsed: false };
+      return { browserOpen: true, dockTab: "browser", dockCollapsed: false };
     }
 
     // ── 多终端会话模型 ──
@@ -636,7 +638,7 @@ window.__ModuleLoader__.load({
       browserNotRunning: "浏览器未启动——在上方输入网址回车，或等 agent 首次使用时自动拉起",
       browserNoPages: "没有打开的页面——在上方输入网址回车，或等 agent 下次导航自动出现在这里",
       dockPreview: "预览",
-      dockJobs: "任务",
+      dockJobs: "后台任务",
       dockBrowser: "浏览器",
       dockClose: "关闭标签",
       pvCloseTab: "关闭此预览",
@@ -948,7 +950,7 @@ window.__ModuleLoader__.load({
       browserNotRunning: "Browser not started — type a URL above or wait for the agent's first use",
       browserNoPages: "No open pages — type a URL above, or the agent's next navigation will appear here",
       dockPreview: "Preview",
-      dockJobs: "Jobs",
+      dockJobs: "Background jobs",
       dockBrowser: "Browser",
       dockClose: "Close tab",
       pvCloseTab: "Close preview",
@@ -1423,7 +1425,7 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-sched-event:hover{filter:brightness(1.08)}
 .dshk-sched-evtime{display:block;font-size:10px;opacity:.85;white-space:nowrap}
 .dshk-sched-evtitle{display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
-.dshk-sched-side{flex:none;width:264px;border-left:1px solid var(--dsw-alias-border-l2);overflow:auto;display:flex;flex-direction:column;gap:10px;padding:10px}
+.dshk-sched-side{flex:none;width:208px;border-left:1px solid var(--dsw-alias-border-l2);overflow:auto;display:flex;flex-direction:column;gap:10px;padding:10px}
 .dshk-sched-card{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-3)}
 .dshk-sched-cardtitle{font-weight:600;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-sched-taskadd{display:flex;gap:6px}
@@ -2765,6 +2767,28 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
             jsxRuntime.jsx("circle", { cx: 8, cy: 8, r: 6 }),
             jsxRuntime.jsx("path", { d: "M2 8h12" }),
             jsxRuntime.jsx("path", { d: "M8 2c1.8 1.6 2.7 3.6 2.7 6S9.8 12.4 8 14c-1.8-1.6-2.7-3.6-2.7-6S6.2 3.6 8 2z" }),
+          ],
+        },
+      );
+    }
+
+    /** 日程图标：日历（圆角框 + 两枚吊耳 + 头部分隔线），与终端/任务描边体系一致 */
+    function SchedIcon() {
+      return jsxRuntime.jsxs(
+        "svg",
+        {
+          width: 15,
+          height: 15,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.2,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          children: [
+            jsxRuntime.jsx("rect", { x: 2.8, y: 3.6, width: 10.4, height: 9.6, rx: 1.6 }),
+            jsxRuntime.jsx("path", { d: "M5.4 2.2v2.6M10.6 2.2v2.6M2.8 7h10.4" }),
           ],
         },
       );
@@ -6821,8 +6845,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       let label = t("dockPreview");
       if (ui.dockTab === "jobs" && ui.jobsOpen) label = t("dockJobs");
       else if (ui.dockTab === "browser" && ui.browserOpen) label = t("dockBrowser");
+      else if (ui.dockTab === "schedule" && ui.schedOpen) label = t("schedTab");
       else if ((ui.previews?.length ?? 0) > 1) label = `${t("dockPreview")} (${ui.previews.length})`;
-      else if ((ui.previews?.length ?? 0) === 0 && !ui.jobsOpen && !ui.browserOpen) label = t("dockPanel");
+      else if ((ui.previews?.length ?? 0) === 0 && !ui.jobsOpen && !ui.browserOpen && !ui.schedOpen) label = t("dockPanel");
       return jsxRuntime.jsx("button", {
         type: "button",
         className: "dshk-dock-stub",
@@ -6838,16 +6863,18 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       // 激活位必须指向「仍存在」的标签：dockTab 失效（配置门控清场等）时落回
       // 第一个存在的标签，没有则 tab=null → 渲染空态选择器（常置坞的 0 标签态）
       const previewCount = ui.previews?.length ?? 0;
-      const exists = { preview: previewCount > 0, jobs: ui.jobsOpen === true, browser: ui.browserOpen === true };
+      const exists = { preview: previewCount > 0, jobs: ui.jobsOpen === true, schedule: ui.schedOpen === true, browser: ui.browserOpen === true };
       const tab = ui.dockTab && exists[ui.dockTab]
         ? ui.dockTab
         : exists.preview
           ? "preview"
           : exists.jobs
             ? "jobs"
-            : exists.browser
-              ? "browser"
-              : null;
+            : exists.schedule
+              ? "schedule"
+              : exists.browser
+                ? "browser"
+                : null;
       const widthRef = react.useRef(0);
       const dragRef = react.useRef(null);
       const [dragging, setDragging] = react.useState(false);
@@ -6861,6 +6888,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       const liveJobs = Array.isArray(jobs) ? jobs.filter((j) => j.status === "running" || j.status === "stopping").length : 0;
       const openable = [];
       if (cfg.jobsEnabled !== false) openable.push({ id: "jobs", label: t("dockJobs"), icon: JobsIcon, badge: liveJobs });
+      openable.push({ id: "schedule", label: t("schedTab"), icon: SchedIcon });
       if (cfg.browserEnabled !== false) openable.push({ id: "browser", label: t("dockBrowser"), icon: BrowserIcon });
       const openTab = (id) => {
         if (id === "browser") autoOpenSuppressed = false; // 手动点开=解除自动打开抑制
@@ -6913,6 +6941,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
         tabDefs.push({ id: "preview", label: previewCount > 1 ? `${t("dockPreview")} (${previewCount})` : t("dockPreview") });
       }
       if (ui.jobsOpen) tabDefs.push({ id: "jobs", label: t("dockJobs"), badge: liveJobs });
+      if (ui.schedOpen) tabDefs.push({ id: "schedule", label: t("schedTab") });
       if (ui.browserOpen) tabDefs.push({ id: "browser", label: t("dockBrowser") });
       const switchTab = (id) => {
         // 人为离开浏览器标签 → 抑制自动拽回；点回浏览器标签 → 解除
@@ -6931,7 +6960,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
         className: "dshk-pane",
         "data-dragging": dragging || undefined,
         role: "dialog",
-        "aria-label": ({ preview: t("dockPreview"), jobs: t("dockJobs"), browser: t("dockBrowser") })[tab] ?? t("dockPanel"),
+        "aria-label": ({ preview: t("dockPreview"), jobs: t("dockJobs"), schedule: t("schedTab"), browser: t("dockBrowser") })[tab] ?? t("dockPanel"),
         children: [
           jsxRuntime.jsx("div", { className: "dshk-pane-handle", onPointerDown: onHandleDown }),
           jsxRuntime.jsxs("div", {
@@ -7024,7 +7053,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
                     onClick: () => {
                       // 全部关闭=人为清场：抑制浏览器自动弹回（+ 菜单重开浏览器解除）
                       autoOpenSuppressed = true;
-                      setKitUi({ previews: [], activePreview: null, jobsOpen: false, browserOpen: false, dockTab: null });
+                      setKitUi({ previews: [], activePreview: null, jobsOpen: false, browserOpen: false, schedOpen: false, dockTab: null });
                     },
                     children: "✕",
                   }),
@@ -7111,6 +7140,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
             className: "dshk-pane-view",
             style: { display: tab === "browser" ? "flex" : "none" },
             children: ui.browserOpen ? jsxRuntime.jsx(BrowserPanel, { active: tab === "browser" }) : null,
+          }),
+          jsxRuntime.jsx("div", {
+            className: "dshk-pane-view",
+            style: { display: tab === "schedule" ? "flex" : "none" },
+            children: ui.schedOpen ? jsxRuntime.jsx(ScheduleView, {}) : null,
           }),
           // 常置空态（0 标签）：「打开标签页」选择器——标题/提示 + 可开类型卡片
           //（与 + 菜单同一份 openable 清单；文件预览被动打开，不设卡片）
@@ -7313,7 +7347,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
               if (kitUi.dockTab === "preview" && kitUi.activePreview) {
                 setKitUi(closePreviewTab(kitUi, kitUi.activePreview));
               } else {
-                const tab = kitUi.dockTab ?? ((kitUi.previews?.length ?? 0) > 0 ? "preview" : kitUi.jobsOpen ? "jobs" : "browser");
+                const tab = kitUi.dockTab ?? ((kitUi.previews?.length ?? 0) > 0 ? "preview" : kitUi.jobsOpen ? "jobs" : kitUi.schedOpen ? "schedule" : "browser");
                 if (tab === "browser") autoOpenSuppressed = true; // 人为关浏览器标签，同 closeTab
                 setKitUi(closeDockTab(kitUi, tab));
               }
@@ -7398,13 +7432,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
             : null,
           // 右侧标签页容器（常置，2026-09-06）：不再随「最后一个标签关闭」而消失
           // ——0 标签时 RightDock 渲染空态选择器；最小化时隐藏容器、右缘留一枚竖条
-          // （DockStub）点击展开。任务/浏览器入口迁入坞内，两入口都被配置关闭且无
-          // 任何标签（连被动预览都没有）时坞无可提供的内容，退回「不渲染」
-          dockAlive(ui) || cfg.jobsEnabled !== false || cfg.browserEnabled !== false
-            ? ui.dockCollapsed === true
-              ? jsxRuntime.jsx(DockStub, {})
-              : jsxRuntime.jsx(RightDock, { props, cwd })
-            : null,
+          // （DockStub）点击展开。日程标签无 cfg 门控恒可开 → 坞始终有可提供的内容，
+          // 除收起外恒渲染
+          ui.dockCollapsed === true
+            ? jsxRuntime.jsx(DockStub, {})
+            : jsxRuntime.jsx(RightDock, { props, cwd }),
         ],
       });
     }
@@ -8200,16 +8232,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
           ),
         );
       }
-      // 日程：中心区第三 tab（对话/轨迹/日程切换）+ 输入区计时芯片。
-      // 注册机制与轨迹视图同款（conversation.view 槽位，id/order/label + 组件）；
-      // 视图与芯片组件内部各自拉 /dsh-kit/schedule/* 数据，与 session 无关。
+      // 日程：右坞标签（用户定稿 2026-09-06：日程放中心区既挤对话输入口又与
+      // 对话绑定奇怪，迁入右坞与任务/浏览器同列）；输入区计时芯片保留原位。
+      // 芯片组件内部拉 /dsh-kit/schedule/* 数据，与 session 无关。
       if (ctx.slots && typeof ctx.slots.inject === "function") {
-        ctx.slots.inject("conversation.view", () =>
-          ctx.slots.register(
-            { name: "conversation.view", id: "dsh-kit-schedule", order: 20, label: () => t("schedTab") },
-            ScheduleView,
-          ),
-        );
         ctx.slots.inject("conversation.composer.dock", () =>
           ctx.slots.register({ name: "conversation.composer.dock", id: "dsh-kit-timer", order: 5 }, ScheduleTimerChip),
         );
