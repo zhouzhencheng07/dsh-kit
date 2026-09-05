@@ -432,15 +432,24 @@ const VENDOR_FILES = new Map([
     // Excel/Word 预览解析库（xlsx/docx 懒加载，进沙箱 iframe 解析）
     ['/dsh-kit/vendor/xlsx.full.min.js', 'xlsx.full.min.js'],
     ['/dsh-kit/vendor/mammoth.browser.min.js', 'mammoth.browser.min.js'],
+    // KaTeX 数学公式（vault 阅读态渲染 $...$ / $$...$$；懒加载）
+    ['/dsh-kit/vendor/katex.min.js', 'katex.min.js'],
+    ['/dsh-kit/vendor/katex.min.css', 'katex.min.css'],
 ]);
 // pdf.js 按需取用的资源子目录（CJK cmaps / 标准字体回退），单文件白名单覆盖不了
 const VENDOR_SUBDIRS = new Map([
     ['cmaps', 'cmaps'],
     ['standard_fonts', 'standard_fonts'],
+    // KaTeX 字体：css 里以 fonts/ 相对路径引用，URL 段固定 fonts，磁盘上隔离在
+    // katex_fonts/ 免得和未来其他字体混放
+    ['fonts', 'katex_fonts'],
 ]);
 const VENDOR_TYPES = new Map([
     ['.js', 'text/javascript; charset=utf-8'],
     ['.css', 'text/css; charset=utf-8'],
+    ['.woff2', 'font/woff2'],
+    ['.woff', 'font/woff'],
+    ['.ttf', 'font/ttf'],
 ]);
 export async function apply(ctx) {
     // ── 插件设置命名空间 ──
@@ -642,7 +651,7 @@ export async function apply(ctx) {
                     // 子目录资源（cmaps/*.bcmap、standard_fonts/*.pfb 等）：单段文件名
                     // 白名单字符校验，杜绝路径穿越
                     let file;
-                    const sub = /^\/dsh-kit\/vendor\/(cmaps|standard_fonts)\/([A-Za-z0-9][A-Za-z0-9._-]*)$/.exec(pathname);
+                    const sub = /^\/dsh-kit\/vendor\/(cmaps|standard_fonts|fonts)\/([A-Za-z0-9][A-Za-z0-9._-]*)$/.exec(pathname);
                     if (sub) {
                         file = path.join(VENDOR_SUBDIRS.get(sub[1] ?? '') ?? '', sub[2] ?? '');
                     }

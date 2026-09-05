@@ -22,7 +22,7 @@ const CALLOUT_TYPES = {
   question: "orange", help: "orange", faq: "orange", warning: "orange",
   caution: "orange", attention: "orange",
   danger: "red", error: "red", failure: "red", fail: "red", missing: "red", bug: "red",
-  example: "purple", quote: "gray", cite: "gray",
+  example: "purple", quote: "gray", cite: "gray", fold: "gray",
 };
 
 const replace = (spec) => Decoration.replace(spec);
@@ -102,6 +102,29 @@ class ImgWidget extends WidgetType {
     if (this.title) img.title = this.title;
     img.addEventListener("error", () => { img.style.display = "none"; });
     return img;
+  }
+}
+
+// 数学公式 widget：katex 由宿主懒加载（window.katex），没就绪时回退显示原文
+class MathWidget extends WidgetType {
+  constructor(tex, display) {
+    super();
+    this.tex = tex;
+    this.display = display;
+  }
+  eq(other) { return other.tex === this.tex && other.display === this.display; }
+  toDOM() {
+    const el = document.createElement(this.display ? "div" : "span");
+    el.className = this.display ? "dshk-lp-mathblock" : "dshk-lp-math";
+    const katex = typeof window !== "undefined" ? window.katex : null;
+    if (katex) {
+      try {
+        katex.render(this.tex, el, { displayMode: this.display, throwOnError: false });
+      } catch {
+        el.textContent = this.tex;
+      }
+    } else el.textContent = this.tex;
+    return el;
   }
 }
 
@@ -350,8 +373,39 @@ function buildDeco(state, handlers) {
     },
   });
 
-  // ── wikilink 补充扫描（语法树不认识 [[..]]；代码/链接区已入禁区）──
+  // ── 数学扫描（语法树不认识 $..$；先于 wikilink 扫描并把公式区入禁区，
+  // 防公式内的 [[、* 等被其他正则误配）。块级 $$..$$ 可跨行 ──
   const inSuppressed = (pos) => suppressed.some(([a, b]) => pos >= a && pos < b);
+  const mathSpans = [];
+  {
+    const text = doc.sliceString(0, len);
+    const bm = /\$\$([^$]+?)\$\$/g;
+    let m;
+    while ((m = bm.exec(text))) {
+      const from = m.index;
+      const to = from + m[0].length;
+      if (inSuppressed(from)) continue;
+      suppressed.push([from, to]);
+      mathSpans.push({ from, to, tex: m[1].trim(), display: true });
+    }
+    const im = /(?<!\$)\$(?!\s)((?:\\.|[^$\n])+?)(?<!\s)\$(?!\$|\w)/g;
+    while ((m = im.exec(text))) {
+      const from = m.index;
+      const to = from + m[0].length;
+      if (inSuppressed(from)) continue;
+      mathSpans.push({ from, to, tex: m[1], display: false });
+    }
+  }
+  for (const span of mathSpans) {
+    if (selHit(sel, span.from, span.to) || typeof window === "undefined" || !window.katex) {
+      // 光标进公式现形源码；katex 未就绪时淡显原文（可读性优于裸替换）
+      marks.push({ from: span.from, to: span.to, deco: mark("dshk-lp-mathraw") });
+      continue;
+    }
+    repl.push({ from: span.from, to: span.to, deco: replace({ widget: new MathWidget(span.tex, span.display) }) });
+  }
+
+  // ── wikilink 补充扫描（语法树不认识 [[..]]；代码/链接区已入禁区）──
   const wlRe = /\[\[([^[\]|\n]+)(?:\|([^[\]\n]*))?\]\]/g;
   for (let pos = 0; pos < len; ) {
     const line = doc.lineAt(pos);
@@ -488,6 +542,9 @@ const lpTheme = EditorView.theme({
   },
   ".dshk-lp-faint": { opacity: "0.45" },
   ".dshk-lp-done": { textDecoration: "line-through", opacity: "0.55" },
+  ".dshk-lp-math": { color: "inherit" },
+  ".dshk-lp-mathblock": { display: "block", width: "100%", textAlign: "center", margin: "2px 0", color: "inherit" },
+  ".dshk-lp-mathraw": { fontFamily: mono, fontSize: "0.92em", color: "var(--dshk-tok-meta, #6639ba)" },
   ".dshk-lp-bullet": { opacity: "0.5" },
   ".dshk-lp-task": { verticalAlign: "middle", margin: "0 3px 0 0", accentColor: "var(--dshk-tok-link, #0969da)" },
   ".dshk-lp-hrline": { display: "inline-block", width: "100%", borderTop: "1px solid var(--dshk-lp-bar, #d0d7de)" },

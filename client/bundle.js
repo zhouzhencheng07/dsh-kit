@@ -767,6 +767,8 @@ window.__ModuleLoader__.load({
       vaultEdit: "编辑",
       vaultSave: "保存",
       vaultSaved: "已保存",
+      vaultCopy: "复制",
+      vaultCopied: "已复制",
       vaultSaveFail: "保存失败：{error}",
       vaultConflict: "页面已被外部修改——已加载最新版，请重试",
       vaultBacklinks: "反链",
@@ -1149,6 +1151,8 @@ window.__ModuleLoader__.load({
       vaultEdit: "Edit",
       vaultSave: "Save",
       vaultSaved: "Saved",
+      vaultCopy: "Copy",
+      vaultCopied: "Copied",
       vaultSaveFail: "Save failed: {error}",
       vaultConflict: "Page changed externally — latest version loaded, please retry",
       vaultBacklinks: "Backlinks",
@@ -1537,6 +1541,16 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-vault-blrow:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-vault-wl{color:var(--dsw-alias-brand-primary);text-decoration:underline dotted}
 .dshk-vault-wl-broken{color:var(--dsw-alias-label-tertiary);text-decoration:underline wavy}
+/* 代码盒：语言条 + 复制钮（wangshu 同款）；pre 自身边距归零由盒子接管 */
+.dshk-codebox{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;overflow:hidden;margin:10px 0}
+.dshk-codebox pre{margin:0;border:0;border-radius:0}
+.dshk-codebar{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:rgba(135,131,120,.12);font-size:11px}
+.dshk-codelang{text-transform:uppercase;letter-spacing:.4px;color:var(--dsw-alias-label-tertiary);font-family:ui-monospace,Consolas,monospace}
+.dshk-codecopy{appearance:none;border:0;background:none;color:var(--dsw-alias-label-secondary);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:5px}
+.dshk-codecopy:hover{background:rgba(135,131,120,.2);color:var(--dsw-alias-label-primary)}
+/* 数学公式（KaTeX 渲染结果 + 库未就绪时的原文回退） */
+.dshk-md .dshk-math{color:inherit}
+.dshk-md .dshk-math .katex-display{margin:.5em 0}
 .dshk-vault-toast{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:var(--dsw-alias-bg-layer-3);border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary);font-size:12px;padding:6px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
 /* 编辑增强（wangshu 特性筛选）：格式工具栏 + 斜杠菜单 + callout 折叠卡 */
 .dshk-vault-tbsep{flex:none;width:1px;height:16px;background:var(--dsw-alias-border-l2);margin:0 2px}
@@ -1854,6 +1868,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
       const jobs = [];
       if (typeof window.marked === "undefined") jobs.push(loadScript("/dsh-kit/vendor/marked.min.js"));
       if (typeof window.DOMPurify === "undefined") jobs.push(loadScript("/dsh-kit/vendor/purify.min.js"));
+      if (typeof window.katex === "undefined") jobs.push(loadScript("/dsh-kit/vendor/katex.min.js"));
+      if (!document.querySelector('link[data-dshk-katex]')) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "/dsh-kit/vendor/katex.min.css";
+        link.setAttribute("data-dshk-katex", "1");
+        document.head.appendChild(link);
+      }
       return Promise.all(jobs);
     }
     function ensureCmLib() {
@@ -7038,6 +7060,40 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
       return String(text ?? "").trim().replace(/\s+/g, "-");
     }
 
+    /** 数学公式预处理（先于 marked，防公式里的下划线/星号被 markdown 吞掉）：
+     *  `$$块$$` / `$行内$` → 占位元素（tex encodeURIComponent 进 data-tex，
+     *  DOMPurify 默认放行 data-*），渲染后处理再 KaTeX 替换成公式；库未就绪
+     *  或渲染失败时后处理回退显示原文。围栏与行内代码里的 $ 不算公式；行内
+     *  规则：开 $ 后非空白、闭 $ 前非空白/后非 $ 非词字符（排掉 "$5 和 $6"
+     *  与 "$$.." 的误配） */
+    function vaultTransformMath(md) {
+      const src = String(md ?? "");
+      const blockMath = /(?:^|\n)[ \t]*\$\$([\s\S]+?)\$\$/g;
+      const inlineMath = /(?<!\$)\$(?!\s)((?:\\.|[^$\n])+?)(?<!\s)\$(?!\$|\w)/g;
+      const transformSeg = (s) =>
+        s
+          .replace(blockMath, (whole, tex) => `\n\n<div class="dshk-math" data-display="1" data-tex="${encodeURIComponent(tex.trim())}"></div>\n\n`)
+          .replace(inlineMath, (whole, tex, offset, str) => {
+            const lineStart = str.lastIndexOf("\n", offset) + 1;
+            const backticks = str.slice(lineStart, offset).match(/`/g);
+            if (backticks !== null && backticks.length % 2 === 1) return whole; // 行内代码里
+            if (/^\s|\s$/.test(tex)) return whole;
+            return `<span class="dshk-math" data-tex="${encodeURIComponent(tex)}"></span>`;
+          });
+      // 围栏切段：围栏内原样保留
+      const out = [];
+      const fenceRe = /(?:^|\n)[ \t]*(?:```|~~~)[^\n]*\n[\s\S]*?(?:\n[ \t]*(?:```|~~~)[^\n]*(?=\n|$)|$)/g;
+      let last = 0;
+      let m;
+      while ((m = fenceRe.exec(src))) {
+        out.push(transformSeg(src.slice(last, m.index)));
+        out.push(m[0]);
+        last = m.index + m[0].length;
+      }
+      out.push(transformSeg(src.slice(last)));
+      return out.join("");
+    }
+
     /** 孤儿级联（用户定稿：删除时同步删掉因此变孤儿的页，git 单提交可整体撤回）。
      *  返回应删页面清单：目标自身 + 「全部反链都在删除集内」的递归闭包；删除前
      *  就已零入链的页不动（那是既有状态，不连坐）；根 AGENTS.md 约定文件受保护 */
@@ -7272,7 +7328,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
         void ensureMdLibs().then(() => {
           if (!alive) return;
           const stripped = page.content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
-          const raw = window.marked.parse(vaultTransformWikiLinks(stripped), { async: false, gfm: true, breaks: true });
+          const raw = window.marked.parse(vaultTransformWikiLinks(vaultTransformMath(stripped)), { async: false, gfm: true, breaks: true });
           setHtml(window.DOMPurify.sanitize(raw));
         });
         return () => {
@@ -7326,28 +7382,75 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
           seenSlugs.add(id);
           h.id = id;
         }
+        // 数学：KaTeX 渲染占位元素（vaultTransformMath 产出）；库未就绪时回退
+        // 显示原文——公式可读性优于空白
+        for (const el of host.querySelectorAll(".dshk-math")) {
+          const tex = decodeURIComponent(el.getAttribute("data-tex") ?? "");
+          if (typeof window.katex === "object" && window.katex !== null) {
+            try {
+              window.katex.render(tex, el, { displayMode: el.getAttribute("data-display") === "1", throwOnError: false });
+            } catch {
+              el.textContent = tex;
+            }
+          } else el.textContent = tex;
+        }
+        // 代码块：语言条 + 复制按钮（wangshu 同款）；marked 产出 pre>code，
+        // 语言取 code.language-* 类，无语言时标签留空只给复制钮
+        for (const pre of Array.from(host.querySelectorAll("pre"))) {
+          if (pre.closest(".dshk-codebox")) continue;
+          const code = pre.querySelector("code");
+          const lang = /language-([\w-]+)/.exec(code?.className ?? "")?.[1] ?? "";
+          const box = document.createElement("div");
+          box.className = "dshk-codebox";
+          const bar = document.createElement("div");
+          bar.className = "dshk-codebar";
+          const langEl = document.createElement("span");
+          langEl.className = "dshk-codelang";
+          langEl.textContent = lang;
+          const copy = document.createElement("button");
+          copy.type = "button";
+          copy.className = "dshk-codecopy";
+          copy.textContent = t("vaultCopy");
+          copy.onclick = async () => {
+            try {
+              await navigator.clipboard.writeText(code?.textContent ?? "");
+              copy.textContent = t("vaultCopied");
+              setTimeout(() => { copy.textContent = t("vaultCopy"); }, 1200);
+            } catch { /* 剪贴板被拒：静默（复制失败不值得打断阅读） */ }
+          };
+          bar.appendChild(langEl);
+          bar.appendChild(copy);
+          pre.replaceWith(box);
+          box.appendChild(bar);
+          box.appendChild(pre);
+        }
         // callout：`> [!kind] 标题` 引用块 → details 卡片（fold 默认收起，其余展开）。
-        // breaks:true 下标记行与内容可能同段（<br> 分隔）——按 <br> 切首段，
-        // 标记行进 summary，其余留在正文，绝不丢内容
+        // breaks:true 下标记行与内容可能同段（<br> 分隔）——按 <br> 切首段。
+        // 摘要支持富文本（内容+内容，wangshu 同款）：[!fold] 不带标题时首段内容
+        // 即摘要；标记行/摘要行进 summary，其余留在正文，绝不丢内容
         for (const bq of Array.from(host.querySelectorAll("blockquote"))) {
           const firstP = bq.querySelector("p");
           if (!firstP) continue;
-          const segs = firstP.innerHTML.split(/<br\s*\/?>/i);
+          let segs = firstP.innerHTML.split(/<br\s*\/?>/i);
           const marker = /^\s*\[!(\w+)\]\s*((?:[\s\S](?!<br))*)/.exec(segs[0] ?? "");
           if (!marker) continue;
           const kind = (marker[1] ?? "").toLowerCase();
-          const tmp = document.createElement("div");
-          tmp.innerHTML = marker[2] ?? "";
-          const title = (tmp.textContent || kind).trim();
+          const titleHtml = marker[2] ?? "";
+          const hasTitle = titleHtml.replace(/<[^>]*>/g, "").trim() !== "";
           const details = document.createElement("details");
           details.className = `dshk-vault-callout is-${kind}`;
           if (kind !== "fold") details.open = true;
           const summary = document.createElement("summary");
-          summary.textContent = title;
+          let bodySegs = segs.slice(1);
+          if (hasTitle) summary.innerHTML = titleHtml;
+          else if (kind === "fold" && (segs[1] ?? "").replace(/<[^>]*>/g, "").trim() !== "") {
+            // 无标题折叠块：首段内容整体作摘要（可含加粗/链接/行内码），不再回退
+            // 成 "fold" 字样
+            summary.innerHTML = segs[1] ?? "";
+            bodySegs = segs.slice(2);
+          } else summary.textContent = kind;
           details.appendChild(summary);
-          // 首段整行是标题行（[!kind] 标题），其余段才是正文
-          const restHtml = segs
-            .slice(1)
+          const restHtml = bodySegs
             .filter((s) => s.replace(/<[^>]*>/g, "").trim() !== "")
             .join("<br>");
           firstP.remove();
@@ -7418,6 +7521,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
         setDraft(page?.content ?? "");
         setEditing(true);
         void ensureCmLib().then(() => setCmReady(true));
+        void ensureMdLibs(); // 编辑态 Live Preview 的公式 widget 依赖 katex
       };
       // ── 编辑增强（wangshu 特性筛选定稿：工具栏 + 斜杠菜单 + 图片粘贴 +
       // 折叠块/块级链接 + Live Preview；泡泡菜单与工具栏重复不做，富文本
