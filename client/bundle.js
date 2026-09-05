@@ -657,6 +657,53 @@ window.__ModuleLoader__.load({
       jobsClose: "关闭任务面板",
       jobsOutputEmpty: "（暂无输出）",
       jobsOutputTransient: "输出读取失败：{error}",
+      schedTab: "日程",
+      schedNew: "新建",
+      schedToday: "今天",
+      schedEdit: "编辑日程",
+      schedCreate: "新建日程",
+      schedTitle: "标题",
+      schedTitlePh: "事项标题…",
+      schedDesc: "备注",
+      schedLoc: "地点",
+      schedStart: "开始",
+      schedEnd: "结束",
+      schedAllDay: "全天",
+      schedRepeat: "重复",
+      schedRepeatNone: "不重复",
+      schedRepeatDaily: "每天",
+      schedRepeatWeekly: "每周",
+      schedRepeatMonthly: "每月",
+      schedRepeatInterval: "间隔",
+      schedDayUnit: "天",
+      schedWeekUnit: "周",
+      schedMonthUnit: "月",
+      schedRepeatUntil: "结束于",
+      schedColor: "颜色",
+      schedSave: "保存",
+      schedDelete: "删除",
+      schedDeleteConfirm: "确认删除这条日程？",
+      schedCancel: "取消",
+      schedTasks: "待办",
+      schedTaskPh: "添加待办，回车确认…",
+      schedTaskDue: "截止",
+      schedNoDue: "无日期",
+      schedOverdue: "逾期",
+      schedTasksEmpty: "暂无待办",
+      schedStatsTimed: "总计时",
+      schedStatsEvents: "事件",
+      schedStatsDone: "已完成",
+      schedStatsOpen: "待办",
+      schedStatsDay: "日",
+      schedStatsWeek: "周",
+      schedStatsMonth: "月",
+      schedEmptyWeek: "本周暂无日程安排",
+      schedPickTimer: "选择要计时的待办",
+      schedTimerStandalone: "独立计时（不挂待办）",
+      schedWeekdays: "一,二,三,四,五,六,日",
+      schedDelDone: "已删除",
+      schedSaved: "已保存",
+      schedOpFail: "操作失败：{error}",
       cfgTerminalShortcut: "终端快捷键",
       cfgFileTreeShortcut: "文件树快捷键",
       cfgSidebarShortcut: "侧边栏展开/收起快捷键",
@@ -940,6 +987,53 @@ window.__ModuleLoader__.load({
       jobsClose: "Close tasks panel",
       jobsOutputEmpty: "(no output yet)",
       jobsOutputTransient: "Failed to read output: {error}",
+      schedTab: "Schedule",
+      schedNew: "New",
+      schedToday: "Today",
+      schedEdit: "Edit entry",
+      schedCreate: "New entry",
+      schedTitle: "Title",
+      schedTitlePh: "Entry title…",
+      schedDesc: "Notes",
+      schedLoc: "Location",
+      schedStart: "Start",
+      schedEnd: "End",
+      schedAllDay: "All day",
+      schedRepeat: "Repeat",
+      schedRepeatNone: "None",
+      schedRepeatDaily: "Daily",
+      schedRepeatWeekly: "Weekly",
+      schedRepeatMonthly: "Monthly",
+      schedRepeatInterval: "Every",
+      schedDayUnit: "day(s)",
+      schedWeekUnit: "week(s)",
+      schedMonthUnit: "month(s)",
+      schedRepeatUntil: "Until",
+      schedColor: "Color",
+      schedSave: "Save",
+      schedDelete: "Delete",
+      schedDeleteConfirm: "Delete this entry?",
+      schedCancel: "Cancel",
+      schedTasks: "Tasks",
+      schedTaskPh: "Add a task, Enter to save…",
+      schedTaskDue: "Due",
+      schedNoDue: "No date",
+      schedOverdue: "Overdue",
+      schedTasksEmpty: "No tasks",
+      schedStatsTimed: "Timed",
+      schedStatsEvents: "Events",
+      schedStatsDone: "Done",
+      schedStatsOpen: "Open",
+      schedStatsDay: "Day",
+      schedStatsWeek: "Week",
+      schedStatsMonth: "Month",
+      schedEmptyWeek: "No events this week",
+      schedPickTimer: "Pick a task to time",
+      schedTimerStandalone: "Standalone timer (no task)",
+      schedWeekdays: "Mo,Tu,We,Th,Fr,Sa,Su",
+      schedDelDone: "Deleted",
+      schedSaved: "Saved",
+      schedOpFail: "Operation failed: {error}",
     };
     /** 语言判定：只认 DSH 的 locale 权威 —— <html lang> 由 dsh-client-locale 的
      *  syncDocumentLanguage 在启动与每次切换时同步（设置→通用→语言），页面内
@@ -1240,6 +1334,90 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-jobs-btn-kill{border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);color:var(--dsw-alias-danger,#cd3131)}
 .dshk-jobs-output{margin-top:2px;padding:6px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-3);font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;word-break:break-all;max-height:180px;overflow:auto;user-select:text}
 .dshk-jobs-empty{padding:10px 8px;font-size:12px;color:var(--dsw-alias-label-tertiary);text-align:center}
+/* 日程模块：中心区第三 tab——周时间网格 + 待办/统计侧栏；计时芯片挂输入区 dock */
+.dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
+.dshk-sched-head{flex:none;display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--dsw-alias-border-l2)}
+.dshk-sched-title{font-weight:600;font-size:15px}
+.dshk-sched-weeknav{display:flex;align-items:center;gap:6px}
+.dshk-sched-weeklabel{min-width:104px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:12px}
+.dshk-sched-navbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
+.dshk-sched-navbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-sched-statsscope{margin-left:auto;display:flex;gap:4px}
+.dshk-sched-chip{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;padding:4px 10px;border-radius:999px;cursor:pointer}
+.dshk-sched-chip:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-sched-chip.is-active{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:#fff}
+.dshk-sched-body{flex:1 1 auto;min-height:0;display:flex}
+.dshk-sched-gridwrap{flex:1 1 auto;min-width:0;overflow:auto}
+.dshk-sched-grid{display:grid;grid-template-columns:52px repeat(7,minmax(0,1fr));min-width:700px}
+.dshk-sched-corner{position:sticky;top:0;z-index:3;background:var(--dsw-alias-bg-base)}
+.dshk-sched-dayhead{position:sticky;top:0;z-index:3;text-align:center;padding:6px 0 4px;background:var(--dsw-alias-bg-base);border-bottom:1px solid var(--dsw-alias-border-l2)}
+.dshk-sched-wd{display:block;font-size:11px;color:var(--dshk-sched-wdcolor,var(--dsw-alias-label-tertiary))}
+.dshk-sched-dnum{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;border-radius:999px;font-size:12px;margin-top:2px}
+.dshk-sched-dayhead.is-today .dshk-sched-dnum{background:var(--dsw-alias-brand-primary);color:#fff}
+.dshk-sched-allday{grid-row:2;border-left:1px solid var(--dsw-alias-border-l2);border-bottom:1px solid var(--dsw-alias-border-l2);padding:2px 4px;font-size:11px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-fill-l2);border-radius:4px;margin:2px 2px;min-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dshk-sched-timeline{border-right:1px solid var(--dsw-alias-border-l2)}
+.dshk-sched-hourlabel{height:42px;padding-right:6px;font-size:10px;color:var(--dsw-alias-label-tertiary);text-align:right;transform:translateY(-6px)}
+.dshk-sched-daycol{position:relative;border-left:1px solid var(--dsw-alias-border-l2);min-width:0}
+.dshk-sched-cell{box-sizing:border-box;border-bottom:1px solid color-mix(in srgb,var(--dsw-alias-border-l2) 55%,transparent);cursor:pointer}
+.dshk-sched-cell:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-sched-nowline{position:absolute;left:0;right:0;height:2px;background:var(--dsw-alias-danger,#cd3131);z-index:2;pointer-events:none}
+.dshk-sched-nowline::before{content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:999px;background:var(--dsw-alias-danger,#cd3131)}
+.dshk-sched-event{position:absolute;z-index:1;overflow:hidden;border-radius:6px;padding:2px 6px;color:#fff;font-size:11px;line-height:1.35;cursor:pointer;background:var(--dsw-alias-brand-primary);box-shadow:inset 0 0 0 1px color-mix(in srgb,#fff 30%,transparent)}
+.dshk-sched-event:hover{filter:brightness(1.08)}
+.dshk-sched-evtime{display:block;font-size:10px;opacity:.85;white-space:nowrap}
+.dshk-sched-evtitle{display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.dshk-sched-side{flex:none;width:264px;border-left:1px solid var(--dsw-alias-border-l2);overflow:auto;display:flex;flex-direction:column;gap:10px;padding:10px}
+.dshk-sched-card{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-3)}
+.dshk-sched-cardtitle{font-weight:600;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshk-sched-taskadd{display:flex;gap:6px}
+.dshk-sched-taskinput{flex:1;min-width:0;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 8px;border-radius:6px}
+.dshk-sched-taskdue{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;padding:4px 6px;border-radius:6px}
+.dshk-sched-task{display:flex;align-items:center;gap:7px;padding:4px 4px;border-radius:6px}
+.dshk-sched-task:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-sched-task.is-done .dshk-sched-tasktitle{text-decoration:line-through;color:var(--dsw-alias-label-tertiary)}
+.dshk-sched-tasktitle{flex:1;min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;cursor:pointer;font-size:12px}
+.dshk-sched-taskduebadge{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary);border:1px solid var(--dsw-alias-border-l2);border-radius:5px;padding:1px 5px}
+.dshk-sched-taskduebadge.is-overdue{color:var(--dsw-alias-danger,#cd3131);border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent)}
+.dshk-sched-tasktimer{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:1;width:20px;height:20px;border-radius:999px;cursor:pointer;flex:none}
+.dshk-sched-tasktimer:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-brand-primary)}
+.dshk-sched-emptytasks{font-size:12px;color:var(--dsw-alias-label-tertiary);text-align:center;padding:8px 0}
+.dshk-sched-statsgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dshk-sched-stat{display:flex;flex-direction:column;gap:2px}
+.dshk-sched-stat b{font-size:15px;font-weight:600}
+.dshk-sched-stat span{font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dshk-sched-overlay{position:fixed;inset:0;background:color-mix(in srgb,#000 45%,transparent);z-index:1000;display:flex;align-items:center;justify-content:center}
+.dshk-sched-modal{width:420px;max-width:92vw;max-height:86vh;overflow:auto;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 40px color-mix(in srgb,#000 30%,transparent)}
+.dshk-sched-modaltitle{font-weight:600;font-size:14px}
+.dshk-sched-input{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:6px 8px;border-radius:6px;width:100%;box-sizing:border-box}
+.dshk-sched-input:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
+textarea.dshk-sched-input{resize:vertical}
+.dshk-sched-row{display:flex;gap:10px;align-items:flex-end}
+.dshk-sched-row .dshk-sched-field{flex:1;min-width:0}
+.dshk-sched-field{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.dshk-sched-check{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer}
+.dshk-sched-wdchip{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
+.dshk-sched-wdchip.is-active{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:#fff}
+.dshk-sched-colors{display:flex;gap:6px;flex-wrap:wrap}
+.dshk-sched-color{appearance:none;width:18px;height:18px;border-radius:999px;border:2px solid transparent;cursor:pointer;padding:0}
+.dshk-sched-color.is-active{border-color:var(--dsw-alias-label-primary)}
+.dshk-sched-actions{display:flex;align-items:center;gap:8px;margin-top:2px}
+.dshk-sched-ghost{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;padding:7px 12px;border-radius:8px;cursor:pointer}
+.dshk-sched-ghost:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-sched-primary{appearance:none;border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:#fff;font:inherit;font-size:12px;line-height:1;padding:7px 14px;border-radius:8px;cursor:pointer}
+.dshk-sched-primary:disabled{opacity:.5;cursor:default}
+.dshk-sched-danger{appearance:none;border:1px solid color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);background:none;color:var(--dsw-alias-danger,#cd3131);font:inherit;font-size:12px;line-height:1;padding:7px 12px;border-radius:8px;cursor:pointer}
+/* 计时芯片：输入区上方 dock */
+.dshk-sched-timer{position:relative;display:inline-flex;align-items:center;gap:6px}
+.dshk-sched-timerbtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);font:inherit;font-size:10px;line-height:1;width:22px;height:22px;border-radius:999px;cursor:pointer}
+.dshk-sched-timerbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-brand-primary)}
+.dshk-sched-timerbtn.is-stop{color:var(--dsw-alias-danger,#cd3131);border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent)}
+.dshk-sched-timerdot{width:7px;height:7px;border-radius:999px;background:var(--dsw-alias-danger,#cd3131);animation:dshk-sched-pulse 1.2s ease-in-out infinite}
+@keyframes dshk-sched-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.dshk-sched-timertitle{max-width:180px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:12px;color:var(--dsw-alias-label-primary)}
+.dshk-sched-timerelapsed{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshk-sched-timerpick{position:absolute;bottom:26px;left:0;z-index:60;min-width:200px;max-height:240px;overflow:auto;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 28px color-mix(in srgb,#000 25%,transparent);display:flex;flex-direction:column;padding:4px}
+.dshk-sched-timerpickitem{appearance:none;border:none;background:none;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;text-align:left;padding:7px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:320px}
+.dshk-sched-timerpickitem:hover{background:var(--dsw-alias-interactive-bg-hover)}
 /* 内置浏览器面板：右侧停靠（复用 .dshk-pane）；URL 栏 + 实时画面 canvas（人机共驾） */
 /* 右侧标签页容器：内容视图占满（非激活标签 display:none 保挂载） */
 .dshk-pane-view{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
@@ -5655,6 +5833,533 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
       });
     }
 
+    // ─────────── 日程模块（中心区第三 tab：周时间网格 + 待办 + 统计 + 计时）───────────
+    // 数据走宿主 /dsh-kit/schedule/* 端点：raw 全量 events + 区间展开 occurrences
+    // （重复展开在宿主做，这里只渲染）+ runningTimer。设计见 .agents/docs/schedule-design.md：
+    // 日程给人看（wangshu 周网格形态），agent 只看汇总走 schedule_query/create 工具。
+    // 计时全局单实例（timer/start 遇 running 先自动 stop），芯片挂 conversation.composer.dock。
+
+    const SCHED_COLORS = ["#228be6", "#40c057", "#fd7e14", "#e64980", "#7048e8", "#f59f00"];
+    const SCHED_DAY_START = 6 * 60; // 网格起点 06:00
+    const SCHED_DAY_END = 24 * 60;
+    const SCHED_HOUR_PX = 42;
+
+    const schedPad2 = (n) => String(n).padStart(2, "0");
+    const schedDateOf = (d) => `${d.getFullYear()}-${schedPad2(d.getMonth() + 1)}-${schedPad2(d.getDate())}`;
+    const schedToday = () => schedDateOf(new Date());
+    const schedAddDays = (s, n) => {
+      const [y, m, d] = s.split("-").map(Number);
+      const dt = new Date(y, m - 1, d);
+      dt.setDate(dt.getDate() + n);
+      return schedDateOf(dt);
+    };
+    const schedMondayOf = (s) => {
+      const [y, m, d] = s.split("-").map(Number);
+      const dt = new Date(y, m - 1, d);
+      return schedAddDays(s, -((dt.getDay() + 6) % 7));
+    };
+    /** "YYYY-MM-DDTHH:mm" → 当日分钟数；解析不了返回 null */
+    const schedMins = (dt) => {
+      if (typeof dt !== "string") return null;
+      const m = dt.split("T")[1];
+      if (!m) return null;
+      const [hh, mm] = m.split(":").map(Number);
+      return hh * 60 + mm;
+    };
+    const schedHHmm = (mins) => `${schedPad2(Math.floor(mins / 60) % 24)}:${schedPad2(mins % 60)}`;
+    const schedWeekdays = () => (resolveZh() ? ["一", "二", "三", "四", "五", "六", "日"] : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]);
+    const schedFmtDur = (ms) => {
+      const mins = Math.round(ms / 60000);
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return h > 0 ? (resolveZh() ? `${h}小时${m}分` : `${h}h ${m}m`) : resolveZh() ? `${m}分钟` : `${m}m`;
+    };
+
+    const schedFetch = async (path, opts) => {
+      const res = await fetch(path, opts);
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error((body && body.error) || `HTTP ${res.status}`);
+      return body;
+    };
+
+    // 并行事件分列（贪心：按开始时间排序，塞进第一条不重叠的泳道）
+    const schedAssignLanes = (items) => {
+      const sorted = [...items].sort((a, b) => a.startMins - b.startMins || (a.endMins ?? 0) - (b.endMins ?? 0));
+      const laneEnds = [];
+      const result = sorted.map((item) => {
+        const end = item.endMins ?? item.startMins + 60;
+        let lane = laneEnds.findIndex((laneEnd) => laneEnd <= item.startMins);
+        if (lane === -1) {
+          lane = laneEnds.length;
+          laneEnds.push(end);
+        } else {
+          laneEnds[lane] = end;
+        }
+        return { ...item, lane, lanes: 1 };
+      });
+      for (const item of result) item.lanes = laneEnds.length;
+      return result;
+    };
+
+    function ScheduleView() {
+      const [weekStart, setWeekStart] = react.useState(() => schedMondayOf(schedToday()));
+      const [data, setData] = react.useState(() => ({ events: [], occurrences: [], runningTimer: null }));
+      const [statsScope, setStatsScope] = react.useState("week");
+      const [stats, setStats] = react.useState(null);
+      const [modal, setModal] = react.useState(null); // { id?, values, kind: 'event'|'task' }
+      const [taskInput, setTaskInput] = react.useState("");
+      const [taskDue, setTaskDue] = react.useState(() => schedToday());
+      const [nowTick, setNowTick] = react.useState(() => Date.now());
+      const gridRef = react.useRef(null);
+      const scrolledOnce = react.useRef(false);
+
+      const weekDates = react.useMemo(() => {
+        const days = [];
+        for (let i = 0; i < 7; i++) days.push(schedAddDays(weekStart, i));
+        return days;
+      }, [weekStart]);
+
+      const fetchData = react.useCallback(async () => {
+        try {
+          const body = await schedFetch(
+            `/dsh-kit/schedule/data?from=${encodeURIComponent(schedAddDays(weekStart, -1))}&to=${encodeURIComponent(schedAddDays(weekStart, 8))}`,
+          );
+          setData({
+            events: Array.isArray(body.events) ? body.events : [],
+            occurrences: Array.isArray(body.occurrences) ? body.occurrences : [],
+            runningTimer: body.runningTimer ?? null,
+          });
+        } catch {
+          /* 拉取失败保留旧数据，下一轮再试 */
+        }
+      }, [weekStart]);
+
+      const fetchStats = react.useCallback(async (scope) => {
+        try {
+          setStats(await schedFetch(`/dsh-kit/schedule/stats?scope=${scope}&date=${encodeURIComponent(schedToday())}`));
+        } catch {
+          setStats(null);
+        }
+      }, []);
+
+      react.useEffect(() => {
+        void fetchData();
+      }, [fetchData]);
+      react.useEffect(() => {
+        void fetchStats(statsScope);
+      }, [fetchStats, statsScope]);
+      // 可见时 30s 轮询（agent 经 schedule_create 建的条目靠它进面板）+ 每分钟走当前时刻线
+      react.useEffect(() => {
+        const timer = setInterval(() => {
+          if (document.visibilityState === "hidden") return;
+          void fetchData();
+          setNowTick(Date.now());
+        }, 30000);
+        const minute = setInterval(() => setNowTick(Date.now()), 60000);
+        return () => {
+          clearInterval(timer);
+          clearInterval(minute);
+        };
+      }, [fetchData]);
+
+      // 挂载后把视口滚到当前时刻上方的 1/3 处（wangshu 同款），只滚一次
+      react.useLayoutEffect(() => {
+        if (scrolledOnce.current || !gridRef.current) return;
+        const now = new Date();
+        const mins = now.getHours() * 60 + now.getMinutes();
+        gridRef.current.scrollTop = Math.max(0, ((mins - SCHED_DAY_START) / 60) * SCHED_HOUR_PX - gridRef.current.clientHeight / 3);
+        scrolledOnce.current = true;
+      }, []);
+
+      const mutate = react.useCallback(
+        async (path, body) => {
+          try {
+            await schedFetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });
+            await fetchData();
+            void fetchStats(statsScope);
+          } catch (error) {
+            flashToast(tf("schedOpFail", { error: String(error?.message ?? error) }));
+          }
+        },
+        [fetchData, fetchStats, statsScope],
+      );
+
+      const tasks = react.useMemo(
+        () =>
+          data.events
+            .filter((e) => e.start === undefined)
+            .sort((a, b) => (a.due ?? "9999") < (b.due ?? "9999") ? -1 : 1),
+        [data.events],
+      );
+      const gridOcc = react.useMemo(
+        () =>
+          schedAssignLanes(data.occurrences.filter((o) => !o.allDay)).map((o) => ({
+            ...o,
+            top: ((Math.max(o.startMins, SCHED_DAY_START) - SCHED_DAY_START) / 60) * SCHED_HOUR_PX,
+            height: Math.max(18, (((o.endMins ?? o.startMins + 60) - Math.max(o.startMins, SCHED_DAY_START)) / 60) * SCHED_HOUR_PX),
+          })),
+        [data.occurrences],
+      );
+      const allDayOcc = react.useMemo(() => data.occurrences.filter((o) => o.allDay), [data.occurrences]);
+
+      const openCreate = (date, hour) => {
+        const hh = hour ?? 9;
+        setModal({
+          id: null,
+          kind: "event",
+          values: {
+            title: "",
+            description: "",
+            location: "",
+            start: `${date}T${schedPad2(hh)}:00`,
+            end: `${date}T${schedPad2(Math.min(hh + 1, 23))}:00`,
+            allDay: false,
+            recurrence: null,
+            color: SCHED_COLORS[data.events.length % SCHED_COLORS.length],
+          },
+        });
+      };
+      const openEdit = (occ) => {
+        const base = data.events.find((e) => e.id === occ.baseId);
+        if (!base) return;
+        setModal({ id: base.id, kind: "event", values: { ...base } });
+      };
+
+      const today = schedToday();
+      const isCurrentWeek = weekDates.includes(today);
+      const nowMins = new Date(nowTick).getHours() * 60 + new Date(nowTick).getMinutes();
+      const hours = [];
+      for (let h = SCHED_DAY_START / 60; h < SCHED_DAY_END / 60; h++) hours.push(h);
+
+      const head = jsxRuntime.jsxs("div", {
+        className: "dshk-sched-head",
+        children: [
+          jsxRuntime.jsx("span", { className: "dshk-sched-title", children: t("schedTab") }),
+          jsxRuntime.jsxs("span", { className: "dshk-sched-weeknav", children: [
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setWeekStart((s) => schedAddDays(s, -7)), children: "‹" }),
+            jsxRuntime.jsx("span", { className: "dshk-sched-weeklabel", children: `${weekDates[0].slice(5).replace("-", "/")} - ${weekDates[6].slice(5).replace("-", "/")}` }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setWeekStart((s) => schedAddDays(s, 7)), children: "›" }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setWeekStart(schedMondayOf(schedToday())), children: t("schedToday") }),
+          ] }),
+          jsxRuntime.jsxs("span", { className: "dshk-sched-statsscope", children: [
+            ["day", "schedStatsDay"], ["week", "schedStatsWeek"], ["month", "schedStatsMonth"],
+          ].map(([scope, key]) =>
+            jsxRuntime.jsx("button", {
+              type: "button",
+              className: `dshk-sched-chip${statsScope === scope ? " is-active" : ""}`,
+              onClick: () => setStatsScope(scope),
+              children: t(key),
+            }, scope),
+          ) }),
+        ],
+      });
+
+      const grid = jsxRuntime.jsxs("div", {
+        className: "dshk-sched-grid",
+        children: [
+          jsxRuntime.jsx("div", { className: "dshk-sched-corner" }),
+          ...weekDates.map((date, i) =>
+            jsxRuntime.jsxs("div", { className: `dshk-sched-dayhead${date === today ? " is-today" : ""}`, children: [
+              jsxRuntime.jsx("span", { className: "dshk-sched-wd", children: schedWeekdays()[i] }),
+              jsxRuntime.jsx("span", { className: "dshk-sched-dnum", children: Number(date.slice(8, 10)) }),
+            ] }, date),
+          ),
+          ...allDayOcc.map((o) =>
+            jsxRuntime.jsx("div", { className: "dshk-sched-allday", style: { gridColumn: (weekDates.indexOf(o.date) + 2) || 1 }, children: o.title }, `ad-${o.baseId}-${o.date}`),
+          ),
+          jsxRuntime.jsx("div", { className: "dshk-sched-timeline", children: hours.map((h) =>
+            jsxRuntime.jsx("div", { className: "dshk-sched-hourlabel", children: `${schedPad2(h)}:00` }, h),
+          ) }),
+          ...weekDates.map((date) => {
+            const inWeek = gridOcc.filter((o) => o.date === date);
+            return jsxRuntime.jsxs("div", { className: "dshk-sched-daycol", "data-date": date, children: [
+              hours.map((h) =>
+                jsxRuntime.jsx("div", {
+                  className: "dshk-sched-cell",
+                  style: { height: SCHED_HOUR_PX },
+                  onClick: () => openCreate(date, h),
+                }, h),
+              ),
+              date === today && isCurrentWeek
+                ? jsxRuntime.jsx("div", { className: "dshk-sched-nowline", style: { top: ((Math.min(nowMins, SCHED_DAY_END) - SCHED_DAY_START) / 60) * SCHED_HOUR_PX } })
+                : null,
+              inWeek.map((o) =>
+                jsxRuntime.jsxs("div", {
+                  className: "dshk-sched-event",
+                  style: {
+                    top: o.top,
+                    height: o.height,
+                    left: `calc(${(o.lane * 100) / o.lanes}% + 2px)`,
+                    width: `calc(${100 / o.lanes}% - 4px)`,
+                    ...(o.color ? { background: o.color } : {}),
+                  },
+                  title: o.title,
+                  onClick: (e) => {
+                    e.stopPropagation();
+                    openEdit(o);
+                  },
+                  children: [
+                    jsxRuntime.jsx("span", { className: "dshk-sched-evtime", children: `${schedHHmm(o.startMins)}${o.endMins !== null ? " " + schedHHmm(o.endMins) : ""}` }),
+                    jsxRuntime.jsx("span", { className: "dshk-sched-evtitle", children: o.title }),
+                  ],
+                }, `${o.baseId}@${o.date}`),
+              ),
+            ] }, date);
+          }),
+        ],
+      });
+
+      const rightCol = jsxRuntime.jsxs("div", { className: "dshk-sched-side", children: [
+        jsxRuntime.jsxs("div", { className: "dshk-sched-card", children: [
+          jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedTasks") }),
+          jsxRuntime.jsxs("div", { className: "dshk-sched-taskadd", children: [
+            jsxRuntime.jsx("input", {
+              className: "dshk-sched-taskinput",
+              value: taskInput,
+              placeholder: t("schedTaskPh"),
+              onChange: (e) => setTaskInput(e.target.value),
+              onKeyDown: (e) => {
+                if (e.key === "Enter" && taskInput.trim() !== "") {
+                  void mutate("/dsh-kit/schedule/create", { title: taskInput.trim(), due: taskDue });
+                  setTaskInput("");
+                }
+              },
+            }),
+            jsxRuntime.jsx("input", { className: "dshk-sched-taskdue", type: "date", value: taskDue, onChange: (e) => setTaskDue(e.target.value) }),
+          ] }),
+          tasks.length === 0
+            ? jsxRuntime.jsx("div", { className: "dshk-sched-emptytasks", children: t("schedTasksEmpty") })
+            : tasks.map((task) => {
+                const overdue = !task.completedAt && task.due !== undefined && task.due < today;
+                return jsxRuntime.jsxs("div", { className: `dshk-sched-task${task.completedAt ? " is-done" : ""}`, children: [
+                  jsxRuntime.jsx("input", {
+                    type: "checkbox",
+                    checked: task.completedAt != null,
+                    onChange: () => void mutate("/dsh-kit/schedule/done", { id: task.id, done: task.completedAt == null }),
+                  }),
+                  jsxRuntime.jsx("span", { className: "dshk-sched-tasktitle", title: task.title, onClick: () => setModal({ id: task.id, kind: "task", values: { ...task } }), children: task.title }),
+                  task.due
+                    ? jsxRuntime.jsx("span", { className: `dshk-sched-taskduebadge${overdue ? " is-overdue" : ""}`, children: overdue ? `${t("schedOverdue")} ${task.due.slice(5)}` : task.due.slice(5) })
+                    : null,
+                  task.completedAt == null
+                    ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-tasktimer", title: t("schedPickTimer"), onClick: () => void mutate("/dsh-kit/schedule/timer-start", { id: task.id }), children: "▶" })
+                    : null,
+                ] }, task.id);
+              }),
+        ] }),
+        stats
+          ? jsxRuntime.jsxs("div", { className: "dshk-sched-card", children: [
+              jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedStatsTimed") }),
+              jsxRuntime.jsxs("div", { className: "dshk-sched-statsgrid", children: [
+                jsxRuntime.jsxs("div", { className: "dshk-sched-stat", children: [jsxRuntime.jsx("b", { children: schedFmtDur(stats.timedMs) }), jsxRuntime.jsx("span", { children: t("schedStatsTimed") })] }),
+                jsxRuntime.jsxs("div", { className: "dshk-sched-stat", children: [jsxRuntime.jsx("b", { children: String(stats.eventCount) }), jsxRuntime.jsx("span", { children: t("schedStatsEvents") })] }),
+                jsxRuntime.jsxs("div", { className: "dshk-sched-stat", children: [jsxRuntime.jsx("b", { children: String(stats.completedCount) }), jsxRuntime.jsx("span", { children: t("schedStatsDone") })] }),
+                jsxRuntime.jsxs("div", { className: "dshk-sched-stat", children: [jsxRuntime.jsx("b", { children: String(stats.openCount) }), jsxRuntime.jsx("span", { children: t("schedStatsOpen") })] }),
+              ] }),
+            ] })
+          : null,
+      ] });
+
+      return jsxRuntime.jsxs("div", { className: "dshk-sched-root", children: [
+        head,
+        jsxRuntime.jsxs("div", { className: "dshk-sched-body", children: [
+          jsxRuntime.jsx("div", { className: "dshk-sched-gridwrap", ref: gridRef, children: jsxRuntime.jsx("div", { className: "dshk-sched-gridinner", children: grid }) }),
+          rightCol,
+        ] }),
+        modal
+          ? jsxRuntime.jsx(ScheduleModal, {
+              modal,
+              onClose: () => setModal(null),
+              onSave: async (id, values) => {
+                if (id) await mutate("/dsh-kit/schedule/update", { id, ...values });
+                else await mutate("/dsh-kit/schedule/create", values);
+                setModal(null);
+              },
+              onDelete: async (id) => {
+                await mutate("/dsh-kit/schedule/delete", { id });
+                setModal(null);
+              },
+            })
+          : null,
+      ] });
+    }
+
+    function ScheduleModal({ modal, onClose, onSave, onDelete }) {
+      const isTask = modal.kind === "task";
+      const [values, setValues] = react.useState(() => ({ ...modal.values }));
+      const [confirming, setConfirming] = react.useState(false);
+      const set = (key, value) => setValues((prev) => ({ ...prev, [key]: value }));
+      const rec = values.recurrence || null;
+      const setRec = (patch) => setValues((prev) => ({ ...prev, recurrence: { ...(prev.recurrence || { type: "weekly" }), ...patch } }));
+      const weekdays = schedWeekdays();
+      const invalid = (values.title ?? "").trim() === "";
+      return jsxRuntime.jsxs("div", { className: "dshk-sched-overlay", onClick: onClose, children: [
+        jsxRuntime.jsxs("div", { className: "dshk-sched-modal", onClick: (e) => e.stopPropagation(), children: [
+          jsxRuntime.jsx("div", { className: "dshk-sched-modaltitle", children: modal.id ? t("schedEdit") : t("schedCreate") }),
+          jsxRuntime.jsx("input", { className: "dshk-sched-input", value: values.title ?? "", placeholder: t("schedTitlePh"), autoFocus: true, onChange: (e) => set("title", e.target.value) }),
+          isTask
+            ? jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
+                jsxRuntime.jsx("span", { children: t("schedTaskDue") }),
+                jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "date", value: values.due ?? "", onChange: (e) => set("due", e.target.value) }),
+              ] })
+            : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                jsxRuntime.jsxs("div", { className: "dshk-sched-row", children: [
+                  jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
+                    jsxRuntime.jsx("span", { children: t("schedStart") }),
+                    jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "datetime-local", value: values.start ?? "", onChange: (e) => set("start", e.target.value) }),
+                  ] }),
+                  jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
+                    jsxRuntime.jsx("span", { children: t("schedEnd") }),
+                    jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "datetime-local", value: values.end ?? "", onChange: (e) => set("end", e.target.value) }),
+                  ] }),
+                ] }),
+                jsxRuntime.jsxs("label", { className: "dshk-sched-check", children: [
+                  jsxRuntime.jsx("input", { type: "checkbox", checked: values.allDay === true, onChange: (e) => set("allDay", e.target.checked) }),
+                  jsxRuntime.jsx("span", { children: t("schedAllDay") }),
+                ] }),
+                rec
+                  ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                jsxRuntime.jsxs("div", { className: "dshk-sched-row", children: [
+                  jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
+                    jsxRuntime.jsx("span", { children: t("schedRepeat") }),
+                    jsxRuntime.jsx("select", { className: "dshk-sched-input", value: rec.type, onChange: (e) => { if (e.target.value === "none") set("recurrence", null); else setRec({ type: e.target.value }); }, children: [
+                      jsxRuntime.jsx("option", { value: "none", children: t("schedRepeatNone") }),
+                      jsxRuntime.jsx("option", { value: "daily", children: t("schedRepeatDaily") }),
+                      jsxRuntime.jsx("option", { value: "weekly", children: t("schedRepeatWeekly") }),
+                      jsxRuntime.jsx("option", { value: "monthly", children: t("schedRepeatMonthly") }),
+                    ] }),
+                  ] }),
+                        jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
+                          jsxRuntime.jsx("span", { children: t("schedRepeatInterval") }),
+                          jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "number", min: 1, value: rec.interval ?? 1, onChange: (e) => setRec({ interval: Math.max(1, Number(e.target.value) || 1) }) }),
+                          jsxRuntime.jsx("span", { children: rec.type === "daily" ? t("schedDayUnit") : rec.type === "weekly" ? t("schedWeekUnit") : t("schedMonthUnit") }),
+                        ] }),
+                      ] }),
+                      rec.type === "weekly"
+                        ? jsxRuntime.jsx("div", { className: "dshk-sched-row", children: weekdays.map((wd, i) =>
+                            jsxRuntime.jsx("button", {
+                              type: "button",
+                              className: `dshk-sched-wdchip${(rec.days ?? []).includes(i + 1) ? " is-active" : ""}`,
+                              onClick: () => {
+                                const cur = new Set(rec.days ?? []);
+                                if (cur.has(i + 1)) cur.delete(i + 1);
+                                else cur.add(i + 1);
+                                if (cur.size > 0) setRec({ days: [...cur].sort((a, b) => a - b) });
+                              },
+                              children: wd,
+                            }, i),
+                          ) })
+                        : null,
+                      jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
+                        jsxRuntime.jsx("span", { children: t("schedRepeatUntil") }),
+                        jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "date", value: rec.end ?? "", onChange: (e) => setRec({ end: e.target.value || undefined }) }),
+                      ] }),
+                    ] })
+                  : null,
+                !rec
+                  ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", onClick: () => setRec({ type: "weekly", interval: 1, days: [new Date().getDay() === 0 ? 7 : new Date().getDay()] }), children: `+ ${t("schedRepeat")}` })
+                  : null,
+              ] }),
+            jsxRuntime.jsxs("div", { className: "dshk-sched-row", children: [
+              jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
+                jsxRuntime.jsx("span", { children: t("schedLoc") }),
+                jsxRuntime.jsx("input", { className: "dshk-sched-input", value: values.location ?? "", onChange: (e) => set("location", e.target.value) }),
+              ] }),
+              jsxRuntime.jsxs("div", { className: "dshk-sched-field", children: [
+                jsxRuntime.jsx("span", { children: t("schedColor") }),
+                jsxRuntime.jsx("div", { className: "dshk-sched-colors", children: SCHED_COLORS.map((c) =>
+                  jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-color${values.color === c ? " is-active" : ""}`, style: { background: c }, onClick: () => set("color", c) }, c),
+                ) }),
+              ] }),
+            ] }),
+            jsxRuntime.jsx("textarea", { className: "dshk-sched-input", rows: 2, value: values.description ?? "", placeholder: t("schedDesc"), onChange: (e) => set("description", e.target.value) }),
+            jsxRuntime.jsxs("div", { className: "dshk-sched-actions", children: [
+              modal.id
+                ? confirming
+                  ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-danger", onClick: () => void onDelete(modal.id), children: t("schedDeleteConfirm") })
+                  : jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", onClick: () => setConfirming(true), children: t("schedDelete") })
+                : null,
+              jsxRuntime.jsx("span", { style: { flex: 1 } }),
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", onClick: onClose, children: t("schedCancel") }),
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-primary", disabled: invalid, onClick: () => void onSave(modal.id, values), children: t("schedSave") }),
+            ] }),
+          ] }),
+      ] });
+    }
+
+    /** 计时芯片（conversation.composer.dock）：空闲=▶（选待办/独立计时），运行=标题+时长+■ */
+    function ScheduleTimerChip() {
+      const [running, setRunning] = react.useState(null); // { id, start, title }
+      const [picking, setPicking] = react.useState(false);
+      const [tasks, setTasks] = react.useState([]);
+      const [nowTick, setNowTick] = react.useState(() => Date.now());
+
+      const refresh = react.useCallback(async () => {
+        try {
+          const body = await schedFetch("/dsh-kit/schedule/data?from=&to=");
+          setRunning(body.runningTimer ?? null);
+          setTasks(Array.isArray(body.events) ? body.events.filter((e) => e.start === undefined && !e.completedAt) : []);
+        } catch {
+          /* 静默：输入区旁的芯片不打扰 */
+        }
+      }, []);
+
+      react.useEffect(() => {
+        void refresh();
+        const timer = setInterval(() => {
+          if (document.visibilityState === "hidden") return;
+          void refresh();
+          setNowTick(Date.now());
+        }, 10000);
+        const tick = setInterval(() => setNowTick(Date.now()), 1000);
+        return () => {
+          clearInterval(timer);
+          clearInterval(tick);
+        };
+      }, [refresh]);
+
+      const elapsedStr = (startStr) => {
+        const [d, tm = "00:00"] = String(startStr).split("T");
+        const [y, mo, dd] = d.split("-").map(Number);
+        const tp = tm.split(":").map(Number);
+        const startMs = new Date(y, mo - 1, dd, tp[0] ?? 0, tp[1] ?? 0, tp[2] ?? 0).getTime();
+        const s = Math.max(0, Math.floor((nowTick - startMs) / 1000));
+        return `${schedPad2(Math.floor(s / 3600))}:${schedPad2(Math.floor((s % 3600) / 60))}:${schedPad2(s % 60)}`;
+      };
+      const start = (id) => {
+        setPicking(false);
+        schedFetch("/dsh-kit/schedule/timer-start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(id ? { id } : {}) })
+          .then((body) => setRunning(body.runningTimer ?? null))
+          .catch(() => {});
+      };
+      const stop = () => {
+        schedFetch("/dsh-kit/schedule/timer-stop", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
+          .then(() => setRunning(null))
+          .catch(() => {});
+      };
+
+      return jsxRuntime.jsxs("span", { className: "dshk-sched-timer", children: [
+        running
+          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+              jsxRuntime.jsx("span", { className: "dshk-sched-timerdot" }),
+              jsxRuntime.jsx("span", { className: "dshk-sched-timertitle", title: running.title, children: running.title || t("schedTimerStandalone") }),
+              jsxRuntime.jsx("span", { className: "dshk-sched-timerelapsed", children: elapsedStr(running.start) }),
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-timerbtn is-stop", onClick: stop, children: "■" }),
+            ] })
+          : picking
+            ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                jsxRuntime.jsxs("div", { className: "dshk-sched-timerpick", onClick: (e) => e.stopPropagation(), children: [
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-timerpickitem", onClick: () => start(null), children: t("schedTimerStandalone") }),
+                  ...tasks.map((task) =>
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-timerpickitem", onClick: () => start(task.id), children: task.title }, task.id),
+                  ),
+                ] }),
+                jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-timerbtn", onClick: () => setPicking(false), children: "✕" }),
+              ] })
+            : jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-timerbtn", title: t("schedPickTimer"), onClick: () => { setPicking(true); void refresh(); }, children: "▶" }),
+      ] });
+    }
+
     // ─────────── 内置浏览器面板（右侧停靠，复用 .dshk-pane 停靠位）───────────
     // 数据走宿主半边 /dsh-kit/browser WS：state/event 广播 + frame 帧流（jpeg）+
     // watch 引用计数 + open/activate/closeTab/nav/newTab（人操作）+ input（人机共驾）。
@@ -7385,6 +8090,20 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-st
             },
             KitConfigCard,
           ),
+        );
+      }
+      // 日程：中心区第三 tab（对话/轨迹/日程切换）+ 输入区计时芯片。
+      // 注册机制与轨迹视图同款（conversation.view 槽位，id/order/label + 组件）；
+      // 视图与芯片组件内部各自拉 /dsh-kit/schedule/* 数据，与 session 无关。
+      if (ctx.slots && typeof ctx.slots.inject === "function") {
+        ctx.slots.inject("conversation.view", () =>
+          ctx.slots.register(
+            { name: "conversation.view", id: "dsh-kit-schedule", order: 20, label: () => t("schedTab") },
+            ScheduleView,
+          ),
+        );
+        ctx.slots.inject("conversation.composer.dock", () =>
+          ctx.slots.register({ name: "conversation.composer.dock", id: "dsh-kit-timer", order: 5 }, ScheduleTimerChip),
         );
       }
       // 导航图标替换是点击驱动的轻量方案：打开设置/面板内切换都源于一次 click

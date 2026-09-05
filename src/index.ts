@@ -66,6 +66,7 @@ import { rawContentType, parseRangeHeader } from './raw-file.ts'
 import { multipartBoundary, parseMultipart, safeUploadName, dedupeName } from './upload.ts'
 import { BrowserService } from './browser.ts'
 import { loadToolsModule, buildBrowserTools } from './browser-tools.ts'
+import { getScheduleStore, buildScheduleTools, isDateStr, todayStr } from './schedule.ts'
 
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在设置里改（phonePort，1-65535） */
 const PHONE_PORT = 3090
@@ -619,6 +620,31 @@ export async function apply(ctx: KitCtx): Promise<void> {
         caps.tools.register(def)
       } catch (error) {
         console.warn(`dsh-kit: 浏览器工具注册失败：${error instanceof Error ? error.message : error}`)
+      }
+    }
+  })
+
+  // ── 日程模块（src/schedule.ts）：结构化日程/待办/计时 ──
+  //   agent 工具恒开（schedule_query 只给日/周/月汇总，schedule_create 只建不
+  //   改删）——「agent 只看汇总、只做总结/查/创建」的工具面锁死；中心区第三
+  //   tab 与输入区计时芯片在 client/bundle.js 挂 conversation.view /
+  //   conversation.composer.dock 槽位；HTTP 端点在下方 webServer 注入块注册。
+  const scheduleStore = getScheduleStore()
+  const scheduleToolsMod = await loadToolsModule((m) => console.warn(`dsh-kit: ${m}`))
+  const scheduleDefs =
+    scheduleToolsMod && typeof scheduleToolsMod.defineTool === 'function'
+      ? buildScheduleTools({ defineTool: scheduleToolsMod.defineTool, store: scheduleStore })
+      : null
+  if (!scheduleDefs) {
+    console.warn('dsh-kit: dsh-tools 不可达，日程 agent 工具未注册（日程面板不受影响）')
+  }
+  ctx.inject(['settings', 'tools'], (caps: { tools: { register: (def: unknown) => void } }) => {
+    if (!scheduleDefs) return
+    for (const def of scheduleDefs) {
+      try {
+        caps.tools.register(def)
+      } catch (error) {
+        console.warn(`dsh-kit: 日程工具注册失败：${error instanceof Error ? error.message : error}`)
       }
     }
   })
@@ -2485,6 +2511,113 @@ export async function apply(ctx: KitCtx): Promise<void> {
         },
       })
 
+      // ── 日程端点：/dsh-kit/schedule/*（src/schedule.ts 单例 store）──
+      //   GET  data?from&to → { events(raw 全量), occurrences(区间展开), runningTimer }
+      //   GET  timer → { runningTimer }；GET stats?scope&date → 统计
+      //   POST create / update / delete / done / timer-start / timer-stop
+      //   重复展开只在宿主做（客户端只渲染 occurrence）；个人规模 raw 全量直发。
+      //   变更类端点 sameOrigin 门控同 upload。
+      const schedJson = (res: http.ServerResponse, code: number, obj: unknown) => {
+        res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' })
+        res.end(JSON.stringify(obj))
+      }
+      const schedReadBody = (req: http.IncomingMessage): Promise<Record<string, unknown>> =>
+        new Promise((resolve) => {
+          let raw = ''
+          req.on('data', (c) => {
+            raw += c
+            if (raw.length > 65536) req.destroy()
+          })
+          req.on('end', () => {
+            try {
+              const body: unknown = JSON.parse(raw === '' ? '{}' : raw)
+              resolve(body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : {})
+            } catch {
+              resolve({})
+            }
+          })
+          req.on('error', () => resolve({}))
+        })
+      const disposeSchedule: Array<() => void> = []
+      const schedRoute = (
+        path: string,
+        handler: (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => void,
+      ) => {
+        disposeSchedule.push(
+          webCtx.webServer.register({
+            kind: 'exact',
+            path,
+            handler: (req, res) => {
+              handler(req, res, new URL(req.url ?? '/', 'http://dsh-kit.local'))
+            },
+          }),
+        )
+      }
+      const schedDateParam = (url: URL, key: 'from' | 'to' | 'date'): string => {
+        const raw = url.searchParams.get(key) ?? ''
+        return isDateStr(raw) ? raw : todayStr()
+      }
+      schedRoute('/dsh-kit/schedule/data', (req, res, url) => {
+        if (req.method !== 'GET') return schedJson(res, 405, { error: 'method not allowed' })
+        const from = schedDateParam(url, 'from')
+        const to = schedDateParam(url, 'to')
+        schedJson(res, 200, {
+          events: scheduleStore.list(),
+          occurrences: scheduleStore.occurrences(from, to),
+          runningTimer: scheduleStore.runningTimer(),
+        })
+      })
+      schedRoute('/dsh-kit/schedule/timer', (req, res) => {
+        if (req.method !== 'GET') return schedJson(res, 405, { error: 'method not allowed' })
+        schedJson(res, 200, { runningTimer: scheduleStore.runningTimer() })
+      })
+      schedRoute('/dsh-kit/schedule/stats', (req, res, url) => {
+        if (req.method !== 'GET') return schedJson(res, 405, { error: 'method not allowed' })
+        const rawScope = url.searchParams.get('scope') ?? 'day'
+        const scope = rawScope === 'week' || rawScope === 'month' ? rawScope : 'day'
+        schedJson(res, 200, scheduleStore.stats(scope, schedDateParam(url, 'date')))
+      })
+      const schedPost = (
+        req: http.IncomingMessage,
+        res: http.ServerResponse,
+        action: (body: Record<string, unknown>) => unknown,
+      ) => {
+        if (req.method !== 'POST') return schedJson(res, 405, { error: 'method not allowed' })
+        if (!sameOrigin(req)) return schedJson(res, 403, { error: 'cross-origin denied' })
+        void schedReadBody(req).then((body) => {
+          try {
+            schedJson(res, 200, action(body) ?? { ok: true })
+          } catch (error) {
+            schedJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
+          }
+        })
+      }
+      schedRoute('/dsh-kit/schedule/create', (req, res) => schedPost(req, res, (body) => ({ event: scheduleStore.create(body) })))
+      schedRoute('/dsh-kit/schedule/update', (req, res) =>
+        schedPost(req, res, (body) => {
+          const ev = scheduleStore.update(String(body.id ?? ''), body)
+          if (!ev) throw new Error('条目不存在')
+          return { event: ev }
+        }),
+      )
+      schedRoute('/dsh-kit/schedule/delete', (req, res) =>
+        schedPost(req, res, (body) => ({ ok: scheduleStore.remove(String(body.id ?? '')) })),
+      )
+      schedRoute('/dsh-kit/schedule/done', (req, res) =>
+        schedPost(req, res, (body) => {
+          const ev = scheduleStore.setDone(String(body.id ?? ''), body.done !== false)
+          if (!ev) throw new Error('条目不存在')
+          return { event: ev }
+        }),
+      )
+      schedRoute('/dsh-kit/schedule/timer-start', (req, res) =>
+        schedPost(req, res, (body) => {
+          const id = typeof body.id === 'string' && body.id !== '' ? body.id : undefined
+          return { runningTimer: scheduleStore.timerStart(id).runningTimer }
+        }),
+      )
+      schedRoute('/dsh-kit/schedule/timer-stop', (req, res) => schedPost(req, res, () => scheduleStore.timerStop()))
+
       return () => {
         disposeVendor()
         disposeTree()
@@ -2508,6 +2641,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
         disposePhoneGateway()
         disposeJobsKill()
         disposeJobsOutput()
+        for (const dispose of disposeSchedule) dispose()
         if (phoneGw) phoneGw.close()
       }
     }, 'dsh-kit: terminal/vendor/tree/read/write/upload/fs-op/git/phone endpoints')
