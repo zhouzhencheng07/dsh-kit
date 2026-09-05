@@ -62,7 +62,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes, VaultView, vaultTransformWikiLinks, resolveVaultLink, vaultBacklinks };",
+  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes, VaultView, vaultTransformWikiLinks, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug };",
 );
 const harness = new Function("require", wrapper);
 const comps = harness((name) => {
@@ -72,7 +72,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RightDock", "DockStub", "openDockTab", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes", "VaultView", "vaultTransformWikiLinks", "resolveVaultLink", "vaultBacklinks"];
+const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RightDock", "DockStub", "openDockTab", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes", "VaultView", "vaultTransformWikiLinks", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -514,6 +514,24 @@ const backlinksHit = comps.vaultBacklinks([
   { path: "D:/v/c.md", rel: "c", title: "C", links: ["别的"] },
 ], "D:/v/b.md");
 check("vaultBacklinks：links 解析命中当前页（1 条）", backlinksHit.length === 1 && backlinksHit[0].path === "D:/v/a.md");
+
+// 6.7) 知识库编辑增强纯函数：锚点变换 / 标题 slug / 孤儿级联
+const anchored = comps.vaultTransformWikiLinks("见 [[页#小节]] 与 [[#本页锚]] 和 [[B|别]]");
+check("wikilink 锚点变换：页#锚与同页锚", anchored.includes("(#vault:%E9%A1%B5#%E5%B0%8F%E8%8A%82)") && anchored.includes("(#vault:#%E6%9C%AC%E9%A1%B5%E9%94%9A)") && anchored.includes("别](#vault:B)"));
+check("vaultHeadingSlug：空白压成 -", comps.vaultHeadingSlug("  Some 标题 two  ") === "Some-标题-two");
+{
+  const pages = [
+    { path: "D:/v/AGENTS.md", rel: "AGENTS", title: "vault 约定", links: [] },
+    { path: "D:/v/index.md", rel: "index", title: "索引", links: ["入门"] },
+    { path: "D:/v/入门.md", rel: "入门", title: "入门", links: ["速记"] },
+    { path: "D:/v/速记.md", rel: "速记", title: "速记", links: [] },
+  ];
+  const doomed = comps.vaultCascadeDelete(pages, "D:/v/index.md");
+  // 删索引 → 入门失去唯一反链连坐 → 速记又失去入门连坐；AGENTS 受保护且本就无反链不动
+  check("孤儿级联：递归闭包 + AGENTS 保护", doomed.length === 3 && doomed.some((p) => p.rel === "入门") && doomed.some((p) => p.rel === "速记") && !doomed.some((p) => p.rel === "AGENTS"));
+  const doomed2 = comps.vaultCascadeDelete(pages, "D:/v/速记.md");
+  check("孤儿级联：删叶子不连坐他人", doomed2.length === 1 && doomed2[0].rel === "速记");
+}
 comps.setKitUi({ dockCollapsed: true });
 callLog = [];
 out = comps.DockStub({});
