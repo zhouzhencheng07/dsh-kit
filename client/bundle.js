@@ -1718,15 +1718,15 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-vault-tbsep{flex:none;width:1px;height:16px;background:var(--dsw-alias-border-l2);margin:0 2px}
 .dshk-vault-tbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;min-width:24px;height:22px;padding:0 5px;border-radius:6px;cursor:pointer}
 .dshk-vault-tbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-vault-slashmenu{position:fixed;z-index:60;width:220px;max-height:380px;overflow:auto;padding:6px 0;display:flex;flex-direction:column;gap:1px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.12)}
-.dshk-vault-slashitem{display:flex;align-items:center;gap:10px;padding:7px 14px;margin:0 4px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer}
+.dshk-vault-slashmenu{position:fixed;z-index:60;width:168px;max-height:300px;overflow:auto;padding:4px 0;display:flex;flex-direction:column;gap:1px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.12)}
+.dshk-vault-slashitem{display:flex;align-items:center;gap:7px;padding:4px 10px;margin:0 3px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer}
 .dshk-vault-slashitem:hover,.dshk-vault-slashitem.is-active{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-vault-slashnum{flex:none;width:20px;text-align:center;font-size:11px;font-weight:600;color:var(--dsw-alias-label-tertiary)}
-.dshk-vault-slashicon{flex:none;width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-3);border-radius:6px;font-size:13px;font-weight:700}
-.dshk-vault-slashtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
-.dshk-vault-slashtitle{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dshk-vault-slashdesc{font-size:11px;color:var(--dsw-alias-label-tertiary)}
-.dshk-vault-slashmore{flex:none;font-size:14px;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-slashnum{flex:none;width:16px;text-align:center;font-size:10px;font-weight:600;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-slashicon{flex:none;width:22px;height:22px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-3);border-radius:5px;font-size:11px;font-weight:700}
+.dshk-vault-slashtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:0}
+.dshk-vault-slashtitle{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-vault-slashdesc{font-size:10px;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-slashmore{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)}
 /* 泡泡菜单（wangshu 同款）：选区上方浮出行内格式条；颜色/高亮点开在条下挂第二行色板 */
 .dshk-vault-bubble{position:fixed;z-index:60;display:flex;flex-direction:column;gap:4px;padding:4px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.12);transform:translateX(-50%)}
 .dshk-vault-bubblebar{display:flex;align-items:center;gap:2px}
@@ -6587,12 +6587,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
       // 上条下网（用户定稿 2026-09-06）：窄坞里左右分栏会挤得周网格只剩横向
       // 滚动的窄窗——改为待办/统计条在上、网格在下吃满坞宽。计时芯片入待办卡头
-      // （用户定稿：输入区旁太丑，归属右坞）
+      // （用户定稿：输入区旁太丑，归属右坞；计时芯片已上移到右坞页条，跨标签可见）
       const topCol = jsxRuntime.jsxs("div", { className: "dshk-sched-side", children: [
         jsxRuntime.jsxs("div", { className: "dshk-sched-card is-tasks", children: [
           jsxRuntime.jsxs("div", { className: "dshk-sched-cardhead", children: [
             jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedTasks") }),
-            jsxRuntime.jsx(ScheduleTimerChip, {}),
           ] }),
           jsxRuntime.jsxs("div", { className: "dshk-sched-taskadd", children: [
             jsxRuntime.jsx("input", {
@@ -7877,7 +7876,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               return;
             }
             const coords = ed.view.coordsAtPos($from.pos);
-            setMenu({ query: q, sub: null, x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4 });
+            setMenu({ query: q, sub: null, x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4, at: coords?.top ?? 0 });
             setMenuIdx((i) => i);
           } else if (menuRef.current !== null) {
             setMenu(null);
@@ -8124,6 +8123,26 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         overwrite: async () => saveEdit("overwrite"),
         reload: () => loadCurrent(),
       };
+      // 外部修改实时刷新（VS Code 同款）：轮询打开页 mtime + 刷索引。盘上变了
+      // 且本地无脏改、无冲突 → 静默重读整页 + 刷左树（AI/编辑器改文件零手动刷
+      // 新；AI 建页删页左树即时跟进）。有脏改时不动——未保存内容由保存时 CAS
+      // 冲突条保护，绝不静默覆盖。文件被外部删除也重读 → 页面显示已消失。
+      // fetch 失败静默（轮询是尽力而为，不打扰）
+      react.useEffect(() => {
+        if (current === null) return undefined;
+        const timer = setInterval(() => {
+          if (document.visibilityState === "hidden") return;
+          if (conflictRef.current !== null || saveEditRef.current.dirty()) return;
+          void schedFetch(`/dsh-kit/vault/stat?path=${encodeURIComponent(current)}`)
+            .then((body) => {
+              if (typeof body.mtimeMs === "number" && Math.abs(body.mtimeMs - mtimeRef.current) < 1) return;
+              void loadCurrent();
+              void loadIndex();
+            })
+            .catch(() => {});
+        }, 4000);
+        return () => clearInterval(timer);
+      }, [current, loadCurrent, loadIndex]);
       const deleteCurrent = async () => {
         if (current === null || !index) return;
         const doomed = vaultCascadeDelete(index.pages, current);
@@ -8429,7 +8448,18 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                               "div",
                               {
                                 className: "dshk-vault-slashmenu",
-                                style: { left: menu.x, top: menu.y },
+                                // 位置自适应：默认光标下方；下方放不下翻到光标上方
+                                // （再不够就贴顶滚动），横向钳在视口内。行高按当前
+                                // 样式估算（叶子 30px，含容器纵向 padding）
+                                style: (() => {
+                                  const rowCount = menuRows({ query: menu.query ?? "", sub: menu.sub ?? null }).length;
+                                  const h = Math.min(rowCount * 30 + 8, 300);
+                                  const top = menu.y + h > window.innerHeight - 8
+                                    ? Math.max(8, (menu.at ?? menu.y) - h - 6)
+                                    : menu.y;
+                                  const left = Math.max(8, Math.min(menu.x, window.innerWidth - 176));
+                                  return { left, top };
+                                })(),
                                 children: (() => {
                                   const rows = menuRows();
                                   const group = menu.sub ? VAULT_MENU.find((g) => g.key === menu.sub) : null;
@@ -8827,10 +8857,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     : null,
                 ],
               }),
-              // 右组：全部关闭（仅有标签时显示）= 人为清场，抑制浏览器自动弹回
+              // 右组：计时芯片（跨标签常驻，running 时在任意标签都可见）+ 全部关闭
+              //（仅有标签时显示）= 人为清场，抑制浏览器自动弹回
               jsxRuntime.jsxs("span", {
                 className: "dshk-jobs-headside",
                 children: [
+                  jsxRuntime.jsx(ScheduleTimerChip, {}),
                   tabDefs.length > 0
                     ? jsxRuntime.jsx("button", {
                         type: "button",

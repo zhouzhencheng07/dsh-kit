@@ -2695,6 +2695,27 @@ export async function apply(ctx) {
                     .then((index) => vaultJson(res, 200, index ?? { root: null, spaces: [], pages: [] }))
                     .catch((error) => vaultJson(res, 500, { error: error instanceof Error ? error.message : String(error) }));
             });
+            // 外部修改实时刷新（VS Code 同款）：只回打开页的 mtime，不读正文——前端
+            // 轮询发现 mtime 变化且本地无脏改即自动重读整页（AI/编辑器改文件零手动刷新）
+            vaultRoute('/dsh-kit/vault/stat', (req, res, url) => {
+                if (req.method !== 'GET')
+                    return vaultJson(res, 405, { error: 'method not allowed' });
+                const root = vaultGuard(res);
+                if (root === null)
+                    return;
+                const resolved = path.resolve(String(url.searchParams.get('path') ?? ''));
+                const rel = path.relative(root, resolved);
+                if (rel.startsWith('..') || path.isAbsolute(rel) || rel === '')
+                    return vaultJson(res, 400, { error: '页面不在 vault 内' });
+                try {
+                    const stat = fs.statSync(resolved);
+                    return vaultJson(res, 200, { mtimeMs: stat.mtimeMs });
+                }
+                catch {
+                    // 文件已被外部删除：回 gone，前端按需重读（页签显示已消失）
+                    return vaultJson(res, 200, { gone: true });
+                }
+            });
             vaultRoute('/dsh-kit/vault/search', (req, res, url) => {
                 if (req.method !== 'GET')
                     return vaultJson(res, 405, { error: 'method not allowed' });
