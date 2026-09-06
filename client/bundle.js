@@ -55,30 +55,11 @@ window.__ModuleLoader__.load({
     // 内激活的文件；打开某功能 = 确保标签存在并激活，互斥清场废除（切走不丢状态）。
     // 容器本身常置：不再随「最后一个标签关闭」而消失，0 标签时渲染空态选择器
     // （打开标签页卡片）；dockCollapsed = 暂时收起成右缘竖条（存在性保留；视为
-    // 人为退出——agent 导航不再弹回），收起态写 localStorage，刷新后仍保持收起。
-    let kitUi = { treeOpen: false, gitOpen: false, previews: [], activePreview: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, dockTab: null, dockCollapsed: false };
+    // 人为退出——agent 导航不再弹回）。收起态不持久化：每次启动一律收起（用户
+    // 定稿），打开任意标签会自动展开；会话内用快捷键开合。
+    let kitUi = { treeOpen: false, gitOpen: false, previews: [], activePreview: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, dockTab: null, dockCollapsed: true };
     const kitUiListeners = new Set();
-    /** dockCollapsed 的 localStorage 持久化（读失败/无 localStorage 环境静默回退） */
-    const dockCollapsedStore = {
-      read() {
-        try {
-          return typeof localStorage !== "undefined" && localStorage.getItem("dshkit.dockCollapsed") === "1";
-        } catch {
-          return false;
-        }
-      },
-      write(v) {
-        try {
-          if (v) localStorage.setItem("dshkit.dockCollapsed", "1");
-          else localStorage.removeItem("dshkit.dockCollapsed");
-        } catch {
-          // 存不了就算了（隐私模式等），仅本会话生效
-        }
-      },
-    };
-    kitUi.dockCollapsed = dockCollapsedStore.read();
     function setKitUi(patch) {
-      if ("dockCollapsed" in patch) dockCollapsedStore.write(patch.dockCollapsed === true);
       kitUi = { ...kitUi, ...patch };
       for (const listener of kitUiListeners) listener();
     }
@@ -240,6 +221,8 @@ window.__ModuleLoader__.load({
       scShortcut: "Ctrl+Alt+.",
       sidebarShortcut: "Ctrl+B",
       sidebarShortcutEnabled: true,
+      dockShortcut: "Ctrl+Alt+B",
+      dockShortcutEnabled: true,
     };
     /** 组合键规范化主键：单字符统一大写、空格记作 Space */
     function normComboKey(key) {
@@ -320,6 +303,11 @@ window.__ModuleLoader__.load({
             ? v.sidebarShortcut
             : CFG_DEFAULTS.sidebarShortcut,
         sidebarShortcutEnabled: v.sidebarShortcutEnabled !== false,
+        dockShortcut:
+          typeof v.dockShortcut === "string" && parseCombo(v.dockShortcut)
+            ? v.dockShortcut
+            : CFG_DEFAULTS.dockShortcut,
+        dockShortcutEnabled: v.dockShortcutEnabled !== false,
       };
     }
     // 模块级通道（apply 注入 / KitSurfaces 订阅 / 设置卡捕获互斥）
@@ -805,6 +793,8 @@ window.__ModuleLoader__.load({
       cfgFileTreeShortcut: "文件树快捷键",
       cfgSidebarShortcut: "侧边栏展开/收起快捷键",
       cfgSidebarShortcutEnabled: "启用侧边栏快捷键",
+      cfgDockShortcut: "侧边面板展开/收起快捷键",
+      cfgDockShortcutEnabled: "启用侧边面板快捷键",
       cfgSidebarShortcutEnabledHint: "关闭后快捷键不再响应",
       cfgSourceControlEnabled: "启用源代码管理",
       cfgSourceControlEnabledHint: "关闭后隐藏入口按钮与快捷键",
@@ -1037,6 +1027,8 @@ window.__ModuleLoader__.load({
       cfgFileTreeShortcut: "File tree shortcut",
       cfgSidebarShortcut: "Sidebar toggle shortcut",
       cfgSidebarShortcutEnabled: "Enable sidebar shortcut",
+      cfgDockShortcut: "Dock toggle shortcut",
+      cfgDockShortcutEnabled: "Enable dock shortcut",
       cfgSidebarShortcutEnabledHint: "Disables the sidebar shortcut",
       cfgSourceControlEnabled: "Enable source control",
       cfgSourceControlEnabledHint: "Hides the entry button and its shortcut",
@@ -8676,6 +8668,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
         const treeCombo = parseCombo(cfg.fileTreeShortcut);
         const scCombo = parseCombo(cfg.scShortcut);
         const sidebarCombo = parseCombo(cfg.sidebarShortcut);
+        const dockCombo = parseCombo(cfg.dockShortcut);
         const onKey = (e) => {
           if (shortcutCapture !== null) return;
           if (inlineEditCapture) return;
@@ -8709,6 +8702,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
             toggleSidebar();
             return;
           }
+          if (dockCombo && cfg.dockShortcutEnabled !== false && comboMatches(e, dockCombo)) {
+            // 右坞开合：仅在有标签时响应（0 标签收展无意义，空态卡片只在展开态）
+            if (dockAlive(kitUi)) {
+              e.preventDefault();
+              e.stopPropagation();
+              setKitUi({ dockCollapsed: kitUi.dockCollapsed !== true });
+            }
+            return;
+          }
           if (e.key === "Escape") {
             // 右侧标签页容器：Esc 关当前激活标签（预览=关当前文件小标签；无激活位
             // 则关第一个存在的标签）；收起态不吞 Esc（面板本就不可见）
@@ -8729,7 +8731,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
         return () => window.removeEventListener("keydown", onKey, true);
         // cwd 必须在依赖里：否则闭包缓存首帧（会话未水化时为 null）的工作区，
         // 之后按快捷键开终端永远绑到 null
-      }, [cwd, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.terminalShortcut, cfg.fileTreeShortcut, cfg.scShortcut, cfg.sidebarShortcut, cfg.sidebarShortcutEnabled]);
+      }, [cwd, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.terminalShortcut, cfg.fileTreeShortcut, cfg.scShortcut, cfg.sidebarShortcut, cfg.sidebarShortcutEnabled, cfg.dockShortcut, cfg.dockShortcutEnabled]);
 
       // ShellBrowserEvents：壳层常驻浏览器事件源（与面板 WS 并存，不订阅帧流）。
       // 面板标签会被收掉（0 页自动收/人为关闭），「agent 开页面板弹回」不能依赖
@@ -9197,12 +9199,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
       { key: "fileTreeShortcut", kind: "combo" },
       { key: "scShortcut", kind: "combo" },
       { key: "sidebarShortcut", kind: "combo" },
+      { key: "dockShortcutEnabled", kind: "bool" },
+      { key: "dockShortcut", kind: "combo" },
     ];
     // 分组渲染：开关行 + 该功能启用时才显示的子配置（所见即所得，保存才落盘生效）
     // 组顺序：文件树 → 源代码管理 → 终端 → 技能页 → 网页搜索 → 手机访问（用户定稿
     // 放最下）。远程域名不在此卡——编辑入口在「手机访问」页面内（PhoneSection）。
     const CFG_GROUPS = [
       { switchKey: "sidebarShortcutEnabled", fields: ["sidebarShortcut"] },
+      { switchKey: "dockShortcutEnabled", fields: ["dockShortcut"] },
       { switchKey: "fileTreeEnabled", fields: ["fileTreeShortcut", "previewMaxTabs"] },
       { switchKey: "chatOpenFilePreview", fields: [] },
       { switchKey: "sourceControlEnabled", fields: ["scShortcut"] },
