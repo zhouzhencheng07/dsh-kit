@@ -62,7 +62,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes, VaultView, VaultRootView, vaultTransformWikiLinks, vaultTransformMath, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug };",
+  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, vaultParseFmInfo, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug };",
 );
 const harness = new Function("require", wrapper);
 const comps = harness((name) => {
@@ -72,7 +72,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RightDock", "DockStub", "openDockTab", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes", "VaultView", "VaultRootView", "vaultTransformWikiLinks", "vaultTransformMath", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug"];
+const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RightDock", "DockStub", "openDockTab", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "vaultParseFmInfo", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -503,9 +503,19 @@ const vaultElem = callLog.find((c) => c[1] === comps.VaultView);
 check("RightDock 知识库标签挂 VaultView", !!vaultElem);
 comps.setKitUi({ vaultOpen: false, dockTab: null });
 
-// 6.6) 知识库纯函数：wikilink 预变换 / 解析优先级 / 反链
-const transformed = comps.vaultTransformWikiLinks("见 [[Python 基础]] 与 [[git|版本控制]] 和 [[x#锚]]");
-check("wikilink 预变换产出 #vault: 锚点链接", transformed.includes("(#vault:Python%20%E5%9F%BA%E7%A1%80)") && transformed.includes("[[git|版本控制]]") === false && transformed.includes("版本控制") && !transformed.includes("[[x"));
+// 6.6) 知识库纯函数：frontmatter 拆分 / 解析优先级 / 反链
+//（wikilink/数学变换已并入 RTE vendor，往返断言在 tests/test-vault-rte.mjs）
+{
+  const raw = "---\ntags: [a, b]\ncreated: 2026-09-06\n---\n\n# 标题\n\n正文";
+  const { fmText, rest } = comps.vaultSplitFrontmatter(raw);
+  check("fm 拆分：字节级原文 + 正文", fmText === "---\ntags: [a, b]\ncreated: 2026-09-06\n---\n" && rest === "\n# 标题\n\n正文");
+  const info = comps.vaultParseFmInfo(fmText);
+  check("fm 解析：tags 数组 + created", info.tags.length === 2 && info.tags[0] === "a" && info.created === "2026-09-06");
+  const noFm = comps.vaultSplitFrontmatter("无头部页");
+  check("fm 拆分：无 frontmatter 原样", noFm.fmText === "" && noFm.rest === "无头部页");
+  const info2 = comps.vaultParseFmInfo("---\ntags: x, y\n---\n");
+  check("fm 解析：逗号分隔 tags", info2.tags.length === 2 && info2.tags[1] === "y");
+}
 const vaultPages = [
   { path: "D:/v/wiki/Python/基础.md", rel: "wiki/Python/基础", title: "Python 基础", links: [] },
   { path: "D:/v/wiki/git.md", rel: "wiki/git", title: "版本控制", links: [] },
@@ -521,19 +531,8 @@ const backlinksHit = comps.vaultBacklinks([
 ], "D:/v/b.md");
 check("vaultBacklinks：links 解析命中当前页（1 条）", backlinksHit.length === 1 && backlinksHit[0].path === "D:/v/a.md");
 
-// 6.7) 知识库编辑增强纯函数：锚点变换 / 标题 slug / 孤儿级联
-const anchored = comps.vaultTransformWikiLinks("见 [[页#小节]] 与 [[#本页锚]] 和 [[B|别]]");
-check("wikilink 锚点变换：页#锚与同页锚", anchored.includes("(#vault:%E9%A1%B5#%E5%B0%8F%E8%8A%82)") && anchored.includes("(#vault:#%E6%9C%AC%E9%A1%B5%E9%94%9A)") && anchored.includes("别](#vault:B)"));
+// 6.7) 知识库纯函数：标题 slug / 孤儿级联
 check("vaultHeadingSlug：空白压成 -", comps.vaultHeadingSlug("  Some 标题 two  ") === "Some-标题-two");
-
-// 6.8) 数学预处理：块级 $$..$$ / 行内 $..$ → 占位元素（data-tex 编码），
-// 围栏与行内代码里的 $ 不动，"$5 与 $6" 价签不误配
-const mathOut = comps.vaultTransformMath("前文\n\n$$\na_1 + b^2\n$$\n\n中 $x^2$ 与 $5 美元 和 $6 元\n\n```js\nconst s = `$x$`;\n```\n\n行内码 `$y$` 结尾");
-check("math：块级占位 data-display", mathOut.includes('<div class="dshk-math" data-display="1" data-tex="' + encodeURIComponent("a_1 + b^2") + '"'));
-check("math：行内占位", mathOut.includes(`<span class="dshk-math" data-tex="${encodeURIComponent("x^2")}"></span>`));
-check("math：价签不误配", !mathOut.includes("5 美元 和") || !mathOut.includes("dshk-math\" data-tex=\"" + encodeURIComponent("5 美元 和 ")));
-check("math：围栏内 $ 原样", mathOut.includes("const s = `$x$`;"));
-check("math：行内码 $ 原样", mathOut.includes("`$y$` 结尾"));
 {
   const pages = [
     { path: "D:/v/AGENTS.md", rel: "AGENTS", title: "vault 约定", links: [] },

@@ -769,6 +769,20 @@ window.__ModuleLoader__.load({
       vaultDelBtn: "删除",
       vaultDelConfirm: "确认删除以下页面？（移入回收站；vault 为 git 仓库时自动生成一个提交，可整体撤回）",
       vaultDeleted: "已删除",
+      vaultFmTip: "页面元数据（frontmatter）：标签与创建日期。在编辑器外展示，保存时原样写回文件头",
+      vaultFmTags: "标签",
+      vaultFmCreated: "创建",
+      vaultConflict: "页面在盘上已被修改，自动保存已暂停",
+      vaultConflictOverwrite: "覆盖盘上",
+      vaultConflictReload: "读取盘上版本",
+      vaultTableAddRow: "加行",
+      vaultTableAddCol: "加列",
+      vaultTableDelRow: "删行",
+      vaultTableDelCol: "删列",
+      vaultTableDel: "删表",
+      vaultCalloutTitlePh: "标题",
+      rtePlaceholder: "输入正文，/ 唤出命令菜单",
+      rteLoadFail: "富文本引擎加载失败，已退回纯文本编辑",
       vmenuGHead: "标题与正文",
       vmenuH1: "标题 1",
       vmenuH1Desc: "一级标题",
@@ -1209,6 +1223,20 @@ window.__ModuleLoader__.load({
       vaultDelBtn: "Delete",
       vaultDelConfirm: "Delete these pages? (Moved to recycle bin; if the vault is a git repo one commit is created so this is fully revertible)",
       vaultDeleted: "Deleted",
+      vaultFmTip: "Page metadata (frontmatter): tags and created date. Shown outside the editor and written back verbatim on save",
+      vaultFmTags: "Tags",
+      vaultFmCreated: "Created",
+      vaultConflict: "The page was modified on disk; autosave paused",
+      vaultConflictOverwrite: "Overwrite disk",
+      vaultConflictReload: "Load disk version",
+      vaultTableAddRow: "Add row",
+      vaultTableAddCol: "Add col",
+      vaultTableDelRow: "Del row",
+      vaultTableDelCol: "Del col",
+      vaultTableDel: "Del table",
+      vaultCalloutTitlePh: "Title",
+      rtePlaceholder: "Type '/' for commands",
+      rteLoadFail: "Rich text engine failed to load; fell back to plain text editing",
       vmenuGHead: "Headings & text",
       vmenuH1: "Heading 1",
       vmenuH1Desc: "Level 1 heading",
@@ -1637,13 +1665,73 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-vault-editwrap{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding:8px 10px}
 .dshk-vault-editbar{flex:none;display:flex;align-items:center;gap:6px;padding-bottom:6px}
 .dshk-vault-dirtydot{flex:none;color:var(--dsw-alias-warning,#e8a13c);font-size:10px;line-height:1;margin-left:2px}
-.dshk-vault-cmhost{flex:1 1 auto;min-height:0;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;overflow:hidden}
-/* 高度约束必须显式给：没有它 cm-scroller 随内容长高、CM 初始视口永不延展，
-   视口外的行永远够不着（估算高度又恰好≈面板高度时连滚动条都不出现）。
-   行高也要显式：CM 用探针行估总高，继承来的排版会让估算失真、虚拟滚动错乱 */
-.dshk-vault-cmhost .cm-editor{height:100%}
-.dshk-vault-cmhost .cm-scroller{overflow:auto;height:100%;font-size:13px;line-height:1.7}
-.dshk-vault-cmhost .cm-content{min-height:100%}
+.dshk-vault-rtehost{flex:1 1 auto;min-height:0;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;overflow:hidden;background:var(--dsw-alias-bg-base)}
+/* 复用 .dshk-md 排版（标题/表格/引用/代码），只覆盖编辑态差异：
+   滚动容器是 rtehost 自身，ProseMirror 去描边、正文区给最小高度 */
+.dshk-vault-rtehost.dshk-md{flex:1 1 auto;overflow:auto;padding:12px 16px}
+.dshk-vault-rtehost .ProseMirror{outline:none;min-height:60px;caret-color:var(--dsw-alias-brand-primary,#1971c2)}
+.dshk-vault-rtehost h5,.dshk-vault-rtehost h6{margin:1.2em 0 .5em;line-height:1.3}
+.dshk-rte-doc p.is-empty::before{content:attr(data-placeholder);color:var(--dsw-alias-label-tertiary);pointer-events:none;float:left;height:0}
+.dshk-rte-anchorflash{animation:dshkRteFlash 1.5s var(--ds-ease-in-out)}
+@keyframes dshkRteFlash{0%{background:rgba(25,113,194,.22)}100%{background:transparent}}
+/* wikilink 复用 .dshk-vault-wl（上面已有）；碎链加波浪下划线类 */
+/* 代码盒：复用 .dshk-codebox/.dshk-codebar/.dshk-codecopy（上面已有）；
+   语言选择器替代只读语言标签 */
+.dshk-rte-langsel{appearance:none;border:0;background:none;font:inherit;font-family:ui-monospace,Consolas,monospace;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--dsw-alias-label-tertiary);cursor:pointer;padding:0 2px}
+.dshk-rte-langsel:hover{color:var(--dsw-alias-label-primary)}
+/* 数学：KaTeX 渲染 + 点击改 tex 的内联输入 */
+.dshk-rte-math{display:inline-block;cursor:pointer}
+.dshk-rte-mathblock{display:block;cursor:pointer;text-align:center;margin:.6em 0}
+.dshk-rte-math.is-editing,.dshk-rte-mathblock.is-editing{background:var(--dsw-alias-bg-layer-3);border-radius:6px}
+.dshk-rte-math-input{font-family:ui-monospace,Consolas,monospace;font-size:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);padding:2px 6px;min-width:120px}
+.dshk-rte-mathblock .dshk-rte-math-input{width:70%}
+/* callout 提示卡（> [!类型] 标题）：整卡底色 + 左条色 + 图标徽章 */
+.dshk-vault-callout{margin:.6em 0;border:1px solid var(--dsw-alias-border-l2);border-left:3px solid var(--dsw-alias-brand-primary);border-radius:8px;background:var(--dsw-alias-bg-layer-3);padding:6px 10px}
+.dshk-vault-callout.is-note{border-left-color:#8250df}
+.dshk-vault-callout.is-tip{border-left-color:#37b24d}
+.dshk-vault-callout.is-success{border-left-color:#37b24d}
+.dshk-vault-callout.is-warning{border-left-color:var(--dsw-alias-warning,#e8a13c)}
+.dshk-vault-callout.is-danger{border-left-color:var(--dsw-alias-danger,#cd3131)}
+.dshk-vault-callout.is-fold,.dshk-vault-callout.is-quote{border-left-color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-cohead{display:flex;align-items:center;gap:6px;font-weight:600}
+.dshk-vault-coglyph{flex:none;font-size:13px}
+.dshk-vault-cotitle{flex:1 1 auto;min-width:0;cursor:text;white-space:pre-wrap;word-break:break-word;outline:none;border-radius:4px}
+.dshk-vault-cotitle.is-ph:empty::before{content:attr(data-ph);color:var(--dsw-alias-label-tertiary);font-weight:400}
+.dshk-vault-details{margin:.6em 0;position:relative;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);padding:2px 10px 2px 26px}
+.dshk-details-chev{position:absolute;left:8px;top:4px;width:16px;height:18px;display:flex;align-items:center;justify-content:center;border:0;background:none;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:1;cursor:pointer;padding:0;transition:transform .15s}
+.dshk-details-chev:hover{color:var(--dsw-alias-label-primary)}
+.dshk-details-title{padding:3px 0;min-height:18px}
+.dshk-details-title>:first-child,.dshk-details-body>:first-child{margin-top:0}
+.dshk-details-title>:last-child,.dshk-details-body>:last-child{margin-bottom:0}
+.dshk-vault-details:not(.is-closed) .dshk-details-title{border-bottom:1px solid var(--dsw-alias-border-l2)}
+.dshk-details-body{padding:3px 0}
+.dshk-vault-details.is-closed .dshk-details-body{display:none}
+.dshk-vault-cotoggle{flex:none;appearance:none;border:0;background:none;color:var(--dsw-alias-label-tertiary);font-size:11px;cursor:pointer;padding:2px 4px;border-radius:4px}
+.dshk-vault-cotoggle:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-vault-callout.is-folded>.dshk-vault-cobody{display:none}
+.dshk-vault-cobody>:first-child{margin-top:2px}
+.dshk-vault-cobody>:last-child{margin-bottom:2px}
+/* 任务列表真复选框（TipTap TaskItem 自带 input，这里只排版） */
+.dshk-vault-rtehost ul[data-type=taskList]{list-style:none;padding-left:.2em}
+.dshk-vault-rtehost ul[data-type=taskList] li{display:flex;gap:6px;align-items:flex-start}
+.dshk-vault-rtehost ul[data-type=taskList] li>label{flex:none;margin-top:3px}
+.dshk-vault-rtehost ul[data-type=taskList] li[data-checked=true]>div{color:var(--dsw-alias-label-tertiary);text-decoration:line-through}
+/* 未知块级 HTML 原样保留盒 */
+.dshk-rte-rawbox{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-layer-3);border:1px dashed var(--dsw-alias-border-l2);border-radius:8px;padding:8px 10px;white-space:pre-wrap;word-break:break-all;margin:.6em 0}
+/* 图片（vault 相对路径经 raw 端点解析） */
+.dshk-rte-img{display:block;margin:.6em 0}
+.dshk-rte-img img{max-width:100%;border-radius:6px}
+.dshk-rte-img.is-broken img{display:none}
+.dshk-rte-img .dshk-rte-imgmiss{display:none;font-size:12px;color:var(--dsw-alias-label-tertiary);border:1px dashed var(--dsw-alias-border-l2);border-radius:6px;padding:6px 10px}
+.dshk-rte-img.is-broken .dshk-rte-imgmiss{display:inline-block}
+/* 表格选中格高亮 + 表头底色（编辑态） */
+.dshk-vault-rtehost .ProseMirror-selectedcell{outline:2px solid var(--dsw-alias-brand-primary,#1971c2)}
+.dshk-vault-rtehost th{background:var(--dsw-alias-bg-layer-3)}
+/* frontmatter 属性条 + CAS 冲突条 */
+.dshk-vault-fmbar{flex:none;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--dsw-alias-label-tertiary);padding:0 2px 6px}
+.dshk-vault-fmtip{cursor:help;border-bottom:1px dotted currentColor}
+.dshk-vault-conflict{flex:none;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dsw-alias-warning,#e8a13c);padding:4px 2px 8px}
+.dshk-vault-rtefallback{flex:1 1 auto;min-height:0;resize:none;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:1.7;padding:10px 12px}
 .dshk-vault-backlinks{border-top:1px dashed var(--dsw-alias-border-l2);margin:16px 0 4px;padding:8px 2px 12px;display:flex;flex-direction:column;gap:4px}
 .dshk-vault-blrow{appearance:none;text-align:left;border:0;background:none;font:inherit;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:2px 4px;border-radius:5px}
 .dshk-vault-blrow:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
@@ -2009,6 +2097,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return typeof window.CM6 === "object" && window.CM6 !== null
         ? Promise.resolve()
         : loadScript("/dsh-kit/vendor/codemirror.bundle.js");
+    }
+    function ensureRteLib() {
+      return typeof window.DshRTE === "object" && window.DshRTE !== null
+        ? Promise.resolve()
+        : loadScript("/dsh-kit/vendor/richeditor.bundle.js");
     }
     /** 解析沙箱（srcdoc iframe 新 realm，原生 Promise）。不能在宿主页面直接跑解
      *  析库：DSH 前端把 window.Promise 换成了自己的实现（外观伪装 native），pdf.js
@@ -7158,67 +7251,42 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // ─────────── 知识库（vault，右坞标签）───────────
     // vault = 设置卡配置的绝对目录，其内一切 md 即页面（数据契约见 src/vault.ts）。
     // 布局「选库进入阅读」（用户定稿 2026-09-06）：左窄条 = 空间（顶层目录）+
-    // 懒加载目录树；右 = 阅读区（marked+DOMPurify 渲染，[[wikilink]] 页内跳转带
-    // 前进后退历史，页尾反链，碎链点击即建页）。编辑 = CodeMirror + Live
-    // Preview（vendor 内建装饰引擎，语法隐藏/光标现形，表格保持源码）+ vault
-    // 写端点 mtime CAS；完整 WYSIWYG（富文本往返）不做。搜索走宿主全文端点。
+    // 懒加载目录树；右 = 真·所见即所得编辑区（TipTap 富文本，vendor/richeditor
+    // .bundle.js 的 window.DshRTE 工厂：md ↔ 富文本往返、[[wikilink]]/公式/
+    // callout/未知块 HTML 原样保留）。保存 = wangshu 同款自动保存（2s 防抖 +
+    // 切页 flush + Ctrl+S）走 vault 写端点 mtime CAS；盘上被外部修改时暂停自
+    // 动保存出冲突条（覆盖盘上 / 读取盘上），绝不静默覆盖。frontmatter 在编辑
+    // 器外剥离成属性条展示，保存时字节级原样写回。搜索走宿主全文端点。
 
-    /** [[目标]] / [[目标#锚]] / [[目标|别名]] → [别名](#vault:目标[#h:锚])，先于
-     *  marked 解析；目标/锚 encodeURIComponent 进片段锚点——DOMPurify 默认放行
-     *  片段链接，不需加白。空目标（[[#锚]]）= 同页定位 */
-    function vaultTransformWikiLinks(md) {
-      return String(md ?? "").replace(/\[\[([^\[\]]+)\]\]/g, (whole, inner) => {
-        const text = String(inner);
-        const bar = text.indexOf("|");
-        const head = bar >= 0 ? text.slice(0, bar) : text;
-        const alias = bar >= 0 ? text.slice(bar + 1).trim() : "";
-        const hashAt = head.indexOf("#");
-        const target = (hashAt >= 0 ? head.slice(0, hashAt) : head).trim();
-        const anchor = hashAt >= 0 ? head.slice(hashAt + 1).trim() : "";
-        if (target === "" && anchor === "") return whole;
-        let href = `#vault:${encodeURIComponent(target)}`;
-        if (anchor !== "") href += `#${encodeURIComponent(anchor)}`;
-        return `[${alias || anchor || target}](${href})`;
-      });
+    /** 拆 frontmatter：返回 { fmText, rest }。fmText = "---…---" 块（含随后的
+     *  首个换行）的字节级原文，无 frontmatter 时 fmText=""；rest = 其余全部。
+     *  保存 = fmText + 编辑器 md，未编辑过的头部字节永不走样 */
+    function vaultSplitFrontmatter(content) {
+      const src = String(content ?? "");
+      const m = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(src);
+      if (!m) return { fmText: "", rest: src };
+      return { fmText: m[0], rest: src.slice(m[0].length) };
     }
 
-    /** 标题锚 slug：压空白为 -（中英混排原样保留，仅保证 id/锚一致） */
-    function vaultHeadingSlug(text) {
-      return String(text ?? "").trim().replace(/\s+/g, "-");
-    }
-
-    /** 数学公式预处理（先于 marked，防公式里的下划线/星号被 markdown 吞掉）：
-     *  `$$块$$` / `$行内$` → 占位元素（tex encodeURIComponent 进 data-tex，
-     *  DOMPurify 默认放行 data-*），渲染后处理再 KaTeX 替换成公式；库未就绪
-     *  或渲染失败时后处理回退显示原文。围栏与行内代码里的 $ 不算公式；行内
-     *  规则：开 $ 后非空白、闭 $ 前非空白/后非 $ 非词字符（排掉 "$5 和 $6"
-     *  与 "$$.." 的误配） */
-    function vaultTransformMath(md) {
-      const src = String(md ?? "");
-      const blockMath = /(?:^|\n)[ \t]*\$\$([\s\S]+?)\$\$/g;
-      const inlineMath = /(?<!\$)\$(?!\s)((?:\\.|[^$\n])+?)(?<!\s)\$(?!\$|\w)/g;
-      const transformSeg = (s) =>
-        s
-          .replace(blockMath, (whole, tex) => `\n\n<div class="dshk-math" data-display="1" data-tex="${encodeURIComponent(tex.trim())}"></div>\n\n`)
-          .replace(inlineMath, (whole, tex, offset, str) => {
-            const lineStart = str.lastIndexOf("\n", offset) + 1;
-            const backticks = str.slice(lineStart, offset).match(/`/g);
-            if (backticks !== null && backticks.length % 2 === 1) return whole; // 行内代码里
-            if (/^\s|\s$/.test(tex)) return whole;
-            return `<span class="dshk-math" data-tex="${encodeURIComponent(tex)}"></span>`;
-          });
-      // 围栏切段：围栏内原样保留
-      const out = [];
-      const fenceRe = /(?:^|\n)[ \t]*(?:```|~~~)[^\n]*\n[\s\S]*?(?:\n[ \t]*(?:```|~~~)[^\n]*(?=\n|$)|$)/g;
-      let last = 0;
-      let m;
-      while ((m = fenceRe.exec(src))) {
-        out.push(transformSeg(src.slice(last, m.index)));
-        out.push(m[0]);
-        last = m.index + m[0].length;
+    /** 属性条展示用最小解析：tags 行（内联数组/逗号分隔）与 created 行 */
+    function vaultParseFmInfo(fmText) {
+      const info = { tags: [], created: "" };
+      const block = String(fmText ?? "").replace(/^---\r?\n/, "").replace(/\r?\n---(?:\r?\n)?$/, "");
+      for (const line of block.split(/\r?\n/)) {
+        const tm = /^tags:\s*(.+)$/.exec(line);
+        if (tm) {
+          const raw = (tm[1] ?? "").trim();
+          const inner = raw.startsWith("[") && raw.endsWith("]") ? raw.slice(1, -1) : raw;
+          for (const piece of inner.split(",")) {
+            const tag = piece.trim().replace(/^['"]|['"]$/g, "");
+            if (tag !== "") info.tags.push(tag);
+          }
+          continue;
+        }
+        const cm = /^created:\s*(.+)$/.exec(line);
+        if (cm) info.created = (cm[1] ?? "").trim();
       }
-      out.push(transformSeg(src.slice(last)));
-      return out.join("");
+      return info;
     }
 
     /** 孤儿级联（用户定稿：删除时同步删掉因此变孤儿的页，git 单提交可整体撤回）。
@@ -7258,6 +7326,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
       }
       return pages.filter((p) => doomed.has(p.path) && p.rel.toUpperCase() !== "AGENTS");
+    }
+
+    /** 标题锚 slug：压空白为 -（中英混排原样保留，仅保证锚点匹配一致） */
+    function vaultHeadingSlug(text) {
+      return String(text ?? "").trim().replace(/\s+/g, "-");
     }
 
     /** wikilink 目标 → 页面：rel 全等 > rel 尾段 > 标题 > 文件名（均不分大小写） */
@@ -7337,7 +7410,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         match: "divider hr fold special 分割 特殊",
         children: [
           { key: "hr", icon: "—", labelKey: "vmenuHr", descKey: "vmenuHrDesc", match: "hr divider 分割线", insert: "\n---\n" },
-          { key: "fold", icon: "▶", labelKey: "vmenuFold", descKey: "vmenuFoldDesc", match: "fold collapsible 折叠 折叠块", insert: "> [!fold] 标题\n>\n> 内容" },
+          { key: "fold", icon: "▸", labelKey: "vmenuFold", descKey: "vmenuFoldDesc", match: "fold collapsible 折叠 折叠块", insert: "<details>\n<summary>\n标题\n</summary>\n\n内容\n</details>" },
         ],
       },
       {
@@ -7416,12 +7489,19 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [expanded, setExpanded] = react.useState({});
       // 阅读历史：stack 存绝对路径，idx 是当前位（后退/前进改 idx 不重压栈）
       const [hist, setHist] = react.useState({ stack: [], idx: -1 });
-      const [page, setPage] = react.useState(null); // { path, content, mtimeMs, loading }
-      const [draft, setDraft] = react.useState("");
-      const [cmReady, setCmReady] = react.useState(false);
-      // 单态所见即所得（用户定稿）：页面内容恒为 CM 编辑器，不再分编辑/只读。
-      // docTick 强制 CM 重挂载——内容需与盘上对齐时（打开新页/冲突回读）bump
+      // page: { path, loading, fmText, body(编辑器入参), mtimeMs, binary, gone }
+      // —— fmText 是 frontmatter 字节级原文（保存时原样拼回），body 交给 RTE
+      const [page, setPage] = react.useState(null);
+      const [draftBody, setDraftBody] = react.useState("");
+      const [savedBody, setSavedBody] = react.useState("");
+      const [rteReady, setRteReady] = react.useState(false);
+      const [rteFailed, setRteFailed] = react.useState(false);
+      // RTE 重挂载 tick：打开新页/冲突回读时 bump；日常保存不重挂
       const [docTick, setDocTick] = react.useState(0);
+      // CAS 冲突：{ diskMtime } | null —— 自动保存暂停，出冲突条（覆盖/读取）
+      const [conflict, setConflict] = react.useState(null);
+      // 表格上下文按钮随选区显隐（选区落在表格内即亮）
+      const [inTable, setInTable] = react.useState(false);
       // 建页/建目录：createDir = 内联输入框所在目录（null 关闭）；输入可再带 /
       // 多级；createKind 区分建页与建目录
       const [createDir, setCreateDir] = react.useState(null);
@@ -7440,8 +7520,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [bubPanel, setBubPanel] = react.useState(null);
       // 跳页后待滚动的标题锚（双链 [[页#标题]] 落点）
       const [pendingAnchor, setPendingAnchor] = react.useState("");
-      const editHostRef = react.useRef(null);
-      const cmRef = react.useRef(null);
+      const rteHostRef = react.useRef(null);
+      const rteRef = react.useRef(null);
 
       const current = hist.idx >= 0 ? hist.stack[hist.idx] : null;
       const treeRoot = root + (space === "" ? "" : "/" + space);
@@ -7480,47 +7560,73 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         void fetchDir(treeRoot);
       }, [treeRoot, fetchDir]);
 
+      // 切页跳转统一走 flush：有未保存草稿先自动保存（冲突=留在本页出冲突条，
+      // 绝不丢本地稿）；saveEditRef 在下方挂载区赋值（闭包时序）
       const openPath = react.useCallback((path, anchor) => {
-        setPendingAnchor(typeof anchor === "string" ? anchor : "");
-        setHist((h) => {
-          const stack = h.stack.slice(0, h.idx + 1);
-          if (stack[stack.length - 1] === path) return { stack, idx: stack.length - 1 };
-          stack.push(path);
-          return { stack, idx: stack.length - 1 };
-        });
-      }, []);
+        const doOpen = () => {
+          setPendingAnchor(typeof anchor === "string" ? anchor : "");
+          setHist((h) => {
+            const stack = h.stack.slice(0, h.idx + 1);
+            if (stack[stack.length - 1] === path) return { stack, idx: stack.length - 1 };
+            stack.push(path);
+            return { stack, idx: stack.length - 1 };
+          });
+        };
+        if (saveEditRef.current && path !== current && saveEditRef.current.dirty()) {
+          void saveEditRef.current.flush().then((outcome) => {
+            // conflict → 留在本页处理冲突条；fail → 照常走（尽力而为，toast 已出）
+            if (outcome !== "conflict") doOpen();
+          });
+          return;
+        }
+        doOpen();
+      }, [current]);
 
-      // 拉当前页内容（打开/冲突回读共用）。单态所见即所得：内容到手即编辑器
-      // 文档，docTick bump 驱动 CM 重挂载对齐盘上内容
+      // 拉当前页内容（打开/冲突回读共用）：拆 frontmatter，body 交给 RTE，
+      // docTick bump 驱动重挂载对齐盘上内容；fm/mtime 写入共享 ref（保存语境）
       const loadCurrent = react.useCallback(async () => {
         if (current === null) return;
+        setConflict(null);
         try {
           const body = await schedFetch(`/dsh-kit/read?path=${encodeURIComponent(current)}`);
+          const raw = body.binary ? "" : (body.content ?? "");
+          const { fmText, rest } = body.binary ? { fmText: "", rest: "" } : vaultSplitFrontmatter(raw);
+          fmRef.current = fmText;
+          mtimeRef.current = body.mtimeMs ?? 0;
           setPage({
             path: current,
             loading: false,
-            content: body.binary ? "" : (body.content ?? ""),
+            fmText,
+            body: rest.trimStart(),
             mtimeMs: body.mtimeMs ?? 0,
             binary: body.binary === true,
             gone: false,
           });
+          setDraftBody(rest.trimStart());
+          setSavedBody(rest.trimStart());
           setDocTick((t) => t + 1);
         } catch {
-          setPage({ path: current, loading: false, content: "", mtimeMs: 0, gone: true });
+          fmRef.current = "";
+          mtimeRef.current = 0;
+          setPage({ path: current, loading: false, fmText: "", body: "", mtimeMs: 0, binary: false, gone: true });
+          setDraftBody("");
+          setSavedBody("");
           setDocTick((t) => t + 1);
         }
       }, [current]);
 
-      // 当前页变化 → 拉内容（历史前进后退同样走这里）；预载 CM 与 KaTeX
-      //（Live Preview 公式 widget 依赖）
+      // 当前页变化 → 拉内容（历史前进后退同样走这里）；预载 RTE 与 KaTeX
+      //（公式节点视图依赖）
       react.useEffect(() => {
         if (current === null) {
           setPage(null);
           return undefined;
         }
-        setPage({ path: current, loading: true, content: "", mtimeMs: 0 });
-        void ensureCmLib().then(() => setCmReady(true));
-        void ensureMdLibs();
+        setPage({ path: current, loading: true, fmText: "", body: "", mtimeMs: 0, binary: false, gone: false });
+        ensureRteLib()
+          .then(() => ensureMdLibs())
+          .then(() => setRteReady(true))
+          .catch(() => setRteFailed(true));
         void loadCurrent();
         return undefined;
       }, [current, loadCurrent]);
@@ -7588,124 +7694,41 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       );
 
       // ── 编辑增强（wangshu 三件套分工，互不重复）：页条=文档级命令（保存/
-      // 删除/撤销/重做），泡泡菜单=选区行内格式，斜杠菜单=块插入；图片粘贴 +
-      // 折叠块/块级链接 + Live Preview。单态所见即所得：无编辑/只读二分 ──
-      const cmView = () => cmRef.current?.view ?? null;
-      /** CM 版标题锚滚动：按行匹配标题文本（slug 归一），光标落行首滚动可见 */
-      const scrollAnchorCm = (anchorRaw) => {
-        const v = cmView();
-        if (!v) return false;
-        const want = vaultHeadingSlug(anchorRaw).toLowerCase();
-        if (want === "") return false;
-        const doc = v.state.doc;
-        for (let n = 1; n <= doc.lines; n++) {
-          const line = doc.line(n);
-          const m = /^#{1,6}\s+(.*)$/.exec(line.text);
-          if (m && vaultHeadingSlug(m[1] ?? "").toLowerCase() === want) {
-            v.dispatch({ selection: { anchor: line.from }, scrollIntoView: true });
-            return true;
-          }
-        }
-        return false;
+      // 删除/撤销/重做 + 自动保存），泡泡菜单=选区行内格式，斜杠菜单=块插入；
+      // 表格按钮随选区显隐。真·所见即所得：页面恒为 TipTap 富文本编辑器 ──
+      /** RTE 版标题锚滚动：vendor 按 doc 里的标题文本 slug 匹配，滚动+光标落点 */
+      const scrollAnchorRte = (anchorRaw) => {
+        const h = rteRef.current;
+        if (!h) return false;
+        return h.scrollToHeading(anchorRaw, vaultHeadingSlug);
       };
-      /** 选中文字两侧包一层语法（加粗/斜体/行内代码/链接） */
-      const cmWrap = (before, after) => {
-        const v = cmView();
-        if (!v) return;
-        const sel = v.state.selection.main;
-        const text = v.state.doc.sliceString(sel.from, sel.to);
-        v.dispatch({
-          changes: { from: sel.from, to: sel.to, insert: before + text + after },
-          selection: { anchor: sel.from + before.length, head: sel.from + before.length + text.length },
-        });
-        v.focus();
-      };
-      /** 选中的行统一换行前缀（标题/列表/待办/引用互切，原有前缀先剥掉） */
-      const cmLinePrefix = (prefix) => {
-        const v = cmView();
-        if (!v) return;
-        const sel = v.state.selection.main;
-        const from = v.state.doc.lineAt(sel.from).number;
-        const to = v.state.doc.lineAt(sel.to).number;
-        const changes = [];
-        for (let n = from; n <= to; n++) {
-          const line = v.state.doc.line(n);
-          const stripped = line.text.replace(/^(#{1,6}\s+|-\s\[[ x]\]\s+|-\s+|>\s?)/, "");
-          changes.push({ from: line.from, to: line.to, insert: prefix + stripped });
-        }
-        v.dispatch({ changes });
-        v.focus();
-      };
-      const cmInsert = (text) => {
-        const v = cmView();
-        if (!v) return;
-        const pos = v.state.selection.main.head;
-        v.dispatch({ changes: { from: pos, insert: text }, selection: { anchor: pos + text.length } });
-        v.focus();
-      };
-      // ── 泡泡菜单（wangshu 同款）：选区非空浮出行内格式条；markdown 语义下
-      // 下划线/上下标/颜色/高亮走行内 HTML（marked+DOMPurify 放行，阅读态可渲染）──
+      // ── 泡泡菜单（wangshu 同款）：选区非空浮出行内格式条；命令走 TipTap ──
       const BUB_COLORS = ["#000000", "#333333", "#666666", "#999999", "#e03131", "#e8590c", "#f08c00", "#2f9e44", "#099268", "#1971c2", "#7048e8", "#d6336c"];
       const BUB_HIGHLIGHTS = ["#fff3bf", "#ffec99", "#ffe066", "#b2f2bb", "#99e9f2", "#bac8ff", "#d0bfff", "#ffc9c9", "#ffd8a8", "#fcc2d7"];
-      /** 选区文本是否已包着这层语法（泡泡按钮点亮态） */
-      const bubActive = (before, after) => {
-        const v = cmView();
-        if (!v) return false;
-        const sel = v.state.selection.main;
-        const text = v.state.doc.sliceString(sel.from, sel.to);
-        return text.length >= before.length + after.length && text.startsWith(before) && text.endsWith(after);
+      const rteCmd = (fn) => {
+        const h = rteRef.current;
+        if (!h) return;
+        fn(h);
+        h.focus();
+        bubbleSync();
       };
-      /** 剥掉选区外包的指定标签（色板「清除」= 只去颜色/高亮，不动其它格式） */
-      const bubStrip = (tag) => {
-        const v = cmView();
-        if (!v) return;
-        const sel = v.state.selection.main;
-        const bare = v.state.doc
-          .sliceString(sel.from, sel.to)
-          .replace(new RegExp(`<${tag}[^>]*>`, "gi"), "")
-          .replace(new RegExp(`</${tag}>`, "gi"), "");
-        v.dispatch({ changes: { from: sel.from, to: sel.to, insert: bare } });
-        v.focus();
-      };
-      /** 清除格式（wangshu 同款语义）：剥掉选区上全部行内语法，留下纯文本 */
-      const cmClearFmt = () => {
-        const v = cmView();
-        if (!v) return;
-        const sel = v.state.selection.main;
-        const bare = v.state.doc
-          .sliceString(sel.from, sel.to)
-          .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-          .replace(/\*\*([^*]*)\*\*/g, "$1")
-          .replace(/(?<!\*)\*(?!\*)/g, "")
-          .replace(/~~|`/g, "")
-          .replace(/<\/?(u|sup|sub|mark|span)[^>]*>/gi, "");
-        v.dispatch({ changes: { from: sel.from, to: sel.to, insert: bare }, selection: { anchor: sel.from, head: sel.from + bare.length } });
-        v.focus();
-      };
-      /** 选区整体是一个 [文本](地址) 链接 → 泡泡链接钮点亮 */
-      const bubLinkActive = () => {
-        const v = cmView();
-        if (!v) return false;
-        const sel = v.state.selection.main;
-        return /^\[[\s\S]*\]\([^)\s]*\)$/.test(v.state.doc.sliceString(sel.from, sel.to));
-      };
+      /** 泡泡按钮点亮态：TipTap isActive */
+      const bubActive = (name) => rteRef.current?.isActive(name) ?? false;
       /** 链接（wangshu 同款 prompt 交互）：已有链接改地址（空=删除），否则包新链接 */
-      const bubLink = () => {        const v = cmView();
-        if (!v) return;
-        const sel = v.state.selection.main;
-        const text = v.state.doc.sliceString(sel.from, sel.to);
-        const existing = /^\[([\s\S]*)\]\(([^)\s]*)\)$/.exec(text);
-        if (existing) {
-          const action = window.prompt(t("vtbLinkEditPrompt"), existing[2] ?? "");
-          if (action === null) return;
-          const next = action.trim() === "" ? (existing[1] ?? "") : `[${existing[1]}](${action.trim()})`;
-          v.dispatch({ changes: { from: sel.from, to: sel.to, insert: next } });
-        } else {
-          const url = window.prompt(t("vtbLinkPrompt"), "https://");
-          if (url) cmWrap("[", `](${url.trim()})`);
-        }
-        v.focus();
-      };
+      const bubLink = () =>
+        rteCmd((h) => {
+          const ed = h.editor;
+          if (ed.isActive("link")) {
+            const href = ed.getAttributes("link").href ?? "";
+            const action = window.prompt(t("vtbLinkEditPrompt"), href);
+            if (action === null) return;
+            if (action.trim() === "") h.unsetLink();
+            else h.setLink(action.trim());
+          } else {
+            const url = window.prompt(t("vtbLinkPrompt"), "https://");
+            if (url) h.setLink(url.trim());
+          }
+        });
       // 斜杠菜单：行首 / 触发；键入过滤；Enter 应用激活项，Esc 关，方向键移动。
       // keydown 用捕获阶段拦 Enter/Esc——CM 已把按键吃进文档，冒泡阶段拦不住。
       // ref 镜像 state：capture 监听读 ref，直接读 state 会停在旧渲染的闭包里
@@ -7715,7 +7738,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       menuIdxRef.current = menuIdx;
       const bubRef = react.useRef(bub);
       bubRef.current = bub;
-      const menuFiltered = () => menuRows();
       // 当前层可见行：sub 空且无 query = 根级分组；有 query = 跨组扁平搜叶项；
       // sub 指向分组 = 该组子级
       const menuRows = () => {
@@ -7738,51 +7760,47 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return VAULT_MENU;
       };
       const applyMenuTemplate = (item) => {
-        const v = cmView();
-        if (!v) return;
-        const pos = v.state.selection.main.head;
-        const line = v.state.doc.lineAt(pos);
-        const before = line.text.slice(0, pos - line.from);
-        const slash = before.lastIndexOf("/");
+        const h = rteRef.current;
+        if (!h) return;
+        const ed = h.editor;
+        const { $from } = ed.state.selection;
+        const textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - 80), $from.parentOffset, "\n", "\n");
+        const m = /(?:^|\n)\/(\S*)$/.exec(textBefore);
         setMenu(null);
-        v.focus();
-        if (slash < 0) return;
-        v.dispatch({ changes: { from: line.from + slash, to: pos, insert: "" } });
-        if (item.rows) {
-          cmInsert(vaultTableTemplate(item.rows, item.cols ?? item.rows));
-        } else if (item.prefix !== undefined) {
-          // 块级语义：当前行换前缀（同 wangshu 的 toggle*，原前缀剥掉互切）
-          cmLinePrefix(item.prefix);
-        } else {
-          const at = v.state.selection.main.head;
-          v.dispatch({
-            changes: { from: at, insert: item.insert },
-            selection: { anchor: at + (item.cursor ?? item.insert.length) },
-          });
+        if (m) {
+          // 删掉 "/查询" 再应用条目
+          ed.view.dispatch(ed.view.state.tr.delete(Math.max(0, $from.pos - (m[1] ?? "").length - 1), $from.pos));
         }
-        v.focus();
+        h.focus();
+        if (!m) return;
+        const key = item.key ?? "";
+        if (item.rows) h.insertTable(item.rows, item.cols ?? item.rows);
+        else if (key === "mathinline") h.insertMathInline();
+        else if (key === "mathblock") h.insertMathBlock();
+        else if (key === "code") h.insertCodeBlock();
+        else if (key === "hr") h.insertHr();
+        else if (key === "fold") h.insertDetails();
+        else if (key.startsWith("co-")) h.insertCallout(key.slice(3) === "warn" ? "warning" : key.slice(3));
+        else if (key === "ul") h.toggleBullet();
+        else if (key === "ol") h.toggleOrdered();
+        else if (key === "todo") h.toggleTask();
+        else if (key === "quote") h.toggleQuote();
+        else if (key === "body") h.setParagraph();
+        else if (/^h[1-6]$/.test(key)) h.setHeading(Number(key.slice(1)));
       };
-      // 泡泡菜单重定位：选区非空且不在围栏代码块内 → 浮在选区上方（放不下换
-      // 下方）。onSelection 是 vendor 高频回调，这里只读 ref 不读 state，闭包
-      // 过期也无碍；斜杠菜单开着时让位
+      // 泡泡菜单重定位：选区非空且不在代码块内 → 浮在选区上方（放不下换
+      // 下方）。selectionUpdate 高频回调只读 ref 不读 state；斜杠菜单开着时让位
       const bubbleSync = () => {
-        const v = cmRef.current?.view;
-        if (!v) return;
-        const sel = v.state.selection.main;
-        if (sel.empty || menuRef.current !== null) {
+        const h = rteRef.current;
+        const ed = h?.editor;
+        if (!ed) return;
+        const sel = ed.state.selection;
+        if (sel.empty || menuRef.current !== null || ed.isActive("codeBlock")) {
           setBub(null);
           return;
         }
-        let fences = 0;
-        for (let n = 1; n < v.state.doc.lineAt(sel.from).number; n++) {
-          if (/^\s*(```|~~~)/.test(v.state.doc.line(n).text)) fences++;
-        }
-        if (fences % 2 === 1) {
-          setBub(null);
-          return;
-        }
-        const c1 = v.coordsAtPos(sel.from);
-        const c2 = v.coordsAtPos(sel.to);
+        const c1 = ed.view.coordsAtPos(sel.from);
+        const c2 = ed.view.coordsAtPos(sel.to);
         if (!c1 || !c2) {
           setBub(null);
           return;
@@ -7794,79 +7812,145 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           above,
         });
       };
-      // 编辑器挂载（与预览编辑同款：实例写 ref，文档变更回写 draft + 刷新斜杠
-      // 菜单 query；capture keydown 管菜单键位与图片粘贴）。live=Live Preview
-      // 引擎（vendor 内建）：处理器的解析语义与 reader 后处理逐一对应——wikilink
-      // ctrl+点 跳页/建页/同页锚，相对链接按页目录分流，图片按 attachments 约定
-      // 换 raw 直链。index 走 ref 镜像：handler 在编辑器实例里闭包，读 state
-      // 会停在挂载时刻
+      // 编辑器挂载（实例写 ref，文档变更防抖回写 draft + 自动保存，选区变化刷
+      // 泡泡/斜杠/表格态）。wikilink 点击跳页/建页/同页锚，相对链接按页目录分
+      // 流，图片按 attachments 约定换 raw 直链。index/page 走 ref 镜像：handler
+      // 在编辑器实例里闭包，读 state 会停在挂载时刻
       const indexRef = react.useRef(index);
       indexRef.current = index;
+      // 保存语境的共享基线（跨闭包统一）：fmText/mtimeMs 属于「当前打开页」，
+      // openPath 在切页前 flush（此刻 ref 仍是旧页的），新页 loadCurrent 时重置
+      const fmRef = react.useRef("");
+      const mtimeRef = react.useRef(0);
+      const draftBodyRef = react.useRef(draftBody);
+      draftBodyRef.current = draftBody;
+      const savedBodyRef = react.useRef(savedBody);
+      savedBodyRef.current = savedBody;
+      const conflictRef = react.useRef(conflict);
+      conflictRef.current = conflict;
       react.useEffect(() => {
-        const host = editHostRef.current;
-        // 单态守卫：页面归属当前路径且内容已就绪才挂 CM；gone/binary 不挂
-        if (!cmReady || !host || !page || page.path !== current || page.loading || page.gone || page.binary) {
+        const host = rteHostRef.current;
+        // 单态守卫：页面归属当前路径且内容已就绪才挂 RTE；gone/binary/加载失败不挂
+        if (!rteReady || rteFailed || !host || !page || page.path !== current || page.loading || page.gone || page.binary) {
           return undefined;
         }
         const pageDir = () => current.split(/[\\/]/).slice(0, -1).join("\\");
-        const h = window.CM6.create(host, {
-          doc: page.content ?? "",
-          readOnly: false,
-          language: "md",
-          chrome: false, // 单态所见即所得：去行号/折叠列等活动行 chrome，版式即阅读态
-          onSelection: () => bubbleSync(),
-          live: {
-            // 语言条文案（vendor 侧不碰 i18n）
-            codebarLabels: { copy: t("vaultCopy"), copied: t("vaultCopied") },
-            onWikiLink: (target, anchor) => {
-              if (target === "") {
-                if (anchor !== "") scrollAnchorCm(anchor);
-                return;
-              }
-              const pages = indexRef.current?.pages ?? [];
-              const resolved = resolveVaultLink(pages, target);
-              if (resolved) openPath(resolved.path, anchor);
-              else void createInSpace(target);
-            },
-            onOpenLink: (href) => {
-              if (/^https?:/i.test(href)) {
-                window.open(href);
-                return;
-              }
-              const joined = `${pageDir()}\\${href.split(/[?#]/, 1)[0]}`;
-              if (/\.md$/i.test(joined)) openPath(joined);
-              else window.open(`http://${location.host}/dsh-kit/read?path=${encodeURIComponent(joined)}`);
-            },
-            resolveSrc: (src) => {
-              if (/^(https?:|data:)/i.test(src)) return src;
-              const abs = /^attachments\//i.test(src) ? `${root}/${src}` : `${pageDir()}/${src}`;
-              return `http://${location.host}/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
-            },
+        const h = window.DshRTE.create(host, {
+          md: page.body ?? "",
+          placeholder: t("rtePlaceholder"),
+          labels: {
+            codeCopy: t("vaultCopy"),
+            codeCopied: t("vaultCopied"),
+            calloutTitlePh: t("vaultCalloutTitlePh"),
+          },
+          onWikiLink: (target, anchor) => {
+            if (target === "") {
+              if (anchor !== "") scrollAnchorRte(anchor);
+              return;
+            }
+            const pages = indexRef.current?.pages ?? [];
+            const resolved = resolveVaultLink(pages, target);
+            if (resolved) openPath(resolved.path, anchor);
+            else void createInSpace(target);
+          },
+          resolveWiki: (target) => resolveVaultLink(indexRef.current?.pages ?? [], target) !== null,
+          resolveSrc: (src) => {
+            if (/^(https?:|data:)/i.test(src)) return src;
+            const abs = /^attachments\//i.test(src) ? `${root}/${src}` : `${pageDir()}/${src}`;
+            return `http://${location.host}/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
           },
         });
-        cmRef.current = h;
-        // 文档变化 → 回写 draft + 斜杠菜单同步：光标行前缀 /xxx 即开/刷新菜单，
-        // 前缀破坏即关。放 docChanged 而非 keydown 是为了覆盖全部输入路径
-        //（真实键入 / execCommand / IME 组合输入）。
-        const syncSlashMenu = (view) => {
-          const pos = view.state.selection.main.head;
-          const line = view.state.doc.lineAt(pos);
-          const before = line.text.slice(0, pos - line.from);
-          const m = /^\/(\S*)$/.exec(before);
+        rteRef.current = h;
+        // 挂载即对齐基准：初次 serialize 可能规整化原文格式（尾随空行等），
+        // 基准取编辑器 md 而非盘上 rest——打开即编辑不误报脏
+        const initial = h.getMd();
+        draftBodyRef.current = initial;
+        savedBodyRef.current = initial;
+        setDraftBody(initial);
+        setSavedBody(initial);
+        // 斜杠菜单同步：光标前缀 /xxx 即开/刷新菜单，前缀破坏即关。挂 update +
+        // selectionUpdate 覆盖全部输入路径（真实键入/IME/命令改写）
+        const syncSlashMenu = () => {
+          const ed = rteRef.current?.editor;
+          if (!ed) return;
+          const { $from } = ed.state.selection;
+          const textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - 80), $from.parentOffset, "\n", "\n");
+          const m = /(?:^|\n)\/(\S*)$/.exec(textBefore);
           if (m) {
-            const coords = view.coordsAtPos(pos);
-            setMenu({ query: m[1] ?? "", x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4 });
+            const coords = ed.view.coordsAtPos($from.pos);
+            setMenu({ query: m[1] ?? "", sub: null, x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4 });
             setMenuIdx((i) => i);
           } else if (menuRef.current !== null) {
             setMenu(null);
           }
         };
-        h.onDocChanged((text) => {
-          setDraft(text);
-          syncSlashMenu(h.view);
+        // 自动保存（wangshu 同款 2s 防抖）：变更后 350ms 算 md（脏点基准），
+        // 2s 后落盘；flush=立即落；冲突时暂停（conflictRef）。自动保存钉住挂载
+        // 页（mountedPath/mountedFm 局部闭包），切页后的卸载保底不会写错路径
+        const mountedPath = current;
+        const mountedFm = fmRef.current;
+        let mdTimer = null;
+        let saveTimer = null;
+        const localAutosave = async () => {
+          if (conflictRef.current !== null) return;
+          const hh = rteRef.current;
+          if (!hh) return;
+          const bodyMd = hh.getMd();
+          try {
+            const body = await schedFetch("/dsh-kit/vault/write", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ path: mountedPath, content: mountedFm + bodyMd, baseMtime: mtimeRef.current }),
+            });
+            if (body.modified === true) {
+              setConflict({ diskMtime: body.mtimeMs ?? 0 });
+              setToast(t("vaultConflict"));
+              return;
+            }
+            setConflict(null);
+            mtimeRef.current = body.mtimeMs ?? mtimeRef.current;
+            savedBodyRef.current = bodyMd;
+            draftBodyRef.current = bodyMd;
+            setSavedBody(bodyMd);
+            setDraftBody(bodyMd);
+            void loadIndex();
+          } catch (error) {
+            setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
+          }
+        };
+        const flushSave = () => {
+          if (saveTimer === null) return;
+          saveTimer = null;
+          void localAutosave();
+        };
+        const offUpdate = h.onUpdate(() => {
+          clearTimeout(mdTimer);
+          mdTimer = setTimeout(() => {
+            mdTimer = null;
+            const hh = rteRef.current;
+            if (!hh) return;
+            const md = hh.getMd();
+            draftBodyRef.current = md;
+            setDraftBody(md);
+          }, 350);
+          clearTimeout(saveTimer);
+          saveTimer = setTimeout(flushSave, 2000);
+        });
+        const offSelection = h.onSelectionUpdate(() => {
+          bubbleSync();
+          syncSlashMenu();
+          const active = rteRef.current?.inTable() === true;
+          setInTable((prev) => (prev === active ? prev : active));
         });
         const onKeyDown = (e) => {
-          // 泡泡菜单开着时 Esc 关它（分层：先色板后泡泡），不拦 CM 的其它按键
+          // Ctrl+S：立即落盘（有 toast 反馈）
+          if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+            e.preventDefault();
+            e.stopPropagation();
+            void saveEditRef.current.flushManual();
+            return;
+          }
+          // 泡泡菜单开着时 Esc 关它（分层：先色板后泡泡），不拦编辑器的其它按键
           if (menuRef.current === null && bubRef.current !== null && e.key === "Escape") {
             e.stopPropagation();
             setBubPanel(null);
@@ -7942,22 +8026,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               return;
             }
           }
-          if (e.key === "/") {
-            // CM 先处理按键，稍后读光标行前缀判断是否行首 /
-            setTimeout(() => {
-              const view = cmRef.current?.view;
-              if (!view) return;
-              const pos = view.state.selection.main.head;
-              const line = view.state.doc.lineAt(pos);
-              const before = line.text.slice(0, pos - line.from);
-              if (/^\/\S*$/.test(before)) {
-                const coords = view.coordsAtPos(pos);
-                setMenu({ query: before.slice(1), sub: null, x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4 });
-                menuIdxRef.current = 0;
-                setMenuIdx(0);
-              }
-            }, 20);
-          }
         };
         host.addEventListener("keydown", onKeyDown, true);
         // 滚动/窗口变化跟随：泡泡/斜杠菜单都是 fixed 定位，坐标只在重定位时刷新
@@ -7965,48 +8033,84 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         host.addEventListener("scroll", onScrollOrResize, true);
         window.addEventListener("resize", onScrollOrResize);
         return () => {
+          clearTimeout(mdTimer);
+          clearTimeout(saveTimer);
+          // 有防抖未触发的改动 → 卸载前尽力落盘（wangshu 同款保底；钉住挂载页
+          // 路径与 fm，冲突时放弃）
+          if (
+            conflictRef.current === null
+            && rteRef.current
+            && rteRef.current.getMd() !== savedBodyRef.current
+          ) {
+            void localAutosave();
+          }
+          offUpdate();
+          offSelection();
           host.removeEventListener("keydown", onKeyDown, true);
           host.removeEventListener("scroll", onScrollOrResize, true);
           window.removeEventListener("resize", onScrollOrResize);
           setBub(null);
           setBubPanel(null);
           h.destroy();
-          cmRef.current = null;
+          rteRef.current = null;
         };
-        // eslint 对 page 的读取是刻意的：doc 取挂载瞬间的盘上内容，draft 走
-        // onDocChanged 回写；保存不重挂（docTick 不动），冲突回读才 bump
-      }, [cmReady, current, docTick]);
-      // 挂载完成后 draft 与文档对齐（保存/脏判定基准）
+        // page 的读取是刻意的：body 取挂载瞬间的盘上内容，后续走 onUpdate 回写；
+        // 保存不重挂（docTick 不动），打开新页/冲突回读才 bump
+      }, [rteReady, current, docTick]);
+      // 索引刷新后 wikilink 碎链态重刷（新建页/删页会影响解析结果）
       react.useEffect(() => {
-        if (cmRef.current) setDraft(cmRef.current.getDoc());
-      }, [cmReady, current, docTick]);
-      // 跳页锚点：CM 就绪后落到目标标题（[[页#锚]] 链路）
+        rteRef.current?.wikiRefresh();
+      }, [index]);
+      // 跳页锚点：RTE 就绪后落到目标标题（[[页#锚]] 链路）
       react.useEffect(() => {
         if (pendingAnchor === "") return;
-        if (scrollAnchorCm(pendingAnchor)) setPendingAnchor("");
-      }, [pendingAnchor, cmReady, current, docTick]);
-      const saveEdit = async () => {
-        if (current === null) return;
+        if (scrollAnchorRte(pendingAnchor)) setPendingAnchor("");
+      }, [pendingAnchor, rteReady, current, docTick]);
+      // 保存入口（手动保存/覆盖盘上/切页 flush 共用；自动保存走挂载 effect 内
+      // 的 localAutosave，钉住挂载页）。content = fmRef（frontmatter 字节级原
+      // 文）+ 编辑器 md；冲突=出冲突条暂停自动保存，绝不静默覆盖。
+      // outcome: ok|conflict|fail
+      const saveEdit = async (mode = "manual") => {
+        if (current === null) return "fail";
+        const h = rteRef.current;
+        if (!h) return "fail";
+        const bodyMd = h.getMd();
+        const base = mode === "overwrite" ? (conflictRef.current?.diskMtime ?? 0) : mtimeRef.current;
         try {
           const body = await schedFetch("/dsh-kit/vault/write", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ path: current, content: draft, baseMtime: page?.mtimeMs ?? 0 }),
+            body: JSON.stringify({ path: current, content: fmRef.current + bodyMd, baseMtime: base }),
           });
           if (body.modified === true) {
-            // CAS 冲突：盘上已有别人/别处的更新——回读对齐（docTick 重挂载），
-            // 本地草稿丢弃，绝不静默覆盖
+            setConflict({ diskMtime: body.mtimeMs ?? 0 });
             setToast(t("vaultConflict"));
-            await loadCurrent();
-            await loadIndex();
-            return;
+            return "conflict";
           }
-          setToast(t("vaultSaved"));
-          setPage((p) => (p && p.path === current ? { ...p, content: draft, mtimeMs: body.mtimeMs ?? p.mtimeMs } : p));
-          await loadIndex();
+          setConflict(null);
+          mtimeRef.current = body.mtimeMs ?? mtimeRef.current;
+          setSavedBody(bodyMd);
+          draftBodyRef.current = bodyMd;
+          setDraftBody(bodyMd);
+          if (mode === "manual" || mode === "overwrite") setToast(t("vaultSaved"));
+          void loadIndex();
+          return "ok";
         } catch (error) {
           setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
+          return "fail";
         }
+      };
+      // ref 镜像：openPath 切页 flush / Ctrl+S / 冲突按钮都经它调，闭包永远新鲜
+      const saveEditRef = react.useRef(null);
+      saveEditRef.current = {
+        dirty: () => draftBodyRef.current !== savedBodyRef.current,
+        flush: async () => {
+          if (current === null || conflictRef.current !== null) return "fail";
+          return saveEdit("auto");
+        },
+        flushManual: async () => saveEdit("manual"),
+        overwrite: async () => saveEdit("overwrite"),
+        reload: () => loadCurrent(),
       };
       const deleteCurrent = async () => {
         if (current === null || !index) return;
@@ -8030,7 +8134,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
         }
       };
-      /** 编辑态粘贴截图：图片文件上传到 vault attachments/，光标处插入 md 链接 */
+      /** 编辑态粘贴截图：图片文件上传到 vault attachments/，光标处插入图片节点 */
       const onEditPaste = (e) => {
         const files = Array.from(e.clipboardData?.files ?? []).filter((f) => /^image\//i.test(f.type));
         if (files.length === 0) return;
@@ -8043,12 +8147,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             .then((body) => {
               const name = body?.saved?.[0]?.name;
               if (!name) throw new Error(body?.warning || "upload failed");
-              const h = cmRef.current;
-              if (h?.view) {
-                const pos = h.view.state.selection.main.head;
-                const insert = `![](attachments/${name})`;
-                h.view.dispatch({ changes: { from: pos, insert }, selection: { anchor: pos + insert.length } });
-              }
+              rteRef.current?.insertImage(`attachments/${name}`, f.name || name);
             })
             .catch(() => setToast(t("vaultSaveFail")));
         }
@@ -8078,8 +8177,20 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
       const indexPages = index?.pages ?? [];
       const backlinks = current && index ? vaultBacklinks(index.pages, current) : [];
-      const histBack = () => setHist((h) => ({ ...h, idx: Math.max(0, h.idx - 1) }));
-      const histFwd = () => setHist((h) => ({ ...h, idx: Math.min(h.stack.length - 1, h.idx + 1) }));
+      // 历史前进/后退同样先 flush（冲突=留在本页）
+      const histGo = (toIdx) => {
+        const path = hist.stack[toIdx];
+        if (path === undefined) return;
+        if (saveEditRef.current.dirty() && path !== current) {
+          void saveEditRef.current.flush().then((outcome) => {
+            if (outcome !== "conflict") setHist((h) => ({ ...h, idx: toIdx }));
+          });
+          return;
+        }
+        setHist((h) => ({ ...h, idx: toIdx }));
+      };
+      const histBack = () => histGo(Math.max(0, hist.idx - 1));
+      const histFwd = () => histGo(Math.min(hist.stack.length - 1, hist.idx + 1));
       const toggleDir = (dir) => {
         const opening = expanded[dir] !== true;
         setExpanded((e) => ({ ...e, [dir]: opening }));
@@ -8184,10 +8295,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       };
 
       const backlinksOf = backlinks;
-      // 脏判定：草稿与盘上内容不一致（保存钮 title 与 ● 提示的依据）
-      const dirty =
-        page != null && page.path === current && page.loading !== true && page.gone !== true && page.binary !== true
-        && draft !== (page.content ?? "");
+      // 脏判定：编辑器 md 与已保存 md 不一致（保存钮 title 与 ● 提示的依据）
+      const dirty = draftBody !== savedBody;
+      // frontmatter 属性条数据（编辑器外展示，保存时字节级原样写回）
+      const fmInfo = page && page.fmText ? vaultParseFmInfo(page.fmText) : null;
       return jsxRuntime.jsxs("div", { className: "dshk-vault", children: [
         jsxRuntime.jsxs("div", { className: "dshk-vault-toolbar", children: [
           jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistBack"), title: t("vaultHistBack"), disabled: hist.idx <= 0, onClick: histBack, children: "←" }),
@@ -8256,18 +8367,51 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   : page.binary === true
                     ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultBinaryHint") })
                     : jsxRuntime.jsxs("div", { className: "dshk-vault-editwrap", onPaste: onEditPaste, children: [
+                        fmInfo
+                          ? jsxRuntime.jsx("div", { className: "dshk-vault-fmbar", children: [
+                              jsxRuntime.jsxs("span", { children: [
+                                jsxRuntime.jsx("span", { children: "🏷 " }),
+                                t("vaultFmTags"),
+                                "：",
+                                fmInfo.tags.length > 0 ? fmInfo.tags.join("、") : "—",
+                              ] }),
+                              fmInfo.created !== ""
+                                ? jsxRuntime.jsxs("span", { children: [t("vaultFmCreated"), "：", fmInfo.created] })
+                                : null,
+                              jsxRuntime.jsx("span", { className: "dshk-vault-fmtip", title: t("vaultFmTip"), children: "ⓘ" }),
+                            ] }, "fmbar")
+                          : null,
                         jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
-                          // 单态所见即所得（用户定稿）：无编辑/只读二分，页面即编辑器。
-                          // 页条=文档级命令（保存/删除/撤销/重做）+ 脏标记；行内格式
-                          // 在泡泡菜单、块插入在斜杠菜单
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", title: dirty ? t("vaultUnsaved") : t("vaultSaved"), onClick: () => void saveEdit(), children: t("vaultSave") }),
+                          // 真·所见即所得（用户定稿）：页面恒为 TipTap 富文本编辑器。
+                          // 页条=文档级命令（保存/删除/撤销/重做）+ 脏标记 + 冲突处理；
+                          // 行内格式在泡泡菜单、块插入在斜杠菜单、表格按钮随选区显隐
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", title: dirty ? t("vaultUnsaved") : t("vaultSaved"), onClick: () => void saveEditRef.current.flushManual(), children: t("vaultSave") }),
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void deleteCurrent(), children: t("vaultDelBtn") }),
                           jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbUndo"), onClick: () => cmRef.current?.undo(), children: "↶" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbRedo"), onClick: () => cmRef.current?.redo(), children: "↷" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbUndo"), onClick: () => rteRef.current?.undo(), children: "↶" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbRedo"), onClick: () => rteRef.current?.redo(), children: "↷" }),
+                          inTable
+                            ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                                jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
+                                jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableAddRow"), onClick: () => rteRef.current?.tableAddRow(true), children: "＋行" }),
+                                jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableAddCol"), onClick: () => rteRef.current?.tableAddCol(true), children: "＋列" }),
+                                jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDelRow"), onClick: () => rteRef.current?.tableDeleteRow(), children: "－行" }),
+                                jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDelCol"), onClick: () => rteRef.current?.tableDeleteCol(), children: "－列" }),
+                                jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDel"), onClick: () => rteRef.current?.tableDelete(), children: "✕表" }),
+                              ] })
+                            : null,
                           dirty ? jsxRuntime.jsx("span", { className: "dshk-vault-dirtydot", title: t("vaultUnsaved"), children: "●" }) : null,
                         ] }),
-                        jsxRuntime.jsx("div", { className: "dshk-vault-cmhost", ref: editHostRef }),
+                        conflict !== null
+                          ? jsxRuntime.jsxs("div", { className: "dshk-vault-conflict", children: [
+                              jsxRuntime.jsx("span", { children: `⚠ ${t("vaultConflict")}` }),
+                              jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void saveEditRef.current.overwrite(), children: t("vaultConflictOverwrite") }),
+                              jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => saveEditRef.current.reload(), children: t("vaultConflictReload") }),
+                            ] }, "conflict")
+                          : null,
+                        rteFailed
+                          ? jsxRuntime.jsx("textarea", { className: "dshk-vault-rtefallback", value: draftBody, onChange: (e) => setDraftBody(e.target.value), spellCheck: false })
+                          : jsxRuntime.jsx("div", { className: "dshk-vault-rtehost dshk-md", ref: rteHostRef }),
                         menu !== null
                           ? jsxRuntime.jsx(
                               "div",
@@ -8339,19 +8483,19 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                                 onMouseDown: (e) => e.preventDefault(),
                                 children: [
                                   jsxRuntime.jsxs("div", { className: "dshk-vault-bubblebar", children: [
-                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("**", "**") ? " is-active" : ""}`, title: t("vtbBold"), onClick: () => { cmWrap("**", "**"); bubbleSync(); }, children: "B" }),
-                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("*", "*") ? " is-active" : ""}`, title: t("vtbItalic"), onClick: () => { cmWrap("*", "*"); bubbleSync(); }, children: "I" }),
-                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("<u>", "</u>") ? " is-active" : ""}`, title: t("vtbUnderline"), onClick: () => { cmWrap("<u>", "</u>"); bubbleSync(); }, children: "U̲" }),
-                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("~~", "~~") ? " is-active" : ""}`, title: t("vtbStrike"), onClick: () => { cmWrap("~~", "~~"); bubbleSync(); }, children: "S̶" }),
-                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("<sup>", "</sup>") ? " is-active" : ""}`, title: t("vtbSup"), onClick: () => { cmWrap("<sup>", "</sup>"); bubbleSync(); }, children: "x²" }),
-                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("<sub>", "</sub>") ? " is-active" : ""}`, title: t("vtbSub"), onClick: () => { cmWrap("<sub>", "</sub>"); bubbleSync(); }, children: "x₂" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("bold") ? " is-active" : ""}`, title: t("vtbBold"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleBold().run()), children: "B" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("italic") ? " is-active" : ""}`, title: t("vtbItalic"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleItalic().run()), children: "I" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("underline") ? " is-active" : ""}`, title: t("vtbUnderline"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleUnderline().run()), children: "U̲" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("strike") ? " is-active" : ""}`, title: t("vtbStrike"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleStrike().run()), children: "S̶" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("superscript") ? " is-active" : ""}`, title: t("vtbSup"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleSuperscript().run()), children: "x²" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("subscript") ? " is-active" : ""}`, title: t("vtbSub"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleSubscript().run()), children: "x₂" }),
                                     jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
                                     jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubPanel === "tc" ? " is-active" : ""}`, title: t("vtbColor"), onClick: () => setBubPanel((p) => (p === "tc" ? null : "tc")), children: "A" }),
                                     jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubPanel === "hc" ? " is-active" : ""}`, title: t("vtbHighlight"), onClick: () => setBubPanel((p) => (p === "hc" ? null : "hc")), children: "▩" }),
-                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("`", "`") ? " is-active" : ""}`, title: t("vtbCode"), onClick: () => { cmWrap("`", "`"); bubbleSync(); }, children: "‹›" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("code") ? " is-active" : ""}`, title: t("vtbCode"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleCode().run()), children: "‹›" }),
                                     jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
-                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubLinkActive() ? " is-active" : ""}`, title: t("vtbLink"), onClick: bubLink, children: "🔗" }),
-                                    jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtbClear"), onClick: cmClearFmt, children: "⌫" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("link") ? " is-active" : ""}`, title: t("vtbLink"), onClick: bubLink, children: "🔗" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtbClear"), onClick: () => rteCmd((h) => h.clearFormat()), children: "⌫" }),
                                   ] }),
                                   bubPanel !== null
                                     ? jsxRuntime.jsx("div", { className: "dshk-vault-bswatchrow", children: (bubPanel === "tc" ? BUB_COLORS : BUB_HIGHLIGHTS).map((c) =>
@@ -8360,10 +8504,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                                           className: "dshk-vault-bswatch",
                                           style: { background: c },
                                           onClick: () => {
-                                            if (bubPanel === "tc") cmWrap(`<span style="color:${c}">`, "</span>");
-                                            else cmWrap(`<mark style="background:${c}">`, "</mark>");
+                                            if (bubPanel === "tc") rteCmd((h) => h.setColor(c));
+                                            else rteCmd((h) => h.setHighlight(c));
                                             setBubPanel(null);
-                                            bubbleSync();
                                           },
                                         }, c),
                                       ).concat([
@@ -8371,9 +8514,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                                           type: "button",
                                           className: "dshk-vault-bswatch-clear",
                                           onClick: () => {
-                                            bubStrip(bubPanel === "tc" ? "span" : "mark");
+                                            rteCmd((h) => (bubPanel === "tc" ? h.unsetColor() : h.unsetHighlight()));
                                             setBubPanel(null);
-                                            bubbleSync();
                                           },
                                           children: t("vtbClearColor"),
                                         }, "clear"),
