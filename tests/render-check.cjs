@@ -455,7 +455,7 @@ out = comps.RightDock({ props: {}, cwd: "C:/x" });
 check("无预览文件时不渲染空标签条", !callLog.some((c) => c[2] && c[2].className === "dshk-pv-tabrow"));
 comps.setKitUi({ browserOpen: false, dockTab: null });
 
-// 7.2.4) 最小化：KitSurfaces 收起态渲染 DockStub 竖条（RightDock 不再出现）；
+// 7.2.4) 最小化：KitSurfaces 收起态渲染 DockStub 收起栏（RightDock 不再出现）；
 // DockStub 直调产出可点击的展开按钮
 comps.setKitUi({ browserOpen: true, dockTab: "browser", dockCollapsed: true });
 callLog = [];
@@ -463,7 +463,7 @@ out = comps.KitSurfaces({});
 const stubElem = callLog.find((c) => c[1] === comps.DockStub);
 const dockElem = callLog.find((c) => c[1] === comps.RightDock);
 check("KitSurfaces 最小化态渲染无异常", !!out && typeof out === "object");
-check("最小化态挂 DockStub 竖条且不挂 RightDock", !!stubElem && !dockElem);
+check("最小化态挂 DockStub 收起栏且不挂 RightDock", !!stubElem && !dockElem);
 callLog = [];
 out = comps.DockStub({});
 const stubBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["展开面板", "Expand panel"].includes(c[2]["aria-label"]));
@@ -488,7 +488,7 @@ check("RightDock 空态渲染后台任务/日程/知识库/浏览器四张卡片
 const emptyAdd = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-dock-add");
 const emptyCloseAll = callLog.find((c) => (c[0] === "jsx") && c[2] && ["全部关闭", "Close all"].includes(c[2]["aria-label"]));
 const emptyMin = callLog.find((c) => (c[0] === "jsx") && c[2] && ["最小化面板", "Minimize panel"].includes(c[2]["aria-label"]));
-check("RightDock 0 标签：只有 »（+ 与全部关闭都不出现）", !emptyAdd && !emptyCloseAll && !!emptyMin);
+check("RightDock 0 标签：只有最小化图标钮（+ 与全部关闭都不出现）", !emptyAdd && !emptyCloseAll && !!emptyMin);
 comps.setKitUi({ schedOpen: true, dockTab: "schedule" });
 callLog = [];
 out = comps.RightDock({ props: {}, cwd: "C:/x" });
@@ -563,8 +563,12 @@ check("vaultHeadingSlug：空白压成 -", comps.vaultHeadingSlug("  Some 标题
 comps.setKitUi({ dockCollapsed: true });
 callLog = [];
 out = comps.DockStub({});
-const stubPanel = callLog.find((c) => (c[0] === "jsx") && c[2] && ["侧边面板", "Side panel"].includes(c[2].children));
-check("DockStub 0 标签显示通用侧边面板文案", !!stubPanel);
+const railRoot = callLog.find((c) => c[0] === "jsxs" && c[2] && c[2].className === "dshk-dock-rail");
+const railBtns = callLog.filter((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[2] && c[2].className === "dshk-dock-rail-btn");
+const railExpand = railBtns.find((c) => ["展开面板", "Expand panel"].includes(c[2]["aria-label"]));
+const railGeneric = railBtns.find((c) => typeof c[2].title === "string" && (c[2].title.startsWith("侧边面板") || c[2].title.startsWith("Side panel")));
+check("DockStub 0 标签渲染收起栏（展开钮 + 4 枚快捷开标签图标）", !!railRoot && railBtns.length === 5 && !!railExpand);
+check("DockStub 0 标签展开钮标题以通用侧边面板开头", !!railGeneric);
 comps.setKitUi({ dockCollapsed: false });
 
 // 7.2.3) 预览标签 LRU 纯逻辑：默认上限 8，超限开新文件逐出 usedAt 最小者；

@@ -54,7 +54,7 @@ window.__ModuleLoader__.load({
     // vaultOpen 是「标签存在性」，dockTab 是当前激活大标签，activePreview 是预览
     // 内激活的文件；打开某功能 = 确保标签存在并激活，互斥清场废除（切走不丢状态）。
     // 容器本身常置：不再随「最后一个标签关闭」而消失，0 标签时渲染空态选择器
-    // （打开标签页卡片）；dockCollapsed = 暂时收起成右缘竖条（存在性保留；视为
+    // （打开标签页卡片）；dockCollapsed = 暂时收起成右缘窄栏（存在性保留；视为
     // 人为退出——agent 导航不再弹回）。收起态不持久化：每次启动一律收起（用户
     // 定稿），打开任意标签会自动展开；会话内用快捷键开合。
     let kitUi = { treeOpen: false, gitOpen: false, previews: [], activePreview: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, dockTab: null, dockCollapsed: true };
@@ -1881,9 +1881,13 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-brw-canvas{max-width:100%;height:auto;margin:auto 0;display:block;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);outline:none}
 .dshk-brw-canvas:focus-visible{border-color:var(--dsw-alias-brand-primary)}
 .dshk-brw-note{padding:8px 12px;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}
-/* 最小化状态的右缘竖条：窄、贴边、垂直文字 */
-.dshk-dock-stub{position:fixed;right:0;top:30%;writing-mode:vertical-rl;padding:12px 5px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-right:0;border-radius:8px 0 0 8px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1;cursor:pointer;z-index:789;box-shadow:-4px 0 12px rgba(0,0,0,.08);transition:color .12s var(--ds-ease-in-out),background .12s var(--ds-ease-in-out)}
-.dshk-dock-stub:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+/* 收起栏（原生折叠侧栏同款）：右缘通高窄条——顶部展开钮 + 可开标签快捷图标
+（点图标=展开并直达），存在性状态全部保留，这只是"暂时挪到边上" */
+.dshk-dock-rail{position:fixed;top:0;right:0;bottom:0;width:36px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0;background:var(--dsw-alias-bg-base);border-left:1px solid var(--dsw-alias-border-l2);box-shadow:-4px 0 12px rgba(0,0,0,.08);z-index:789}
+.dshk-dock-rail-btn{position:relative;appearance:none;border:0;background:none;padding:0;width:26px;height:26px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);cursor:pointer;transition:color .12s var(--ds-ease-in-out),background .12s var(--ds-ease-in-out)}
+.dshk-dock-rail-btn:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-dock-rail-btn-on{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-rail-dot{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:999px;background:var(--dsw-alias-brand-primary)}
 /* 透明 IME 输入：只做组合事件宿主，视觉隐形、不拦截点击 */
 .dshk-brw-ime{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;border:0;padding:0;margin:0;outline:none;pointer-events:none;z-index:-1;background:transparent}
 /* 手机触控增强：斜杠菜单（input-trigger）在触屏上滚不动/悬停粘滞的兜底。
@@ -3215,6 +3219,29 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           children: [
             jsxRuntime.jsx("path", { d: "M3 2.6v10.8M6.6 2.6v10.8" }),
             jsxRuntime.jsx("rect", { x: 9.4, y: 2.6, width: 3.4, height: 10.8, rx: 0.9 }),
+          ],
+        },
+      );
+    }
+
+    /** 面板开合图标（圆角矩形 + 右侧分隔竖线）：坞头最小化与收起栏展开共用一枚，
+    语义对齐原生侧边栏的开合钮；与终端/任务描边体系一致 */
+    function PaneToggleIcon() {
+      return jsxRuntime.jsxs(
+        "svg",
+        {
+          width: 15,
+          height: 15,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.2,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          children: [
+            jsxRuntime.jsx("rect", { x: 2.8, y: 3.2, width: 10.4, height: 9.6, rx: 1.6 }),
+            jsxRuntime.jsx("path", { d: "M10.4 3.2v9.6" }),
           ],
         },
       );
@@ -8554,10 +8581,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     function dockBounds(tab) {
       return { min: 480, max: Math.min(960, Math.max(560, window.innerWidth - 820)) };
     }
-    /** 最小化状态的右缘竖条：一枚可点的小按钮，点击展开面板（标题=当前激活大标签，
-     *  多文件预览带计数；0 标签=常置空坞，显示通用「侧边面板」）。存在性状态全部
-     *  保留，这只是"暂时挪到边上"。 */
-    function DockStub() {
+    /** 收起态的右缘窄栏（原生折叠侧栏同款）：通高贴边，顶部展开钮 + 可开标签
+     *  快捷图标（点图标 = 展开并直达该标签，与「+」菜单同一份 openable 清单；
+     *  任务有在跑时图标角上亮点）。展开钮标题带当前激活大标签名（多文件预览带
+     *  计数；0 标签 = 常置空坞，显示通用「侧边面板」）。存在性状态全部保留，
+     *  这只是"暂时挪到边上"。 */
+    function DockStub({ props }) {
       const ui = useKitUi();
       let label = t("dockPreview");
       if (ui.dockTab === "jobs" && ui.jobsOpen) label = t("dockJobs");
@@ -8566,13 +8595,47 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       else if (ui.dockTab === "vault" && ui.vaultOpen) label = t("vaultTitle");
       else if ((ui.previews?.length ?? 0) > 1) label = `${t("dockPreview")} (${ui.previews.length})`;
       else if ((ui.previews?.length ?? 0) === 0 && !ui.jobsOpen && !ui.browserOpen && !ui.schedOpen && !ui.vaultOpen) label = t("dockPanel");
-      return jsxRuntime.jsx("button", {
-        type: "button",
-        className: "dshk-dock-stub",
-        title: t("dockRestore"),
-        "aria-label": t("dockRestore"),
-        onClick: () => setKitUi({ dockCollapsed: false }),
-        children: label,
+      const cfg = cfgFromSnapshot(getCfgSnapshot());
+      const useSessions = props && typeof props.useSessions === "function" ? props.useSessions : null;
+      const current = useSessions ? useSessions((s) => s.current) : undefined;
+      const jobs = useSessions ? useSessions((s) => (current ? s.jobsBySession[current] : undefined)) : undefined;
+      const liveJobs = Array.isArray(jobs) ? jobs.filter((j) => j.status === "running" || j.status === "stopping").length : 0;
+      const openable = [];
+      if (cfg.jobsEnabled !== false) openable.push({ id: "jobs", label: t("dockJobs"), icon: JobsIcon, badge: liveJobs });
+      openable.push({ id: "schedule", label: t("schedTab"), icon: SchedIcon });
+      if (cfg.vaultEnabled !== false) openable.push({ id: "vault", label: t("vaultTitle"), icon: VaultIcon });
+      if (cfg.browserEnabled !== false) openable.push({ id: "browser", label: t("dockBrowser"), icon: BrowserIcon });
+      const openTab = (id) => {
+        if (id === "browser") autoOpenSuppressed = false; // 手动点开=解除自动打开抑制
+        setKitUi(openDockTab(kitUi, id));
+      };
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-dock-rail",
+        role: "complementary",
+        "aria-label": t("dockPanel"),
+        children: [
+          jsxRuntime.jsx("button", {
+            type: "button",
+            className: "dshk-dock-rail-btn",
+            title: `${label} · ${t("dockRestore")}`,
+            "aria-label": t("dockRestore"),
+            onClick: () => setKitUi({ dockCollapsed: false }),
+            children: jsxRuntime.jsx(PaneToggleIcon, {}),
+          }),
+          openable.map((m) =>
+            jsxRuntime.jsxs("button", {
+              type: "button",
+              className: `dshk-dock-rail-btn${ui.dockTab === m.id ? " dshk-dock-rail-btn-on" : ""}`,
+              title: m.label,
+              "aria-label": m.label,
+              onClick: () => openTab(m.id),
+              children: [
+                jsxRuntime.jsx(m.icon, {}),
+                m.badge > 0 ? jsxRuntime.jsx("span", { className: "dshk-rail-dot", "aria-hidden": true }) : null,
+              ],
+            }, m.id),
+          ),
+        ],
       });
     }
 
@@ -8688,8 +8751,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           jsxRuntime.jsxs("div", {
             className: "dshk-jobs-head",
             children: [
-              // 最左：最小化（用户定稿 2026-09-06）：常置坞的唯一"退出"动作放最左，
-              // 与标签互不打架；收起后右缘竖条恢复
+              // 最左：最小化（原生侧边栏同款面板开合图标）：常置坞的唯一"退出"动作
+              // 放最左，与标签互不打架；收起后右缘收起栏恢复
               jsxRuntime.jsx("button", {
                 type: "button",
                 className: "dshk-jobs-close",
@@ -8701,7 +8764,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   setMenuOpen(false);
                   setKitUi({ dockCollapsed: true });
                 },
-                children: "»",
+                children: jsxRuntime.jsx(PaneToggleIcon, {}),
               }),
               // 左组：标签条 + 紧随其后的「+」（+ 显示在标签旁边）。两者仅有标签
               // 时显示——0 标签的空态选择器已承担开新标签职责，头部不再重复
@@ -9174,11 +9237,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               })
             : null,
           // 右侧标签页容器（常置，2026-09-06）：不再随「最后一个标签关闭」而消失
-          // ——0 标签时 RightDock 渲染空态选择器；最小化时隐藏容器、右缘留一枚竖条
-          // （DockStub）点击展开。日程标签无 cfg 门控恒可开 → 坞始终有可提供的内容，
-          // 除收起外恒渲染
+          // ——0 标签时 RightDock 渲染空态选择器；最小化时隐藏容器、右缘留收起栏
+          // （DockStub：展开钮 + 快捷开标签图标）。日程标签无 cfg 门控恒可开 → 坞
+          // 始终有可提供的内容，除收起外恒渲染
           ui.dockCollapsed === true
-            ? jsxRuntime.jsx(DockStub, {})
+            ? jsxRuntime.jsx(DockStub, { props })
             : jsxRuntime.jsx(RightDock, { props, cwd }),
         ],
       });
