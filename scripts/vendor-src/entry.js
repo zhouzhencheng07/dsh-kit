@@ -2,6 +2,7 @@
 // 打包成 IIFE，暴露 window.CM6.create 工厂）。
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
 import { EditorState, Compartment } from "@codemirror/state";
+import { undo, redo } from "@codemirror/commands";
 import { basicSetup } from "codemirror";
 import { HighlightStyle, syntaxHighlighting, StreamLanguage, LanguageSupport, LanguageDescription } from "@codemirror/language";
 import { tags as tg } from "@lezer/highlight";
@@ -100,7 +101,9 @@ EXT_LANGS.markdown = md;
  *  自动换行——不产生横向滚动条，观感与旧纯文本预览一致；带语言的代码文件
  *  保持不换行（横向滚动条由宿主 CSS 钉底）。
  *  opts.live：Live Preview 处理器（仅 md 编辑场景传）——
- *    { onWikiLink(target, anchor), onOpenLink(href), resolveSrc(src) → URL|null } */
+ *    { onWikiLink(target, anchor), onOpenLink(href), resolveSrc(src) → URL|null }
+ *  opts.onSelection(view)：选区/文档/几何（滚动、缩放）变化回调——宿主泡泡
+ *    菜单靠它跟随选区重定位；高频事件，处理器自身要廉价（空选区早退） */
 function create(container, opts) {
   const o = opts || {};
   const langComp = new Compartment();
@@ -118,6 +121,7 @@ function create(container, opts) {
         ...(o.live ? livePreview(o.live) : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && typeof onChangeCb === "function") onChangeCb(view.state.doc.toString());
+          if ((u.docChanged || u.selectionChanged || u.geometryChanged) && typeof o.onSelection === "function") o.onSelection(view);
         }),
       ],
     }),
@@ -126,6 +130,8 @@ function create(container, opts) {
   view.dom.classList.add("dshk-cm", "dshk-cm-scope");
   return {
     view,
+    undo() { if (undo(view)) view.focus(); },
+    redo() { if (redo(view)) view.focus(); },
     setEditable(next) { view.dispatch({ effects: roComp.reconfigure(next ? [] : EditorView.editable.of(false)) }); },
     getDoc() { return view.state.doc.toString(); },
     setDoc(text) { view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: String(text) } }); },

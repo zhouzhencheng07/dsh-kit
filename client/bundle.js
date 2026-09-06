@@ -769,26 +769,76 @@ window.__ModuleLoader__.load({
       vaultDelBtn: "删除",
       vaultDelConfirm: "确认删除以下页面？（移入回收站；vault 为 git 仓库时自动生成一个提交，可整体撤回）",
       vaultDeleted: "已删除",
-      vmenuHeading: "标题",
-      vmenuH1: "一级标题",
-      vmenuH2: "二级标题",
-      vmenuH3: "三级标题",
-      vmenuH4: "四级标题",
-      vmenuH5: "五级标题",
-      vmenuH6: "六级标题",
-      vmenuList: "列表",
-      vmenuUl: "无序列表",
-      vmenuOl: "有序列表",
-      vmenuTodo: "待办",
-      vmenuQuote: "引用",
-      vmenuFold: "折叠块",
-      vmenuCode: "代码块",
-      vmenuTable: "表格",
+      vmenuGHead: "标题与正文",
+      vmenuH1: "标题 1",
+      vmenuH1Desc: "一级标题",
+      vmenuH2: "标题 2",
+      vmenuH2Desc: "二级标题",
+      vmenuH3: "标题 3",
+      vmenuH3Desc: "三级标题",
+      vmenuH4: "标题 4",
+      vmenuH4Desc: "四级标题",
+      vmenuBody: "正文",
+      vmenuBodyDesc: "普通文本段落",
+      vmenuGSpecial: "分割与特殊块",
       vmenuHr: "分割线",
+      vmenuHrDesc: "水平分割线",
+      vmenuFold: "折叠块",
+      vmenuFoldDesc: "可折叠内容区域",
+      vmenuGList: "列表",
+      vmenuUl: "无序列表",
+      vmenuUlDesc: "圆点列表",
+      vmenuOl: "有序列表",
+      vmenuOlDesc: "编号列表",
+      vmenuTodo: "任务列表",
+      vmenuTodoDesc: "勾选待办",
+      vmenuGMath: "数学公式与代码",
+      vmenuMathInline: "行内公式",
+      vmenuMathInlineDesc: "行内数学公式",
+      vmenuMathBlock: "行间公式",
+      vmenuMathBlockDesc: "独立公式区域",
+      vmenuCode: "代码块",
+      vmenuCodeDesc: "代码区域（语法高亮）",
+      vmenuGQuote: "引用和提示框",
+      vmenuQuote: "引用",
+      vmenuQuoteDesc: "引用块",
+      vmenuCoInfo: "提示框 · 信息",
+      vmenuCoInfoDesc: "蓝色信息提示",
+      vmenuCoNote: "提示框 · 笔记",
+      vmenuCoNoteDesc: "紫色笔记提示",
+      vmenuCoSuccess: "提示框 · 成功",
+      vmenuCoSuccessDesc: "绿色成功提示",
+      vmenuCoWarn: "提示框 · 警告",
+      vmenuCoWarnDesc: "橙色警告提示",
+      vmenuCoDanger: "提示框 · 危险",
+      vmenuCoDangerDesc: "红色危险提示",
+      vmenuGTable: "表格",
+      vmenuTable1: "1×2",
+      vmenuTable1Desc: "1 行 2 列",
+      vmenuTable2: "2×2",
+      vmenuTable2Desc: "2 行 2 列",
+      vmenuTable3: "3×3",
+      vmenuTable3Desc: "3 行 3 列",
+      vmenuTable4: "4×4",
+      vmenuTable4Desc: "4 行 4 列",
+      vmenuTable5: "5×5",
+      vmenuTable5Desc: "5 行 5 列",
+      vtbUndo: "撤销",
+      vtbRedo: "重做",
       vtbBold: "加粗",
       vtbItalic: "斜体",
+      vtbUnderline: "下划线",
+      vtbStrike: "删除线",
+      vtbSup: "上标",
+      vtbSub: "下标",
       vtbCode: "行内代码",
+      vtbColor: "文字颜色",
+      vtbHighlight: "高亮颜色",
       vtbLink: "链接",
+      vtbLinkPrompt: "链接地址：",
+      vtbLinkEditPrompt: "输入新地址修改链接，留空并确定删除链接：",
+      vtbClear: "清除格式",
+      vtbClearColor: "清除",
       cfgTerminalShortcut: "终端快捷键",
       cfgFileTreeShortcut: "文件树快捷键",
       cfgSidebarShortcut: "侧边栏展开/收起快捷键",
@@ -1159,26 +1209,76 @@ window.__ModuleLoader__.load({
       vaultDelBtn: "Delete",
       vaultDelConfirm: "Delete these pages? (Moved to recycle bin; if the vault is a git repo one commit is created so this is fully revertible)",
       vaultDeleted: "Deleted",
-      vmenuHeading: "Heading",
+      vmenuGHead: "Headings & text",
       vmenuH1: "Heading 1",
+      vmenuH1Desc: "Level 1 heading",
       vmenuH2: "Heading 2",
+      vmenuH2Desc: "Level 2 heading",
       vmenuH3: "Heading 3",
+      vmenuH3Desc: "Level 3 heading",
       vmenuH4: "Heading 4",
-      vmenuH5: "Heading 5",
-      vmenuH6: "Heading 6",
-      vmenuList: "List",
-      vmenuUl: "Bullet list",
-      vmenuOl: "Ordered list",
-      vmenuTodo: "To-do",
-      vmenuQuote: "Quote",
-      vmenuFold: "Fold block",
-      vmenuCode: "Code block",
-      vmenuTable: "Table",
+      vmenuH4Desc: "Level 4 heading",
+      vmenuBody: "Body text",
+      vmenuBodyDesc: "Plain text paragraph",
+      vmenuGSpecial: "Dividers & special blocks",
       vmenuHr: "Divider",
+      vmenuHrDesc: "Horizontal rule",
+      vmenuFold: "Fold block",
+      vmenuFoldDesc: "Collapsible content area",
+      vmenuGList: "Lists",
+      vmenuUl: "Bullet list",
+      vmenuUlDesc: "Dotted list",
+      vmenuOl: "Ordered list",
+      vmenuOlDesc: "Numbered list",
+      vmenuTodo: "Task list",
+      vmenuTodoDesc: "Checklist items",
+      vmenuGMath: "Math & code",
+      vmenuMathInline: "Inline math",
+      vmenuMathInlineDesc: "Inline math formula",
+      vmenuMathBlock: "Math block",
+      vmenuMathBlockDesc: "Standalone formula area",
+      vmenuCode: "Code block",
+      vmenuCodeDesc: "Code area with syntax highlighting",
+      vmenuGQuote: "Quotes & callouts",
+      vmenuQuote: "Quote",
+      vmenuQuoteDesc: "Blockquote",
+      vmenuCoInfo: "Callout · Info",
+      vmenuCoInfoDesc: "Blue info note",
+      vmenuCoNote: "Callout · Note",
+      vmenuCoNoteDesc: "Purple note",
+      vmenuCoSuccess: "Callout · Success",
+      vmenuCoSuccessDesc: "Green success note",
+      vmenuCoWarn: "Callout · Warning",
+      vmenuCoWarnDesc: "Orange warning note",
+      vmenuCoDanger: "Callout · Danger",
+      vmenuCoDangerDesc: "Red danger note",
+      vmenuGTable: "Tables",
+      vmenuTable1: "1×2",
+      vmenuTable1Desc: "1 row 2 cols",
+      vmenuTable2: "2×2",
+      vmenuTable2Desc: "2 rows 2 cols",
+      vmenuTable3: "3×3",
+      vmenuTable3Desc: "3 rows 3 cols",
+      vmenuTable4: "4×4",
+      vmenuTable4Desc: "4 rows 4 cols",
+      vmenuTable5: "5×5",
+      vmenuTable5Desc: "5 rows 5 cols",
+      vtbUndo: "Undo",
+      vtbRedo: "Redo",
       vtbBold: "Bold",
       vtbItalic: "Italic",
+      vtbUnderline: "Underline",
+      vtbStrike: "Strikethrough",
+      vtbSup: "Superscript",
+      vtbSub: "Subscript",
       vtbCode: "Inline code",
+      vtbColor: "Text color",
+      vtbHighlight: "Highlight color",
       vtbLink: "Link",
+      vtbLinkPrompt: "Link URL:",
+      vtbLinkEditPrompt: "Enter a new URL to edit the link; leave empty and confirm to remove it:",
+      vtbClear: "Clear formatting",
+      vtbClearColor: "Clear",
     };
     /** 语言判定：只认 DSH 的 locale 权威 —— <html lang> 由 dsh-client-locale 的
      *  syncDocumentLanguage 在启动与每次切换时同步（设置→通用→语言），页面内
@@ -1559,20 +1659,39 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-md .dshk-math{color:inherit}
 .dshk-md .dshk-math .katex-display{margin:.5em 0}
 .dshk-vault-toast{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:var(--dsw-alias-bg-layer-3);border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary);font-size:12px;padding:6px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
-/* 编辑增强（wangshu 特性筛选）：格式工具栏 + 斜杠菜单 + callout 折叠卡 */
+/* 编辑增强（wangshu 三件套分工，互不重复）：编辑条=文档级命令（保存/撤销/
+   重做）、泡泡菜单=选区行内格式、斜杠菜单=块插入（分类→条目，图标+标题+描述） */
 .dshk-vault-tbsep{flex:none;width:1px;height:16px;background:var(--dsw-alias-border-l2);margin:0 2px}
 .dshk-vault-tbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;min-width:24px;height:22px;padding:0 5px;border-radius:6px;cursor:pointer}
 .dshk-vault-tbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-vault-slashmenu{position:fixed;z-index:60;min-width:180px;max-height:260px;overflow:auto;padding:4px;display:flex;flex-direction:column;gap:1px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
-.dshk-vault-slashitem{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer}
+.dshk-vault-slashmenu{position:fixed;z-index:60;width:280px;max-height:380px;overflow:auto;padding:6px 0;display:flex;flex-direction:column;gap:1px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.12)}
+.dshk-vault-slashitem{display:flex;align-items:center;gap:10px;padding:7px 14px;margin:0 4px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer}
 .dshk-vault-slashitem:hover,.dshk-vault-slashitem.is-active{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-vault-slashnum{flex:none;width:20px;text-align:center;font-size:11px;font-weight:600;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-slashicon{flex:none;width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-3);border-radius:6px;font-size:13px;font-weight:700}
+.dshk-vault-slashtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.dshk-vault-slashtitle{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-vault-slashdesc{font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-slashmore{flex:none;font-size:14px;color:var(--dsw-alias-label-tertiary)}
+/* 泡泡菜单（wangshu 同款）：选区上方浮出行内格式条；颜色/高亮点开在条下挂第二行色板 */
+.dshk-vault-bubble{position:fixed;z-index:60;display:flex;flex-direction:column;gap:4px;padding:4px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.12);transform:translateX(-50%)}
+.dshk-vault-bubblebar{display:flex;align-items:center;gap:2px}
+.dshk-vault-bsep{flex:none;width:1px;height:16px;background:var(--dsw-alias-border-l2);margin:0 2px}
+.dshk-vault-bbtn{appearance:none;border:0;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;min-width:26px;height:26px;padding:0 4px;border-radius:6px;cursor:pointer}
+.dshk-vault-bbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-vault-bbtn.is-active{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-brand-primary)}
+.dshk-vault-bswatchrow{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;border-top:1px solid var(--dsw-alias-border-l1);padding-top:4px}
+.dshk-vault-bswatch{flex:none;width:20px;height:20px;border-radius:4px;border:1px solid rgba(0,0,0,.12);cursor:pointer;padding:0}
+.dshk-vault-bswatch-clear{appearance:none;border:0;background:none;font:inherit;font-size:11px;color:var(--dsw-alias-label-tertiary);cursor:pointer;padding:2px 6px;align-self:center}
+.dshk-vault-bswatch-clear:hover{color:var(--dsw-alias-label-primary)}
 .dshk-vault-slashback{padding:4px 10px 6px;font-size:11px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-bottom:1px dashed var(--dsw-alias-border-l1);margin-bottom:2px}
 .dshk-vault-slashback:hover{color:var(--dsw-alias-label-primary)}
 .dshk-vault-slashmore{font-size:10px;color:var(--dsw-alias-label-tertiary)}
 .dshk-vault-callout{margin:.6em 0;border:1px solid var(--dsw-alias-border-l2);border-left:3px solid var(--dsw-alias-brand-primary);border-radius:8px;background:var(--dsw-alias-bg-layer-3);padding:6px 10px;font-size:12.5px}
 .dshk-vault-callout summary{cursor:pointer;font-weight:600;color:var(--dsw-alias-label-primary)}
 .dshk-vault-callout.is-warn,.dshk-vault-callout.is-warning{border-left-color:var(--dsw-alias-warning,#e8a13c)}
-.dshk-vault-callout.is-tip{border-left-color:#37b24d}
+.dshk-vault-callout.is-tip,.dshk-vault-callout.is-success,.dshk-vault-callout.is-done,.dshk-vault-callout.is-check{border-left-color:#37b24d}
+.dshk-vault-callout.is-note{border-left-color:#8250df}
 .dshk-vault-callout.is-danger{border-left-color:var(--dsw-alias-danger,#cd3131)}
 /* 日程模块：中心区第三 tab——周时间网格 + 待办/统计侧栏；计时芯片挂输入区 dock */
 .dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
@@ -7193,36 +7312,88 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
 
     /** 斜杠菜单：两级（wangshu 同款）——根级为分组（标题/列表含子级，多级标题
      *  快速插），叶级为插入模板。label 走 i18n，match 是中英过滤词 */
+    // 斜杠菜单（wangshu 同款两级结构：分类 → 条目；条目行 = 图标徽章+标题+描述）。
+    // 三件套分工不重复（wangshu 同款）：块插入只在这里，行内格式在泡泡菜单，
+    // 文档级命令（撤销/重做/保存）在编辑条。条目语义：prefix = 当前行换前缀
+    // （原前缀剥掉，同 wangshu 的 toggle*）；insert = 删掉 "/查询" 后插模板，
+    // cursor = 光标落点偏移；rows/cols = 表格尺寸，模板按下表现生成
     const VAULT_MENU = [
       {
-        key: "heading",
-        labelKey: "vmenuHeading",
-        match: "heading h1 h2 h3 h4 h5 h6 标题 一级 二级 三级",
+        key: "head",
+        labelKey: "vmenuGHead",
+        match: "heading h1 h2 h3 h4 body 标题 正文",
         children: [
-          { key: "h1", labelKey: "vmenuH1", match: "h1 一级", insert: "# " },
-          { key: "h2", labelKey: "vmenuH2", match: "h2 二级", insert: "## " },
-          { key: "h3", labelKey: "vmenuH3", match: "h3 三级", insert: "### " },
-          { key: "h4", labelKey: "vmenuH4", match: "h4 四级", insert: "#### " },
-          { key: "h5", labelKey: "vmenuH5", match: "h5 五级", insert: "##### " },
-          { key: "h6", labelKey: "vmenuH6", match: "h6 六级", insert: "###### " },
+          { key: "h1", icon: "H1", labelKey: "vmenuH1", descKey: "vmenuH1Desc", match: "h1 一级", prefix: "# " },
+          { key: "h2", icon: "H2", labelKey: "vmenuH2", descKey: "vmenuH2Desc", match: "h2 二级", prefix: "## " },
+          { key: "h3", icon: "H3", labelKey: "vmenuH3", descKey: "vmenuH3Desc", match: "h3 三级", prefix: "### " },
+          { key: "h4", icon: "H4", labelKey: "vmenuH4", descKey: "vmenuH4Desc", match: "h4 四级", prefix: "#### " },
+          { key: "body", icon: "P", labelKey: "vmenuBody", descKey: "vmenuBodyDesc", match: "body paragraph 正文 段落", prefix: "" },
+        ],
+      },
+      {
+        key: "special",
+        labelKey: "vmenuGSpecial",
+        match: "divider hr fold special 分割 特殊",
+        children: [
+          { key: "hr", icon: "—", labelKey: "vmenuHr", descKey: "vmenuHrDesc", match: "hr divider 分割线", insert: "\n---\n" },
+          { key: "fold", icon: "▶", labelKey: "vmenuFold", descKey: "vmenuFoldDesc", match: "fold collapsible 折叠 折叠块", insert: "> [!fold] 标题\n>\n> 内容" },
         ],
       },
       {
         key: "list",
-        labelKey: "vmenuList",
-        match: "list bullet ordered 列表 无序 有序",
+        labelKey: "vmenuGList",
+        match: "list bullet ordered task 列表 无序 有序 待办",
         children: [
-          { key: "ul", labelKey: "vmenuUl", match: "ul bullet 无序", insert: "- " },
-          { key: "ol", labelKey: "vmenuOl", match: "ol ordered 有序", insert: "1. " },
-          { key: "todo", labelKey: "vmenuTodo", match: "todo task 待办 任务", insert: "- [ ] " },
+          { key: "ul", icon: "•", labelKey: "vmenuUl", descKey: "vmenuUlDesc", match: "ul bullet 无序", prefix: "- " },
+          { key: "ol", icon: "1.", labelKey: "vmenuOl", descKey: "vmenuOlDesc", match: "ol ordered 有序", prefix: "1. " },
+          { key: "todo", icon: "☑", labelKey: "vmenuTodo", descKey: "vmenuTodoDesc", match: "todo task 待办 任务", prefix: "- [ ] " },
         ],
       },
-      { key: "quote", labelKey: "vmenuQuote", match: "quote blockquote 引用", insert: "> " },
-      { key: "fold", labelKey: "vmenuFold", match: "fold collapsible 折叠 折叠块", insert: "> [!fold] 标题\n>\n> 内容" },
-      { key: "code", labelKey: "vmenuCode", match: "code block fence 代码块", insert: "```\n\n```" },
-      { key: "table", labelKey: "vmenuTable", match: "table 表格", insert: "| 列 | 列 |\n| --- | --- |\n|  |  |" },
-      { key: "hr", labelKey: "vmenuHr", match: "hr divider 分割线", insert: "\n---\n" },
+      {
+        key: "math",
+        labelKey: "vmenuGMath",
+        match: "math formula code 数学 公式 代码",
+        children: [
+          { key: "mathinline", icon: "∑", labelKey: "vmenuMathInline", descKey: "vmenuMathInlineDesc", match: "inline math 行内 公式", insert: "$$", cursor: 1 },
+          { key: "mathblock", icon: "∫", labelKey: "vmenuMathBlock", descKey: "vmenuMathBlockDesc", match: "block math 行间 公式", insert: "\n$$\n\n$$", cursor: 4 },
+          { key: "code", icon: "</>", labelKey: "vmenuCode", descKey: "vmenuCodeDesc", match: "code block fence 代码块", insert: "```\n\n```", cursor: 4 },
+        ],
+      },
+      {
+        key: "quote",
+        labelKey: "vmenuGQuote",
+        match: "quote callout 引用 提示框",
+        children: [
+          { key: "quote", icon: "❝", labelKey: "vmenuQuote", descKey: "vmenuQuoteDesc", match: "quote blockquote 引用", prefix: "> " },
+          { key: "co-info", icon: "ℹ", labelKey: "vmenuCoInfo", descKey: "vmenuCoInfoDesc", match: "info callout 信息 提示", insert: "> [!info] 标题\n> 内容" },
+          { key: "co-note", icon: "📝", labelKey: "vmenuCoNote", descKey: "vmenuCoNoteDesc", match: "note callout 笔记 提示", insert: "> [!note] 标题\n> 内容" },
+          { key: "co-success", icon: "✓", labelKey: "vmenuCoSuccess", descKey: "vmenuCoSuccessDesc", match: "success callout 成功 提示", insert: "> [!success] 标题\n> 内容" },
+          { key: "co-warn", icon: "⚠", labelKey: "vmenuCoWarn", descKey: "vmenuCoWarnDesc", match: "warning warn callout 警告 提示", insert: "> [!warning] 标题\n> 内容" },
+          { key: "co-danger", icon: "✕", labelKey: "vmenuCoDanger", descKey: "vmenuCoDangerDesc", match: "danger error callout 危险 提示", insert: "> [!danger] 标题\n> 内容" },
+        ],
+      },
+      {
+        key: "table",
+        labelKey: "vmenuGTable",
+        match: "table 表格",
+        children: [
+          { key: "t1x2", icon: "⊟", labelKey: "vmenuTable1", descKey: "vmenuTable1Desc", match: "table 1x2 表格", rows: 1, cols: 2 },
+          { key: "t2x2", icon: "⊞", labelKey: "vmenuTable2", descKey: "vmenuTable2Desc", match: "table 2x2 表格", rows: 2, cols: 2 },
+          { key: "t3x3", icon: "⊟", labelKey: "vmenuTable3", descKey: "vmenuTable3Desc", match: "table 3x3 表格", rows: 3, cols: 3 },
+          { key: "t4x4", icon: "⊞", labelKey: "vmenuTable4", descKey: "vmenuTable4Desc", match: "table 4x4 表格", rows: 4, cols: 4 },
+          { key: "t5x5", icon: "⊟", labelKey: "vmenuTable5", descKey: "vmenuTable5Desc", match: "table 5x5 表格", rows: 5, cols: 5 },
+        ],
+      },
     ];
+
+    /** rows×cols markdown 表格模板：首行表头 + 分隔线 + rows-1 空白行体 */
+    function vaultTableTemplate(rows, cols) {
+      const row = (fill) => `| ${Array(cols).fill(fill).join(" | ")} |`;
+      return `${row("列")}\n${row("---")}${Array(Math.max(rows - 1, 0))
+        .fill("")
+        .map(() => `\n${row(" ")}`)
+        .join("")}`;
+    }
 
     function VaultView() {
       const cfg = cfgFromSnapshot(getCfgSnapshot());
@@ -7263,6 +7434,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
       // 斜杠菜单：{query, x, y} | null（行首 / 触发，键入过滤，Esc/失焦关）
       const [menu, setMenu] = react.useState(null);
       const [menuIdx, setMenuIdx] = react.useState(0);
+      // 泡泡菜单：{x, y, above} | null（选区非空时浮在选区上/下方）；bubPanel =
+      // 展开的色板（"tc" 文字颜色 | "hc" 高亮）
+      const [bub, setBub] = react.useState(null);
+      const [bubPanel, setBubPanel] = react.useState(null);
       // 跳页后待滚动的标题锚（双链 [[页#标题]] 落点）
       const [pendingAnchor, setPendingAnchor] = react.useState("");
       const readerRef = react.useRef(null);
@@ -7596,9 +7771,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
         void ensureCmLib().then(() => setCmReady(true));
         void ensureMdLibs(); // 编辑态 Live Preview 的公式 widget 依赖 katex
       };
-      // ── 编辑增强（wangshu 特性筛选定稿：工具栏 + 斜杠菜单 + 图片粘贴 +
-      // 折叠块/块级链接 + Live Preview；泡泡菜单与工具栏重复不做，富文本
-      // 往返式 WYSIWYG 不做）──
+      // ── 编辑增强（wangshu 三件套分工，互不重复）：编辑条=文档级命令（保存/
+      // 撤销/重做），泡泡菜单=选区行内格式，斜杠菜单=块插入；图片粘贴 +
+      // 折叠块/块级链接 + Live Preview；富文本往返式 WYSIWYG 不做）──
       const cmView = () => cmRef.current?.view ?? null;
       /** 选中文字两侧包一层语法（加粗/斜体/行内代码/链接） */
       const cmWrap = (before, after) => {
@@ -7635,6 +7810,69 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
         v.dispatch({ changes: { from: pos, insert: text }, selection: { anchor: pos + text.length } });
         v.focus();
       };
+      // ── 泡泡菜单（wangshu 同款）：选区非空浮出行内格式条；markdown 语义下
+      // 下划线/上下标/颜色/高亮走行内 HTML（marked+DOMPurify 放行，阅读态可渲染）──
+      const BUB_COLORS = ["#000000", "#333333", "#666666", "#999999", "#e03131", "#e8590c", "#f08c00", "#2f9e44", "#099268", "#1971c2", "#7048e8", "#d6336c"];
+      const BUB_HIGHLIGHTS = ["#fff3bf", "#ffec99", "#ffe066", "#b2f2bb", "#99e9f2", "#bac8ff", "#d0bfff", "#ffc9c9", "#ffd8a8", "#fcc2d7"];
+      /** 选区文本是否已包着这层语法（泡泡按钮点亮态） */
+      const bubActive = (before, after) => {
+        const v = cmView();
+        if (!v) return false;
+        const sel = v.state.selection.main;
+        const text = v.state.doc.sliceString(sel.from, sel.to);
+        return text.length >= before.length + after.length && text.startsWith(before) && text.endsWith(after);
+      };
+      /** 剥掉选区外包的指定标签（色板「清除」= 只去颜色/高亮，不动其它格式） */
+      const bubStrip = (tag) => {
+        const v = cmView();
+        if (!v) return;
+        const sel = v.state.selection.main;
+        const bare = v.state.doc
+          .sliceString(sel.from, sel.to)
+          .replace(new RegExp(`<${tag}[^>]*>`, "gi"), "")
+          .replace(new RegExp(`</${tag}>`, "gi"), "");
+        v.dispatch({ changes: { from: sel.from, to: sel.to, insert: bare } });
+        v.focus();
+      };
+      /** 清除格式（wangshu 同款语义）：剥掉选区上全部行内语法，留下纯文本 */
+      const cmClearFmt = () => {
+        const v = cmView();
+        if (!v) return;
+        const sel = v.state.selection.main;
+        const bare = v.state.doc
+          .sliceString(sel.from, sel.to)
+          .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+          .replace(/\*\*([^*]*)\*\*/g, "$1")
+          .replace(/(?<!\*)\*(?!\*)/g, "")
+          .replace(/~~|`/g, "")
+          .replace(/<\/?(u|sup|sub|mark|span)[^>]*>/gi, "");
+        v.dispatch({ changes: { from: sel.from, to: sel.to, insert: bare }, selection: { anchor: sel.from, head: sel.from + bare.length } });
+        v.focus();
+      };
+      /** 选区整体是一个 [文本](地址) 链接 → 泡泡链接钮点亮 */
+      const bubLinkActive = () => {
+        const v = cmView();
+        if (!v) return false;
+        const sel = v.state.selection.main;
+        return /^\[[\s\S]*\]\([^)\s]*\)$/.test(v.state.doc.sliceString(sel.from, sel.to));
+      };
+      /** 链接（wangshu 同款 prompt 交互）：已有链接改地址（空=删除），否则包新链接 */
+      const bubLink = () => {        const v = cmView();
+        if (!v) return;
+        const sel = v.state.selection.main;
+        const text = v.state.doc.sliceString(sel.from, sel.to);
+        const existing = /^\[([\s\S]*)\]\(([^)\s]*)\)$/.exec(text);
+        if (existing) {
+          const action = window.prompt(t("vtbLinkEditPrompt"), existing[2] ?? "");
+          if (action === null) return;
+          const next = action.trim() === "" ? (existing[1] ?? "") : `[${existing[1]}](${action.trim()})`;
+          v.dispatch({ changes: { from: sel.from, to: sel.to, insert: next } });
+        } else {
+          const url = window.prompt(t("vtbLinkPrompt"), "https://");
+          if (url) cmWrap("[", `](${url.trim()})`);
+        }
+        v.focus();
+      };
       // 斜杠菜单：行首 / 触发；键入过滤；Enter 应用激活项，Esc 关，方向键移动。
       // keydown 用捕获阶段拦 Enter/Esc——CM 已把按键吃进文档，冒泡阶段拦不住。
       // ref 镜像 state：capture 监听读 ref，直接读 state 会停在旧渲染的闭包里
@@ -7642,6 +7880,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
       const menuIdxRef = react.useRef(menuIdx);
       menuRef.current = menu;
       menuIdxRef.current = menuIdx;
+      const bubRef = react.useRef(bub);
+      bubRef.current = bub;
       const menuFiltered = () => menuRows();
       // 当前层可见行：sub 空且无 query = 根级分组；有 query = 跨组扁平搜叶项；
       // sub 指向分组 = 该组子级
@@ -7674,9 +7914,51 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
         setMenu(null);
         v.focus();
         if (slash < 0) return;
-        v.dispatch({
-          changes: { from: line.from + slash, to: pos, insert: item.insert },
-          selection: { anchor: line.from + slash + item.insert.length },
+        v.dispatch({ changes: { from: line.from + slash, to: pos, insert: "" } });
+        if (item.rows) {
+          cmInsert(vaultTableTemplate(item.rows, item.cols ?? item.rows));
+        } else if (item.prefix !== undefined) {
+          // 块级语义：当前行换前缀（同 wangshu 的 toggle*，原前缀剥掉互切）
+          cmLinePrefix(item.prefix);
+        } else {
+          const at = v.state.selection.main.head;
+          v.dispatch({
+            changes: { from: at, insert: item.insert },
+            selection: { anchor: at + (item.cursor ?? item.insert.length) },
+          });
+        }
+        v.focus();
+      };
+      // 泡泡菜单重定位：选区非空且不在围栏代码块内 → 浮在选区上方（放不下换
+      // 下方）。onSelection 是 vendor 高频回调，这里只读 ref 不读 state，闭包
+      // 过期也无碍；斜杠菜单开着时让位
+      const bubbleSync = () => {
+        const v = cmRef.current?.view;
+        if (!v) return;
+        const sel = v.state.selection.main;
+        if (sel.empty || menuRef.current !== null) {
+          setBub(null);
+          return;
+        }
+        let fences = 0;
+        for (let n = 1; n < v.state.doc.lineAt(sel.from).number; n++) {
+          if (/^\s*(```|~~~)/.test(v.state.doc.line(n).text)) fences++;
+        }
+        if (fences % 2 === 1) {
+          setBub(null);
+          return;
+        }
+        const c1 = v.coordsAtPos(sel.from);
+        const c2 = v.coordsAtPos(sel.to);
+        if (!c1 || !c2) {
+          setBub(null);
+          return;
+        }
+        const above = Math.min(c1.top, c2.top) >= 44;
+        setBub({
+          x: Math.max(180, Math.min((c1.left + c2.right) / 2, window.innerWidth - 180)),
+          y: above ? Math.min(c1.top, c2.top) - 8 : Math.max(c1.bottom, c2.bottom) + 8,
+          above,
         });
       };
       // 编辑器挂载（与预览编辑同款：实例写 ref，文档变更回写 draft + 刷新斜杠
@@ -7695,6 +7977,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
           doc: draft,
           readOnly: false,
           language: "md",
+          onSelection: () => bubbleSync(),
           live: {
             onWikiLink: (target, anchor) => {
               if (target === "") {
@@ -7744,6 +8027,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
           syncSlashMenu(h.view);
         });
         const onKeyDown = (e) => {
+          // 泡泡菜单开着时 Esc 关它（分层：先色板后泡泡），不拦 CM 的其它按键
+          if (menuRef.current === null && bubRef.current !== null && e.key === "Escape") {
+            e.stopPropagation();
+            setBubPanel(null);
+            setBub(null);
+            return;
+          }
           if (menuRef.current !== null) {
             const rows = menuRows();
             const idx = rows.length === 0 ? 0 : Math.min(menuIdxRef.current, rows.length - 1);
@@ -7781,6 +8071,21 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
               setMenuIdx(0);
               return;
             }
+            // 数字键 1-9 直达（wangshu 同款）：分类层跳进第 n 组，条目层直接应用
+            if (/^[1-9]$/.test(e.key)) {
+              const target = rows[Number(e.key) - 1];
+              if (!target) return;
+              e.preventDefault();
+              e.stopPropagation();
+              if (target.children) {
+                setMenu({ ...menuRef.current, sub: target.key });
+                menuIdxRef.current = 0;
+                setMenuIdx(0);
+              } else {
+                applyMenuTemplate(target);
+              }
+              return;
+            }
             if (e.key === "Enter") {
               e.preventDefault();
               e.stopPropagation();
@@ -7816,8 +8121,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
           }
         };
         host.addEventListener("keydown", onKeyDown, true);
+        // 滚动/窗口变化跟随：泡泡/斜杠菜单都是 fixed 定位，坐标只在重定位时刷新
+        const onScrollOrResize = () => bubbleSync();
+        host.addEventListener("scroll", onScrollOrResize, true);
+        window.addEventListener("resize", onScrollOrResize);
         return () => {
           host.removeEventListener("keydown", onKeyDown, true);
+          host.removeEventListener("scroll", onScrollOrResize, true);
+          window.removeEventListener("resize", onScrollOrResize);
+          setBub(null);
+          setBubPanel(null);
           h.destroy();
           cmRef.current = null;
         };
@@ -8088,20 +8401,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
                   : editing
                     ? jsxRuntime.jsxs("div", { className: "dshk-vault-editwrap", onPaste: onEditPaste, children: [
                         jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
+                          // wangshu 三件套分工：编辑条只管文档级命令（保存/撤销/重做），
+                          // 行内格式在泡泡菜单、块插入在斜杠菜单——不放格式按钮（避免重复）
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void saveEdit(), children: t("vaultSave") }),
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setEditing(false), children: t("vaultCancel") }),
                           jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbBold"), onClick: () => cmWrap("**", "**"), children: "B" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbItalic"), onClick: () => cmWrap("*", "*"), children: "I" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbCode"), onClick: () => cmWrap("`", "`"), children: "‹›" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuH2"), onClick: () => cmLinePrefix("## "), children: "H2" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuUl"), onClick: () => cmLinePrefix("- "), children: "•" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuTodo"), onClick: () => cmLinePrefix("- [ ] "), children: "☑" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuQuote"), onClick: () => cmLinePrefix("> "), children: "❝" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbLink"), onClick: () => cmWrap("[", "](https://)"), children: "🔗" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuFold"), onClick: () => cmInsert("> [!fold] 标题\n>\n> 内容"), children: "▸" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuTable"), onClick: () => cmInsert("| 列 | 列 |\n| --- | --- |\n|  |  |"), children: "▦" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vmenuCode"), onClick: () => cmInsert("```\n\n```"), children: "{}" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbUndo"), onClick: () => cmRef.current?.undo(), children: "↶" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbRedo"), onClick: () => cmRef.current?.redo(), children: "↷" }),
                         ] }),
                         jsxRuntime.jsx("div", { className: "dshk-vault-cmhost", ref: editHostRef }),
                         menu !== null
@@ -8141,7 +8447,21 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
                                                 setMenuIdx(0);
                                               } else applyMenuTemplate(row);
                                             },
-                                            children: [t(row.labelKey), isGroup ? jsxRuntime.jsx("span", { className: "dshk-vault-slashmore", children: "▸" }) : null],
+                                            children: isGroup
+                                              ? [
+                                                  // 分类行（wangshu 同款）：序号徽章 + 组名 + ›
+                                                  jsxRuntime.jsx("span", { className: "dshk-vault-slashnum", children: i + 1 }, "num"),
+                                                  jsxRuntime.jsx("span", { className: "dshk-vault-slashtitle", children: t(row.labelKey) }, "title"),
+                                                  jsxRuntime.jsx("span", { className: "dshk-vault-slashmore", children: "›" }, "more"),
+                                                ]
+                                              : [
+                                                  // 条目行（wangshu 同款）：图标徽章 + 标题/描述两行
+                                                  jsxRuntime.jsx("span", { className: "dshk-vault-slashicon", children: row.icon }, "icon"),
+                                                  jsxRuntime.jsxs("span", { className: "dshk-vault-slashtext", children: [
+                                                    jsxRuntime.jsx("span", { className: "dshk-vault-slashtitle", children: t(row.labelKey) }, "title"),
+                                                    jsxRuntime.jsx("span", { className: "dshk-vault-slashdesc", children: t(row.descKey) }, "desc"),
+                                                  ] }, "text"),
+                                                ],
                                           },
                                           (menu.sub ? menu.sub + "-" : "") + row.key,
                                         );
@@ -8150,6 +8470,60 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
                                 })(),
                               },
                               "slashmenu",
+                            )
+                          : null,
+                        bub !== null
+                          ? jsxRuntime.jsxs(
+                              "div",
+                              {
+                                className: "dshk-vault-bubble",
+                                style: { left: bub.x, top: bub.above ? undefined : bub.y, bottom: bub.above ? window.innerHeight - bub.y : undefined },
+                                onMouseDown: (e) => e.preventDefault(),
+                                children: [
+                                  jsxRuntime.jsxs("div", { className: "dshk-vault-bubblebar", children: [
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("**", "**") ? " is-active" : ""}`, title: t("vtbBold"), onClick: () => { cmWrap("**", "**"); bubbleSync(); }, children: "B" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("*", "*") ? " is-active" : ""}`, title: t("vtbItalic"), onClick: () => { cmWrap("*", "*"); bubbleSync(); }, children: "I" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("<u>", "</u>") ? " is-active" : ""}`, title: t("vtbUnderline"), onClick: () => { cmWrap("<u>", "</u>"); bubbleSync(); }, children: "U̲" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("~~", "~~") ? " is-active" : ""}`, title: t("vtbStrike"), onClick: () => { cmWrap("~~", "~~"); bubbleSync(); }, children: "S̶" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("<sup>", "</sup>") ? " is-active" : ""}`, title: t("vtbSup"), onClick: () => { cmWrap("<sup>", "</sup>"); bubbleSync(); }, children: "x²" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("<sub>", "</sub>") ? " is-active" : ""}`, title: t("vtbSub"), onClick: () => { cmWrap("<sub>", "</sub>"); bubbleSync(); }, children: "x₂" }),
+                                    jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubPanel === "tc" ? " is-active" : ""}`, title: t("vtbColor"), onClick: () => setBubPanel((p) => (p === "tc" ? null : "tc")), children: "A" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubPanel === "hc" ? " is-active" : ""}`, title: t("vtbHighlight"), onClick: () => setBubPanel((p) => (p === "hc" ? null : "hc")), children: "▩" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("`", "`") ? " is-active" : ""}`, title: t("vtbCode"), onClick: () => { cmWrap("`", "`"); bubbleSync(); }, children: "‹›" }),
+                                    jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubLinkActive() ? " is-active" : ""}`, title: t("vtbLink"), onClick: bubLink, children: "🔗" }),
+                                    jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtbClear"), onClick: cmClearFmt, children: "⌫" }),
+                                  ] }),
+                                  bubPanel !== null
+                                    ? jsxRuntime.jsx("div", { className: "dshk-vault-bswatchrow", children: (bubPanel === "tc" ? BUB_COLORS : BUB_HIGHLIGHTS).map((c) =>
+                                        jsxRuntime.jsx("button", {
+                                          type: "button",
+                                          className: "dshk-vault-bswatch",
+                                          style: { background: c },
+                                          onClick: () => {
+                                            if (bubPanel === "tc") cmWrap(`<span style="color:${c}">`, "</span>");
+                                            else cmWrap(`<mark style="background:${c}">`, "</mark>");
+                                            setBubPanel(null);
+                                            bubbleSync();
+                                          },
+                                        }, c),
+                                      ).concat([
+                                        jsxRuntime.jsx("button", {
+                                          type: "button",
+                                          className: "dshk-vault-bswatch-clear",
+                                          onClick: () => {
+                                            bubStrip(bubPanel === "tc" ? "span" : "mark");
+                                            setBubPanel(null);
+                                            bubbleSync();
+                                          },
+                                          children: t("vtbClearColor"),
+                                        }, "clear"),
+                                      ]) })
+                                    : null,
+                                ],
+                              },
+                              "bubble",
                             )
                           : null,
                       ] })

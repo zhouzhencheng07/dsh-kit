@@ -18,6 +18,7 @@ const PKGS = [
   'esbuild@0.24.2',
   '@codemirror/state',
   '@codemirror/view',
+  '@codemirror/commands',
   '@codemirror/language',
   '@lezer/highlight',
   'codemirror',
