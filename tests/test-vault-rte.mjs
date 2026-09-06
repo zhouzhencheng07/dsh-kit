@@ -139,12 +139,14 @@ console.log("== vault 自定义语法 ==");
   );
 }
 {
+  // 提示框卡片能力已移除：[!类型] 降级为普通引用块，标记行转义保留为文字
+  // （"\[" 不再触发 callout tokenizer，二次稳定；内容无损）
   const [out, err] = rt("> [!info] 注意\n> 这里是内容");
-  check("callout info", err === null && out.startsWith("> [!info] 注意") && out.includes("这里是内容") && stable(out), `err=${err} out=${JSON.stringify(out)}`);
+  check("callout info 降级普通引用", err === null && out === "> \\[!info\\] 注意\n>\n> 这里是内容" && stable(out), `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("> [!warning]- 默认收起\n> 收起内容");
-  check("callout 折叠旗标", err === null && out.startsWith("> [!warning]- 默认收起") && stable(out), `err=${err} out=${JSON.stringify(out)}`);
+  check("callout 折叠旗标降级", err === null && out === "> \\[!warning\\]- 默认收起\n>\n> 收起内容" && stable(out), `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("> 普通引用保持");

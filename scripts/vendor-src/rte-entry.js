@@ -5,7 +5,7 @@
 //
 // 往返选型：@tiptap/markdown（官方，内建 marked lexer + 各扩展 parseMarkdown/
 // renderMarkdown 规格）。标准 md（标题/列表/表格/代码块/引用/行内样式）全部用
-// 官方规格；本文件只补 vault 约定的三类自定义语法（wikilink / 数学 / callout）
+// 官方规格；本文件只补 vault 约定的自定义语法（wikilink / 数学 / 折叠块，> [!] 仅剩旧语法迁移）
 // 的 tokenizer + 双向规格，以及旧约定行内 HTML（<u>/<sup>/<sub>/<mark>/
 // <span style>) 的序列化覆写。未知块级 HTML 整块原样保留（rawBlock），绝不丢弃。
 //
@@ -356,51 +356,17 @@ const MathBlock = Node.create({
   },
 });
 
-// ─── Callout（> [!类型] 标题 引用式提示卡；[!fold] = 折叠块，`-` 旗标 = 收起） ─
-const CALLOUT_GLYPHS = {
-  info: "ℹ", note: "📝", success: "✓", warning: "⚠", danger: "✕",
-  fold: "▶", quote: "❝", tip: "💡", example: "✒", question: "?", important: "!",
-};
-function calloutGlyph(type) {
-  return CALLOUT_GLYPHS[String(type ?? "").toLowerCase()] ?? "ℹ";
-}
-
-const Callout = Node.create({
-  name: "callout",
+// ─── Callout 遗留迁移（> [!类型] 行；[!fold] = 折叠块，`-` 旗标 = 收起） ──
+// 提示框卡片能力已移除（/ 菜单不再提供）。本扩展只剩解析职责：历史折叠页的
+// [!fold] 语法解析即迁移 dshkDetails 双槽（存盘落 <details> 新格式）；其余类型
+// 降级为普通引用块，标记行原样保留为文字（无内容损失，二次解析稳定）
+const CalloutLegacy = Node.create({
+  name: "dshkCalloutLegacy",
   group: "block",
-  content: "block+",
-  defining: true,
-  // tokenizer 发出的 token 类型与节点名不同，解析分发按 token 名走
   markdownTokenName: "dshkCallout",
   addOptions() {
     return { ctx: null };
   },
-  addAttributes() {
-    return {
-      type: { default: "info" },
-      title: { default: "" },
-      folded: { default: false },
-    };
-  },
-  parseHTML() {
-    return [{ tag: "div.dshk-callout" }];
-  },
-  renderHTML({ node, HTMLAttributes }) {
-    return [
-      "div",
-      mergeAttributes(
-        {
-          class: `dshk-callout is-${node.attrs.type ?? "info"}`,
-          "data-type": node.attrs.type ?? "info",
-          "data-title": node.attrs.title ?? "",
-        },
-        HTMLAttributes,
-      ),
-      0,
-    ];
-  },
-  // 块级 tokenizer：拦 > [!类型] 的引用块（先于 marked 内建 blockquote）。
-  // 内文剥 "> " 后交回内建 lexer 解析（列表/表格/公式在内照常工作）
   markdownTokenizer: {
     name: "dshkCallout",
     level: "block",
@@ -439,9 +405,8 @@ const Callout = Node.create({
     },
   },
   parseMarkdown(token, helpers) {
-    // [!fold] 解析即迁移到 dshkDetails 双槽（wangshu 同款：标题/正文都是任意块
-    // 内容，存盘 <details><summary>）；标记行标题只有一行纯文本 → 标题槽首段，
-    // 下次保存落新格式。其余类型维持单行标题属性的 callout 卡
+    // [!fold] → dshkDetails 双槽（标题/正文都是任意块内容）。标记行标题只有一行
+    // 纯文本 → 标题槽首段，下次保存落新格式
     if (String(token.cotype ?? "") === "fold") {
       const kids = (token.tokens ?? []).length > 0 ? helpers.parseBlockChildren(token.tokens) : [{ type: "paragraph", content: [] }];
       const titleText = String(token.title ?? "").trim();
@@ -459,176 +424,12 @@ const Callout = Node.create({
         ],
       };
     }
-    const content = (token.tokens ?? []).length > 0 ? helpers.parseBlockChildren(token.tokens) : [{ type: "paragraph", content: [] }];
+    // 其余类型：普通引用块，标记行保留为文字段（内容无损，往返稳定）
+    const marker = `[!${token.cotype ?? "info"}]${token.flag === "-" ? "-" : ""}${token.title !== "" ? ` ${token.title}` : ""}`;
+    const kids = (token.tokens ?? []).length > 0 ? helpers.parseBlockChildren(token.tokens) : [];
     return {
-      type: "callout",
-      attrs: {
-        type: token.cotype ?? "info",
-        title: token.title ?? "",
-        folded: token.flag === "-",
-      },
-      content,
-    };
-  },
-  renderMarkdown(node, helpers) {
-    const type = node.attrs?.type || "info";
-    const title = node.attrs?.title || "";
-    const flag = node.attrs?.folded ? "-" : "";
-    const inner = (helpers.renderChildren(node.content ?? [], "\n\n") || "").replace(/\n+$/, "");
-    const marker = `[!${type}]${flag}${title !== "" ? ` ${title}` : ""}`;
-    // 逐行加 "> " 前缀；空行成裸 ">"。不能走 wrapInBlock（它每行后强制补空行，
-    // 会在单段 callout 尾部留下空引行，二次解析多出空段落，往返不稳定）
-    const body = inner
-      .split("\n")
-      .map((line) => (line === "" ? ">" : `> ${line}`))
-      .join("\n");
-    return `> ${marker}\n${body}`;
-  },
-  addCommands() {
-    return {
-      insertCallout:
-        (attrs) =>
-        ({ chain }) =>
-          chain()
-            .insertContent({
-              type: this.name,
-              attrs: { type: "info", title: "", folded: false, ...(attrs ?? {}) },
-              content: [{ type: "paragraph" }],
-            })
-            .run(),
-    };
-  },
-  addNodeView() {
-    return (props) => {
-      const ctx = this.options.ctx ?? {};
-      const card = document.createElement("div");
-      card.className = `dshk-vault-callout is-${props.node.attrs.type ?? "info"}`;
-      const head = document.createElement("div");
-      head.className = "dshk-vault-cohead";
-      const glyph = document.createElement("span");
-      glyph.className = "dshk-vault-coglyph";
-      glyph.textContent = calloutGlyph(props.node.attrs.type);
-      const title = document.createElement("span");
-      title.className = "dshk-vault-cotitle";
-      // 原生 contenteditable 直编，不放 PM content（md 标记行只有一行纯文本），
-      // 也不用 input 弹框——input 的增删会被 PM 的 DOM 观察器当成外部改动重建
-      // 节点视图（"弹出框又消失"）。ignoreMutation+stopEvent 把标题从 PM 手里
-      // 整个拿走，Enter/失焦提交
-      title.contentEditable = "true";
-      title.spellcheck = false;
-      title.dataset.ph = ctx.calloutTitlePh ?? "标题";
-      const body = document.createElement("div");
-      body.className = "dshk-vault-cobody";
-      const syncTitle = () => {
-        if (title.dataset.editing === "1") return;
-        const value = props.node.attrs.title ?? "";
-        title.textContent = value;
-        title.classList.toggle("is-ph", value === "");
-      };
-      syncTitle();
-      const toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.className = "dshk-vault-cotoggle";
-      toggle.textContent = props.node.attrs.folded ? "▸" : "▾";
-      toggle.addEventListener("click", (e) => {
-        e.preventDefault();
-        const pos = props.getPos();
-        if (typeof pos !== "number") return;
-        const view = props.editor.view;
-        const folding = props.node.attrs.folded !== true;
-        const tr = view.state.tr.setNodeMarkup(pos, undefined, {
-          ...props.node.attrs,
-          folded: !props.node.attrs.folded,
-        });
-        // 收起时若光标在正文里必须挪出：正文随收起 display:none，留在里面打字
-        // 全是隐形编辑（用户视角"打字没反应"）
-        if (folding && view.state.selection.from >= pos && view.state.selection.from < pos + props.node.nodeSize) {
-          tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(pos + props.node.nodeSize, tr.doc.content.size)), 1));
-        }
-        view.dispatch(tr);
-      });
-      // 收起态点卡片（标题/图标/空白）= 展开：正文 display:none 时 PM 会把光标
-      // 解析进隐藏正文，直接编辑等于盲打。展开钮有专属 click，这里放行；
-      // 展开态不干预（标题点击仍是改标题输入框）。capture 先于 PM 的 mousedown，
-      // 否则 PM 已把光标塞进隐藏正文
-      card.addEventListener("mousedown", (e) => {
-        if (e.button !== 0 || props.node.attrs.folded !== true) return;
-        if (e.target.closest?.(".dshk-vault-cotoggle")) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const pos = props.getPos();
-        if (typeof pos !== "number") return;
-        const view = props.editor.view;
-        const tr = view.state.tr.setNodeMarkup(pos, undefined, { ...props.node.attrs, folded: false });
-        tr.setSelection(TextSelection.near(tr.doc.resolve(pos + 1), 1));
-        view.dispatch(tr.scrollIntoView());
-        view.focus();
-      }, true);
-      head.appendChild(glyph);
-      head.appendChild(title);
-      head.appendChild(toggle);
-      card.appendChild(head);
-      card.appendChild(body);
-      const syncFold = () => {
-        card.classList.toggle("is-folded", props.node.attrs.folded === true);
-        toggle.textContent = props.node.attrs.folded ? "▸" : "▾";
-      };
-      syncFold();
-      const commitTitle = () => {
-        if (title.dataset.editing !== "1") return;
-        delete title.dataset.editing;
-        // 标记行一行纯文本：换行压成空格
-        const text = (title.textContent ?? "").replace(/\s*\n\s*/g, " ").trim();
-        const pos = props.getPos();
-        if (typeof pos === "number") {
-          props.editor.view.dispatch(
-            props.editor.view.state.tr.setNodeMarkup(pos, undefined, {
-              ...props.node.attrs,
-              title: text,
-            }),
-          );
-        }
-        syncTitle();
-      };
-      title.addEventListener("focus", () => {
-        title.dataset.editing = "1";
-        title.classList.remove("is-ph");
-      });
-      title.addEventListener("blur", commitTitle);
-      title.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          title.blur();
-        } else if (e.key === "Escape") {
-          e.stopPropagation();
-          delete title.dataset.editing;
-          syncTitle();
-          props.editor.view.focus();
-        }
-      });
-      return {
-        dom: card,
-        contentDOM: body,
-        ignoreMutation(mutation) {
-          // 标题是 PM 管辖外的原生 contenteditable：不忽略会被当成外部 DOM 改动
-          // 触发节点视图重建（编辑中的内容直接蒸发）
-          const t = mutation.target;
-          return !!(t && title.contains(t));
-        },
-        stopEvent(event) {
-          const t = event.target;
-          return !!(t instanceof Node && (title.contains(t) || toggle.contains(t)));
-        },
-        update(node) {
-          if (node.type.name !== "callout") return false;
-          props.node = node;
-          glyph.textContent = calloutGlyph(node.attrs.type);
-          card.className = `dshk-vault-callout is-${node.attrs.type ?? "info"}`;
-          syncTitle();
-          syncFold();
-          return true;
-        },
-      };
+      type: "blockquote",
+      content: [{ type: "paragraph", content: [{ type: "text", text: marker }] }, ...kids],
     };
   },
 });
@@ -1150,7 +951,7 @@ function buildExtensions(ctx = {}) {
     Gapcursor, Dropcursor,
     WikiLink.configure({ ctx }),
     MathInline, MathBlock,
-    Callout.configure({ ctx }),
+    CalloutLegacy,
     Details, DetailsTitle, DetailsBody,
     RawBlock,
   ];
@@ -1164,7 +965,6 @@ function create(host, opts = {}) {
       placeholder: opts.placeholder ?? "",
       codeCopy: opts.labels?.codeCopy,
       codeCopied: opts.labels?.codeCopied,
-      calloutTitlePh: opts.labels?.calloutTitlePh,
       onWikiLink: opts.onWikiLink,
       resolveWiki: opts.resolveWiki,
       resolveSrc: opts.resolveSrc,
@@ -1220,7 +1020,6 @@ function create(host, opts = {}) {
     insertCodeBlock: () => editor.chain().focus().toggleCodeBlock().run(),
     insertMathInline: () => editor.chain().focus().insertMathInline().run(),
     insertMathBlock: () => editor.chain().focus().insertMathBlock().run(),
-    insertCallout: (type, folded) => editor.chain().focus().insertCallout({ type, folded: !!folded }).run(),
     insertDetails: () => editor.chain().focus().insertDetails().run(),
     insertTable: (rows, cols) => editor.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run(),
     insertImage: (src, alt) => editor.chain().focus().setImage({ src, alt }).run(),

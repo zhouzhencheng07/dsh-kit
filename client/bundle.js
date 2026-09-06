@@ -779,7 +779,6 @@ window.__ModuleLoader__.load({
       vaultTableDelRow: "删行",
       vaultTableDelCol: "删列",
       vaultTableDel: "删表",
-      vaultCalloutTitlePh: "标题",
       rtePlaceholder: "输入正文，/ 唤出命令菜单",
       rteLoadFail: "富文本引擎加载失败，已退回纯文本编辑",
       vmenuGHead: "标题与正文",
@@ -797,7 +796,7 @@ window.__ModuleLoader__.load({
       vmenuH6Desc: "六级标题",
       vmenuBody: "正文",
       vmenuBodyDesc: "普通文本段落",
-      vmenuGSpecial: "分割与特殊块",
+      vmenuGSpecial: "特殊块",
       vmenuHr: "分割线",
       vmenuHrDesc: "水平分割线",
       vmenuFold: "折叠块",
@@ -816,7 +815,6 @@ window.__ModuleLoader__.load({
       vmenuMathBlockDesc: "独立公式区域",
       vmenuCode: "代码块",
       vmenuCodeDesc: "代码区域（语法高亮）",
-      vmenuGQuote: "引用",
       vmenuQuote: "引用",
       vmenuQuoteDesc: "引用块",
       vmenuGTable: "表格",
@@ -1226,7 +1224,6 @@ window.__ModuleLoader__.load({
       vaultTableDelRow: "Del row",
       vaultTableDelCol: "Del col",
       vaultTableDel: "Del table",
-      vaultCalloutTitlePh: "Title",
       rtePlaceholder: "Type '/' for commands",
       rteLoadFail: "Rich text engine failed to load; fell back to plain text editing",
       vmenuGHead: "Headings & text",
@@ -1244,7 +1241,7 @@ window.__ModuleLoader__.load({
       vmenuH6Desc: "Level 6 heading",
       vmenuBody: "Body text",
       vmenuBodyDesc: "Plain text paragraph",
-      vmenuGSpecial: "Dividers & special blocks",
+      vmenuGSpecial: "Special blocks",
       vmenuHr: "Divider",
       vmenuHrDesc: "Horizontal rule",
       vmenuFold: "Fold block",
@@ -1263,7 +1260,6 @@ window.__ModuleLoader__.load({
       vmenuMathBlockDesc: "Standalone formula area",
       vmenuCode: "Code block",
       vmenuCodeDesc: "Code area with syntax highlighting",
-      vmenuGQuote: "Quotes",
       vmenuQuote: "Quote",
       vmenuQuoteDesc: "Blockquote",
       vmenuGTable: "Tables",
@@ -1671,18 +1667,6 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-rte-math.is-editing,.dshk-rte-mathblock.is-editing{background:var(--dsw-alias-bg-layer-3);border-radius:6px}
 .dshk-rte-math-input{font-family:ui-monospace,Consolas,monospace;font-size:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);padding:2px 6px;min-width:120px}
 .dshk-rte-mathblock .dshk-rte-math-input{width:70%}
-/* callout 提示卡（> [!类型] 标题）：整卡底色 + 左条色 + 图标徽章 */
-.dshk-vault-callout{margin:.6em 0;border:1px solid var(--dsw-alias-border-l2);border-left:3px solid var(--dsw-alias-brand-primary);border-radius:8px;background:var(--dsw-alias-bg-layer-3);padding:6px 10px}
-.dshk-vault-callout.is-note{border-left-color:#8250df}
-.dshk-vault-callout.is-tip{border-left-color:#37b24d}
-.dshk-vault-callout.is-success{border-left-color:#37b24d}
-.dshk-vault-callout.is-warning{border-left-color:var(--dsw-alias-warning,#e8a13c)}
-.dshk-vault-callout.is-danger{border-left-color:var(--dsw-alias-danger,#cd3131)}
-.dshk-vault-callout.is-fold,.dshk-vault-callout.is-quote{border-left-color:var(--dsw-alias-label-tertiary)}
-.dshk-vault-cohead{display:flex;align-items:center;gap:6px;font-weight:600}
-.dshk-vault-coglyph{flex:none;font-size:13px}
-.dshk-vault-cotitle{flex:1 1 auto;min-width:0;cursor:text;white-space:pre-wrap;word-break:break-word;outline:none;border-radius:4px}
-.dshk-vault-cotitle.is-ph:empty::before{content:attr(data-ph);color:var(--dsw-alias-label-tertiary);font-weight:400}
 .dshk-vault-details{margin:.6em 0;position:relative;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);padding:2px 10px 2px 26px}
 .dshk-details-chev{position:absolute;left:8px;top:4px;width:16px;height:18px;display:flex;align-items:center;justify-content:center;border:0;background:none;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:1;cursor:pointer;padding:0;transition:transform .15s}
 .dshk-details-chev:hover{color:var(--dsw-alias-label-primary)}
@@ -1692,11 +1676,6 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-vault-details:not(.is-closed) .dshk-details-title{border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dshk-details-body{padding:3px 0}
 .dshk-vault-details.is-closed .dshk-details-body{display:none}
-.dshk-vault-cotoggle{flex:none;appearance:none;border:0;background:none;color:var(--dsw-alias-label-tertiary);font-size:11px;cursor:pointer;padding:2px 4px;border-radius:4px}
-.dshk-vault-cotoggle:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-vault-callout.is-folded>.dshk-vault-cobody{display:none}
-.dshk-vault-cobody>:first-child{margin-top:2px}
-.dshk-vault-cobody>:last-child{margin-bottom:2px}
 /* 任务列表真复选框（TipTap TaskItem 自带 input，这里只排版） */
 .dshk-vault-rtehost ul[data-type=taskList]{list-style:none;padding-left:.2em}
 .dshk-vault-rtehost ul[data-type=taskList] li{display:flex;gap:6px;align-items:flex-start}
@@ -1762,12 +1741,6 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-vault-slashback{padding:4px 10px 6px;font-size:11px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-bottom:1px dashed var(--dsw-alias-border-l1);margin-bottom:2px}
 .dshk-vault-slashback:hover{color:var(--dsw-alias-label-primary)}
 .dshk-vault-slashmore{font-size:10px;color:var(--dsw-alias-label-tertiary)}
-.dshk-vault-callout{margin:.6em 0;border:1px solid var(--dsw-alias-border-l2);border-left:3px solid var(--dsw-alias-brand-primary);border-radius:8px;background:var(--dsw-alias-bg-layer-3);padding:6px 10px;font-size:12.5px}
-.dshk-vault-callout summary{cursor:pointer;font-weight:600;color:var(--dsw-alias-label-primary)}
-.dshk-vault-callout.is-warn,.dshk-vault-callout.is-warning{border-left-color:var(--dsw-alias-warning,#e8a13c)}
-.dshk-vault-callout.is-tip,.dshk-vault-callout.is-success,.dshk-vault-callout.is-done,.dshk-vault-callout.is-check{border-left-color:#37b24d}
-.dshk-vault-callout.is-note{border-left-color:#8250df}
-.dshk-vault-callout.is-danger{border-left-color:var(--dsw-alias-danger,#cd3131)}
 /* 日程模块：中心区第三 tab——周时间网格 + 待办/统计侧栏；计时芯片挂输入区 dock */
 .dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px}
 .dshk-sched-head{flex:none;display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--dsw-alias-border-l2)}
@@ -7438,10 +7411,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       {
         key: "special",
         labelKey: "vmenuGSpecial",
-        match: "divider hr fold special 分割 特殊",
+        match: "special divider hr fold quote 分割 特殊 引用 折叠",
         children: [
           { key: "hr", icon: "—", labelKey: "vmenuHr", descKey: "vmenuHrDesc", match: "hr divider 分割线", insert: "\n---\n" },
           { key: "fold", icon: "▸", labelKey: "vmenuFold", descKey: "vmenuFoldDesc", match: "fold collapsible 折叠 折叠块", insert: "<details>\n<summary>\n标题\n</summary>\n\n内容\n</details>" },
+          { key: "quote", icon: "❝", labelKey: "vmenuQuote", descKey: "vmenuQuoteDesc", match: "quote blockquote 引用", prefix: "> " },
         ],
       },
       {
@@ -7462,14 +7436,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           { key: "mathinline", icon: "∑", labelKey: "vmenuMathInline", descKey: "vmenuMathInlineDesc", match: "inline math 行内 公式", insert: "$$", cursor: 1 },
           { key: "mathblock", icon: "∫", labelKey: "vmenuMathBlock", descKey: "vmenuMathBlockDesc", match: "block math 行间 公式", insert: "\n$$\n\n$$", cursor: 4 },
           { key: "code", icon: "</>", labelKey: "vmenuCode", descKey: "vmenuCodeDesc", match: "code block fence 代码块", insert: "```\n\n```", cursor: 4 },
-        ],
-      },
-      {
-        key: "quote",
-        labelKey: "vmenuGQuote",
-        match: "quote 引用",
-        children: [
-          { key: "quote", icon: "❝", labelKey: "vmenuQuote", descKey: "vmenuQuoteDesc", match: "quote blockquote 引用", prefix: "> " },
         ],
       },
       {
@@ -7765,9 +7731,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const bubRef = react.useRef(bub);
       bubRef.current = bub;
       // 当前层可见行：sub 空且无 query = 根级分组；有 query = 跨组扁平搜叶项；
-      // sub 指向分组 = 该组子级
-      const menuRows = () => {
-        const mn = menuRef.current ?? { query: "", sub: null };
+      // sub 指向分组 = 该组子级。可传 mnArg 按暂态计算（syncSlashMenu 预判零匹配）
+      const menuRows = (mnArg) => {
+        const mn = mnArg ?? menuRef.current ?? { query: "", sub: null };
         const q = (mn.query ?? "").toLowerCase();
         if (mn.sub) {
           const group = VAULT_MENU.find((g) => g.key === mn.sub);
@@ -7866,7 +7832,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           labels: {
             codeCopy: t("vaultCopy"),
             codeCopied: t("vaultCopied"),
-            calloutTitlePh: t("vaultCalloutTitlePh"),
           },
           onWikiLink: (target, anchor) => {
             if (target === "") {
@@ -7904,8 +7869,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           const textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - 80), $from.parentOffset, "\n", "\n");
           const m = /(?:^|[\s\u3000-\u303F\uFF01-\uFF5E])\/(\S*)$/.exec(textBefore);
           if (m) {
+            const q = m[1] ?? "";
+            // 查询无匹配即关：字面 "/" 打完随后出现的字符会让过滤落空，自动消失
+            // 才不纠缠（菜单非破坏性，/ 始终是真实文本）
+            if (q !== "" && menuRows({ query: q, sub: null }).length === 0) {
+              setMenu(null);
+              return;
+            }
             const coords = ed.view.coordsAtPos($from.pos);
-            setMenu({ query: m[1] ?? "", sub: null, x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4 });
+            setMenu({ query: q, sub: null, x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4 });
             setMenuIdx((i) => i);
           } else if (menuRef.current !== null) {
             setMenu(null);
