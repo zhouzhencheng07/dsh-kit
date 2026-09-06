@@ -1792,7 +1792,10 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-sched-navbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-sched-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
 .dshk-sched-gridwrap{flex:1 1 auto;min-width:0;overflow:auto}
-.dshk-sched-grid{display:grid;grid-template-columns:52px repeat(7,minmax(0,1fr));min-width:700px}
+/* 每日列宽跟随坞宽（minmax(0,1fr) 均分），不设网格 min-width——设了的话窄坞
+（下限 480，(480-52)/7≈61px/天）会横向滚动只露出四-五天；事件/全天chip均有
+ellipsis，窄列只截字不破版 */
+.dshk-sched-grid{display:grid;grid-template-columns:52px repeat(7,minmax(0,1fr))}
 .dshk-sched-corner{position:sticky;top:0;z-index:3;background:var(--dsw-alias-bg-base)}
 .dshk-sched-dayhead{position:sticky;top:0;z-index:3;text-align:center;padding:6px 0 4px;background:var(--dsw-alias-bg-base);border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dshk-sched-wd{display:block;font-size:11px;color:var(--dshk-sched-wdcolor,var(--dsw-alias-label-tertiary))}
