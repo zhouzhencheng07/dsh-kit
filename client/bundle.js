@@ -8075,6 +8075,18 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const onScrollOrResize = () => bubbleSync();
         host.addEventListener("scroll", onScrollOrResize, true);
         window.addEventListener("resize", onScrollOrResize);
+        // 泡泡点击外部收起：编辑器内的点击由 selectionUpdate 处理（收光标即关、
+        // 拖拽重选即跟位）；点在编辑器与泡泡之外（页条/空白/反链区）不产生选区
+        // 变化事件，泡泡会卡在原地——document 捕获阶段兜底关闭
+        const onDocMouseDown = (e) => {
+          if (bubRef.current === null) return;
+          const t = e.target;
+          if (!(t instanceof Element)) return;
+          if (t.closest(".dshk-vault-bubble") !== null || host.contains(t)) return;
+          setBubPanel(null);
+          setBub(null);
+        };
+        document.addEventListener("mousedown", onDocMouseDown, true);
         return () => {
           clearTimeout(mdTimer);
           clearTimeout(saveTimer);
@@ -8092,6 +8104,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           host.removeEventListener("keydown", onKeyDown, true);
           host.removeEventListener("scroll", onScrollOrResize, true);
           window.removeEventListener("resize", onScrollOrResize);
+          document.removeEventListener("mousedown", onDocMouseDown, true);
           setBub(null);
           setBubPanel(null);
           h.destroy();
