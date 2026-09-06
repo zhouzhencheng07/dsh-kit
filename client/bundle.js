@@ -1805,7 +1805,9 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-dayhead.is-today .dshk-sched-dnum{background:var(--dsw-alias-brand-primary);color:#fff}
 .dshk-sched-allday{grid-row:2;border-left:1px solid var(--dsw-alias-border-l2);border-bottom:1px solid var(--dsw-alias-border-l2);padding:2px 4px;font-size:11px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-fill-l2);border-radius:4px;margin:2px 2px;min-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dshk-sched-timeline{border-right:1px solid var(--dsw-alias-border-l2)}
-.dshk-sched-hourlabel{height:42px;padding-right:6px;font-size:10px;color:var(--dsw-alias-label-tertiary);text-align:right;transform:translateY(-6px)}
+.dshk-sched-hourlabel{position:relative;z-index:4;height:42px;padding-right:6px;font-size:10px;color:var(--dsw-alias-label-tertiary);text-align:right;transform:translateY(-6px)}
+/* 标签压在 sticky 空白角格（z3 不透明底）之上：否则非整点对齐的滚动位置会让
+首行标签上半截滑进角格底下被盖没；角格无内容，列头（有日期文字）仍照常遮罩日列 */
 .dshk-sched-daycol{position:relative;border-left:1px solid var(--dsw-alias-border-l2);min-width:0}
 .dshk-sched-cell{box-sizing:border-box;border-bottom:1px solid color-mix(in srgb,var(--dsw-alias-border-l2) 55%,transparent);cursor:pointer}
 .dshk-sched-cell:hover{background:var(--dsw-alias-interactive-bg-hover)}
