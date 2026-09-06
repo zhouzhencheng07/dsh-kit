@@ -13,7 +13,7 @@
 //   POST /dsh-kit/skills/op   body 为 JSON：
 //       {op:'copy',  src, dest, overwrite?}   复制到目标根（dest=物理根 id）
 //       {op:'move',  src, dest, overwrite?}   复制校验后移除源（数据先落目标再撤源）
-//       {op:'delete', src}                    直接永久删除（客户端两步确认兜底）
+//       {op:'delete', src}                    删除；Windows 移入回收站，其它平台直接删
 //       {op:'disable', src, disabled}         改 SKILL.md frontmatter 双键：
 //                                             disable-model-invocation:true +
 //                                             user-invocable:false（chokidar 热生效）；
@@ -29,6 +29,9 @@ import fs from 'node:fs'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
+
+import { recycleDelete } from './recycle.ts'
+import { sameOrigin } from './web-guard.ts'
 
 const POOL_DIRNAME = 'skill-pool'
 
@@ -350,17 +353,7 @@ interface SkillPoolHooks {
 export function applySkillPool(ctx: KitCtx, hooks?: SkillPoolHooks): void {
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => {
-      const origins = (req: http.IncomingMessage): boolean => {
-        const origin = req.headers.origin
-        const host = req.headers.host
-        if (typeof origin !== 'string' || origin === '') return true
-        if (typeof host !== 'string') return false
-        try {
-          return new URL(origin).host === host
-        } catch {
-          return false
-        }
-      }
+      const origins = (req: http.IncomingMessage): boolean => sameOrigin(req)
 
       // ── GET 枚举 ──
       const disposeList = webCtx.webServer.register({
@@ -516,8 +509,16 @@ export function applySkillPool(ctx: KitCtx, hooks?: SkillPoolHooks): void {
                 jsonOf(res, 400, { error: '源不是白名单根下的技能条目' })
                 return
               }
-              // 直接永久删除（客户端两步确认兜底误触）
-              fs.rmSync(located.real, { recursive: true, force: true })
+              // Windows 移入回收站（全局约定；失败报错不静默转永久删），其它平台直接删
+              if (process.platform === 'win32') {
+                const gone = await recycleDelete(located.real)
+                if (!gone) {
+                  jsonOf(res, 500, { error: '移入回收站失败（文件可能被占用或路径过长）' })
+                  return
+                }
+              } else {
+                fs.rmSync(located.real, { recursive: true, force: true })
+              }
               jsonOf(res, 200, { ok: true, op: 'delete' })
               return
             }

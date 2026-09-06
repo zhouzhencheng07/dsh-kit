@@ -192,19 +192,23 @@ export class ScheduleStore {
         }
         try {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed.events)) {
-                this.data = { events: parsed.events, runningTimer: parsed.runningTimer ?? null };
-            }
+            if (!Array.isArray(parsed.events))
+                throw new Error('events 不是数组');
+            this.data = {
+                events: parsed.events,
+                runningTimer: parsed.runningTimer ?? null,
+                orphans: Array.isArray(parsed.orphans) ? parsed.orphans : [],
+            };
         }
         catch {
-            // 损坏：坏文件挪 .bak，服务降级空库继续活
+            // 损坏（含 events 非数组这类半损坏）：坏文件挪 .bak，服务降级空库继续活
             try {
                 fs.renameSync(this.file, `${this.file}.bak`);
             }
             catch {
                 /* 改名失败就让它留在原地 */
             }
-            this.data = { events: [], runningTimer: null };
+            this.data = { events: [], runningTimer: null, orphans: [] };
         }
     }
     persist() {
@@ -221,6 +225,10 @@ export class ScheduleStore {
     }
     list() {
         return this.data.events;
+    }
+    /** 独立计时段（不进事件列表，统计用）；测试与后续「未分类时段」视图共用 */
+    listOrphans() {
+        return Array.isArray(this.data.orphans) ? this.data.orphans : [];
     }
     create(input) {
         const fields = sanitizeFields(input, false);
@@ -337,6 +345,13 @@ export class ScheduleStore {
                 target.updatedAt = dtStrOf(new Date(), true);
             }
         }
+        else {
+            // 独立计时（未挂条目）的时段落到 orphans：不挂列表但统计照计，
+            // 否则停表即丢数据；timerStart 撞上已删条目静默降级成的独立计时也走这里
+            if (!Array.isArray(this.data.orphans))
+                this.data.orphans = [];
+            this.data.orphans.push({ start: running.start, end: dtStrOf(new Date(), true) });
+        }
         this.data.runningTimer = null;
         this.persist();
         return { stopped: true };
@@ -354,7 +369,7 @@ export class ScheduleStore {
     }
     stats(scope, date) {
         const [from, to] = rangeOf(scope, date);
-        const timedMs = timedMsInRange(this.data.events, from, to);
+        const timedMs = timedMsInRange(this.data.events, from, to, this.data.orphans);
         const eventCount = expandOccurrences(this.data.events, from, to).length;
         let completedCount = 0;
         let openCount = 0;
@@ -438,13 +453,13 @@ export function rangeOf(scope, date) {
 function minsToHHmm(mins) {
     return `${pad2(Math.floor(mins / 60) % 24)}:${pad2(mins % 60)}`;
 }
-/** 区间内计时合计（按计时段 start 归属日；进行中的不计入） */
-export function timedMsInRange(events, from, to) {
+/** 区间内计时合计（按计时段 start 归属日；进行中的不计入；orphans=独立计时段） */
+export function timedMsInRange(events, from, to, orphans) {
     let total = 0;
-    for (const ev of events) {
-        if (!Array.isArray(ev.timeEntries))
-            continue;
-        for (const t of ev.timeEntries) {
+    const addRange = (entries) => {
+        if (!Array.isArray(entries))
+            return;
+        for (const t of entries) {
             if (t.end === undefined)
                 continue;
             const day = t.start.slice(0, 10);
@@ -455,7 +470,10 @@ export function timedMsInRange(events, from, to) {
             if (s && e && e > s)
                 total += e.getTime() - s.getTime();
         }
-    }
+    };
+    for (const ev of events)
+        addRange(ev.timeEntries);
+    addRange(orphans);
     return total;
 }
 /**

@@ -7,7 +7,6 @@ import path from 'node:path'
 import {
   sanitizePageTitle,
   sanitizePageRel,
-  parseFrontmatterTags,
   extractTitle,
   extractWikiLinks,
   VaultScanner,
@@ -38,15 +37,6 @@ await test('sanitizePageRel 分段净化，支持子目录且防穿越', () => {
   assert.equal(sanitizePageRel('/头部斜杠//压缩/'), '头部斜杠/压缩')
   assert.equal(sanitizePageRel('///..//'), '') // 无有效段 → 空（端点报缺标题）
   assert.equal(sanitizePageRel('1/2/3/4/5/6/7/8/9/10').split('/').length <= 8, true) // 最多 8 段
-})
-
-await test('parseFrontmatterTags 只认 tags 行，内联数组与逗号两可', () => {
-  const a = parseFrontmatterTags('---\ntags: [python, 学习]\ncreated: x\n---\n正文')
-  assert.deepEqual(a.tags, ['python', '学习'])
-  const b = parseFrontmatterTags('---\ntags: python, git\n---\n正文')
-  assert.deepEqual(b.tags, ['python', 'git'])
-  const c = parseFrontmatterTags('没有 frontmatter')
-  assert.deepEqual(c.tags, [])
 })
 
 await test('extractTitle 首个 # 标题，缺省回退文件名', () => {
@@ -84,7 +74,6 @@ await test('scan：md 建页、跳过 attachments/点前缀、space 归属正确
   assert.equal(base.space, 'wiki')
   assert.equal(base.title, 'Python 基础')
   assert.deepEqual(base.links, ['工具链', 'AGENTS 常见问题'])
-  assert.deepEqual(base.tags, ['python'])
 })
 
 await test('scan：mtime 缓存命中不重读（改缓存时间戳探测）', async () => {

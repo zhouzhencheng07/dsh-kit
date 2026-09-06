@@ -68,6 +68,8 @@ import { BrowserService } from './browser.ts'
 import { loadToolsModule, buildBrowserTools } from './browser-tools.ts'
 import { getScheduleStore, buildScheduleTools, isDateStr, todayStr } from './schedule.ts'
 import { VaultScanner, sanitizePageTitle, sanitizePageRel } from './vault.ts'
+import { sameOrigin } from './web-guard.ts'
+import { recycleDelete, recycleDeleteBatch } from './recycle.ts'
 
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在设置里改（phonePort，1-65535） */
 const PHONE_PORT = 3090
@@ -356,45 +358,6 @@ function invalidFsName(raw: unknown): boolean {
   return false
 }
 
-/**
- * 删除进回收站（全局约定：优先进回收站，避免直接永久删除）。
- * Windows 走 powershell.exe + Microsoft.VisualBasic.FileIO.FileSystem（路径单引号
- * 转义后嵌入脚本再以 -Command 原样传递，规避命令行引号转义问题）；其它平台无
- * 回收站 API，resolve(false) 由调用方决定回退方式。
- */
-function recycleDelete(target: string, isDir: boolean): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (process.platform !== 'win32') {
-      resolve(false)
-      return
-    }
-    const esc = String(target).replace(/'/g, "''")
-    const method = isDir ? 'DeleteDirectory' : 'DeleteFile'
-    const script =
-      `try{Add-Type -AssemblyName Microsoft.VisualBasic;` +
-      `[Microsoft.VisualBasic.FileIO.FileSystem]::${method}('${esc}','OnlyErrorDialogs','SendToRecycleBin')}catch{exit 1}`
-    let child: import('node:child_process').ChildProcess
-    try {
-      child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true })
-    } catch {
-      resolve(false)
-      return
-    }
-    let settled = false
-    const timer = setTimeout(() => {
-      try { child.kill() } catch {}
-    }, 15000)
-    const finish = (ok: boolean) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      resolve(ok)
-    }
-    child.on('error', () => finish(false))
-    child.on('close', (code) => finish(code === 0))
-  })
-}
-
 /** Windows 优先 pwsh（PowerShell 7+），退回 powershell.exe；其它平台用 $SHELL 或 bash。结果缓存。 */
 let shellCache: ShellChoice | undefined
 /** PSReadLine 历史预测初始化（灰字建议 + → 接受整条建议，fish 风格）：PowerShell
@@ -431,18 +394,6 @@ function resolveShell(): ShellChoice {
     shellCache = { file, args: [], label: file }
   }
   return shellCache
-}
-
-/** 同源校验：Origin 必须存在且 host 与请求 Host 完全一致（webserver 默认只绑 loopback）。 */
-function sameOrigin(req: http.IncomingMessage): boolean {
-  const origin = req.headers.origin
-  const host = req.headers.host
-  if (typeof origin !== 'string' || typeof host !== 'string') return false
-  try {
-    return new URL(origin).host === host
-  } catch {
-    return false
-  }
 }
 
 // vendor 静态资源：白名单文件名 → client/vendor/ 下同名文件
@@ -869,6 +820,9 @@ export async function apply(ctx: KitCtx): Promise<void> {
             'cache-control': 'no-cache',
             'accept-ranges': 'bytes',
             'x-content-type-options': 'nosniff',
+            // CSP sandbox：raw 内容以文档形态打开（新标签/iframe）时进不透明源、
+            // 脚本不执行——svg 内嵌脚本是存储型 XSS 面（img/fetch 取字节不受影响）
+            'content-security-policy': 'sandbox',
             // inline + 编码文件名：浏览器标题/另存名取这里，中文不乱码
             'content-disposition': `inline; filename*=UTF-8''${encodeURIComponent(path.basename(file.path))}`,
           }
@@ -907,10 +861,10 @@ export async function apply(ctx: KitCtx): Promise<void> {
       })
 
       // ── 编辑保存端点：POST /dsh-kit/write ──
-      // body {path, content, baseMtime, cwd}。校验链：同源（POST 必须带 Origin 且
-      // 匹配 Host）→ 文件必须位于 realpath(cwd) 子树内 → 必须是已存在文件 → 内容
-      // ≤512KB 且不含 NUL → mtime CAS（baseMtime 不等于当前值回 409 modified，
-      // 附带当前 mtimeMs 供前端重载）。成功返回新的 mtimeMs。
+      // body {path, content, baseMtime, cwd}。校验链：同源（sameOrigin：Host 必须
+      // 回环名 + Origin 存在时匹配，见 web-guard.ts）→ 文件必须位于 realpath(cwd)
+      // 子树内 → 必须是已存在文件 → 内容 ≤512KB 且不含 NUL → mtime CAS（baseMtime
+      // 不等于当前值回 409 modified，附带当前 mtimeMs 供前端重载）。成功返回新的 mtimeMs。
       const disposeWrite = webCtx.webServer.register({
         kind: 'exact',
         path: '/dsh-kit/write',
@@ -1011,7 +965,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
       // ── 上传端点：POST /dsh-kit/upload?dir=<绝对目录>（multipart 文件，落盘该目录）──
       // 场景：手机访问 DSH 时用 <input type=file> 唤起手机自己的选择器（原生对话框
       // 只会弹在运行它的机器上，手机够不到电脑的），选完经 HTTP 传回写入工作区。
-      // 校验链与 /write 一致：同源（POST 强制 Origin）→ dir 走 validateCwd；文件名
+      // 校验链与 /write 一致：sameOrigin → dir 走 validateCwd；文件名
       // 只取 basename + 去非法字符，重名自动追加 " (n)" 序号不覆盖。整体缓冲有上限，
       // 单文件另设上限（multipart 手工解析，见 src/upload.ts）。
       const UPLOAD_TOTAL_LIMIT = 200 * 1024 * 1024
@@ -1104,8 +1058,8 @@ export async function apply(ctx: KitCtx): Promise<void> {
       //   rename {path, name}              同目录内重命名（目标已存在报错）
       //   delete {path}                    删除；Windows 移入回收站，其它平台直接递归删。
       //                                    破坏性操作，前端已二次确认。
-      // 校验链与 /write 一致：同源（POST 必须带 Origin 且匹配 Host）→ 目标必须位于
-      // realpath(cwd) 子树内（工作区根本身不可改删）→ 名称过 invalidFsName 校验。
+      // 校验链与 /write 一致：sameOrigin → 目标必须位于 realpath(cwd) 子树内
+      // （工作区根本身不可改删）→ 名称过 invalidFsName 校验。
       const disposeFsOp = webCtx.webServer.register({
         kind: 'exact',
         path: '/dsh-kit/fs/op',
@@ -1227,7 +1181,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
             }
 
             if (op === 'delete') {
-              const gone = await recycleDelete(target.path, target.stat.isDirectory())
+              const gone = await recycleDelete(target.path)
               if (!gone) {
                 if (process.platform !== 'win32') {
                   // 无回收站 API 的平台：退回直接删除
@@ -2413,9 +2367,10 @@ export async function apply(ctx: KitCtx): Promise<void> {
       //   2) GET  /dsh-kit/jobs/output?sessionId=&jobId= —— 增量读输出
       // 输出读取走 job-tee（src/job-tee.ts）：底层 readOutput 降级为取新块进
       // 公共 buffer，面板与模型侧 job_output 各持独立游标切片，互不抢量。
-      // 权限对齐官方 job_kill/job_output 工具：caller 必须是任务所属 session 的
-      // agent（jobs-local assertAccess 校验 owner.id === caller.id），做不到的
-      // 请求（跨会话/未知任务）抛错 → 404/403。jobs 服务缺失（宿主组合没挂
+      // 身份语义（如实记）：caller 由请求参数 sessionId 反查 agents 注册表得到，
+      // 报得出所属会话即可操作其任务——并非真正的调用方鉴权。定位是「面板只操作
+      // 当前会话的后台任务」的约定门（越界任务仍然 kill/output 不出），守住非浏览器
+      // 客户端之外没有身份可伪造的本地信任边界。jobs 服务缺失（宿主组合没挂
       // dsh-jobs-local）时能力整体不可用，返回 503。
       const disposeJobsKill = webCtx.webServer.register({
         kind: 'exact',
@@ -2742,7 +2697,8 @@ export async function apply(ctx: KitCtx): Promise<void> {
         if (fs.existsSync(file)) return { exists: true, path: file, mtimeMs: fs.statSync(file).mtimeMs }
         const today = new Date()
         const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-        const template = `---\ntags: []\ncreated: ${dateStr}\n---\n\n# ${segs[segs.length - 1] ?? ''}\n\n`
+        // frontmatter 只种 created：文件 mtime 会被编辑覆盖，这是唯一可信的创建日
+        const template = `---\ncreated: ${dateStr}\n---\n\n# ${segs[segs.length - 1] ?? ''}\n\n`
         fs.writeFileSync(file, template, 'utf8')
         return { path: file, mtimeMs: fs.statSync(file).mtimeMs }
       })
@@ -2774,12 +2730,17 @@ export async function apply(ctx: KitCtx): Promise<void> {
           throw new Error(`读取文件失败：${error instanceof Error ? error.message : error}`)
         }
         if (stat.mtimeMs !== baseMtime) return { modified: true, mtimeMs: stat.mtimeMs }
-        fs.writeFileSync(resolved, content, 'utf8')
+        // tmp+rename 原子落盘（schedule.json 同款）：写一半崩溃/断电不会留下截断页
+        const tmp = `${resolved}.tmp`
+        fs.writeFileSync(tmp, content, 'utf8')
+        fs.renameSync(tmp, resolved)
         return { ok: true, mtimeMs: fs.statSync(resolved).mtimeMs }
       })
-      // 删除（含孤儿级联，客户端算清单）：每页移入回收站（失败退回直接删除）；
-      // 若 vault 是 git 仓库，删除完成后 add+commit 单提交（用户定稿：一个提交
-      // 即可整体撤回）。git 不可用（未装/未配置 user）不阻断删除本身。
+      // 删除（含孤儿级联，客户端算清单）：Windows 批量移入回收站（单 PS 进程逐项
+      // 对账），失败项不再退回永久删除而是原样保留并回传 failed 清单；其它平台直接
+      // 删，失败同样计 failed。deleted 只按「确实消失」的计数；若 vault 是 git 仓库
+      // 且确有删除，完成后 add+commit 单提交（用户定稿：一个提交即可整体撤回）。
+      // git 不可用（未装/未配置 user）不阻断删除本身。
       vaultPost('/dsh-kit/vault/delete', async (body, root) => {
         const paths = Array.isArray(body.paths) ? body.paths.map((p) => String(p)) : []
         if (paths.length === 0) throw new Error('缺少 paths')
@@ -2791,26 +2752,39 @@ export async function apply(ctx: KitCtx): Promise<void> {
           if (!/\.md$/i.test(resolved)) throw new Error(`只允许删 md 文件：${resolved}`)
           resolvedSet.add(resolved)
         }
-        let deleted = 0
+        const targets: string[] = []
         for (const resolved of resolvedSet) {
           try {
             fs.accessSync(resolved)
           } catch {
             continue
           }
-          const recycled = await recycleDelete(resolved, false)
-          if (recycled === false) {
+          targets.push(resolved)
+        }
+        let deleted = 0
+        const failed: string[] = []
+        if (process.platform === 'win32') {
+          const results = await recycleDeleteBatch(targets)
+          targets.forEach((p, i) => {
+            if (results[i] === true) deleted += 1
+            else failed.push(path.basename(p))
+          })
+        } else {
+          for (const p of targets) {
             try {
-              fs.rmSync(resolved)
-            } catch {}
+              await fs.promises.rm(p)
+              deleted += 1
+            } catch {
+              failed.push(path.basename(p))
+            }
           }
-          deleted += 1
         }
         let committed = false
+        if (deleted === 0) return { deleted, committed, ...(failed.length > 0 ? { failed } : {}) }
         try {
           fs.accessSync(path.join(root, '.git'))
         } catch {
-          return { deleted, committed }
+          return { deleted, committed, ...(failed.length > 0 ? { failed } : {}) }
         }
         const runGitVault = (args: string[]) =>
           new Promise<boolean>((resolve) => {
@@ -2845,7 +2819,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
             'commit', '-m', `dsh-kit: 删除 ${deleted} 页（含孤儿级联）`,
           ])
         }
-        return { deleted, committed }
+        return { deleted, committed, ...(failed.length > 0 ? { failed } : {}) }
       })
 
       return () => {

@@ -32,29 +32,6 @@ export function sanitizePageRel(raw) {
         .slice(0, 8);
     return segs.join('/');
 }
-/** 最小 frontmatter 解析：只认 `---` 包裹块内的 `tags:` 行（内联数组或逗号分隔）。
- *  其余 yaml 一律不解析——解析失败按无 frontmatter，绝不丢弃内容。 */
-export function parseFrontmatterTags(content) {
-    const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(content);
-    if (!m)
-        return { tags: [], body: content };
-    const tags = [];
-    const block = m[1] ?? '';
-    for (const line of block.split(/\r?\n/)) {
-        const tm = /^tags:\s*(.+)$/.exec(line);
-        if (!tm)
-            continue;
-        const raw = (tm[1] ?? '').trim();
-        const inner = raw.startsWith('[') && raw.endsWith(']') ? raw.slice(1, -1) : raw;
-        for (const piece of inner.split(',')) {
-            const tag = piece.trim().replace(/^['"]|['"]$/g, '');
-            if (tag !== '')
-                tags.push(tag);
-        }
-        break;
-    }
-    return { tags, body: content };
-}
 /** 首个 `# ` 标题行（前 60 行内找），找不到回退文件名 */
 export function extractTitle(content, fallbackName) {
     const lines = content.split(/\r?\n/, 60);
@@ -82,6 +59,8 @@ export function extractWikiLinks(content) {
     }
     return out;
 }
+/** 单页正文缓存上限 */
+const SEARCH_CACHE_CAP = 256 * 1024;
 export class VaultScanner {
     rootProvider;
     /** mtime 增量缓存：重扫只重读变化文件，walk 本身每次全量（readdir 便宜） */
@@ -167,15 +146,18 @@ export class VaultScanner {
                 }
                 try {
                     const content = await fs.promises.readFile(full, 'utf8');
-                    const { tags } = parseFrontmatterTags(content);
                     const page = {
                         rel,
                         space,
                         title: extractTitle(content, rel.split('/').pop() ?? dirent.name),
                         links: extractWikiLinks(content),
-                        tags,
                     };
-                    this.cache.set(full, { mtimeMs: stat.mtimeMs, size: stat.size, page });
+                    this.cache.set(full, {
+                        mtimeMs: stat.mtimeMs,
+                        size: stat.size,
+                        page,
+                        content: content.length <= SEARCH_CACHE_CAP ? content.toLowerCase() : null,
+                    });
                     pages.push({ ...page, path: full, mtimeMs: stat.mtimeMs, size: stat.size });
                 }
                 catch {
@@ -205,12 +187,15 @@ export class VaultScanner {
         const terms = q.split(/\s+/).filter((t) => t !== '');
         const results = [];
         for (const page of index.pages) {
-            let content = '';
-            try {
-                content = (await fs.promises.readFile(page.path, 'utf8')).toLowerCase();
-            }
-            catch {
-                continue;
+            // 正文优先取 mtime 缓存（scan 刚刷新过，命中即免读盘）；超大页等未缓存者现读
+            let content = this.cache.get(page.path)?.content ?? null;
+            if (content === null) {
+                try {
+                    content = (await fs.promises.readFile(page.path, 'utf8')).toLowerCase();
+                }
+                catch {
+                    continue;
+                }
             }
             let score = 0;
             const relLower = page.rel.toLowerCase();
@@ -261,7 +246,7 @@ export class VaultScanner {
             '- 文件是唯一真源：一切内容都是本目录下的 md 文件，无第二存储。',
             '- 一题一页：一个主题一页；写前先搜索是否已有同类页，重叠则合并。',
             '- wikilink 用 `[[页面名]]` 引用其它页（按文件名解析，移动不破链）。',
-            '- frontmatter 最小集：`tags:`（内联数组）。`archived: true` 表示已归档。',
+            '- frontmatter 可省；需要时只写 `created`（日期）；`archived: true` 表示已归档。',
             '- 二进制（图片/PDF）放 `attachments/`，页面里用相对链接引用。',
             '- 单页超过约 16KB 考虑拆分或抽象出索引页。',
             '',

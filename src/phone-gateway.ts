@@ -13,9 +13,10 @@
 //
 // 转发策略（全功能模式）：Host 重写为 127.0.0.1:<upstream>、剥离 Origin 与本网关
 // Cookie。这会让 dsh 的 browser-trust fence 把请求当回环同源放行（含特权 RPC——
-// 上游把它们钉死 loopback）。安全上自洽：令牌即认证层，持有链接者本就能借 agent
-// 对话执行任意命令，特权钉死对该威胁模型无增量；而直连回环的本机访问不受影响，
-// dsh 本体零改动。
+// 上游把它们钉死 loopback）；kit 自有端点同语义（web-guard.ts sameOrigin 对缺
+// Origin 放行 + Host 回环闸），kit 的 POST/WS 经网关同样可达。安全上自洽：令牌即
+// 认证层，持有链接者本就能借 agent 对话执行任意命令，特权钉死对该威胁模型无增量；
+// 而直连回环的本机访问不受影响，dsh 本体零改动。
 //
 // dsh web ≥ v0.1.2-alpha.5 起带浏览器会话鉴权：回环直连请求也必须携带
 // client-connection 签名 cookie，否则 index 一律 401（手机端会看到
@@ -397,8 +398,11 @@ export function startPhoneGateway({ port, upstreamPort, stateFile = defaultState
     },
     token: () => token,
     rotate() {
+      // enabled 读状态文件现值而非启动快照：启停走 /dsh-kit/phone/gateway 端点直写
+      // 文件，rotate 若回写 boot 值会把用户改过的启用位悄悄回退（重启后网关不自启）
+      const enabled = loadGatewayState(stateFile, log).enabled
       token = newToken()
-      saveGatewayState(stateFile, { token, enabled: boot.enabled }, log)
+      saveGatewayState(stateFile, { token, enabled }, log)
       return token
     },
     fingerprint: () => token.slice(-4),

@@ -768,8 +768,8 @@ window.__ModuleLoader__.load({
       vaultDelBtn: "删除",
       vaultDelConfirm: "确认删除以下页面？（移入回收站；vault 为 git 仓库时自动生成一个提交，可整体撤回）",
       vaultDeleted: "已删除",
-      vaultFmTip: "页面元数据（frontmatter）：标签与创建日期。在编辑器外展示，保存时原样写回文件头",
-      vaultFmTags: "标签",
+      vaultDelFail: "删除失败（文件被占用？已保留）：",
+      vaultFmTip: "页面元数据（frontmatter）：创建日期。在编辑器外展示，保存时原样写回文件头",
       vaultFmCreated: "创建",
       vaultConflict: "页面在盘上已被修改，自动保存已暂停",
       vaultConflictOverwrite: "覆盖盘上",
@@ -1213,8 +1213,8 @@ window.__ModuleLoader__.load({
       vaultDelBtn: "Delete",
       vaultDelConfirm: "Delete these pages? (Moved to recycle bin; if the vault is a git repo one commit is created so this is fully revertible)",
       vaultDeleted: "Deleted",
-      vaultFmTip: "Page metadata (frontmatter): tags and created date. Shown outside the editor and written back verbatim on save",
-      vaultFmTags: "Tags",
+      vaultDelFail: "Delete failed (file locked? kept):",
+      vaultFmTip: "Page metadata (frontmatter): created date. Shown outside the editor and written back verbatim on save",
       vaultFmCreated: "Created",
       vaultConflict: "The page was modified on disk; autosave paused",
       vaultConflictOverwrite: "Overwrite disk",
@@ -5176,6 +5176,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             return win.pdfjsLib
               .getDocument({
                 url: `${origin}/dsh-kit/raw?path=${encodeURIComponent(path)}`,
+                // 关 eval 化字体变换：pdf.js <4.2 有 FontMatrix 注入任意 JS 的路子
+                // （CVE-2024-4367），沙箱与主文档同源，不关等于给恶意 PDF 开后门
+                isEvalSupported: false,
                 cMapUrl: `${origin}/dsh-kit/vendor/cmaps/`,
                 cMapPacked: true,
                 standardFontDataUrl: `${origin}/dsh-kit/vendor/standard_fonts/`,
@@ -6424,6 +6427,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         void fetchStats();
       }, [fetchStats]);
       // 可见时 30s 轮询（agent 经 schedule_create 建的条目靠它进面板）+ 每分钟走当前时刻线
+      // + dshk-sched-changed 事件（本面板/计时芯片的写操作即时互相同步，轮询只是兜底）
       react.useEffect(() => {
         const timer = setInterval(() => {
           if (document.visibilityState === "hidden") return;
@@ -6431,11 +6435,17 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           setNowTick(Date.now());
         }, 30000);
         const minute = setInterval(() => setNowTick(Date.now()), 60000);
+        const onChanged = () => {
+          void fetchData();
+          void fetchStats();
+        };
+        window.addEventListener("dshk-sched-changed", onChanged);
         return () => {
           clearInterval(timer);
           clearInterval(minute);
+          window.removeEventListener("dshk-sched-changed", onChanged);
         };
-      }, [fetchData]);
+      }, [fetchData, fetchStats]);
 
       // 日程视图每次变为可见（挂载即激活 / 从别的标签切回）都把视口滚到当前
       // 时刻上方 1/3 处。旧版"只滚一次"有坑：挂载时若视图还 display:none
@@ -6459,13 +6469,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         async (path, body) => {
           try {
             await schedFetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });
-            await fetchData();
-            void fetchStats();
+            // 刷新走 dshk-sched-changed 事件：本面板与计时芯片共用一条同步通道，
+            // 一处写操作两边即时跟进（避免各轮询节奏的 10~30s 滞后）
+            window.dispatchEvent(new Event("dshk-sched-changed"));
           } catch (error) {
             flashToast(tf("schedOpFail", { error: String(error?.message ?? error) }));
           }
         },
-        [fetchData, fetchStats],
+        [],
       );
 
       const tasks = react.useMemo(
@@ -6775,13 +6786,22 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [tasks, setTasks] = react.useState([]);
       const [nowTick, setNowTick] = react.useState(() => Date.now());
 
+      // 平时只拉轻端点（runningTimer 一项）；全量 data 是给选择器列待办用的，
+      // 点开 ▶ 才拉。日程面板与芯片经 dshk-sched-changed 事件互相同步，轮询只是兜底。
       const refresh = react.useCallback(async () => {
         try {
-          const body = await schedFetch("/dsh-kit/schedule/data?from=&to=");
+          const body = await schedFetch("/dsh-kit/schedule/timer");
           setRunning(body.runningTimer ?? null);
-          setTasks(Array.isArray(body.events) ? body.events.filter((e) => e.start === undefined && !e.completedAt) : []);
         } catch {
           /* 静默：输入区旁的芯片不打扰 */
+        }
+      }, []);
+      const loadTasks = react.useCallback(async () => {
+        try {
+          const body = await schedFetch("/dsh-kit/schedule/data?from=&to=");
+          setTasks(Array.isArray(body.events) ? body.events.filter((e) => e.start === undefined && !e.completedAt) : []);
+        } catch {
+          /* 静默 */
         }
       }, []);
 
@@ -6792,13 +6812,23 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           void refresh();
           setNowTick(Date.now());
         }, 10000);
-        const tick = setInterval(() => setNowTick(Date.now()), 1000);
+        const onChanged = () => {
+          void refresh();
+          if (picking) void loadTasks();
+        };
+        window.addEventListener("dshk-sched-changed", onChanged);
         return () => {
           clearInterval(timer);
-          clearInterval(tick);
+          window.removeEventListener("dshk-sched-changed", onChanged);
         };
-      }, [refresh]);
-
+      }, [refresh, loadTasks, picking]);
+      // 秒针只在计时进行时走：空闲芯片只有一个 ▶，每秒重渲染纯浪费
+      react.useEffect(() => {
+        if (!running) return undefined;
+        setNowTick(Date.now());
+        const tick = setInterval(() => setNowTick(Date.now()), 1000);
+        return () => clearInterval(tick);
+      }, [running && running.id, running && running.start]);
       const elapsedStr = (startStr) => {
         const [d, tm = "00:00"] = String(startStr).split("T");
         const [y, mo, dd] = d.split("-").map(Number);
@@ -6810,12 +6840,18 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const start = (id) => {
         setPicking(false);
         schedFetch("/dsh-kit/schedule/timer-start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(id ? { id } : {}) })
-          .then((body) => setRunning(body.runningTimer ?? null))
+          .then((body) => {
+            setRunning(body.runningTimer ?? null);
+            window.dispatchEvent(new Event("dshk-sched-changed"));
+          })
           .catch(() => {});
       };
       const stop = () => {
         schedFetch("/dsh-kit/schedule/timer-stop", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
-          .then(() => setRunning(null))
+          .then(() => {
+            setRunning(null);
+            window.dispatchEvent(new Event("dshk-sched-changed"));
+          })
           .catch(() => {});
       };
 
@@ -7269,21 +7305,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return { fmText: m[0], rest: src.slice(m[0].length) };
     }
 
-    /** 属性条展示用最小解析：tags 行（内联数组/逗号分隔）与 created 行 */
+    /** 属性条展示用最小解析：created 行（frontmatter 其余内容不感知，保存原样写回） */
     function vaultParseFmInfo(fmText) {
-      const info = { tags: [], created: "" };
+      const info = { created: "" };
       const block = String(fmText ?? "").replace(/^---\r?\n/, "").replace(/\r?\n---(?:\r?\n)?$/, "");
       for (const line of block.split(/\r?\n/)) {
-        const tm = /^tags:\s*(.+)$/.exec(line);
-        if (tm) {
-          const raw = (tm[1] ?? "").trim();
-          const inner = raw.startsWith("[") && raw.endsWith("]") ? raw.slice(1, -1) : raw;
-          for (const piece of inner.split(",")) {
-            const tag = piece.trim().replace(/^['"]|['"]$/g, "");
-            if (tag !== "") info.tags.push(tag);
-          }
-          continue;
-        }
         const cm = /^created:\s*(.+)$/.exec(line);
         if (cm) info.created = (cm[1] ?? "").trim();
       }
@@ -7299,7 +7325,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const linkers = new Map(); // 页面 path → 引用它的页面 path 集合
       for (const p of pages) {
         for (const l of p.links) {
-          const hit = resolveVaultLink(pages, l);
+          const hit = resolveVaultLink(pages, l, p.space);
           if (!hit) continue;
           if (!linkers.has(hit.path)) linkers.set(hit.path, new Set());
           linkers.get(hit.path).add(p.path);
@@ -7334,22 +7360,31 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return String(text ?? "").trim().replace(/\s+/g, "-");
     }
 
-    /** wikilink 目标 → 页面：rel 全等 > rel 尾段 > 标题 > 文件名（均不分大小写） */
-    function resolveVaultLink(pages, target) {
+    /** wikilink 目标 → 页面：rel 全等 > rel 尾段 > 标题 > 文件名（均不分大小写）。
+     *  space 给定时（发起链接的页面所在空间），同层并列命中优先取同空间的——
+     *  跨空间重名页时链接不再静默指向字典序小的那个 */
+    function resolveVaultLink(pages, target, space) {
       const t = String(target ?? "").trim().replace(/\.md$/i, "").replace(/\\/g, "/").toLowerCase();
       if (t === "") return null;
       const base = t.split("/").pop() ?? t;
+      const pref = typeof space === "string" && space !== "" ? `${space.toLowerCase()}/` : null;
+      const prefer = (p, cur) => {
+        if (cur === null || pref === null) return cur === null;
+        const pIn = p.rel.toLowerCase().startsWith(pref);
+        const cIn = cur.rel.toLowerCase().startsWith(pref);
+        return pIn && !cIn;
+      };
       let rel = null;
       let suffix = null;
       let title = null;
       let baseName = null;
       for (const p of pages) {
         const relLower = p.rel.toLowerCase();
-        if (rel === null && relLower === t) rel = p;
-        if (suffix === null && t.includes("/") && relLower.endsWith("/" + t)) suffix = p;
-        if (title === null && p.title.toLowerCase() === t) title = p;
+        if (relLower === t && prefer(p, rel)) rel = p;
+        if (t.includes("/") && relLower.endsWith("/" + t) && prefer(p, suffix)) suffix = p;
+        if (p.title.toLowerCase() === t && prefer(p, title)) title = p;
         const b = relLower.split("/").pop() ?? relLower;
-        if (baseName === null && b === base) baseName = p;
+        if (b === base && prefer(p, baseName)) baseName = p;
       }
       return rel ?? suffix ?? title ?? baseName ?? null;
     }
@@ -7838,7 +7873,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               return;
             }
             const pages = indexRef.current?.pages ?? [];
-            const resolved = resolveVaultLink(pages, target);
+            const ownerSpace = pages.find((p) => p.path === current)?.space ?? "";
+            const resolved = resolveVaultLink(pages, target, ownerSpace);
             if (resolved) openPath(resolved.path, anchor);
             else void createInSpace(target);
           },
@@ -8155,6 +8191,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             body: JSON.stringify({ paths: doomed.map((p) => p.path) }),
           });
           setToast(`${t("vaultDeleted")} ×${String(body.deleted ?? "")}${body.committed === true ? " · git" : ""}`);
+          if (Array.isArray(body.failed) && body.failed.length > 0) {
+            setToast(`${t("vaultDelFail")} ${body.failed.join("、")}`);
+          }
           const gone = new Set(doomed.map((p) => p.path));
           setHist((h) => {
             const stack = h.stack.filter((p) => !gone.has(p));
@@ -8165,23 +8204,36 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
         }
       };
-      /** 编辑态粘贴截图：图片文件上传到 vault attachments/，光标处插入图片节点 */
+      /** 编辑态粘贴截图：图片文件上传到 vault attachments/，光标处插入图片节点。
+       *  上传前先幂等建 attachments/（/dsh-kit/upload 要求目录已存在，新 vault
+       *  首次粘贴不建目录必 400） */
       const onEditPaste = (e) => {
         const files = Array.from(e.clipboardData?.files ?? []).filter((f) => /^image\//i.test(f.type));
         if (files.length === 0) return;
         e.preventDefault();
-        for (const f of files) {
-          const fd = new FormData();
-          fd.append("file", f, f.name || "paste.png");
-          fetch(`/dsh-kit/upload?dir=${encodeURIComponent(`${root}/attachments`)}`, { method: "POST", body: fd })
-            .then((r) => r.json())
-            .then((body) => {
-              const name = body?.saved?.[0]?.name;
-              if (!name) throw new Error(body?.warning || "upload failed");
-              rteRef.current?.insertImage(`attachments/${name}`, f.name || name);
-            })
-            .catch(() => setToast(t("vaultSaveFail")));
-        }
+        void (async () => {
+          try {
+            await schedFetch("/dsh-kit/vault/mkdir", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ dir: "attachments" }),
+            });
+          } catch {
+            /* 已存在等幂等失败场景不拦；上传失败另有提示 */
+          }
+          for (const f of files) {
+            const fd = new FormData();
+            fd.append("file", f, f.name || "paste.png");
+            fetch(`/dsh-kit/upload?dir=${encodeURIComponent(`${root}/attachments`)}`, { method: "POST", body: fd })
+              .then((r) => r.json())
+              .then((body) => {
+                const name = body?.saved?.[0]?.name;
+                if (!name) throw new Error(body?.warning || "upload failed");
+                rteRef.current?.insertImage(`attachments/${name}`, f.name || name);
+              })
+              .catch(() => setToast(t("vaultSaveFail")));
+          }
+        })();
       };
       const runSearch = async () => {
         const q = searchQ.trim();
@@ -8207,7 +8259,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [toast]);
 
       const indexPages = index?.pages ?? [];
-      const backlinks = current && index ? vaultBacklinks(index.pages, current) : [];
+      const backlinks = react.useMemo(
+        () => (current && index ? vaultBacklinks(index.pages, current) : []),
+        [index, current],
+      );
       // 历史前进/后退同样先 flush（冲突=留在本页）
       const histGo = (toIdx) => {
         const path = hist.stack[toIdx];
@@ -8399,13 +8454,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultBinaryHint") })
                     : jsxRuntime.jsxs("div", { className: "dshk-vault-editwrap", onPaste: onEditPaste, children: [
                         fmInfo
-                          ? jsxRuntime.jsx("div", { className: "dshk-vault-fmbar", children: [
-                              jsxRuntime.jsxs("span", { children: [
-                                jsxRuntime.jsx("span", { children: "🏷 " }),
-                                t("vaultFmTags"),
-                                "：",
-                                fmInfo.tags.length > 0 ? fmInfo.tags.join("、") : "—",
-                              ] }),
+                          ? jsxRuntime.jsxs("div", { className: "dshk-vault-fmbar", children: [
                               fmInfo.created !== ""
                                 ? jsxRuntime.jsxs("span", { children: [t("vaultFmCreated"), "：", fmInfo.created] })
                                 : null,

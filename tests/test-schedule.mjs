@@ -175,10 +175,18 @@ test('timer：全局单计时互斥、stop 闭合、runningTimer 带标题', () 
   assert.equal(store.runningTimer(), null)
   const bEntry = store.list().find((e) => e.id === b.id).timeEntries
   assert.ok(bEntry[0].end !== undefined)
-  // 独立计时：无挂载条目，runningTimer.title 为空串
+  // 独立计时：无挂载条目，runningTimer.title 为空串；停表落 orphans 不丢时段
   store.timerStart(undefined)
   assert.equal(store.runningTimer().title, '')
   store.timerStop()
+  assert.equal(store.runningTimer(), null)
+  assert.equal(store.listOrphans().length, 1)
+  // 同秒起止时长为 0 属边界行为：拉成确定时段验证统计口径
+  const orphan = store.listOrphans()[0]
+  orphan.start = '2026-09-08T09:30:00'
+  orphan.end = '2026-09-08T10:00:00'
+  const dayStats = store.stats('day', '2026-09-08')
+  assert.ok(dayStats.timedMs === 30 * 60000)
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
@@ -192,6 +200,28 @@ test('持久化往返与损坏降级', () => {
   assert.equal(s2.list()[0].title, '跨实例')
   // 损坏 → .bak + 空库
   fs.writeFileSync(file, '{broken json', 'utf8')
+  const s3 = new ScheduleStore(file)
+  assert.equal(s3.list().length, 0)
+  assert.ok(fs.existsSync(`${file}.bak`))
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('独立计时 orphans 持久化往返 + events 非数组也走 .bak', () => {
+  const dir = tmp()
+  const file = path.join(dir, 'schedule.json')
+  const s1 = new ScheduleStore(file)
+  s1.timerStart(undefined)
+  s1.timerStop()
+  // 拉成确定时段（同秒起止时长 0 是边界行为），重开实例验证落盘往返
+  const orphan = s1.listOrphans()[0]
+  orphan.start = '2026-09-08T08:00:00'
+  orphan.end = '2026-09-08T08:20:00'
+  s1.create({ title: '触发落盘', due: '2026-09-08' }) // mutate 才 persist（直改 orphan 字段不落盘）
+  const s2 = new ScheduleStore(file)
+  const stats = s2.stats('day', '2026-09-08')
+  assert.equal(stats.timedMs, 20 * 60000)
+  // events 键存在但不是数组：同样按损坏处理（挪 .bak），不能静默覆盖原文件
+  fs.writeFileSync(file, '{"events":"nope"}', 'utf8')
   const s3 = new ScheduleStore(file)
   assert.equal(s3.list().length, 0)
   assert.ok(fs.existsSync(`${file}.bak`))
