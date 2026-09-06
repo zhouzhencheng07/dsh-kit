@@ -426,6 +426,8 @@ const VENDOR_FILES = new Map([
     ['/dsh-kit/vendor/marked.min.js', 'marked.min.js'],
     ['/dsh-kit/vendor/purify.min.js', 'purify.min.js'],
     ['/dsh-kit/vendor/codemirror.bundle.js', 'codemirror.bundle.js'],
+    // vault 页面富文本编辑器（TipTap 引擎，md↔富文本往返；懒加载）
+    ['/dsh-kit/vendor/richeditor.bundle.js', 'richeditor.bundle.js'],
     // pdf.js 预览（主文件懒加载；worker/cmaps/standard_fonts 由库按需再取）
     ['/dsh-kit/vendor/pdf.min.js', 'pdf.min.js'],
     ['/dsh-kit/vendor/pdf.worker.min.js', 'pdf.worker.min.js'],
