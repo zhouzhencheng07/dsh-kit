@@ -753,7 +753,6 @@ window.__ModuleLoader__.load({
       vaultNewPagePh: "标题，可含 / 建子目录，回车创建",
       vaultNewDirPh: "目录名，可含 / 多级，回车创建",
       vaultCreate: "创建",
-      vaultSave: "保存",
       vaultSaved: "已保存",
       vaultUnsaved: "有未保存修改",
       vaultBinaryHint: "二进制文件，知识库不渲染",
@@ -792,6 +791,10 @@ window.__ModuleLoader__.load({
       vmenuH3Desc: "三级标题",
       vmenuH4: "标题 4",
       vmenuH4Desc: "四级标题",
+      vmenuH5: "标题 5",
+      vmenuH5Desc: "五级标题",
+      vmenuH6: "标题 6",
+      vmenuH6Desc: "六级标题",
       vmenuBody: "正文",
       vmenuBodyDesc: "普通文本段落",
       vmenuGSpecial: "分割与特殊块",
@@ -813,19 +816,9 @@ window.__ModuleLoader__.load({
       vmenuMathBlockDesc: "独立公式区域",
       vmenuCode: "代码块",
       vmenuCodeDesc: "代码区域（语法高亮）",
-      vmenuGQuote: "引用和提示框",
+      vmenuGQuote: "引用",
       vmenuQuote: "引用",
       vmenuQuoteDesc: "引用块",
-      vmenuCoInfo: "提示框 · 信息",
-      vmenuCoInfoDesc: "蓝色信息提示",
-      vmenuCoNote: "提示框 · 笔记",
-      vmenuCoNoteDesc: "紫色笔记提示",
-      vmenuCoSuccess: "提示框 · 成功",
-      vmenuCoSuccessDesc: "绿色成功提示",
-      vmenuCoWarn: "提示框 · 警告",
-      vmenuCoWarnDesc: "橙色警告提示",
-      vmenuCoDanger: "提示框 · 危险",
-      vmenuCoDangerDesc: "红色危险提示",
       vmenuGTable: "表格",
       vmenuTable1: "1×2",
       vmenuTable1Desc: "1 行 2 列",
@@ -1207,7 +1200,6 @@ window.__ModuleLoader__.load({
       vaultNewPagePh: "Title, / for subfolders, Enter to create",
       vaultNewDirPh: "Folder name, / for nesting, Enter to create",
       vaultCreate: "Create",
-      vaultSave: "Save",
       vaultSaved: "Saved",
       vaultUnsaved: "Unsaved changes",
       vaultBinaryHint: "Binary file — not rendered in the vault",
@@ -1246,6 +1238,10 @@ window.__ModuleLoader__.load({
       vmenuH3Desc: "Level 3 heading",
       vmenuH4: "Heading 4",
       vmenuH4Desc: "Level 4 heading",
+      vmenuH5: "Heading 5",
+      vmenuH5Desc: "Level 5 heading",
+      vmenuH6: "Heading 6",
+      vmenuH6Desc: "Level 6 heading",
       vmenuBody: "Body text",
       vmenuBodyDesc: "Plain text paragraph",
       vmenuGSpecial: "Dividers & special blocks",
@@ -1267,19 +1263,9 @@ window.__ModuleLoader__.load({
       vmenuMathBlockDesc: "Standalone formula area",
       vmenuCode: "Code block",
       vmenuCodeDesc: "Code area with syntax highlighting",
-      vmenuGQuote: "Quotes & callouts",
+      vmenuGQuote: "Quotes",
       vmenuQuote: "Quote",
       vmenuQuoteDesc: "Blockquote",
-      vmenuCoInfo: "Callout · Info",
-      vmenuCoInfoDesc: "Blue info note",
-      vmenuCoNote: "Callout · Note",
-      vmenuCoNoteDesc: "Purple note",
-      vmenuCoSuccess: "Callout · Success",
-      vmenuCoSuccessDesc: "Green success note",
-      vmenuCoWarn: "Callout · Warning",
-      vmenuCoWarnDesc: "Orange warning note",
-      vmenuCoDanger: "Callout · Danger",
-      vmenuCoDangerDesc: "Red danger note",
       vmenuGTable: "Tables",
       vmenuTable1: "1×2",
       vmenuTable1Desc: "1 row 2 cols",
@@ -1753,7 +1739,7 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-vault-tbsep{flex:none;width:1px;height:16px;background:var(--dsw-alias-border-l2);margin:0 2px}
 .dshk-vault-tbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;min-width:24px;height:22px;padding:0 5px;border-radius:6px;cursor:pointer}
 .dshk-vault-tbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-vault-slashmenu{position:fixed;z-index:60;width:280px;max-height:380px;overflow:auto;padding:6px 0;display:flex;flex-direction:column;gap:1px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.12)}
+.dshk-vault-slashmenu{position:fixed;z-index:60;width:220px;max-height:380px;overflow:auto;padding:6px 0;display:flex;flex-direction:column;gap:1px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.12)}
 .dshk-vault-slashitem{display:flex;align-items:center;gap:10px;padding:7px 14px;margin:0 4px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer}
 .dshk-vault-slashitem:hover,.dshk-vault-slashitem.is-active{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-vault-slashnum{flex:none;width:20px;text-align:center;font-size:11px;font-weight:600;color:var(--dsw-alias-label-tertiary)}
@@ -7438,12 +7424,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       {
         key: "head",
         labelKey: "vmenuGHead",
-        match: "heading h1 h2 h3 h4 body 标题 正文",
+        match: "heading h1 h2 h3 h4 h5 h6 body 标题 正文",
         children: [
           { key: "h1", icon: "H1", labelKey: "vmenuH1", descKey: "vmenuH1Desc", match: "h1 一级", prefix: "# " },
           { key: "h2", icon: "H2", labelKey: "vmenuH2", descKey: "vmenuH2Desc", match: "h2 二级", prefix: "## " },
           { key: "h3", icon: "H3", labelKey: "vmenuH3", descKey: "vmenuH3Desc", match: "h3 三级", prefix: "### " },
           { key: "h4", icon: "H4", labelKey: "vmenuH4", descKey: "vmenuH4Desc", match: "h4 四级", prefix: "#### " },
+          { key: "h5", icon: "H5", labelKey: "vmenuH5", descKey: "vmenuH5Desc", match: "h5 五级", prefix: "##### " },
+          { key: "h6", icon: "H6", labelKey: "vmenuH6", descKey: "vmenuH6Desc", match: "h6 六级", prefix: "###### " },
           { key: "body", icon: "P", labelKey: "vmenuBody", descKey: "vmenuBodyDesc", match: "body paragraph 正文 段落", prefix: "" },
         ],
       },
@@ -7479,14 +7467,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       {
         key: "quote",
         labelKey: "vmenuGQuote",
-        match: "quote callout 引用 提示框",
+        match: "quote 引用",
         children: [
           { key: "quote", icon: "❝", labelKey: "vmenuQuote", descKey: "vmenuQuoteDesc", match: "quote blockquote 引用", prefix: "> " },
-          { key: "co-info", icon: "ℹ", labelKey: "vmenuCoInfo", descKey: "vmenuCoInfoDesc", match: "info callout 信息 提示", insert: "> [!info] 标题\n> 内容" },
-          { key: "co-note", icon: "📝", labelKey: "vmenuCoNote", descKey: "vmenuCoNoteDesc", match: "note callout 笔记 提示", insert: "> [!note] 标题\n> 内容" },
-          { key: "co-success", icon: "✓", labelKey: "vmenuCoSuccess", descKey: "vmenuCoSuccessDesc", match: "success callout 成功 提示", insert: "> [!success] 标题\n> 内容" },
-          { key: "co-warn", icon: "⚠", labelKey: "vmenuCoWarn", descKey: "vmenuCoWarnDesc", match: "warning warn callout 警告 提示", insert: "> [!warning] 标题\n> 内容" },
-          { key: "co-danger", icon: "✕", labelKey: "vmenuCoDanger", descKey: "vmenuCoDangerDesc", match: "danger error callout 危险 提示", insert: "> [!danger] 标题\n> 内容" },
         ],
       },
       {
@@ -7554,7 +7537,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [searchRes, setSearchRes] = react.useState(null);
       const [searching, setSearching] = react.useState(false);
       const [toast, setToast] = react.useState("");
-      // 斜杠菜单：{query, x, y} | null（行首 / 触发，键入过滤，Esc/失焦关）
+      // 斜杠菜单：{query, x, y} | null（/ 触发：行首或空白后，键入过滤，Esc/失焦关）
       const [menu, setMenu] = react.useState(null);
       const [menuIdx, setMenuIdx] = react.useState(0);
       // 泡泡菜单：{x, y, above} | null（选区非空时浮在选区上/下方）；bubPanel =
@@ -7808,7 +7791,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const ed = h.editor;
         const { $from } = ed.state.selection;
         const textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - 80), $from.parentOffset, "\n", "\n");
-        const m = /(?:^|\n)\/(\S*)$/.exec(textBefore);
+        const m = /(?:^|[\s\u3000-\u303F\uFF01-\uFF5E])\/(\S*)$/.exec(textBefore);
         setMenu(null);
         if (m) {
           // 删掉 "/查询" 再应用条目
@@ -7823,7 +7806,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         else if (key === "code") h.insertCodeBlock();
         else if (key === "hr") h.insertHr();
         else if (key === "fold") h.insertDetails();
-        else if (key.startsWith("co-")) h.insertCallout(key.slice(3) === "warn" ? "warning" : key.slice(3));
         else if (key === "ul") h.toggleBullet();
         else if (key === "ol") h.toggleOrdered();
         else if (key === "todo") h.toggleTask();
@@ -7911,14 +7893,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         savedBodyRef.current = initial;
         setDraftBody(initial);
         setSavedBody(initial);
-        // 斜杠菜单同步：光标前缀 /xxx 即开/刷新菜单，前缀破坏即关。挂 update +
-        // selectionUpdate 覆盖全部输入路径（真实键入/IME/命令改写）
+        // 斜杠菜单同步：光标前 /xxx（行首/空白/CJK 或全角标点后，行中也能触发）
+        // 即开/刷新菜单，前缀破坏即关。挂 update + selectionUpdate 覆盖全部输入
+        // 路径（真实键入/IME/命令改写）。边界集与 applyMenuTemplate 的删除正则
+        // 必须同源；ASCII 字母数字与 / 后不触发（URL 不捣乱）
         const syncSlashMenu = () => {
           const ed = rteRef.current?.editor;
           if (!ed) return;
           const { $from } = ed.state.selection;
           const textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - 80), $from.parentOffset, "\n", "\n");
-          const m = /(?:^|\n)\/(\S*)$/.exec(textBefore);
+          const m = /(?:^|[\s\u3000-\u303F\uFF01-\uFF5E])\/(\S*)$/.exec(textBefore);
           if (m) {
             const coords = ed.view.coordsAtPos($from.pos);
             setMenu({ query: m[1] ?? "", sub: null, x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4 });
@@ -8439,9 +8423,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                           : null,
                         jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
                           // 真·所见即所得（用户定稿）：页面恒为 TipTap 富文本编辑器。
-                          // 页条=文档级命令（保存/删除/撤销/重做）+ 脏标记 + 冲突处理；
+                          // 页条=文档级命令（删除/撤销/重做）+ 脏标记 + 冲突处理；保存
+                          // 全自动（2s 防抖/切页 flush/Ctrl+S），手动按钮已无必要。
                           // 行内格式在泡泡菜单、块插入在斜杠菜单、表格按钮随选区显隐
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", title: dirty ? t("vaultUnsaved") : t("vaultSaved"), onClick: () => void saveEditRef.current.flushManual(), children: t("vaultSave") }),
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void deleteCurrent(), children: t("vaultDelBtn") }),
                           jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbUndo"), onClick: () => rteRef.current?.undo(), children: "↶" }),
