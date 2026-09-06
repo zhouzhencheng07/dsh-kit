@@ -31,6 +31,7 @@ const PKGS = [
   '@codemirror/lang-xml',
   '@codemirror/lang-sql',
   '@codemirror/legacy-modes',
+  '@codemirror/search',
 ]
 
 try {
