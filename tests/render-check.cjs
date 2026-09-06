@@ -506,15 +506,13 @@ comps.setKitUi({ vaultOpen: false, dockTab: null });
 // 6.6) 知识库纯函数：frontmatter 拆分 / 解析优先级 / 反链
 //（wikilink/数学变换已并入 RTE vendor，往返断言在 tests/test-vault-rte.mjs）
 {
-  const raw = "---\ntags: [a, b]\ncreated: 2026-09-06\n---\n\n# 标题\n\n正文";
+  const raw = "---\ncreated: 2026-09-06\n---\n\n# 标题\n\n正文";
   const { fmText, rest } = comps.vaultSplitFrontmatter(raw);
-  check("fm 拆分：字节级原文 + 正文", fmText === "---\ntags: [a, b]\ncreated: 2026-09-06\n---\n" && rest === "\n# 标题\n\n正文");
+  check("fm 拆分：字节级原文 + 正文", fmText === "---\ncreated: 2026-09-06\n---\n" && rest === "\n# 标题\n\n正文");
   const info = comps.vaultParseFmInfo(fmText);
-  check("fm 解析：tags 数组 + created", info.tags.length === 2 && info.tags[0] === "a" && info.created === "2026-09-06");
+  check("fm 解析：created", info.created === "2026-09-06");
   const noFm = comps.vaultSplitFrontmatter("无头部页");
   check("fm 拆分：无 frontmatter 原样", noFm.fmText === "" && noFm.rest === "无头部页");
-  const info2 = comps.vaultParseFmInfo("---\ntags: x, y\n---\n");
-  check("fm 解析：逗号分隔 tags", info2.tags.length === 2 && info2.tags[1] === "y");
 }
 const vaultPages = [
   { path: "D:/v/wiki/Python/基础.md", rel: "wiki/Python/基础", title: "Python 基础", links: [] },

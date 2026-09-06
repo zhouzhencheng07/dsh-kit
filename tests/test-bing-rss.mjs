@@ -1,7 +1,7 @@
 // Bing RSS 解析单元测试：不联网，喂 fixture 验证 item 抽取与实体解码。
 // 用法：node tests\test-bing-rss.mjs（退出码即结果）
 import assert from 'node:assert/strict'
-import { parseBingRss } from '../src/engines/bing.js'
+import { parseBingRss } from '../src/engines/bing.ts'
 
 const SAMPLE = `<?xml version="1.0" encoding="utf-8" ?><rss version="2.0"><channel><title>Bing: test query</title>
 <item><title>First &amp; result</title><link>https://example.com/a?x=1&amp;y=2</link><description>Snippet with &lt;b&gt;bold&lt;/b&gt; and &#x4e2d;&#25991; entities.</description></item>

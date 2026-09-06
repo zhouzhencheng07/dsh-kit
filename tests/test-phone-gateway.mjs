@@ -180,6 +180,17 @@ try {
   check('新令牌链接可用', r.status === 302)
   const persisted = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
   check('新令牌已持久化', persisted.token === gw.token())
+
+  // ── rotate 不回退启用位：启停端点直写状态文件后，rotate 应沿用现值 ──
+  //（旧实现回写启动时的 boot.enabled，会把用户改过的开关悄悄翻回去）
+  fs.writeFileSync(stateFile, JSON.stringify({ token: gw.token(), enabled: true }), 'utf8')
+  gw.rotate()
+  const persisted2 = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+  check('rotate 沿用状态文件现值 enabled=true', persisted2.enabled === true && persisted2.token === gw.token())
+  fs.writeFileSync(stateFile, JSON.stringify({ token: gw.token(), enabled: false }), 'utf8')
+  gw.rotate()
+  const persisted3 = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+  check('rotate 沿用状态文件现值 enabled=false', persisted3.enabled === false && persisted3.token === gw.token())
 } finally {
   gw.close()
   await new Promise((r) => upstream.server.close(r))
