@@ -2741,6 +2741,16 @@ export async function apply(ctx) {
                 fs.writeFileSync(file, template, 'utf8');
                 return { path: file, mtimeMs: fs.statSync(file).mtimeMs };
             });
+            // 建目录：标题带 `/` 多级递归创建（树上「新建目录」用；已存在=幂等成功）
+            vaultPost('/dsh-kit/vault/mkdir', (body, root) => {
+                const space = sanitizePageTitle(String(body.space ?? ''));
+                const rel = sanitizePageRel(String(body.dir ?? ''));
+                if (rel === '')
+                    throw new Error('缺少目录名');
+                const dir = path.join(root, ...(space === '' ? [] : [space]), ...rel.split('/'));
+                fs.mkdirSync(dir, { recursive: true });
+                return { path: dir };
+            });
             // 写回：路径必须落在 vault 根内且是 md；mtime CAS 同 /dsh-kit/write 语义
             vaultPost('/dsh-kit/vault/write', (body, root) => {
                 const rawPath = String(body.path ?? '');
