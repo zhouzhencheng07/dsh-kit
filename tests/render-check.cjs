@@ -62,7 +62,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes, VaultView, vaultTransformWikiLinks, vaultTransformMath, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug };",
+  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes, VaultView, VaultRootView, vaultTransformWikiLinks, vaultTransformMath, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug };",
 );
 const harness = new Function("require", wrapper);
 const comps = harness((name) => {
@@ -72,7 +72,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RightDock", "DockStub", "openDockTab", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes", "VaultView", "vaultTransformWikiLinks", "vaultTransformMath", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug"];
+const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RightDock", "DockStub", "openDockTab", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes", "VaultView", "VaultRootView", "vaultTransformWikiLinks", "vaultTransformMath", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -414,7 +414,8 @@ const dbJ = comps.dockBounds("jobs");
 const dbB = comps.dockBounds("browser");
 check("右坞三标签宽度界限同一（切标签不改宽）", dbP.min === dbJ.min && dbP.max === dbJ.max && dbP.min === dbB.min && dbP.max === dbB.max);
 
-// 7.2.2) 多文件预览：二级文件小标签条（>1 个文件才显示）+ 坞头全部关闭/收起按钮
+// 7.2.2) 多文件预览：二级文件小标签条（>1 个文件才显示）+ 坞头三件（用户定稿
+// 2026-09-06：» 最左，标签条/+ 仅在有标签时显示，全部关闭 ✕ 同样仅有标签时显示）
 comps.setKitUi({
   previews: [
     { path: "C:/x/a.js", from: "tree", untracked: false, usedAt: 1 },
@@ -430,9 +431,10 @@ const pvChips = callLog.filter((c) => (c[0] === "jsxs") && c[2] && typeof c[2].c
 // 桩环境 <html lang> 缺失 → t() 走英文兜底（语言跟随设计的正确行为），断言双语匹配
 const closeAllBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["全部关闭", "Close all"].includes(c[2]["aria-label"]));
 const minimizeBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["最小化面板", "Minimize panel"].includes(c[2]["aria-label"]));
+const addBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-dock-add");
 check("RightDock 多文件预览渲染无异常", !!out && typeof out === "object");
 check("RightDock 渲染出二级文件标签条（2 个文件 chip）", !!pvTabrow && pvChips.length === 2);
-check("RightDock 坞头渲染全部关闭与最小化按钮", !!closeAllBtn && !!minimizeBtn);
+check("RightDock 有标签：» + 标签条 + + + 全部关闭都在", !!minimizeBtn && !!closeAllBtn && !!addBtn);
 comps.setKitUi({ previews: [], activePreview: null, dockTab: null });
 
 // 7.2.2b) 单文件预览：文件标签条恒显示（与浏览器页签统一——单文件也有标签级 ✕，
@@ -483,6 +485,10 @@ const emptyHint = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].ch
 const emptyCards = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-dock-empty-card");
 check("RightDock 常置空态渲染选择器标题与提示", !!emptyTitle && !!emptyHint);
 check("RightDock 空态渲染后台任务/日程/知识库/浏览器四张卡片", emptyCards.length === 4);
+const emptyAdd = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-dock-add");
+const emptyCloseAll = callLog.find((c) => (c[0] === "jsx") && c[2] && ["全部关闭", "Close all"].includes(c[2]["aria-label"]));
+const emptyMin = callLog.find((c) => (c[0] === "jsx") && c[2] && ["最小化面板", "Minimize panel"].includes(c[2]["aria-label"]));
+check("RightDock 0 标签：只有 »（+ 与全部关闭都不出现）", !emptyAdd && !emptyCloseAll && !!emptyMin);
 comps.setKitUi({ schedOpen: true, dockTab: "schedule" });
 callLog = [];
 out = comps.RightDock({ props: {}, cwd: "C:/x" });
@@ -540,6 +546,20 @@ check("math：行内码 $ 原样", mathOut.includes("`$y$` 结尾"));
   check("孤儿级联：递归闭包 + AGENTS 保护", doomed.length === 3 && doomed.some((p) => p.rel === "入门") && doomed.some((p) => p.rel === "速记") && !doomed.some((p) => p.rel === "AGENTS"));
   const doomed2 = comps.vaultCascadeDelete(pages, "D:/v/速记.md");
   check("孤儿级联：删叶子不连坐他人", doomed2.length === 1 && doomed2[0].rel === "速记");
+}
+
+// 6.9) 单态 VaultRootView 直渲（无 hooks 执行的完整渲染体）：槽位渲染器会静默
+// 吞掉渲染期异常（readerRef 残留引用教训），必须在这里显式跑过才肯放行
+{
+  let vaultOut = null;
+  let vaultErr = null;
+  try {
+    vaultOut = comps.VaultRootView({ root: "D:/v" });
+  } catch (e) {
+    vaultErr = e;
+  }
+  check("VaultRootView 单态渲染无异常", vaultErr === null && !!vaultOut && typeof vaultOut === "object");
+  if (vaultErr) console.log("  VaultRootView error:", vaultErr.message);
 }
 comps.setKitUi({ dockCollapsed: true });
 callLog = [];

@@ -753,10 +753,10 @@ window.__ModuleLoader__.load({
       vaultNewPagePh: "标题，可含 / 建子目录，回车创建",
       vaultNewDirPh: "目录名，可含 / 多级，回车创建",
       vaultCreate: "创建",
-      vaultCancel: "取消",
-      vaultEdit: "编辑",
       vaultSave: "保存",
       vaultSaved: "已保存",
+      vaultUnsaved: "有未保存修改",
+      vaultBinaryHint: "二进制文件，知识库不渲染",
       vaultCopy: "复制",
       vaultCopied: "已复制",
       vaultSaveFail: "保存失败：{error}",
@@ -764,7 +764,7 @@ window.__ModuleLoader__.load({
       vaultBacklinks: "反链",
       vaultBroken: "页面不存在，点击创建",
       vaultEmptySpace: "此库还没有页面",
-      vaultPickPage: "从左侧选择一页开始阅读",
+      vaultPickPage: "从左侧选择一页开始",
       vaultPageGone: "页面不存在（可能已被移动或删除）",
       vaultDelBtn: "删除",
       vaultDelConfirm: "确认删除以下页面？（移入回收站；vault 为 git 仓库时自动生成一个提交，可整体撤回）",
@@ -1193,10 +1193,10 @@ window.__ModuleLoader__.load({
       vaultNewPagePh: "Title, / for subfolders, Enter to create",
       vaultNewDirPh: "Folder name, / for nesting, Enter to create",
       vaultCreate: "Create",
-      vaultCancel: "Cancel",
-      vaultEdit: "Edit",
       vaultSave: "Save",
       vaultSaved: "Saved",
+      vaultUnsaved: "Unsaved changes",
+      vaultBinaryHint: "Binary file — not rendered in the vault",
       vaultCopy: "Copy",
       vaultCopied: "Copied",
       vaultSaveFail: "Save failed: {error}",
@@ -1204,7 +1204,7 @@ window.__ModuleLoader__.load({
       vaultBacklinks: "Backlinks",
       vaultBroken: "Page does not exist, click to create",
       vaultEmptySpace: "No pages in this space yet",
-      vaultPickPage: "Pick a page on the left to start reading",
+      vaultPickPage: "Pick a page on the left to start",
       vaultPageGone: "Page not found (it may have been moved or deleted)",
       vaultDelBtn: "Delete",
       vaultDelConfirm: "Delete these pages? (Moved to recycle bin; if the vault is a git repo one commit is created so this is fully revertible)",
@@ -1635,7 +1635,8 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-vault-reader{flex:1 1 auto;min-width:0;overflow:auto;display:flex;flex-direction:column}
 .dshk-vault-pagebar{flex:none;display:flex;justify-content:flex-end;padding:6px 10px 0}
 .dshk-vault-editwrap{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding:8px 10px}
-.dshk-vault-editbar{flex:none;display:flex;gap:6px;padding-bottom:6px}
+.dshk-vault-editbar{flex:none;display:flex;align-items:center;gap:6px;padding-bottom:6px}
+.dshk-vault-dirtydot{flex:none;color:var(--dsw-alias-warning,#e8a13c);font-size:10px;line-height:1;margin-left:2px}
 .dshk-vault-cmhost{flex:1 1 auto;min-height:0;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;overflow:hidden}
 /* 高度约束必须显式给：没有它 cm-scroller 随内容长高、CM 初始视口永不延展，
    视口外的行永远够不着（估算高度又恰好≈面板高度时连滚动条都不出现）。
@@ -1838,7 +1839,7 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-cm-scope{--dshk-tok-keyword:#953800;--dshk-tok-string:#0a3069;--dshk-tok-comment:#697077;--dshk-tok-number:#0550ae;--dshk-tok-fn:#8250df;--dshk-tok-type:#0550ae;--dshk-tok-operator:#953800;--dshk-tok-meta:#6639ba;--dshk-tok-link:#0550ae;--dshk-tok-heading:#0550ae}
 body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-string:#a5d6ff;--dshk-tok-comment:#8b949e;--dshk-tok-number:#79c0ff;--dshk-tok-fn:#d2a8ff;--dshk-tok-type:#ffa657;--dshk-tok-operator:#ff7b72;--dshk-tok-meta:#79c0ff;--dshk-tok-link:#a5d6ff;--dshk-tok-heading:#f0883e}
 /* Live Preview 调色板（亮色兜底在 vendor 主题里，这里只补暗色） */
-body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:#58a6ff;--dshk-lp-co-blue-bg:rgba(88,166,255,.13);--dshk-lp-co-teal:#39c5cf;--dshk-lp-co-teal-bg:rgba(57,197,207,.12);--dshk-lp-co-green:#3fb950;--dshk-lp-co-green-bg:rgba(63,185,80,.13);--dshk-lp-co-orange:#e0823d;--dshk-lp-co-orange-bg:rgba(224,130,61,.13);--dshk-lp-co-red:#f85149;--dshk-lp-co-red-bg:rgba(248,81,73,.13);--dshk-lp-co-purple:#d2a8ff;--dshk-lp-co-purple-bg:rgba(210,168,255,.13);--dshk-lp-co-gray:#8b949e;--dshk-lp-co-gray-bg:rgba(139,148,158,.15)}
+body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:#30363d;--dshk-lp-co-blue:#58a6ff;--dshk-lp-co-blue-bg:rgba(88,166,255,.13);--dshk-lp-co-teal:#39c5cf;--dshk-lp-co-teal-bg:rgba(57,197,207,.12);--dshk-lp-co-green:#3fb950;--dshk-lp-co-green-bg:rgba(63,185,80,.13);--dshk-lp-co-orange:#e0823d;--dshk-lp-co-orange-bg:rgba(224,130,61,.13);--dshk-lp-co-red:#f85149;--dshk-lp-co-red-bg:rgba(248,81,73,.13);--dshk-lp-co-purple:#d2a8ff;--dshk-lp-co-purple-bg:rgba(210,168,255,.13);--dshk-lp-co-gray:#8b949e;--dshk-lp-co-gray-bg:rgba(139,148,158,.15)}
 .dshk-editarea.dshk-cm-host{min-height:280px}
 /* git 状态徽标与 diff 着色 */
 .dshk-gitbadge{flex:none;margin-left:auto;font-size:10px;line-height:14px;padding:0 5px;border-radius:6px;font-family:ui-monospace,Consolas,monospace;border:1px solid currentColor}
@@ -7415,18 +7416,17 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
       const [expanded, setExpanded] = react.useState({});
       // 阅读历史：stack 存绝对路径，idx 是当前位（后退/前进改 idx 不重压栈）
       const [hist, setHist] = react.useState({ stack: [], idx: -1 });
-      const [page, setPage] = react.useState(null); // { content, mtimeMs, loading }
-      const [html, setHtml] = react.useState(null);
-      const [editing, setEditing] = react.useState(false);
+      const [page, setPage] = react.useState(null); // { path, content, mtimeMs, loading }
       const [draft, setDraft] = react.useState("");
       const [cmReady, setCmReady] = react.useState(false);
+      // 单态所见即所得（用户定稿）：页面内容恒为 CM 编辑器，不再分编辑/只读。
+      // docTick 强制 CM 重挂载——内容需与盘上对齐时（打开新页/冲突回读）bump
+      const [docTick, setDocTick] = react.useState(0);
       // 建页/建目录：createDir = 内联输入框所在目录（null 关闭）；输入可再带 /
       // 多级；createKind 区分建页与建目录
       const [createDir, setCreateDir] = react.useState(null);
       const [createKind, setCreateKind] = react.useState("page");
       const [createTitle, setCreateTitle] = react.useState("");
-      // 建页跳转 → 内容到手直接进编辑态（ref：跨 effect 传递，state 会闭包过期）
-      const autoEditRef = react.useRef(false);
       const [searchQ, setSearchQ] = react.useState("");
       const [searchRes, setSearchRes] = react.useState(null);
       const [searching, setSearching] = react.useState(false);
@@ -7440,7 +7440,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
       const [bubPanel, setBubPanel] = react.useState(null);
       // 跳页后待滚动的标题锚（双链 [[页#标题]] 落点）
       const [pendingAnchor, setPendingAnchor] = react.useState("");
-      const readerRef = react.useRef(null);
       const editHostRef = react.useRef(null);
       const cmRef = react.useRef(null);
 
@@ -7491,57 +7490,43 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
         });
       }, []);
 
-      // 当前页变化 → 拉内容（历史前进后退同样走这里）。建页跳转时
-      // autoEditRef 置位：内容到手即直接进编辑态（建页即编辑，用户定稿）
+      // 拉当前页内容（打开/冲突回读共用）。单态所见即所得：内容到手即编辑器
+      // 文档，docTick bump 驱动 CM 重挂载对齐盘上内容
+      const loadCurrent = react.useCallback(async () => {
+        if (current === null) return;
+        try {
+          const body = await schedFetch(`/dsh-kit/read?path=${encodeURIComponent(current)}`);
+          setPage({
+            path: current,
+            loading: false,
+            content: body.binary ? "" : (body.content ?? ""),
+            mtimeMs: body.mtimeMs ?? 0,
+            binary: body.binary === true,
+            gone: false,
+          });
+          setDocTick((t) => t + 1);
+        } catch {
+          setPage({ path: current, loading: false, content: "", mtimeMs: 0, gone: true });
+          setDocTick((t) => t + 1);
+        }
+      }, [current]);
+
+      // 当前页变化 → 拉内容（历史前进后退同样走这里）；预载 CM 与 KaTeX
+      //（Live Preview 公式 widget 依赖）
       react.useEffect(() => {
         if (current === null) {
           setPage(null);
-          setHtml(null);
           return undefined;
         }
-        setEditing(false);
-        setPage({ loading: true, content: "", mtimeMs: 0 });
-        let alive = true;
-        void (async () => {
-          try {
-            const body = await schedFetch(`/dsh-kit/read?path=${encodeURIComponent(current)}`);
-            if (!alive) return;
-            setPage({ loading: false, content: body.binary ? "" : (body.content ?? ""), mtimeMs: body.mtimeMs ?? 0, binary: body.binary === true, gone: false });
-            if (autoEditRef.current && body.binary !== true) {
-              autoEditRef.current = false;
-              setDraft(body.content ?? "");
-              setEditing(true);
-              void ensureCmLib().then(() => setCmReady(true));
-            }
-          } catch {
-            if (!alive) return;
-            autoEditRef.current = false;
-            setPage({ loading: false, content: "", mtimeMs: 0, gone: true });
-          }
-        })();
-        return () => {
-          alive = false;
-        };
-      }, [current]);
+        setPage({ path: current, loading: true, content: "", mtimeMs: 0 });
+        void ensureCmLib().then(() => setCmReady(true));
+        void ensureMdLibs();
+        void loadCurrent();
+        return undefined;
+      }, [current, loadCurrent]);
 
-      // 内容 → 剥 frontmatter → wikilink 预变换 → marked → DOMPurify → 渲染 HTML
-      react.useEffect(() => {
-        if (!page || page.loading || page.gone || page.binary) {
-          setHtml(null);
-          return undefined;
-        }
-        let alive = true;
-        void ensureMdLibs().then(() => {
-          if (!alive) return;
-          const stripped = page.content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
-          const raw = window.marked.parse(vaultTransformWikiLinks(vaultTransformMath(stripped)), { async: false, gfm: true, breaks: true });
-          setHtml(window.DOMPurify.sanitize(raw));
-        });
-        return () => {
-          alive = false;
-        };
-      }, [page]);
-
+      // 单态所见即所得：阅读态渲染链（剥 frontmatter → marked → DOMPurify →
+      // 后处理）整体退场——页面即编辑器，渲染由 Live Preview 引擎承担
       const createInSpace = react.useCallback(
         async (title, dir) => {
           let trimmed = String(title ?? "").trim();
@@ -7568,10 +7553,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
               void fetchDir(dir);
             }
             await loadIndex();
-            if (body.path) {
-              autoEditRef.current = body.path !== current; // 同页（已存在）不折腾
-              openPath(body.path);
-            }
+            if (body.path) openPath(body.path);
           } catch (error) {
             setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
           }
@@ -7605,176 +7587,27 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
         [root, fetchDir],
       );
 
-      // 渲染后处理：标题锚 id → callout 折叠块 → 双链/碎链/同页锚点击 →
-      // attachments 图片解析 → 待滚锚点。onclick 用属性赋值保证幂等（同 html
-      // 复渲染时 effect 重跑不叠加监听器）
-      react.useEffect(() => {
-        const host = readerRef.current;
-        if (!host || html === null) return undefined;
-        const indexNow = index;
-        const scrollAnchor = (anchorRaw) => {
-          const id = "vh-" + encodeURIComponent(vaultHeadingSlug(anchorRaw));
-          const el = host.querySelector(`#${CSS.escape(id)}`);
-          if (el) el.scrollIntoView({ block: "start" });
-        };
-        // 标题锚 id（[[页#锚]] / [[#锚]] 的落点；重复标题追加序号）
-        const seenSlugs = new Set();
-        for (const h of host.querySelectorAll("h1, h2, h3, h4")) {
-          const slug = "vh-" + encodeURIComponent(vaultHeadingSlug(h.textContent));
-          let id = slug;
-          let n = 2;
-          while (seenSlugs.has(id)) {
-            id = `${slug}-${n}`;
-            n += 1;
-          }
-          seenSlugs.add(id);
-          h.id = id;
-        }
-        // 数学：KaTeX 渲染占位元素（vaultTransformMath 产出）；库未就绪时回退
-        // 显示原文——公式可读性优于空白
-        for (const el of host.querySelectorAll(".dshk-math")) {
-          const tex = decodeURIComponent(el.getAttribute("data-tex") ?? "");
-          if (typeof window.katex === "object" && window.katex !== null) {
-            try {
-              window.katex.render(tex, el, { displayMode: el.getAttribute("data-display") === "1", throwOnError: false });
-            } catch {
-              el.textContent = tex;
-            }
-          } else el.textContent = tex;
-        }
-        // 代码块：语言条 + 复制按钮（wangshu 同款）；marked 产出 pre>code，
-        // 语言取 code.language-* 类，无语言时标签留空只给复制钮
-        for (const pre of Array.from(host.querySelectorAll("pre"))) {
-          if (pre.closest(".dshk-codebox")) continue;
-          const code = pre.querySelector("code");
-          const lang = /language-([\w-]+)/.exec(code?.className ?? "")?.[1] ?? "";
-          const box = document.createElement("div");
-          box.className = "dshk-codebox";
-          const bar = document.createElement("div");
-          bar.className = "dshk-codebar";
-          const langEl = document.createElement("span");
-          langEl.className = "dshk-codelang";
-          langEl.textContent = lang;
-          const copy = document.createElement("button");
-          copy.type = "button";
-          copy.className = "dshk-codecopy";
-          copy.textContent = t("vaultCopy");
-          copy.onclick = async () => {
-            try {
-              await navigator.clipboard.writeText(code?.textContent ?? "");
-              copy.textContent = t("vaultCopied");
-              setTimeout(() => { copy.textContent = t("vaultCopy"); }, 1200);
-            } catch { /* 剪贴板被拒：静默（复制失败不值得打断阅读） */ }
-          };
-          bar.appendChild(langEl);
-          bar.appendChild(copy);
-          pre.replaceWith(box);
-          box.appendChild(bar);
-          box.appendChild(pre);
-        }
-        // callout：`> [!kind] 标题` 引用块 → details 卡片（fold 默认收起，其余展开）。
-        // breaks:true 下标记行与内容可能同段（<br> 分隔）——按 <br> 切首段。
-        // 摘要支持富文本（内容+内容，wangshu 同款）：[!fold] 不带标题时首段内容
-        // 即摘要；标记行/摘要行进 summary，其余留在正文，绝不丢内容
-        for (const bq of Array.from(host.querySelectorAll("blockquote"))) {
-          const firstP = bq.querySelector("p");
-          if (!firstP) continue;
-          let segs = firstP.innerHTML.split(/<br\s*\/?>/i);
-          const marker = /^\s*\[!(\w+)\]\s*((?:[\s\S](?!<br))*)/.exec(segs[0] ?? "");
-          if (!marker) continue;
-          const kind = (marker[1] ?? "").toLowerCase();
-          const titleHtml = marker[2] ?? "";
-          const hasTitle = titleHtml.replace(/<[^>]*>/g, "").trim() !== "";
-          const details = document.createElement("details");
-          details.className = `dshk-vault-callout is-${kind}`;
-          if (kind !== "fold") details.open = true;
-          const summary = document.createElement("summary");
-          let bodySegs = segs.slice(1);
-          if (hasTitle) summary.innerHTML = titleHtml;
-          else if (kind === "fold" && (segs[1] ?? "").replace(/<[^>]*>/g, "").trim() !== "") {
-            // 无标题折叠块：首段内容整体作摘要（可含加粗/链接/行内码），不再回退
-            // 成 "fold" 字样
-            summary.innerHTML = segs[1] ?? "";
-            bodySegs = segs.slice(2);
-          } else summary.textContent = kind;
-          details.appendChild(summary);
-          const restHtml = bodySegs
-            .filter((s) => s.replace(/<[^>]*>/g, "").trim() !== "")
-            .join("<br>");
-          firstP.remove();
-          if (restHtml !== "") {
-            const bodyP = document.createElement("p");
-            bodyP.innerHTML = restHtml;
-            details.appendChild(bodyP);
-          }
-          while (bq.firstChild) details.appendChild(bq.firstChild);
-          bq.replaceWith(details);
-        }
-        // 图片：attachments/ 前缀从 vault 根解析，其余按当前页目录；都走 /raw
-        const pageDir = current ? current.split(/[\\/]/).slice(0, -1).join("/") : "";
-        for (const img of host.querySelectorAll("img")) {
-          const src = img.getAttribute("src") ?? "";
-          if (src === "" || /^(https?:|data:)/i.test(src)) continue;
-          const abs = /^attachments\//i.test(src) ? `${root}/${src}` : `${pageDir}/${src}`;
-          img.src = `/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
-        }
-        for (const a of host.querySelectorAll("a")) {
-          const href = a.getAttribute("href") ?? "";
-          if (href.startsWith("#vault:")) {
-            const rawText = decodeURIComponent(href.slice(7));
-            const hash = rawText.indexOf("#");
-            const target = (hash >= 0 ? rawText.slice(0, hash) : rawText).trim();
-            const anchor = hash >= 0 ? rawText.slice(hash + 1) : "";
-            const resolved = target === "" ? null : indexNow ? resolveVaultLink(indexNow.pages, target) : null;
-            a.classList.add("dshk-vault-wl");
-            a.onclick = (e) => {
-              e.preventDefault();
-              if (target !== "" && !resolved) {
-                void createInSpace(target);
-                return;
-              }
-              if (target === "") {
-                if (anchor !== "") scrollAnchor(anchor);
-                return;
-              }
-              openPath(resolved.path, anchor);
-            };
-            if (resolved) a.title = resolved.rel;
-            else {
-              a.classList.add("dshk-vault-wl-broken");
-              a.title = `${t("vaultBroken")}：${target}`;
-            }
-          } else if (/^https?:/i.test(href)) {
-            a.target = "_blank";
-            a.rel = "noreferrer";
-          } else if (href !== "" && !href.startsWith("#")) {
-            a.onclick = (e) => {
-              e.preventDefault();
-              // 相对链接按当前页目录解析（vault 内 md 跳页，外部路径放行系统打开）
-              const dir = current.split(/[\\/]/).slice(0, -1).join("\\");
-              const joined = `${dir}\\${href.split(/[?#]/, 1)[0]}`;
-              if (/\.md$/i.test(joined)) openPath(joined);
-              else window.open(`http://${location.host}/dsh-kit/read?path=${encodeURIComponent(joined)}`);
-            };
-          }
-        }
-        if (pendingAnchor !== "") {
-          scrollAnchor(pendingAnchor);
-          setPendingAnchor("");
-        }
-        return undefined;
-      }, [html, index, current, openPath, pendingAnchor, root, createInSpace]);
-
-      const enterEdit = () => {
-        setDraft(page?.content ?? "");
-        setEditing(true);
-        void ensureCmLib().then(() => setCmReady(true));
-        void ensureMdLibs(); // 编辑态 Live Preview 的公式 widget 依赖 katex
-      };
-      // ── 编辑增强（wangshu 三件套分工，互不重复）：编辑条=文档级命令（保存/
-      // 撤销/重做），泡泡菜单=选区行内格式，斜杠菜单=块插入；图片粘贴 +
-      // 折叠块/块级链接 + Live Preview；富文本往返式 WYSIWYG 不做）──
+      // ── 编辑增强（wangshu 三件套分工，互不重复）：页条=文档级命令（保存/
+      // 删除/撤销/重做），泡泡菜单=选区行内格式，斜杠菜单=块插入；图片粘贴 +
+      // 折叠块/块级链接 + Live Preview。单态所见即所得：无编辑/只读二分 ──
       const cmView = () => cmRef.current?.view ?? null;
+      /** CM 版标题锚滚动：按行匹配标题文本（slug 归一），光标落行首滚动可见 */
+      const scrollAnchorCm = (anchorRaw) => {
+        const v = cmView();
+        if (!v) return false;
+        const want = vaultHeadingSlug(anchorRaw).toLowerCase();
+        if (want === "") return false;
+        const doc = v.state.doc;
+        for (let n = 1; n <= doc.lines; n++) {
+          const line = doc.line(n);
+          const m = /^#{1,6}\s+(.*)$/.exec(line.text);
+          if (m && vaultHeadingSlug(m[1] ?? "").toLowerCase() === want) {
+            v.dispatch({ selection: { anchor: line.from }, scrollIntoView: true });
+            return true;
+          }
+        }
+        return false;
+      };
       /** 选中文字两侧包一层语法（加粗/斜体/行内代码/链接） */
       const cmWrap = (before, after) => {
         const v = cmView();
@@ -7971,17 +7804,23 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
       indexRef.current = index;
       react.useEffect(() => {
         const host = editHostRef.current;
-        if (!cmReady || !editing || !host) return undefined;
+        // 单态守卫：页面归属当前路径且内容已就绪才挂 CM；gone/binary 不挂
+        if (!cmReady || !host || !page || page.path !== current || page.loading || page.gone || page.binary) {
+          return undefined;
+        }
         const pageDir = () => current.split(/[\\/]/).slice(0, -1).join("\\");
         const h = window.CM6.create(host, {
-          doc: draft,
+          doc: page.content ?? "",
           readOnly: false,
           language: "md",
+          chrome: false, // 单态所见即所得：去行号/折叠列等活动行 chrome，版式即阅读态
           onSelection: () => bubbleSync(),
           live: {
+            // 语言条文案（vendor 侧不碰 i18n）
+            codebarLabels: { copy: t("vaultCopy"), copied: t("vaultCopied") },
             onWikiLink: (target, anchor) => {
               if (target === "") {
-                if (anchor !== "") scrollAnchor(anchor);
+                if (anchor !== "") scrollAnchorCm(anchor);
                 return;
               }
               const pages = indexRef.current?.pages ?? [];
@@ -8134,7 +7973,18 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
           h.destroy();
           cmRef.current = null;
         };
-      }, [cmReady, editing, current]);
+        // eslint 对 page 的读取是刻意的：doc 取挂载瞬间的盘上内容，draft 走
+        // onDocChanged 回写；保存不重挂（docTick 不动），冲突回读才 bump
+      }, [cmReady, current, docTick]);
+      // 挂载完成后 draft 与文档对齐（保存/脏判定基准）
+      react.useEffect(() => {
+        if (cmRef.current) setDraft(cmRef.current.getDoc());
+      }, [cmReady, current, docTick]);
+      // 跳页锚点：CM 就绪后落到目标标题（[[页#锚]] 链路）
+      react.useEffect(() => {
+        if (pendingAnchor === "") return;
+        if (scrollAnchorCm(pendingAnchor)) setPendingAnchor("");
+      }, [pendingAnchor, cmReady, current, docTick]);
       const saveEdit = async () => {
         if (current === null) return;
         try {
@@ -8144,14 +7994,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
             body: JSON.stringify({ path: current, content: draft, baseMtime: page?.mtimeMs ?? 0 }),
           });
           if (body.modified === true) {
+            // CAS 冲突：盘上已有别人/别处的更新——回读对齐（docTick 重挂载），
+            // 本地草稿丢弃，绝不静默覆盖
             setToast(t("vaultConflict"));
-            setEditing(false);
+            await loadCurrent();
             await loadIndex();
             return;
           }
-          setEditing(false);
           setToast(t("vaultSaved"));
-          setPage((p) => (p ? { ...p, content: draft, mtimeMs: body.mtimeMs ?? p.mtimeMs } : p));
+          setPage((p) => (p && p.path === current ? { ...p, content: draft, mtimeMs: body.mtimeMs ?? p.mtimeMs } : p));
           await loadIndex();
         } catch (error) {
           setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
@@ -8333,6 +8184,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
       };
 
       const backlinksOf = backlinks;
+      // 脏判定：草稿与盘上内容不一致（保存钮 title 与 ● 提示的依据）
+      const dirty =
+        page != null && page.path === current && page.loading !== true && page.gone !== true && page.binary !== true
+        && draft !== (page.content ?? "");
       return jsxRuntime.jsxs("div", { className: "dshk-vault", children: [
         jsxRuntime.jsxs("div", { className: "dshk-vault-toolbar", children: [
           jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistBack"), title: t("vaultHistBack"), disabled: hist.idx <= 0, onClick: histBack, children: "←" }),
@@ -8391,23 +8246,26 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
             createDir === treeRoot ? createRow(treeRoot, 0, `${treeRoot}#create`) : null,
             renderDir(treeRoot, 0),
           ] }),
-          jsxRuntime.jsxs("div", { className: "dshk-vault-reader", ref: readerRef, children: [
+          jsxRuntime.jsxs("div", { className: "dshk-vault-reader", children: [
             current === null
               ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPickPage") })
-              : page?.loading === true || html === null
+              : !page || page.loading === true
                 ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("contentLoading") })
-                : page?.gone === true
+                : page.gone === true
                   ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPageGone") })
-                  : editing
-                    ? jsxRuntime.jsxs("div", { className: "dshk-vault-editwrap", onPaste: onEditPaste, children: [
+                  : page.binary === true
+                    ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultBinaryHint") })
+                    : jsxRuntime.jsxs("div", { className: "dshk-vault-editwrap", onPaste: onEditPaste, children: [
                         jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
-                          // wangshu 三件套分工：编辑条只管文档级命令（保存/撤销/重做），
-                          // 行内格式在泡泡菜单、块插入在斜杠菜单——不放格式按钮（避免重复）
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void saveEdit(), children: t("vaultSave") }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setEditing(false), children: t("vaultCancel") }),
+                          // 单态所见即所得（用户定稿）：无编辑/只读二分，页面即编辑器。
+                          // 页条=文档级命令（保存/删除/撤销/重做）+ 脏标记；行内格式
+                          // 在泡泡菜单、块插入在斜杠菜单
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", title: dirty ? t("vaultUnsaved") : t("vaultSaved"), onClick: () => void saveEdit(), children: t("vaultSave") }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void deleteCurrent(), children: t("vaultDelBtn") }),
                           jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbUndo"), onClick: () => cmRef.current?.undo(), children: "↶" }),
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbRedo"), onClick: () => cmRef.current?.redo(), children: "↷" }),
+                          dirty ? jsxRuntime.jsx("span", { className: "dshk-vault-dirtydot", title: t("vaultUnsaved"), children: "●" }) : null,
                         ] }),
                         jsxRuntime.jsx("div", { className: "dshk-vault-cmhost", ref: editHostRef }),
                         menu !== null
@@ -8526,22 +8384,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
                               "bubble",
                             )
                           : null,
-                      ] })
-                    : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-                        jsxRuntime.jsxs("div", { className: "dshk-vault-pagebar", children: [
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: enterEdit, children: t("vaultEdit") }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void deleteCurrent(), children: t("vaultDelBtn") }),
-                        ] }),
-                        jsxRuntime.jsx("div", { className: "dshk-md", dangerouslySetInnerHTML: { __html: html } }),
-                        backlinksOf.length > 0
-                          ? jsxRuntime.jsxs("div", { className: "dshk-vault-backlinks", children: [
-                              jsxRuntime.jsxs("span", { className: "dshk-sched-cardtitle", children: [t("vaultBacklinks"), " (", String(backlinksOf.length), ")"] }),
-                              backlinksOf.map((p) =>
-                                jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-blrow", onClick: () => openPath(p.path), children: p.title }, p.path),
-                              ),
-                            ] })
-                          : null,
                       ] }),
+            backlinksOf.length > 0
+              ? jsxRuntime.jsxs("div", { className: "dshk-vault-backlinks", children: [
+                  jsxRuntime.jsxs("span", { className: "dshk-sched-cardtitle", children: [t("vaultBacklinks"), " (", String(backlinksOf.length), ")"] }),
+                  backlinksOf.map((p) =>
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-blrow", onClick: () => openPath(p.path), children: p.title }, p.path),
+                  ),
+                ] })
+              : null,
           ] }),
         ] }),
         toast !== "" ? jsxRuntime.jsx("div", { className: "dshk-vault-toast", role: "status", children: toast }) : null,
@@ -8695,39 +8546,55 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
           jsxRuntime.jsxs("div", {
             className: "dshk-jobs-head",
             children: [
-              // 左组：标签条 + 紧随其后的「+」（用户定稿 2026-09-06：+ 显示在
-              // 标签旁边）。下拉菜单挂在 + 的定位包裹层上——.dshk-tabs 有
-              // overflow:hidden，菜单放里面会被裁掉
+              // 最左：最小化（用户定稿 2026-09-06）：常置坞的唯一"退出"动作放最左，
+              // 与标签互不打架；收起后右缘竖条恢复
+              jsxRuntime.jsx("button", {
+                type: "button",
+                className: "dshk-jobs-close",
+                "aria-label": t("dockMinimize"),
+                title: t("dockMinimize"),
+                onClick: () => {
+                  // 最小化 = 人为退出：浏览器标签若存在，agent 导航不再拽回
+                  autoOpenSuppressed = true;
+                  setMenuOpen(false);
+                  setKitUi({ dockCollapsed: true });
+                },
+                children: "»",
+              }),
+              // 左组：标签条 + 紧随其后的「+」（+ 显示在标签旁边）。两者仅有标签
+              // 时显示——0 标签的空态选择器已承担开新标签职责，头部不再重复
               jsxRuntime.jsxs("span", {
                 className: "dshk-jobs-headleft",
                 children: [
-                  jsxRuntime.jsx("span", {
-                    className: "dshk-tabs",
-                    children: tabDefs.map((d) =>
-                      jsxRuntime.jsxs("span", {
-                        className: `dshk-tab${d.id === tab ? " dshk-tab-on" : ""}`,
-                        onClick: () => switchTab(d.id),
-                        children: [
-                          jsxRuntime.jsx("span", { className: "dshk-tab-label", children: d.label }),
-                          d.badge > 0
-                            ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(d.badge) })
-                            : null,
-                          jsxRuntime.jsx("button", {
-                            type: "button",
-                            className: "dshk-tab-x",
-                            "aria-label": t("dockClose"),
-                            title: t("dockClose"),
-                            onClick: (e) => {
-                              e.stopPropagation();
-                              closeTab(d.id);
-                            },
-                            children: "✕",
-                          }),
-                        ],
-                      }, d.id),
-                    ),
-                  }),
-                  openable.length > 0
+                  tabDefs.length > 0
+                    ? jsxRuntime.jsx("span", {
+                        className: "dshk-tabs",
+                        children: tabDefs.map((d) =>
+                          jsxRuntime.jsxs("span", {
+                            className: `dshk-tab${d.id === tab ? " dshk-tab-on" : ""}`,
+                            onClick: () => switchTab(d.id),
+                            children: [
+                              jsxRuntime.jsx("span", { className: "dshk-tab-label", children: d.label }),
+                              d.badge > 0
+                                ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(d.badge) })
+                                : null,
+                              jsxRuntime.jsx("button", {
+                                type: "button",
+                                className: "dshk-tab-x",
+                                "aria-label": t("dockClose"),
+                                title: t("dockClose"),
+                                onClick: (e) => {
+                                  e.stopPropagation();
+                                  closeTab(d.id);
+                                },
+                                children: "✕",
+                              }),
+                            ],
+                          }, d.id),
+                        ),
+                      })
+                    : null,
+                  tabDefs.length > 0 && openable.length > 0
                     ? jsxRuntime.jsxs("span", { className: "dshk-dock-addwrap", children: [
                         jsxRuntime.jsx("button", {
                           type: "button",
@@ -8770,35 +8637,24 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-co-blue:
                     : null,
                 ],
               }),
-              // 右组：全部关闭 + 暂时收起（存在性保留，右缘竖条恢复）
+              // 右组：全部关闭（仅有标签时显示）= 人为清场，抑制浏览器自动弹回
               jsxRuntime.jsxs("span", {
                 className: "dshk-jobs-headside",
                 children: [
-                  jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-jobs-close",
-                    "aria-label": t("dockCloseAll"),
-                    title: t("dockCloseAll"),
-                    onClick: () => {
-                      // 全部关闭=人为清场：抑制浏览器自动弹回（+ 菜单重开浏览器解除）
-                      autoOpenSuppressed = true;
-                      setKitUi({ previews: [], activePreview: null, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, dockTab: null });
-                    },
-                    children: "✕",
-                  }),
-                  jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-jobs-close",
-                    "aria-label": t("dockMinimize"),
-                    title: t("dockMinimize"),
-                    onClick: () => {
-                      // 最小化 = 人为退出：浏览器标签若存在，agent 导航不再拽回
-                      autoOpenSuppressed = true;
-                      setMenuOpen(false);
-                      setKitUi({ dockCollapsed: true });
-                    },
-                    children: "»",
-                  }),
+                  tabDefs.length > 0
+                    ? jsxRuntime.jsx("button", {
+                        type: "button",
+                        className: "dshk-jobs-close",
+                        "aria-label": t("dockCloseAll"),
+                        title: t("dockCloseAll"),
+                        onClick: () => {
+                          autoOpenSuppressed = true;
+                          setMenuOpen(false);
+                          setKitUi({ previews: [], activePreview: null, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, dockTab: null });
+                        },
+                        children: "✕",
+                      })
+                    : null,
                 ],
               }),
               menuOpen

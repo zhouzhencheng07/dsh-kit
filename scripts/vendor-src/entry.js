@@ -1,8 +1,10 @@
 // CodeMirror 6 vendor 入口（由 scripts/build-vendor.mjs 拷进临时目录后 esbuild
 // 打包成 IIFE，暴露 window.CM6.create 工厂）。
-import { EditorView, keymap, drawSelection } from "@codemirror/view";
+import { EditorView, keymap, drawSelection, dropCursor, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, lineNumbers, rectangularSelection, crosshairCursor } from "@codemirror/view";
 import { EditorState, Compartment } from "@codemirror/state";
-import { undo, redo } from "@codemirror/commands";
+import { undo, redo, defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { foldGutter, foldKeymap, indentOnInput, bracketMatching } from "@codemirror/language";
+import { searchKeymap } from "@codemirror/search";
 import { basicSetup } from "codemirror";
 import { HighlightStyle, syntaxHighlighting, StreamLanguage, LanguageSupport, LanguageDescription } from "@codemirror/language";
 import { tags as tg } from "@lezer/highlight";
@@ -114,7 +116,22 @@ function create(container, opts) {
     state: EditorState.create({
       doc: String(o.doc ?? ""),
       extensions: [
-        basicSetup,
+        // chrome:false（知识库单态所见即所得）：去行号/折叠列/活动行高亮/自动补全
+        // 等编辑器专属 chrome——版式与阅读态一致；代码文件预览编辑仍用完整 basicSetup
+        ...(o.chrome === false
+          ? [
+              highlightSpecialChars(),
+              history(),
+              drawSelection(),
+              dropCursor(),
+              EditorState.allowMultipleSelections.of(true),
+              indentOnInput(),
+              bracketMatching(),
+              rectangularSelection(),
+              crosshairCursor(),
+              keymap.of([...defaultKeymap, ...historyKeymap, ...foldKeymap, ...searchKeymap]),
+            ]
+          : [basicSetup]),
         syntaxHighlighting(kitHighlight),
         langComp.of(langs.length > 0 ? langs : [EditorView.lineWrapping]),
         roComp.of(o.readOnly ? EditorView.editable.of(false) : []),

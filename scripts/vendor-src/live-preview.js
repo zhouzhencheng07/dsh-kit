@@ -128,6 +128,116 @@ class MathWidget extends WidgetType {
   }
 }
 
+// 围栏代码块头（阅读态代码盒语言条同款）：语言名 + 复制钮，替换 ``` 开栏行。
+// 标签文案由宿主经 handlers.codebarLabels 传入（vendor 侧不碰 i18n）
+class CodebarWidget extends WidgetType {
+  constructor(lang, code, labels) {
+    super();
+    this.lang = lang;
+    this.code = code;
+    this.labels = labels ?? {};
+  }
+  eq(other) { return other.lang === this.lang && other.code === this.code; }
+  toDOM() {
+    const bar = document.createElement("div");
+    bar.className = "dshk-lp-codebar";
+    const lang = document.createElement("span");
+    lang.className = "dshk-lp-codelang";
+    lang.textContent = this.lang;
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "dshk-lp-codecopy";
+    copy.textContent = this.labels.copy ?? "copy";
+    copy.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); });
+    copy.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      try { void navigator.clipboard?.writeText(this.code); } catch { /* 剪贴板不可用静默 */ }
+      copy.textContent = this.labels.copied ?? "copied";
+      setTimeout(() => { copy.textContent = this.labels.copy ?? "copy"; }, 1200);
+    });
+    bar.appendChild(lang);
+    bar.appendChild(copy);
+    return bar;
+  }
+}
+
+// 表格 widget（阅读态真表格同款渲染）：光标不在表内时整块替换成 table。
+// 单元格点击 → 光标落到该单元格源码文本起点（表格现形管道行可编辑），与
+// 全引擎「光标现形」语义一致。单元格文本走 textContent（不注 HTML）。
+// head = 表头 cells 数组、body = cells 数组的数组（parsePipeRow 直出数组）
+class TableWidget extends WidgetType {
+  constructor(srcText, aligns, head, body) {
+    super();
+    this.srcText = srcText;
+    this.aligns = aligns;
+    this.head = head;
+    this.body = body;
+  }
+  eq(other) { return other.srcText === this.srcText; }
+  mkCell(tag, cell, i, view) {
+    const el = document.createElement(tag);
+    const align = this.aligns[i];
+    if (align === "center") el.style.textAlign = "center";
+    else if (align === "right") el.style.textAlign = "right";
+    el.textContent = cell.text;
+    el.addEventListener("mousedown", (e) => e.stopPropagation());
+    el.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      // 与 TaskWidget 同款：toDOM(view) 拿到的实例直接派发，光标落该单元格
+      // 源码文本起点 → 表格现形管道行可编辑
+      view.dispatch({ selection: { anchor: cell.from }, scrollIntoView: true });
+    });
+    return el;
+  }
+  toDOM(view) {
+    const wrapEl = document.createElement("div");
+    wrapEl.className = "dshk-lp-tablewrap";
+    const table = document.createElement("table");
+    const thead = document.createElement("thead");
+    const trh = document.createElement("tr");
+    (this.head ?? []).forEach((c, i) => trh.appendChild(this.mkCell("th", c, i, view)));
+    thead.appendChild(trh);
+    const tbody = document.createElement("tbody");
+    for (const cells of this.body ?? []) {
+      const tr = document.createElement("tr");
+      (cells ?? []).forEach((c, i) => tr.appendChild(this.mkCell("td", c, i, view)));
+      tbody.appendChild(tr);
+    }
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    wrapEl.appendChild(table);
+    return wrapEl;
+  }
+  ignoreEvents() { return false; }
+}
+
+/** 拆一行管道行为 cells：{text(去空白), from(doc 偏移)}；\| 转义不分割 */
+function parsePipeRow(doc, line) {
+  const raw = line.text;
+  const cells = [];
+  let seg = null;
+  const flush = (end) => {
+    if (seg === null) return;
+    let a = seg;
+    let b = end;
+    while (a < b && (raw[a] === " " || raw[a] === "\t")) a++;
+    while (b > a && (raw[b - 1] === " " || raw[b - 1] === "\t")) b--;
+    cells.push({ text: raw.slice(a, b), from: line.from + a });
+    seg = null;
+  };
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (ch === "\\" && raw[i + 1] === "|") { i++; continue; }
+    if (ch === "|") {
+      flush(i);
+      seg = i + 1;
+    }
+  }
+  // 尾管道后没有内容就不再出空单元格（| a | b | 的闭管道不是一列）
+  if (seg !== null && seg < raw.length) flush(raw.length);
+  return cells;
+}
+
 /** 光标语义：任选区与 [from,to] 相交即「光标在内」→ 该构造现形源码 */
 const selHit = (sel, from, to) => sel.ranges.some((r) => r.from <= to && r.to >= from);
 
@@ -158,14 +268,19 @@ function buildDeco(state, handlers) {
     return to;
   };
 
-  // frontmatter：文档以 --- 开头时整块淡显。lezer（本版本）不解析 frontmatter，
-  // 会把 tags 段当成段落+setext 下划线——树遍历时整个区间跳过，只认手动扫描
+  // frontmatter：文档以 --- 开头时整块处理。lezer（本版本）不解析 frontmatter，
+  // 会把 tags 段当成段落+setext 下划线——树遍历时整个区间跳过，只认手动扫描。
+  // 光标不在块内时整块隐藏（阅读态直接裁掉 frontmatter，两边一致）；进块现形淡显
   let fmLimit = -1;
   if (doc.lines > 1 && /^---\s*$/.test(doc.line(1).text)) {
     for (let n = 2; n <= Math.min(doc.lines, 60); n++) {
       const line = doc.line(n);
       if (/^(---|\.\.\.)\s*$/.test(line.text)) {
-        for (let k = 1; k <= n; k++) addLine(doc.line(k).from, "dshk-lp-frontmatter");
+        if (!selHit(sel, doc.line(1).from, line.to)) {
+          for (let k = 1; k <= n; k++) hideLine(doc.line(k).from);
+        } else {
+          for (let k = 1; k <= n; k++) addLine(doc.line(k).from, "dshk-lp-frontmatter");
+        }
         fmLimit = line.to + 1;
         break;
       }
@@ -231,14 +346,30 @@ function buildDeco(state, handlers) {
         const last = doc.lineAt(node.to).number;
         for (let n = first; n <= last; n++) addLine(doc.line(n).from, "dshk-lp-codeblock");
         suppressed.push([node.from, node.to]);
-        stack.push({ name, hideMarks: name === "FencedCode" && !selHit(sel, node.from, node.to) });
+        const hide = name === "FencedCode" && !selHit(sel, node.from, node.to);
+        if (hide) {
+          // 开栏行换成语言条+复制钮（阅读态代码盒同款）；闭栏行由 CodeMark 分支藏
+          const firstLine = doc.lineAt(node.from);
+          const lastLine = doc.lineAt(node.to);
+          const openm = /^\s*(?:`{3,}|~{3,})\s*([\w+#.-]*)/.exec(firstLine.text);
+          const closed = last > first && /^\s*(`{3,}|~{3,})\s*$/.test(lastLine.text);
+          const innerFrom = firstLine.to + 1;
+          const innerTo = closed ? lastLine.from : node.to;
+          const code = innerTo > innerFrom ? doc.sliceString(innerFrom, innerTo) : "";
+          repl.push({
+            from: firstLine.from,
+            to: Math.min(firstLine.to + 1, len),
+            deco: replace({ widget: new CodebarWidget(openm ? openm[1] : "", code, handlers.codebarLabels) }),
+          });
+        }
+        stack.push({ name, hideMarks: hide, firstFrom: node.from });
         return;
       }
       if (name === "CodeMark") {
         if (parent?.name === "InlineCode" && parent.hideMarks) {
           repl.push({ from: node.from, to: node.to, deco: replace({}) });
-        } else if (parent?.name === "FencedCode" && parent.hideMarks) {
-          hideLine(node.from); // 围栏整行连换行一起消（同行的 CodeInfo 一并消失）
+        } else if (parent?.name === "FencedCode" && parent.hideMarks && node.from !== parent.firstFrom) {
+          hideLine(node.from); // 闭栏整行连换行一起消（开栏行已换成语言条）
         }
         stack.push({ name });
         return;
@@ -252,8 +383,12 @@ function buildDeco(state, handlers) {
         const colorKey = typeName ? CALLOUT_TYPES[typeName] ?? "blue" : null;
         const first = doc.lineAt(node.from).number;
         const last = doc.lineAt(node.to).number;
-        for (let n = first; n <= last; n++) addLine(doc.line(n).from, colorKey ? "dshk-lp-callout" : "dshk-lp-quote");
-        if (colorKey) addLine(firstLine.from, `dshk-lp-co-${colorKey}`);
+        // 阅读态 callout 是整卡底色——每行都铺类型色（首行带 badge，其余同底色），
+        // 纯引用维持左条灰样式
+        for (let n = first; n <= last; n++) {
+          addLine(doc.line(n).from, colorKey ? "dshk-lp-callout" : "dshk-lp-quote");
+          if (colorKey) addLine(doc.line(n).from, `dshk-lp-co-${colorKey}`);
+        }
         if (cm && !selHit(sel, firstLine.from, firstLine.to)) {
           const markStart = firstLine.from + cm.index + cm[0].indexOf("[!");
           const markEnd = markStart + cm[1].length + 2;
@@ -405,6 +540,90 @@ function buildDeco(state, handlers) {
     repl.push({ from: span.from, to: span.to, deco: replace({ widget: new MathWidget(span.tex, span.display) }) });
   }
 
+  // ── 行内 HTML 扫描（u/sup/sub/mark/span：泡泡菜单插入的富文本格式，阅读态
+  // marked+DOMPurify 照常渲染——编辑态同款渲染才是所见即所得）。标签隐掉、内容
+  // 按 style/class 上样式；光标进区现形源码。同名标签嵌套用栈配对，跨名嵌套
+  // 各自独立扫描后内容区间自然重叠合成 ──
+  {
+    const text = doc.sliceString(0, len);
+    const tokenRe = /<(\/)?(u|sup|sub|mark|span)((?:\s+[^<>]*?)?)>/gi;
+    const tagStack = []; // {tag, from, innerFrom, style}
+    const htmlRegions = [];
+    let hm;
+    while ((hm = tokenRe.exec(text))) {
+      const from = hm.index;
+      const to = from + hm[0].length;
+      if (inSuppressed(from)) continue;
+      const tag = hm[2].toLowerCase();
+      if (hm[1]) {
+        let i = tagStack.length - 1;
+        while (i >= 0 && tagStack[i].tag !== tag) i--;
+        if (i >= 0) {
+          const open = tagStack[i];
+          htmlRegions.push({ tag, from: open.from, to, innerFrom: open.innerFrom, innerTo: from, style: open.style });
+          tagStack.length = i;
+        }
+      } else {
+        const styleAttr = /\bstyle\s*=\s*"([^"]*)"/i.exec(hm[3] ?? "") ?? /\bstyle\s*=\s*'([^']*)'/i.exec(hm[3] ?? "");
+        tagStack.push({ tag, from, innerFrom: to, style: styleAttr ? styleAttr[1] : null });
+      }
+    }
+    for (const rg of htmlRegions) {
+      const cls = rg.tag === "u" ? "dshk-lp-u"
+        : rg.tag === "sup" ? "dshk-lp-sup"
+        : rg.tag === "sub" ? "dshk-lp-sub"
+        : rg.tag === "mark" ? "dshk-lp-mark"
+        : "dshk-lp-span";
+      const attrs = rg.style ? { attributes: { style: rg.style } } : undefined;
+      if (selHit(sel, rg.from, rg.to)) {
+        // 现形：标签可见（淡显），内容样式保持，方便对照改
+        marks.push({ from: rg.from, to: rg.to, deco: mark("dshk-lp-faint") });
+        marks.push({ from: rg.innerFrom, to: rg.innerTo, deco: mark(cls, attrs) });
+      } else {
+        marks.push({ from: rg.innerFrom, to: rg.innerTo, deco: mark(cls, attrs) });
+        repl.push({ from: rg.from, to: rg.innerFrom, deco: replace({}) });
+        repl.push({ from: rg.innerTo, to: rg.to, deco: replace({}) });
+      }
+    }
+  }
+
+  // ── 表格扫描：顶层级管道表（表头+分隔行+行体）整块换成真表格 widget（阅读态
+  // 同款），点击单元格光标落入对应源码位置（表格现形管道行可编辑）；光标在表
+  // 内时显示源码。引号前缀行（callout 内表格）不匹配，保持源码 ──
+  {
+    let n = 1;
+    while (n <= doc.lines) {
+      const l1 = doc.line(n);
+      if (inSuppressed(l1.from) || !/^\s*\|.*\|\s*$/.test(l1.text)) { n++; continue; }
+      if (n + 1 > doc.lines) break;
+      const l2 = doc.line(n + 1);
+      if (
+        inSuppressed(l2.from)
+        || !l2.text.includes("|")
+        || !/^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(l2.text)
+      ) { n++; continue; }
+      let last = n + 1;
+      while (last < doc.lines && !inSuppressed(doc.line(last + 1).from) && /^\s*\|/.test(doc.line(last + 1).text)) last++;
+      const from = l1.from;
+      const to = Math.min(doc.line(last).to + 1, len);
+      if (!selHit(sel, from, to)) {
+        const rows = [];
+        for (let k = n; k <= last; k++) rows.push(parsePipeRow(doc, doc.line(k)));
+        if (rows.length >= 2 && rows[1].length > 0) {
+          const aligns = rows[1].map((c) => (/^:-+:$/.test(c.text) ? "center" : /-+:$/.test(c.text) ? "right" : "left"));
+          const body = rows.filter((_, i) => i !== 1);
+          repl.push({
+            from,
+            to,
+            deco: replace({ widget: new TableWidget(doc.sliceString(from, to), aligns, body[0], body.slice(1)), block: true }),
+          });
+          suppressed.push([from, to]);
+        }
+      }
+      n = last + 1;
+    }
+  }
+
   // ── wikilink 补充扫描（语法树不认识 [[..]]；代码/链接区已入禁区）──
   const wlRe = /\[\[([^[\]|\n]+)(?:\|([^[\]\n]*))?\]\]/g;
   for (let pos = 0; pos < len; ) {
@@ -545,6 +764,52 @@ const lpTheme = EditorView.theme({
   ".dshk-lp-math": { color: "inherit" },
   ".dshk-lp-mathblock": { display: "block", width: "100%", textAlign: "center", margin: "2px 0", color: "inherit" },
   ".dshk-lp-mathraw": { fontFamily: mono, fontSize: "0.92em", color: "var(--dshk-tok-meta, #6639ba)" },
+  // 行内 HTML 富文本（阅读态同款语义）
+  ".dshk-lp-u": { textDecoration: "underline" },
+  ".dshk-lp-sup": { verticalAlign: "super", fontSize: "0.8em" },
+  ".dshk-lp-sub": { verticalAlign: "sub", fontSize: "0.8em" },
+  ".dshk-lp-mark": { background: "#fff3bf", borderRadius: "2px", padding: "0 1px" },
+  // 表格（镜像阅读态 .dshk-md table）
+  ".dshk-lp-tablewrap": { margin: "2px 0" },
+  ".dshk-lp-tablewrap table": {
+    borderCollapse: "collapse",
+    fontSize: "12px",
+    margin: "0.6em 0",
+    cursor: "pointer",
+  },
+  ".dshk-lp-tablewrap th, .dshk-lp-tablewrap td": {
+    border: "1px solid var(--dshk-lp-tborder, #d0d7de)",
+    padding: "4px 10px",
+    textAlign: "left",
+  },
+  ".dshk-lp-tablewrap th": { fontWeight: "600", background: "rgba(135,131,120,0.08)" },
+  // 代码块语言条（镜像阅读态 .dshk-codebar）
+  ".dshk-lp-codebar": {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    background: "rgba(135,131,120,0.12)",
+    fontSize: "11px",
+    padding: "2px 10px",
+    borderRadius: "6px 6px 0 0",
+  },
+  ".dshk-lp-codelang": {
+    textTransform: "uppercase",
+    letterSpacing: "0.4px",
+    opacity: "0.7",
+    fontFamily: mono,
+  },
+  ".dshk-lp-codecopy": {
+    border: "0",
+    background: "none",
+    cursor: "pointer",
+    font: "inherit",
+    fontSize: "11px",
+    padding: "2px 6px",
+    borderRadius: "5px",
+    color: "inherit",
+    opacity: "0.75",
+  },
   ".dshk-lp-bullet": { opacity: "0.5" },
   ".dshk-lp-task": { verticalAlign: "middle", margin: "0 3px 0 0", accentColor: "var(--dshk-tok-link, #0969da)" },
   ".dshk-lp-hrline": { display: "inline-block", width: "100%", borderTop: "1px solid var(--dshk-lp-bar, #d0d7de)" },
