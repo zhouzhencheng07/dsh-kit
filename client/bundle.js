@@ -1792,6 +1792,8 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-sched-navbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-sched-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
 .dshk-sched-gridwrap{flex:1 1 auto;min-width:0;overflow:auto}
+/* 顶部留白＞小时标签的 6px 上提量：00:00 是首行，不加的话上提文字被滚动口裁掉半截 */
+.dshk-sched-gridinner{padding-top:8px}
 /* 每日列宽跟随坞宽（minmax(0,1fr) 均分），不设网格 min-width——设了的话窄坞
 （下限 480，(480-52)/7≈61px/天）会横向滚动只露出四-五天；事件/全天chip均有
 ellipsis，窄列只截字不破版 */
@@ -6352,7 +6354,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 计时全局单实例（timer/start 遇 running 先自动 stop），芯片挂 conversation.composer.dock。
 
     const SCHED_COLORS = ["#228be6", "#40c057", "#fd7e14", "#e64980", "#7048e8", "#f59f00"];
-    const SCHED_DAY_START = 6 * 60; // 网格起点 06:00
+    const SCHED_DAY_START = 0; // 网格起点 00:00（全天制，起止时刻零裁剪）
     const SCHED_DAY_END = 24 * 60;
     const SCHED_HOUR_PX = 42;
 
@@ -6413,7 +6415,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return result;
     };
 
-    function ScheduleView() {
+    function ScheduleView({ active }) {
       const [weekStart, setWeekStart] = react.useState(() => schedMondayOf(schedToday()));
       const [data, setData] = react.useState(() => ({ events: [], occurrences: [], runningTimer: null }));
       // 统计口径固定周（用户定稿 2026-09-06：日/月视图先不做）——agent 侧
@@ -6424,7 +6426,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [taskDue, setTaskDue] = react.useState(() => schedToday());
       const [nowTick, setNowTick] = react.useState(() => Date.now());
       const gridRef = react.useRef(null);
-      const scrolledOnce = react.useRef(false);
 
       const weekDates = react.useMemo(() => {
         const days = [];
@@ -6474,14 +6475,23 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         };
       }, [fetchData]);
 
-      // 挂载后把视口滚到当前时刻上方的 1/3 处（wangshu 同款），只滚一次
+      // 日程视图每次变为可见（挂载即激活 / 从别的标签切回）都把视口滚到当前
+      // 时刻上方 1/3 处。旧版"只滚一次"有坑：挂载时若视图还 display:none
+      // （日程开着但激活位在别的标签），唯一一次机会被浪费，切回永远停在顶部。
+      // rAF 再兜一帧：可见性翻转首帧 clientHeight 偶发未就绪，按真实视口重算
       react.useLayoutEffect(() => {
-        if (scrolledOnce.current || !gridRef.current) return;
-        const now = new Date();
-        const mins = now.getHours() * 60 + now.getMinutes();
-        gridRef.current.scrollTop = Math.max(0, ((mins - SCHED_DAY_START) / 60) * SCHED_HOUR_PX - gridRef.current.clientHeight / 3);
-        scrolledOnce.current = true;
-      }, []);
+        if (!active) return undefined;
+        const scrollToNow = () => {
+          const el = gridRef.current;
+          if (!el || el.clientHeight === 0) return;
+          const now = new Date();
+          const mins = now.getHours() * 60 + now.getMinutes();
+          el.scrollTop = Math.max(0, ((mins - SCHED_DAY_START) / 60) * SCHED_HOUR_PX - el.clientHeight / 3);
+        };
+        scrollToNow();
+        const raf = requestAnimationFrame(scrollToNow);
+        return () => cancelAnimationFrame(raf);
+      }, [active]);
 
       const mutate = react.useCallback(
         async (path, body) => {
@@ -8937,7 +8947,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           jsxRuntime.jsx("div", {
             className: "dshk-pane-view",
             style: { display: tab === "schedule" ? "flex" : "none" },
-            children: ui.schedOpen ? jsxRuntime.jsx(ScheduleView, {}) : null,
+            children: ui.schedOpen ? jsxRuntime.jsx(ScheduleView, { active: tab === "schedule" }) : null,
           }),
           jsxRuntime.jsx("div", {
             className: "dshk-pane-view",
