@@ -1783,7 +1783,7 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-vault-callout.is-note{border-left-color:#8250df}
 .dshk-vault-callout.is-danger{border-left-color:var(--dsw-alias-danger,#cd3131)}
 /* 日程模块：中心区第三 tab——周时间网格 + 待办/统计侧栏；计时芯片挂输入区 dock */
-.dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
+.dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px}
 .dshk-sched-head{flex:none;display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dshk-sched-title{font-weight:600;font-size:15px}
 .dshk-sched-weeknav{display:flex;align-items:center;gap:6px}
@@ -1791,23 +1791,24 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-sched-navbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
 .dshk-sched-navbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-sched-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
-.dshk-sched-gridwrap{flex:1 1 auto;min-width:0;overflow:auto}
-/* 顶部留白＞小时标签的 6px 上提量：00:00 是首行，不加的话上提文字被滚动口裁掉半截 */
+/* y 轴 mandatory 吸附到整点行：静止位置恒为「某小时标签贴在表头带下方」，
+标签既不会被 sticky 角格盖掉半截，也不会漂进表头区（2026-09-06 两轮反馈的根治）；
+scroll-padding 与 --dshk-sched-band 绑定，改带高只需改一处 */
+.dshk-sched-gridwrap{flex:1 1 auto;min-width:0;overflow:auto;scroll-snap-type:y mandatory;scroll-padding-top:calc(var(--dshk-sched-band) + 4px)}
+/* 顶部 8px 是 00:00 行与表头带的呼吸空间（s=0 时) */
 .dshk-sched-gridinner{padding-top:8px}
 /* 每日列宽跟随坞宽（minmax(0,1fr) 均分），不设网格 min-width——设了的话窄坞
 （下限 480，(480-52)/7≈61px/天）会横向滚动只露出四-五天；事件/全天chip均有
 ellipsis，窄列只截字不破版 */
 .dshk-sched-grid{display:grid;grid-template-columns:52px repeat(7,minmax(0,1fr))}
-.dshk-sched-corner{position:sticky;top:0;z-index:3;background:var(--dsw-alias-bg-base)}
-.dshk-sched-dayhead{position:sticky;top:0;z-index:3;text-align:center;padding:6px 0 4px;background:var(--dsw-alias-bg-base);border-bottom:1px solid var(--dsw-alias-border-l2)}
+.dshk-sched-corner{position:sticky;top:0;z-index:3;height:var(--dshk-sched-band);box-sizing:border-box;background:var(--dsw-alias-bg-base)}
+.dshk-sched-dayhead{position:sticky;top:0;z-index:3;box-sizing:border-box;height:var(--dshk-sched-band);text-align:center;padding:6px 0 4px;background:var(--dsw-alias-bg-base);border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dshk-sched-wd{display:block;font-size:11px;color:var(--dshk-sched-wdcolor,var(--dsw-alias-label-tertiary))}
 .dshk-sched-dnum{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;border-radius:999px;font-size:12px;margin-top:2px}
 .dshk-sched-dayhead.is-today .dshk-sched-dnum{background:var(--dsw-alias-brand-primary);color:#fff}
 .dshk-sched-allday{grid-row:2;border-left:1px solid var(--dsw-alias-border-l2);border-bottom:1px solid var(--dsw-alias-border-l2);padding:2px 4px;font-size:11px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-fill-l2);border-radius:4px;margin:2px 2px;min-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dshk-sched-timeline{border-right:1px solid var(--dsw-alias-border-l2)}
-.dshk-sched-hourlabel{position:relative;z-index:4;height:42px;padding-right:6px;font-size:10px;color:var(--dsw-alias-label-tertiary);text-align:right;transform:translateY(-6px)}
-/* 标签压在 sticky 空白角格（z3 不透明底）之上：否则非整点对齐的滚动位置会让
-首行标签上半截滑进角格底下被盖没；角格无内容，列头（有日期文字）仍照常遮罩日列 */
+.dshk-sched-hourlabel{height:42px;padding-right:6px;font-size:10px;color:var(--dsw-alias-label-tertiary);text-align:right;scroll-snap-align:start}
 .dshk-sched-daycol{position:relative;border-left:1px solid var(--dsw-alias-border-l2);min-width:0}
 .dshk-sched-cell{box-sizing:border-box;border-bottom:1px solid color-mix(in srgb,var(--dsw-alias-border-l2) 55%,transparent);cursor:pointer}
 .dshk-sched-cell:hover{background:var(--dsw-alias-interactive-bg-hover)}
