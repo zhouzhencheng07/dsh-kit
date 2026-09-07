@@ -324,6 +324,10 @@ out = comps.ScheduleModal({ modal: { id: "t1", kind: "task", values: { title: "�
 check("ScheduleModal 待办编辑态渲染无异常", !!out && typeof out === "object");
 out = comps.ScheduleTimerChip({});
 check("TimerChip 空闲态渲染无异常", !!out && typeof out === "object");
+callLog = [];
+out = comps.ScheduleTimerChip({ compact: true });
+const railChipRoot = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-sched-timer is-rail");
+check("TimerChip compact（收起栏变体）空闲态渲染无异常", !!out && typeof out === "object" && !!railChipRoot);
 {
   const lanes = comps.schedAssignLanes([
     { baseId: "a", startMins: 540, endMins: 600 },
@@ -567,6 +571,8 @@ const railExpand = railBtns.find((c) => ["展开面板", "Expand panel"].include
 const railGeneric = railBtns.find((c) => typeof c[2].title === "string" && (c[2].title.startsWith("侧边面板") || c[2].title.startsWith("Side panel")));
 check("DockStub 0 标签渲染收起栏（展开钮 + 4 枚快捷开标签图标）", !!railRoot && railBtns.length === 5 && !!railExpand);
 check("DockStub 0 标签展开钮标题以通用侧边面板开头", !!railGeneric);
+const railTimer = callLog.find((c) => c[1] === comps.ScheduleTimerChip);
+check("DockStub 收起栏底部挂计时芯片（compact）", !!railTimer && railTimer[2] && railTimer[2].compact === true);
 comps.setKitUi({ dockCollapsed: false });
 
 // 7.2.3) 预览标签 LRU 纯逻辑：默认上限 8，超限开新文件逐出 usedAt 最小者；
