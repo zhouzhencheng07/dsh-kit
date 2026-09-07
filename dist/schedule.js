@@ -98,6 +98,9 @@ function minutesOfTimePart(s) {
     return hh * 60 + mm;
 }
 function fmtDur(ms) {
+    // 不足一分钟的段（快速起停的计时）显示秒，不然"0分"看不出时长
+    if (ms < 60000)
+        return `${Math.round(ms / 1000)}秒`;
     const mins = Math.round(ms / 60000);
     const h = Math.floor(mins / 60);
     const m = mins % 60;

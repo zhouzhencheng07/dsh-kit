@@ -1821,8 +1821,11 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-cell:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-sched-nowline{position:absolute;left:0;right:0;height:2px;background:var(--dsw-alias-danger,#cd3131);z-index:2;pointer-events:none}
 .dshk-sched-nowline::before{content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:999px;background:var(--dsw-alias-danger,#cd3131)}
-.dshk-sched-event{position:absolute;z-index:1;overflow:hidden;border-radius:6px;padding:2px 6px;color:#fff;font-size:11px;line-height:1.35;cursor:pointer;background:var(--dsw-alias-brand-primary);box-shadow:inset 0 0 0 1px color-mix(in srgb,#fff 30%,transparent)}
+.dshk-sched-event{position:absolute;z-index:1;overflow:hidden;border-radius:6px;padding:2px 6px;color:#fff;font-size:11px;line-height:1.35;cursor:pointer;background:var(--dsw-alias-brand-primary);box-shadow:inset 0 0 0 1px color-mix(in srgb,#fff 30%,transparent);box-sizing:border-box}
 .dshk-sched-event:hover{filter:brightness(1.08)}
+/* 短段（按比例高度不足 18px）：紧凑排版把下限压到 14px 仍容得下单行标题，
+   高度尽量贴合真实时长比例（border-box 后渲染高度=style 高度，不再被 padding 抬高） */
+.dshk-sched-event.is-thin{padding:1px 4px;line-height:1.15;border-radius:4px}
 .dshk-sched-evtitle{display:block;font-size:10px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 /* 够高的块（≥48px）标题放开两行，行数由 line-clamp 限死——
    短块维持单行省略，避免半截字被容器裁掉 */
@@ -6541,6 +6544,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     const schedHHmm = (mins) => `${schedPad2(Math.floor(mins / 60) % 24)}:${schedPad2(mins % 60)}`;
     const schedWeekdays = () => (resolveZh() ? ["一", "二", "三", "四", "五", "六", "日"] : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]);
     const schedFmtDur = (ms) => {
+      if (ms < 60000) return resolveZh() ? `${Math.round(ms / 1000)}秒` : `${Math.round(ms / 1000)}s`;
       const mins = Math.round(ms / 60000);
       const h = Math.floor(mins / 60);
       const m = mins % 60;
@@ -6700,11 +6704,17 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [data.events, data.orphans]);
       const gridOcc = react.useMemo(
         () =>
-          schedAssignLanes([...data.occurrences.filter((o) => !o.allDay), ...timedOcc]).map((o) => ({
-            ...o,
-            top: ((Math.max(o.startMins, SCHED_DAY_START) - SCHED_DAY_START) / 60) * SCHED_HOUR_PX,
-            height: Math.max(18, (((o.endMins ?? o.startMins + 60) - Math.max(o.startMins, SCHED_DAY_START)) / 60) * SCHED_HOUR_PX),
-          })),
+          schedAssignLanes([...data.occurrences.filter((o) => !o.allDay), ...timedOcc]).map((o) => {
+            // 高度贴合真实时长比例（用户定稿 2026-09-08）：短段不再一律抬到 18px，
+            // 但下限 14px + is-thin 紧凑排版保证单行标题仍可读
+            const raw = (((o.endMins ?? o.startMins + 60) - Math.max(o.startMins, SCHED_DAY_START)) / 60) * SCHED_HOUR_PX;
+            return {
+              ...o,
+              top: ((Math.max(o.startMins, SCHED_DAY_START) - SCHED_DAY_START) / 60) * SCHED_HOUR_PX,
+              height: Math.max(14, raw),
+              thin: raw < 18,
+            };
+          }),
         [data.occurrences, timedOcc],
       );
       const allDayOcc = react.useMemo(() => data.occurrences.filter((o) => o.allDay), [data.occurrences]);
@@ -6797,7 +6807,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   ...(o.description ? [o.description] : []),
                 ];
                 return jsxRuntime.jsxs("div", {
-                  className: `dshk-sched-event${o.isTimed ? " is-timed" : ""}${o.height >= 48 ? " is-tall" : ""}`,
+                  className: `dshk-sched-event${o.isTimed ? " is-timed" : ""}${o.height >= 48 ? " is-tall" : ""}${o.thin ? " is-thin" : ""}`,
                   style: {
                     top: o.top,
                     height: o.height,
