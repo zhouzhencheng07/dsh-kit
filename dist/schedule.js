@@ -449,10 +449,29 @@ export class ScheduleStore {
     occurrences(from, to) {
         return expandOccurrences(this.data.events, from, to);
     }
-    stats(scope, date) {
+    stats(scope, date, now) {
         const [from, to] = rangeOf(scope, date);
         const timedMs = timedMsInRange(this.data.events, from, to, this.data.orphans);
         const eventCount = expandOccurrences(this.data.events, from, to).length;
+        // 总时长（时间分配口径，2026-09-08 定稿）：日程块就是时间分配，结束时刻一过
+        // 即计入合计，不用再补计时段；未到来的不记。挂了计时段的事件不按占位时长
+        // 重复计——真实用时已由段承载（timedMsInRange 按 start 日归属）。全天事件
+        // 无固定时长，不参与。now 供测试注入。
+        const nowD = now ?? new Date();
+        const nowDate = dateStrOf(nowD);
+        const nowMins = nowD.getHours() * 60 + nowD.getMinutes();
+        const withEntries = new Set(this.data.events
+            .filter((e) => Array.isArray(e.timeEntries) && e.timeEntries.length > 0)
+            .map((e) => e.id));
+        let elapsedMs = 0;
+        for (const o of expandOccurrences(this.data.events, from, to)) {
+            if (o.allDay || withEntries.has(o.baseId))
+                continue;
+            const end = o.endMins ?? o.startMins + 60;
+            const passed = o.date < nowDate || (o.date === nowDate && end <= nowMins);
+            if (passed)
+                elapsedMs += Math.max(0, end - o.startMins) * 60000;
+        }
         let completedCount = 0;
         let openCount = 0;
         for (const ev of this.data.events) {
@@ -463,7 +482,7 @@ export class ScheduleStore {
             else if (!ev.completedAt && ev.due && ev.due >= from && ev.due <= to)
                 openCount++;
         }
-        return { timedMs, eventCount, completedCount, openCount };
+        return { timedMs, totalMs: elapsedMs + timedMs, eventCount, completedCount, openCount };
     }
     /** agent 只看汇总（日/周/月）——schedule_query 工具的产物 */
     summary(scope, date) {
@@ -477,7 +496,7 @@ export class ScheduleStore {
         else {
             lines.push(`日程汇总 ${scope === 'week' ? '本周' : '本月'} ${from} ~ ${to}`);
         }
-        lines.push(`合计：事件 ${stats.eventCount} · 待办完成 ${stats.completedCount} · 到期待办 ${stats.openCount} · 计时 ${fmtDur(stats.timedMs)}`);
+        lines.push(`合计：事件 ${stats.eventCount} · 待办完成 ${stats.completedCount} · 到期待办 ${stats.openCount} · 总时长 ${fmtDur(stats.totalMs)}（内计时 ${fmtDur(stats.timedMs)}）`);
         const occ = expandOccurrences(this.data.events, from, to);
         const byDate = new Map();
         for (const o of occ) {

@@ -147,6 +147,25 @@ test('stats：事件数/完成数/到期待办/计时口径', () => {
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
+test('stats：总时长=已结束日程占位+计时段，未来不记、挂段不重复计、全天不参与', () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  store.create({ title: '已过', start: '2026-09-08T09:00', end: '2026-09-08T10:00' }) // +60min
+  store.create({ title: '未到', start: '2026-09-08T22:00', end: '2026-09-08T23:00' }) // now 12:00 不记
+  // 挂段事件：占位 60min 不计，真实段 30min 计入
+  const seg = store.create({ title: '挂段', start: '2026-09-08T11:00', end: '2026-09-08T12:00' })
+  store.timerStart(seg.id)
+  const withEntry = store.list().find((e) => e.id === seg.id)
+  withEntry.timeEntries[0].start = '2026-09-08T10:30:00'
+  withEntry.timeEntries[0].end = '2026-09-08T11:00:00'
+  store.create({ title: '全天', start: '2026-09-08T00:00', allDay: true }) // 无固定时长不参与
+  store.create({ title: '无尾', start: '2026-09-08T10:00' }) // 无 end 按 60min 兜底，已过 +60min
+  const stats = store.stats('day', '2026-09-08', new Date(2026, 8, 8, 12, 0))
+  assert.equal(stats.timedMs, 30 * 60000)
+  assert.equal(stats.totalMs, (60 + 30 + 60) * 60000)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
 test('summary：日汇总含事件行与待办行，空时段有兜底句', () => {
   const dir = tmp()
   const store = new ScheduleStore(path.join(dir, 'schedule.json'))
