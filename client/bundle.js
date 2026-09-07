@@ -728,7 +728,7 @@ window.__ModuleLoader__.load({
       schedNoDue: "无日期",
       schedOverdue: "逾期",
       schedTasksEmpty: "暂无待办",
-      schedStatsTimed: "总计时",
+      schedStatsTotal: "总时长",
       schedStatsEvents: "事件",
       schedStatsDone: "已完成",
       schedStatsOpen: "待办",
@@ -1193,7 +1193,7 @@ window.__ModuleLoader__.load({
       schedNoDue: "No date",
       schedOverdue: "Overdue",
       schedTasksEmpty: "No tasks",
-      schedStatsTimed: "Timed",
+      schedStatsTotal: "Total time",
       schedStatsEvents: "Events",
       schedStatsDone: "Done",
       schedStatsOpen: "Open",
@@ -1823,9 +1823,8 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-nowline::before{content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:999px;background:var(--dsw-alias-danger,#cd3131)}
 .dshk-sched-event{position:absolute;z-index:1;overflow:hidden;border-radius:6px;padding:2px 6px;color:#fff;font-size:11px;line-height:1.35;cursor:pointer;background:var(--dsw-alias-brand-primary);box-shadow:inset 0 0 0 1px color-mix(in srgb,#fff 30%,transparent)}
 .dshk-sched-event:hover{filter:brightness(1.08)}
-.dshk-sched-evtime{display:block;font-size:10px;opacity:.85;white-space:nowrap}
 .dshk-sched-evtitle{display:block;font-size:10px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
-/* 够高的块（≥48px：时间行+两行标题）标题放开两行，行数由 line-clamp 限死——
+/* 够高的块（≥48px）标题放开两行，行数由 line-clamp 限死——
    短块维持单行省略，避免半截字被容器裁掉 */
 .dshk-sched-event.is-tall .dshk-sched-evtitle{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;word-break:break-word;line-clamp:2}
 /* 上条下网（用户定稿 2026-09-06）：待办/统计横条在上，周网格在下吃满坞宽 */
@@ -6789,9 +6788,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 ? jsxRuntime.jsx("div", { className: "dshk-sched-nowline", style: { top: ((Math.min(nowMins, SCHED_DAY_END) - SCHED_DAY_START) / 60) * SCHED_HOUR_PX } })
                 : null,
               inWeek.map((o) => {
-                // 块内只留开始时刻（结束看块高/tooltip，位置本身就编码了时段），
-                // 宽度让给标题——标题才是识别事项的主体；其余信息（完整时段/
-                // 地点/备注）进 tooltip。够高的块标题放开两行（is-tall）
+                // 块内只留标题（时刻纵向就在轴上，完整时段进 tooltip，悬停即看）；
+                // 其余信息（地点/备注）同样进 tooltip。够高的块标题放开两行（is-tall）
                 const tipParts = [
                   `${schedHHmm(o.startMins)}${o.endMins !== null ? "–" + schedHHmm(o.endMins) : ""}`,
                   o.title,
@@ -6803,8 +6801,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   style: {
                     top: o.top,
                     height: o.height,
-                    left: `calc(${(o.lane * 100) / o.lanes}% + 2px)`,
-                    width: `calc(${100 / o.lanes}% - 4px)`,
+                    // 泳道均分且零内缩：块边缘与列网格线严丝合缝（用户定稿 2026-09-08）
+                    left: `${(o.lane * 100) / o.lanes}%`,
+                    width: `${100 / o.lanes}%`,
                     ...(o.color && !o.isTimed ? { background: o.color } : {}),
                   },
                   title: tipParts.filter(Boolean).join("\n"),
@@ -6814,7 +6813,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     else openEdit(o);
                   },
                   children: [
-                    jsxRuntime.jsx("span", { className: "dshk-sched-evtime", children: schedHHmm(o.startMins) }),
                     jsxRuntime.jsx("span", { className: "dshk-sched-evtitle", children: o.isTimed ? `⏱ ${o.title}` : o.title }),
                   ],
                 }, `${o.baseId}@${o.date}`);
@@ -6875,7 +6873,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           ? jsxRuntime.jsxs("div", { className: "dshk-sched-card is-stats", children: [
               jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedStatsTitle") }),
               jsxRuntime.jsxs("div", { className: "dshk-sched-statsgrid", children: [
-                jsxRuntime.jsxs("div", { className: "dshk-sched-stat", children: [jsxRuntime.jsx("b", { children: schedFmtDur(stats.timedMs) }), jsxRuntime.jsx("span", { children: t("schedStatsTimed") })] }),
+                jsxRuntime.jsxs("div", { className: "dshk-sched-stat", children: [jsxRuntime.jsx("b", { children: schedFmtDur(stats.totalMs) }), jsxRuntime.jsx("span", { children: t("schedStatsTotal") })] }),
                 jsxRuntime.jsxs("div", { className: "dshk-sched-stat", children: [jsxRuntime.jsx("b", { children: String(stats.eventCount) }), jsxRuntime.jsx("span", { children: t("schedStatsEvents") })] }),
                 jsxRuntime.jsxs("div", { className: "dshk-sched-stat", children: [jsxRuntime.jsx("b", { children: String(stats.completedCount) }), jsxRuntime.jsx("span", { children: t("schedStatsDone") })] }),
                 jsxRuntime.jsxs("div", { className: "dshk-sched-stat", children: [jsxRuntime.jsx("b", { children: String(stats.openCount) }), jsxRuntime.jsx("span", { children: t("schedStatsOpen") })] }),
