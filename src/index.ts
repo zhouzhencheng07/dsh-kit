@@ -2530,7 +2530,8 @@ export async function apply(ctx: KitCtx): Promise<void> {
       // ── 日程端点：/dsh-kit/schedule/*（src/schedule.ts 单例 store）──
       //   GET  data?from&to → { events(raw 全量), occurrences(区间展开), runningTimer }
       //   GET  timer → { runningTimer }；GET stats?scope&date → 统计
-      //   POST create / update / delete / done / timer-start / timer-stop
+      //   POST create / update / delete / done / timer-start / timer-stop /
+      //        entry-update / entry-delete（计时段改/删，owner 缺省=独立段）
       //   重复展开只在宿主做（客户端只渲染 occurrence）；个人规模 raw 全量直发。
       //   变更类端点 sameOrigin 门控同 upload。
       const schedJson = (res: http.ServerResponse, code: number, obj: unknown) => {
@@ -2635,6 +2636,28 @@ export async function apply(ctx: KitCtx): Promise<void> {
         }),
       )
       schedRoute('/dsh-kit/schedule/timer-stop', (req, res) => schedPost(req, res, () => scheduleStore.timerStop()))
+      // 计时段编辑/删除（owner 缺省 = 独立计时段 orphans；index 为数组下标）。
+      // 只允许已闭合段：进行中的段归停表管，直接改会与 runningTimer 错位
+      schedRoute('/dsh-kit/schedule/entry-update', (req, res) =>
+        schedPost(req, res, (body) => {
+          const owner = typeof body.owner === 'string' && body.owner !== '' ? body.owner : null
+          const patch: { start?: string; end?: string; note?: string } = {}
+          if (typeof body.start === 'string') patch.start = body.start
+          if (typeof body.end === 'string') patch.end = body.end
+          if (typeof body.note === 'string') patch.note = body.note
+          const entry = scheduleStore.entryUpdate(owner, Number(body.index ?? -1), patch)
+          if (!entry) throw new Error('计时段不存在、时刻非法或仍在进行中')
+          return { entry }
+        }),
+      )
+      schedRoute('/dsh-kit/schedule/entry-delete', (req, res) =>
+        schedPost(req, res, (body) => {
+          const owner = typeof body.owner === 'string' && body.owner !== '' ? body.owner : null
+          const ok = scheduleStore.entryDelete(owner, Number(body.index ?? -1))
+          if (!ok) throw new Error('计时段不存在或仍在进行中')
+          return { ok }
+        }),
+      )
 
       // ── 知识库（vault，src/vault.ts）──
       // vaultRoot 是设置卡配置的绝对目录，在工作区外——read 端点本就通配绝对
