@@ -23,15 +23,12 @@ test('matchGatewayHost：主域与子域命中，大小写不敏感，仿冒域�
   assert.equal(matchGatewayHost(''), false)
 })
 
-test('resolveAffinityValue：按亲和头优先级取值，大小写不敏感，空值跳过', () => {
+test('resolveAffinityValue：只认 x-session-affinity，大小写不敏感，空值视为无', () => {
   assert.equal(resolveAffinityValue(new Headers({ 'x-session-affinity': 's1' })), 's1')
-  assert.equal(
-    resolveAffinityValue(new Headers({ 'x-client-request-id': 's2', 'X-Session-Affinity': 's3' })),
-    's3',
-  )
-  // 无 affinity 时依次退到 x-session-id / x-client-request-id
-  assert.equal(resolveAffinityValue(new Headers({ 'x-session-id': 's4' })), 's4')
-  assert.equal(resolveAffinityValue(new Headers({ 'x-client-request-id': 's5' })), 's5')
+  assert.equal(resolveAffinityValue(new Headers({ 'X-Session-Affinity': 's3' })), 's3')
+  // 范围收敛（只适配 openai-completions）：其他亲和类头不作为镜像源
+  assert.equal(resolveAffinityValue(new Headers({ 'x-session-id': 's4' })), null)
+  assert.equal(resolveAffinityValue(new Headers({ 'x-client-request-id': 's5' })), null)
   assert.equal(resolveAffinityValue(new Headers({ 'x-session-affinity': '  ' })), null)
   assert.equal(resolveAffinityValue(new Headers()), null)
 })
