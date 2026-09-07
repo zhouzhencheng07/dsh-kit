@@ -371,3 +371,15 @@ test('schedule_query 工具：返回 items 供删除定位', async () => {
   assert.equal(r.items[0].kind, '日程')
   fs.rmSync(dir, { recursive: true, force: true })
 })
+
+test('标题统一上限 16 字（面板/agent 工具同一口径，细节让位备注）', () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const long = '一'.repeat(30)
+  const ev = store.create({ title: long })
+  assert.equal(ev.title.length, 16)
+  const up = store.create({ title: 'x' })
+  store.update(up.id, { title: long })
+  assert.equal(store.list().find((e) => e.id === up.id).title.length, 16)
+  fs.rmSync(dir, { recursive: true, force: true })
+})

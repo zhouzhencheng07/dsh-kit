@@ -192,6 +192,10 @@ const WEEKDAY_ZH = ['', '周一', '周二', '周三', '周四', '周五', '周�
 
 // ── 字段白名单与校验 ─────────────────────────────────────────────────────────
 
+/** 标题统一上限（面板输入框 maxLength/计数器、agent 工具同一口径）：标题只放
+ *  重要信息，细节写备注——周网格块内标题是识别主体，长标题展示必然截断 */
+export const SCHED_TITLE_MAX = 16
+
 function sanitizeRecurrence(raw: unknown): ScheduleRecurrence | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
@@ -216,7 +220,7 @@ function sanitizeFields(input: Record<string, unknown>, patch: boolean): Partial
   const has = (k: string): boolean => Object.prototype.hasOwnProperty.call(input, k)
   if (has('title')) {
     const t = input.title
-    if (typeof t === 'string' && t.trim() !== '') out.title = t.trim().slice(0, 200)
+    if (typeof t === 'string' && t.trim() !== '') out.title = t.trim().slice(0, SCHED_TITLE_MAX)
   }
   if (has('description') && typeof input.description === 'string') {
     out.description = input.description.slice(0, 2000)
@@ -736,7 +740,7 @@ export function buildScheduleTools({ defineTool, store }: { defineTool: DefineTo
       '用户说「帮我记个日程」「周三下午3点开会」「周五全天评审」「加个待办/周五要交报告」时使用；' +
       '重复日程用 repeat 系参数（如每两周周一：repeat=weekly、repeatInterval=2、repeatDays="1"）。',
     parameters: {
-      title: { type: 'string', required: true, description: '事项标题' },
+      title: { type: 'string', required: true, description: `事项标题，最多 ${SCHED_TITLE_MAX} 字：重要信息做标题，其余写 description` },
       date: { type: 'string', required: true, description: '日期 YYYY-MM-DD（也容忍 YYYY-MM-DDTHH:mm）' },
       time: { type: 'string', description: '开始时刻 HH:mm（给了就是日程事件，不给且无 allDay 则创建为待办）' },
       endTime: { type: 'string', description: '结束时刻 HH:mm（仅与 time 同用）' },
