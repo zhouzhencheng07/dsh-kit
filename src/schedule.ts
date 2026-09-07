@@ -87,6 +87,16 @@ export interface Occurrence {
   virtual: boolean
 }
 
+/** schedule_query 返回的结构化条目（agent 拿 id 走 schedule_delete；不进渲染摘要） */
+export interface ScheduleItemRef {
+  id: string
+  kind: '日程' | '待办' | '已完成待办'
+  title: string
+  when: string
+  /** 重复日程：删除的是整个系列（v1 无单次实例摘除） */
+  recurring?: boolean
+}
+
 // ── 时间工具（本地朴素时间，字符串即真源）────────────────────────────────────
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -476,6 +486,36 @@ export class ScheduleStore {
     if (lines.length <= 2) lines.push('（该时段没有日程安排）')
     return lines.join('\n')
   }
+
+  /** summary 的结构化并行视图：时段内条目 id/kind/标题/时间，供 agent 精确
+   *  指向（删除）。重复事件按 baseId 去重，待办含已完成（completedAt 落在时段） */
+  items(scope: 'day' | 'week' | 'month', date: string): ScheduleItemRef[] {
+    const [from, to] = rangeOf(scope, date)
+    const out: ScheduleItemRef[] = []
+    const seenEvents = new Set<string>()
+    for (const o of expandOccurrences(this.data.events, from, to)) {
+      if (seenEvents.has(o.baseId)) continue
+      seenEvents.add(o.baseId)
+      const ev = this.data.events.find((e) => e.id === o.baseId)
+      if (!ev) continue
+      out.push({
+        id: ev.id,
+        kind: '日程',
+        title: ev.title,
+        when: o.allDay ? `${o.date} 全天` : `${o.date} ${minsToHHmm(o.startMins)}`,
+        recurring: ev.recurrence != null ? true : undefined,
+      })
+    }
+    for (const ev of this.data.events) {
+      if (ev.start !== undefined) continue
+      if (ev.completedAt && ev.completedAt.slice(0, 10) >= from && ev.completedAt.slice(0, 10) <= to) {
+        out.push({ id: ev.id, kind: '已完成待办', title: ev.title, when: ev.completedAt.slice(0, 10) })
+      } else if (!ev.completedAt && ev.due !== undefined && ev.due >= from && ev.due <= to) {
+        out.push({ id: ev.id, kind: '待办', title: ev.title, when: ev.due })
+      }
+    }
+    return out
+  }
 }
 
 export function dtStrOf(d: Date, withSeconds = false): string {
@@ -576,9 +616,10 @@ export function getScheduleStore(): ScheduleStore {
   return singleton
 }
 
-// ── agent 工具（schedule_query / schedule_create）───────────────────────────
-// 边界即设计：agent 只见汇总（日/周/月）与创建，不给改/删原子的工具——
-// 「人主导日程，agent 是助理」在工具面就锁死，不依赖提示词自觉。
+// ── agent 工具（schedule_query / schedule_create / schedule_delete）─────────
+// 边界即设计：agent 见汇总与创建/删除，不给 update 原子工具——编辑细节（改时刻/
+// 重复规则/挪位置）在面板做，人主导；删除由人发起（对话里确认），agent 代执行，
+// 所以 query 返回 items（id）+ delete 按 id 精确删，不提供按标题模糊删。
 
 /** "H:mm"/"HH:mm" 归一成 "HH:mm"；缺位/越界返回 null */
 function normHHmm(raw: string): string | null {
@@ -672,7 +713,8 @@ export function buildScheduleTools({ defineTool, store }: { defineTool: DefineTo
     name: 'schedule_query',
     description:
       '查询用户的日程汇总（日/周/月粒度）：带时刻的事件、到期待办、已完成事项、累计计时。' +
-      '用户问「今天/本周/本月有什么安排」「这周做了什么」，或安排新事项前想先看时间冲突时使用。',
+      '用户问「今天/本周/本月有什么安排」「这周做了什么」，或安排新事项前想先看时间冲突时使用。' +
+      '返回值 items 带条目 id，是 schedule_delete 的删除依据。',
     parameters: {
       scope: { type: 'string', required: true, enum: ['day', 'week', 'month'], description: '汇总粒度：日/周/月' },
       date: { type: 'string', description: '基准日期 YYYY-MM-DD，缺省今天' },
@@ -684,7 +726,7 @@ export function buildScheduleTools({ defineTool, store }: { defineTool: DefineTo
     async execute(args: { scope?: 'day' | 'week' | 'month'; date?: string }) {
       const scope = args?.scope === 'week' || args?.scope === 'month' ? args.scope : 'day'
       const date = typeof args?.date === 'string' && DATE_RE.test(args.date) ? args.date : todayStr()
-      return { summary: store.summary(scope, date) }
+      return { summary: store.summary(scope, date), items: store.items(scope, date) }
     },
   })
   const create = defineTool({
@@ -715,5 +757,26 @@ export function buildScheduleTools({ defineTool, store }: { defineTool: DefineTo
       return { id: ev.id, summary: createSummary(ev) }
     },
   })
-  return [query, create]
+  const del = defineTool({
+    name: 'schedule_delete',
+    description:
+      '删除用户日程里的条目（按 id，id 来自 schedule_query 返回的 items）。' +
+      '用户说「把xx删了/取消周三的会」时：先 schedule_query 查时段拿 id，向用户确认后删除。' +
+      '重复日程删除的是整个重复系列（v1 不支持只删单次实例）。',
+    parameters: {
+      id: { type: 'string', required: true, description: 'schedule_query 返回的条目 id' },
+    },
+    output: {
+      schema: { type: 'object', additionalProperties: true },
+      render: (_args: unknown, value: { summary: string }) => [{ type: 'text', text: value.summary }],
+    },
+    async execute(args: Record<string, unknown>) {
+      const id = typeof args.id === 'string' ? args.id : ''
+      const ev = store.list().find((e) => e.id === id)
+      if (!ev) return { ok: false, summary: `未找到条目 ${id}（可能已删除），请用 schedule_query 重新查询` }
+      store.remove(id)
+      return { ok: true, summary: `已删除：${ev.title}${ev.recurrence != null ? '（重复日程，整个系列已移除）' : ''}` }
+    },
+  })
+  return [query, create, del]
 }

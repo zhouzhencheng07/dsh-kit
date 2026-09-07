@@ -320,3 +320,54 @@ test('schedule_create 工具：date+time 建日程、date 建待办、重复透�
   assert.match(r4.summary, /已创建日程：外出（2026-10-01 全天）/)
   fs.rmSync(dir, { recursive: true, force: true })
 })
+
+test('items：时段内条目结构化（id/kind/when），重复事件去重带 recurring', () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  store.create({ title: '例会', start: '2026-09-07T09:00', recurrence: { type: 'weekly', days: [1] } })
+  store.create({ title: '交报告', due: '2026-09-08' })
+  const done = store.create({ title: '已办', due: '2026-09-08' })
+  // completedAt 写死固定日，避免依赖机器时钟
+  store.list().find((e) => e.id === done.id).completedAt = '2026-09-08T10:00'
+  const items = store.items('week', '2026-09-08') // 本周 9/7–9/13
+  assert.equal(items.length, 3)
+  const ev = items.find((i) => i.kind === '日程')
+  assert.equal(ev.title, '例会')
+  assert.equal(ev.when, '2026-09-07 09:00')
+  assert.equal(ev.recurring, true)
+  assert.ok(items.some((i) => i.kind === '待办' && i.title === '交报告' && i.when === '2026-09-08'))
+  assert.ok(items.some((i) => i.kind === '已完成待办' && i.title === '已办' && i.when === '2026-09-08'))
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('schedule_delete 工具：按 id 删除、重复系列整体移除、未找到回 ok:false', async () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const defineTool = (opts) => opts
+  const tools = buildScheduleTools({ defineTool, store })
+  const del = tools.find((t) => t.name === 'schedule_delete')
+  const ev = store.create({ title: '要删的', start: '2026-09-10T09:00', recurrence: { type: 'daily' } })
+  const r = await del.execute({ id: ev.id })
+  assert.equal(r.ok, true)
+  assert.match(r.summary, /已删除：要删的（重复日程，整个系列已移除）/)
+  assert.equal(store.list().length, 0)
+  const r2 = await del.execute({ id: 'nope' })
+  assert.equal(r2.ok, false)
+  assert.match(r2.summary, /未找到/)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('schedule_query 工具：返回 items 供删除定位', async () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const defineTool = (opts) => opts
+  const tools = buildScheduleTools({ defineTool, store })
+  const query = tools.find((t) => t.name === 'schedule_query')
+  const ev = store.create({ title: '评审', start: '2026-09-10T15:00' })
+  const r = await query.execute({ scope: 'day', date: '2026-09-10' })
+  assert.equal(typeof r.summary, 'string')
+  assert.ok(Array.isArray(r.items) && r.items.length === 1)
+  assert.equal(r.items[0].id, ev.id)
+  assert.equal(r.items[0].kind, '日程')
+  fs.rmSync(dir, { recursive: true, force: true })
+})
