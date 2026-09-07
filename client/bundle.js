@@ -524,6 +524,11 @@ window.__ModuleLoader__.load({
       scActions: "更多操作",
       scPublish: "发布分支",
       scPush: "推送到远程",
+      scPull: "从远程拉取",
+      scPullDone: "已拉取",
+      scPullFail: "拉取失败",
+      scStageAll: "暂存全部更改",
+      scSynced: "已同步，无待推送提交",
       scPushAhead: "推送 {n} 个提交到远程",
       scBehind: "落后 {n} 个提交",
       scPushDone: "已推送",
@@ -761,10 +766,8 @@ window.__ModuleLoader__.load({
       vaultSearchPh: "搜索笔记，回车执行",
       vaultSearchEmpty: "无结果",
       vaultSearchFail: "搜索失败：{error}",
-      vaultNewPage: "新建页面",
-      vaultNewDir: "新建目录",
-      vaultNewPagePh: "标题，可含 / 建子目录，回车创建",
-      vaultNewDirPh: "目录名，可含 / 多级，回车创建",
+      vaultNewAny: "新建页面/目录",
+      vaultNewPh: "标题，\\ 开头新建目录，可含 / 多级，回车创建",
       vaultCreate: "创建",
       vaultSaved: "已保存",
       vaultUnsaved: "有未保存修改",
@@ -956,6 +959,11 @@ window.__ModuleLoader__.load({
       scActions: "More actions…",
       scPublish: "Publish branch",
       scPush: "Push to remote",
+      scPull: "Pull from remote",
+      scPullDone: "Pulled",
+      scPullFail: "Pull failed",
+      scStageAll: "Stage all changes",
+      scSynced: "Synced — nothing to push",
       scPushAhead: "Push {n} commit(s) to remote",
       scBehind: "{n} commit(s) behind",
       scPushDone: "Pushed",
@@ -1216,10 +1224,8 @@ window.__ModuleLoader__.load({
       vaultSearchPh: "Search notes, Enter to run",
       vaultSearchEmpty: "No results",
       vaultSearchFail: "Search failed: {error}",
-      vaultNewPage: "New page",
-      vaultNewDir: "New folder",
-      vaultNewPagePh: "Title, / for subfolders, Enter to create",
-      vaultNewDirPh: "Folder name, / for nesting, Enter to create",
+      vaultNewAny: "New page/folder",
+      vaultNewPh: "Title, \\ prefix creates a folder, / for nesting, Enter to create",
       vaultCreate: "Create",
       vaultSaved: "Saved",
       vaultUnsaved: "Unsaved changes",
@@ -1660,7 +1666,7 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-vault-treerow{display:flex;align-items:center;gap:4px;padding:3px 4px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden}
 .dshk-vault-treerow:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-vault-treerow.is-active{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-label-primary)}
-.dshk-vault-twist{flex:none;display:inline-block;transition:transform .12s var(--ds-ease-in-out);font-size:10px;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-twist{flex:none;display:inline-block;width:10px;text-align:center;transition:transform .12s var(--ds-ease-in-out);font-size:10px;color:var(--dsw-alias-label-tertiary)}
 .dshk-vault-twist.is-open{transform:rotate(90deg)}
 .dshk-vault-treename{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis}
 .dshk-vault-ticon{width:13px;height:13px;flex:none;opacity:.75}
@@ -1799,7 +1805,7 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-event{position:absolute;z-index:1;overflow:hidden;border-radius:6px;padding:2px 6px;color:#fff;font-size:11px;line-height:1.35;cursor:pointer;background:var(--dsw-alias-brand-primary);box-shadow:inset 0 0 0 1px color-mix(in srgb,#fff 30%,transparent)}
 .dshk-sched-event:hover{filter:brightness(1.08)}
 .dshk-sched-evtime{display:block;font-size:10px;opacity:.85;white-space:nowrap}
-.dshk-sched-evtitle{display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.dshk-sched-evtitle{display:block;font-size:10px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 /* 够高的块（≥48px：时间行+两行标题）标题放开两行，行数由 line-clamp 限死——
    短块维持单行省略，避免半截字被容器裁掉 */
 .dshk-sched-event.is-tall .dshk-sched-evtitle{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;word-break:break-word;line-clamp:2}
@@ -1828,6 +1834,11 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-stat span{font-size:11px;color:var(--dsw-alias-label-tertiary)}
 .dshk-sched-overlay{position:fixed;inset:0;background:color-mix(in srgb,#000 45%,transparent);z-index:1000;display:flex;align-items:center;justify-content:center}
 .dshk-sched-modal{width:420px;max-width:92vw;max-height:86vh;overflow:auto;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 40px color-mix(in srgb,#000 30%,transparent)}
+/* 标题字数上限（用户定稿 2026-09-07：标题只放重要信息，细节写备注）——
+   计数器悬浮输入框右缘，与 maxLength 同一常量 */
+.dshk-sched-countwrap{position:relative}
+.dshk-sched-countwrap .dshk-sched-input,.dshk-sched-countwrap .dshk-sched-taskinput{padding-right:44px}
+.dshk-sched-count{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--dsw-alias-label-tertiary);pointer-events:none}
 .dshk-sched-modaltitle{font-weight:600;font-size:14px}
 .dshk-sched-input{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:6px 8px;border-radius:6px;width:100%;box-sizing:border-box}
 .dshk-sched-input:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
@@ -3492,7 +3503,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           }, "rename")
         : jsxRuntime.jsx("span", { className: "dshk-name", children: entry.name }, "name");
       const rowChildren = [
-        jsxRuntime.jsx("span", { className: "dshk-chev", children: entry.dir ? jsxRuntime.jsx(ChevronIcon, { open: !!info }) : null }, "chev"),
+        // 空目录（宿主 /tree 附 empty 标记）没有可展开内容：去掉箭头、点击不折叠，
+        // 行本身保留——空目录有"看得见"的必要（用户定稿 2026-09-07）
+        jsxRuntime.jsx("span", { className: "dshk-chev", children: entry.dir && entry.empty !== true ? jsxRuntime.jsx(ChevronIcon, { open: !!info }) : null }, "chev"),
         nameEl,
       ];
       if (rowActions.length > 0) {
@@ -3504,8 +3517,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         title: entry.path,
         onClick: () => {
           if (renaming) return; // 行内改名中：点击不触发打开/折叠
-          if (entry.dir) onToggle(entry);
-          else onOpenFile(entry.path);
+          if (entry.dir) {
+            if (entry.empty !== true) onToggle(entry);
+          } else onOpenFile(entry.path);
         },
         children: rowChildren,
       }, entry.path)];
@@ -4158,6 +4172,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [createdBranch, setCreatedBranch] = react.useState(null); // 刚新建的分支名（列表打「新建」标记）
       const [branchBusy, setBranchBusy] = react.useState(false);
       const [pushing, setPushing] = react.useState(false);
+      const [pulling, setPulling] = react.useState(false);
       // ⋯ 操作菜单 / 分支浮层（fixed 悬浮）：anchor 为按钮矩形锚点 {left, top}
       const [actionsOpen, setActionsOpen] = react.useState(false);
       const [actionsAnchor, setActionsAnchor] = react.useState(null);
@@ -4243,6 +4258,30 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           return false;
         } finally {
           setPushing(false);
+        }
+      };
+
+      /** 拉取（⋯ 菜单；缺上游/冲突等错误原文 toast）：成功后刷新状态与图谱 */
+      const doPull = async () => {
+        if (pulling || !cwd || !available) return false;
+        setPulling(true);
+        try {
+          const res = await fetch("/dsh-kit/git/op", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ cwd, op: "pull" }),
+          });
+          const b = await res.json().catch(() => ({}));
+          if (!res.ok || !b.ok) throw new Error(b.error || `HTTP ${res.status}`);
+          flashToast(t("scPullDone"));
+          if (fetchRef.current) fetchRef.current();
+          if (graphRef.current) graphRef.current();
+          return true;
+        } catch (error) {
+          flashToast(`${t("scPullFail")}：${error?.message ?? error}`);
+          return false;
+        } finally {
+          setPulling(false);
         }
       };
 
@@ -4394,7 +4433,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       };
 
       const ahead = available && typeof data?.ahead === "number" ? data.ahead : 0;
-      const behind = available && typeof data?.behind === "number" ? data.behind : 0;
 
       return jsxRuntime.jsxs("div", {
         className: "dshk-tree",
@@ -4403,7 +4441,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             className: "dshk-head",
             children: [
               jsxRuntime.jsx(BranchIcon, {}),
-              // 分支按钮（vs 式：名称 + 领先/落后计数）：点击开固定悬浮分支浮层
+              // 分支按钮（vs 式：名称为主，推送计数不在这里——2026-09-07 用户定稿
+              // 迁到独立推送按钮，分支显示不与推送语义重叠）：点击开固定悬浮分支浮层
               available && data
                 ? jsxRuntime.jsx("button", {
                     type: "button",
@@ -4418,13 +4457,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                         className: "dshk-branch-name",
                         children: data.detached === true ? t("scDetached") : data.branch || "—",
                       }),
-                      !data.detached && (ahead > 0 || behind > 0)
-                        ? jsxRuntime.jsx("span", {
-                            className: "dshk-branch-ar",
-                            title: `${ahead > 0 ? t("scPushAhead").replace("{n}", String(ahead)) : ""}${ahead > 0 && behind > 0 ? " · " : ""}${behind > 0 ? t("scBehind").replace("{n}", String(behind)) : ""}`,
-                            children: `${ahead > 0 ? "↑" + ahead : ""}${behind > 0 ? "↓" + behind : ""}`,
-                          })
-                        : null,
                       jsxRuntime.jsx("span", { className: "dshk-caret", children: "▾" }),
                     ],
                   })
@@ -4433,6 +4465,24 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 ? jsxRuntime.jsx("span", { className: "dshk-status", children: String(entries.length) })
                 : null,
               jsxRuntime.jsx("span", { className: "dshk-spring" }),
+              // 推送按钮（vs 式同步钮位）：↑n=待推提交数；无上游=发布（首次推送）；
+              // 已同步置灰。↓ 待拉取数在分支浮层徽标与 ⋯拉取里，不占这里
+              available && data && data.detached !== true
+                ? jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-btn dshk-headbtn",
+                    disabled: pushing || data.unborn === true || (!!data.upstream && ahead === 0),
+                    title: pushing
+                      ? t("saving")
+                      : !data.upstream
+                        ? t("scPublish")
+                        : ahead > 0
+                          ? t("scPushAhead").replace("{n}", String(ahead))
+                          : t("scSynced"),
+                    onClick: () => void doPush(!(data.upstream)),
+                    children: pushing ? "…" : ahead > 0 ? `↑${ahead}` : "↑↓",
+                  })
+                : null,
               jsxRuntime.jsx("button", {
                 type: "button",
                 className: "dshk-btn dshk-headbtn" + (view === "graph" ? " dshk-headbtn-on" : ""),
@@ -4509,6 +4559,18 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     label: data && data.upstream ? t("scPush") : t("scPublish"),
                     disabled: pushing || !available || data?.detached === true || data?.branch === "",
                     run: () => doPush(!(data && data.upstream)),
+                  },
+                  {
+                    key: "pull",
+                    label: t("scPull"),
+                    disabled: pulling || !available || data?.detached === true || data?.branch === "",
+                    run: () => void doPull(),
+                  },
+                  {
+                    key: "stageAll",
+                    label: t("scStageAll"),
+                    disabled: busy || !available,
+                    run: () => void runOp({ op: "stageAll" }),
                   },
                 ],
                 onClose: closeActions,
@@ -6380,6 +6442,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 计时全局单实例（timer/start 遇 running 先自动 stop），芯片挂 conversation.composer.dock。
 
     const SCHED_COLORS = ["#228be6", "#40c057", "#fd7e14", "#e64980", "#7048e8", "#f59f00"];
+    // 标题字数上限：与宿主 store 截断/工具描述同一口径（重要信息做标题，其余写备注）
+    const SCHED_TITLE_MAX = 16;
     const SCHED_DAY_START = 0; // 网格起点 00:00（全天制，起止时刻零裁剪）
     const SCHED_DAY_END = 24 * 60;
     const SCHED_HOUR_PX = 42;
@@ -6693,18 +6757,22 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedTasks") }),
           ] }),
           jsxRuntime.jsxs("div", { className: "dshk-sched-taskadd", children: [
-            jsxRuntime.jsx("input", {
-              className: "dshk-sched-taskinput",
-              value: taskInput,
-              placeholder: t("schedTaskPh"),
-              onChange: (e) => setTaskInput(e.target.value),
-              onKeyDown: (e) => {
-                if (e.key === "Enter" && taskInput.trim() !== "") {
-                  void mutate("/dsh-kit/schedule/create", { title: taskInput.trim(), due: taskDue });
-                  setTaskInput("");
-                }
-              },
-            }),
+            jsxRuntime.jsxs("div", { className: "dshk-sched-countwrap", style: { flex: 1, minWidth: 0 }, children: [
+              jsxRuntime.jsx("input", {
+                className: "dshk-sched-taskinput",
+                value: taskInput,
+                maxLength: SCHED_TITLE_MAX,
+                placeholder: t("schedTaskPh"),
+                onChange: (e) => setTaskInput(e.target.value.slice(0, SCHED_TITLE_MAX)),
+                onKeyDown: (e) => {
+                  if (e.key === "Enter" && taskInput.trim() !== "") {
+                    void mutate("/dsh-kit/schedule/create", { title: taskInput.trim(), due: taskDue });
+                    setTaskInput("");
+                  }
+                },
+              }),
+              taskInput !== "" ? jsxRuntime.jsx("span", { className: "dshk-sched-count", children: `${taskInput.length}/${SCHED_TITLE_MAX}` }) : null,
+            ] }),
             jsxRuntime.jsx("input", { className: "dshk-sched-taskdue", type: "date", value: taskDue, onChange: (e) => setTaskDue(e.target.value) }),
           ] }),
           tasks.length === 0
@@ -6776,7 +6844,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return jsxRuntime.jsxs("div", { className: "dshk-sched-overlay", onClick: onClose, children: [
         jsxRuntime.jsxs("div", { className: "dshk-sched-modal", onClick: (e) => e.stopPropagation(), children: [
           jsxRuntime.jsx("div", { className: "dshk-sched-modaltitle", children: modal.id ? t("schedEdit") : t("schedCreate") }),
-          jsxRuntime.jsx("input", { className: "dshk-sched-input", value: values.title ?? "", placeholder: t("schedTitlePh"), autoFocus: true, onChange: (e) => set("title", e.target.value) }),
+          jsxRuntime.jsxs("div", { className: "dshk-sched-countwrap", children: [
+            jsxRuntime.jsx("input", { className: "dshk-sched-input", maxLength: SCHED_TITLE_MAX, value: values.title ?? "", placeholder: t("schedTitlePh"), autoFocus: true, onChange: (e) => set("title", e.target.value.slice(0, SCHED_TITLE_MAX)) }),
+            jsxRuntime.jsx("span", { className: "dshk-sched-count", children: `${(values.title ?? "").length}/${SCHED_TITLE_MAX}` }),
+          ] }),
           isTask
             ? jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
                 jsxRuntime.jsx("span", { children: t("schedTaskDue") }),
@@ -7606,11 +7677,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       jsxRuntime.jsx("svg", { className: "dshk-vault-ticon", viewBox: "0 0 16 16", children: jsxRuntime.jsx("path", { d: "M1.5 4.5a1 1 0 0 1 1-1h3.1l1.7 1.9h5.7a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1v-8.5z", fill: "none", stroke: "currentColor", strokeWidth: "1.2", strokeLinejoin: "round" }) });
     const VaultPageIcon = () =>
       jsxRuntime.jsx("svg", { className: "dshk-vault-ticon", viewBox: "0 0 16 16", children: jsxRuntime.jsx("path", { d: "M4 2.2a0.7 0.7 0 0 1 0.7-0.7h4.2l3.6 3.6v8.6a0.7 0.7 0 0 1-0.7 0.7H4.7a0.7 0.7 0 0 1-0.7-0.7v-11.5z M9 1.8v3.3h3.3", fill: "none", stroke: "currentColor", strokeWidth: "1.2", strokeLinejoin: "round" }) });
-    const VaultDirPlusIcon = () =>
-      jsxRuntime.jsxs("svg", { className: "dshk-vault-ticon", viewBox: "0 0 16 16", children: [
-        jsxRuntime.jsx("path", { d: "M1.5 4.5a1 1 0 0 1 1-1h3.1l1.7 1.9h5.7a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1v-8.5z", fill: "none", stroke: "currentColor", strokeWidth: "1.2", strokeLinejoin: "round" }),
-        jsxRuntime.jsx("path", { d: "M8 7.6v3.2M6.4 9.2h3.2", stroke: "currentColor", strokeWidth: "1.3" }),
-      ] });
 
     /** 斜杠菜单：两级（wangshu 同款）——根级为分组（标题/列表含子级，多级标题
      *  快速插），叶级为插入模板。label 走 i18n，match 是中英过滤词 */
@@ -7723,10 +7789,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [conflict, setConflict] = react.useState(null);
       // 表格上下文按钮随选区显隐（选区落在表格内即亮）
       const [inTable, setInTable] = react.useState(false);
-      // 建页/建目录：createDir = 内联输入框所在目录（null 关闭）；输入可再带 /
-      // 多级；createKind 区分建页与建目录
+      // 建页/建目录合并入口（用户定稿 2026-09-07）：createDir = 内联输入框所在
+      // 目录（null 关闭）；输入 `\` 开头 = 新建目录（剥掉前缀），否则建页面；
+      // 两者都还可带 / 多级
       const [createDir, setCreateDir] = react.useState(null);
-      const [createKind, setCreateKind] = react.useState("page");
       const [createTitle, setCreateTitle] = react.useState("");
       const [searchQ, setSearchQ] = react.useState("");
       const [searchRes, setSearchRes] = react.useState(null);
@@ -8481,19 +8547,23 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         setExpanded((e) => ({ ...e, [dir]: opening }));
         if (opening) void fetchDir(dir);
       };
-      // 目录行悬停 +（页/目录两个按钮，或左轨头部）→ 该目录下弹出内联建输入
-      const startCreate = (dir, kind) => {
+      // 目录行悬停 +（单一建页/目录按钮，或左轨头部）→ 该目录下弹出内联建输入
+      const startCreate = (dir) => {
         setCreateDir(dir);
-        setCreateKind(kind === "dir" ? "dir" : "page");
         setCreateTitle("");
         setExpanded((e) => ({ ...e, [dir]: true }));
         void fetchDir(dir);
       };
       const submitCreate = (dir) => {
-        const name = createTitle.trim();
-        if (name === "") return;
-        if (createKind === "dir") void mkdirIn(name, dir);
-        else void createInSpace(name, dir);
+        const raw = createTitle.trim();
+        if (raw === "") return;
+        // `\` 前缀建目录（可多级），其余建页面
+        if (raw.startsWith("\\")) {
+          const name = raw.slice(1).trim();
+          if (name !== "") void mkdirIn(name, dir);
+        } else {
+          void createInSpace(raw, dir);
+        }
       };
       const createRow = (dir, depth, key) =>
         jsxRuntime.jsxs(
@@ -8505,14 +8575,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               jsxRuntime.jsx("input", {
                 autoFocus: true,
                 value: createTitle,
-                placeholder: createKind === "dir" ? t("vaultNewDirPh") : t("vaultNewPagePh"),
+                placeholder: t("vaultNewPh"),
                 onChange: (e) => setCreateTitle(e.target.value),
                 onKeyDown: (e) => {
                   if (e.key === "Enter") submitCreate(dir);
                   if (e.key === "Escape") setCreateDir(null);
                 },
               }),
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-treeplus", style: { visibility: "visible", fontSize: "13px" }, title: createKind === "dir" ? t("vaultNewDir") : t("vaultNewPage"), onClick: () => submitCreate(dir), children: "✓" }),
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-treeplus", style: { visibility: "visible", fontSize: "13px" }, title: t("vaultNewAny"), onClick: () => submitCreate(dir), children: "✓" }),
             ],
           },
           key,
@@ -8523,6 +8593,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (!entries) return jsxRuntime.jsx("div", { className: "dshk-vault-treeload", style: { paddingLeft: 10 + depth * 14 }, children: "…" }, `${dirPath}#load`);
         return entries.map((e) => {
           if (e.dir) {
+            // 空目录判定（用户定稿 2026-09-07）：vault 语义下没有后代的目录
+            // 就是空的——索引页（root 相对 rel）无一落在该目录前缀下即空，
+            // 去掉展开钮（没东西可展开），行保留（有看到空目录的必要）
+            const rel = e.path.slice(treeRoot.length).split(/[\\/]+/).filter(Boolean).join("/");
+            const prefix = space === "" ? `${rel}/` : `${space}/${rel}/`;
+            const hasPage = indexPages.some((p) => p.rel.startsWith(prefix));
             return jsxRuntime.jsxs(
               "div",
               {
@@ -8530,28 +8606,21 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   jsxRuntime.jsxs("div", {
                     className: "dshk-vault-treerow",
                     style: { paddingLeft: 10 + depth * 14 },
-                    onClick: () => toggleDir(e.path),
+                    onClick: () => {
+                      if (hasPage) toggleDir(e.path);
+                    },
                     children: [
-                      jsxRuntime.jsx("span", { className: `dshk-vault-twist${expanded[e.path] === true ? " is-open" : ""}`, children: "▸" }),
+                      hasPage ? jsxRuntime.jsx("span", { className: `dshk-vault-twist${expanded[e.path] === true ? " is-open" : ""}`, children: "▸" }) : jsxRuntime.jsx("span", { className: "dshk-vault-twist" }),
                       jsxRuntime.jsx(VaultFolderIcon, {}),
                       jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
                       jsxRuntime.jsx("span", {
                         className: "dshk-vault-treeplus",
-                        title: `${t("vaultNewPage")} · ${e.name}`,
+                        title: `${t("vaultNewAny")} · ${e.name}`,
                         onClick: (ev) => {
                           ev.stopPropagation();
-                          startCreate(e.path, "page");
+                          startCreate(e.path);
                         },
                         children: "+",
-                      }),
-                      jsxRuntime.jsx("span", {
-                        className: "dshk-vault-treeplus",
-                        title: `${t("vaultNewDir")} · ${e.name}`,
-                        onClick: (ev) => {
-                          ev.stopPropagation();
-                          startCreate(e.path, "dir");
-                        },
-                        children: jsxRuntime.jsx(VaultDirPlusIcon, {}),
                       }),
                     ],
                   }),
@@ -8642,15 +8711,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               jsxRuntime.jsx("span", { className: "dshk-vault-railtitle", title: treeRoot, children: space === "" ? t("vaultSpaceAll") : space }),
               jsxRuntime.jsx("span", {
                 className: "dshk-vault-treeplus",
-                title: `${t("vaultNewPage")} · ${space === "" ? t("vaultSpaceAll") : space}`,
-                onClick: () => startCreate(treeRoot, "page"),
+                title: `${t("vaultNewAny")} · ${space === "" ? t("vaultSpaceAll") : space}`,
+                onClick: () => startCreate(treeRoot),
                 children: "+",
-              }),
-              jsxRuntime.jsx("span", {
-                className: "dshk-vault-treeplus",
-                title: `${t("vaultNewDir")} · ${space === "" ? t("vaultSpaceAll") : space}`,
-                onClick: () => startCreate(treeRoot, "dir"),
-                children: jsxRuntime.jsx(VaultDirPlusIcon, {}),
               }),
             ] }),
             createDir === treeRoot ? createRow(treeRoot, 0, `${treeRoot}#create`) : null,
