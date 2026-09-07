@@ -316,6 +316,7 @@ window.__ModuleLoader__.load({
     // 模块级通道（apply 注入 / KitSurfaces 订阅 / 设置卡捕获互斥）
     let cfgScope = null;
     let shortcutCapture = null; // 正在录制快捷键的字段名；非 null 时面板快捷键监听让路
+    let schedModalOpen = false; // 日程弹窗开着：KitSurfaces 的 Esc 不收标签页（Esc 归弹窗自关）
     let inlineEditCapture = false; // 树行内改名输入激活：面板快捷键（含 Esc 分层关闭）让路
     const subscribeCfg = (listener) => (cfgScope ? cfgScope.subscribe(listener) : () => {});
     const getCfgSnapshot = () => (cfgScope ? cfgScope.getSnapshot() : null);
@@ -644,7 +645,6 @@ window.__ModuleLoader__.load({
       dockClose: "关闭标签",
       pvCloseTab: "关闭此预览",
       pvDeletedNote: "文件已删除——此预览仅展示删除 diff；可在源代码管理里 ↩ 恢复文件",
-      dockCloseAll: "全部关闭",
       dockMinimize: "最小化面板",
       dockRestore: "展开面板",
       dockOpenTab: "打开标签页",
@@ -721,7 +721,7 @@ window.__ModuleLoader__.load({
       schedSave: "保存",
       schedDelete: "删除",
       schedDeleteConfirm: "确认删除？",
-      schedCancel: "取消",
+      schedClose: "关闭",
       schedTasks: "待办",
       schedTaskPh: "添加待办，回车确认…",
       schedTaskDue: "截止",
@@ -1086,7 +1086,6 @@ window.__ModuleLoader__.load({
       dockClose: "Close tab",
       pvCloseTab: "Close preview",
       pvDeletedNote: "File deleted — this preview shows the deletion diff only; restore it via ↩ in source control",
-      dockCloseAll: "Close all",
       dockMinimize: "Minimize panel",
       dockRestore: "Expand panel",
       dockOpenTab: "Open tabs",
@@ -1186,7 +1185,7 @@ window.__ModuleLoader__.load({
       schedSave: "Save",
       schedDelete: "Delete",
       schedDeleteConfirm: "Confirm delete?",
-      schedCancel: "Cancel",
+      schedClose: "Close",
       schedTasks: "Tasks",
       schedTaskPh: "Add a task, Enter to save…",
       schedTaskDue: "Due",
@@ -1860,7 +1859,9 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-countwrap{position:relative}
 .dshk-sched-countwrap .dshk-sched-input,.dshk-sched-countwrap .dshk-sched-taskinput{padding-right:44px}
 .dshk-sched-count{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--dsw-alias-label-tertiary);pointer-events:none}
-.dshk-sched-modaltitle{font-weight:600;font-size:14px}
+.dshk-sched-modaltitle{font-weight:600;font-size:14px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dshk-sched-x{appearance:none;border:none;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:13px;line-height:1;padding:4px 6px;border-radius:6px;cursor:pointer;flex:none}
+.dshk-sched-x:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-sched-input{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:6px 8px;border-radius:6px;width:100%;box-sizing:border-box}
 .dshk-sched-input:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
 textarea.dshk-sched-input{resize:vertical}
@@ -6924,6 +6925,23 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const entryOrphan = isEntry && modal.owner === null;
       const [values, setValues] = react.useState(() => ({ ...modal.values }));
       const [confirming, setConfirming] = react.useState(false);
+      // 可关闭窗口语义（与 dsh 自身弹窗一致，2026-09-08 用户定稿：无取消键）——
+      // Esc / 点背景 / 右上 ✕ 都直接关窗，未保存的编辑即放弃。挂 schedModalOpen
+      // 让 KitSurfaces 的全局 Esc（收标签页那个）让路；本监听 stopPropagation
+      // 兜底，Esc 只关本弹窗
+      react.useEffect(() => {
+        schedModalOpen = true;
+        const onKey = (e) => {
+          if (e.key !== "Escape") return;
+          e.stopPropagation();
+          onClose();
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => {
+          schedModalOpen = false;
+          window.removeEventListener("keydown", onKey, true);
+        };
+      }, [onClose]);
       const set = (key, value) => setValues((prev) => ({ ...prev, [key]: value }));
       const rec = values.recurrence || null;
       const setRec = (patch) => setValues((prev) => ({ ...prev, recurrence: { ...(prev.recurrence || { type: "weekly" }), ...patch } }));
@@ -6934,7 +6952,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         : (values.title ?? "").trim() === "";
       return jsxRuntime.jsxs("div", { className: "dshk-sched-overlay", onClick: onClose, children: [
         jsxRuntime.jsxs("div", { className: "dshk-sched-modal", onClick: (e) => e.stopPropagation(), children: [
-          jsxRuntime.jsx("div", { className: "dshk-sched-modaltitle", children: isEntry ? t("schedEditEntry") : modal.id ? t("schedEdit") : t("schedCreate") }),
+          jsxRuntime.jsxs("div", { className: "dshk-sched-modaltitle", children: [
+            jsxRuntime.jsx("span", { children: isEntry ? t("schedEditEntry") : modal.id ? t("schedEdit") : t("schedCreate") }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-x", "aria-label": t("schedClose"), title: t("schedClose"), onClick: onClose, children: "✕" }),
+          ] }),
           isEntry ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
             jsxRuntime.jsxs("div", { className: "dshk-sched-countwrap", children: [
               jsxRuntime.jsx("input", { className: "dshk-sched-input", maxLength: entryOrphan ? SCHED_TITLE_MAX : 200, value: values.note ?? "", placeholder: entryOrphan ? t("schedTitlePh") : t("schedDesc"), autoFocus: true, onChange: (e) => set("note", e.target.value.slice(0, entryOrphan ? SCHED_TITLE_MAX : 200)) }),
@@ -7042,7 +7063,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   : jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", onClick: () => setConfirming(true), children: t("schedDelete") })
                 : null,
               jsxRuntime.jsx("span", { style: { flex: 1 } }),
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", onClick: onClose, children: t("schedCancel") }),
               jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-primary", disabled: invalid, onClick: () => void onSave(modal.id, values), children: t("schedSave") }),
             ] }),
           ] }),
@@ -9323,27 +9343,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     : null,
                 ],
               }),
-              // 右组：全部关闭（仅有标签时显示）= 人为清场，抑制浏览器自动弹回；
-              // 计时不再占页条——运行态见悬浮小窗，入口见「计时」标签页
-              jsxRuntime.jsxs("span", {
-                className: "dshk-jobs-headside",
-                children: [
-                  tabDefs.length > 0
-                    ? jsxRuntime.jsx("button", {
-                        type: "button",
-                        className: "dshk-jobs-close",
-                        "aria-label": t("dockCloseAll"),
-                        title: t("dockCloseAll"),
-                        onClick: () => {
-                          autoOpenSuppressed = true;
-                          setMenuOpen(false);
-                          setKitUi({ previews: [], activePreview: null, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, dockTab: null });
-                        },
-                        children: "✕",
-                      })
-                    : null,
-                ],
-              }),
+              // 右组已清空（全部关闭按钮 2026-09-08 用户定稿移除——逐个关标签即可，
+              // 且该按钮会连带抑制浏览器自动弹回的隐藏状态）；计时运行态见悬浮小窗
               menuOpen
                 ? jsxRuntime.jsx("div", { className: "dshk-dock-backdrop", onClick: () => setMenuOpen(false) })
                 : null,
@@ -9634,6 +9635,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             return;
           }
           if (e.key === "Escape") {
+            // 日程弹窗开着时让路：Esc 归弹窗自己（只关弹窗，不收标签页）
+            if (schedModalOpen) return;
             // 右侧标签页容器：Esc 关当前激活标签（预览=关当前文件小标签；无激活位
             // 则关第一个存在的标签）；收起态不吞 Esc（面板本就不可见）
             if (dockAlive(kitUi) && kitUi.dockCollapsed !== true) {
