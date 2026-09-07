@@ -1,9 +1,9 @@
 // dsh-kit 日程模块——结构化存储与查询派生（schedule.ts）
 //
 // 职责：日程/待办/计时的唯一数据持有者（JSON 原子落盘，2026-09-08 起与知识库
-// 同址：<vaultRoot>/schedule.json（vault 只索引 md，json 放根下不碍事），
-// vaultRoot 未配置回退 $DSH_HOME/dsh-kit/schedule.json，首次自动迁入、原文件
-// 改名 .migrated 留档），以及派生层：区间重复展开、统计、文本汇总。UI 组件在
+// 同址：<vaultRoot>/schedule.json（vault 只索引 md，json 放根下不碍事）；不配置
+// 知识库目录日程整体不可用——UI 引导配置、端点回 vault-not-configured、agent
+// 工具拒绝），以及派生层：区间重复展开、统计、文本汇总。UI 组件在
 // client/bundle.js，agent 工具定义与端点注册在 index.ts——本文件不感知两者形状。
 //
 // 设计要点（schedule-design.md）：
@@ -263,35 +263,14 @@ export function dshKitDataDir(): string {
 
 /**
  * 日程数据文件解析（2026-09-08 用户定稿：与知识库同址——vault 只索引 md，json
- * 放根下不碍事，直接 <vaultRoot>/schedule.json；未配置 vaultRoot 回退原位置
- * <DSH_HOME>/dsh-kit/schedule.json）。目标缺失而迁移源有旧数据时整库迁入，迁完
- * 原文件改名 .migrated 留档——不删（数据还在）但不复活（用户删掉 vault 里的
- * schedule.json 想重新开始时，不会被旧数据覆盖回来）。迁移源按序找老默认位置与
- * 过渡期用过的 <vaultRoot>/.dsh-kit/（当晚未发版构建用过，顺手收编）。
+ * 放根下不碍事，直接 <vaultRoot>/schedule.json）。不配置知识库目录日程即不可用
+ * （UI 引导配置、端点与 agent 工具拒绝），此回退路径仅作 store 的停泊位，不做
+ * 任何数据迁移——测试期没有要搬的数据。
  */
 export function resolveScheduleFile(vaultRoot?: string): string {
   const root = (vaultRoot ?? '').trim()
   if (root === '') return path.join(dshKitDataDir(), 'schedule.json')
-  const file = path.join(root, 'schedule.json')
-  if (!fs.existsSync(file)) {
-    const sources = [
-      path.join(dshKitDataDir(), 'schedule.json'),
-      path.join(root, '.dsh-kit', 'schedule.json'),
-    ]
-    for (const legacy of sources) {
-      try {
-        if (fs.existsSync(legacy)) {
-          fs.mkdirSync(path.dirname(file), { recursive: true })
-          fs.copyFileSync(legacy, file)
-          fs.renameSync(legacy, `${legacy}.migrated`)
-          break
-        }
-      } catch {
-        // 单个迁移源失败就试下一个，都失败按目标路径空库起步
-      }
-    }
-  }
-  return file
+  return path.join(root, 'schedule.json')
 }
 
 export class ScheduleStore {
@@ -851,7 +830,21 @@ export function toolArgsToCreateInput(args: Record<string, unknown>): Record<str
   return input
 }
 
-export function buildScheduleTools({ defineTool, store }: { defineTool: DefineTool; store: ScheduleStore }): ToolDefinition[] {
+export function buildScheduleTools({
+  defineTool,
+  store,
+  isConfigured,
+}: {
+  defineTool: DefineTool
+  store: ScheduleStore
+  /** 知识库目录是否已配置（日程存储同址，未配置整体不可用）；缺省视为已配置 */
+  isConfigured?: () => boolean
+}): ToolDefinition[] {
+  /** 未配置时的引导文案：query 作为 summary 返回，create/delete 直接抛错 */
+  const gate = (): string | null =>
+    isConfigured && !isConfigured()
+      ? '日程尚未启用：日程与知识库共用存储目录，请先在 设置 → 插件 → dsh-kit 里填写「知识库目录」'
+      : null
   const query = defineTool({
     name: 'schedule_query',
     description:
@@ -867,6 +860,8 @@ export function buildScheduleTools({ defineTool, store }: { defineTool: DefineTo
       render: (_args: unknown, value: { summary: string }) => [{ type: 'text', text: value.summary }],
     },
     async execute(args: { scope?: 'day' | 'week' | 'month'; date?: string }) {
+      const blocked = gate()
+      if (blocked) return { summary: blocked, items: [] }
       const scope = args?.scope === 'week' || args?.scope === 'month' ? args.scope : 'day'
       const date = typeof args?.date === 'string' && DATE_RE.test(args.date) ? args.date : todayStr()
       return { summary: store.summary(scope, date), items: store.items(scope, date) }
@@ -896,6 +891,8 @@ export function buildScheduleTools({ defineTool, store }: { defineTool: DefineTo
       render: (_args: unknown, value: { summary: string }) => [{ type: 'text', text: value.summary }],
     },
     async execute(args: Record<string, unknown>) {
+      const blocked = gate()
+      if (blocked) throw new Error(blocked)
       const ev = store.create(toolArgsToCreateInput(args))
       return { id: ev.id, summary: createSummary(ev) }
     },
@@ -914,6 +911,8 @@ export function buildScheduleTools({ defineTool, store }: { defineTool: DefineTo
       render: (_args: unknown, value: { summary: string }) => [{ type: 'text', text: value.summary }],
     },
     async execute(args: Record<string, unknown>) {
+      const blocked = gate()
+      if (blocked) throw new Error(blocked)
       const id = typeof args.id === 'string' ? args.id : ''
       const ev = store.list().find((e) => e.id === id)
       if (!ev) return { ok: false, summary: `未找到条目 ${id}（可能已删除），请用 schedule_query 重新查询` }
