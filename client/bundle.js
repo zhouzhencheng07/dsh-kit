@@ -1458,6 +1458,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-row{display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;border-radius:8px;cursor:pointer;color:var(--dsw-alias-label-primary);white-space:nowrap;user-select:none}
 .dshk-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-chev{width:16px;flex:none;display:inline-flex;justify-content:center;align-items:center;color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:1}
+.dshk-ticonwrap{flex:none;display:inline-flex;align-items:center}
 .dshk-arrow{transition:transform .15s var(--ds-ease-in-out);display:block}
 .dshk-arrow-open{transform:rotate(90deg)}
 .dshk-name{overflow:hidden;text-overflow:ellipsis}
@@ -3341,6 +3342,46 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       );
     }
 
+    /** 树行小图标（13px 暗淡，随 currentColor）：空目录无箭头后靠它区分文件/目录 */
+    function TreeFolderIcon() {
+      return jsxRuntime.jsx(
+        "svg",
+        {
+          className: "dshk-vault-ticon",
+          width: 13,
+          height: 13,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          children: jsxRuntime.jsx("path", {
+            d: "M1.5 3.5c0-.55.45-1 1-1h3.2l1.6 1.8h6.2c.55 0 1 .45 1 1v7.2c0 .55-.45 1-1 1h-11c-.55 0-1-.45-1-1v-9z",
+            fill: "none",
+            stroke: "currentColor",
+            strokeWidth: 1.2,
+            strokeLinejoin: "round",
+          }),
+        },
+      );
+    }
+    function TreeFileIcon() {
+      return jsxRuntime.jsx(
+        "svg",
+        {
+          className: "dshk-vault-ticon",
+          width: 13,
+          height: 13,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          children: jsxRuntime.jsx("path", {
+            d: "M4 2.2a0.7 0.7 0 0 1 0.7-0.7h4.2l3.6 3.6v8.6a0.7 0.7 0 0 1-0.7 0.7H4.7a0.7 0.7 0 0 1-0.7-0.7v-11.5z M9 1.8v3.3h3.3",
+            fill: "none",
+            stroke: "currentColor",
+            strokeWidth: 1.2,
+            strokeLinejoin: "round",
+          }),
+        },
+      );
+    }
+
     /** 删除图标：垃圾桶 */
     function TrashIcon() {
       return jsxRuntime.jsxs(
@@ -3491,8 +3532,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         : jsxRuntime.jsx("span", { className: "dshk-name", children: entry.name }, "name");
       const rowChildren = [
         // 空目录（宿主 /tree 附 empty 标记）没有可展开内容：去掉箭头、点击不折叠，
-        // 行本身保留——空目录有"看得见"的必要（用户定稿 2026-09-07）
+        // 行本身保留——空目录有"看得见"的必要（用户定稿 2026-09-07）；目录/文件
+        // 图标常驻（箭头消失后空目录靠它和文件区分，2026-09-08）
         jsxRuntime.jsx("span", { className: "dshk-chev", children: entry.dir && entry.empty !== true ? jsxRuntime.jsx(ChevronIcon, { open: !!info }) : null }, "chev"),
+        jsxRuntime.jsx("span", { className: "dshk-ticonwrap", children: entry.dir ? jsxRuntime.jsx(TreeFolderIcon, {}) : jsxRuntime.jsx(TreeFileIcon, {}) }, "dicon"),
         nameEl,
       ];
       if (rowActions.length > 0) {
@@ -3721,6 +3764,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 目录行 ⋯ 菜单都汇到这里（createAt = 目标目录）
       const [createAt, setCreateAt] = react.useState(null);
       const [createName, setCreateName] = react.useState("");
+      // 区域外点击 = 取消新建（直接丢弃已输入内容，不弹窗不代建）：误点代建
+      // 会产生意外条目，弹窗又比一行输入的损失重；Enter 始终是显式创建
+      react.useEffect(() => {
+        if (createAt === null) return undefined;
+        const onDown = (e) => {
+          if (e.target instanceof Element && !e.target.closest(".dshk-createrow")) setCreateAt(null);
+        };
+        document.addEventListener("pointerdown", onDown, true);
+        return () => document.removeEventListener("pointerdown", onDown, true);
+      }, [createAt]);
       const startCreate = (dirPath) => {
         if (!cwd) return;
         setCreateAt(dirPath ?? cwd);
@@ -3876,7 +3929,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               }),
             ],
           }),
-          // 新建内联输入（vault 同款）：挂在头部下、目标目录由触发入口决定
+          // 新建内联输入（vault 同款）：挂在头部下、目标目录由触发入口决定；
+          // Enter 创建、Esc/空内容退格/区域外点击取消（✓ 按钮取消，用户定稿
+          // 2026-09-08：回车即建，不需要第二确认点）
           createAt !== null
             ? jsxRuntime.jsxs("div", { className: "dshk-createrow", title: createAt, children: [
                 jsxRuntime.jsx("input", {
@@ -3887,9 +3942,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   onKeyDown: (e) => {
                     if (e.key === "Enter") void submitCreate();
                     if (e.key === "Escape") setCreateAt(null);
+                    if (e.key === "Backspace" && createName === "") setCreateAt(null);
                   },
                 }),
-                jsxRuntime.jsx("button", { type: "button", className: "dshk-btn", title: t("treeNewAny"), onClick: () => void submitCreate(), children: "✓" }),
               ] })
             : null,
           jsxRuntime.jsx("div", {
@@ -7833,9 +7888,17 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [inTable, setInTable] = react.useState(false);
       // 建页/建目录合并入口（用户定稿 2026-09-07）：createDir = 内联输入框所在
       // 目录（null 关闭）；输入 `\` 开头 = 新建目录（剥掉前缀），否则建页面；
-      // 两者都还可带 / 多级
+      // 两者都还可带 / 多级。区域外点击 = 取消（直接丢弃，理由同文件树）
       const [createDir, setCreateDir] = react.useState(null);
       const [createTitle, setCreateTitle] = react.useState("");
+      react.useEffect(() => {
+        if (createDir === null) return undefined;
+        const onDown = (e) => {
+          if (e.target instanceof Element && !e.target.closest(".dshk-vault-createrow")) setCreateDir(null);
+        };
+        document.addEventListener("pointerdown", onDown, true);
+        return () => document.removeEventListener("pointerdown", onDown, true);
+      }, [createDir]);
       const [searchQ, setSearchQ] = react.useState("");
       const [searchRes, setSearchRes] = react.useState(null);
       const [searching, setSearching] = react.useState(false);
@@ -8622,9 +8685,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 onKeyDown: (e) => {
                   if (e.key === "Enter") submitCreate(dir);
                   if (e.key === "Escape") setCreateDir(null);
+                  if (e.key === "Backspace" && createTitle === "") setCreateDir(null);
                 },
               }),
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-treeplus", style: { visibility: "visible", fontSize: "13px" }, title: t("vaultNewAny"), onClick: () => submitCreate(dir), children: "✓" }),
             ],
           },
           key,
