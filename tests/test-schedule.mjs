@@ -15,6 +15,8 @@ import {
   mondayOf,
   isDateStr,
   timedMsInRange,
+  buildScheduleTools,
+  toolArgsToCreateInput,
 } from '../dist/schedule.js'
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'dshkit-sched-'))
@@ -249,5 +251,72 @@ test('update/delete：patch 白名单不产生脏字段', () => {
   assert.equal(after.start, undefined)
   assert.equal(store.remove(ev.id), true)
   assert.equal(store.remove(ev.id), false)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('toolArgsToCreateInput：date+time→事件、仅 date→待办、allDay→全天', () => {
+  assert.deepEqual(
+    toolArgsToCreateInput({ title: '开会', date: '2026-09-10', time: '15:00', endTime: '16:00' }),
+    { title: '开会', start: '2026-09-10T15:00', end: '2026-09-10T16:00' },
+  )
+  assert.deepEqual(
+    toolArgsToCreateInput({ title: '交报告', date: '2026-09-11' }),
+    { title: '交报告', due: '2026-09-11' },
+  )
+  assert.deepEqual(
+    toolArgsToCreateInput({ title: '休假', date: '2026-10-01', allDay: true }),
+    { title: '休假', start: '2026-10-01T00:00', allDay: true },
+  )
+})
+
+test('toolArgsToCreateInput：宽松输入（datetime 形 date、一位小时）与显式错误', () => {
+  assert.equal(toolArgsToCreateInput({ title: 'x', date: '2026-09-10T15:00' }).start, '2026-09-10T15:00')
+  assert.equal(toolArgsToCreateInput({ title: 'x', date: '2026-09-10', time: '9:05' }).start, '2026-09-10T09:05')
+  assert.throws(() => toolArgsToCreateInput({ title: 'x', date: '9月10日' }), /date/)
+  assert.throws(() => toolArgsToCreateInput({ title: 'x', date: '2026-09-10T99:99' }), /date/)
+  assert.throws(() => toolArgsToCreateInput({ title: 'x', date: '2026-09-10', time: '25:00' }), /time/)
+  assert.throws(() => toolArgsToCreateInput({ title: 'x', date: '2026-09-10', endTime: 'abc' }), /endTime/)
+})
+
+test('toolArgsToCreateInput：repeat 系参数组装 recurrence、待办带 repeat 拒绝', () => {
+  assert.deepEqual(
+    toolArgsToCreateInput({ title: '例会', date: '2026-09-07', time: '09:00', repeat: 'weekly', repeatInterval: 2, repeatDays: '1,3', repeatEnd: '2026-12-31' }).recurrence,
+    { type: 'weekly', interval: 2, days: [1, 3], end: '2026-12-31' },
+  )
+  assert.deepEqual(
+    toolArgsToCreateInput({ title: '跑步', date: '2026-09-07', time: '07:00', repeat: 'daily', repeatInterval: 2 }).recurrence,
+    { type: 'daily', interval: 2 },
+  )
+  // 垃圾字符过滤成空 days → 缺省开始日星期
+  assert.deepEqual(
+    toolArgsToCreateInput({ title: 'x', date: '2026-09-07', time: '08:00', repeat: 'weekly', repeatDays: '周一、周三' }).recurrence,
+    { type: 'weekly' },
+  )
+  assert.equal(toolArgsToCreateInput({ title: 'x', date: '2026-09-07', time: '08:00', repeat: 'yearly' }).recurrence, undefined)
+  assert.throws(
+    () => toolArgsToCreateInput({ title: 'x', date: '2026-09-07', repeat: 'weekly' }),
+    /repeat 仅对日程生效/,
+  )
+})
+
+test('schedule_create 工具：date+time 建日程、date 建待办、重复透传与摘要', async () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const defineTool = (opts) => opts
+  const tools = buildScheduleTools({ defineTool, store })
+  const create = tools.find((t) => t.name === 'schedule_create')
+  const r1 = await create.execute({ title: '评审', date: '2026-09-10', time: '15:00', endTime: '16:00' })
+  assert.match(r1.summary, /已创建日程：评审（2026-09-10 15:00–16:00）/)
+  const r2 = await create.execute({ title: '例会', date: '2026-09-07', time: '09:00', repeat: 'weekly', repeatInterval: 2, repeatDays: '1' })
+  assert.match(r2.summary, /已创建日程：例会（2026-09-07 09:00，每2周\(1\)）/)
+  const ev2 = store.list().find((e) => e.id === r2.id)
+  assert.deepEqual(ev2.recurrence, { type: 'weekly', interval: 2, days: [1] })
+  // 展开对齐：9/7 起每两周周一 → 区间内落 9/7 与 9/21
+  const occ = expandOccurrences([ev2], '2026-09-07', '2026-09-30')
+  assert.deepEqual(occ.map((o) => o.date), ['2026-09-07', '2026-09-21'])
+  const r3 = await create.execute({ title: '交表', date: '2026-09-11' })
+  assert.match(r3.summary, /已创建待办：交表（截止 2026-09-11）/)
+  const r4 = await create.execute({ title: '外出', date: '2026-10-01', allDay: true })
+  assert.match(r4.summary, /已创建日程：外出（2026-10-01 全天）/)
   fs.rmSync(dir, { recursive: true, force: true })
 })

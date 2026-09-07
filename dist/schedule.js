@@ -546,6 +546,109 @@ export function getScheduleStore() {
 // ── agent 工具（schedule_query / schedule_create）───────────────────────────
 // 边界即设计：agent 只见汇总（日/周/月）与创建，不给改/删原子的工具——
 // 「人主导日程，agent 是助理」在工具面就锁死，不依赖提示词自觉。
+/** "H:mm"/"HH:mm" 归一成 "HH:mm"；缺位/越界返回 null */
+function normHHmm(raw) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(raw.trim());
+    if (m === null)
+        return null;
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    if (hh > 23 || mm > 59)
+        return null;
+    return `${pad2(hh)}:${pad2(mm)}`;
+}
+const REC_TYPE_ZH = { daily: '每天', weekly: '每周', monthly: '每月' };
+function recurrenceLabel(rec) {
+    // "每2周(1)" 形式：interval 与 days 直接拼接会有「每周×21」这类读法歧义
+    const unit = rec.type === 'daily' ? '天' : rec.type === 'weekly' ? '周' : '月';
+    const head = rec.interval !== undefined && rec.interval > 1 ? `每${rec.interval}${unit}` : REC_TYPE_ZH[rec.type];
+    const bits = [head];
+    if (rec.days !== undefined && rec.days.length > 0)
+        bits.push(`(${rec.days.join(',')})`);
+    if (rec.end !== undefined)
+        bits.push(`至${rec.end}`);
+    return bits.join('');
+}
+function createSummary(ev) {
+    const kind = ev.start !== undefined ? '日程' : '待办';
+    const bits = [];
+    if (ev.allDay === true)
+        bits.push(`${ev.start?.slice(0, 10) ?? ''} 全天`);
+    else if (ev.start !== undefined) {
+        bits.push(`${ev.start.replace('T', ' ')}${ev.end !== undefined ? `–${ev.end.split('T')[1] ?? ''}` : ''}`);
+    }
+    else if (ev.due !== undefined)
+        bits.push(`截止 ${ev.due}`);
+    if (ev.recurrence)
+        bits.push(recurrenceLabel(ev.recurrence));
+    return `已创建${kind}：${ev.title}${bits.length > 0 ? `（${bits.join('，')}）` : ''}`;
+}
+/**
+ * schedule_create 扁平参数 → store.create 输入。纯函数（测试直接对表）：
+ * date+time→start/end、仅 date→due（待办）、allDay→全天事件、repeat* 组装
+ * recurrence（store 层 sanitizeRecurrence 再兜底一道）。date/time 写错是
+ * 显式意图，解析失败抛错让模型重试，不静默降级成别的日子或别的种类。
+ * 重复只对日程生效（expandOccurrences 跳过无 start 条目），待办带 repeat
+ * 会变成永不展开的死配置，故直接拒绝。
+ */
+export function toolArgsToCreateInput(args) {
+    const input = {};
+    if (typeof args.title === 'string')
+        input.title = args.title;
+    if (typeof args.description === 'string')
+        input.description = args.description;
+    if (typeof args.location === 'string')
+        input.location = args.location;
+    const rawDate = typeof args.date === 'string' ? args.date.trim() : '';
+    let date = isDateStr(rawDate) ? rawDate : '';
+    let dtTime = null;
+    if (date === '' && DT_RE.test(rawDate)) {
+        dtTime = normHHmm(rawDate.slice(11, 16));
+        if (dtTime === null)
+            throw new Error(`date 无法解析：${args.date}`);
+        date = rawDate.slice(0, 10);
+    }
+    if (date === '')
+        throw new Error('date 必填，格式 YYYY-MM-DD');
+    const timeArg = typeof args.time === 'string' && args.time.trim() !== '' ? args.time : null;
+    const time = timeArg !== null ? normHHmm(timeArg) : dtTime;
+    if (timeArg !== null && time === null)
+        throw new Error(`time 无法解析：${timeArg}`);
+    const endTimeArg = typeof args.endTime === 'string' && args.endTime.trim() !== '' ? args.endTime : null;
+    const endTime = endTimeArg !== null ? normHHmm(endTimeArg) : null;
+    if (endTimeArg !== null && endTime === null)
+        throw new Error(`endTime 无法解析：${endTimeArg}`);
+    if (args.allDay === true) {
+        input.start = `${date}T00:00`;
+        input.allDay = true;
+    }
+    else if (time !== null) {
+        input.start = `${date}T${time}`;
+        if (endTime !== null)
+            input.end = `${date}T${endTime}`;
+    }
+    else {
+        input.due = date;
+    }
+    const repeat = args.repeat;
+    if (repeat === 'daily' || repeat === 'weekly' || repeat === 'monthly') {
+        if (!('start' in input))
+            throw new Error('repeat 仅对日程生效：请提供 time 或 allDay=true');
+        const rec = { type: repeat };
+        if (typeof args.repeatInterval === 'number' && Number.isFinite(args.repeatInterval) && args.repeatInterval >= 1) {
+            rec.interval = Math.floor(args.repeatInterval);
+        }
+        if (repeat === 'weekly' && typeof args.repeatDays === 'string') {
+            const days = [...new Set(args.repeatDays.split(/[^0-9]+/).map(Number).filter((n) => n >= 1 && n <= 7))].sort((a, b) => a - b);
+            if (days.length > 0)
+                rec.days = days;
+        }
+        if (typeof args.repeatEnd === 'string' && isDateStr(args.repeatEnd))
+            rec.end = args.repeatEnd;
+        input.recurrence = rec;
+    }
+    return input;
+}
 export function buildScheduleTools({ defineTool, store }) {
     const query = defineTool({
         name: 'schedule_query',
@@ -567,13 +670,19 @@ export function buildScheduleTools({ defineTool, store }) {
     });
     const create = defineTool({
         name: 'schedule_create',
-        description: '在用户日程里创建条目。给 time 创建日程事件（周网格显示），只给 date 创建待办（待办列表显示）。' +
-            '用户说「帮我记个日程」「周三下午3点开会」「加个待办/周五要交报告」时使用；重复日程先按单次创建，请用户在日程面板里调整重复规则。',
+        description: '在用户日程里创建条目。date+time 或 allDay 创建日程事件（周网格显示），只给 date 创建待办（待办列表显示）。' +
+            '用户说「帮我记个日程」「周三下午3点开会」「周五全天评审」「加个待办/周五要交报告」时使用；' +
+            '重复日程用 repeat 系参数（如每两周周一：repeat=weekly、repeatInterval=2、repeatDays="1"）。',
         parameters: {
             title: { type: 'string', required: true, description: '事项标题' },
-            date: { type: 'string', required: true, description: '日期 YYYY-MM-DD' },
-            time: { type: 'string', description: '开始时刻 HH:mm（给了就是日程事件，不给则创建为待办）' },
-            endTime: { type: 'string', description: '结束时刻 HH:mm' },
+            date: { type: 'string', required: true, description: '日期 YYYY-MM-DD（也容忍 YYYY-MM-DDTHH:mm）' },
+            time: { type: 'string', description: '开始时刻 HH:mm（给了就是日程事件，不给且无 allDay 则创建为待办）' },
+            endTime: { type: 'string', description: '结束时刻 HH:mm（仅与 time 同用）' },
+            allDay: { type: 'boolean', description: '全天日程：给了就在该日建全天事件而非待办' },
+            repeat: { type: 'string', enum: ['daily', 'weekly', 'monthly'], description: '重复类型，缺省不重复；仅日程（time/allDay）生效' },
+            repeatInterval: { type: 'number', description: '重复间隔：每 N 天/周/月，缺省 1' },
+            repeatDays: { type: 'string', description: 'weekly 专用：重复星期，1=周一…7=周日，如 "1,3,5"；缺省=开始日的星期' },
+            repeatEnd: { type: 'string', description: '重复截止日 YYYY-MM-DD（含当天），缺省无限' },
             description: { type: 'string', description: '备注' },
             location: { type: 'string', description: '地点' },
         },
@@ -582,12 +691,8 @@ export function buildScheduleTools({ defineTool, store }) {
             render: (_args, value) => [{ type: 'text', text: value.summary }],
         },
         async execute(args) {
-            const ev = store.create(args);
-            const when = ev.start !== undefined
-                ? `${ev.start.replace('T', ' ')}${ev.end !== undefined ? `–${ev.end.split('T')[1] ?? ''}` : ''}`
-                : (ev.due ?? '');
-            const kind = ev.start !== undefined ? '日程' : '待办';
-            return { id: ev.id, summary: `已创建${kind}：${ev.title}${when !== '' ? `（${when}）` : ''}` };
+            const ev = store.create(toolArgsToCreateInput(args));
+            return { id: ev.id, summary: createSummary(ev) };
         },
     });
     return [query, create];
