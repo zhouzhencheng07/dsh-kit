@@ -62,10 +62,11 @@ export interface ScheduleEvent {
 
 export interface ScheduleData {
   events: ScheduleEvent[]
-  /** 全局单计时：进行中的计时段（end 空闲）挂在哪个条目上 */
-  runningTimer?: { id: string; start: string } | null
+  /** 全局单计时：进行中的计时段（end 空闲）挂在哪个条目上；独立计时的
+   *  自由标题放 title（挂条目时标题从条目取，不落这里） */
+  runningTimer?: { id: string; start: string; title?: string } | null
   /** 独立计时（未挂条目）闭合后的时段：不进事件/待办列表，统计照计——
-   *  没有它，停表即意味着这段时间凭空消失 */
+   *  没有它，停表即意味着这段时间凭空消失；note=独立计时的自由标题 */
   orphans?: ScheduleTimeEntry[]
 }
 
@@ -365,19 +366,22 @@ export class ScheduleStore {
 
   // ── 计时（全局单实例）────────────────────────────────────────────────────
 
-  timerStart(id?: string): { runningTimer: NonNullable<ScheduleData['runningTimer']> } {
+  timerStart(id?: string, title?: string): { runningTimer: NonNullable<ScheduleData['runningTimer']> } {
     // 已有进行中先闭合（礼貌性互斥：一边计时是人对自己时间的诚实）
     if (this.data.runningTimer) this.timerStop()
     const target = id ? this.data.events.find((e) => e.id === id) : undefined
     const start = dtStrOf(new Date(), true)
+    // 独立计时可带自由标题（wangshu 同款：不挂任务也能给这段轨迹起名），
+    // 挂条目时标题永远跟条目走，不收 title
+    const label = target ? undefined : title?.trim().slice(0, 200) || undefined
     if (target) {
       if (!Array.isArray(target.timeEntries)) target.timeEntries = []
       target.timeEntries.push({ start })
       target.updatedAt = start
     }
-    this.data.runningTimer = { id: target ? target.id : '', start }
+    this.data.runningTimer = { id: target ? target.id : '', start, title: label }
     this.persist()
-    return { runningTimer: { id: this.data.runningTimer.id, start } }
+    return { runningTimer: { id: this.data.runningTimer.id, start, title: label } }
   }
 
   timerStop(): { stopped: boolean } {
@@ -394,7 +398,7 @@ export class ScheduleStore {
       // 独立计时（未挂条目）的时段落到 orphans：不挂列表但统计照计，
       // 否则停表即丢数据；timerStart 撞上已删条目静默降级成的独立计时也走这里
       if (!Array.isArray(this.data.orphans)) this.data.orphans = []
-      this.data.orphans.push({ start: running.start, end: dtStrOf(new Date(), true) })
+      this.data.orphans.push({ start: running.start, end: dtStrOf(new Date(), true), note: running.title })
     }
     this.data.runningTimer = null
     this.persist()
@@ -404,7 +408,9 @@ export class ScheduleStore {
   runningTimer(): { id: string; start: string; title: string } | null {
     const running = this.data.runningTimer
     if (!running) return null
-    const title = running.id ? (this.data.events.find((e) => e.id === running.id)?.title ?? '') : ''
+    const title = running.id
+      ? (this.data.events.find((e) => e.id === running.id)?.title ?? '')
+      : (running.title ?? '')
     return { id: running.id, start: running.start, title }
   }
 

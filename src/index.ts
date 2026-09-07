@@ -2537,6 +2537,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
           events: scheduleStore.list(),
           occurrences: scheduleStore.occurrences(from, to),
           runningTimer: scheduleStore.runningTimer(),
+          orphans: scheduleStore.listOrphans(),
         })
       })
       schedRoute('/dsh-kit/schedule/timer', (req, res) => {
@@ -2585,7 +2586,8 @@ export async function apply(ctx: KitCtx): Promise<void> {
       schedRoute('/dsh-kit/schedule/timer-start', (req, res) =>
         schedPost(req, res, (body) => {
           const id = typeof body.id === 'string' && body.id !== '' ? body.id : undefined
-          return { runningTimer: scheduleStore.timerStart(id).runningTimer }
+          const title = typeof body.title === 'string' && body.title !== '' ? body.title : undefined
+          return { runningTimer: scheduleStore.timerStart(id, title).runningTimer }
         }),
       )
       schedRoute('/dsh-kit/schedule/timer-stop', (req, res) => schedPost(req, res, () => scheduleStore.timerStop()))

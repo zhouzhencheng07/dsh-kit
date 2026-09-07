@@ -57,7 +57,7 @@ window.__ModuleLoader__.load({
     // （打开标签页卡片）；dockCollapsed = 暂时收起成右缘窄栏（存在性保留；视为
     // 人为退出——agent 导航不再弹回）。收起态不持久化：每次启动一律收起（用户
     // 定稿），打开任意标签会自动展开；会话内用快捷键开合。
-    let kitUi = { treeOpen: false, gitOpen: false, previews: [], activePreview: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, dockTab: null, dockCollapsed: true };
+    let kitUi = { treeOpen: false, gitOpen: false, previews: [], activePreview: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, timerOpen: false, vaultOpen: false, dockTab: null, dockCollapsed: true };
     const kitUiListeners = new Set();
     function setKitUi(patch) {
       kitUi = { ...kitUi, ...patch };
@@ -95,7 +95,7 @@ window.__ModuleLoader__.load({
       return Math.max(1, Number.isInteger(v) ? v : PREVIEW_MAX_DEFAULT);
     }
     /** 右侧标签页共存的活性判定（渲染右坞与否） */
-    const dockAlive = (ui) => (ui.previews?.length ?? 0) > 0 || ui.jobsOpen === true || ui.browserOpen === true || ui.schedOpen === true || ui.vaultOpen === true;
+    const dockAlive = (ui) => (ui.previews?.length ?? 0) > 0 || ui.jobsOpen === true || ui.browserOpen === true || ui.schedOpen === true || ui.timerOpen === true || ui.vaultOpen === true;
     /** 打开/激活文件预览标签：已存在则置顶激活（usedAt 刷新，deleted/untracked
      *  同步为本次状态）；超过上限按 LRU 逐出最久未用的（绝不含本次）；顺带取消
      *  最小化态并激活预览大标签。deleted=已删除文件，预览只承载删除 diff。 */
@@ -140,6 +140,7 @@ window.__ModuleLoader__.load({
         patch.activePreview = null;
       } else if (tab === "jobs") patch.jobsOpen = false;
       else if (tab === "schedule") patch.schedOpen = false;
+      else if (tab === "timer") patch.timerOpen = false;
       else if (tab === "vault") patch.vaultOpen = false;
       else patch.browserOpen = false;
       if (ui.dockTab === tab) {
@@ -147,6 +148,7 @@ window.__ModuleLoader__.load({
         if (tab !== "preview" && (ui.previews?.length ?? 0) > 0) remaining.push("preview");
         if (tab !== "jobs" && ui.jobsOpen) remaining.push("jobs");
         if (tab !== "schedule" && ui.schedOpen) remaining.push("schedule");
+        if (tab !== "timer" && ui.timerOpen) remaining.push("timer");
         if (tab !== "vault" && ui.vaultOpen) remaining.push("vault");
         if (tab !== "browser" && ui.browserOpen) remaining.push("browser");
         patch.dockTab = remaining[0] ?? null;
@@ -158,6 +160,7 @@ window.__ModuleLoader__.load({
     function openDockTab(ui, tab) {
       if (tab === "jobs") return { jobsOpen: true, dockTab: "jobs", dockCollapsed: false };
       if (tab === "schedule") return { schedOpen: true, dockTab: "schedule", dockCollapsed: false };
+      if (tab === "timer") return { timerOpen: true, dockTab: "timer", dockCollapsed: false };
       if (tab === "vault") return { vaultOpen: true, dockTab: "vault", dockCollapsed: false };
       return { browserOpen: true, dockTab: "browser", dockCollapsed: false };
     }
@@ -730,6 +733,16 @@ window.__ModuleLoader__.load({
       schedEmptyWeek: "本周暂无日程安排",
       schedPickTimer: "选择要计时的待办",
       schedTimerStandalone: "独立计时（不挂待办）",
+      timerTab: "计时",
+      timerIdleHint: "开始一次计时——可挂待办，也可只写个名目独立计时",
+      timerLabelPh: "在做什么（可留空）",
+      timerStartBtn: "开始计时",
+      timerStopBtn: "停止计时",
+      timerRunning: "计时中",
+      timerToday: "今日计时",
+      timerTodayEmpty: "今天还没有计时记录",
+      timerOpenPill: "打开计时标签页",
+      timerGridBadge: "计时",
       schedWeekdays: "一,二,三,四,五,六,日",
       schedDelDone: "已删除",
       schedSaved: "已保存",
@@ -1175,6 +1188,16 @@ window.__ModuleLoader__.load({
       schedEmptyWeek: "No events this week",
       schedPickTimer: "Pick a task to time",
       schedTimerStandalone: "Standalone timer (no task)",
+      timerTab: "Timer",
+      timerIdleHint: "Start a timer — bind a task or just name it standalone",
+      timerLabelPh: "What are you working on (optional)",
+      timerStartBtn: "Start",
+      timerStopBtn: "Stop timer",
+      timerRunning: "Timing",
+      timerToday: "Today's time",
+      timerTodayEmpty: "No timer records today",
+      timerOpenPill: "Open timer tab",
+      timerGridBadge: "Timer",
       schedWeekdays: "Mo,Tu,We,Th,Fr,Sa,Su",
       schedDelDone: "Deleted",
       schedSaved: "Saved",
@@ -1821,20 +1844,31 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-sched-primary{appearance:none;border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:#fff;font:inherit;font-size:12px;line-height:1;padding:7px 14px;border-radius:8px;cursor:pointer}
 .dshk-sched-primary:disabled{opacity:.5;cursor:default}
 .dshk-sched-danger{appearance:none;border:1px solid color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);background:none;color:var(--dsw-alias-danger,#cd3131);font:inherit;font-size:12px;line-height:1;padding:7px 12px;border-radius:8px;cursor:pointer}
-/* 计时芯片：页条最小化钮旁（展开态）+ 收起栏底部（is-rail，弹层向左上开） */
-.dshk-sched-timer{position:relative;display:inline-flex;align-items:center;gap:6px}
-.dshk-sched-timer.is-rail{gap:4px}
-.dshk-sched-timer.is-rail .dshk-sched-timerpick{top:auto;bottom:0;right:30px;left:auto}
-.dshk-sched-timerbtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);font:inherit;font-size:10px;line-height:1;width:22px;height:22px;border-radius:999px;cursor:pointer}
-.dshk-sched-timerbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-brand-primary)}
-.dshk-sched-timerbtn.is-stop{color:var(--dsw-alias-danger,#cd3131);border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent)}
+/* 计时：悬浮小窗（运行中且不在计时页时漂浮内容区右下，坞展开自动让位）+
+   计时标签页视图 + 周网格橙色计时段（wangshu 同款 #fd7e14） */
 .dshk-sched-timerdot{width:7px;height:7px;border-radius:999px;background:var(--dsw-alias-danger,#cd3131);animation:dshk-sched-pulse 1.2s ease-in-out infinite}
 @keyframes dshk-sched-pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.dshk-sched-timertitle{max-width:180px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:12px;color:var(--dsw-alias-label-primary)}
-.dshk-sched-timerelapsed{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dsw-alias-label-secondary)}
-.dshk-sched-timerpick{position:absolute;top:26px;left:0;z-index:60;min-width:200px;max-height:240px;overflow:auto;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 28px color-mix(in srgb,#000 25%,transparent);display:flex;flex-direction:column;padding:4px}
-.dshk-sched-timerpickitem{appearance:none;border:none;background:none;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;text-align:left;padding:7px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:320px}
-.dshk-sched-timerpickitem:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-timer-pill{position:fixed;right:calc(var(--dshk-pane-w, 0px) + 12px);bottom:14px;z-index:700;display:inline-flex;align-items:center;gap:8px;padding:7px 9px 7px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-base);box-shadow:0 6px 20px color-mix(in srgb,#000 22%,transparent);cursor:pointer;user-select:none}
+.dshk-timer-pill:hover{border-color:var(--dsw-alias-brand-primary)}
+.dshk-timer-pilltime{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dsw-alias-label-primary);font-variant-numeric:tabular-nums}
+.dshk-timer-pillstop{appearance:none;border:1px solid color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);background:none;color:var(--dsw-alias-danger,#cd3131);font-size:8px;line-height:1;width:18px;height:18px;border-radius:999px;cursor:pointer;padding:0}
+.dshk-timer-pillstop:hover{background:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 12%,transparent)}
+.dshk-timer-root{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:0 12px 12px}
+.dshk-timer-nowline{display:flex;align-items:center;gap:7px}
+.dshk-timer-nowlabel{font-size:11px;color:var(--dsw-alias-label-secondary)}
+.dshk-timer-bigelapsed{font-family:ui-monospace,Consolas,monospace;font-size:30px;line-height:1.25;color:var(--dsw-alias-label-primary);font-variant-numeric:tabular-nums}
+.dshk-timer-nowmeta{display:flex;align-items:center;gap:8px;min-width:0}
+.dshk-timer-nowtitle{flex:1;min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:12px;color:var(--dsw-alias-label-primary)}
+.dshk-timer-hint{font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dshk-timer-startrow{display:flex;gap:6px;align-items:center}
+.dshk-timer-startrow .dshk-sched-taskinput{flex:1;min-width:0}
+.dshk-timer-rec{display:flex;align-items:center;gap:8px;padding:4px 2px;border-radius:6px;font-size:12px}
+.dshk-timer-rec:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-timer-rectitle{flex:1;min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;color:var(--dsw-alias-label-primary)}
+.dshk-timer-rectime{flex:none;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dshk-timer-recdur{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.dshk-timer-total{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--dsw-alias-border-l2);padding-top:8px;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshk-sched-event.is-timed{background:color-mix(in srgb,#fd7e14 16%,transparent);color:var(--dsw-alias-label-primary);box-shadow:none;border-left:3px solid #fd7e14}
 /* 内置浏览器面板：右侧停靠（复用 .dshk-pane）；URL 栏 + 实时画面 canvas（人机共驾） */
 /* 右侧标签页容器：内容视图占满（非激活标签 display:none 保挂载） */
 .dshk-pane-view{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
@@ -1857,7 +1891,6 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-dock-rail-btn:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-dock-rail-btn-on{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-rail-dot{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:999px;background:var(--dsw-alias-brand-primary)}
-.dshk-dock-rail-timer{margin-top:auto;display:inline-flex;justify-content:center}
 /* 透明 IME 输入：只做组合事件宿主，视觉隐形、不拦截点击 */
 .dshk-brw-ime{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;border:0;padding:0;margin:0;outline:none;pointer-events:none;z-index:-1;background:transparent}
 /* 手机触控增强：斜杠菜单（input-trigger）在触屏上滚不动/悬停粘滞的兜底。
@@ -3167,6 +3200,28 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           children: [
             jsxRuntime.jsx("rect", { x: 2.8, y: 3.6, width: 10.4, height: 9.6, rx: 1.6 }),
             jsxRuntime.jsx("path", { d: "M5.4 2.2v2.6M10.6 2.2v2.6M2.8 7h10.4" }),
+          ],
+        },
+      );
+    }
+
+    /** 计时图标：秒表（圆体 + 顶部按钮 + 左上斜柄 + 指针），与终端/任务描边体系一致 */
+    function TimerIcon() {
+      return jsxRuntime.jsxs(
+        "svg",
+        {
+          width: 15,
+          height: 15,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.2,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          children: [
+            jsxRuntime.jsx("circle", { cx: 8, cy: 9, r: 5.2 }),
+            jsxRuntime.jsx("path", { d: "M6.6 1.6h2.8M8 1.6v2.2M8 9V6.6M4.4 3.9 3.3 2.8" }),
           ],
         },
       );
@@ -6410,6 +6465,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             events: Array.isArray(body.events) ? body.events : [],
             occurrences: Array.isArray(body.occurrences) ? body.occurrences : [],
             runningTimer: body.runningTimer ?? null,
+            orphans: Array.isArray(body.orphans) ? body.orphans : [],
           });
         } catch {
           /* 拉取失败保留旧数据，下一轮再试 */
@@ -6489,14 +6545,31 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             .sort((a, b) => (a.due ?? "9999") < (b.due ?? "9999") ? -1 : 1),
         [data.events],
       );
+      // 计时段上网格（wangshu 对齐）：事件 timeEntries 与独立计时段（orphans，
+      // note=自由标题）合成显示块——停了的才显示（进行中的没形状），按 start 日
+      // 归属（与 timedMsInRange 统计口径一致）。独立段不可编辑（无 base 条目）
+      const timedOcc = react.useMemo(() => {
+        const segs = [];
+        for (const ev of data.events) {
+          (Array.isArray(ev.timeEntries) ? ev.timeEntries : []).forEach((t, i) => {
+            if (t.end === undefined) return;
+            segs.push({ baseId: `${ev.id}#timed${i}`, date: t.start.slice(0, 10), startMins: timerMinsOfDT(t.start), endMins: timerMinsOfDT(t.end), allDay: false, title: ev.title, virtual: false, isTimed: true });
+          });
+        }
+        (Array.isArray(data.orphans) ? data.orphans : []).forEach((o, i) => {
+          if (o.end === undefined) return;
+          segs.push({ baseId: `orphan#timed${i}`, date: o.start.slice(0, 10), startMins: timerMinsOfDT(o.start), endMins: timerMinsOfDT(o.end), allDay: false, title: o.note || t("schedTimerStandalone"), virtual: false, isTimed: true });
+        });
+        return segs;
+      }, [data.events, data.orphans]);
       const gridOcc = react.useMemo(
         () =>
-          schedAssignLanes(data.occurrences.filter((o) => !o.allDay)).map((o) => ({
+          schedAssignLanes([...data.occurrences.filter((o) => !o.allDay), ...timedOcc]).map((o) => ({
             ...o,
             top: ((Math.max(o.startMins, SCHED_DAY_START) - SCHED_DAY_START) / 60) * SCHED_HOUR_PX,
             height: Math.max(18, (((o.endMins ?? o.startMins + 60) - Math.max(o.startMins, SCHED_DAY_START)) / 60) * SCHED_HOUR_PX),
           })),
-        [data.occurrences],
+        [data.occurrences, timedOcc],
       );
       const allDayOcc = react.useMemo(() => data.occurrences.filter((o) => o.allDay), [data.occurrences]);
 
@@ -6575,22 +6648,22 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 : null,
               inWeek.map((o) =>
                 jsxRuntime.jsxs("div", {
-                  className: "dshk-sched-event",
+                  className: `dshk-sched-event${o.isTimed ? " is-timed" : ""}`,
                   style: {
                     top: o.top,
                     height: o.height,
                     left: `calc(${(o.lane * 100) / o.lanes}% + 2px)`,
                     width: `calc(${100 / o.lanes}% - 4px)`,
-                    ...(o.color ? { background: o.color } : {}),
+                    ...(o.color && !o.isTimed ? { background: o.color } : {}),
                   },
                   title: o.title,
                   onClick: (e) => {
                     e.stopPropagation();
-                    openEdit(o);
+                    if (!o.isTimed) openEdit(o);
                   },
                   children: [
                     jsxRuntime.jsx("span", { className: "dshk-sched-evtime", children: `${schedHHmm(o.startMins)}${o.endMins !== null ? " " + schedHHmm(o.endMins) : ""}` }),
-                    jsxRuntime.jsx("span", { className: "dshk-sched-evtitle", children: o.title }),
+                    jsxRuntime.jsx("span", { className: "dshk-sched-evtitle", children: o.isTimed ? `⏱ ${o.title}` : o.title }),
                   ],
                 }, `${o.baseId}@${o.date}`),
               ),
@@ -6782,34 +6855,38 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       ] });
     }
 
-    /** 计时芯片，双挂载：页条最小化钮旁（展开态）+ 收起栏底部（compact——与
-     *  浏览器/知识库对齐，坞收起也留按钮；省标题与时长文字，tooltip 带实时时长）。
-     *  空闲=▶（选待办/独立计时），运行=标题+时长+■ */
-    function ScheduleTimerChip({ compact }) {
-      const [running, setRunning] = react.useState(null); // { id, start, title }
-      const [picking, setPicking] = react.useState(false);
-      const [tasks, setTasks] = react.useState([]);
-      const [nowTick, setNowTick] = react.useState(() => Date.now());
+    /** 计时段的已流逝时长（本地朴素时间串 → hh:mm:ss）；纯函数，渲染与测试共用 */
+    function timerElapsedStr(nowTick, startStr) {
+      const [d, tm = "00:00"] = String(startStr).split("T");
+      const [y, mo, dd] = d.split("-").map(Number);
+      const tp = tm.split(":").map(Number);
+      const startMs = new Date(y, mo - 1, dd, tp[0] ?? 0, tp[1] ?? 0, tp[2] ?? 0).getTime();
+      const s = Math.max(0, Math.floor((nowTick - startMs) / 1000));
+      return `${schedPad2(Math.floor(s / 3600))}:${schedPad2(Math.floor((s % 3600) / 60))}:${schedPad2(s % 60)}`;
+    }
+    /** 计时段 "YYYY-MM-DDTHH:mm(:ss)" → 当日分钟数（网格橙块定位用） */
+    function timerMinsOfDT(dt) {
+      return Number(String(dt).slice(11, 13)) * 60 + Number(String(dt).slice(14, 16));
+    }
+    /** 悬浮小窗可见性：在计时且没在看计时标签页（坞收着/在别的标签/根本没开）。
+     *  计时比较特殊——全屏界面没人常看，运行态必须漂在内容上；纯函数便于断言 */
+    function timerPillVisible(running, ui) {
+      return !!running && !(ui.dockCollapsed === false && ui.dockTab === "timer");
+    }
 
-      // 平时只拉轻端点（runningTimer 一项）；全量 data 是给选择器列待办用的，
-      // 点开 ▶ 才拉。日程面板与芯片经 dshk-sched-changed 事件互相同步，轮询只是兜底。
+    /** 运行态轮询三件套（10s 轻端点 + dshk-sched-changed 即时 + 秒针仅运行中），
+     *  计时页与悬浮小窗共用同一套节奏 */
+    function useRunningTimer() {
+      const [running, setRunning] = react.useState(null); // { id, start, title }
+      const [nowTick, setNowTick] = react.useState(() => Date.now());
       const refresh = react.useCallback(async () => {
         try {
           const body = await schedFetch("/dsh-kit/schedule/timer");
           setRunning(body.runningTimer ?? null);
         } catch {
-          /* 静默：输入区旁的芯片不打扰 */
+          /* 静默：计时件不打扰 */
         }
       }, []);
-      const loadTasks = react.useCallback(async () => {
-        try {
-          const body = await schedFetch("/dsh-kit/schedule/data?from=&to=");
-          setTasks(Array.isArray(body.events) ? body.events.filter((e) => e.start === undefined && !e.completedAt) : []);
-        } catch {
-          /* 静默 */
-        }
-      }, []);
-
       react.useEffect(() => {
         void refresh();
         const timer = setInterval(() => {
@@ -6817,70 +6894,167 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           void refresh();
           setNowTick(Date.now());
         }, 10000);
-        const onChanged = () => {
-          void refresh();
-          if (picking) void loadTasks();
-        };
+        const onChanged = () => void refresh();
         window.addEventListener("dshk-sched-changed", onChanged);
         return () => {
           clearInterval(timer);
           window.removeEventListener("dshk-sched-changed", onChanged);
         };
-      }, [refresh, loadTasks, picking]);
-      // 秒针只在计时进行时走：空闲芯片只有一个 ▶，每秒重渲染纯浪费
+      }, [refresh]);
       react.useEffect(() => {
         if (!running) return undefined;
         setNowTick(Date.now());
         const tick = setInterval(() => setNowTick(Date.now()), 1000);
         return () => clearInterval(tick);
       }, [running && running.id, running && running.start]);
-      const elapsedStr = (startStr) => {
-        const [d, tm = "00:00"] = String(startStr).split("T");
-        const [y, mo, dd] = d.split("-").map(Number);
-        const tp = tm.split(":").map(Number);
-        const startMs = new Date(y, mo - 1, dd, tp[0] ?? 0, tp[1] ?? 0, tp[2] ?? 0).getTime();
-        const s = Math.max(0, Math.floor((nowTick - startMs) / 1000));
-        return `${schedPad2(Math.floor(s / 3600))}:${schedPad2(Math.floor((s % 3600) / 60))}:${schedPad2(s % 60)}`;
-      };
-      const start = (id) => {
-        setPicking(false);
-        schedFetch("/dsh-kit/schedule/timer-start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(id ? { id } : {}) })
-          .then((body) => {
-            setRunning(body.runningTimer ?? null);
-            window.dispatchEvent(new Event("dshk-sched-changed"));
-          })
-          .catch(() => {});
-      };
-      const stop = () => {
+      const stop = react.useCallback(() => {
         schedFetch("/dsh-kit/schedule/timer-stop", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
           .then(() => {
             setRunning(null);
             window.dispatchEvent(new Event("dshk-sched-changed"));
           })
           .catch(() => {});
+      }, []);
+      return { running, nowTick, refresh, stop };
+    }
+
+    /** 计时标签页（右坞「计时」）：起停 + 独立计时命名 + 待办列表 + 今日计时记录。
+     *  wangshu 对齐：计时段是日程数据的一等公民——停了的段以橙色块上网格（网格
+     *  合成在 ScheduleView），这里给「今日计了哪些」的清单视图与合计 */
+    function TimerView({ active }) {
+      const { running, nowTick, refresh, stop } = useRunningTimer();
+      const [data, setData] = react.useState(() => ({ events: [], orphans: [] }));
+      const [label, setLabel] = react.useState("");
+
+      const fetchData = react.useCallback(async () => {
+        try {
+          const body = await schedFetch(`/dsh-kit/schedule/data?from=${encodeURIComponent(schedToday())}&to=${encodeURIComponent(schedToday())}`);
+          setData({ events: Array.isArray(body.events) ? body.events : [], orphans: Array.isArray(body.orphans) ? body.orphans : [] });
+        } catch {
+          /* 拉取失败保留旧数据 */
+        }
+      }, []);
+      react.useEffect(() => {
+        void fetchData();
+        const onChanged = () => void fetchData();
+        window.addEventListener("dshk-sched-changed", onChanged);
+        return () => window.removeEventListener("dshk-sched-changed", onChanged);
+      }, [fetchData]);
+
+      const start = (id, title) => {
+        schedFetch("/dsh-kit/schedule/timer-start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...(id ? { id } : {}), ...(title ? { title } : {}) }) })
+          .then(() => {
+            void refresh();
+            window.dispatchEvent(new Event("dshk-sched-changed"));
+          })
+          .catch(() => {});
       };
 
-      const fullTitle = running ? `${running.title || t("schedTimerStandalone")} · ${elapsedStr(running.start)}` : undefined;
-      return jsxRuntime.jsxs("span", { className: `dshk-sched-timer${compact ? " is-rail" : ""}`, title: compact ? fullTitle : undefined, children: [
-        running
-          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-              jsxRuntime.jsx("span", { className: "dshk-sched-timerdot" }),
-              compact ? null : jsxRuntime.jsx("span", { className: "dshk-sched-timertitle", title: running.title, children: running.title || t("schedTimerStandalone") }),
-              compact ? null : jsxRuntime.jsx("span", { className: "dshk-sched-timerelapsed", children: elapsedStr(running.start) }),
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-timerbtn is-stop", onClick: stop, children: "■" }),
-            ] })
-          : picking
+      const tasks = data.events
+        .filter((e) => e.start === undefined && !e.completedAt)
+        .sort((a, b) => (a.due ?? "9999") < (b.due ?? "9999") ? -1 : 1);
+      const today = schedToday();
+      const records = react.useMemo(() => {
+        const segs = [];
+        for (const ev of data.events) {
+          for (const t of Array.isArray(ev.timeEntries) ? ev.timeEntries : []) {
+            if (t.end !== undefined && t.start.slice(0, 10) === today) segs.push({ title: ev.title, start: t.start, end: t.end });
+          }
+        }
+        for (const o of data.orphans) {
+          if (o.end !== undefined && o.start.slice(0, 10) === today) segs.push({ title: o.note || t("schedTimerStandalone"), start: o.start, end: o.end });
+        }
+        segs.sort((a, b) => (a.start < b.start ? -1 : 1));
+        return segs;
+      }, [data, today]);
+      const totalMs = records.reduce((sum, r) => {
+        const s = new Date(r.start.replace("T", " ")).getTime();
+        const e = new Date(r.end.replace("T", " ")).getTime();
+        return sum + (e > s ? e - s : 0);
+      }, 0);
+
+      return jsxRuntime.jsxs("div", { className: "dshk-timer-root", children: [
+        jsxRuntime.jsxs("div", { className: "dshk-sched-card is-current", children: [
+          running
             ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-                jsxRuntime.jsxs("div", { className: "dshk-sched-timerpick", onClick: (e) => e.stopPropagation(), children: [
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-timerpickitem", onClick: () => start(null), children: t("schedTimerStandalone") }),
-                  ...tasks.map((task) =>
-                    jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-timerpickitem", onClick: () => start(task.id), children: task.title }, task.id),
-                  ),
+                jsxRuntime.jsxs("div", { className: "dshk-timer-nowline", children: [
+                  jsxRuntime.jsx("span", { className: "dshk-sched-timerdot" }),
+                  jsxRuntime.jsx("span", { className: "dshk-timer-nowlabel", children: t("timerRunning") }),
                 ] }),
-                jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-timerbtn", onClick: () => setPicking(false), children: "✕" }),
+                jsxRuntime.jsx("div", { className: "dshk-timer-bigelapsed", children: timerElapsedStr(nowTick, running.start) }),
+                jsxRuntime.jsxs("div", { className: "dshk-timer-nowmeta", children: [
+                  jsxRuntime.jsx("span", { className: "dshk-timer-nowtitle", title: running.title, children: running.title || t("schedTimerStandalone") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-danger", onClick: stop, children: t("timerStopBtn") }),
+                ] }),
               ] })
-            : jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-timerbtn", title: t("schedPickTimer"), onClick: () => { setPicking(true); void refresh(); }, children: "▶" }),
+            : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                jsxRuntime.jsx("div", { className: "dshk-timer-hint", children: t("timerIdleHint") }),
+                jsxRuntime.jsxs("div", { className: "dshk-timer-startrow", children: [
+                  jsxRuntime.jsx("input", { className: "dshk-sched-taskinput", value: label, placeholder: t("timerLabelPh"), onChange: (e) => setLabel(e.target.value), onKeyDown: (e) => { if (e.key === "Enter") { start(null, label.trim()); setLabel(""); } } }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-primary", onClick: () => { start(null, label.trim()); setLabel(""); }, children: `▶ ${t("timerStartBtn")}` }),
+                ] }),
+              ] }),
+        ] }),
+        jsxRuntime.jsxs("div", { className: "dshk-sched-card is-tasks", children: [
+          jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedTasks") }),
+          tasks.length === 0
+            ? jsxRuntime.jsx("div", { className: "dshk-sched-emptytasks", children: t("schedTasksEmpty") })
+            : tasks.map((task) =>
+                jsxRuntime.jsxs("div", { className: "dshk-sched-task", children: [
+                  jsxRuntime.jsx("span", { className: "dshk-sched-tasktitle", title: task.title, children: task.title }),
+                  task.due ? jsxRuntime.jsx("span", { className: "dshk-sched-taskduebadge", children: task.due.slice(5) }) : null,
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-tasktimer", title: t("schedPickTimer"), onClick: () => start(task.id), children: "▶" }),
+                ] }, task.id),
+              ),
+        ] }),
+        jsxRuntime.jsxs("div", { className: "dshk-sched-card is-records", children: [
+          jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("timerToday") }),
+          records.length === 0
+            ? jsxRuntime.jsx("div", { className: "dshk-sched-emptytasks", children: t("timerTodayEmpty") })
+            : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                ...records.map((r, i) =>
+                  jsxRuntime.jsxs("div", { className: "dshk-timer-rec", children: [
+                    jsxRuntime.jsx("span", { className: "dshk-timer-rectitle", title: r.title, children: r.title }),
+                    jsxRuntime.jsx("span", { className: "dshk-timer-rectime", children: `${r.start.slice(11, 16)}–${r.end.slice(11, 16)}` }),
+                    jsxRuntime.jsx("span", { className: "dshk-timer-recdur", children: schedFmtDur((new Date(r.end.replace("T", " ")).getTime() - new Date(r.start.replace("T", " ")).getTime())) }),
+                  ] }, `${r.start}-${i}`),
+                ),
+                jsxRuntime.jsxs("div", { className: "dshk-timer-total", children: [
+                  jsxRuntime.jsx("span", { children: t("timerToday") }),
+                  jsxRuntime.jsx("b", { children: schedFmtDur(totalMs) }),
+                ] }),
+              ] }),
+        ] }),
       ] });
+    }
+
+    /** 悬浮计时小窗：运行中且没在看计时标签页时漂在内容区右下（坞展开时自动
+     *  让开右坞宽度）。点窗体跳计时页，■ 直接停表——补上芯片退场后的运行态
+     *  常驻可见性，又不占任何页条/收起栏空间 */
+    function FloatingTimerPill() {
+      const ui = useKitUi();
+      const { running, nowTick, stop } = useRunningTimer();
+      if (!timerPillVisible(running, ui)) return null;
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-timer-pill",
+        title: `${running.title || t("schedTimerStandalone")} · ${t("timerOpenPill")}`,
+        onClick: () => setKitUi(openDockTab(getKitUi(), "timer")),
+        children: [
+          jsxRuntime.jsx("span", { className: "dshk-sched-timerdot" }),
+          jsxRuntime.jsx("span", { className: "dshk-timer-pilltime", children: timerElapsedStr(nowTick, running.start) }),
+          jsxRuntime.jsx("button", {
+            type: "button",
+            className: "dshk-timer-pillstop",
+            "aria-label": t("timerStopBtn"),
+            title: t("timerStopBtn"),
+            onClick: (e) => {
+              e.stopPropagation();
+              stop();
+            },
+            children: "■",
+          }),
+        ],
+      });
     }
 
     // ─────────── 内置浏览器面板（右侧停靠，复用 .dshk-pane 停靠位）───────────
@@ -8663,9 +8837,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       if (ui.dockTab === "jobs" && ui.jobsOpen) label = t("dockJobs");
       else if (ui.dockTab === "browser" && ui.browserOpen) label = t("dockBrowser");
       else if (ui.dockTab === "schedule" && ui.schedOpen) label = t("schedTab");
+      else if (ui.dockTab === "timer" && ui.timerOpen) label = t("timerTab");
       else if (ui.dockTab === "vault" && ui.vaultOpen) label = t("vaultTitle");
       else if ((ui.previews?.length ?? 0) > 1) label = `${t("dockPreview")} (${ui.previews.length})`;
-      else if ((ui.previews?.length ?? 0) === 0 && !ui.jobsOpen && !ui.browserOpen && !ui.schedOpen && !ui.vaultOpen) label = t("dockPanel");
+      else if ((ui.previews?.length ?? 0) === 0 && !ui.jobsOpen && !ui.browserOpen && !ui.schedOpen && !ui.timerOpen && !ui.vaultOpen) label = t("dockPanel");
       const cfg = cfgFromSnapshot(getCfgSnapshot());
       const useSessions = props && typeof props.useSessions === "function" ? props.useSessions : null;
       const current = useSessions ? useSessions((s) => s.current) : undefined;
@@ -8674,6 +8849,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const openable = [];
       if (cfg.jobsEnabled !== false) openable.push({ id: "jobs", label: t("dockJobs"), icon: JobsIcon, badge: liveJobs });
       openable.push({ id: "schedule", label: t("schedTab"), icon: SchedIcon });
+      openable.push({ id: "timer", label: t("timerTab"), icon: TimerIcon });
       if (cfg.vaultEnabled !== false) openable.push({ id: "vault", label: t("vaultTitle"), icon: VaultIcon });
       if (cfg.browserEnabled !== false) openable.push({ id: "browser", label: t("dockBrowser"), icon: BrowserIcon });
       const openTab = (id) => {
@@ -8706,8 +8882,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               ],
             }, m.id),
           ),
-          // 底部锚位：计时芯片与导航图标隔开（margin-top:auto），收起态的唯一常驻控件
-          jsxRuntime.jsx("span", { className: "dshk-dock-rail-timer", children: jsxRuntime.jsx(ScheduleTimerChip, { compact: true }) }),
         ],
       });
     }
@@ -8717,7 +8891,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 激活位必须指向「仍存在」的标签：dockTab 失效（配置门控清场等）时落回
       // 第一个存在的标签，没有则 tab=null → 渲染空态选择器（常置坞的 0 标签态）
       const previewCount = ui.previews?.length ?? 0;
-      const exists = { preview: previewCount > 0, jobs: ui.jobsOpen === true, schedule: ui.schedOpen === true, vault: ui.vaultOpen === true, browser: ui.browserOpen === true };
+      const exists = { preview: previewCount > 0, jobs: ui.jobsOpen === true, schedule: ui.schedOpen === true, timer: ui.timerOpen === true, vault: ui.vaultOpen === true, browser: ui.browserOpen === true };
       const tab = ui.dockTab && exists[ui.dockTab]
         ? ui.dockTab
         : exists.preview
@@ -8726,11 +8900,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             ? "jobs"
             : exists.schedule
               ? "schedule"
-              : exists.vault
-                ? "vault"
-                : exists.browser
-                  ? "browser"
-                  : null;
+              : exists.timer
+                ? "timer"
+                : exists.vault
+                  ? "vault"
+                  : exists.browser
+                    ? "browser"
+                    : null;
       const widthRef = react.useRef(0);
       const dragRef = react.useRef(null);
       const [dragging, setDragging] = react.useState(false);
@@ -8745,6 +8921,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const openable = [];
       if (cfg.jobsEnabled !== false) openable.push({ id: "jobs", label: t("dockJobs"), icon: JobsIcon, badge: liveJobs });
       openable.push({ id: "schedule", label: t("schedTab"), icon: SchedIcon });
+      openable.push({ id: "timer", label: t("timerTab"), icon: TimerIcon });
       if (cfg.vaultEnabled !== false) openable.push({ id: "vault", label: t("vaultTitle"), icon: VaultIcon });
       if (cfg.browserEnabled !== false) openable.push({ id: "browser", label: t("dockBrowser"), icon: BrowserIcon });
       const openTab = (id) => {
@@ -8799,6 +8976,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }
       if (ui.jobsOpen) tabDefs.push({ id: "jobs", label: t("dockJobs"), badge: liveJobs });
       if (ui.schedOpen) tabDefs.push({ id: "schedule", label: t("schedTab") });
+      if (ui.timerOpen) tabDefs.push({ id: "timer", label: t("timerTab") });
       if (ui.vaultOpen) tabDefs.push({ id: "vault", label: t("vaultTitle") });
       if (ui.browserOpen) tabDefs.push({ id: "browser", label: t("dockBrowser") });
       const switchTab = (id) => {
@@ -8818,7 +8996,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         className: "dshk-pane",
         "data-dragging": dragging || undefined,
         role: "dialog",
-        "aria-label": ({ preview: t("dockPreview"), jobs: t("dockJobs"), schedule: t("schedTab"), vault: t("vaultTitle"), browser: t("dockBrowser") })[tab] ?? t("dockPanel"),
+        "aria-label": ({ preview: t("dockPreview"), jobs: t("dockJobs"), schedule: t("schedTab"), timer: t("timerTab"), vault: t("vaultTitle"), browser: t("dockBrowser") })[tab] ?? t("dockPanel"),
         children: [
           jsxRuntime.jsx("div", { className: "dshk-pane-handle", onPointerDown: onHandleDown }),
           jsxRuntime.jsxs("div", {
@@ -8839,10 +9017,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 },
                 children: jsxRuntime.jsx(PaneToggleIcon, {}),
               }),
-              // 最小化钮旁：计时芯片（用户定稿 2026-09-07：贴最小化钮，不占页条
-              // 右组；展开态常驻，running 时任意标签可见。收起态由 DockStub 底部
-              // 同款芯片接管）。选待办弹层 left:0 向右开，贴近左缘不裁切
-              jsxRuntime.jsx(ScheduleTimerChip, {}),
               // 左组：标签条 + 紧随其后的「+」（+ 显示在标签旁边）。两者仅有标签
               // 时显示——0 标签的空态选择器已承担开新标签职责，头部不再重复
               jsxRuntime.jsxs("span", {
@@ -8920,7 +9094,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 ],
               }),
               // 右组：全部关闭（仅有标签时显示）= 人为清场，抑制浏览器自动弹回；
-              // 计时芯片已移至最小化钮旁
+              // 计时不再占页条——运行态见悬浮小窗，入口见「计时」标签页
               jsxRuntime.jsxs("span", {
                 className: "dshk-jobs-headside",
                 children: [
@@ -9013,6 +9187,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             className: "dshk-pane-view",
             style: { display: tab === "schedule" ? "flex" : "none" },
             children: ui.schedOpen ? jsxRuntime.jsx(ScheduleView, { active: tab === "schedule" }) : null,
+          }),
+          jsxRuntime.jsx("div", {
+            className: "dshk-pane-view",
+            style: { display: tab === "timer" ? "flex" : "none" },
+            children: ui.timerOpen ? jsxRuntime.jsx(TimerView, { active: tab === "timer" }) : null,
           }),
           jsxRuntime.jsx("div", {
             className: "dshk-pane-view",
@@ -9321,6 +9500,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           ui.dockCollapsed === true
             ? jsxRuntime.jsx(DockStub, { props })
             : jsxRuntime.jsx(RightDock, { props, cwd }),
+          // 悬浮计时小窗：运行中且没在看计时页才现身（组件内部自判），平时零占用
+          jsxRuntime.jsx(FloatingTimerPill, {}),
         ],
       });
     }

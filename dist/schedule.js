@@ -316,21 +316,24 @@ export class ScheduleStore {
         return ev;
     }
     // ── 计时（全局单实例）────────────────────────────────────────────────────
-    timerStart(id) {
+    timerStart(id, title) {
         // 已有进行中先闭合（礼貌性互斥：一边计时是人对自己时间的诚实）
         if (this.data.runningTimer)
             this.timerStop();
         const target = id ? this.data.events.find((e) => e.id === id) : undefined;
         const start = dtStrOf(new Date(), true);
+        // 独立计时可带自由标题（wangshu 同款：不挂任务也能给这段轨迹起名），
+        // 挂条目时标题永远跟条目走，不收 title
+        const label = target ? undefined : title?.trim().slice(0, 200) || undefined;
         if (target) {
             if (!Array.isArray(target.timeEntries))
                 target.timeEntries = [];
             target.timeEntries.push({ start });
             target.updatedAt = start;
         }
-        this.data.runningTimer = { id: target ? target.id : '', start };
+        this.data.runningTimer = { id: target ? target.id : '', start, title: label };
         this.persist();
-        return { runningTimer: { id: this.data.runningTimer.id, start } };
+        return { runningTimer: { id: this.data.runningTimer.id, start, title: label } };
     }
     timerStop() {
         const running = this.data.runningTimer;
@@ -350,7 +353,7 @@ export class ScheduleStore {
             // 否则停表即丢数据；timerStart 撞上已删条目静默降级成的独立计时也走这里
             if (!Array.isArray(this.data.orphans))
                 this.data.orphans = [];
-            this.data.orphans.push({ start: running.start, end: dtStrOf(new Date(), true) });
+            this.data.orphans.push({ start: running.start, end: dtStrOf(new Date(), true), note: running.title });
         }
         this.data.runningTimer = null;
         this.persist();
@@ -360,7 +363,9 @@ export class ScheduleStore {
         const running = this.data.runningTimer;
         if (!running)
             return null;
-        const title = running.id ? (this.data.events.find((e) => e.id === running.id)?.title ?? '') : '';
+        const title = running.id
+            ? (this.data.events.find((e) => e.id === running.id)?.title ?? '')
+            : (running.title ?? '');
         return { id: running.id, start: running.start, title };
     }
     // ── 派生：展开 / 统计 / 汇总 ─────────────────────────────────────────────

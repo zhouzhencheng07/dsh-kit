@@ -62,7 +62,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, ScheduleTimerChip, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, vaultParseFmInfo, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug };",
+  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, TimerView, FloatingTimerPill, timerPillVisible, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, vaultParseFmInfo, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug };",
 );
 const harness = new Function("require", wrapper);
 const comps = harness((name) => {
@@ -72,7 +72,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RightDock", "DockStub", "openDockTab", "dockBounds", "ScheduleView", "ScheduleModal", "ScheduleTimerChip", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "vaultParseFmInfo", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug"];
+const names = ["TreeNode", "FileTreePanel", "FileContentPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RightDock", "DockStub", "openDockTab", "dockBounds", "ScheduleView", "ScheduleModal", "TimerView", "FloatingTimerPill", "timerPillVisible", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "vaultParseFmInfo", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -322,12 +322,19 @@ out = comps.ScheduleModal({ modal: { id: null, kind: "event", values: { title: "
 check("ScheduleModal 事件新建态渲染无异常", !!out && typeof out === "object");
 out = comps.ScheduleModal({ modal: { id: "t1", kind: "task", values: { title: "交报告", due: "2026-09-10", completedAt: null } }, onClose: () => {}, onSave: () => {}, onDelete: () => {} });
 check("ScheduleModal 待办编辑态渲染无异常", !!out && typeof out === "object");
-out = comps.ScheduleTimerChip({});
-check("TimerChip 空闲态渲染无异常", !!out && typeof out === "object");
-callLog = [];
-out = comps.ScheduleTimerChip({ compact: true });
-const railChipRoot = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-sched-timer is-rail");
-check("TimerChip compact（收起栏变体）空闲态渲染无异常", !!out && typeof out === "object" && !!railChipRoot);
+out = comps.TimerView({});
+check("TimerView 空闲态渲染无异常（数据未达走空分支）", !!out && typeof out === "object");
+check("FloatingTimerPill 空闲不渲染（运行中才现身）", comps.FloatingTimerPill() === null);
+check("timerPillVisible：运行中且不在计时页才可见", comps.timerPillVisible(null, { dockCollapsed: true }) === false
+  && comps.timerPillVisible({ id: "", start: "2026-09-07T10:00:00" }, { dockCollapsed: true, dockTab: "vault" }) === true
+  && comps.timerPillVisible({ id: "", start: "2026-09-07T10:00:00" }, { dockCollapsed: false, dockTab: "timer" }) === false
+  && comps.timerPillVisible({ id: "", start: "2026-09-07T10:00:00" }, { dockCollapsed: false, dockTab: "vault" }) === true);
+check("timerElapsedStr：整秒差折 hh:mm:ss", comps.timerElapsedStr(new Date(2026, 8, 7, 10, 0, 40).getTime(), "2026-09-07T10:00:00") === "00:00:40");
+check("timerMinsOfDT：取 HH:mm 折当日分钟", comps.timerMinsOfDT("2026-09-07T09:30:15") === 570);
+{
+  const openTimer = comps.openDockTab({ previews: [], dockTab: null, dockCollapsed: true }, "timer");
+  check("openDockTab timer：开标签并激活展开", openTimer.timerOpen === true && openTimer.dockTab === "timer" && openTimer.dockCollapsed === false);
+}
 {
   const lanes = comps.schedAssignLanes([
     { baseId: "a", startMins: 540, endMins: 600 },
@@ -488,7 +495,7 @@ const emptyTitle = callLog.find((c) => (c[0] === "jsx") && c[2] && (c[2].childre
 const emptyHint = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("选择要在侧边面板") || c[2].children.startsWith("Choose a tab")));
 const emptyCards = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-dock-empty-card");
 check("RightDock 常置空态渲染选择器标题与提示", !!emptyTitle && !!emptyHint);
-check("RightDock 空态渲染后台任务/日程/知识库/浏览器四张卡片", emptyCards.length === 4);
+check("RightDock 空态渲染后台任务/日程/计时/知识库/浏览器五张卡片", emptyCards.length === 5);
 const emptyAdd = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-dock-add");
 const emptyCloseAll = callLog.find((c) => (c[0] === "jsx") && c[2] && ["全部关闭", "Close all"].includes(c[2]["aria-label"]));
 const emptyMin = callLog.find((c) => (c[0] === "jsx") && c[2] && ["最小化面板", "Minimize panel"].includes(c[2]["aria-label"]));
@@ -499,9 +506,14 @@ out = comps.RightDock({ props: {}, cwd: "C:/x" });
 const schedOn = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-tab dshk-tab-on");
 const schedElem = callLog.find((c) => c[1] === comps.ScheduleView);
 check("RightDock 日程标签激活并挂 ScheduleView", !!schedOn && !!schedElem);
-const barChip = callLog.find((c) => c[1] === comps.ScheduleTimerChip);
-check("RightDock 页条挂计时芯片（非 compact）", !!barChip && barChip[2] && barChip[2].compact !== true);
+check("RightDock 页条不再挂计时芯片（计时独立成页）", !callLog.some((c) => typeof c[1] === "function" && c[1].name === "ScheduleTimerChip"));
 comps.setKitUi({ schedOpen: false, dockTab: null });
+comps.setKitUi({ timerOpen: true, dockTab: "timer" });
+callLog = [];
+out = comps.RightDock({ props: {}, cwd: "C:/x" });
+const timerElem = callLog.find((c) => c[1] === comps.TimerView);
+check("RightDock 计时标签挂 TimerView", !!timerElem);
+comps.setKitUi({ timerOpen: false, dockTab: null });
 comps.setKitUi({ vaultOpen: true, dockTab: "vault" });
 callLog = [];
 out = comps.RightDock({ props: {}, cwd: "C:/x" });
@@ -571,10 +583,8 @@ const railRoot = callLog.find((c) => c[0] === "jsxs" && c[2] && c[2].className =
 const railBtns = callLog.filter((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[2] && c[2].className === "dshk-dock-rail-btn");
 const railExpand = railBtns.find((c) => ["展开面板", "Expand panel"].includes(c[2]["aria-label"]));
 const railGeneric = railBtns.find((c) => typeof c[2].title === "string" && (c[2].title.startsWith("侧边面板") || c[2].title.startsWith("Side panel")));
-check("DockStub 0 标签渲染收起栏（展开钮 + 4 枚快捷开标签图标）", !!railRoot && railBtns.length === 5 && !!railExpand);
+check("DockStub 0 标签渲染收起栏（展开钮 + 5 枚快捷开标签图标）", !!railRoot && railBtns.length === 6 && !!railExpand);
 check("DockStub 0 标签展开钮标题以通用侧边面板开头", !!railGeneric);
-const railTimer = callLog.find((c) => c[1] === comps.ScheduleTimerChip);
-check("DockStub 收起栏底部挂计时芯片（compact）", !!railTimer && railTimer[2] && railTimer[2].compact === true);
 comps.setKitUi({ dockCollapsed: false });
 
 // 7.2.3) 预览标签 LRU 纯逻辑：默认上限 8，超限开新文件逐出 usedAt 最小者；
