@@ -162,10 +162,16 @@ export function saveGatewayState(stateFile: string, { token, enabled }: GatewayS
   }
 }
 
-/** 本机非回环 IPv4 地址列表（二维码里局域网链接的候选） */
-export function lanAddresses(): string[] {
-  return Object.values(os.networkInterfaces())
-    .flat()
+/** Windows 热点/Wi-Fi Direct 与常见虚拟交换机的网卡名——它们上的地址对局域网
+ *  二维码是噪音：热点客户端经本机转发照样能访问实体网卡的地址（192.168.137.1
+ *  那块「本地连接* N」实测冗余），VMware/Hyper-V/WSL 的 host-only 从不面向局域网 */
+const VIRTUAL_IFACE_RE = /^(本地连接\*|Local Area Connection\*|vEthernet|VMware Network Adapter|VirtualBox Host-Only)/i
+
+/** 本机非回环 IPv4 地址列表（二维码里局域网链接的候选）；@param interfaces 测试注入用 */
+export function lanAddresses(interfaces: NodeJS.Dict<import('node:os').NetworkInterfaceInfo[]> = os.networkInterfaces()): string[] {
+  return Object.entries(interfaces)
+    .filter(([name]) => !VIRTUAL_IFACE_RE.test(name))
+    .flatMap(([, iface]) => iface ?? [])
     .filter((iface): iface is import('node:os').NetworkInterfaceInfoIPv4 => iface !== undefined && iface.family === 'IPv4' && !iface.internal)
     .map((iface) => iface.address)
 }
