@@ -181,6 +181,16 @@ test('timer：全局单计时互斥、stop 闭合、runningTimer 带标题', () 
   store.timerStop()
   assert.equal(store.runningTimer(), null)
   assert.equal(store.listOrphans().length, 1)
+  // 带标题的独立计时（wangshu 对齐）：标题随 runningTimer 走，停表落 orphan.note
+  store.timerStart(undefined, '  整理周报  ')
+  assert.equal(store.runningTimer().title, '整理周报')
+  store.timerStop()
+  const titled = store.listOrphans().at(-1)
+  assert.equal(titled.note, '整理周报')
+  // 挂条目计时不收 title（标题永远跟条目走）
+  store.timerStart(b.id, '无视这个')
+  assert.equal(store.runningTimer().title, '任务B')
+  store.timerStop()
   // 同秒起止时长为 0 属边界行为：拉成确定时段验证统计口径
   const orphan = store.listOrphans()[0]
   orphan.start = '2026-09-08T09:30:00'
