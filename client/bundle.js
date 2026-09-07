@@ -8854,6 +8854,18 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
      *  状态全部保留，这只是"暂时挪到边上"。 */
     function DockStub({ props }) {
       const ui = useKitUi();
+      // 让位：收起栏虽只有 36px 也压着内容右缘，对话列同样左移（用户定稿
+      // 2026-09-07）。复用展开态的 dshk-pane-open + --dshk-pane-w 机制——中列
+      // margin、TurnNavigator 恢复显示、悬浮计时小窗偏移全部自动跟随；展开时
+      // RightDock 的同名 effect 接管（卸载清理先于新挂 effect，无闪烁）
+      react.useLayoutEffect(() => {
+        document.body.classList.add("dshk-pane-open");
+        document.documentElement.style.setProperty("--dshk-pane-w", "36px");
+        return () => {
+          document.body.classList.remove("dshk-pane-open");
+          document.documentElement.style.removeProperty("--dshk-pane-w");
+        };
+      }, []);
       let label = t("dockPreview");
       if (ui.dockTab === "jobs" && ui.jobsOpen) label = t("dockJobs");
       else if (ui.dockTab === "browser" && ui.browserOpen) label = t("dockBrowser");
