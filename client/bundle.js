@@ -1800,6 +1800,9 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-event:hover{filter:brightness(1.08)}
 .dshk-sched-evtime{display:block;font-size:10px;opacity:.85;white-space:nowrap}
 .dshk-sched-evtitle{display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+/* 够高的块（≥48px：时间行+两行标题）标题放开两行，行数由 line-clamp 限死——
+   短块维持单行省略，避免半截字被容器裁掉 */
+.dshk-sched-event.is-tall .dshk-sched-evtitle{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;word-break:break-word;line-clamp:2}
 /* 上条下网（用户定稿 2026-09-06）：待办/统计横条在上，周网格在下吃满坞宽 */
 .dshk-sched-side{flex:none;display:flex;flex-direction:row;align-items:flex-start;gap:10px;padding:10px;border-bottom:1px solid var(--dsw-alias-border-l2);overflow:auto}
 .dshk-sched-card.is-tasks{flex:1 1 auto;min-width:0}
@@ -6646,9 +6649,18 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               date === today && isCurrentWeek
                 ? jsxRuntime.jsx("div", { className: "dshk-sched-nowline", style: { top: ((Math.min(nowMins, SCHED_DAY_END) - SCHED_DAY_START) / 60) * SCHED_HOUR_PX } })
                 : null,
-              inWeek.map((o) =>
-                jsxRuntime.jsxs("div", {
-                  className: `dshk-sched-event${o.isTimed ? " is-timed" : ""}`,
+              inWeek.map((o) => {
+                // 块内只留开始时刻（结束看块高/tooltip，位置本身就编码了时段），
+                // 宽度让给标题——标题才是识别事项的主体；其余信息（完整时段/
+                // 地点/备注）进 tooltip。够高的块标题放开两行（is-tall）
+                const tipParts = [
+                  `${schedHHmm(o.startMins)}${o.endMins !== null ? "–" + schedHHmm(o.endMins) : ""}`,
+                  o.title,
+                  ...(o.location ? [o.location] : []),
+                  ...(o.description ? [o.description] : []),
+                ];
+                return jsxRuntime.jsxs("div", {
+                  className: `dshk-sched-event${o.isTimed ? " is-timed" : ""}${o.height >= 48 ? " is-tall" : ""}`,
                   style: {
                     top: o.top,
                     height: o.height,
@@ -6656,17 +6668,17 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     width: `calc(${100 / o.lanes}% - 4px)`,
                     ...(o.color && !o.isTimed ? { background: o.color } : {}),
                   },
-                  title: o.title,
+                  title: tipParts.filter(Boolean).join("\n"),
                   onClick: (e) => {
                     e.stopPropagation();
                     if (!o.isTimed) openEdit(o);
                   },
                   children: [
-                    jsxRuntime.jsx("span", { className: "dshk-sched-evtime", children: `${schedHHmm(o.startMins)}${o.endMins !== null ? " " + schedHHmm(o.endMins) : ""}` }),
+                    jsxRuntime.jsx("span", { className: "dshk-sched-evtime", children: schedHHmm(o.startMins) }),
                     jsxRuntime.jsx("span", { className: "dshk-sched-evtitle", children: o.isTimed ? `⏱ ${o.title}` : o.title }),
                   ],
-                }, `${o.baseId}@${o.date}`),
-              ),
+                }, `${o.baseId}@${o.date}`);
+              }),
             ] }, `dc-${date}`);
           }),
         ],
