@@ -8,12 +8,31 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 
-import { startPhoneGateway, PHONE_COOKIE } from '../src/phone-gateway.ts'
+import { startPhoneGateway, PHONE_COOKIE, lanAddresses } from '../src/phone-gateway.ts'
 
 let failed = 0
 const check = (label, ok) => {
   console.log(`${ok ? 'PASS  ' : 'FAIL  '}${label}`)
   if (!ok) failed++
+}
+
+// ── lanAddresses：虚拟网卡过滤（热点/虚拟交换机的地址是二维码噪音）──
+{
+  const v4 = (address, internal = false) => ({ address, family: 'IPv4', internal })
+  const ifaces = {
+    WLAN: [v4('10.3.94.39'), { address: 'fe80::1', family: 'IPv6', internal: false }],
+    '本地连接* 2': [v4('192.168.137.1')],
+    'Local Area Connection* 3': [v4('192.168.137.1')],
+    'vEthernet (WSL (Hyper-V firewall))': [v4('172.20.0.1')],
+    'VMware Network Adapter VMnet8': [v4('192.168.111.1')],
+    'VirtualBox Host-Only Ethernet Adapter': [v4('192.168.56.1')],
+    '以太网': [v4('192.168.1.7')],
+    'Loopback Pseudo-Interface 1': [{ address: '127.0.0.1', family: 'IPv4', internal: true }],
+  }
+  const addrs = lanAddresses(ifaces)
+  check('lanAddresses：滤掉热点/Wi-Fi Direct 虚拟网卡（本地连接* N）', !addrs.includes('192.168.137.1'))
+  check('lanAddresses：滤掉 vEthernet/VMware/VirtualBox host-only', !addrs.includes('172.20.0.1') && !addrs.includes('192.168.111.1') && !addrs.includes('192.168.56.1'))
+  check('lanAddresses：保留实体网卡 IPv4、丢弃 IPv6 与回环', JSON.stringify(addrs) === JSON.stringify(['10.3.94.39', '192.168.1.7']))
 }
 
 /** 起一个回显上游：GET 回显收到的 host/origin/cookie 头；POST 回显请求体；/ws 升级回 101 并回声 */
