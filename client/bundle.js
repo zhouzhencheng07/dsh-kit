@@ -722,7 +722,7 @@ window.__ModuleLoader__.load({
       schedColor: "颜色",
       schedSave: "保存",
       schedDelete: "删除",
-      schedDeleteConfirm: "确认删除这条日程？",
+      schedDeleteConfirm: "确认删除？",
       schedCancel: "取消",
       schedTasks: "待办",
       schedTaskPh: "添加待办，回车确认…",
@@ -740,7 +740,9 @@ window.__ModuleLoader__.load({
       schedTimerStandalone: "独立计时（不挂待办）",
       timerTab: "计时",
       timerIdleHint: "开始一次计时——可挂待办，也可只写个名目独立计时",
-      timerLabelPh: "在做什么（可留空）",
+      timerTitleRequired: "先写个名目（独立计时必带标题）",
+      schedEditEntry: "编辑计时",
+      timerLabelPh: "在做点什么（必填名目）",
       timerStartBtn: "开始计时",
       timerStopBtn: "停止计时",
       timerRunning: "计时中",
@@ -1180,7 +1182,7 @@ window.__ModuleLoader__.load({
       schedColor: "Color",
       schedSave: "Save",
       schedDelete: "Delete",
-      schedDeleteConfirm: "Delete this entry?",
+      schedDeleteConfirm: "Confirm delete?",
       schedCancel: "Cancel",
       schedTasks: "Tasks",
       schedTaskPh: "Add a task, Enter to save…",
@@ -1198,7 +1200,9 @@ window.__ModuleLoader__.load({
       schedTimerStandalone: "Standalone timer (no task)",
       timerTab: "Timer",
       timerIdleHint: "Start a timer — bind a task or just name it standalone",
-      timerLabelPh: "What are you working on (optional)",
+      timerTitleRequired: "Name it first (standalone timers need a title)",
+      schedEditEntry: "Edit timer entry",
+      timerLabelPh: "What are you working on (required)",
       timerStartBtn: "Start",
       timerStopBtn: "Stop timer",
       timerRunning: "Timing",
@@ -6620,12 +6624,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         for (const ev of data.events) {
           (Array.isArray(ev.timeEntries) ? ev.timeEntries : []).forEach((t, i) => {
             if (t.end === undefined) return;
-            segs.push({ baseId: `${ev.id}#timed${i}`, date: t.start.slice(0, 10), startMins: timerMinsOfDT(t.start), endMins: timerMinsOfDT(t.end), allDay: false, title: ev.title, virtual: false, isTimed: true });
+            // owner/index/rawStart/rawEnd/note 供段编辑弹窗寻址（entry-update/delete 同一套下标）
+            segs.push({ baseId: `${ev.id}#timed${i}`, date: t.start.slice(0, 10), startMins: timerMinsOfDT(t.start), endMins: timerMinsOfDT(t.end), allDay: false, title: ev.title, virtual: false, isTimed: true, owner: ev.id, index: i, rawStart: t.start, rawEnd: t.end, note: t.note });
           });
         }
         (Array.isArray(data.orphans) ? data.orphans : []).forEach((o, i) => {
           if (o.end === undefined) return;
-          segs.push({ baseId: `orphan#timed${i}`, date: o.start.slice(0, 10), startMins: timerMinsOfDT(o.start), endMins: timerMinsOfDT(o.end), allDay: false, title: o.note || t("schedTimerStandalone"), virtual: false, isTimed: true });
+          segs.push({ baseId: `orphan#timed${i}`, date: o.start.slice(0, 10), startMins: timerMinsOfDT(o.start), endMins: timerMinsOfDT(o.end), allDay: false, title: o.note || t("schedTimerStandalone"), virtual: false, isTimed: true, owner: null, index: i, rawStart: o.start, rawEnd: o.end, note: o.note });
         });
         return segs;
       }, [data.events, data.orphans]);
@@ -6661,6 +6666,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const base = data.events.find((e) => e.id === occ.baseId);
         if (!base) return;
         setModal({ id: base.id, kind: "event", values: { ...base } });
+      };
+      // 计时段编辑（网格=时间分配视图，段与日程一样可改可删）：从段上带的
+      // owner/index 寻址，orphan 的 note 即标题
+      const openEntryEdit = (occ) => {
+        setModal({ kind: "entry", owner: occ.owner ?? null, index: occ.index, values: { note: occ.note || "", start: occ.rawStart, end: occ.rawEnd } });
       };
 
       const today = schedToday();
@@ -6735,7 +6745,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   title: tipParts.filter(Boolean).join("\n"),
                   onClick: (e) => {
                     e.stopPropagation();
-                    if (!o.isTimed) openEdit(o);
+                    if (o.isTimed) openEntryEdit(o);
+                    else openEdit(o);
                   },
                   children: [
                     jsxRuntime.jsx("span", { className: "dshk-sched-evtime", children: schedHHmm(o.startMins) }),
@@ -6819,12 +6830,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               modal,
               onClose: () => setModal(null),
               onSave: async (id, values) => {
-                if (id) await mutate("/dsh-kit/schedule/update", { id, ...values });
+                if (modal.kind === "entry") await mutate("/dsh-kit/schedule/entry-update", { owner: modal.owner, index: modal.index, ...values });
+                else if (id) await mutate("/dsh-kit/schedule/update", { id, ...values });
                 else await mutate("/dsh-kit/schedule/create", values);
                 setModal(null);
               },
               onDelete: async (id) => {
-                await mutate("/dsh-kit/schedule/delete", { id });
+                if (modal.kind === "entry") await mutate("/dsh-kit/schedule/entry-delete", { owner: modal.owner, index: modal.index });
+                else await mutate("/dsh-kit/schedule/delete", { id });
                 setModal(null);
               },
             })
@@ -6834,26 +6847,48 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     function ScheduleModal({ modal, onClose, onSave, onDelete }) {
       const isTask = modal.kind === "task";
+      const isEntry = modal.kind === "entry";
+      const entryOrphan = isEntry && modal.owner === null;
       const [values, setValues] = react.useState(() => ({ ...modal.values }));
       const [confirming, setConfirming] = react.useState(false);
       const set = (key, value) => setValues((prev) => ({ ...prev, [key]: value }));
       const rec = values.recurrence || null;
       const setRec = (patch) => setValues((prev) => ({ ...prev, recurrence: { ...(prev.recurrence || { type: "weekly" }), ...patch } }));
       const weekdays = schedWeekdays();
-      const invalid = (values.title ?? "").trim() === "";
+      // 计时段：独立段 note 即标题必填（同 16 字口径）；挂条目段备注可选
+      const invalid = isEntry
+        ? entryOrphan && (values.note ?? "").trim() === ""
+        : (values.title ?? "").trim() === "";
       return jsxRuntime.jsxs("div", { className: "dshk-sched-overlay", onClick: onClose, children: [
         jsxRuntime.jsxs("div", { className: "dshk-sched-modal", onClick: (e) => e.stopPropagation(), children: [
-          jsxRuntime.jsx("div", { className: "dshk-sched-modaltitle", children: modal.id ? t("schedEdit") : t("schedCreate") }),
-          jsxRuntime.jsxs("div", { className: "dshk-sched-countwrap", children: [
+          jsxRuntime.jsx("div", { className: "dshk-sched-modaltitle", children: isEntry ? t("schedEditEntry") : modal.id ? t("schedEdit") : t("schedCreate") }),
+          isEntry ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+            jsxRuntime.jsxs("div", { className: "dshk-sched-countwrap", children: [
+              jsxRuntime.jsx("input", { className: "dshk-sched-input", maxLength: entryOrphan ? SCHED_TITLE_MAX : 200, value: values.note ?? "", placeholder: entryOrphan ? t("schedTitlePh") : t("schedDesc"), autoFocus: true, onChange: (e) => set("note", e.target.value.slice(0, entryOrphan ? SCHED_TITLE_MAX : 200)) }),
+              entryOrphan ? jsxRuntime.jsx("span", { className: "dshk-sched-count", children: `${(values.note ?? "").length}/${SCHED_TITLE_MAX}` }) : null,
+            ] }),
+            jsxRuntime.jsxs("div", { className: "dshk-sched-row", children: [
+              jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
+                jsxRuntime.jsx("span", { children: t("schedStart") }),
+                jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "datetime-local", value: values.start ?? "", onChange: (e) => set("start", e.target.value) }),
+              ] }),
+              jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
+                jsxRuntime.jsx("span", { children: t("schedEnd") }),
+                jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "datetime-local", value: values.end ?? "", onChange: (e) => set("end", e.target.value) }),
+              ] }),
+            ] }),
+          ] })
+          : jsxRuntime.jsxs("div", { className: "dshk-sched-countwrap", children: [
             jsxRuntime.jsx("input", { className: "dshk-sched-input", maxLength: SCHED_TITLE_MAX, value: values.title ?? "", placeholder: t("schedTitlePh"), autoFocus: true, onChange: (e) => set("title", e.target.value.slice(0, SCHED_TITLE_MAX)) }),
             jsxRuntime.jsx("span", { className: "dshk-sched-count", children: `${(values.title ?? "").length}/${SCHED_TITLE_MAX}` }),
           ] }),
-          isTask
+          !isEntry && isTask
             ? jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
                 jsxRuntime.jsx("span", { children: t("schedTaskDue") }),
                 jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "date", value: values.due ?? "", onChange: (e) => set("due", e.target.value) }),
               ] })
-            : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+            : !isEntry
+              ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
                 jsxRuntime.jsxs("div", { className: "dshk-sched-row", children: [
                   jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
                     jsxRuntime.jsx("span", { children: t("schedStart") }),
@@ -6910,7 +6945,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 !rec
                   ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", onClick: () => setRec({ type: "weekly", interval: 1, days: [new Date().getDay() === 0 ? 7 : new Date().getDay()] }), children: `+ ${t("schedRepeat")}` })
                   : null,
-              ] }),
+              ] })
+              : null,
+            !isEntry ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
             jsxRuntime.jsxs("div", { className: "dshk-sched-row", children: [
               jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
                 jsxRuntime.jsx("span", { children: t("schedLoc") }),
@@ -6924,8 +6961,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               ] }),
             ] }),
             jsxRuntime.jsx("textarea", { className: "dshk-sched-input", rows: 2, value: values.description ?? "", placeholder: t("schedDesc"), onChange: (e) => set("description", e.target.value) }),
+            ] }) : null,
             jsxRuntime.jsxs("div", { className: "dshk-sched-actions", children: [
-              modal.id
+              (modal.id || isEntry)
                 ? confirming
                   ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-danger", onClick: () => void onDelete(modal.id), children: t("schedDeleteConfirm") })
                   : jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", onClick: () => setConfirming(true), children: t("schedDelete") })
@@ -7073,8 +7111,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
                 jsxRuntime.jsx("div", { className: "dshk-timer-hint", children: t("timerIdleHint") }),
                 jsxRuntime.jsxs("div", { className: "dshk-timer-startrow", children: [
-                  jsxRuntime.jsx("input", { className: "dshk-sched-taskinput", value: label, placeholder: t("timerLabelPh"), onChange: (e) => setLabel(e.target.value), onKeyDown: (e) => { if (e.key === "Enter") { start(null, label.trim()); setLabel(""); } } }),
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-primary", onClick: () => { start(null, label.trim()); setLabel(""); }, children: `▶ ${t("timerStartBtn")}` }),
+                  jsxRuntime.jsxs("div", { className: "dshk-sched-countwrap", style: { flex: 1, minWidth: 0 }, children: [
+                    jsxRuntime.jsx("input", { className: "dshk-sched-taskinput", value: label, maxLength: SCHED_TITLE_MAX, placeholder: t("timerLabelPh"), onChange: (e) => setLabel(e.target.value.slice(0, SCHED_TITLE_MAX)), onKeyDown: (e) => { if (e.key === "Enter") { const t = label.trim(); if (t === "") return; start(null, t); setLabel(""); } } }),
+                    label !== "" ? jsxRuntime.jsx("span", { className: "dshk-sched-count", children: `${label.length}/${SCHED_TITLE_MAX}` }) : null,
+                  ] }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-primary", disabled: label.trim() === "", title: label.trim() === "" ? t("timerTitleRequired") : undefined, onClick: () => { const t = label.trim(); if (t === "") return; start(null, t); setLabel(""); }, children: `▶ ${t("timerStartBtn")}` }),
                 ] }),
               ] }),
         ] }),
