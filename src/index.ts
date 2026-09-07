@@ -67,7 +67,7 @@ import { multipartBoundary, parseMultipart, safeUploadName, dedupeName } from '.
 import { BrowserService } from './browser.ts'
 import { loadToolsModule, buildBrowserTools } from './browser-tools.ts'
 import { getScheduleStore, buildScheduleTools, isDateStr, todayStr } from './schedule.ts'
-import { VaultScanner, sanitizePageTitle, sanitizePageRel } from './vault.ts'
+import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton } from './vault.ts'
 import { sameOrigin } from './web-guard.ts'
 import { recycleDelete, recycleDeleteBatch } from './recycle.ts'
 
@@ -503,6 +503,21 @@ export async function apply(ctx: KitCtx): Promise<void> {
   // 手机网关的设置联动钩子（端口变更热重启等），由 webServer 注入段回填
   let onSettingsReady = () => {}
   let onSettingsChanged = () => {}
+  // vaultRoot 上次已知值：onChange 对任意保存都触发，靠值比对识别「知识库位置
+  // 真的变了」，变了才补种骨架目录（null = 尚未见过值）
+  let lastVaultRoot: string | null = null
+  /** vaultRoot 配置变化时补建骨架（root + wiki/attachments），见 ensureVaultSkeleton */
+  function trackVaultRoot(): void {
+    let root = ''
+    try {
+      root = String(readSettings().vaultRoot ?? '').trim()
+    } catch {
+      return
+    }
+    if (root === '' || root === lastVaultRoot) return
+    lastVaultRoot = root
+    void ensureVaultSkeleton(root)
+  }
   /** setSource/onChange 钩子：settings 首次就绪时触发网关启用位检查（此时 readSettings
    *  才读到真实值）；注意 onSettingsReady 在 webServer 注入回填前是空函数——如果注入
    *  回调还未执行，调用无效果；注入回调已存在时触发首次评估（解决时序差） */
@@ -510,9 +525,13 @@ export async function apply(ctx: KitCtx): Promise<void> {
     setSource: (current: () => any) => {
       readSettings = current
       phoneSettingsReady = true
+      trackVaultRoot()
       onSettingsReady()
     },
-    onChange: () => { onSettingsChanged() },
+    onChange: () => {
+      trackVaultRoot()
+      onSettingsChanged()
+    },
   }
   if (Config) {
     ctx.inject(['settings'], (settingsCtx: { settings: KitSettingsService }) => {

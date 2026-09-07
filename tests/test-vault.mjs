@@ -10,6 +10,7 @@ import {
   extractTitle,
   extractWikiLinks,
   VaultScanner,
+  ensureVaultSkeleton,
 } from '../dist/vault.js'
 
 const test = (name, fn) =>
@@ -113,3 +114,16 @@ await test('root：未配置/不存在回 null', async () => {
 
 fs.rmSync(root, { recursive: true, force: true })
 console.log(process.exitCode ? 'FAIL' : 'ALL VAULT TESTS OK')
+
+await test('ensureVaultSkeleton 补种骨架目录且幂等', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshkit-vault-sk-'))
+  const root = path.join(dir, '新建库')
+  await ensureVaultSkeleton(root)
+  assert.ok(fs.statSync(path.join(root, 'wiki')).isDirectory())
+  assert.ok(fs.statSync(path.join(root, 'attachments')).isDirectory())
+  // 已有内容不被覆盖
+  fs.writeFileSync(path.join(root, 'wiki', '已有.md'), '# x', 'utf8')
+  await ensureVaultSkeleton(root)
+  assert.ok(fs.existsSync(path.join(root, 'wiki', '已有.md')))
+  fs.rmSync(dir, { recursive: true, force: true })
+})
