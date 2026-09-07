@@ -125,7 +125,7 @@ callLog = [];
 out = comps.TreeRowMenu({ entry: { name: "src", path: "D:/w/src", dir: true }, rect: { top: 0, bottom: 20, left: 0, right: 100 }, actions: { onCreate: () => {}, onCopyPath: () => {}, onRename: () => {}, onDelete: () => {} }, onClose: () => {} });
 const dirLabels = callLog.filter(([, , p]) => p && typeof p === "object" && typeof p.children === "string").map(([, , p]) => p.children);
 const dirHasAny = (cands) => cands.some((c) => dirLabels.includes(c));
-check("TreeRowMenu 目录行菜单(新建文件/夹+复制相对/重命名/删除)", dirHasAny(["新建文件", "New File"]) && dirHasAny(["新建文件夹", "New Folder"]) && dirHasAny(["复制相对路径", "Copy relative path"]) && dirHasAny(["删除", "Delete"]));
+check("TreeRowMenu 目录行菜单(新建文件/目录单入口+复制相对/重命名/删除)", dirHasAny(["新建文件/目录", "New file/folder"]) && dirHasAny(["复制相对路径", "Copy relative path"]) && dirHasAny(["删除", "Delete"]));
 
 // 5) FileTreePanel：cwd 有/无
 callLog = [];

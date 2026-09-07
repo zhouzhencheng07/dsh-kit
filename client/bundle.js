@@ -468,8 +468,8 @@ window.__ModuleLoader__.load({
       treeEmpty: "（空目录）",
       treeFail: "加载失败",
       treeTruncated: "条目过多，列表已截断",
-      treeNewFile: "新建文件",
-      treeNewFolder: "新建文件夹",
+      treeNewAny: "新建文件/目录",
+      treeNewPh: "名称，\\ 开头新建文件夹，可含 / 多级，回车创建",
       treeUpload: "上传文件到当前目录",
       uploadDone: "已上传 {n} 个文件",
       uploadFail: "上传失败",
@@ -481,8 +481,6 @@ window.__ModuleLoader__.load({
       treeAt: "@ 到对话",
       treeAtUnavailable: "输入框未就绪（无会话或不可用）",
       treeMenu: "更多操作",
-      promptFileName: "新文件名：",
-      promptFolderName: "新文件夹名：",
       confirmDelete: "删除「{name}」？内容将移入回收站。",
       created: "已创建",
       renamed: "已重命名",
@@ -905,8 +903,8 @@ window.__ModuleLoader__.load({
       treeEmpty: "(empty)",
       treeFail: "Failed to load",
       treeTruncated: "Too many entries, list truncated",
-      treeNewFile: "New File",
-      treeNewFolder: "New Folder",
+      treeNewAny: "New file/folder",
+      treeNewPh: "Name, \\ prefix creates a folder, / for nesting, Enter to create",
       treeUpload: "Upload files to this folder",
       uploadDone: "Uploaded {n} file(s)",
       uploadFail: "Upload failed",
@@ -918,8 +916,6 @@ window.__ModuleLoader__.load({
       treeAt: "Insert @ mention",
       treeAtUnavailable: "Composer is not ready (no active session)",
       treeMenu: "More actions",
-      promptFileName: "New file name:",
-      promptFolderName: "New folder name:",
       confirmDelete: "Delete \"{name}\"? It will be moved to the Recycle Bin.",
       created: "Created",
       renamed: "Renamed",
@@ -1450,6 +1446,10 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
    行/箭头对齐原生工作区树（Radius 8、padding 0 8、gap 6、hover 用 interactive-bg-hover） */
 .dshk-tree{width:100%;height:100%;display:flex;flex-direction:column;pointer-events:auto}
 .dshk-tree-body{flex:1 1 auto;min-height:0;overflow:auto;padding:4px 4px 12px;font-size:13px}
+/* 新建内联输入（vault createrow 同款）：头部下单行，\ 前缀建目录 */
+.dshk-createrow{display:flex;gap:6px;padding:6px 8px}
+.dshk-createrow input{flex:1;min-width:0;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 8px;border-radius:6px}
+.dshk-createrow .dshk-btn{flex:none}
 .dshk-row{display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;border-radius:8px;cursor:pointer;color:var(--dsw-alias-label-primary);white-space:nowrap;user-select:none}
 .dshk-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-chev{width:16px;flex:none;display:inline-flex;justify-content:center;align-items:center;color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:1}
@@ -3313,7 +3313,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       );
     }
 
-    /** 新建文件图标：文件折角 + 加号 */
+    /** 新建文件图标：文件折角 + 加号（文件/目录共用单入口后唯一的新建图标） */
     function FilePlusIcon() {
       return jsxRuntime.jsxs(
         "svg",
@@ -3331,28 +3331,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             jsxRuntime.jsx("path", { d: "M3.5 1.5h5l4 4v9h-9z" }),
             jsxRuntime.jsx("path", { d: "M8.5 1.5v4h4" }),
             jsxRuntime.jsx("path", { d: "M8 7.8v3.4M6.3 9.5h3.4" }),
-          ],
-        },
-      );
-    }
-
-    /** 新建文件夹图标：FolderIcon 轮廓 + 加号 */
-    function FolderPlusIcon() {
-      return jsxRuntime.jsxs(
-        "svg",
-        {
-          width: 15,
-          height: 15,
-          viewBox: "0 0 16 16",
-          "aria-hidden": true,
-          fill: "none",
-          stroke: "currentColor",
-          strokeWidth: 1.2,
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          children: [
-            jsxRuntime.jsx("path", { d: "M1.5 3.5c0-.55.45-1 1-1h3.2l1.6 1.8h6.2c.55 0 1 .45 1 1v7.2c0 .55-.45 1-1 1h-11c-.55 0-1-.45-1-1v-9z" }),
-            jsxRuntime.jsx("path", { d: "M8 7.6v3.6M6.2 9.4h3.6" }),
           ],
         },
       );
@@ -3733,16 +3711,28 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           return false;
         }
       };
-      /** 在 dirPath 下新建文件/文件夹；完成后刷新该目录（未展开则顺带展开） */
-      const createEntry = async (dirPath, wantDir) => {
+      // 新建文件/目录单入口（用户定稿 2026-09-08，vault 同款）：内联输入，
+      // `\` 开头 = 新建文件夹（剥前缀），否则建文件；可带 / 多级。头部按钮与
+      // 目录行 ⋯ 菜单都汇到这里（createAt = 目标目录）
+      const [createAt, setCreateAt] = react.useState(null);
+      const [createName, setCreateName] = react.useState("");
+      const startCreate = (dirPath) => {
         if (!cwd) return;
-        const rawName = window.prompt(wantDir ? t("promptFolderName") : t("promptFileName"));
-        if (rawName === null) return;
-        const name = rawName.trim();
+        setCreateAt(dirPath ?? cwd);
+        setCreateName("");
+      };
+      const submitCreate = async () => {
+        const dirPath = createAt ?? cwd;
+        const raw = createName.trim();
+        if (raw === "") return;
+        const wantDir = raw.startsWith("\\");
+        const name = (wantDir ? raw.slice(1) : raw).trim();
         if (name === "") return;
         const okDone = await runFsOp({ op: "create", dir: dirPath, name, kind: wantDir ? "dir" : "file" });
         if (!okDone) return;
         flashToast(t("created"));
+        setCreateAt(null);
+        setCreateName("");
         loadDir(dirPath);
       };
       // ── 行内改名（✎ 触发）：聚焦时只选中最后一个扩展名分隔符之前的
@@ -3810,7 +3800,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       };
 
       const treeActions = {
-        onCreate: createEntry,
+        onCreate: startCreate,
         onDelete: deleteEntry,
         onRename: startRename,
         onCopyPath: copyEntryPath,
@@ -3841,23 +3831,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               jsxRuntime.jsx(FolderIcon, {}),
               // 显示当前目录路径（不显示"文件树"文字），过长时省略号，hover 悬浮看全
               jsxRuntime.jsx("span", { className: "dshk-dir", title: cwd ?? "", children: cwd ?? t("treeLabel") }),
-              // 根目录新建文件/文件夹
+              // 根目录新建文件/目录（单入口，\ 前缀建目录）
               cwd
                 ? jsxRuntime.jsx("button", {
                     type: "button",
                     className: "dshk-btn",
-                    title: t("treeNewFile"),
-                    onClick: () => createEntry(cwd, false),
+                    title: t("treeNewAny"),
+                    onClick: () => startCreate(cwd),
                     children: jsxRuntime.jsx(FilePlusIcon, {}),
-                  })
-                : null,
-              cwd
-                ? jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-btn",
-                    title: t("treeNewFolder"),
-                    onClick: () => createEntry(cwd, true),
-                    children: jsxRuntime.jsx(FolderPlusIcon, {}),
                   })
                 : null,
               cwd
@@ -3890,6 +3871,22 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               }),
             ],
           }),
+          // 新建内联输入（vault 同款）：挂在头部下、目标目录由触发入口决定
+          createAt !== null
+            ? jsxRuntime.jsxs("div", { className: "dshk-createrow", title: createAt, children: [
+                jsxRuntime.jsx("input", {
+                  autoFocus: true,
+                  value: createName,
+                  placeholder: t("treeNewPh"),
+                  onChange: (e) => setCreateName(e.target.value),
+                  onKeyDown: (e) => {
+                    if (e.key === "Enter") void submitCreate();
+                    if (e.key === "Escape") setCreateAt(null);
+                  },
+                }),
+                jsxRuntime.jsx("button", { type: "button", className: "dshk-btn", title: t("treeNewAny"), onClick: () => void submitCreate(), children: "✓" }),
+              ] })
+            : null,
           jsxRuntime.jsx("div", {
             className: "dshk-tree-body",
             children:
@@ -3937,8 +3934,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [onClose]);
       const items = [];
       if (entry.dir && actions.onCreate) {
-        items.push({ key: "nf", label: t("treeNewFile"), run: () => actions.onCreate(entry.path, false) });
-        items.push({ key: "nd", label: t("treeNewFolder"), run: () => actions.onCreate(entry.path, true) });
+        items.push({ key: "nany", label: t("treeNewAny"), run: () => actions.onCreate(entry.path) });
       }
       if (actions.onCopyPath) items.push({ key: "cr", label: t("treeCopyRel"), run: () => actions.onCopyPath(entry, true) });
       if (actions.onRename) items.push({ key: "rn", label: t("treeRename"), run: () => actions.onRename(entry) });
