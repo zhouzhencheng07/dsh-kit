@@ -72,7 +72,7 @@ import { multipartBoundary, parseMultipart, safeUploadName, dedupeName } from ".
 import { BrowserService } from "./browser.js";
 import { loadToolsModule, buildBrowserTools } from "./browser-tools.js";
 import { getScheduleStore, buildScheduleTools, isDateStr, todayStr } from "./schedule.js";
-import { VaultScanner, sanitizePageTitle, sanitizePageRel } from "./vault.js";
+import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton } from "./vault.js";
 import { sameOrigin } from "./web-guard.js";
 import { recycleDelete, recycleDeleteBatch } from "./recycle.js";
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在设置里改（phonePort，1-65535） */
@@ -468,6 +468,23 @@ export async function apply(ctx) {
     // 手机网关的设置联动钩子（端口变更热重启等），由 webServer 注入段回填
     let onSettingsReady = () => { };
     let onSettingsChanged = () => { };
+    // vaultRoot 上次已知值：onChange 对任意保存都触发，靠值比对识别「知识库位置
+    // 真的变了」，变了才补种骨架目录（null = 尚未见过值）
+    let lastVaultRoot = null;
+    /** vaultRoot 配置变化时补建骨架（root + wiki/attachments），见 ensureVaultSkeleton */
+    function trackVaultRoot() {
+        let root = '';
+        try {
+            root = String(readSettings().vaultRoot ?? '').trim();
+        }
+        catch {
+            return;
+        }
+        if (root === '' || root === lastVaultRoot)
+            return;
+        lastVaultRoot = root;
+        void ensureVaultSkeleton(root);
+    }
     /** setSource/onChange 钩子：settings 首次就绪时触发网关启用位检查（此时 readSettings
      *  才读到真实值）；注意 onSettingsReady 在 webServer 注入回填前是空函数——如果注入
      *  回调还未执行，调用无效果；注入回调已存在时触发首次评估（解决时序差） */
@@ -475,9 +492,13 @@ export async function apply(ctx) {
         setSource: (current) => {
             readSettings = current;
             phoneSettingsReady = true;
+            trackVaultRoot();
             onSettingsReady();
         },
-        onChange: () => { onSettingsChanged(); },
+        onChange: () => {
+            trackVaultRoot();
+            onSettingsChanged();
+        },
     };
     if (Config) {
         ctx.inject(['settings'], (settingsCtx) => {

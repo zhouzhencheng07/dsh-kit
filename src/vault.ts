@@ -36,6 +36,22 @@ const MD_EXTS = new Set(['.md', '.markdown'])
 const SKIP_DIRS = new Set(['attachments', '.git', '.trash', 'node_modules'])
 const SCAN_FILE_LIMIT = 5000
 
+/**
+ * vault 骨架目录补种（配置保存 vaultRoot 时调用）：root 本体随 recursive mkdir
+ * 一并创建，约定目录放 wiki/（双链知识页）与 attachments/（二进制，SKIP_DIRS
+ * 已豁免索引）。幂等——已存在原样保留；失败静默（只读盘等场景不该挡住配置保存，
+ * 骨架是便利设施不是前置条件）。
+ */
+export async function ensureVaultSkeleton(root: string): Promise<void> {
+  for (const dir of ['wiki', 'attachments']) {
+    try {
+      await fs.promises.mkdir(path.join(root, dir), { recursive: true })
+    } catch {
+      return
+    }
+  }
+}
+
 export function isMdPath(p: string): boolean {
   return MD_EXTS.has(path.extname(p).toLowerCase())
 }
