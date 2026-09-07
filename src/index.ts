@@ -526,6 +526,18 @@ export async function apply(ctx: KitCtx): Promise<void> {
     void ensureVaultSkeleton(root)
     syncScheduleStore(root)
   }
+  /** 日程与知识库同址存储（2026-09-08 定稿）：目录未配置即整体不可用——端点回
+   *  vault-not-configured、agent 工具拒绝、UI 出引导页，与知识库同语义 */
+  function scheduleVaultRoot(): string {
+    try {
+      return String(readSettings().vaultRoot ?? '').trim()
+    } catch {
+      return ''
+    }
+  }
+  function scheduleConfigured(): boolean {
+    return scheduleVaultRoot() !== ''
+  }
   /** setSource/onChange 钩子：settings 首次就绪时触发网关启用位检查（此时 readSettings
    *  才读到真实值）；注意 onSettingsReady 在 webServer 注入回填前是空函数——如果注入
    *  回调还未执行，调用无效果；注入回调已存在时触发首次评估（解决时序差） */
@@ -639,7 +651,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
   const scheduleToolsMod = await loadToolsModule((m) => console.warn(`dsh-kit: ${m}`))
   const scheduleDefs =
     scheduleToolsMod && typeof scheduleToolsMod.defineTool === 'function'
-      ? buildScheduleTools({ defineTool: scheduleToolsMod.defineTool, store: scheduleStore })
+      ? buildScheduleTools({ defineTool: scheduleToolsMod.defineTool, store: scheduleStore, isConfigured: scheduleConfigured })
       : null
   if (!scheduleDefs) {
     console.warn('dsh-kit: dsh-tools 不可达，日程 agent 工具未注册（日程面板不受影响）')
@@ -2584,6 +2596,14 @@ export async function apply(ctx: KitCtx): Promise<void> {
             kind: 'exact',
             path,
             handler: (req, res) => {
+              // 存储与知识库同址：目录未配置整体不可用（UI 出引导页，端点不给数据）
+              if (!scheduleConfigured()) {
+                schedJson(res, 400, { error: 'vault-not-configured' })
+                return
+              }
+              // 幂等同步：settings.yaml 被外部编辑时设置服务热重读但不走插件
+              // onChange，store 停泊位不会自己换回来——请求前对一次账自愈
+              syncScheduleStore(scheduleVaultRoot())
               handler(req, res, new URL(req.url ?? '/', 'http://dsh-kit.local'))
             },
           }),
