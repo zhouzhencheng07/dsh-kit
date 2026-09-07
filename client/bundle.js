@@ -1821,10 +1821,10 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-sched-primary{appearance:none;border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:#fff;font:inherit;font-size:12px;line-height:1;padding:7px 14px;border-radius:8px;cursor:pointer}
 .dshk-sched-primary:disabled{opacity:.5;cursor:default}
 .dshk-sched-danger{appearance:none;border:1px solid color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);background:none;color:var(--dsw-alias-danger,#cd3131);font:inherit;font-size:12px;line-height:1;padding:7px 12px;border-radius:8px;cursor:pointer}
-/* 计时芯片：右坞页条右组（展开态）+ 收起栏底部（is-rail，弹层向左上开） */
+/* 计时芯片：页条最小化钮旁（展开态）+ 收起栏底部（is-rail，弹层向左上开） */
 .dshk-sched-timer{position:relative;display:inline-flex;align-items:center;gap:6px}
 .dshk-sched-timer.is-rail{gap:4px}
-.dshk-sched-timer.is-rail .dshk-sched-timerpick{top:auto;bottom:0;right:30px}
+.dshk-sched-timer.is-rail .dshk-sched-timerpick{top:auto;bottom:0;right:30px;left:auto}
 .dshk-sched-timerbtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);font:inherit;font-size:10px;line-height:1;width:22px;height:22px;border-radius:999px;cursor:pointer}
 .dshk-sched-timerbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-brand-primary)}
 .dshk-sched-timerbtn.is-stop{color:var(--dsw-alias-danger,#cd3131);border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent)}
@@ -1832,7 +1832,7 @@ textarea.dshk-sched-input{resize:vertical}
 @keyframes dshk-sched-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .dshk-sched-timertitle{max-width:180px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:12px;color:var(--dsw-alias-label-primary)}
 .dshk-sched-timerelapsed{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dsw-alias-label-secondary)}
-.dshk-sched-timerpick{position:absolute;top:26px;right:0;z-index:60;min-width:200px;max-height:240px;overflow:auto;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 28px color-mix(in srgb,#000 25%,transparent);display:flex;flex-direction:column;padding:4px}
+.dshk-sched-timerpick{position:absolute;top:26px;left:0;z-index:60;min-width:200px;max-height:240px;overflow:auto;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 28px color-mix(in srgb,#000 25%,transparent);display:flex;flex-direction:column;padding:4px}
 .dshk-sched-timerpickitem{appearance:none;border:none;background:none;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;text-align:left;padding:7px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:320px}
 .dshk-sched-timerpickitem:hover{background:var(--dsw-alias-interactive-bg-hover)}
 /* 内置浏览器面板：右侧停靠（复用 .dshk-pane）；URL 栏 + 实时画面 canvas（人机共驾） */
@@ -6782,8 +6782,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       ] });
     }
 
-    /** 计时芯片，双挂载：右坞页条右组（展开态）+ 收起栏底部（compact——与浏览器/
-     *  知识库对齐，坞收起也留按钮；省标题与时长文字，tooltip 带实时时长）。
+    /** 计时芯片，双挂载：页条最小化钮旁（展开态）+ 收起栏底部（compact——与
+     *  浏览器/知识库对齐，坞收起也留按钮；省标题与时长文字，tooltip 带实时时长）。
      *  空闲=▶（选待办/独立计时），运行=标题+时长+■ */
     function ScheduleTimerChip({ compact }) {
       const [running, setRunning] = react.useState(null); // { id, start, title }
@@ -8839,6 +8839,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 },
                 children: jsxRuntime.jsx(PaneToggleIcon, {}),
               }),
+              // 最小化钮旁：计时芯片（用户定稿 2026-09-07：贴最小化钮，不占页条
+              // 右组；展开态常驻，running 时任意标签可见。收起态由 DockStub 底部
+              // 同款芯片接管）。选待办弹层 left:0 向右开，贴近左缘不裁切
+              jsxRuntime.jsx(ScheduleTimerChip, {}),
               // 左组：标签条 + 紧随其后的「+」（+ 显示在标签旁边）。两者仅有标签
               // 时显示——0 标签的空态选择器已承担开新标签职责，头部不再重复
               jsxRuntime.jsxs("span", {
@@ -8915,13 +8919,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     : null,
                 ],
               }),
-              // 右组：计时芯片（展开态常驻，running 时在任意标签都可见；收起态
-              // 由 DockStub 底部同款芯片接管）+ 全部关闭（仅有标签时显示）=
-              // 人为清场，抑制浏览器自动弹回
+              // 右组：全部关闭（仅有标签时显示）= 人为清场，抑制浏览器自动弹回；
+              // 计时芯片已移至最小化钮旁
               jsxRuntime.jsxs("span", {
                 className: "dshk-jobs-headside",
                 children: [
-                  jsxRuntime.jsx(ScheduleTimerChip, {}),
                   tabDefs.length > 0
                     ? jsxRuntime.jsx("button", {
                         type: "button",

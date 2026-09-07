@@ -499,6 +499,8 @@ out = comps.RightDock({ props: {}, cwd: "C:/x" });
 const schedOn = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-tab dshk-tab-on");
 const schedElem = callLog.find((c) => c[1] === comps.ScheduleView);
 check("RightDock 日程标签激活并挂 ScheduleView", !!schedOn && !!schedElem);
+const barChip = callLog.find((c) => c[1] === comps.ScheduleTimerChip);
+check("RightDock 页条挂计时芯片（非 compact）", !!barChip && barChip[2] && barChip[2].compact !== true);
 comps.setKitUi({ schedOpen: false, dockTab: null });
 comps.setKitUi({ vaultOpen: true, dockTab: "vault" });
 callLog = [];
