@@ -440,12 +440,13 @@ out = comps.RightDock({ props: {}, cwd: "C:/x" });
 const pvTabrow = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-pv-tabrow");
 const pvChips = callLog.filter((c) => (c[0] === "jsxs") && c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-tab") && typeof c[2].title === "string" && c[2].title.startsWith("C:/x/"));
 // 桩环境 <html lang> 缺失 → t() 走英文兜底（语言跟随设计的正确行为），断言双语匹配
+// 全部关闭按钮 2026-09-08 用户定稿移除（逐个关标签即可）——断言其不再渲染
 const closeAllBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["全部关闭", "Close all"].includes(c[2]["aria-label"]));
 const minimizeBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["最小化面板", "Minimize panel"].includes(c[2]["aria-label"]));
 const addBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-dock-add");
 check("RightDock 多文件预览渲染无异常", !!out && typeof out === "object");
 check("RightDock 渲染出二级文件标签条（2 个文件 chip）", !!pvTabrow && pvChips.length === 2);
-check("RightDock 有标签：» + 标签条 + + + 全部关闭都在", !!minimizeBtn && !!closeAllBtn && !!addBtn);
+check("RightDock 有标签：最小化 + 新建都在且全部关闭已移除", !!minimizeBtn && !!addBtn && !closeAllBtn);
 comps.setKitUi({ previews: [], activePreview: null, dockTab: null });
 
 // 7.2.2b) 单文件预览：文件标签条恒显示（与浏览器页签统一——单文件也有标签级 ✕，

@@ -1,7 +1,9 @@
 // dsh-kit 日程模块——结构化存储与查询派生（schedule.ts）
 //
-// 职责：日程/待办/计时的唯一数据持有者（JSON 原子落盘 $DSH_HOME/dsh-kit/
-// schedule.json），以及派生层：区间重复展开、统计、文本汇总。UI 组件在
+// 职责：日程/待办/计时的唯一数据持有者（JSON 原子落盘，2026-09-08 起与知识库
+// 同址：<vaultRoot>/schedule.json（vault 只索引 md，json 放根下不碍事），
+// vaultRoot 未配置回退 $DSH_HOME/dsh-kit/schedule.json，首次自动迁入、原文件
+// 改名 .migrated 留档），以及派生层：区间重复展开、统计、文本汇总。UI 组件在
 // client/bundle.js，agent 工具定义与端点注册在 index.ts——本文件不感知两者形状。
 //
 // 设计要点（schedule-design.md）：
@@ -259,12 +261,54 @@ export function dshKitDataDir(): string {
   return path.join(home, 'dsh-kit')
 }
 
+/**
+ * 日程数据文件解析（2026-09-08 用户定稿：与知识库同址——vault 只索引 md，json
+ * 放根下不碍事，直接 <vaultRoot>/schedule.json；未配置 vaultRoot 回退原位置
+ * <DSH_HOME>/dsh-kit/schedule.json）。目标缺失而迁移源有旧数据时整库迁入，迁完
+ * 原文件改名 .migrated 留档——不删（数据还在）但不复活（用户删掉 vault 里的
+ * schedule.json 想重新开始时，不会被旧数据覆盖回来）。迁移源按序找老默认位置与
+ * 过渡期用过的 <vaultRoot>/.dsh-kit/（当晚未发版构建用过，顺手收编）。
+ */
+export function resolveScheduleFile(vaultRoot?: string): string {
+  const root = (vaultRoot ?? '').trim()
+  if (root === '') return path.join(dshKitDataDir(), 'schedule.json')
+  const file = path.join(root, 'schedule.json')
+  if (!fs.existsSync(file)) {
+    const sources = [
+      path.join(dshKitDataDir(), 'schedule.json'),
+      path.join(root, '.dsh-kit', 'schedule.json'),
+    ]
+    for (const legacy of sources) {
+      try {
+        if (fs.existsSync(legacy)) {
+          fs.mkdirSync(path.dirname(file), { recursive: true })
+          fs.copyFileSync(legacy, file)
+          fs.renameSync(legacy, `${legacy}.migrated`)
+          break
+        }
+      } catch {
+        // 单个迁移源失败就试下一个，都失败按目标路径空库起步
+      }
+    }
+  }
+  return file
+}
+
 export class ScheduleStore {
-  readonly file: string
+  /** 当前数据文件（retarget 可换——vaultRoot 配置变化时整体换库，实例不变） */
+  file: string
   private data: ScheduleData = { events: [], runningTimer: null }
 
   constructor(file?: string) {
     this.file = file ?? path.join(dshKitDataDir(), 'schedule.json')
+    this.load()
+  }
+
+  /** 换数据文件并重读（同文件 no-op）。旧内存态丢弃；进行中的计时随旧库消失，
+   * 换库后 runningTimer=null——切知识库位置是罕见操作，可接受 */
+  retarget(file: string): void {
+    if (this.file === file) return
+    this.file = file
     this.load()
   }
 
@@ -273,7 +317,10 @@ export class ScheduleStore {
     try {
       raw = fs.readFileSync(this.file, 'utf8')
     } catch {
-      return // 缺失 = 空库
+      // 缺失 = 空库。必须清内存态：retarget 换库时旧库数据不能残留——
+      // 否则下一次 mutate 会把旧库内容整体写进新文件
+      this.data = { events: [], runningTimer: null, orphans: [] }
+      return
     }
     try {
       const parsed = JSON.parse(raw) as ScheduleData
@@ -702,10 +749,13 @@ export function expandOccurrences(events: ScheduleEvent[], from: string, to: str
   return out.sort((a, b) => (a.date === b.date ? a.startMins - b.startMins : a.date < b.date ? -1 : 1))
 }
 
-/** 模块级单例：端点与 agent 工具共享同一份内存态 */
+/** 模块级单例：端点与 agent 工具共享同一份内存态。每次调用按当前 vaultRoot
+ * 重解析目标文件，变了就原位 retarget（实例不变，捕获方无需重新取） */
 let singleton: ScheduleStore | null = null
-export function getScheduleStore(): ScheduleStore {
-  if (!singleton) singleton = new ScheduleStore()
+export function syncScheduleStore(vaultRoot?: string): ScheduleStore {
+  const file = resolveScheduleFile(vaultRoot)
+  if (!singleton) singleton = new ScheduleStore(file)
+  else singleton.retarget(file)
   return singleton
 }
 

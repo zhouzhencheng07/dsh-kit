@@ -17,6 +17,7 @@ import {
   timedMsInRange,
   buildScheduleTools,
   toolArgsToCreateInput,
+  resolveScheduleFile,
 } from '../dist/schedule.js'
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'dshkit-sched-'))
@@ -445,4 +446,49 @@ test('entryUpdate/entryDelete：独立段与挂条目段改删，非法输入拒
   assert.equal(store.entryDelete(null, 0), true)
   assert.equal(store.listOrphans().length, 0)
   fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('存储位置：vaultRoot 配置后与知识库同址，旧数据自动迁入且原文件改名留档', () => {
+  const dir = tmp()
+  const legacyHome = path.join(dir, 'home', 'dsh-kit')
+  fs.mkdirSync(legacyHome, { recursive: true })
+  const legacyFile = path.join(legacyHome, 'schedule.json')
+  fs.writeFileSync(legacyFile, JSON.stringify({ events: [{ id: 'a', title: '旧数据', createdAt: '2026-09-08T00:00', updatedAt: '2026-09-08T00:00' }], runningTimer: null }), 'utf8')
+  const vault = path.join(dir, 'vault')
+  const prevHome = process.env.DSH_HOME
+  process.env.DSH_HOME = path.join(dir, 'home')
+  try {
+    // 未配置 vaultRoot → 原位置
+    assert.equal(resolveScheduleFile(''), legacyFile)
+    assert.equal(resolveScheduleFile(undefined), legacyFile)
+    // 配置 vaultRoot → vault 根直放 + 自动迁入
+    const file = resolveScheduleFile(vault)
+    assert.equal(file, path.join(vault, 'schedule.json'))
+    assert.ok(fs.existsSync(file))
+    assert.equal(new ScheduleStore(file).list()[0].title, '旧数据')
+    // 原文件改名 .migrated 留档（不删也不复活）
+    assert.ok(!fs.existsSync(legacyFile))
+    assert.ok(fs.existsSync(`${legacyFile}.migrated`))
+    // 再次解析不重复迁入
+    assert.equal(resolveScheduleFile(vault), file)
+    // 过渡期用过的 <vaultRoot>/.dsh-kit/ 也会被收编到根下
+    const vault3 = path.join(dir, 'vault3')
+    fs.mkdirSync(path.join(vault3, '.dsh-kit'), { recursive: true })
+    fs.writeFileSync(path.join(vault3, '.dsh-kit', 'schedule.json'), JSON.stringify({ events: [{ id: 'c', title: '过渡数据', createdAt: '', updatedAt: '' }], runningTimer: null }), 'utf8')
+    const file3 = resolveScheduleFile(vault3)
+    assert.equal(file3, path.join(vault3, 'schedule.json'))
+    assert.equal(new ScheduleStore(file3).list()[0].title, '过渡数据')
+    assert.ok(!fs.existsSync(path.join(vault3, '.dsh-kit', 'schedule.json')))
+    // retarget 原位换库：同一实例读新文件（源用 vault 里迁好的数据）
+    const s = new ScheduleStore(file)
+    assert.equal(s.list().length, 1)
+    s.retarget(path.join(dir, 'empty.json'))
+    assert.equal(s.list().length, 0)
+    assert.equal(s.file, path.join(dir, 'empty.json'))
+    s.retarget(s.file) // 同文件 no-op
+  } finally {
+    if (prevHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = prevHome
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 })
