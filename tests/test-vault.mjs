@@ -120,6 +120,7 @@ await test('ensureVaultSkeleton 补种骨架目录且幂等', async () => {
   const root = path.join(dir, '新建库')
   await ensureVaultSkeleton(root)
   assert.ok(fs.statSync(path.join(root, 'wiki')).isDirectory())
+  assert.ok(fs.statSync(path.join(root, 'library')).isDirectory())
   assert.ok(fs.statSync(path.join(root, 'attachments')).isDirectory())
   // 已有内容不被覆盖
   fs.writeFileSync(path.join(root, 'wiki', '已有.md'), '# x', 'utf8')
