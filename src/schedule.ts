@@ -384,10 +384,11 @@ export class ScheduleStore {
     // 已有进行中先闭合（礼貌性互斥：一边计时是人对自己时间的诚实）
     if (this.data.runningTimer) this.timerStop()
     const target = id ? this.data.events.find((e) => e.id === id) : undefined
+    // 独立计时必须有名目（用户定稿 2026-09-08：网格=时间分配视图，无名目的
+    // 时段无从识别）；标题与日程/待办同口径限 16 字。挂条目时标题永远跟条目走
+    const label = target ? undefined : title?.trim().slice(0, SCHED_TITLE_MAX) || undefined
+    if (!target && label === undefined) throw new Error('独立计时需要标题（也允许挂待办）')
     const start = dtStrOf(new Date(), true)
-    // 独立计时可带自由标题（wangshu 同款：不挂任务也能给这段轨迹起名），
-    // 挂条目时标题永远跟条目走，不收 title
-    const label = target ? undefined : title?.trim().slice(0, 200) || undefined
     if (target) {
       if (!Array.isArray(target.timeEntries)) target.timeEntries = []
       target.timeEntries.push({ start })
@@ -410,7 +411,7 @@ export class ScheduleStore {
       }
     } else {
       // 独立计时（未挂条目）的时段落到 orphans：不挂列表但统计照计，
-      // 否则停表即丢数据；timerStart 撞上已删条目静默降级成的独立计时也走这里
+      // 否则停表即丢数据（timerStart 已强制独立计时必带标题，note 不会空）
       if (!Array.isArray(this.data.orphans)) this.data.orphans = []
       this.data.orphans.push({ start: running.start, end: dtStrOf(new Date(), true), note: running.title })
     }
@@ -426,6 +427,73 @@ export class ScheduleStore {
       ? (this.data.events.find((e) => e.id === running.id)?.title ?? '')
       : (running.title ?? '')
     return { id: running.id, start: running.start, title }
+  }
+
+  // ── 计时段编辑（网格=时间分配视图：计时段真实计入，须可像日程一样改）──────
+
+  /** owner=null → 独立计时段（orphans），否则事件 id → 其 timeEntries */
+  private entryListOf(owner: string | null): ScheduleTimeEntry[] | null {
+    if (owner === null) {
+      if (!Array.isArray(this.data.orphans)) this.data.orphans = []
+      return this.data.orphans
+    }
+    const ev = this.data.events.find((e) => e.id === owner)
+    if (!ev) return null
+    if (!Array.isArray(ev.timeEntries)) ev.timeEntries = []
+    return ev.timeEntries
+  }
+
+  /**
+   * 修改计时段（时刻/备注）。只允许改已闭合段——进行中的段归停表动作管，直接
+   * 改会造成 runningTimer 与数据错位。先整体验证再落字段：时刻非法或 end<=start
+   * 拒绝（返回 null），不做半截更新。
+   */
+  entryUpdate(
+    owner: string | null,
+    index: number,
+    patch: { start?: string; end?: string; note?: string },
+  ): ScheduleTimeEntry | null {
+    const list = this.entryListOf(owner)
+    if (!list) return null
+    const entry = list[index]
+    if (!entry || entry.end === undefined) return null
+    const start = patch.start !== undefined ? patch.start : entry.start
+    const end = patch.end !== undefined ? patch.end : entry.end
+    if (!DT_RE.test(start) || !DT_RE.test(end)) return null
+    const s = parseDT(start)
+    const e = parseDT(end)
+    // end<start 才拒（同秒零长段是快速停表的合法存量，允许只改备注）
+    if (!s || !e || e.getTime() < s.getTime()) return null
+    entry.start = start.slice(0, 16)
+    entry.end = end.slice(0, 16)
+    if (patch.note !== undefined) {
+      // 独立段的 note 就是标题（16 字同口径）；挂条目段是备注
+      const cap = owner === null ? SCHED_TITLE_MAX : 200
+      const note = patch.note.trim().slice(0, cap)
+      if (note !== '') entry.note = note
+      else delete entry.note
+    }
+    if (owner !== null) {
+      const ev = this.data.events.find((e2) => e2.id === owner)
+      if (ev) ev.updatedAt = dtStrOf(new Date())
+    }
+    this.persist()
+    return entry
+  }
+
+  /** 删除计时段（仅已闭合段；进行中的段先停表）。返回是否真的删了 */
+  entryDelete(owner: string | null, index: number): boolean {
+    const list = this.entryListOf(owner)
+    if (!list) return false
+    const entry = list[index]
+    if (!entry || entry.end === undefined) return false
+    list.splice(index, 1)
+    if (owner !== null) {
+      const ev = this.data.events.find((e) => e.id === owner)
+      if (ev) ev.updatedAt = dtStrOf(new Date())
+    }
+    this.persist()
+    return true
   }
 
   // ── 派生：展开 / 统计 / 汇总 ─────────────────────────────────────────────

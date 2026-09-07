@@ -177,12 +177,10 @@ test('timer：全局单计时互斥、stop 闭合、runningTimer 带标题', () 
   assert.equal(store.runningTimer(), null)
   const bEntry = store.list().find((e) => e.id === b.id).timeEntries
   assert.ok(bEntry[0].end !== undefined)
-  // 独立计时：无挂载条目，runningTimer.title 为空串；停表落 orphans 不丢时段
-  store.timerStart(undefined)
-  assert.equal(store.runningTimer().title, '')
-  store.timerStop()
+  // 独立计时强制标题（2026-09-08 定稿）：无名目直接拒绝、不产生 orphan
+  assert.throws(() => store.timerStart(undefined), /独立计时需要标题/)
   assert.equal(store.runningTimer(), null)
-  assert.equal(store.listOrphans().length, 1)
+  assert.equal(store.listOrphans().length, 0)
   // 带标题的独立计时（wangshu 对齐）：标题随 runningTimer 走，停表落 orphan.note
   store.timerStart(undefined, '  整理周报  ')
   assert.equal(store.runningTimer().title, '整理周报')
@@ -222,7 +220,7 @@ test('独立计时 orphans 持久化往返 + events 非数组也走 .bak', () =>
   const dir = tmp()
   const file = path.join(dir, 'schedule.json')
   const s1 = new ScheduleStore(file)
-  s1.timerStart(undefined)
+  s1.timerStart(undefined, '独立计时')
   s1.timerStop()
   // 拉成确定时段（同秒起止时长 0 是边界行为），重开实例验证落盘往返
   const orphan = s1.listOrphans()[0]
@@ -381,5 +379,51 @@ test('标题统一上限 16 字（面板/agent 工具同一口径，细节让位
   const up = store.create({ title: 'x' })
   store.update(up.id, { title: long })
   assert.equal(store.list().find((e) => e.id === up.id).title.length, 16)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('timerStart：独立计时强制标题且限 16 字', () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  assert.throws(() => store.timerStart(undefined), /独立计时需要标题/)
+  assert.throws(() => store.timerStart(undefined, '   '), /独立计时需要标题/)
+  const running = store.timerStart(undefined, '一'.repeat(20)).runningTimer
+  assert.equal(running.title.length, 16)
+  store.timerStop()
+  const orphans = store.listOrphans()
+  assert.equal(orphans.length, 1)
+  assert.equal(orphans[0].note.length, 16)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('entryUpdate/entryDelete：独立段与挂条目段改删，非法输入拒绝', () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const ev = store.create({ title: '挂段事件', start: '2026-09-08T09:00' })
+  store.timerStart(ev.id)
+  store.timerStop()
+  store.timerStart(undefined, '独立段')
+  store.timerStop()
+  // 挂条目段改时刻 + 备注
+  const up1 = store.entryUpdate(ev.id, 0, { start: '2026-09-08T10:00', end: '2026-09-08T11:00', note: '备注' })
+  assert.equal(up1.start, '2026-09-08T10:00')
+  assert.equal(up1.note, '备注')
+  assert.equal(store.list().find((e) => e.id === ev.id).timeEntries[0].end, '2026-09-08T11:00')
+  // 独立段改标题（note 即标题）
+  const up2 = store.entryUpdate(null, 0, { note: '改名了' })
+  assert.equal(up2.note, '改名了')
+  // 独立段 note 限 16 字
+  assert.equal(store.entryUpdate(null, 0, { note: '一'.repeat(20) }).note.length, 16)
+  // 非法：end<=start、坏格式、越界下标、不存在 owner
+  assert.equal(store.entryUpdate(null, 0, { start: '2026-09-08T20:00', end: '2026-09-08T09:00' }), null)
+  assert.equal(store.entryUpdate(null, 0, { start: 'bad' }), null)
+  assert.equal(store.entryUpdate(null, 99, { note: 'x' }), null)
+  assert.equal(store.entryUpdate('no-such-id', 0, { note: 'x' }), null)
+  // 删除
+  assert.equal(store.entryDelete(ev.id, 0), true)
+  assert.equal(store.entryDelete(ev.id, 0), false) // 已删，越界
+  assert.equal(store.list().find((e) => e.id === ev.id).timeEntries.length, 0)
+  assert.equal(store.entryDelete(null, 0), true)
+  assert.equal(store.listOrphans().length, 0)
   fs.rmSync(dir, { recursive: true, force: true })
 })
