@@ -716,18 +716,39 @@ export async function apply(ctx: KitCtx): Promise<void> {
               path: path.join(dir.path, d.name),
               dir: d.isDirectory(),
             }))
-            entries.sort((a, b) =>
-              a.dir === b.dir
-                ? a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })
-                : a.dir
-                  ? -1
-                  : 1,
-            )
-            const truncated = entries.length > TREE_LIMIT
-            json(200, {
-              path: dir.path,
-              entries: truncated ? entries.slice(0, TREE_LIMIT) : entries,
-              truncated,
+            // 目录附 empty 标记（opendir 读一项即关，开销 O(1)）：前端据此对空
+            // 目录去掉展开钮——展开只会得到"（空）"，白点一下还占视觉
+            void Promise.all(
+              entries
+                .filter((e) => e.dir)
+                .map((e) =>
+                  fs.promises
+                    .opendir(e.path)
+                    .then(async (it) => {
+                      const first = await it.read()
+                      await it.close()
+                      return { path: e.path, empty: first === null }
+                    })
+                    .catch(() => null),
+                ),
+            ).then((probes) => {
+              const emptyMap = new Map(probes.filter((p): p is { path: string; empty: boolean } => p !== null).map((p) => [p.path, p.empty]))
+              for (const e of entries) {
+                if (e.dir && emptyMap.has(e.path)) (e as { empty?: boolean }).empty = emptyMap.get(e.path) === true
+              }
+              entries.sort((a, b) =>
+                a.dir === b.dir
+                  ? a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })
+                  : a.dir
+                    ? -1
+                    : 1,
+              )
+              const truncated = entries.length > TREE_LIMIT
+              json(200, {
+                path: dir.path,
+                entries: truncated ? entries.slice(0, TREE_LIMIT) : entries,
+                truncated,
+              })
             })
           })
         },
@@ -1538,6 +1559,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
       //   stageAll         = git add -A
       //   commit(message, all?) = 可选先 add -A（暂存区为空时的"提交全部"），再 commit -m
       //   push(upstream?, remote?) = git push（upstream:true → push -u <remote> <当前分支>）
+      //   pull = git pull（网络操作，PUSH_TIMEOUT 长超时）
       //   branchCreate(name, switch?) = git branch <name> 或 git switch -c <name>
       //   branchSwitch(name) = git switch <name>
       //   branchDelete(name, force?) = git branch -d|-D <name>（当前分支拒绝）
@@ -1638,6 +1660,9 @@ export async function apply(ctx: KitCtx): Promise<void> {
               } else {
                 r = await runGit(['push'], root, PUSH_TIMEOUT)
               }
+            } else if (op === 'pull') {
+              // 网络操作同 push 走长超时；缺上游等错误原文透出（前端 toast 展示）
+              r = await runGit(['pull'], root, PUSH_TIMEOUT)
             } else if (op === 'branchCreate' || op === 'branchSwitch' || op === 'branchDelete') {
               const name = String(body?.name ?? '').trim()
               if (name === '') {
