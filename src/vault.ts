@@ -38,12 +38,12 @@ const SCAN_FILE_LIMIT = 5000
 
 /**
  * vault 骨架目录补种（配置保存 vaultRoot 时调用）：root 本体随 recursive mkdir
- * 一并创建，约定目录放 wiki/（双链知识页）与 attachments/（二进制，SKIP_DIRS
- * 已豁免索引）。幂等——已存在原样保留；失败静默（只读盘等场景不该挡住配置保存，
- * 骨架是便利设施不是前置条件）。
+ * 一并创建，约定目录按 vault-design.md 布局放 wiki/（策展层）、library/（参考
+ * 层）、attachments/（二进制，SKIP_DIRS 已豁免索引）。幂等——已存在原样保留；
+ * 失败静默（只读盘等场景不该挡住配置保存，骨架是便利设施不是前置条件）。
  */
 export async function ensureVaultSkeleton(root: string): Promise<void> {
-  for (const dir of ['wiki', 'attachments']) {
+  for (const dir of ['wiki', 'library', 'attachments']) {
     try {
       await fs.promises.mkdir(path.join(root, dir), { recursive: true })
     } catch {
