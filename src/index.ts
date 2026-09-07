@@ -56,6 +56,7 @@ import http from 'node:http'
 import path from 'node:path'
 
 import { applySkillPool, findProjectRoot } from './skill-pool.ts'
+import { applyOpenCodeSession } from './opencode-session.ts'
 import { applyWebSearch } from './web-search.ts'
 import { parseStatusBranch, parseLogRecords, parseBranchList, parseTrack } from './git.ts'
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from './phone-gateway.ts'
@@ -557,6 +558,8 @@ export async function apply(ctx: KitCtx): Promise<void> {
     skillsRegistry = skillsCtx.skills
   })
   applySkillPool(ctx, { getRegistry: () => skillsRegistry })
+  // OpenCode Go 会话头一键写入端点（实现见 src/opencode-session.ts）
+  applyOpenCodeSession(ctx)
 
   // 后台任务控制（实现见下）：浏览器半边「任务」面板的结束/读输出走这里。
   // jobs 注册表（dsh-jobs-local）与 agents 注册表（dsh-agent）都是宿主组合里的

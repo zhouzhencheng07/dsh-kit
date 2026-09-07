@@ -789,6 +789,14 @@ const fakeScope = {
 };
 out = comps.KitConfigCard({ scope: fakeScope });
 check("KitConfigCard 渲染无异常", !!out && typeof out === "object");
+// OpenCode Go 会话头动作行：卡片收起态桩渲染不到卡体，改查源码级装配
+//（i18n 双语键 + 端点路径在 bundle 里存在）；点击交互由浏览器实测覆盖
+check(
+  "Bundle 含 OpenCode Go 会话头 i18n（zh/en）与端点路径",
+  src.includes("cfgOpenCodeSession:") &&
+    src.includes("cfgOpenCodeSessionHint:") &&
+    src.includes('"/dsh-kit/opencode-session"'),
+);
 
 // React 桩记录到的组件类型必须包含本插件自定义组件名（防 ReferenceError 被忽略后整段缺失）
 const types = new Set(callLog.flatMap(([, t]) => (typeof t === "string" ? [t] : [])));
