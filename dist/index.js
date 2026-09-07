@@ -73,7 +73,6 @@ import { BrowserService } from "./browser.js";
 import { loadToolsModule, buildBrowserTools } from "./browser-tools.js";
 import { getScheduleStore, buildScheduleTools, isDateStr, todayStr } from "./schedule.js";
 import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton } from "./vault.js";
-import { installOpenCodeSessionMirror } from "./opencode-session.js";
 import { sameOrigin } from "./web-guard.js";
 import { recycleDelete, recycleDeleteBatch } from "./recycle.js";
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在设置里改（phonePort，1-65535） */
@@ -455,9 +454,6 @@ export async function apply(ctx) {
         // 自动切面板与画面跟随 agent 是恒定行为（用户定稿，无开关）——人为切走浏览器
         // 标签后的"不再拽回"抑制在客户端侧实现。
         browserEnabled: z.boolean().default(true),
-        // OpenCode Go 兼容（x-opencode-session fetch 镜像）的 kill switch，默认开：
-        // 域名门控下对非 OpenCode Go 用户零开销；dsh 原生支持落地后可关可删
-        opencodeGoEnabled: z.boolean().default(true),
         sidebarShortcut: z.string().default('Ctrl+B'),
         sidebarShortcutEnabled: z.boolean().default(true),
         terminalShortcut: z.string().default('Ctrl+/'),
@@ -522,15 +518,6 @@ export async function apply(ctx) {
         // 设置层不可用：搜索按开启处理直接挂链
         applyWebSearch(ctx);
     }
-    // OpenCode Go 会话头兼容（src/opencode-session.ts）：包装全局 fetch，对
-    // opencode.ai 请求把 pi-ai 亲和头镜像为 x-opencode-session。域名门控 + 幂等
-    // 让位，对非 OpenCode Go 用户零开销；开关是 kill switch（默认开，实时读）。
-    // 前置：该 provider 的 profile 需配 compat.sendSessionAffinityHeaders=true，
-    // 否则没有亲和头可镜像（见 .agents/docs/opencode-go-session-header.md）。
-    installOpenCodeSessionMirror({
-        isDisabled: () => readSettings().opencodeGoEnabled === false,
-        log: (msg) => console.warn(`dsh-kit: ${msg}`),
-    });
     // 技能池端点（实现见 src/skill-pool.ts）：自带 webServer 注入与同源校验。
     // skills 注册表是可选增强（归属展示），服务晚于本行就绪也无碍——注入回调捕获引用。
     let skillsRegistry = null;
