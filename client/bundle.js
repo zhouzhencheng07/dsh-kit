@@ -7677,16 +7677,19 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     function VaultView() {
       const cfg = cfgFromSnapshot(getCfgSnapshot());
-      if (cfg.vaultEnabled === false || cfg.vaultRoot === "") {
+      // 只保留开关门槛；vaultRoot 不读 settings 快照——手机/远程浏览器拿不到设置
+      // 镜像（快照恒 loading，回退默认空串），root 由 VaultRootView 从
+      // /dsh-kit/vault/index 自取，那才是两端一致的配置源
+      if (cfg.vaultEnabled === false) {
         return jsxRuntime.jsxs("div", { className: "dshk-vault", children: [
           jsxRuntime.jsx("div", { className: "dshk-vault-hinttitle", children: t("vaultNotConfigured") }),
           jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultNotConfiguredHint") }),
         ] });
       }
-      return jsxRuntime.jsx(VaultRootView, { root: cfg.vaultRoot });
+      return jsxRuntime.jsx(VaultRootView, {});
     }
 
-    function VaultRootView({ root }) {
+    function VaultRootView() {
       const [index, setIndex] = react.useState(null);
       const [indexErr, setIndexErr] = react.useState("");
       const [space, setSpace] = react.useState(""); // '' = 全部库
@@ -7730,7 +7733,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const rteRef = react.useRef(null);
 
       const current = hist.idx >= 0 ? hist.stack[hist.idx] : null;
-      const treeRoot = root + (space === "" ? "" : "/" + space);
+      // root 从 index 响应取而非入参；null = 索引未就绪（加载中/未配置/失败），
+      // 整页态由下方早退分支承担
+      const root = index !== null && typeof index.root === "string" && index.root !== "" ? index.root : null;
+      const treeRoot = root === null ? null : root + (space === "" ? "" : "/" + space);
 
       const loadIndex = react.useCallback(async () => {
         try {
@@ -7759,9 +7765,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
       }, []);
 
-      // 空间切换：树状态清空并展开根层
+      // 空间切换：树状态清空并展开根层（root 未就绪时只清空，不拉树）
       react.useEffect(() => {
         setTreeDirs({});
+        if (treeRoot === null) return;
         setExpanded({ [treeRoot]: true });
         void fetchDir(treeRoot);
       }, [treeRoot, fetchDir]);
@@ -8565,6 +8572,20 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const dirty = draftBody !== savedBody;
       // frontmatter 属性条数据（编辑器外展示，保存时字节级原样写回）
       const fmInfo = page && page.fmText ? vaultParseFmInfo(page.fmText) : null;
+      // root 未就绪的整页态：加载中 / 未配置 / 索引失败（root 就绪后的瞬时错误
+      // 走主界面内的错误条，不早退）
+      if (root === null) {
+        if (indexErr === "") {
+          return jsxRuntime.jsx("div", { className: "dshk-vault", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("contentLoading") }) });
+        }
+        if (indexErr === "vault-not-configured") {
+          return jsxRuntime.jsxs("div", { className: "dshk-vault", children: [
+            jsxRuntime.jsx("div", { className: "dshk-vault-hinttitle", children: t("vaultNotConfigured") }),
+            jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultNotConfiguredHint") }),
+          ] });
+        }
+        return jsxRuntime.jsx("div", { className: "dshk-vault", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: `${t("vaultIndexFail")} ${indexErr}` }) });
+      }
       return jsxRuntime.jsxs("div", { className: "dshk-vault", children: [
         jsxRuntime.jsxs("div", { className: "dshk-vault-toolbar", children: [
           jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistBack"), title: t("vaultHistBack"), disabled: hist.idx <= 0, onClick: histBack, children: "←" }),
