@@ -790,13 +790,11 @@ const fakeScope = {
 };
 out = comps.KitConfigCard({ scope: fakeScope });
 check("KitConfigCard 渲染无异常", !!out && typeof out === "object");
-// OpenCode Go 会话头提示行：卡片收起态桩渲染不到卡体，改查源码级装配
-//（i18n 双语键存在；旧写入端点必须已移除——静态头会压过内置按会话注入）
+// OpenCode Go 会话头已非配置项（内置行为，2026-09-08 用户定）：i18n 键与旧
+// 写入端点都必须不存在；注入机制本身由 test-opencode-session.mjs 覆盖
 check(
-  "Bundle 含 OpenCode Go 会话头 i18n（zh/en）且旧写入端点已移除",
-  src.includes("cfgOpenCodeSession:") &&
-    src.includes("cfgOpenCodeSessionHint:") &&
-    !src.includes('"/dsh-kit/opencode-session"'),
+  "OpenCode Go 会话头已不出现在设置卡（i18n 键与旧端点均移除）",
+  !src.includes("cfgOpenCodeSession") && !src.includes('"/dsh-kit/opencode-session"'),
 );
 
 // React 桩记录到的组件类型必须包含本插件自定义组件名（防 ReferenceError 被忽略后整段缺失）

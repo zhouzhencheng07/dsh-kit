@@ -757,8 +757,6 @@ window.__ModuleLoader__.load({
       cfgVaultEnabledHint: "右坞「知识库」标签：浏览、编辑、双链跳转 vault 笔记（目录未配置时标签内显示引导）",
       cfgVaultRoot: "知识库和日程目录",
       cfgVaultRootHint: "vault 根目录绝对路径（如 D:\\notes），知识库与日程共用。其内一切 md 即页面；attachments/ 与点前缀目录不进索引，根目录自动生成 AGENTS.md 约定；日程数据落在根下 schedule.json",
-      cfgOpenCodeSession: "OpenCode Go 会话头",
-      cfgOpenCodeSessionHint: "内置按会话注入：发往 opencode / opencode-go 的模型请求自动携带 x-opencode-session（复用 DSH 会话 id），网关按它做路由亲和与提示词缓存，缺失会 400。无需配置；settings.yaml 里残留的同名静态头会压过它，应删除",
       vaultTitle: "知识库",
       vaultNotConfigured: "未配置知识库和日程目录",
       vaultNotConfiguredHint: "在 设置 → 插件 → dsh-kit 里填写「知识库和日程目录」后即可使用：目录内一切 md 文件即页面，支持双链跳转与全文搜索",
@@ -1217,8 +1215,6 @@ window.__ModuleLoader__.load({
       cfgVaultEnabledHint: "The Knowledge base tab in the dock: browse, edit and wiki-link vault notes (shows setup hint until a directory is configured)",
       cfgVaultRoot: "Knowledge base & schedule directory",
       cfgVaultRootHint: "Absolute path of the vault root (e.g. D:\\notes), shared by the knowledge base and schedule. Every md file inside is a page; attachments/ and dot-directories are not indexed; an AGENTS.md convention file is generated at the root; schedule data lives in schedule.json at the root",
-      cfgOpenCodeSession: "OpenCode Go session header",
-      cfgOpenCodeSessionHint: "Built-in per-session injection: model requests to opencode / opencode-go automatically carry x-opencode-session (reusing the DSH session id), which the gateway uses for routing affinity and prompt caching; it 400s without it. Zero config; a same-named static header left in settings.yaml overrides this and should be removed",
       vaultTitle: "Knowledge base",
       vaultNotConfigured: "Knowledge base & schedule directory not configured",
       vaultNotConfiguredHint: "Set the knowledge base directory in Settings → Plugins → dsh-kit: every md file inside becomes a page, with wiki-links and full-text search",
@@ -10507,22 +10503,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                             },
                             group.switchKey,
                           );
-                        })
-                      : null,
-                    available
-                      ? jsxRuntime.jsx("div", {
-                          className: "dshk-cfg-group",
-                          children: jsxRuntime.jsxs("div", {
-                            className: "dshk-cfg-field",
-                            children: [
-                              jsxRuntime.jsx("span", { className: "dshk-cfg-label", children: t("cfgOpenCodeSession") }),
-                              jsxRuntime.jsx("span", {
-                                className: "dshk-cfg-hint",
-                                title: t("cfgOpenCodeSessionHint"),
-                                children: t("cfgOpenCodeSessionHint"),
-                              }),
-                            ],
-                          }),
                         })
                       : null,
                     available
