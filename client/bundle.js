@@ -746,6 +746,10 @@ window.__ModuleLoader__.load({
       schedDelDone: "已删除",
       schedSaved: "已保存",
       schedOpFail: "操作失败：{error}",
+      archivedTab: "已存档会话",
+      archivedRestore: "恢复",
+      archivedEmpty: "没有已存档的会话",
+      archivedHint: "已归档的会话不出现在会话列表；点「恢复」回到原工作区位置",
       cfgVaultEnabled: "启用知识库",
       cfgVaultEnabledHint: "右坞「知识库」标签：浏览、编辑、双链跳转 vault 笔记（目录未配置时标签内显示引导）",
       cfgVaultRoot: "知识库目录",
@@ -1202,6 +1206,10 @@ window.__ModuleLoader__.load({
       schedDelDone: "Deleted",
       schedSaved: "Saved",
       schedOpFail: "Operation failed: {error}",
+      archivedTab: "Archived",
+      archivedRestore: "Restore",
+      archivedEmpty: "No archived sessions",
+      archivedHint: "Archived sessions are hidden from the session list; restore returns them to their workspace slot",
       cfgVaultEnabled: "Enable knowledge base",
       cfgVaultEnabledHint: "The Knowledge base tab in the dock: browse, edit and wiki-link vault notes (shows setup hint until a directory is configured)",
       cfgVaultRoot: "Knowledge base directory",
@@ -1863,6 +1871,13 @@ textarea.dshk-sched-input{resize:vertical}
 @keyframes dshk-sched-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .dshk-timer-pill{position:fixed;right:calc(var(--dshk-pane-w, 0px) + 12px);bottom:14px;z-index:700;display:inline-flex;align-items:center;gap:8px;padding:7px 9px 7px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-base);box-shadow:0 6px 20px color-mix(in srgb,#000 22%,transparent);cursor:pointer;user-select:none}
 .dshk-timer-pill:hover{border-color:var(--dsw-alias-brand-primary)}
+.dshk-arch-root{padding:14px 16px;overflow:auto;height:100%;display:flex;flex-direction:column;gap:8px}
+.dshk-arch-hint{font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshk-arch-empty{font-size:13px;color:var(--dsw-alias-label-tertiary);padding:18px 0;text-align:center}
+.dshk-arch-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-2)}
+.dshk-arch-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.dshk-arch-title{font-size:13px;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-arch-ws{font-size:11px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshk-timer-pilltitle{min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--dsw-alias-label-primary)}
 .dshk-timer-pilltime{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dsw-alias-label-primary);font-variant-numeric:tabular-nums}
 .dshk-timer-stopmeta{display:flex;align-items:center;gap:10px;min-width:0;margin:2px 0 8px}
@@ -7786,6 +7801,52 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         .join("")}`;
     }
 
+    /** 已存档会话视图（conversation.view 槽位，排在对话/轨迹之后）：宿主
+     *  侧栏菜单只能归档（进 registry 全局归档集，列表即隐藏），恢复入口宿主
+     *  没做——这里列归档集合并提供「恢复」按钮（dsh-kit 宿主端点原位剔除，
+     *  domain/changed 广播让侧栏即时重过滤） */
+    function ArchivedSessionsView() {
+      const [rows, setRows] = react.useState(null); // null=加载中
+      const [busy, setBusy] = react.useState("");
+      const load = react.useCallback(async () => {
+        try {
+          const body = await schedFetch("/dsh-kit/workspace/archived");
+          setRows(Array.isArray(body && body.sessions) ? body.sessions : []);
+        } catch {
+          setRows([]);
+        }
+      }, []);
+      react.useEffect(() => {
+        void load();
+      }, [load]);
+      const restore = async (id) => {
+        setBusy(id);
+        try {
+          await schedFetch("/dsh-kit/workspace/unarchive", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId: id }) });
+          await load();
+        } catch {
+          // 静默：失败项留在列表，下一轮刷新对账
+        }
+        setBusy("");
+      };
+      return jsxRuntime.jsxs("div", { className: "dshk-arch-root", children: [
+        jsxRuntime.jsx("div", { className: "dshk-arch-hint", children: t("archivedHint") }),
+        rows === null
+          ? jsxRuntime.jsx("div", { className: "dshk-arch-empty", children: t("loadingCfg") })
+          : rows.length === 0
+            ? jsxRuntime.jsx("div", { className: "dshk-arch-empty", children: t("archivedEmpty") })
+            : rows.map((r) =>
+                jsxRuntime.jsxs("div", { className: "dshk-arch-row", children: [
+                  jsxRuntime.jsxs("div", { className: "dshk-arch-main", children: [
+                    jsxRuntime.jsx("span", { className: "dshk-arch-title", title: r.title, children: r.title }),
+                    jsxRuntime.jsx("span", { className: "dshk-arch-ws", title: r.cwd, children: r.workspaceTitle || r.cwd }),
+                  ] }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-primary", disabled: busy === r.id, onClick: () => void restore(r.id), children: t("archivedRestore") }),
+                ] }, r.id),
+              ),
+      ] });
+    }
+
     function VaultView() {
       const cfg = cfgFromSnapshot(getCfgSnapshot());
       // 只保留开关门槛；vaultRoot 不读 settings 快照——手机/远程浏览器拿不到设置
@@ -7868,6 +7929,23 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, []);
       react.useEffect(() => {
         void loadIndex();
+      }, [loadIndex]);
+      // 外部增删文件及时可见（vscode 式，用户定稿 2026-09-09）：打开页的正文
+      // 刷新由 stat 轮询管，树/索引靠这里——窗口聚焦 + 30s 周期重拉（mtime
+      // 缓存让无变化的重拉接近零成本）
+      react.useEffect(() => {
+        const refresh = () => {
+          if (document.visibilityState === "hidden") return;
+          void loadIndex();
+        };
+        window.addEventListener("focus", refresh);
+        document.addEventListener("visibilitychange", refresh);
+        const timer = setInterval(refresh, 30000);
+        return () => {
+          window.removeEventListener("focus", refresh);
+          document.removeEventListener("visibilitychange", refresh);
+          clearInterval(timer);
+        };
       }, [loadIndex]);
 
       const fetchDir = react.useCallback(async (dir) => {
@@ -9456,6 +9534,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (!slotsCtx) return undefined;
         const handles = [];
         const want = [
+          // 已存档会话视图：对话/轨迹之后的第三个 View 标签（order 100 排尾）
+          ["archived", true, () =>
+            slotsCtx.slots.register(
+              { name: "conversation.view", id: "dsh-kit-archived", order: 100, label: () => t("archivedTab") },
+              ArchivedSessionsView,
+            )],
           // 输入框入口排序（左→右）：文件树、源代码管理、终端；手机访问与
           // 技能页同类，走 settings.section 页面入口（order：技能 40 → 手机 45）
           ["filetree", cfg.fileTreeEnabled, () =>

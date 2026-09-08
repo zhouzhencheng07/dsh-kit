@@ -2901,6 +2901,62 @@ export async function apply(ctx: KitCtx): Promise<void> {
         return { deleted, committed, ...(failed.length > 0 ? { failed } : {}) }
       })
 
+      // ── 已存档会话（宿主 workspaceRegistry 的全局 archive 集合）──
+      // 侧栏菜单只提供了归档，宿主没有恢复 remote——这里补齐：unarchive 用
+      // registry.setState 原位剔除（global.set 持久化并广播 domain/changed，
+      // workspace follow 喂给侧栏即时重过滤）；标题取 registry 的 header 索引。
+      // registry 经注入获取（ctx 属性在插件 scope 解析不到，官方服务同通道）
+      ctx.inject(['workspaceRegistry'], (regCtx: { workspaceRegistry: any }) => {
+        const workspaceRegistry = regCtx.workspaceRegistry
+        webCtx.webServer.register({
+          kind: 'exact',
+          path: '/dsh-kit/workspace/archived',
+          handler: (_req, res) => {
+            try {
+              const sessions = (workspaceRegistry.archivedSessionIds as string[]).map((id: string) => {
+                const header = workspaceRegistry.headers?.get?.(id)
+                let workspaceTitle = ''
+                for (const w of workspaceRegistry.list()) {
+                  if (Array.isArray(w.sessionIds) && w.sessionIds.includes(id)) {
+                    workspaceTitle = String(w.title ?? '')
+                    break
+                  }
+                }
+                return { id, title: String(header?.title ?? '') || workspaceTitle || id, cwd: String(header?.cwd ?? ''), workspaceTitle }
+              })
+              vaultJson(res, 200, { sessions })
+            } catch (error) {
+              vaultJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
+            }
+          },
+        })
+        webCtx.webServer.register({
+          kind: 'exact',
+          path: '/dsh-kit/workspace/unarchive',
+          handler: (req, res) => {
+            if (req.method !== 'POST') return vaultJson(res, 405, { error: 'method not allowed' })
+            if (!sameOrigin(req)) return vaultJson(res, 403, { error: 'cross-origin denied' })
+            void schedReadBody(req).then(async (raw) => {
+              try {
+                const id = String((raw as Record<string, unknown>).sessionId ?? '')
+                if (id === '') throw new Error('缺少 sessionId')
+                const state = workspaceRegistry.requireState()
+                if (!state.archivedSessionIds.includes(id)) {
+                  return vaultJson(res, 200, { ok: true, archivedSessionIds: [...workspaceRegistry.archivedSessionIds] })
+                }
+                await workspaceRegistry.setState({
+                  ...state,
+                  archivedSessionIds: state.archivedSessionIds.filter((x: string) => x !== id),
+                })
+                vaultJson(res, 200, { ok: true, archivedSessionIds: [...workspaceRegistry.archivedSessionIds] })
+              } catch (error) {
+                vaultJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
+              }
+            })
+          },
+        })
+      })
+
       return () => {
         disposeVendor()
         disposeTree()
