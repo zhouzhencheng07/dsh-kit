@@ -74,6 +74,7 @@ import { BrowserService } from "./browser.js";
 import { loadToolsModule, buildBrowserTools } from "./browser-tools.js";
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from "./schedule.js";
 import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton } from "./vault.js";
+import { commitVault, ensureVaultGit, isInsideVault } from "./vault-git.js";
 import { sameOrigin } from "./web-guard.js";
 import { recycleDelete, recycleDeleteBatch } from "./recycle.js";
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在设置里改（phonePort，1-65535） */
@@ -484,7 +485,10 @@ export async function apply(ctx) {
         if (root === '' || root === lastVaultRoot)
             return;
         lastVaultRoot = root;
-        void ensureVaultSkeleton(root);
+        // 骨架补种后做 git 初始存档（无 git / 已是仓库自动跳过，见 vault-git.ts）
+        void ensureVaultSkeleton(root)
+            .catch(() => { })
+            .then(() => ensureVaultGit(root));
     }
     /** setSource/onChange 钩子：settings 首次就绪时触发网关启用位检查（此时 readSettings
      *  才读到真实值）；注意 onSettingsReady 在 webServer 注入回填前是空函数——如果注入
@@ -610,6 +614,35 @@ export async function apply(ctx) {
             }
         }
     });
+    // ── 知识库扫描器（src/vault.ts）：提到 apply 级——webServer 注入可能重进，
+    //   端点块与下方 fs intent 监听共享同一实例（mtime 缓存也就不用重建）──
+    const vaultScanner = new VaultScanner(() => {
+        try {
+            return String(readSettings().vaultRoot ?? '');
+        }
+        catch {
+            return '';
+        }
+    });
+    // ── 知识库 git 存档（src/vault-git.ts）：agent 编辑工具落盘前存一次 ──
+    //   宿主 fs 工具的 write/edit 在真正写盘前都过 fs/write-intent、fs/edit-intent
+    //   瀑布（检索类工具无 intent 瀑布，天然不触发）。监听挂在插件 ctx 上——cordis
+    //   子 context 原型继承根事件总线，session 内的派发这里收得到。await 提交完成
+    //   再 next()，保证快照严格先于本次 AI 改动；存档失败静默放行，不阻断编辑。
+    if (typeof ctx.on === 'function') {
+        const vaultEditIntent = (target, _exec, next) => {
+            const p = target?.displayPath;
+            if (typeof p === 'string') {
+                const root = vaultScanner.root();
+                if (root !== null && isInsideVault(root, p)) {
+                    return commitVault(root, `dsh-kit: agent 编辑前存档（${path.basename(p)}）`).then(() => next());
+                }
+            }
+            return next();
+        };
+        ctx.on('fs/write-intent', vaultEditIntent);
+        ctx.on('fs/edit-intent', vaultEditIntent);
+    }
     // webServer 可能在本插件 apply 之后才挂载，用动态注入等它就绪
     ctx.inject(['webServer', 'credentials'], (webCtx) => {
         webCtx.effect(() => {
@@ -2677,14 +2710,6 @@ export async function apply(ctx) {
             // vaultRoot 是设置卡配置的绝对目录，在工作区外——read 端点本就通配绝对
             // 路径可直接读页，但 write 强制 cwd 子树内，故 vault 的写回走自己的端点。
             // 全部端点在 vaultRoot 未配置/不存在时回 400 vault-not-configured。
-            const vaultScanner = new VaultScanner(() => {
-                try {
-                    return String(readSettings().vaultRoot ?? '');
-                }
-                catch {
-                    return '';
-                }
-            });
             const disposeVault = [];
             const vaultRoute = (path, handler) => {
                 disposeVault.push(webCtx.webServer.register({
@@ -2802,7 +2827,7 @@ export async function apply(ctx) {
                 return { path: dir };
             });
             // 写回：路径必须落在 vault 根内且是 md；mtime CAS 同 /dsh-kit/write 语义
-            vaultPost('/dsh-kit/vault/write', (body, root) => {
+            vaultPost('/dsh-kit/vault/write', async (body, root) => {
                 const rawPath = String(body.path ?? '');
                 const resolved = path.resolve(rawPath);
                 const rel = path.relative(root, resolved);
@@ -2831,6 +2856,9 @@ export async function apply(ctx) {
                 const tmp = `${resolved}.tmp`;
                 fs.writeFileSync(tmp, content, 'utf8');
                 fs.renameSync(tmp, resolved);
+                // 人工保存后提交一次（Ctrl+S/工具栏保存同路）；await 保证响应返回时
+                // 存档已落——后续紧邻的 AI 编辑前存档不会把这次人工改动卷进"改动前"快照
+                await commitVault(root, `dsh-kit: 保存 ${path.basename(resolved)}`);
                 return { ok: true, mtimeMs: fs.statSync(resolved).mtimeMs };
             });
             // 删除（含孤儿级联，客户端算清单）：Windows 批量移入回收站（单 PS 进程逐项
@@ -2887,45 +2915,9 @@ export async function apply(ctx) {
                 let committed = false;
                 if (deleted === 0)
                     return { deleted, committed, ...(failed.length > 0 ? { failed } : {}) };
-                try {
-                    fs.accessSync(path.join(root, '.git'));
-                }
-                catch {
-                    return { deleted, committed, ...(failed.length > 0 ? { failed } : {}) };
-                }
-                const runGitVault = (args) => new Promise((resolve) => {
-                    const child = spawn('git', ['-C', root, ...args], { windowsHide: true });
-                    let settled = false;
-                    const finish = (ok) => {
-                        if (!settled) {
-                            settled = true;
-                            resolve(ok);
-                        }
-                    };
-                    const timer = setTimeout(() => {
-                        try {
-                            child.kill();
-                        }
-                        catch { }
-                        finish(false);
-                    }, 15000);
-                    child.on('exit', (code) => {
-                        clearTimeout(timer);
-                        finish(code === 0);
-                    });
-                    child.on('error', () => {
-                        clearTimeout(timer);
-                        finish(false);
-                    });
-                });
-                const addOk = await runGitVault(['add', '-A']);
-                if (addOk) {
-                    committed = await runGitVault([
-                        '-c', 'user.name=dsh-kit',
-                        '-c', 'user.email=dsh-kit@local',
-                        'commit', '-m', `dsh-kit: 删除 ${deleted} 页（含孤儿级联）`,
-                    ]);
-                }
+                // 有删除即整体提交一次（用户定稿：一个提交即可整体撤回）；git 不可用
+                // 不阻断删除本身，提交失败静默
+                committed = await commitVault(root, `dsh-kit: 删除 ${deleted} 页（含孤儿级联）`);
                 return { deleted, committed, ...(failed.length > 0 ? { failed } : {}) };
             });
             return () => {
