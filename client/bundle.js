@@ -746,10 +746,12 @@ window.__ModuleLoader__.load({
       schedDelDone: "已删除",
       schedSaved: "已保存",
       schedOpFail: "操作失败：{error}",
-      archivedTab: "已存档会话",
+      archivedTab: "归档会话",
       archivedRestore: "恢复",
       archivedEmpty: "没有已存档的会话",
       archivedHint: "已归档的会话不出现在会话列表；点「恢复」回到原工作区位置",
+      archivedFilterCurrent: "当前工作区",
+      archivedFilterAll: "全部",
       cfgVaultEnabled: "启用知识库",
       cfgVaultEnabledHint: "右坞「知识库」标签：浏览、编辑、双链跳转 vault 笔记（目录未配置时标签内显示引导）",
       cfgVaultRoot: "知识库目录",
@@ -1210,6 +1212,8 @@ window.__ModuleLoader__.load({
       archivedRestore: "Restore",
       archivedEmpty: "No archived sessions",
       archivedHint: "Archived sessions are hidden from the session list; restore returns them to their workspace slot",
+      archivedFilterCurrent: "Current workspace",
+      archivedFilterAll: "All",
       cfgVaultEnabled: "Enable knowledge base",
       cfgVaultEnabledHint: "The Knowledge base tab in the dock: browse, edit and wiki-link vault notes (shows setup hint until a directory is configured)",
       cfgVaultRoot: "Knowledge base directory",
@@ -1872,6 +1876,11 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-timer-pill{position:fixed;right:calc(var(--dshk-pane-w, 0px) + 12px);bottom:14px;z-index:700;display:inline-flex;align-items:center;gap:8px;padding:7px 9px 7px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-base);box-shadow:0 6px 20px color-mix(in srgb,#000 22%,transparent);cursor:pointer;user-select:none}
 .dshk-timer-pill:hover{border-color:var(--dsw-alias-brand-primary)}
 .dshk-arch-root{padding:14px 16px;overflow:auto;height:100%;display:flex;flex-direction:column;gap:8px}
+.dshk-arch-bar{display:flex;align-items:center;gap:10px}
+.dshk-arch-bar .dshk-arch-hint{flex:1;min-width:0}
+.dshk-arch-scope{display:inline-flex;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;overflow:hidden}
+.dshk-arch-scopebtn{appearance:none;border:0;background:none;padding:3px 10px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.dshk-arch-scopebtn.is-active{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-arch-hint{font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-arch-empty{font-size:13px;color:var(--dsw-alias-label-tertiary);padding:18px 0;text-align:center}
 .dshk-arch-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-2)}
@@ -7805,9 +7814,23 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
      *  侧栏菜单只能归档（进 registry 全局归档集，列表即隐藏），恢复入口宿主
      *  没做——这里列归档集合并提供「恢复」按钮（dsh-kit 宿主端点原位剔除，
      *  domain/changed 广播让侧栏即时重过滤） */
-    function ArchivedSessionsView() {
+    function ArchivedSessionsView(props) {
+      // 当前工作区归属：当前会话挂在哪个工作区（与归档行的 workspaceId 同一口
+      // 径——workspace.sessionIds 成员判定），作为默认筛选范围
+      const sessions = props && typeof props.useSessions === "function" ? props.useSessions((s2) => s2) : null;
+      const workspaces = props && typeof props.useWorkspaces === "function" ? props.useWorkspaces((w) => w) : null;
+      const [scope, setScope] = react.useState("current");
       const [rows, setRows] = react.useState(null); // null=加载中
       const [busy, setBusy] = react.useState("");
+      const currentWsId = (() => {
+        const items = workspaces && Array.isArray(workspaces.items) ? workspaces.items : [];
+        const sid = props ? props.sessionId : undefined;
+        if (sid === undefined || sessions === null) return "";
+        for (const w of items) {
+          if (Array.isArray(w.sessionIds) && w.sessionIds.includes(sid)) return String(w.workspaceId ?? "");
+        }
+        return "";
+      })();
       const load = react.useCallback(async () => {
         try {
           const body = await schedFetch("/dsh-kit/workspace/archived");
@@ -7829,13 +7852,21 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
         setBusy("");
       };
+      const all = rows === null ? [] : rows;
+      const visible = scope === "current" && currentWsId !== "" ? all.filter((r) => r.workspaceId === currentWsId) : all;
       return jsxRuntime.jsxs("div", { className: "dshk-arch-root", children: [
-        jsxRuntime.jsx("div", { className: "dshk-arch-hint", children: t("archivedHint") }),
+        jsxRuntime.jsxs("div", { className: "dshk-arch-bar", children: [
+          jsxRuntime.jsx("div", { className: "dshk-arch-hint", children: t("archivedHint") }),
+          jsxRuntime.jsxs("div", { className: "dshk-arch-scope", children: [
+            jsxRuntime.jsx("button", { type: "button", className: `dshk-arch-scopebtn${scope === "current" ? " is-active" : ""}`, onClick: () => setScope("current"), children: t("archivedFilterCurrent") }),
+            jsxRuntime.jsx("button", { type: "button", className: `dshk-arch-scopebtn${scope === "all" ? " is-active" : ""}`, onClick: () => setScope("all"), children: t("archivedFilterAll") }),
+          ] }),
+        ] }),
         rows === null
           ? jsxRuntime.jsx("div", { className: "dshk-arch-empty", children: t("loadingCfg") })
-          : rows.length === 0
+          : visible.length === 0
             ? jsxRuntime.jsx("div", { className: "dshk-arch-empty", children: t("archivedEmpty") })
-            : rows.map((r) =>
+            : visible.map((r) =>
                 jsxRuntime.jsxs("div", { className: "dshk-arch-row", children: [
                   jsxRuntime.jsxs("div", { className: "dshk-arch-main", children: [
                     jsxRuntime.jsx("span", { className: "dshk-arch-title", title: r.title, children: r.title }),

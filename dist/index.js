@@ -2933,29 +2933,51 @@ export async function apply(ctx) {
             // registry.setState 原位剔除（global.set 持久化并广播 domain/changed，
             // workspace follow 喂给侧栏即时重过滤）；标题取 registry 的 header 索引。
             // registry 经注入获取（ctx 属性在插件 scope 解析不到，官方服务同通道）
-            ctx.inject(['workspaceRegistry'], (regCtx) => {
+            ctx.inject(['workspaceRegistry', 'sessionQuery'], (regCtx) => {
                 const workspaceRegistry = regCtx.workspaceRegistry;
+                const sessionQuery = regCtx.sessionQuery;
                 webCtx.webServer.register({
                     kind: 'exact',
                     path: '/dsh-kit/workspace/archived',
                     handler: (_req, res) => {
-                        try {
-                            const sessions = workspaceRegistry.archivedSessionIds.map((id) => {
+                        void (async () => {
+                            const ids = workspaceRegistry.archivedSessionIds.map(String);
+                            // 标题三级回退：header.title → 会话日志折叠标题（sessionQuery，
+                            // 支持已持久化会话）→ 工作区名 → id。workspaceId 供前端按工作区筛选。
+                            const folded = new Map();
+                            try {
+                                for (const r of await sessionQuery.readTitleSnapshots(ids)) {
+                                    const snap = r.status === 'fulfilled' ? r.value.title : undefined;
+                                    if (snap && typeof snap.title === 'string' && snap.title !== '')
+                                        folded.set(r.value.session.id, snap.title);
+                                }
+                            }
+                            catch {
+                                /* 标题折叠失败按无标题处理 */
+                            }
+                            const sessions = ids.map((id) => {
                                 const header = workspaceRegistry.headers?.get?.(id);
                                 let workspaceTitle = '';
+                                let workspaceId = '';
                                 for (const w of workspaceRegistry.list()) {
                                     if (Array.isArray(w.sessionIds) && w.sessionIds.includes(id)) {
                                         workspaceTitle = String(w.title ?? '');
+                                        workspaceId = String(w.id ?? '');
                                         break;
                                     }
                                 }
-                                return { id, title: String(header?.title ?? '') || workspaceTitle || id, cwd: String(header?.cwd ?? ''), workspaceTitle };
+                                return {
+                                    id,
+                                    title: String(header?.title ?? '') || folded.get(id) || workspaceTitle || id,
+                                    cwd: String(header?.cwd ?? ''),
+                                    workspaceTitle,
+                                    workspaceId,
+                                };
                             });
                             vaultJson(res, 200, { sessions });
-                        }
-                        catch (error) {
+                        })().catch((error) => {
                             vaultJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
-                        }
+                        });
                     },
                 });
                 webCtx.webServer.register({
