@@ -1,17 +1,33 @@
-// test-opencode-session.mjs — src/opencode-session.ts 单测（文本级 YAML 插入 + 端点数据面）
+// test-opencode-session.mjs — src/opencode-session.ts 单测（按会话注入机制）
+// 覆盖：门控判定、fetch 补丁（注入/放行/已带头跳过）、withStore 的 ALS 传播、
+// applyOpenCodeSessionHeader 的接线（假 ctx 捕获监听 + fetch 补丁生命周期）。
 import assert from 'node:assert/strict'
-import * as fsp from 'node:fs/promises'
-import * as os from 'node:os'
-import * as path from 'node:path'
-import { insertOpenCodeSessionHeader, findOpenCodeSessionValue, ensureOpenCodeSession } from '../dist/opencode-session.js'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import {
+  shouldAttach,
+  patchFetch,
+  withStore,
+  applyOpenCodeSessionHeader,
+} from '../dist/opencode-session.js'
 
 let passed = 0
-const U1 = '11111111-2222-3333-4444-555555555555'
-const U2 = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 
 function check(name, fn) {
   try {
-    fn()
+    const r = fn()
+    if (r instanceof Promise) {
+      return r.then(
+        () => {
+          passed += 1
+          console.log(`  ok ${name}`)
+        },
+        (error) => {
+          console.error(`  FAIL ${name}`)
+          console.error(error)
+          process.exitCode = 1
+        },
+      )
+    }
     passed += 1
     console.log(`  ok ${name}`)
   } catch (error) {
@@ -19,198 +35,167 @@ function check(name, fn) {
     console.error(error)
     process.exitCode = 1
   }
+  return undefined
 }
 
-// dev 环境 settings.yaml 的真实形状（opencode-go 在 providers 下，带 models 列表）
-const DEV_SHAPE = [
-  'ui-onboarding:',
-  '  welcomeNoticeVersion: 2026-08-13.1',
-  'llm-pi-ai:',
-  '  providers:',
-  '    opencode-go:',
-  '      models:',
-  '        - id: hy3',
-  '          name: Hy3',
-  '        - id: mimo-v2.5',
-  '          name: MiMo V2.5',
-  '      apiKeyEnv: OPENCODE_GO_API_KEY',
-  'agent-default-model:',
-  '  provider: opencode-go',
-  '  model: mimo-v2.5',
-  '',
-].join('\n')
+const PROVIDERS = new Set(['opencode', 'opencode-go'])
 
-check('真实形状：headers+session 两行插在 opencode-go: 之后、models: 之前', () => {
-  const r = insertOpenCodeSessionHeader(DEV_SHAPE, U1)
-  assert.equal(r.action, 'created')
-  assert.equal(r.value, U1)
-  const expected = [
-    '    opencode-go:',
-    '      headers:',
-    `        x-opencode-session: ${U1}`,
-    '      models:',
-  ].join('\n')
-  assert.ok(r.text.includes(expected), `插入位置/缩进不对：\n${r.text}`)
-  // 其余内容原样保留
-  assert.ok(r.text.includes('  providers:\n') && r.text.endsWith('  model: mimo-v2.5\n'))
+// ── shouldAttach 门控 ──
+check('shouldAttach：provider 命中且带 sessionId → 返回会话 id', () => {
+  assert.equal(shouldAttach({ provider: 'opencode-go', sessionId: 'session-abc' }, PROVIDERS), 'session-abc')
+  assert.equal(shouldAttach({ provider: 'opencode', sessionId: 'session-x' }, PROVIDERS), 'session-x')
+})
+check('shouldAttach：provider 不命中 / 无 sessionId / 非对象 → null', () => {
+  assert.equal(shouldAttach({ provider: 'sensenova', sessionId: 's' }, PROVIDERS), null)
+  assert.equal(shouldAttach({ provider: 'opencode-go' }, PROVIDERS), null)
+  assert.equal(shouldAttach({ provider: 'opencode-go', sessionId: null }, PROVIDERS), null)
+  assert.equal(shouldAttach({ provider: 'opencode-go', sessionId: '' }, PROVIDERS), null)
+  assert.equal(shouldAttach('oops', PROVIDERS), null)
+  assert.equal(shouldAttach(null, PROVIDERS), null)
 })
 
-check('幂等：已有 session 再插入 → exists 原文返回', () => {
-  const once = insertOpenCodeSessionHeader(DEV_SHAPE, U1)
-  const twice = insertOpenCodeSessionHeader(once.text, U2)
-  assert.equal(twice.action, 'exists')
-  assert.equal(twice.value, U1)
-  assert.equal(twice.text, once.text)
-})
+// ── patchFetch ──
+const als = new AsyncLocalStorage()
 
-check('findOpenCodeSessionValue：插入前 null，插入后取到值', () => {
-  assert.equal(findOpenCodeSessionValue(DEV_SHAPE), null)
-  const r = insertOpenCodeSessionHeader(DEV_SHAPE, U1)
-  assert.equal(findOpenCodeSessionValue(r.text), U1)
-})
-
-check('headers 已存在但缺 session：作为兄弟子键插进 headers 下，缩进对齐', () => {
-  const input = [
-    'llm-pi-ai:',
-    '  providers:',
-    '    opencode-go:',
-    '      headers:',
-    '        authorization: Bearer x',
-    '      apiKeyEnv: OPENCODE_GO_API_KEY',
-    '',
-  ].join('\n')
-  const r = insertOpenCodeSessionHeader(input, U1)
-  assert.equal(r.action, 'created')
-  const expected = `        x-opencode-session: ${U1}`
-  assert.ok(r.text.includes(expected), `session 行缩进不对：\n${r.text}`)
-  // authorization 仍在，且 session 是 headers 的直接子键（同缩进）
-  assert.ok(r.text.includes('        authorization: Bearer x'))
-  const lines = r.text.split('\n')
-  const iSession = lines.findIndex((l) => l.startsWith('        x-opencode-session:'))
-  const iAuth = lines.findIndex((l) => l === '        authorization: Bearer x')
-  const iHeaders = lines.findIndex((l) => l === '      headers:')
-  assert.ok(iHeaders !== -1 && iSession === iHeaders + 1 && iAuth === iSession + 1)
-})
-
-check('headers: {} 内联空 map：改写为裸键并挂子键', () => {
-  const input = 'llm-pi-ai:\n  providers:\n    opencode-go:\n      headers: {}\n      apiKeyEnv: K\n'
-  const r = insertOpenCodeSessionHeader(input, U1)
-  assert.equal(r.action, 'created')
-  assert.ok(r.text.includes('      headers:\n'))
-  assert.ok(!r.text.includes('headers: {}'))
-  assert.ok(r.text.includes(`        x-opencode-session: ${U1}`))
-})
-
-check('headers 非空内联：拒绝插入返回 error', () => {
-  const input = 'llm-pi-ai:\n  providers:\n    opencode-go:\n      headers: {a: b}\n'
-  const r = insertOpenCodeSessionHeader(input, U1)
-  assert.equal(r.action, 'error')
-  assert.equal(r.text, input)
-})
-
-check('没有 opencode-go 段：no-provider 原文返回', () => {
-  const r = insertOpenCodeSessionHeader('foo:\n  bar: 1\n', U1)
-  assert.equal(r.action, 'no-provider')
-  assert.equal(r.text, 'foo:\n  bar: 1\n')
-})
-
-check('CRLF 文件：插入行沿用 \\r\\n，已有行原样', () => {
-  const input = DEV_SHAPE.replace(/\n/g, '\r\n')
-  const r = insertOpenCodeSessionHeader(input, U1)
-  assert.equal(r.action, 'created')
-  assert.ok(r.text.includes(`    opencode-go:\r\n      headers:\r\n        x-opencode-session: ${U1}\r\n`))
-  assert.equal(r.text.split('\r\n').length, input.split('\r\n').length + 2)
-})
-
-check('文件不以换行结尾（EOF 在 provider 段内）：补换行后插入，尾部无多余空行', () => {
-  const input = 'llm-pi-ai:\n  providers:\n    opencode-go:\n      apiKeyEnv: K'
-  const r = insertOpenCodeSessionHeader(input, U1)
-  assert.equal(r.action, 'created')
-  assert.equal(r.text, `llm-pi-ai:\n  providers:\n    opencode-go:\n      headers:\n        x-opencode-session: ${U1}\n      apiKeyEnv: K`)
-})
-
-check('块内深层注释不打断扫描；低缩进注释正确结束块', () => {
-  const input = [
-    'llm-pi-ai:',
-    '  providers:',
-    '    opencode-go:',
-    '      # 模型列表',
-    '      models:',
-    '        - id: hy3',
-    '# 顶层注释',
-    'other: 1',
-    '',
-  ].join('\n')
-  const r = insertOpenCodeSessionHeader(input, U1)
-  assert.equal(r.action, 'created')
-  assert.ok(r.text.includes('    opencode-go:\n      headers:'))
-  // 顶层注释与后续内容仍原样
-  assert.ok(r.text.includes('# 顶层注释\nother: 1\n'))
-})
-
-check('provider 内联空 map `opencode-go: {}`：改写裸键并插入', () => {
-  const input = 'llm-pi-ai:\n  providers:\n    opencode-go: {}\n'
-  const r = insertOpenCodeSessionHeader(input, U1)
-  assert.equal(r.action, 'created')
-  assert.ok(r.text.includes('    opencode-go:\n      headers:\n'))
-  assert.ok(!r.text.includes('opencode-go: {}'))
-})
-
-check('provider 非空内联：拒绝插入返回 error', () => {
-  const input = 'llm-pi-ai:\n  providers:\n    opencode-go: {models: []}\n'
-  const r = insertOpenCodeSessionHeader(input, U1)
-  assert.equal(r.action, 'error')
-  assert.equal(r.text, input)
-})
-
-check('session 值带行尾注释也能读回', () => {
-  const input = `llm-pi-ai:\n  providers:\n    opencode-go:\n      headers:\n        x-opencode-session: ${U1} # 个人机\n`
-  assert.equal(findOpenCodeSessionValue(input), U1)
-  const r = insertOpenCodeSessionHeader(input, U2)
-  assert.equal(r.action, 'exists')
-})
-
-// 端点数据面：临时 DSH_HOME 全流程 created → exists，文件不再变化
-const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'dshk-oc-'))
-process.env.DSH_HOME = tmp
-await fsp.writeFile(path.join(tmp, 'settings.yaml'), DEV_SHAPE, 'utf8')
-
-try {
-  const first = await ensureOpenCodeSession()
-  if (first.action !== 'created' || !/^[0-9a-f-]{36}$/.test(first.value ?? '')) {
-    console.error('  FAIL ensureOpenCodeSession 首次应 created 且值是 UUID', first)
-    process.exitCode = 1
-  } else {
-    console.log('  ok ensureOpenCodeSession 首次 created（随机 UUID）')
-    passed += 1
+function makeRecordingFetch() {
+  const calls = []
+  const fake = (input, init) => {
+    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+    calls.push(headers.get('x-opencode-session'))
+    return Promise.resolve(new Response('ok'))
   }
-  const afterWrite = await fsp.readFile(path.join(tmp, 'settings.yaml'), 'utf8')
-  if (!afterWrite.includes(`        x-opencode-session: ${first.value}`)) {
-    console.error('  FAIL 落盘内容缺少 session 行')
-    process.exitCode = 1
-  } else {
-    console.log('  ok settings.yaml 落盘含 session 行')
-    passed += 1
-  }
-  const second = await ensureOpenCodeSession()
-  if (second.action !== 'exists' || second.value !== first.value) {
-    console.error('  FAIL 第二次应 exists 且值不变', second)
-    process.exitCode = 1
-  } else {
-    console.log('  ok 第二次 exists 且值不变（幂等）')
-    passed += 1
-  }
-  const afterSecond = await fsp.readFile(path.join(tmp, 'settings.yaml'), 'utf8')
-  if (afterSecond !== afterWrite) {
-    console.error('  FAIL exists 分支不应改写文件')
-    process.exitCode = 1
-  } else {
-    console.log('  ok exists 分支不改写文件')
-    passed += 1
-  }
-} catch (error) {
-  console.error('  FAIL ensureOpenCodeSession 异常', error)
-  process.exitCode = 1
+  return { calls, fake }
 }
 
-console.log(`\n${passed} passed${process.exitCode ? '（有失败）' : ''}`)
+check('patchFetch：store 激活 → 注入头值', () => {
+  const { calls, fake } = makeRecordingFetch()
+  const patched = patchFetch(fake, als)
+  return als.run({ value: 'session-abc' }, async () => {
+    await patched('https://gw.example/v1/chat')
+    assert.deepEqual(calls, ['session-abc'])
+  })
+})
+check('patchFetch：无 store → 原样转发（不带会话头）', async () => {
+  const { calls, fake } = makeRecordingFetch()
+  const patched = patchFetch(fake, als)
+  await patched('https://gw.example/v1/chat')
+  assert.deepEqual(calls, [null])
+})
+check('patchFetch：请求已自带会话头 → 不覆盖', () => {
+  const { calls, fake } = makeRecordingFetch()
+  const patched = patchFetch(fake, als)
+  return als.run({ value: 'from-store' }, async () => {
+    await patched('https://gw.example/v1/chat', { headers: { 'x-opencode-session': 'static-uuid' } })
+    assert.deepEqual(calls, ['static-uuid'])
+  })
+})
+check('patchFetch：init.headers 与原有头并存（不丢其他头）', () => {
+  const seen = []
+  const fake = (_input, init) => {
+    seen.push(new Headers(init?.headers))
+    return Promise.resolve(new Response('ok'))
+  }
+  const patched = patchFetch(fake, als)
+  return als.run({ value: 'session-abc' }, async () => {
+    await patched('https://gw.example/v1/chat', { headers: { authorization: 'Bearer x' } })
+    assert.equal(seen[0].get('authorization'), 'Bearer x')
+    assert.equal(seen[0].get('x-opencode-session'), 'session-abc')
+  })
+})
+
+// ── withStore：ALS 跨惰性 pull 传播 ──
+check('withStore：每次 pull 在 store 内执行，下游 fetch 能读到头值', async () => {
+  const { calls, fake } = makeRecordingFetch()
+  const patched = patchFetch(fake, als)
+  async function* downstream() {
+    await patched('https://gw.example/v1/chat')
+    yield 1
+    await patched('https://gw.example/v1/chat')
+    yield 2
+  }
+  const wrapped = withStore(downstream(), { value: 'session-abc' }, als)
+  // 在 store 外逐个 pull——传播靠 wrapper 的 als.run，不靠调用方上下文
+  const out = [await wrapped.next(), await wrapped.next()]
+  assert.deepEqual(calls, ['session-abc', 'session-abc'])
+  assert.deepEqual(out.map((r) => r.value), [1, 2])
+  assert.equal((await wrapped.return()).done, true)
+})
+
+// ── applyOpenCodeSessionHeader 接线（假 ctx）──
+function fakeCtx() {
+  const listeners = {}
+  const effects = []
+  return {
+    listeners,
+    effects,
+    inject(_deps, _cb) {},
+    effect(fn) {
+      effects.push(fn)
+    },
+    on(event, listener, options) {
+      ;(listeners[event] ??= []).push({ listener, options })
+      return () => {}
+    },
+  }
+}
+
+check('接线：fetch 打了补丁、llm/stream 监听带 prepend', () => {
+  const original = globalThis.fetch
+  const ctx = fakeCtx()
+  applyOpenCodeSessionHeader(ctx)
+  // cordis effect 注册即执行：手动跑一遍 effect 体（装补丁），拿到清理函数
+  const disposes = ctx.effects.map((fn) => fn()).filter((d) => typeof d === 'function')
+  try {
+    assert.notEqual(globalThis.fetch, original)
+    const ls = ctx.listeners['llm/stream'] ?? []
+    assert.equal(ls.length, 1)
+    assert.deepEqual(ls[0].options, { prepend: true })
+  } finally {
+    for (const d of disposes) d()
+  }
+  assert.equal(globalThis.fetch, original)
+})
+
+check('端到端：监听命中 → 流内 fetch 带头；不命中 → 不带', async () => {
+  const { calls, fake } = makeRecordingFetch()
+  // 先把记录桩装上，让接线打出的补丁包住它——模块内监听与补丁共享同一 ALS
+  const original = globalThis.fetch
+  globalThis.fetch = fake
+  const ctx = fakeCtx()
+  applyOpenCodeSessionHeader(ctx)
+  const disposes = ctx.effects.map((fn) => fn()).filter((d) => typeof d === 'function')
+  const installedFetch = globalThis.fetch
+  assert.notEqual(installedFetch, fake) // 已是补丁
+  for (const d of disposes) d()
+  assert.equal(globalThis.fetch, fake) // globalThis 还原；installedFetch 仍持有补丁
+  const { listener } = ctx.listeners['llm/stream'][0]
+
+  const downstreamFor = () => ({
+    async *[Symbol.asyncIterator]() {
+      await installedFetch('https://gw.example/v1/chat')
+      yield 'chunk'
+    },
+  })
+
+  // 命中：provider + sessionId，注入传播全靠监听给的 withStore 包装
+  const wrapped = listener({ provider: 'opencode-go', sessionId: 'session-e2e' }, () => downstreamFor())
+  for await (const _chunk of wrapped) break
+  assert.deepEqual(calls, ['session-e2e'])
+
+  // 不命中：别的 provider，next() 的下游原样返回（可迭代对象，无包装），请求照发但不带头
+  const plain = listener({ provider: 'sensenova', sessionId: 'session-x' }, () => downstreamFor())
+  assert.equal(typeof plain[Symbol.asyncIterator], 'function')
+  await plain[Symbol.asyncIterator]().next()
+  assert.deepEqual(calls, ['session-e2e', null])
+  globalThis.fetch = original
+})
+
+check('降级：无 ctx.on 时 fetch 补丁回滚、不注册监听', () => {
+  const original = globalThis.fetch
+  const warns = []
+  applyOpenCodeSessionHeader({ inject() {} }, (m) => warns.push(m))
+  assert.equal(globalThis.fetch, original)
+  assert.ok(warns.length > 0)
+})
+
+console.log(passed > 0 && process.exitCode !== 1 ? `ALL PASS (${passed} checks)` : 'DONE')
