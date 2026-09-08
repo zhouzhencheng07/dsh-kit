@@ -9661,12 +9661,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             return;
           }
           if (dockCombo && cfg.dockShortcutEnabled !== false && comboMatches(e, dockCombo)) {
-            // 右坞开合：仅在有标签时响应（0 标签收展无意义，空态卡片只在展开态）
-            if (dockAlive(kitUi)) {
-              e.preventDefault();
-              e.stopPropagation();
-              setKitUi({ dockCollapsed: kitUi.dockCollapsed !== true });
-            }
+            // 右坞开合：坞常置（0 标签展开显示空态选签卡片），收展随时有意义
+            e.preventDefault();
+            e.stopPropagation();
+            setKitUi({ dockCollapsed: kitUi.dockCollapsed !== true });
             return;
           }
           if (e.key === "Escape") {
