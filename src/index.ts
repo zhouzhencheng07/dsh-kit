@@ -68,7 +68,7 @@ import { multipartBoundary, parseMultipart, safeUploadName, dedupeName } from '.
 import { BrowserService } from './browser.ts'
 import { loadToolsModule, buildBrowserTools } from './browser-tools.ts'
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from './schedule.ts'
-import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton } from './vault.ts'
+import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton, defaultVaultRoot } from './vault.ts'
 import { commitVault, ensureVaultGit, isInsideVault } from './vault-git.ts'
 import { sameOrigin } from './web-guard.ts'
 import { recycleDelete, recycleDeleteBatch } from './recycle.ts'
@@ -109,7 +109,7 @@ interface KitWebServer {
 }
 
 interface KitSettingsService {
-  installSection(owner: unknown, ns: string, schema: unknown, entry: Record<string, never>, hooks: unknown): void
+  installSection(owner: unknown, ns: string, schema: unknown, entry: Record<string, unknown>, hooks: unknown): void
 }
 
 interface KitCredentials {
@@ -483,10 +483,12 @@ export async function apply(ctx: KitCtx): Promise<void> {
     phoneKeepGatewayOn: z.boolean().default(false),
     jobsEnabled: z.boolean().default(true),
     // 知识库（vault）：vaultEnabled = 右坞「知识库」标签入口可见性；vaultRoot =
-    // 知识库根目录（绝对路径，空 = 未配置，前端渲染引导）。宿主据此提供索引/
-    // 搜索/建页/写回端点，数据契约见 src/vault.ts 头注释。
+    // 知识库根目录（绝对路径；schema 默认值 = defaultVaultRoot()，字段恒有值）。
+    // 宿主据此提供索引/搜索/建页/写回端点，数据契约见 src/vault.ts 头注释。
     vaultEnabled: z.boolean().default(true),
-    vaultRoot: z.string().default(''),
+    // schema 默认值即默认根：设置面与运行时读到的都是实际路径（与其他配置项
+    // 同一口径——字段恒有值），用户显式清空保存为 '' 时由读取侧兜底回默认
+    vaultRoot: z.string().default(defaultVaultRoot()),
     // 内置浏览器总开关（默认开）：关=不注册 browser_* 工具（重启生效）；浏览器
     // 半边入口按钮与面板同步隐藏。execute 内另有守卫兜底（注册期竞态时挡调用）。
     // 自动切面板与画面跟随 agent 是恒定行为（用户定稿，无开关）——人为切走浏览器
@@ -510,15 +512,17 @@ export async function apply(ctx: KitCtx): Promise<void> {
   // vaultRoot 上次已知值：onChange 对任意保存都触发，靠值比对识别「知识库位置
   // 真的变了」，变了才补种骨架目录（null = 尚未见过值）
   let lastVaultRoot: string | null = null
-  /** vaultRoot 配置变化时补建骨架（root + wiki/attachments），见 ensureVaultSkeleton */
+  /** vaultRoot 配置变化时补建骨架（root + wiki/attachments，见 ensureVaultSkeleton）。
+   *  留空 = 用默认根（即开即用），骨架与 git 初始存档对默认根同样生效 */
   function trackVaultRoot(): void {
-    let root = ''
+    let configured = ''
     try {
-      root = String(readSettings().vaultRoot ?? '').trim()
+      configured = String(readSettings().vaultRoot ?? '').trim()
     } catch {
       return
     }
-    if (root === '' || root === lastVaultRoot) return
+    const root = configured === '' ? defaultVaultRoot() : configured
+    if (root === lastVaultRoot) return
     lastVaultRoot = root
     // 骨架补种后做 git 初始存档（无 git / 已是仓库自动跳过，见 vault-git.ts）
     void ensureVaultSkeleton(root)
@@ -543,7 +547,9 @@ export async function apply(ctx: KitCtx): Promise<void> {
   if (Config) {
     ctx.inject(['settings'], (settingsCtx: { settings: KitSettingsService }) => {
       try {
-        settingsCtx.settings.installSection(ctx, 'dsh-kit', Config, {}, settingsHooks)
+        // base 带上 vaultRoot 默认根：设置卡「恢复默认」与组合读取都从这里取值
+        // （entry = 组合基座，用户层覆盖其上；空对象会让恢复默认 staged 成空串）
+        settingsCtx.settings.installSection(ctx, 'dsh-kit', Config, { vaultRoot: defaultVaultRoot() }, settingsHooks)
       } catch (error) {
         console.warn(`dsh-kit: 设置命名空间注册失败：${error instanceof Error ? error.message : error}`)
       }
@@ -648,10 +654,12 @@ export async function apply(ctx: KitCtx): Promise<void> {
   })
 
   // ── 知识库扫描器（src/vault.ts）：提到 apply 级——webServer 注入可能重进，
-  //   端点块与下方 fs intent 监听共享同一实例（mtime 缓存也就不用重建）──
+  //   端点块与下方 fs intent 监听共享同一实例（mtime 缓存也就不用重建）。
+  //   vaultRoot 留空用默认根（即开即用，trackVaultRoot 会种骨架）
   const vaultScanner = new VaultScanner(() => {
     try {
-      return String(readSettings().vaultRoot ?? '')
+      const configured = String(readSettings().vaultRoot ?? '').trim()
+      return configured === '' ? defaultVaultRoot() : configured
     } catch {
       return ''
     }
