@@ -1,9 +1,8 @@
 // dsh-kit 日程模块——结构化存储与查询派生（schedule.ts）
 //
-// 职责：日程/待办/计时的唯一数据持有者（JSON 原子落盘，2026-09-08 起与知识库
-// 同址：<vaultRoot>/schedule.json（vault 只索引 md，json 放根下不碍事）；不配置
-// 知识库目录日程整体不可用——UI 引导配置、端点回 vault-not-configured、agent
-// 工具拒绝），以及派生层：区间重复展开、统计、文本汇总。UI 组件在
+// 职责：日程/待办/计时的唯一数据持有者（JSON 原子落盘，固定
+// $DSH_HOME/dsh-kit/schedule.json，与知识库 vaultRoot 互不相干），以及派生层：
+// 区间重复展开、统计、文本汇总。UI 组件在
 // client/bundle.js，agent 工具定义与端点注册在 index.ts——本文件不感知两者形状。
 //
 // 设计要点（schedule-design.md）：
@@ -261,33 +260,19 @@ export function dshKitDataDir(): string {
   return path.join(home, 'dsh-kit')
 }
 
-/**
- * 日程数据文件解析（2026-09-08 用户定稿：与知识库同址——vault 只索引 md，json
- * 放根下不碍事，直接 <vaultRoot>/schedule.json）。不配置知识库目录日程即不可用
- * （UI 引导配置、端点与 agent 工具拒绝），此回退路径仅作 store 的停泊位，不做
- * 任何数据迁移——测试期没有要搬的数据。
- */
-export function resolveScheduleFile(vaultRoot?: string): string {
-  const root = (vaultRoot ?? '').trim()
-  if (root === '') return path.join(dshKitDataDir(), 'schedule.json')
-  return path.join(root, 'schedule.json')
+/** 日程数据文件：固定 $DSH_HOME/dsh-kit/schedule.json，与知识库（vaultRoot）无关
+ * ——日程是独立能力，知识库未配置也照常可用 */
+export function resolveScheduleFile(): string {
+  return path.join(dshKitDataDir(), 'schedule.json')
 }
 
 export class ScheduleStore {
-  /** 当前数据文件（retarget 可换——vaultRoot 配置变化时整体换库，实例不变） */
+  /** 当前数据文件（构造可注入别的路径供测试；默认 resolveScheduleFile()） */
   file: string
   private data: ScheduleData = { events: [], runningTimer: null }
 
   constructor(file?: string) {
-    this.file = file ?? path.join(dshKitDataDir(), 'schedule.json')
-    this.load()
-  }
-
-  /** 换数据文件并重读（同文件 no-op）。旧内存态丢弃；进行中的计时随旧库消失，
-   * 换库后 runningTimer=null——切知识库位置是罕见操作，可接受 */
-  retarget(file: string): void {
-    if (this.file === file) return
-    this.file = file
+    this.file = file ?? resolveScheduleFile()
     this.load()
   }
 
@@ -296,8 +281,7 @@ export class ScheduleStore {
     try {
       raw = fs.readFileSync(this.file, 'utf8')
     } catch {
-      // 缺失 = 空库。必须清内存态：retarget 换库时旧库数据不能残留——
-      // 否则下一次 mutate 会把旧库内容整体写进新文件
+      // 缺失 = 空库
       this.data = { events: [], runningTimer: null, orphans: [] }
       return
     }
@@ -728,13 +712,10 @@ export function expandOccurrences(events: ScheduleEvent[], from: string, to: str
   return out.sort((a, b) => (a.date === b.date ? a.startMins - b.startMins : a.date < b.date ? -1 : 1))
 }
 
-/** 模块级单例：端点与 agent 工具共享同一份内存态。每次调用按当前 vaultRoot
- * 重解析目标文件，变了就原位 retarget（实例不变，捕获方无需重新取） */
+/** 模块级单例：端点与 agent 工具共享同一份内存态。文件位置固定，惰性构造一次 */
 let singleton: ScheduleStore | null = null
-export function syncScheduleStore(vaultRoot?: string): ScheduleStore {
-  const file = resolveScheduleFile(vaultRoot)
-  if (!singleton) singleton = new ScheduleStore(file)
-  else singleton.retarget(file)
+export function syncScheduleStore(): ScheduleStore {
+  if (!singleton) singleton = new ScheduleStore()
   return singleton
 }
 
@@ -833,18 +814,10 @@ export function toolArgsToCreateInput(args: Record<string, unknown>): Record<str
 export function buildScheduleTools({
   defineTool,
   store,
-  isConfigured,
 }: {
   defineTool: DefineTool
   store: ScheduleStore
-  /** 知识库目录是否已配置（日程存储同址，未配置整体不可用）；缺省视为已配置 */
-  isConfigured?: () => boolean
 }): ToolDefinition[] {
-  /** 未配置时的引导文案：query 作为 summary 返回，create/delete 直接抛错 */
-  const gate = (): string | null =>
-    isConfigured && !isConfigured()
-      ? '日程尚未启用：日程与知识库共用存储目录，请先在 设置 → 插件 → dsh-kit 里填写「知识库目录」'
-      : null
   const query = defineTool({
     name: 'schedule_query',
     description:
@@ -860,8 +833,6 @@ export function buildScheduleTools({
       render: (_args: unknown, value: { summary: string }) => [{ type: 'text', text: value.summary }],
     },
     async execute(args: { scope?: 'day' | 'week' | 'month'; date?: string }) {
-      const blocked = gate()
-      if (blocked) return { summary: blocked, items: [] }
       const scope = args?.scope === 'week' || args?.scope === 'month' ? args.scope : 'day'
       const date = typeof args?.date === 'string' && DATE_RE.test(args.date) ? args.date : todayStr()
       return { summary: store.summary(scope, date), items: store.items(scope, date) }
@@ -891,8 +862,6 @@ export function buildScheduleTools({
       render: (_args: unknown, value: { summary: string }) => [{ type: 'text', text: value.summary }],
     },
     async execute(args: Record<string, unknown>) {
-      const blocked = gate()
-      if (blocked) throw new Error(blocked)
       const ev = store.create(toolArgsToCreateInput(args))
       return { id: ev.id, summary: createSummary(ev) }
     },
@@ -911,8 +880,6 @@ export function buildScheduleTools({
       render: (_args: unknown, value: { summary: string }) => [{ type: 'text', text: value.summary }],
     },
     async execute(args: Record<string, unknown>) {
-      const blocked = gate()
-      if (blocked) throw new Error(blocked)
       const id = typeof args.id === 'string' ? args.id : ''
       const ev = store.list().find((e) => e.id === id)
       if (!ev) return { ok: false, summary: `未找到条目 ${id}（可能已删除），请用 schedule_query 重新查询` }

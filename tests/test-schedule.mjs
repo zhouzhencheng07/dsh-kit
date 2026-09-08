@@ -448,31 +448,19 @@ test('entryUpdate/entryDelete：独立段与挂条目段改删，非法输入拒
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('存储位置：vaultRoot 配置 → <vault>/schedule.json，未配置回退默认位置，不做迁移', () => {
+test('存储位置：固定 $DSH_HOME/dsh-kit/schedule.json，与知识库无关，不做迁移', () => {
   const dir = tmp()
-  const legacyHome = path.join(dir, 'home')
+  const home = path.join(dir, 'home')
   const prevHome = process.env.DSH_HOME
-  process.env.DSH_HOME = legacyHome
+  process.env.DSH_HOME = home
   try {
-    const legacyFile = path.join(legacyHome, 'dsh-kit', 'schedule.json')
-    // 未配置 vaultRoot → 原位置
-    assert.equal(resolveScheduleFile(''), legacyFile)
-    assert.equal(resolveScheduleFile(undefined), legacyFile)
-    // 配置 vaultRoot → vault 根直放
-    const vault = path.join(dir, 'vault')
-    assert.equal(resolveScheduleFile(vault), path.join(vault, 'schedule.json'))
-    // 不做迁移：旧位置有数据也不复制、不改名
-    fs.mkdirSync(path.dirname(legacyFile), { recursive: true })
-    fs.writeFileSync(legacyFile, 'x', 'utf8')
-    assert.equal(resolveScheduleFile(vault), path.join(vault, 'schedule.json'))
-    assert.ok(!fs.existsSync(path.join(vault, 'schedule.json')))
-    assert.ok(fs.existsSync(legacyFile))
-    // retarget 原位换库：同一实例读新文件，缺文件清内存态
-    const s = new ScheduleStore(legacyFile)
-    s.retarget(path.join(vault, 'schedule.json'))
-    assert.equal(s.list().length, 0)
-    assert.equal(s.file, path.join(vault, 'schedule.json'))
-    s.retarget(s.file) // 同文件 no-op
+    const fixedFile = path.join(home, 'dsh-kit', 'schedule.json')
+    assert.equal(resolveScheduleFile(), fixedFile)
+    // 不做迁移：固定位置已有数据原样保留，不存在"换个目录"的入口
+    fs.mkdirSync(path.dirname(fixedFile), { recursive: true })
+    fs.writeFileSync(fixedFile, 'x', 'utf8')
+    assert.equal(resolveScheduleFile(), fixedFile)
+    assert.ok(fs.existsSync(fixedFile))
   } finally {
     if (prevHome === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = prevHome

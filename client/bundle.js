@@ -729,7 +729,6 @@ window.__ModuleLoader__.load({
       schedOverdue: "逾期",
       schedTasksEmpty: "暂无待办",
       schedStatsTotal: "总时长",
-      schedNotConfiguredHint: "日程与知识库共用存储目录：在 设置 → 插件 → dsh-kit 填写「知识库和日程目录」后即可使用日程与计时",
       schedStatsEvents: "事件",
       schedStatsDone: "已完成",
       schedStatsOpen: "待办",
@@ -755,11 +754,11 @@ window.__ModuleLoader__.load({
       schedOpFail: "操作失败：{error}",
       cfgVaultEnabled: "启用知识库",
       cfgVaultEnabledHint: "右坞「知识库」标签：浏览、编辑、双链跳转 vault 笔记（目录未配置时标签内显示引导）",
-      cfgVaultRoot: "知识库和日程目录",
-      cfgVaultRootHint: "vault 根目录绝对路径（如 D:\\notes），知识库与日程共用。其内一切 md 即页面；attachments/ 与点前缀目录不进索引，根目录自动生成 AGENTS.md 约定；日程数据落在根下 schedule.json",
+      cfgVaultRoot: "知识库目录",
+      cfgVaultRootHint: "vault 根目录绝对路径（如 D:\\notes）。其内一切 md 即页面；attachments/ 与点前缀目录不进索引，根目录自动生成 AGENTS.md 约定",
       vaultTitle: "知识库",
-      vaultNotConfigured: "未配置知识库和日程目录",
-      vaultNotConfiguredHint: "在 设置 → 插件 → dsh-kit 里填写「知识库和日程目录」后即可使用：目录内一切 md 文件即页面，支持双链跳转与全文搜索",
+      vaultNotConfigured: "未配置知识库目录",
+      vaultNotConfiguredHint: "在 设置 → 插件 → dsh-kit 里填写「知识库目录」后即可使用：目录内一切 md 文件即页面，支持双链跳转与全文搜索",
       vaultIndexFail: "索引失败：{error}",
       vaultHistBack: "后退",
       vaultHistFwd: "前进",
@@ -1189,7 +1188,6 @@ window.__ModuleLoader__.load({
       schedOverdue: "Overdue",
       schedTasksEmpty: "No tasks",
       schedStatsTotal: "Total time",
-      schedNotConfiguredHint: "The schedule shares storage with the knowledge base: set the knowledge base directory in Settings → Plugins → dsh-kit to enable schedule and timer.",
       schedStatsEvents: "Events",
       schedStatsDone: "Done",
       schedStatsOpen: "Open",
@@ -1215,10 +1213,10 @@ window.__ModuleLoader__.load({
       schedOpFail: "Operation failed: {error}",
       cfgVaultEnabled: "Enable knowledge base",
       cfgVaultEnabledHint: "The Knowledge base tab in the dock: browse, edit and wiki-link vault notes (shows setup hint until a directory is configured)",
-      cfgVaultRoot: "Knowledge base & schedule directory",
-      cfgVaultRootHint: "Absolute path of the vault root (e.g. D:\\notes), shared by the knowledge base and schedule. Every md file inside is a page; attachments/ and dot-directories are not indexed; an AGENTS.md convention file is generated at the root; schedule data lives in schedule.json at the root",
+      cfgVaultRoot: "Knowledge base directory",
+      cfgVaultRootHint: "Absolute path of the vault root (e.g. D:\\notes). Every md file inside is a page; attachments/ and dot-directories are not indexed; an AGENTS.md convention file is generated at the root",
       vaultTitle: "Knowledge base",
-      vaultNotConfigured: "Knowledge base & schedule directory not configured",
+      vaultNotConfigured: "Knowledge base directory not configured",
       vaultNotConfiguredHint: "Set the knowledge base directory in Settings → Plugins → dsh-kit: every md file inside becomes a page, with wiki-links and full-text search",
       vaultIndexFail: "Index failed: {error}",
       vaultHistBack: "Back",
@@ -6574,8 +6572,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 统计口径固定周（用户定稿 2026-09-06：日/月视图先不做）——agent 侧
       // schedule_query 仍支持 day/month 汇总，此处只砍 UI 切换
       const [stats, setStats] = react.useState(null);
-      // 知识库目录未配置 → 日程整体不可用（存储同址），整页引导
-      const [notConfigured, setNotConfigured] = react.useState(false);
       const [modal, setModal] = react.useState(null); // { id?, values, kind: 'event'|'task' }
       const [taskInput, setTaskInput] = react.useState("");
       const [taskDue, setTaskDue] = react.useState(() => schedToday());
@@ -6599,10 +6595,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             runningTimer: body.runningTimer ?? null,
             orphans: Array.isArray(body.orphans) ? body.orphans : [],
           });
-          setNotConfigured(false);
-        } catch (error) {
-          // 未配置 → 整页引导；其余错误保留旧数据，下一轮再试
-          setNotConfigured(String((error && error.message) || "") === "vault-not-configured");
+        } catch {
+          // 拉取失败保留旧数据，下一轮轮询再试
         }
       }, [weekStart]);
 
@@ -6639,15 +6633,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           window.removeEventListener("dshk-sched-changed", onChanged);
         };
       }, [fetchData, fetchStats]);
-
-      // 切回本标签即重拉数据：设置里改完知识库目录回到日程/计时，引导页立即
-      // 恢复成数据视图（不等 30s 轮询）；反之配置清空当轮就出引导
-      react.useEffect(() => {
-        if (!active) return undefined;
-        void fetchData();
-        void fetchStats();
-        return undefined;
-      }, [active, fetchData, fetchStats]);
 
       // 日程视图每次变为可见（挂载即激活 / 从别的标签切回）都把视口滚到当前
       // 时刻上方 1/3 处。旧版"只滚一次"有坑：挂载时若视图还 display:none
@@ -6730,14 +6715,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         });
       }, [data.occurrences, timedOcc]);
       const allDayOcc = react.useMemo(() => data.occurrences.filter((o) => o.allDay), [data.occurrences]);
-
-      // 未配置知识库目录：整页引导（端点同语义拒绝，与知识库一致）
-      if (notConfigured) {
-        return jsxRuntime.jsxs("div", { className: "dshk-vault", children: [
-          jsxRuntime.jsx("div", { className: "dshk-vault-hinttitle", children: t("vaultNotConfigured") }),
-          jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("schedNotConfiguredHint") }),
-        ] });
-      }
 
       const openCreate = (date, hour) => {
         const hh = hour ?? 9;
@@ -7154,19 +7131,17 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     /** 计时标签页（右坞「计时」）：起停 + 独立计时命名 + 待办列表 + 今日计时记录。
      *  wangshu 对齐：计时段是日程数据的一等公民——停了的段以橙色块上网格（网格
      *  合成在 ScheduleView），这里给「今日计了哪些」的清单视图与合计 */
-    function TimerView({ active }) {
+    function TimerView() {
       const { running, nowTick, refresh, stop } = useRunningTimer();
       const [data, setData] = react.useState(() => ({ events: [], orphans: [] }));
       const [label, setLabel] = react.useState("");
-      const [notConfigured, setNotConfigured] = react.useState(false);
 
       const fetchData = react.useCallback(async () => {
         try {
           const body = await schedFetch(`/dsh-kit/schedule/data?from=${encodeURIComponent(schedToday())}&to=${encodeURIComponent(schedToday())}`);
           setData({ events: Array.isArray(body.events) ? body.events : [], orphans: Array.isArray(body.orphans) ? body.orphans : [] });
-          setNotConfigured(false);
-        } catch (error) {
-          setNotConfigured(String((error && error.message) || "") === "vault-not-configured");
+        } catch {
+          // 拉取失败保留旧数据，下轮事件再试
         }
       }, []);
       react.useEffect(() => {
@@ -7175,12 +7150,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         window.addEventListener("dshk-sched-changed", onChanged);
         return () => window.removeEventListener("dshk-sched-changed", onChanged);
       }, [fetchData]);
-      // 切回计时页即重拉：设置里改完知识库目录，引导页立即恢复成数据视图
-      react.useEffect(() => {
-        if (!active) return undefined;
-        void fetchData();
-        return undefined;
-      }, [active, fetchData]);
 
       const start = (id, title) => {
         schedFetch("/dsh-kit/schedule/timer-start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...(id ? { id } : {}), ...(title ? { title } : {}) }) })
@@ -7213,14 +7182,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const e = new Date(r.end.replace("T", " ")).getTime();
         return sum + (e > s ? e - s : 0);
       }, 0);
-
-      // 未配置知识库目录：整页引导（与日程视图同语义）
-      if (notConfigured) {
-        return jsxRuntime.jsxs("div", { className: "dshk-vault", children: [
-          jsxRuntime.jsx("div", { className: "dshk-vault-hinttitle", children: t("vaultNotConfigured") }),
-          jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("schedNotConfiguredHint") }),
-        ] });
-      }
 
       return jsxRuntime.jsxs("div", { className: "dshk-timer-root", children: [
         jsxRuntime.jsxs("div", { className: "dshk-sched-card is-current", children: [
