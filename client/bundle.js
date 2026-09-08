@@ -6718,21 +6718,29 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         });
         return segs;
       }, [data.events, data.orphans]);
-      const gridOcc = react.useMemo(
-        () =>
-          schedAssignLanes([...data.occurrences.filter((o) => !o.allDay), ...timedOcc]).map((o) => {
-            // 高度贴合真实时长比例（用户定稿 2026-09-08）：短段不再一律抬到 18px，
-            // 但下限 14px + is-thin 紧凑排版保证单行标题仍可读
-            const raw = (((o.endMins ?? o.startMins + 60) - Math.max(o.startMins, SCHED_DAY_START)) / 60) * SCHED_HOUR_PX;
-            return {
-              ...o,
-              top: ((Math.max(o.startMins, SCHED_DAY_START) - SCHED_DAY_START) / 60) * SCHED_HOUR_PX,
-              height: Math.max(14, raw),
-              thin: raw < 18,
-            };
-          }),
-        [data.occurrences, timedOcc],
-      );
+      const gridOcc = react.useMemo(() => {
+        // 泳道按日分池：每列独立布道。全周混排会让不同天、同时刻的事件互相
+        // 挤占泳道（周一 9-10 与周二 9:30-10:30 各拿半列宽），列间本无冲突
+        const byDate = new Map();
+        for (const o of [...data.occurrences.filter((o) => !o.allDay), ...timedOcc]) {
+          const arr = byDate.get(o.date) ?? [];
+          arr.push(o);
+          byDate.set(o.date, arr);
+        }
+        const laid = [];
+        for (const arr of byDate.values()) laid.push(...schedAssignLanes(arr));
+        return laid.map((o) => {
+          // 高度贴合真实时长比例（用户定稿 2026-09-08）：短段不再一律抬到 18px，
+          // 但下限 14px + is-thin 紧凑排版保证单行标题仍可读
+          const raw = (((o.endMins ?? o.startMins + 60) - Math.max(o.startMins, SCHED_DAY_START)) / 60) * SCHED_HOUR_PX;
+          return {
+            ...o,
+            top: ((Math.max(o.startMins, SCHED_DAY_START) - SCHED_DAY_START) / 60) * SCHED_HOUR_PX,
+            height: Math.max(14, raw),
+            thin: raw < 18,
+          };
+        });
+      }, [data.occurrences, timedOcc]);
       const allDayOcc = react.useMemo(() => data.occurrences.filter((o) => o.allDay), [data.occurrences]);
 
       // 未配置知识库目录：整页引导（端点同语义拒绝，与知识库一致）
