@@ -1,15 +1,28 @@
 // vault 知识库宿主半边 —— 扫描索引 / wikilink 解析 / 内容搜索 / 建页与写回。
-// 数据契约：vault 是设置卡配置的一个绝对目录（vaultRoot），其内一切皆 md 文件
-// （attachments/ 与点前缀目录除外），插件不持有第二真源；索引由扫描派生、
-// mtime 增量缓存，进程内存态，重启重扫。生命周期：跟随 webServer 注入段创建，
-// 随插件卸载丢弃（无外部资源）。降级路径：vaultRoot 未配置或不存在 → 索引端点
-// 回 { root: null }，前端渲染「未配置」引导；扫描/搜索失败按空结果+错误字段回。
+// 数据契约：vault 是设置卡配置的一个绝对目录（vaultRoot，留空用默认根
+// defaultVaultRoot()），其内一切皆 md 文件（attachments/ 与点前缀目录除外），
+// 插件不持有第二真源；索引由扫描派生、mtime 增量缓存，进程内存态，重启重扫。
+// 生命周期：跟随 webServer 注入段创建，随插件卸载丢弃（无外部资源）。降级路径：
+// 根不存在（含默认根首启未种出）→ 索引端点回 { root: null }，前端渲染引导；
+// 扫描/搜索失败按空结果+错误字段回。
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 const MD_EXTS = new Set(['.md', '.markdown']);
 /** 不进索引与树的目录名（attachments 约定放二进制；点前缀一律隐藏） */
 const SKIP_DIRS = new Set(['attachments', '.git', '.trash', 'node_modules']);
 const SCAN_FILE_LIMIT = 5000;
+/** 插件数据目录（$DSH_HOME/dsh-kit；与 schedule.ts 同式，各自轻量持有） */
+function dshKitDataDir() {
+    const env = process.env.DSH_HOME;
+    const home = env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh');
+    return path.join(home, 'dsh-kit');
+}
+/** vault 默认根（vaultRoot 留空时即开即用）：数据目录下的 knowledge 子树，与
+ * browser-profile/screenshots 等运行产物不混居 */
+export function defaultVaultRoot() {
+    return path.join(dshKitDataDir(), 'knowledge');
+}
 /**
  * vault 骨架目录补种（配置保存 vaultRoot 时调用）：root 本体随 recursive mkdir
  * 一并创建，约定目录按 vault-design.md 布局放 wiki/（策展层）、library/（参考
