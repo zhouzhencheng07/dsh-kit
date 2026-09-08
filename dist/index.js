@@ -62,7 +62,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { applySkillPool, findProjectRoot } from "./skill-pool.js";
-import { applyOpenCodeSession } from "./opencode-session.js";
+import { applyOpenCodeSessionHeader } from "./opencode-session.js";
 import { applyWebSearch } from "./web-search.js";
 import { parseStatusBranch, parseLogRecords, parseBranchList, parseTrack } from "./git.js";
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from "./phone-gateway.js";
@@ -546,8 +546,8 @@ export async function apply(ctx) {
         skillsRegistry = skillsCtx.skills;
     });
     applySkillPool(ctx, { getRegistry: () => skillsRegistry });
-    // OpenCode Go 会话头一键写入端点（实现见 src/opencode-session.ts）
-    applyOpenCodeSession(ctx);
+    // OpenCode Go 会话头按会话注入（实现见 src/opencode-session.ts）
+    applyOpenCodeSessionHeader(ctx, (m) => console.warn(`dsh-kit: ${m}`));
     // 后台任务控制（实现见下）：浏览器半边「任务」面板的结束/读输出走这里。
     // jobs 注册表（dsh-jobs-local）与 agents 注册表（dsh-agent）都是宿主组合里的
     // 可选服务，分开注入捕获引用；缺失时对应端点返回 503（面板隐藏对应能力）。

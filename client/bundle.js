@@ -758,12 +758,7 @@ window.__ModuleLoader__.load({
       cfgVaultRoot: "知识库和日程目录",
       cfgVaultRootHint: "vault 根目录绝对路径（如 D:\\notes），知识库与日程共用。其内一切 md 即页面；attachments/ 与点前缀目录不进索引，根目录自动生成 AGENTS.md 约定；日程数据落在根下 schedule.json",
       cfgOpenCodeSession: "OpenCode Go 会话头",
-      cfgOpenCodeSessionBtn: "生成并写入",
-      cfgOpenCodeSessionBusy: "写入中…",
-      cfgOpenCodeSessionDone: "已写入",
-      cfgOpenCodeSessionExists: "已存在",
-      cfgOpenCodeSessionFail: "写入失败",
-      cfgOpenCodeSessionHint: "向 DSH_HOME/settings.yaml 的 llm-pi-ai.providers.opencode-go 写入随机 x-opencode-session（已有则不动）。OpenCode Go 网关用它做路由亲和，缺失会 400；写入即生效无需重启",
+      cfgOpenCodeSessionHint: "内置按会话注入：发往 opencode / opencode-go 的模型请求自动携带 x-opencode-session（复用 DSH 会话 id），网关按它做路由亲和与提示词缓存，缺失会 400。无需配置；settings.yaml 里残留的同名静态头会压过它，应删除",
       vaultTitle: "知识库",
       vaultNotConfigured: "未配置知识库和日程目录",
       vaultNotConfiguredHint: "在 设置 → 插件 → dsh-kit 里填写「知识库和日程目录」后即可使用：目录内一切 md 文件即页面，支持双链跳转与全文搜索",
@@ -1223,12 +1218,7 @@ window.__ModuleLoader__.load({
       cfgVaultRoot: "Knowledge base & schedule directory",
       cfgVaultRootHint: "Absolute path of the vault root (e.g. D:\\notes), shared by the knowledge base and schedule. Every md file inside is a page; attachments/ and dot-directories are not indexed; an AGENTS.md convention file is generated at the root; schedule data lives in schedule.json at the root",
       cfgOpenCodeSession: "OpenCode Go session header",
-      cfgOpenCodeSessionBtn: "Generate & write",
-      cfgOpenCodeSessionBusy: "Writing…",
-      cfgOpenCodeSessionDone: "Written",
-      cfgOpenCodeSessionExists: "Already present",
-      cfgOpenCodeSessionFail: "Write failed",
-      cfgOpenCodeSessionHint: "Writes a random x-opencode-session under llm-pi-ai.providers.opencode-go in DSH_HOME/settings.yaml (kept if already present). The OpenCode Go gateway uses it for routing affinity and 400s without it; effective immediately, no restart",
+      cfgOpenCodeSessionHint: "Built-in per-session injection: model requests to opencode / opencode-go automatically carry x-opencode-session (reusing the DSH session id), which the gateway uses for routing affinity and prompt caching; it 400s without it. Zero config; a same-named static header left in settings.yaml overrides this and should be removed",
       vaultTitle: "Knowledge base",
       vaultNotConfigured: "Knowledge base & schedule directory not configured",
       vaultNotConfiguredHint: "Set the knowledge base directory in Settings → Plugins → dsh-kit: every md file inside becomes a page, with wiki-links and full-text search",
@@ -10224,23 +10214,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [drafts, setDrafts] = react.useState({});
       const [saving, setSaving] = react.useState(false);
       const [failed, setFailed] = react.useState(false);
-      // OpenCode Go 会话头一键写入：动作型行（不走草稿/保存流程），点击即调端点
-      const [oc, setOc] = react.useState({ phase: "idle", value: "" });
-      const ocEnsure = async () => {
-        if (oc.phase === "busy") return;
-        setOc({ phase: "busy", value: "" });
-        try {
-          const res = await fetch("/dsh-kit/opencode-session", { method: "POST" });
-          const data = await res.json().catch(() => null);
-          if (res.ok && data && data.ok) {
-            setOc({ phase: data.action === "exists" ? "exists" : "done", value: String(data.value ?? "") });
-          } else {
-            setOc({ phase: "fail", value: String((data && data.error) || `HTTP ${res.status}`) });
-          }
-        } catch (error) {
-          setOc({ phase: "fail", value: String((error && error.message) || error) });
-        }
-      };
       const [open, setOpen] = react.useState(false);
       // 正在录制快捷键的字段；null = 非录制态（同一时间至多一个）
       const [capturing, setCapturing] = react.useState(null);
@@ -10537,38 +10510,20 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                         })
                       : null,
                     available
-                      ? (() => {
-                          // OpenCode Go 会话头：动作型行，不参与草稿/保存
-                          const ocValueText =
-                            oc.phase === "done"
-                              ? `${t("cfgOpenCodeSessionDone")}：${oc.value}`
-                              : oc.phase === "exists"
-                                ? `${t("cfgOpenCodeSessionExists")}：${oc.value}`
-                                : oc.phase === "fail"
-                                  ? `${t("cfgOpenCodeSessionFail")}：${oc.value}`
-                                  : t("cfgOpenCodeSessionHint");
-                          return jsxRuntime.jsx("div", {
-                            className: "dshk-cfg-group",
-                            children: jsxRuntime.jsxs("div", {
-                              className: "dshk-cfg-field",
-                              children: [
-                                jsxRuntime.jsx("span", { className: "dshk-cfg-label", children: t("cfgOpenCodeSession") }),
-                                jsxRuntime.jsx("button", {
-                                  type: "button",
-                                  className: "dshk-cfg-combo",
-                                  disabled: oc.phase === "busy",
-                                  onClick: ocEnsure,
-                                  children: t(oc.phase === "busy" ? "cfgOpenCodeSessionBusy" : "cfgOpenCodeSessionBtn"),
-                                }),
-                                jsxRuntime.jsx("span", {
-                                  className: oc.phase === "fail" ? "dshk-cfg-invalid" : "dshk-cfg-hint",
-                                  title: ocValueText,
-                                  children: ocValueText,
-                                }),
-                              ],
-                            }),
-                          });
-                        })()
+                      ? jsxRuntime.jsx("div", {
+                          className: "dshk-cfg-group",
+                          children: jsxRuntime.jsxs("div", {
+                            className: "dshk-cfg-field",
+                            children: [
+                              jsxRuntime.jsx("span", { className: "dshk-cfg-label", children: t("cfgOpenCodeSession") }),
+                              jsxRuntime.jsx("span", {
+                                className: "dshk-cfg-hint",
+                                title: t("cfgOpenCodeSessionHint"),
+                                children: t("cfgOpenCodeSessionHint"),
+                              }),
+                            ],
+                          }),
+                        })
                       : null,
                     available
                       ? jsxRuntime.jsxs("div", {
