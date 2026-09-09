@@ -70,7 +70,7 @@ import { loadToolsModule, buildBrowserTools } from './browser-tools.ts'
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from './schedule.ts'
 import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton, defaultVaultRoot, buildVaultTools } from './vault.ts'
 import { commitVault, ensureVaultGit } from './vault-git.ts'
-import { defaultSkillsDir, writeVaultSkill } from './vault-skill.ts'
+import { defaultSkillsDir, removeVaultSkill, writeVaultSkill } from './vault-skill.ts'
 import { sameOrigin } from './web-guard.ts'
 import { recycleDelete, recycleDeleteBatch } from './recycle.ts'
 
@@ -540,6 +540,11 @@ export async function apply(ctx: KitCtx): Promise<void> {
       .catch(() => {})
       .then(() => ensureVaultGit(root))
       .then(() => writeVaultSkill(defaultSkillsDir(), root))
+  }
+  // 卸载/禁用时收走生成的知识库技能（HMR 更新=卸载+重装，重装时 trackVaultRoot
+  // 会重写；回收站删除，失败静默）
+  if (typeof ctx.effect === 'function') {
+    ctx.effect(() => () => void removeVaultSkill(defaultSkillsDir()), 'dsh-kit.vault-skill.cleanup')
   }
   /** setSource/onChange 钩子：settings 首次就绪时触发网关启用位检查（此时 readSettings
    *  才读到真实值）；注意 onSettingsReady 在 webServer 注入回填前是空函数——如果注入
