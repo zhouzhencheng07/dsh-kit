@@ -214,6 +214,10 @@ window.__ModuleLoader__.load({
       phoneKeepGatewayOn: false,
       jobsEnabled: true,
       browserEnabled: true,
+      monitorEnabled: true,
+      monitorWaitMs: 30000,
+      monitorMaxAuto: 3,
+      monitorRepeatThreshold: 3,
       vaultEnabled: true,
       vaultRoot: "",
       terminalShortcut: "Ctrl+/",
@@ -284,6 +288,19 @@ window.__ModuleLoader__.load({
         phoneRemoteDomain: typeof v.phoneRemoteDomain === "string" ? v.phoneRemoteDomain : "",
         jobsEnabled: v.jobsEnabled !== false,
         browserEnabled: v.browserEnabled !== false,
+        monitorEnabled: v.monitorEnabled !== false,
+        monitorWaitMs:
+          Number.isInteger(v.monitorWaitMs) && v.monitorWaitMs >= 5000 && v.monitorWaitMs <= 600000
+            ? v.monitorWaitMs
+            : CFG_DEFAULTS.monitorWaitMs,
+        monitorMaxAuto:
+          Number.isInteger(v.monitorMaxAuto) && v.monitorMaxAuto >= 1 && v.monitorMaxAuto <= 10
+            ? v.monitorMaxAuto
+            : CFG_DEFAULTS.monitorMaxAuto,
+        monitorRepeatThreshold:
+          Number.isInteger(v.monitorRepeatThreshold) && v.monitorRepeatThreshold >= 2 && v.monitorRepeatThreshold <= 10
+            ? v.monitorRepeatThreshold
+            : CFG_DEFAULTS.monitorRepeatThreshold,
         vaultEnabled: v.vaultEnabled !== false,
         vaultRoot: typeof v.vaultRoot === "string" ? v.vaultRoot : "",
         terminalShortcut:
@@ -621,6 +638,26 @@ window.__ModuleLoader__.load({
       cfgJobsEnabledHint: "右坞「+」菜单里的任务入口：查看并结束后台任务",
       cfgBrowserEnabled: "启用内置浏览器",
       cfgBrowserEnabledHint: "右坞「+」菜单里的浏览器入口：实时画面查看并操作 agent 的浏览器（重启生效）",
+      cfgMonitorEnabled: "启用会话监视",
+      cfgMonitorEnabledHint: "回合因 429 限流等可重试错误结束后等待自动发「继续」；流式输出重复内容（死循环征兆）时停止回合并续跑。只监视当前打开的会话",
+      cfgMonitorWaitMs: "失败后等待(毫秒)",
+      cfgMonitorWaitMsHint: "回合以可重试错误结束后，等待这么久再自动发送「继续」（5000-600000）",
+      cfgMonitorMaxAuto: "自动继续上限(次)",
+      cfgMonitorMaxAutoHint: "连续自动续跑达到该次数后暂停，等你手动处理；出现一次正常完成的回合即重置（1-10）",
+      cfgMonitorRepeatThreshold: "重复判定(次)",
+      cfgMonitorRepeatThresholdHint: "流式文本尾部出现连续重复片段达到该次数即判定死循环，停止并续跑（2-10）",
+      monitorContinueText: "继续",
+      monitorLoopBreakText: "检测到你的输出在重复相同内容，可能陷入了死循环。请立即停止重复，简要说明当前状态，换一种方式继续完成任务。",
+      monitorCancel: "取消",
+      monitorRepeatErr: "重复输出（死循环征兆）",
+      monitorStopping: "监视：检测到重复输出（死循环征兆），正在停止当前回合…",
+      monitorCapped: "监视：已连续自动继续 {max} 次，暂停自动续跑（重复输出仍会中止）",
+      monitorAutoIn: "监视：检测到{err}，{sec} 秒后自动继续（第 {n}/{max} 次）",
+      monitorErr429: "请求被限流（429）",
+      monitorErrSERVER: "服务端错误",
+      monitorErrTIMEOUT: "请求超时",
+      monitorErrTRANSPORT: "网络传输错误",
+      monitorErrEMPTY_RESPONSE: "模型返回空响应",
       cfgPreviewMaxTabs: "文件预览最多标签数",
       cfgPreviewMaxTabsHint: "预览标签超过该数时，打开新文件自动关掉最久没看的那个（1-20，即时生效）",
       browserUrlPh: "输入网址，回车打开",
@@ -1059,6 +1096,26 @@ window.__ModuleLoader__.load({
       cfgJobsEnabledHint: "Jobs entry in the dock + menu: watch and stop background jobs",
       cfgBrowserEnabled: "Enable built-in browser",
       cfgBrowserEnabledHint: "Browser entry in the dock + menu: watch and operate the agent's browser (restart to apply)",
+      cfgMonitorEnabled: "Enable session monitor",
+      cfgMonitorEnabledHint: "After a turn ends with a retryable error (429 rate limit etc.), wait then auto-send \"Continue\"; stop the turn and continue when streamed output repeats (dead-loop sign). Watches the currently open session only",
+      cfgMonitorWaitMs: "Wait after failure (ms)",
+      cfgMonitorWaitMsHint: "How long to wait after a retryable terminal failure before auto-sending \"Continue\" (5000-600000)",
+      cfgMonitorMaxAuto: "Auto-continue limit",
+      cfgMonitorMaxAutoHint: "Pause auto-continue after this many consecutive automatic resumes until a turn completes normally (1-10)",
+      cfgMonitorRepeatThreshold: "Repeat threshold",
+      cfgMonitorRepeatThresholdHint: "Stop and continue once this many consecutive repeated blocks appear at the stream tail (2-10)",
+      monitorContinueText: "Continue",
+      monitorLoopBreakText: "Your output appears to be repeating itself, which suggests an infinite loop. Stop repeating immediately, briefly state the current status, and continue the task in a different way.",
+      monitorCancel: "Cancel",
+      monitorRepeatErr: "repeated output (dead-loop sign)",
+      monitorStopping: "Monitor: repeated output detected (dead-loop sign), stopping the current turn…",
+      monitorCapped: "Monitor: auto-continued {max} times in a row, pausing auto-continue (repeats are still stopped)",
+      monitorAutoIn: "Monitor: {err}; auto-continue in {sec}s (attempt {n}/{max})",
+      monitorErr429: "rate limit (429)",
+      monitorErrSERVER: "server error",
+      monitorErrTIMEOUT: "request timeout",
+      monitorErrTRANSPORT: "network transport error",
+      monitorErrEMPTY_RESPONSE: "empty model response",
       cfgPreviewMaxTabs: "Max file preview tabs",
       cfgPreviewMaxTabsHint: "Beyond the limit, opening a new file closes the least-recently-viewed preview tab (1-20, applies immediately)",
       browserUrlPh: "Type a URL and press Enter",
@@ -1876,6 +1933,11 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-timer-pill{position:fixed;right:calc(var(--dshk-pane-w, 0px) + 12px);bottom:14px;z-index:700;display:inline-flex;align-items:center;gap:8px;padding:7px 9px 7px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-base);box-shadow:0 6px 20px color-mix(in srgb,#000 22%,transparent);cursor:pointer;user-select:none}
 .dshk-timer-pill:hover{border-color:var(--dsw-alias-brand-primary)}
 .dshk-arch-root{padding:14px 16px;overflow:auto;height:100%;display:flex;flex-direction:column;gap:8px}
+/* 会话监视条（composer 上方细条，仅有动作时出现） */
+.dshk-monitor-line{display:flex;align-items:center;gap:10px;padding:5px 12px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 35%,transparent);border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 8%,transparent);font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshk-monitor-text{flex:1;min-width:0}
+.dshk-monitor-cancel{appearance:none;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:none;padding:2px 10px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.dshk-monitor-cancel:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-tertiary)}
 .dshk-arch-bar{display:flex;align-items:center;gap:10px}
 .dshk-arch-bar .dshk-arch-hint{flex:1;min-width:0}
 .dshk-arch-scope{display:inline-flex;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;overflow:hidden}
@@ -7814,6 +7876,264 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
      *  侧栏菜单只能归档（进 registry 全局归档集，列表即隐藏），恢复入口宿主
      *  没做——这里列归档集合并提供「恢复」按钮（dsh-kit 宿主端点原位剔除，
      *  domain/changed 广播让侧栏即时重过滤） */
+    // ─────────── 会话监视器（conversation.composer.dock 座位）───────────
+    // 对话页内监视当前打开的会话，两条自动化路径：
+    // ① 终态失败续跑：回合以可重试类错误终态（RATE_LIMIT/SERVER/TIMEOUT/
+    //    TRANSPORT/EMPTY_RESPONSE——宿主 llm-retry 链内部 5 次退避耗尽后才落到
+    //    turn-error）结束时，等 monitorWaitMs 再 inputActions.setDraft("继续")+
+    //    submit()（官方停止按钮同款 wire 语义的用户侧续跑通道）。
+    // ② 死循环停止：仅回合运行中每 1s 扫描「当前流文本」（双源：宿主 partial
+    //    投影优先，退最新未中断 assistant 节点——本宿主 legacy.partial 恒 null
+    //    且节点落地即全长），尾部自重叠连续重复 ≥monitorRepeatThreshold 次判
+    //    死循环 → sessions 服务 cancel() 停止当前回合（官方停止按钮同款调用），
+    //    停止完成后照 ① 等待续跑。
+    // 约束：连续自动续跑达 monitorMaxAuto 次暂停（一次正常完成的回合即重置）；
+    // 停止动作不受上限（防死循环烧 token），续跑受上限；等待期间用户介入（手动
+    // 发消息使回合运行 / 草稿非空）即放弃本次自动续跑；同一条 turn-error 只自动
+    // 接管一次。仅监视当前打开的会话——dock 座位随会话页挂载/卸载，切走即停。
+    const MONITOR_RETRYABLE = new Set(["RATE_LIMIT", "SERVER", "TIMEOUT", "TRANSPORT", "EMPTY_RESPONSE"]);
+    const MONITOR_SCAN_MS = 1000; // 扫描周期：检测延迟 1-2s；真实死循环以分钟计，绰绰有余
+    const MONITOR_MIN_BLOCK = 8; // 重复块最短长度：放过短分隔符/标点（--- 、换行噪声）
+    const MONITOR_MAX_BLOCK = 128; // 重复块最长扫描长度：兜住长句循环，扫描成本封顶
+    /** 错误码 → 本地化短语；未知码原样显示 */
+    function monitorErrText(code) {
+      const key = `monitorErr${code}`;
+      const s = tf(key);
+      return s === key ? String(code || "") : s;
+    }
+
+    /** 尾部自重叠扫描：返回累计文本末尾连续重复块的最大次数（块长在
+     *  MONITOR_MIN_BLOCK..MAX_BLOCK 内穷举对齐，与流式分块方式无关；文本不足
+     *  两个最短块时返回 1）。死循环判定 = 返回值 ≥ monitorRepeatThreshold。 */
+    function monitorTailRepeatCount(text) {
+      const len = text.length;
+      let best = 1;
+      for (let p = MONITOR_MIN_BLOCK; p <= MONITOR_MAX_BLOCK && p * 2 <= len; p++) {
+        const block = text.slice(len - p);
+        let m = 1;
+        while (len - (m + 1) * p >= 0 && text.slice(len - (m + 1) * p, len - m * p) === block) m++;
+        if (m > best) best = m;
+      }
+      return best;
+    }
+
+    function MonitorLine(props) {
+      const { useChat, useSession, useInput, inputActions, sessionId } = props;
+      react.useSyncExternalStore(subscribeLocale, getLocaleVersion);
+      const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
+      const nodes = typeof useChat === "function" ? useChat((s) => s.legacy.nodes) : [];
+      // 流式文本（text+reasoning）：assistant-step 运行中宿主才产 partial（turn/
+      // step/blocks），落定即清空、nodes 才出现 finalized assistant——所以 partial
+      // 天然只含"正在流出"的文本，天然排除历史回合误判
+      const partial = typeof useChat === "function" ? useChat((s) => s.legacy.partial) : null;
+      const running = typeof useSession === "function" ? useSession((s) => s.running) : false;
+      const draft = typeof useInput === "function" ? useInput((s) => s.draft) : "";
+      // plan: null | {phase:"waiting",fireAt,code,seq,reason} | {phase:"stopping"} | {phase:"capped",max}
+      const [plan, setPlan] = react.useState(null);
+      const [now, setNow] = react.useState(() => Date.now());
+      const [autoCount, setAutoCount] = react.useState(0);
+      const handledRef = react.useRef(new Set()); // 已接管的 turn-error seq（会话切换清空）
+      const partialTextRef = react.useRef(null); // 最新流式文本（partial.blocks 拼接）
+      const partialKeyRef = react.useRef(null); // 镜像侧记录的当前流 turn/step
+      const lastStreamKeyRef = react.useRef(null); // 上次扫描的数据源标识（换源 = 新回合）
+      const lastLenRef = react.useRef(0); // 本源扫描基线
+      const nodesSeqRef = react.useRef(null); // 最新「未中断」assistant 节点 seq
+      const nodesTextRef = react.useRef(null); // 该节点的文本（回合内步骤落地即扫一次）
+      const stoppingRef = react.useRef(false); // cancel 已发出（防重复触发；续跑后复位）
+      // 会话切换：监视状态全部归零
+      react.useEffect(() => {
+        handledRef.current = new Set();
+        partialTextRef.current = null;
+        partialKeyRef.current = null;
+        lastStreamKeyRef.current = null;
+        lastLenRef.current = 0;
+        nodesSeqRef.current = null;
+        nodesTextRef.current = null;
+        stoppingRef.current = false;
+        setPlan(null);
+        setAutoCount(0);
+      }, [sessionId]);
+      // 流式文本镜像：partial 随 chunk 变化，只写 ref 不 setState（渲染开销趋零）。
+      // 部分宿主版本 legacy.partial 恒 null（运行中步骤不进投影或不广播），此路
+      // 不通时由 nodes 镜像兜底。
+      react.useEffect(() => {
+        if (!partial || !Array.isArray(partial.blocks)) {
+          partialTextRef.current = null;
+          return;
+        }
+        partialKeyRef.current = partial.turn + "/" + partial.step;
+        let text = "";
+        for (const b of partial.blocks) {
+          if ((b.kind === "text" || b.kind === "reasoning") && typeof b.text === "string") text += b.text;
+        }
+        partialTextRef.current = text;
+      }, [partial]);
+      // 最新「未中断」assistant 节点镜像：步骤落地即全长出现（0→full 一拍），
+      // interrupted（监视器停止的回合残余）不作扫描源——那是上一轮已处置的文本
+      react.useEffect(() => {
+        let seq = null;
+        let text = null;
+        for (let i = nodes.length - 1; i >= 0; i--) {
+          const n = nodes[i];
+          if (n && n.kind === "assistant") {
+            if (n.interrupted !== true && Array.isArray(n.blocks)) {
+              seq = n.seq;
+              text = "";
+              for (const b of n.blocks) {
+                if ((b.kind === "text" || b.kind === "reasoning") && typeof b.text === "string") text += b.text;
+              }
+            }
+            break;
+          }
+        }
+        nodesSeqRef.current = seq;
+        nodesTextRef.current = text;
+      }, [nodes]);
+      // ① 终态失败检测：空闲 + 出现未接管的可重试 turn-error → 计划等待
+      react.useEffect(() => {
+        if (!cfg.monitorEnabled || running || !inputActions) return;
+        let lastErr = null;
+        for (const n of nodes) {
+          if (n && n.kind === "turn-error") lastErr = n;
+        }
+        if (!lastErr) return;
+        const key = String(lastErr.seq);
+        if (handledRef.current.has(key)) return;
+        handledRef.current.add(key);
+        if (!MONITOR_RETRYABLE.has(lastErr.code)) return; // AUTH 等不可重试类不自动续
+        if (autoCount >= cfg.monitorMaxAuto) {
+          setPlan({ phase: "capped", max: cfg.monitorMaxAuto });
+          return;
+        }
+        setPlan({ phase: "waiting", fireAt: Date.now() + cfg.monitorWaitMs, code: lastErr.code, seq: lastErr.seq, reason: "error" });
+      }, [nodes, running, cfg.monitorEnabled, cfg.monitorMaxAuto, cfg.monitorWaitMs, autoCount, inputActions]);
+      // 成功推进即重置连续计数：空闲且最后节点是「未被打断的」assistant message
+      // （回合正常收尾）；监视器停止的回合带 interrupted 标记，不算成功。
+      // "继续"落地产生的是 user message，不会误重置
+      react.useEffect(() => {
+        if (running || (autoCount === 0 && plan?.phase !== "capped") || nodes.length === 0) return;
+        const last = nodes[nodes.length - 1];
+        if (last && last.kind === "assistant" && last.interrupted !== true) {
+          setAutoCount(0);
+          if (plan?.phase === "capped") setPlan(null);
+        }
+      }, [nodes, running, autoCount, plan]);
+      // ② 死循环扫描：仅回合运行中轮询（空闲不扫——历史文本不在观察面）。双数据
+      //    源取其一：partial（流式中，若宿主广播）优先；否则最新未中断 assistant
+      //    节点（步骤落地即全长出现，落地后立扫一次——快速流整段不可分时也有
+      //    检测机会）。对文本做尾部自重叠扫描：长度 ≥MONITOR_MIN_BLOCK 的块 B 在
+      //    末尾连续出现 ≥monitorRepeatThreshold 次（对齐长度穷举，与分块无关）。
+      //    换源（新流/新节点）→ 复位停止标记与基线。interval 依赖刻意不含
+      //    partial/nodes——流式高频换引用会让节拍永远跑不满，读取全走 ref。
+      react.useEffect(() => {
+        if (!cfg.monitorEnabled || !running) return undefined;
+        const timer = setInterval(() => {
+          let key = null;
+          let text = null;
+          if (partialTextRef.current !== null && partialKeyRef.current !== null) {
+            key = "p:" + partialKeyRef.current;
+            text = partialTextRef.current;
+          } else if (nodesSeqRef.current !== null && nodesTextRef.current !== null) {
+            key = "n:" + nodesSeqRef.current;
+            text = nodesTextRef.current;
+          }
+          if (key === null || text === null) return;
+          if (key !== lastStreamKeyRef.current) {
+            lastStreamKeyRef.current = key;
+            stoppingRef.current = false;
+            lastLenRef.current = 0;
+          }
+          if (stoppingRef.current) return;
+          const len = text.length;
+          if (len <= lastLenRef.current) return;
+          lastLenRef.current = len;
+          if (monitorTailRepeatCount(text) < cfg.monitorRepeatThreshold) return;
+          stoppingRef.current = true;
+          setPlan({ phase: "stopping" });
+          try {
+            const sessions = slotsCtx ? slotsCtx.get("sessions") : null;
+            const binding = sessions && typeof sessions.binding === "function" ? sessions.binding(sessionId) : null;
+            const sess = binding && binding.session;
+            if (sess && typeof sess.cancel === "function") void sess.cancel().catch(() => {});
+          } catch {
+            // 服务未就绪：放弃本次停止（等待自然结束），stopping 超时兜底会清态
+          }
+        }, MONITOR_SCAN_MS);
+        return () => clearInterval(timer);
+      }, [running, cfg.monitorEnabled, cfg.monitorRepeatThreshold, sessionId]);
+      // stopping → 停止完成转等待（上限内）或 capped（超限：停而不续）；
+      // 停止超时（cancel 失败/被拒）放弃并复位
+      react.useEffect(() => {
+        if (plan?.phase !== "stopping") return undefined;
+        if (!running) {
+          if (autoCount >= cfg.monitorMaxAuto) setPlan({ phase: "capped", max: cfg.monitorMaxAuto });
+          else setPlan({ phase: "waiting", fireAt: Date.now() + 2500, code: "", seq: 0, reason: "repeat" });
+          return undefined;
+        }
+        const giveUp = setTimeout(() => {
+          stoppingRef.current = false;
+          setPlan(null);
+        }, 15000);
+        return () => clearTimeout(giveUp);
+      }, [plan, running, autoCount, cfg.monitorMaxAuto]);
+      // 等待期间用户介入（手动发消息使回合运行）→ 放弃本次自动续跑
+      react.useEffect(() => {
+        if (plan?.phase === "waiting" && running) setPlan(null);
+      }, [running, plan]);
+      // 倒计时跳动
+      react.useEffect(() => {
+        if (plan?.phase !== "waiting") return undefined;
+        const timer = setInterval(() => setNow(Date.now()), 500);
+        return () => clearInterval(timer);
+      }, [plan]);
+      // 到点执行：草稿非空（用户在打字）或回合又跑起来都视为介入，放弃续跑；
+      // 超限兜底转 capped（正常路径到不了这里——stopping 转换已挡）
+      react.useEffect(() => {
+        if (plan?.phase !== "waiting") return;
+        if (Date.now() < plan.fireAt) return;
+        if (autoCount >= cfg.monitorMaxAuto) {
+          setPlan({ phase: "capped", max: cfg.monitorMaxAuto });
+          return;
+        }
+        if (running || String(draft ?? "").trim() !== "") {
+          setPlan(null);
+          return;
+        }
+        // 话术分流（用户定稿）：429 等失败发「继续」；死循环发带循环提示的话——
+        // 让 agent 知道自己卡在循环里，停止重复并换方式推进
+        inputActions.setDraft(tf(plan.reason === "repeat" ? "monitorLoopBreakText" : "monitorContinueText"));
+        inputActions.submit();
+        stoppingRef.current = false; // 续跑已发出：本会话下一回合的死循环仍要接管
+        setAutoCount((c) => c + 1);
+        setPlan(null);
+      }, [plan, now, running, draft, autoCount, cfg.monitorMaxAuto, inputActions]);
+      if (!plan || !cfg.monitorEnabled) return null;
+      let line = "";
+      if (plan.phase === "waiting") {
+        const sec = Math.max(0, Math.ceil((plan.fireAt - now) / 1000));
+        const err = plan.reason === "repeat" ? tf("monitorRepeatErr") : monitorErrText(plan.code);
+        line = tf("monitorAutoIn", { err, sec: String(sec), n: String(autoCount + 1), max: String(cfg.monitorMaxAuto) });
+      } else if (plan.phase === "stopping") {
+        line = tf("monitorStopping");
+      } else if (plan.phase === "capped") {
+        line = tf("monitorCapped", { max: String(cfg.monitorMaxAuto) });
+      }
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-monitor-line",
+        children: [
+          jsxRuntime.jsx("span", { className: "dshk-monitor-text", children: line }),
+          plan.phase === "waiting"
+            ? jsxRuntime.jsx("button", {
+                type: "button",
+                className: "dshk-monitor-cancel",
+                onClick: () => setPlan(null),
+                children: t("monitorCancel"),
+              })
+            : null,
+        ],
+      });
+    }
+
     function ArchivedSessionsView(props) {
       // 当前工作区归属：当前会话挂在哪个工作区（与归档行的 workspaceId 同一口
       // 径——workspace.sessionIds 成员判定），作为默认筛选范围
@@ -9571,6 +9891,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               { name: "conversation.view", id: "dsh-kit-archived", order: 100, label: () => t("archivedTab") },
               ArchivedSessionsView,
             )],
+          // 会话监视条：composer 上方环境条（官方 StatsLine order 0，排其后）
+          ["monitor", cfg.monitorEnabled, () =>
+            slotsCtx.slots.register(
+              { name: "conversation.composer.dock", id: "dsh-kit-monitor", order: 5 },
+              MonitorLine,
+            )],
           // 输入框入口排序（左→右）：文件树、源代码管理、终端；手机访问与
           // 技能页同类，走 settings.section 页面入口（order：技能 40 → 手机 45）
           ["filetree", cfg.fileTreeEnabled, () =>
@@ -9607,7 +9933,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             }
           }
         };
-      }, [cfg.phoneEnabled, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.sourceControlEnabled, cfg.skillsPageEnabled]);
+      }, [cfg.phoneEnabled, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.sourceControlEnabled, cfg.skillsPageEnabled, cfg.monitorEnabled]);
 
       // 配置关闭但视图还开着（如设置卡保存瞬间）：立即归位，预览随来源跟随清掉；
       // 终端功能关闭 = 结束全部终端会话（连 WS 杀 pty，与单终端时代语义一致）
@@ -10200,6 +10526,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { key: "phoneKeepGatewayOn", kind: "bool" },
       { key: "jobsEnabled", kind: "bool" },
       { key: "browserEnabled", kind: "bool" },
+      { key: "monitorEnabled", kind: "bool" },
+      { key: "monitorWaitMs", kind: "number", min: 5000, max: 600000 },
+      { key: "monitorMaxAuto", kind: "number", min: 1, max: 10 },
+      { key: "monitorRepeatThreshold", kind: "number", min: 2, max: 10 },
       { key: "vaultEnabled", kind: "bool" },
       { key: "vaultRoot", kind: "text" },
       { key: "sidebarShortcutEnabled", kind: "bool" },
@@ -10221,6 +10551,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { switchKey: "sourceControlEnabled", fields: ["scShortcut"] },
       { switchKey: "jobsEnabled", fields: [] },
       { switchKey: "browserEnabled", fields: [] },
+      { switchKey: "monitorEnabled", fields: ["monitorWaitMs", "monitorMaxAuto", "monitorRepeatThreshold"] },
       { switchKey: "vaultEnabled", fields: ["vaultRoot"] },
       { switchKey: "terminalEnabled", fields: ["terminalShortcut"] },
       { switchKey: "skillsPageEnabled", fields: [] },
@@ -10244,7 +10575,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const trimmed = String(text ?? "").trim();
         const n = Number(trimmed);
         const hi = cfgSpec[field].max ?? 8;
-        return Number.isInteger(n) && n >= 1 && n <= hi ? { kind: "set", value: n } : undefined;
+        const lo = cfgSpec[field].min ?? 1;
+        return Number.isInteger(n) && n >= lo && n <= hi ? { kind: "set", value: n } : undefined;
       }
       if (cfgSpec[field].kind === "text") return { kind: "set", value: String(text ?? "").trim() };
       const trimmed = String(text ?? "").trim();

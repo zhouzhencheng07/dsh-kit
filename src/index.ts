@@ -494,6 +494,15 @@ export async function apply(ctx: KitCtx): Promise<void> {
     // 自动切面板与画面跟随 agent 是恒定行为（用户定稿，无开关）——人为切走浏览器
     // 标签后的"不再拽回"抑制在客户端侧实现。
     browserEnabled: z.boolean().default(true),
+    // 会话监视器（纯浏览器端消费，宿主不读）：对话页内监视当前会话——
+    // ① turn 以可重试类失败终态（429 限流/服务端/超时/传输/空响应）结束后，
+    //    等 monitorWaitMs 再自动发送"继续"，连续自动续跑不超过 monitorMaxAuto 次；
+    // ② 流式输出出现重复增量（死循环征兆）达 monitorRepeatThreshold 次时
+    //    停止当前回合并续跑（停止不受上限，防烧 token；续跑受上限）。
+    monitorEnabled: z.boolean().default(true),
+    monitorWaitMs: z.number().step(1).min(5000).max(600000).default(30000),
+    monitorMaxAuto: z.number().step(1).min(1).max(10).default(3),
+    monitorRepeatThreshold: z.number().step(1).min(2).max(10).default(3),
     sidebarShortcut: z.string().default('Ctrl+B'),
     sidebarShortcutEnabled: z.boolean().default(true),
     terminalShortcut: z.string().default('Ctrl+/'),
