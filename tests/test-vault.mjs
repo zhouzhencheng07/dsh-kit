@@ -11,6 +11,8 @@ import {
   extractWikiLinks,
   VaultScanner,
   ensureVaultSkeleton,
+  vaultSearchSummary,
+  buildVaultTools,
 } from '../dist/vault.js'
 
 const test = (name, fn) =>
@@ -53,6 +55,7 @@ await test('extractWikiLinks 提取目标/剥锚与别名/去重不分大小写'
 // VaultScanner：临时目录夹具
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dshk-vault-'))
 fs.mkdirSync(path.join(root, 'wiki', 'Python'), { recursive: true })
+fs.mkdirSync(path.join(root, 'library'), { recursive: true })
 fs.mkdirSync(path.join(root, 'attachments'), { recursive: true })
 fs.mkdirSync(path.join(root, '.hidden'), { recursive: true })
 fs.writeFileSync(
@@ -61,6 +64,8 @@ fs.writeFileSync(
 )
 fs.writeFileSync(path.join(root, 'wiki', 'Python', '工具链.md'), '# 工具链\n\n回到 [[基础]]。\n\n- uv：`uv add <pkg>`\n- ruff：lint + format 一体')
 fs.writeFileSync(path.join(root, 'wiki', 'git.md'), '# git\n忽略 [[ disappeared ]]')
+fs.writeFileSync(path.join(root, 'library', '原始资料.md'), '# 原始资料\n\nuv 是 python 包管理器，不进检索池')
+fs.writeFileSync(path.join(root, '根级散页.md'), '# 根级散页\n\nuv 也不该被搜到')
 fs.writeFileSync(path.join(root, 'attachments', '忽略.md'), '# 不进索引')
 fs.writeFileSync(path.join(root, '.hidden', 'x.md'), '# 不进索引')
 let scanner = new VaultScanner(() => root)
@@ -69,8 +74,8 @@ let index
 await test('scan：md 建页、跳过 attachments/点前缀、space 归属正确', async () => {
   index = await scanner.scan()
   assert.equal(index.root, fs.realpathSync(root))
-  assert.deepEqual(index.spaces, ['wiki'])
-  assert.equal(index.pages.length, 3)
+  assert.deepEqual(index.spaces, ['library', 'wiki'])
+  assert.equal(index.pages.length, 5)
   const base = index.pages.find((p) => p.rel === 'wiki/Python/基础')
   assert.equal(base.space, 'wiki')
   assert.equal(base.title, 'Python 基础')
@@ -94,6 +99,35 @@ await test('search：多词 AND，文件名/标题加权，正文计次', async 
   assert.equal(hit.results[0].rel, 'wiki/Python/工具链')
   const none = await scanner.search('不存在的词组xyz', 10)
   assert.equal(none.results.length, 0)
+})
+
+await test('search：仅 wiki 区——library 与根级散页不进检索池', async () => {
+  const lib = await scanner.search('uv 包管理器', 10)
+  assert.equal(lib.results.length, 0)
+  const loose = await scanner.search('根级散页', 10)
+  assert.equal(loose.results.length, 0)
+})
+
+await test('vault_search 工具：命中摘要带绝对路径，未配置优雅降级', async () => {
+  const defs = buildVaultTools({ defineTool: (d) => d, scanner })
+  assert.equal(defs.length, 1)
+  assert.equal(defs[0].name, 'vault_search')
+  const value = await defs[0].execute({ query: 'uv ruff' })
+  assert.equal(value.results.length, 1)
+  assert.ok(value.summary.includes(path.join('wiki', 'Python', '工具链.md')))
+  assert.equal(value.summary, vaultSearchSummary('uv ruff', value.results))
+  const miss = await defs[0].execute({ query: '原始资料' })
+  assert.ok(miss.summary.includes('未找到匹配'))
+  const unconfigured = await buildVaultTools({
+    defineTool: (d) => d,
+    scanner: new VaultScanner(() => ''),
+  })[0].execute({ query: 'x' })
+  assert.ok(unconfigured.summary.includes('未配置'))
+  assert.deepEqual(unconfigured.results, [])
+})
+
+await test('vaultSearchSummary：空结果提示', () => {
+  assert.ok(vaultSearchSummary('xx', []).includes('未找到'))
 })
 
 await test('ensureAgentsMd：首次生成约定文件，再次不覆盖', async () => {

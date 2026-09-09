@@ -8,6 +8,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import type { DefineTool, ToolDefinition } from './browser-tools.ts'
 
 export interface VaultPage {
   /** 绝对路径（realpath 归一后） */
@@ -237,8 +238,10 @@ export class VaultScanner {
     return { root, spaces: [...spaces].sort(), pages, truncated }
   }
 
-  /** 全文搜索：文件名/标题命中权重高于正文次数；小库逐文件读可接受，
-   *  大库换索引是后续阶段。返回带 snippet 的前 limit 条。 */
+  /** 全文搜索，仅 wiki/ 区（用户定稿 2026-09-09）：library 是原始资料、根级散页
+   *  不属策展层，都不进检索池——检索面收窄后 archived 出池概念不再需要（原 M5
+   *  园艺的出池设计随之退役）。文件名/标题命中权重高于正文次数；小库逐文件读
+   *  可接受，大库换索引是后续阶段。返回带 snippet 的前 limit 条。 */
   async search(
     query: string,
     limit: number,
@@ -250,6 +253,7 @@ export class VaultScanner {
     const terms = q.split(/\s+/).filter((t) => t !== '')
     const results: Array<{ path: string; rel: string; title: string; snippet: string; score: number }> = []
     for (const page of index.pages) {
+      if (!page.rel.startsWith('wiki/')) continue
       // 正文优先取 mtime 缓存（scan 刚刷新过，命中即免读盘）；超大页等未缓存者现读
       let content = this.cache.get(page.path)?.content ?? null
       if (content === null) {
@@ -303,7 +307,7 @@ export class VaultScanner {
       '- 文件是唯一真源：一切内容都是本目录下的 md 文件，无第二存储。',
       '- 一题一页：一个主题一页；写前先搜索是否已有同类页，重叠则合并。',
       '- wikilink 用 `[[页面名]]` 引用其它页（按文件名解析，移动不破链）。',
-      '- frontmatter 可省；`archived: true` 表示已归档。',
+      '- frontmatter 可省。',
       '- 二进制（图片/PDF）放 `attachments/`，页面里用相对链接引用。',
       '- 单页超过约 16KB 考虑拆分或抽象出索引页。',
       '',
@@ -314,4 +318,48 @@ export class VaultScanner {
       // 只读盘等场景静默失败，不阻断索引
     }
   }
+}
+
+// ── agent 工具（vault_search）───────────────────────────────────────────────
+// 决策（用户 2026-09-09）：不做会话启动注入 wiki 地图，agent 按需检索——
+// 一个只读搜索工具，页面本体仍走「文件即接口」（拿绝对路径用文件工具读）。
+// 恒开（同日程工具）；vaultRoot 未配置由 execute 优雅降级为提示。
+
+/** vault_search 返回值的对话摘要：每行「路径 — 标题」+ snippet 缩进行 */
+export function vaultSearchSummary(query: string, items: Array<{ path: string; title: string; snippet: string }>): string {
+  if (items.length === 0) return `知识库 wiki 区未找到匹配「${query}」的页面`
+  return items
+    .map((r) => `${r.path} — ${r.title}${r.snippet !== '' ? `\n  ${r.snippet}` : ''}`)
+    .join('\n')
+}
+
+export function buildVaultTools({
+  defineTool,
+  scanner,
+}: {
+  defineTool: DefineTool
+  scanner: VaultScanner
+}): ToolDefinition[] {
+  const search = defineTool({
+    name: 'vault_search',
+    description:
+      '检索用户知识库（vault）wiki 区的页面：全文搜索，多词 AND，文件名/标题命中权重高于正文。' +
+      '用户问「我笔记里有没有…」「知识库/之前记过的 xx」或回答前想查既有知识时使用。' +
+      '返回页面绝对路径与摘要片段，用文件读取工具打开页面；vault 约定见根目录 AGENTS.md。',
+    parameters: {
+      query: { type: 'string', required: true, description: '关键词，可多词（同时命中才返回）' },
+    },
+    output: {
+      schema: { type: 'object', additionalProperties: true },
+      render: (_args: unknown, value: { summary: string }) => [{ type: 'text', text: value.summary }],
+    },
+    async execute(args: { query?: string }) {
+      const q = typeof args?.query === 'string' ? args.query : ''
+      const result = await scanner.search(q, 10)
+      if (result === null) return { summary: '知识库未配置（目录不存在或未设置），请提示用户在 dsh-kit 设置卡配置知识库目录', root: null, results: [] }
+      const items = result.results.map((r) => ({ path: r.path, title: r.title, snippet: r.snippet }))
+      return { summary: vaultSearchSummary(q, items), root: result.root, results: items }
+    },
+  })
+  return [search]
 }
