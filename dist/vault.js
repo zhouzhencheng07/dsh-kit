@@ -275,7 +275,7 @@ export class VaultScanner {
             '- 文件是唯一真源：一切内容都是本目录下的 md 文件，无第二存储。',
             '- 一题一页：一个主题一页；写前先搜索是否已有同类页，重叠则合并。',
             '- wikilink 用 `[[页面名]]` 引用其它页（按文件名解析，移动不破链）。',
-            '- frontmatter 可省；需要时只写 `created`（日期）；`archived: true` 表示已归档。',
+            '- frontmatter 可省；`archived: true` 表示已归档。',
             '- 二进制（图片/PDF）放 `attachments/`，页面里用相对链接引用。',
             '- 单页超过约 16KB 考虑拆分或抽象出索引页。',
             '',

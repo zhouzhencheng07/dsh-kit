@@ -822,8 +822,6 @@ window.__ModuleLoader__.load({
       vaultDelConfirm: "确认删除以下页面？（移入回收站；vault 为 git 仓库时自动生成一个提交，可整体撤回）",
       vaultDeleted: "已删除",
       vaultDelFail: "删除失败（文件被占用？已保留）：",
-      vaultFmTip: "页面元数据（frontmatter）：创建日期。在编辑器外展示，保存时原样写回文件头",
-      vaultFmCreated: "创建",
       vaultConflict: "页面在盘上已被修改，自动保存已暂停",
       vaultConflictOverwrite: "覆盖盘上",
       vaultConflictReload: "读取盘上版本",
@@ -1304,8 +1302,6 @@ window.__ModuleLoader__.load({
       vaultDelConfirm: "Delete these pages? (Moved to recycle bin; if the vault is a git repo one commit is created so this is fully revertible)",
       vaultDeleted: "Deleted",
       vaultDelFail: "Delete failed (file locked? kept):",
-      vaultFmTip: "Page metadata (frontmatter): created date. Shown outside the editor and written back verbatim on save",
-      vaultFmCreated: "Created",
       vaultConflict: "The page was modified on disk; autosave paused",
       vaultConflictOverwrite: "Overwrite disk",
       vaultConflictReload: "Load disk version",
@@ -1788,8 +1784,6 @@ body.dshk-pane-open [class*="_scroll"] > [class*="_slot"]{display:block!importan
 .dshk-vault-rtehost .ProseMirror-selectedcell{outline:2px solid var(--dsw-alias-brand-primary,#1971c2)}
 .dshk-vault-rtehost th{background:var(--dsw-alias-bg-layer-3)}
 /* frontmatter 属性条 + CAS 冲突条 */
-.dshk-vault-fmbar{flex:none;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--dsw-alias-label-tertiary);padding:0 2px 6px}
-.dshk-vault-fmtip{cursor:help;border-bottom:1px dotted currentColor}
 .dshk-vault-conflict{flex:none;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dsw-alias-warning,#e8a13c);padding:4px 2px 8px}
 .dshk-vault-rtefallback{flex:1 1 auto;min-height:0;resize:none;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:1.7;padding:10px 12px}
 .dshk-vault-backlinks{border-top:1px dashed var(--dsw-alias-border-l2);margin:16px 0 4px;padding:8px 2px 12px;display:flex;flex-direction:column;gap:4px}
@@ -7687,17 +7681,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return { fmText: m[0], rest: src.slice(m[0].length) };
     }
 
-    /** 属性条展示用最小解析：created 行（frontmatter 其余内容不感知，保存原样写回） */
-    function vaultParseFmInfo(fmText) {
-      const info = { created: "" };
-      const block = String(fmText ?? "").replace(/^---\r?\n/, "").replace(/\r?\n---(?:\r?\n)?$/, "");
-      for (const line of block.split(/\r?\n/)) {
-        const cm = /^created:\s*(.+)$/.exec(line);
-        if (cm) info.created = (cm[1] ?? "").trim();
-      }
-      return info;
-    }
-
     /** 孤儿级联（用户定稿：删除时同步删掉因此变孤儿的页，git 单提交可整体撤回）。
      *  返回应删页面清单：目标自身 + 「全部反链都在删除集内」的递归闭包；删除前
      *  就已零入链的页不动（那是既有状态，不连坐）；根 AGENTS.md 约定文件受保护 */
@@ -9121,8 +9104,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const backlinksOf = backlinks;
       // 脏判定：编辑器 md 与已保存 md 不一致（保存钮 title 与 ● 提示的依据）
       const dirty = draftBody !== savedBody;
-      // frontmatter 属性条数据（编辑器外展示，保存时字节级原样写回）
-      const fmInfo = page && page.fmText ? vaultParseFmInfo(page.fmText) : null;
       // root 未就绪的整页态：加载中 / 未配置 / 索引失败（root 就绪后的瞬时错误
       // 走主界面内的错误条，不早退）
       if (root === null) {
@@ -9199,14 +9180,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   : page.binary === true
                     ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultBinaryHint") })
                     : jsxRuntime.jsxs("div", { className: "dshk-vault-editwrap", onPaste: onEditPaste, children: [
-                        fmInfo
-                          ? jsxRuntime.jsxs("div", { className: "dshk-vault-fmbar", children: [
-                              fmInfo.created !== ""
-                                ? jsxRuntime.jsxs("span", { children: [t("vaultFmCreated"), "：", fmInfo.created] })
-                                : null,
-                              jsxRuntime.jsx("span", { className: "dshk-vault-fmtip", title: t("vaultFmTip"), children: "ⓘ" }),
-                            ] }, "fmbar")
-                          : null,
                         jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
                           // 真·所见即所得（用户定稿）：页面恒为 TipTap 富文本编辑器。
                           // 页条=文档级命令（删除/撤销/重做）+ 脏标记 + 冲突处理；保存

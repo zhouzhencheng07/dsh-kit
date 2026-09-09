@@ -2826,10 +2826,10 @@ export async function apply(ctx) {
                 const file = path.join(dir, `${segs[segs.length - 1] ?? ''}.md`);
                 if (fs.existsSync(file))
                     return { exists: true, path: file, mtimeMs: fs.statSync(file).mtimeMs };
-                const today = new Date();
-                const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-                // frontmatter 只种 created：文件 mtime 会被编辑覆盖，这是唯一可信的创建日
-                const template = `---\ncreated: ${dateStr}\n---\n\n# ${segs[segs.length - 1] ?? ''}\n\n`;
+                // 建页不种 frontmatter（用户定稿）：创建/修改时间文件系统本身就有属性，
+                // 外部导入的 md 也不会有这字段——frontmatter 留给真正需要语义的页
+                //（archived: true 表示已归档）
+                const template = `# ${segs[segs.length - 1] ?? ''}\n\n`;
                 fs.writeFileSync(file, template, 'utf8');
                 return { path: file, mtimeMs: fs.statSync(file).mtimeMs };
             });
