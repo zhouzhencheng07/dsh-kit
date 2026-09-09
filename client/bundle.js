@@ -669,8 +669,6 @@ window.__ModuleLoader__.load({
       browserCloseTab: "关闭页签",
       browserStarting: "浏览器启动中…",
       browserReconnect: "连接断开，重连中…",
-      browserAgentPage: "agent 正在此页操作",
-      browserCloseAgentConfirm: "agent 正在此页面工作，关闭会中断它并丢失页面内状态（表单内容/滚动位置）。确定关闭？",
       browserNotRunning: "浏览器未启动——在上方输入网址回车，或等 agent 首次使用时自动拉起",
       browserNoPages: "没有打开的页面——在上方输入网址回车，或等 agent 下次导航自动出现在这里",
       dockPreview: "预览",
@@ -1125,8 +1123,6 @@ window.__ModuleLoader__.load({
       browserCloseTab: "Close tab",
       browserStarting: "Browser starting…",
       browserReconnect: "Reconnecting…",
-      browserAgentPage: "agent is working on this page",
-      browserCloseAgentConfirm: "agent is working on this page. Closing it interrupts the agent and loses in-page state (form input/scroll). Close anyway?",
       browserNotRunning: "Browser not started — type a URL above or wait for the agent's first use",
       browserNoPages: "No open pages — type a URL above, or the agent's next navigation will appear here",
       dockPreview: "Preview",
@@ -1974,7 +1970,6 @@ textarea.dshk-sched-input{resize:vertical}
 /* 右侧标签页容器：内容视图占满（非激活标签 display:none 保挂载） */
 .dshk-pane-view{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
 .dshk-brw-tabrow,.dshk-pv-tabrow{flex:none;display:flex;align-items:center;gap:4px;padding:8px 10px 2px;min-width:0;overflow:hidden}
-.dshk-tab-dot{width:6px;height:6px;border-radius:999px;background:var(--dsw-alias-brand-primary);flex:none}
 .dshk-brw-newtab{padding:0 7px;font-size:13px}
 .dshk-brw-nav{flex:none;min-width:26px}
 .dshk-jobs-btn:disabled{opacity:.4;cursor:default}
@@ -7264,13 +7259,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 生命周期：关标签仅停流不关浏览器（空闲 10 分钟自动优雅关，登录态保留在
     // 专用 profile，重开无损）。
 
-    // 关页签守卫（纯函数，render-check 直调）：agent 活动页（●）的 ✕ 需人工确认。
-    // 为什么拦：页关闭后页面内状态（表单/SPA 状态/滚动）不可恢复，agent 只能按 URL
-    // 重走；且 agent 无事件通道，被关了也不知是谁关的、为何失败——误触代价不成比例
-    function tabCloseConfirm(page, confirmFn, t) {
-      if (!page || page.active !== true) return true;
-      return confirmFn(t("browserCloseAgentConfirm")) === true;
-    }
+    // 关页签即关（无确认，用户定稿）：「agent 活动页」的宿主识别与实际操作页常对
+    // 不上，据此弹「agent 在用」确认只会误拦；agent 被关页后按 URL 重走即可
 
     function BrowserPanel({ active }) {
       const [state, setState] = react.useState({ running: false, launching: false, pages: [], activeId: null, viewId: null });
@@ -7544,7 +7534,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
       return jsxRuntime.jsxs(jsxRuntime.Fragment, {
         children: [
-          // 页签条：高亮=观察页；●=agent 正在此页操作；× 关页签；＋ 新页签
+          // 页签条：高亮=观察页；× 关页签（直关无确认）；＋ 新页签
           jsxRuntime.jsx("div", {
             className: "dshk-brw-tabrow",
             children: jsxRuntime.jsxs("span", {
@@ -7553,10 +7543,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 (state.pages ?? []).map((p) =>
                   jsxRuntime.jsxs("span", {
                     className: `dshk-tab${p.viewed ? " dshk-tab-on" : ""}`,
-                    title: `${p.url}${p.active ? ` · ${t("browserAgentPage")}` : ""}`,
+                    title: p.url,
                     onClick: () => sendInput({ t: "activate", tabId: p.tabId }),
                     children: [
-                      p.active ? jsxRuntime.jsx("span", { className: "dshk-tab-dot", title: t("browserAgentPage") }) : null,
                       jsxRuntime.jsx("span", { className: "dshk-tab-label", children: tabLabel(p) }),
                       jsxRuntime.jsx("button", {
                         type: "button",
@@ -7565,7 +7554,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                         title: t("browserCloseTab"),
                         onClick: (e) => {
                           e.stopPropagation();
-                          if (!tabCloseConfirm(p, (msg) => window.confirm(msg), t)) return;
                           sendInput({ t: "closeTab", tabId: p.tabId });
                         },
                         children: "✕",
