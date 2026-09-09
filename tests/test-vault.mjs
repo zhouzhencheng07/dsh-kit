@@ -130,16 +130,6 @@ await test('vaultSearchSummary：空结果提示', () => {
   assert.ok(vaultSearchSummary('xx', []).includes('未找到'))
 })
 
-await test('ensureAgentsMd：首次生成约定文件，再次不覆盖', async () => {
-  await scanner.ensureAgentsMd()
-  const file = path.join(root, 'AGENTS.md')
-  const first = fs.readFileSync(file, 'utf8')
-  assert.ok(first.includes('一题一页'))
-  fs.writeFileSync(file, '自定义内容', 'utf8')
-  await scanner.ensureAgentsMd()
-  assert.equal(fs.readFileSync(file, 'utf8'), '自定义内容')
-})
-
 await test('root：未配置/不存在回 null', async () => {
   assert.equal(new VaultScanner(() => '').root(), null)
   assert.equal(new VaultScanner(() => 'D:/no/such/dir').root(), null)

@@ -69,7 +69,8 @@ import { BrowserService } from './browser.ts'
 import { loadToolsModule, buildBrowserTools } from './browser-tools.ts'
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from './schedule.ts'
 import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton, defaultVaultRoot, buildVaultTools } from './vault.ts'
-import { commitVault, ensureVaultGit, isInsideVault } from './vault-git.ts'
+import { commitVault, ensureVaultGit } from './vault-git.ts'
+import { defaultSkillsDir, writeVaultSkill } from './vault-skill.ts'
 import { sameOrigin } from './web-guard.ts'
 import { recycleDelete, recycleDeleteBatch } from './recycle.ts'
 
@@ -533,10 +534,12 @@ export async function apply(ctx: KitCtx): Promise<void> {
     const root = configured === '' ? defaultVaultRoot() : configured
     if (root === lastVaultRoot) return
     lastVaultRoot = root
-    // 骨架补种后做 git 初始存档（无 git / 已是仓库自动跳过，见 vault-git.ts）
+    // 骨架补种后做 git 初始存档（无 git / 已是仓库自动跳过，见 vault-git.ts），
+    // 再重写知识库使用技能（根路径随设置更新，见 vault-skill.ts）
     void ensureVaultSkeleton(root)
       .catch(() => {})
       .then(() => ensureVaultGit(root))
+      .then(() => writeVaultSkill(defaultSkillsDir(), root))
   }
   /** setSource/onChange 钩子：settings 首次就绪时触发网关启用位检查（此时 readSettings
    *  才读到真实值）；注意 onSettingsReady 在 webServer 注入回填前是空函数——如果注入
@@ -695,25 +698,14 @@ export async function apply(ctx: KitCtx): Promise<void> {
     }
   })
 
-  // ── 知识库 git 存档（src/vault-git.ts）：agent 编辑工具落盘前存一次 ──
-  //   宿主 fs 工具的 write/edit 在真正写盘前都过 fs/write-intent、fs/edit-intent
-  //   瀑布（检索类工具无 intent 瀑布，天然不触发）。监听挂在插件 ctx 上——cordis
-  //   子 context 原型继承根事件总线，session 内的派发这里收得到。await 提交完成
-  //   再 next()，保证快照严格先于本次 AI 改动；存档失败静默放行，不阻断编辑。
-  if (typeof ctx.on === 'function') {
-    const vaultEditIntent = (target: unknown, _exec: unknown, next: () => unknown): unknown => {
-      const p = (target as { displayPath?: unknown } | null)?.displayPath
-      if (typeof p === 'string') {
-        const root = vaultScanner.root()
-        if (root !== null && isInsideVault(root, p)) {
-          return commitVault(root, `dsh-kit: agent 编辑前存档（${path.basename(p)}）`).then(() => next())
-        }
-      }
-      return next()
-    }
-    ctx.on('fs/write-intent', vaultEditIntent)
-    ctx.on('fs/edit-intent', vaultEditIntent)
-  }
+  // ── 知识库 git 存档（src/vault-git.ts）：三时机全不拦 agent ──
+  //   初始存档（建库时）+ 人工保存后（vault/write）+ 删除后（delete 端点）。
+  //   原第四时机「agent 编辑工具落盘前拦 fs/write-intent、fs/edit-intent 瀑布」
+  //   已退役（用户定稿 2026-09-09）：实测本宿主该瀑布对 profile 插件不可达
+  //   （fs/observed 的 emit 能到、write-intent 的 waterfall 到不了，global 监听
+  //   同样收不到），且拦截语义复杂、随宿主升级难维护——agent 的版本管理改由知识
+  //   库技能教会的 git -C add/commit 承担（src/vault-skill.ts，trackVaultRoot 处
+  //   随 vaultRoot 变化重写）。恢复点语义见 .agents/docs/vault-git-archive.md。
 
   // webServer 可能在本插件 apply 之后才挂载，用动态注入等它就绪
   ctx.inject(['webServer', 'credentials'], (webCtx: KitWebCtx) => {
@@ -2775,9 +2767,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
         const root = vaultGuard(res)
         if (root === null) return
         void vaultScanner
-          .ensureAgentsMd()
-          .catch(() => {})
-          .then(() => vaultScanner.scan())
+          .scan()
           .then((index) => vaultJson(res, 200, index ?? { root: null, spaces: [], pages: [] }))
           .catch((error) => vaultJson(res, 500, { error: error instanceof Error ? error.message : String(error) }))
       })
