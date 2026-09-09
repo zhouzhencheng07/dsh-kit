@@ -344,6 +344,31 @@ window.__ModuleLoader__.load({
     // 判定链任何一环不命中都放行官方。
     let chatPreviewHook = null;
 
+    // ── M4 会话→笔记（用户定稿 2026-09-09）：vault 路径点击直达知识库标签 ──
+    // vault root 的客户端缓存：拦截器路由判定用（vault 内路径开知识库标签而非
+    // 文件预览，且不受 chatOpenFilePreview 门控——互通是知识库本体能力）。
+    // VaultRootView 每次拉索引同步刷新；从未开过知识库时点击现取一次（索引端
+    // 点宿主侧有 mtime 缓存），失败按无 vault 处理走原行为。vaultOpenRequest：
+    // 坞收起时 VaultRootView 未挂载、open 事件没人听——请求先落地，挂载后消费。
+    let vaultRootHint = null;
+    let vaultRootHintFetching = null;
+    let vaultOpenRequest = null;
+    function ensureVaultRootHint() {
+      if (vaultRootHint !== null) return Promise.resolve(vaultRootHint);
+      if (vaultRootHintFetching === null) {
+        vaultRootHintFetching = schedFetch("/dsh-kit/vault/index")
+          .then((body) => {
+            vaultRootHint = body && typeof body.root === "string" && body.root !== "" ? body.root : null;
+            return vaultRootHint;
+          })
+          .catch(() => null)
+          .finally(() => {
+            vaultRootHintFetching = null;
+          });
+      }
+      return vaultRootHintFetching;
+    }
+
     /** title 是否为可接管路径：盘符/UNC/根斜杠绝对路径，或含分隔符的相对路径 */
     function isChatOpenPathish(title) {
       return (
@@ -383,13 +408,14 @@ window.__ModuleLoader__.load({
 
     /** document capture：开启配置后接管官方对话区文件打开按钮的点击。
      *  两种形态：① markdown 内联代码与「产物文件」chips → button[title=路径]；
-     *  ② read/write/edit 工具行（ui-tool ToolRow）→ button[class*=_fileLink]，
+     *  ② read/write/edit 工具行（ui-tool ToolRow）→ button[class*="_fileLink"]，
      *     无 title，按钮文本即工具 path/file_path 参数按 cwd 相对化的路径
-     *     （relativizeToCwd 剥掉的前缀由 resolveChatOpenPath 拼回，语义还原）。 */
+     *     （relativizeToCwd 剥掉的前缀由 resolveChatOpenPath 拼回，语义还原）。
+     *  vault 内路径优先路由到知识库标签（M4 会话→笔记），见尾部分支。 */
     function onChatOpenFileClick(ev) {
       if (!ev.isTrusted) return;
       const hook = chatPreviewHook;
-      if (!hook || !hook.ready) return;
+      if (!hook || !(hook.ready || hook.vaultOn)) return;
       if (!(ev.target instanceof Element)) return;
       const btn =
         ev.target.closest("button[title]") || ev.target.closest('button[class*="_fileLink"]');
@@ -417,9 +443,32 @@ window.__ModuleLoader__.load({
         const t2 = path.startsWith("\\\\") ? path : path.replace(/^[\\/](?=[A-Za-z]:)/, "");
         if (!/^[A-Za-z]:[\\/]/.test(t2) && !t2.startsWith("\\\\")) return;
       }
+      const resolved = resolveChatOpenPath(hook.cwd, path);
+      // 知识库优先路由（M4 会话→笔记）：vault 内路径的归宿是知识库标签的
+      // WYSIWYG 编辑器，不是文件预览。preventDefault 只在两条路都有着落时才
+      // 做（root 未缓存走异步判定时必须 hook.ready 兜底预览，否则吞掉官方
+      // 点击无法恢复）
+      if (hook.vaultOn && (vaultRootHint !== null || hook.ready)) {
+        if (vaultRootHint !== null && isPathInsideVaultRoot(vaultRootHint, resolved)) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          hook.openVaultPage(resolved);
+          return;
+        }
+        if (vaultRootHint === null && hook.ready) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          void ensureVaultRootHint().then((r) => {
+            if (r !== null && isPathInsideVaultRoot(r, resolved)) hook.openVaultPage(resolved);
+            else hook.openPreview(resolved);
+          });
+          return;
+        }
+      }
+      if (!hook.ready) return; // 预览接管未开启：放行官方（系统默认程序打开）
       ev.preventDefault();
       ev.stopPropagation();
-      hook.openPreview(resolveChatOpenPath(hook.cwd, path));
+      hook.openPreview(resolved);
     }
 
     // ─────────── 对话 @ 引用（文件树 → 输入框）───────────
@@ -461,6 +510,41 @@ window.__ModuleLoader__.load({
       if (/[\u0000-\u001f\u007f-\u009f"]/u.test(relPath)) return null;
       if (relPath.endsWith("/")) return /\s/u.test(relPath) ? `@"${relPath}` : `@${relPath}`;
       return /\s/u.test(relPath) ? `@"${relPath}"` : `@${relPath}`;
+    }
+
+    /** M4 路由判据：path 是否落在 vault root 内。分隔符归一 + 解 ..；Windows 形
+     *  根（盘符/UNC）大小写不敏感，POSIX 根大小写敏感。path 等于根本身不算内。 */
+    function isPathInsideVaultRoot(root, path) {
+      if (typeof root !== "string" || typeof path !== "string" || root === "" || path === "") return false;
+      const norm = (p) => {
+        const out = [];
+        for (const s of p.split(/[\\/]+/)) {
+          if (s === "" || s === ".") continue;
+          if (s === "..") out.pop();
+          else out.push(s);
+        }
+        return out;
+      };
+      const win = /^[A-Za-z]:[\\/]/.test(root) || root.startsWith("\\\\");
+      const lc = (arr) => (win ? arr.map((s) => s.toLowerCase()) : arr);
+      const r = lc(norm(root));
+      const t = lc(norm(path));
+      if (t.length <= r.length) return false;
+      return r.every((seg, i) => t[i] === seg);
+    }
+
+    /** M4 笔记→会话：「引用到对话」插入文本 = 现有草稿末尾追加（选区转引用块，
+     *  首尾空行剥掉）。纯文本路径而非 @ 芯片：vault 在会话工作区外，官方 @ 引用
+     *  按 cwd 相对语义解析不适用；agent 拿绝对路径走文件工具读，与「文件即接口」
+     *  一致。render-check 直调。 */
+    function vaultCiteText(draft, selText, path) {
+      const base = typeof draft === "string" ? draft : "";
+      const lines = typeof selText === "string" ? selText.replace(/\r\n?/g, "\n").split("\n") : [];
+      while (lines.length > 0 && lines[0].trim() === "") lines.shift();
+      while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
+      const quote = lines.length > 0 ? lines.map((l) => `> ${l}`).join("\n") + "\n\n" : "";
+      const joiner = base !== "" && !base.endsWith("\n") ? "\n" : "";
+      return base + joiner + quote + path + "\n";
     }
 
     // ─────────── 文案 ───────────
@@ -798,7 +882,7 @@ window.__ModuleLoader__.load({
       vaultHistBack: "后退",
       vaultHistFwd: "前进",
       vaultSpaceAll: "全部",
-      vaultSearchPh: "搜索笔记，回车执行",
+      vaultSearchPh: "搜索 wiki 笔记，回车执行",
       vaultSearchEmpty: "无结果",
       vaultSearchFail: "搜索失败：{error}",
       vaultNewAny: "新建页面/目录",
@@ -817,6 +901,9 @@ window.__ModuleLoader__.load({
       vaultPickPage: "从左侧选择一页开始",
       vaultPageGone: "页面不存在（可能已被移动或删除）",
       vaultDelBtn: "删除",
+      vaultCiteBtn: "引用到对话",
+      vaultCited: "已插入对话输入框",
+      vaultCiteUnavailable: "对话输入框未就绪（无会话或不可用）",
       vaultDelConfirm: "确认删除以下页面？（移入回收站；vault 为 git 仓库时自动生成一个提交，可整体撤回）",
       vaultDeleted: "已删除",
       vaultDelFail: "删除失败（文件被占用？已保留）：",
@@ -1276,7 +1363,7 @@ window.__ModuleLoader__.load({
       vaultHistBack: "Back",
       vaultHistFwd: "Forward",
       vaultSpaceAll: "All",
-      vaultSearchPh: "Search notes, Enter to run",
+      vaultSearchPh: "Search wiki notes, Enter to run",
       vaultSearchEmpty: "No results",
       vaultSearchFail: "Search failed: {error}",
       vaultNewAny: "New page/folder",
@@ -1295,6 +1382,9 @@ window.__ModuleLoader__.load({
       vaultPickPage: "Pick a page on the left to start",
       vaultPageGone: "Page not found (it may have been moved or deleted)",
       vaultDelBtn: "Delete",
+      vaultCiteBtn: "Cite to chat",
+      vaultCited: "Inserted into composer",
+      vaultCiteUnavailable: "Composer is not ready (no active session)",
       vaultDelConfirm: "Delete these pages? (Moved to recycle bin; if the vault is a git repo one commit is created so this is fully revertible)",
       vaultDeleted: "Deleted",
       vaultDelFail: "Delete failed (file locked? kept):",
@@ -8233,6 +8323,19 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [pendingAnchor, setPendingAnchor] = react.useState("");
       const rteHostRef = react.useRef(null);
       const rteRef = react.useRef(null);
+      // M4 笔记→会话：面板根 ref（引用按钮取选区时判定选区落在知识库内）与选区
+      // 镜像——点击页条按钮会塌掉原生选区，selectionchange 即时留底
+      const vaultPaneRef = react.useRef(null);
+      const selTextRef = react.useRef("");
+      react.useEffect(() => {
+        const onSel = () => {
+          const pane = vaultPaneRef.current;
+          const sel = document.getSelection();
+          selTextRef.current = pane && sel && sel.anchorNode && pane.contains(sel.anchorNode) ? String(sel) : "";
+        };
+        document.addEventListener("selectionchange", onSel);
+        return () => document.removeEventListener("selectionchange", onSel);
+      }, []);
 
       const current = hist.idx >= 0 ? hist.stack[hist.idx] : null;
       // root 从 index 响应取而非入参；null = 索引未就绪（加载中/未配置/失败），
@@ -8245,6 +8348,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           const body = await schedFetch("/dsh-kit/vault/index");
           setIndex(body);
           setIndexErr(body && body.root ? "" : "vault-not-configured");
+          // M4：同步给对话拦截器做 vault 路径路由判定
+          vaultRootHint = body && typeof body.root === "string" && body.root !== "" ? body.root : null;
         } catch (error) {
           setIndexErr(String(error?.message ?? error));
         }
@@ -8313,6 +8418,21 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
         doOpen();
       }, [current]);
+
+      // M4 会话→笔记：消费拦截器转来的开页请求。两种时序都接——坞收起时点
+      // 聊天路径，展开后本组件才挂载（vaultOpenRequest 落地等着）；已挂载时走
+      // window 事件
+      react.useEffect(() => {
+        const openReq = () => {
+          if (vaultOpenRequest === null) return;
+          const p = vaultOpenRequest;
+          vaultOpenRequest = null;
+          openPath(p);
+        };
+        openReq();
+        window.addEventListener("dshk-vault-open", openReq);
+        return () => window.removeEventListener("dshk-vault-open", openReq);
+      }, [openPath]);
 
       // 拉当前页内容（打开/冲突回读共用）：拆 frontmatter，body 交给 RTE，
       // docTick bump 驱动重挂载对齐盘上内容；fm/mtime 写入共享 ref（保存语境）
@@ -8910,6 +9030,26 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
         }
       };
+      /** M4 笔记→会话：当前页路径（+ 编辑器选区文本转引用块）追加进对话输入框
+       *  草稿。走官方 InputHub shell（文件树「@到对话」同源），vault 在会话工作
+       *  区外故用纯文本路径而非 @ 芯片（见 vaultCiteText 注释） */
+      const citeToChat = () => {
+        if (current === null) return;
+        const shell = currentComposerShell();
+        if (!shell || typeof shell.actions?.setDraft !== "function") {
+          flashToast(t("vaultCiteUnavailable"));
+          return;
+        }
+        const state = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
+        const draft = state && typeof state.draft === "string" ? state.draft : "";
+        try {
+          shell.actions.setDraft(vaultCiteText(draft, selTextRef.current, current));
+        } catch {
+          flashToast(t("vaultCiteUnavailable"));
+          return;
+        }
+        setToast(t("vaultCited"));
+      };
       /** 编辑态粘贴截图：图片文件上传到 vault attachments/，光标处插入图片节点。
        *  上传前先幂等建 attachments/（/dsh-kit/upload 要求目录已存在，新 vault
        *  首次粘贴不建目录必 400） */
@@ -9106,7 +9246,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
         return jsxRuntime.jsx("div", { className: "dshk-vault", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: `${t("vaultIndexFail")} ${indexErr}` }) });
       }
-      return jsxRuntime.jsxs("div", { className: "dshk-vault", children: [
+      return jsxRuntime.jsxs("div", { className: "dshk-vault", ref: vaultPaneRef, children: [
         jsxRuntime.jsxs("div", { className: "dshk-vault-toolbar", children: [
           jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistBack"), title: t("vaultHistBack"), disabled: hist.idx <= 0, onClick: histBack, children: "←" }),
           jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistFwd"), title: t("vaultHistFwd"), disabled: hist.idx >= hist.stack.length - 1, onClick: histFwd, children: "→" }),
@@ -9170,9 +9310,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     : jsxRuntime.jsxs("div", { className: "dshk-vault-editwrap", onPaste: onEditPaste, children: [
                         jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
                           // 真·所见即所得（用户定稿）：页面恒为 TipTap 富文本编辑器。
-                          // 页条=文档级命令（删除/撤销/重做）+ 脏标记 + 冲突处理；保存
-                          // 全自动（2s 防抖/切页 flush/Ctrl+S），手动按钮已无必要。
-                          // 行内格式在泡泡菜单、块插入在斜杠菜单、表格按钮随选区显隐
+                          // 页条=文档级命令（引用到对话/删除/撤销/重做）+ 脏标记 +
+                          // 冲突处理；保存全自动（2s 防抖/切页 flush/Ctrl+S），手动
+                          // 按钮已无必要。行内格式在泡泡菜单、块插入在斜杠菜单、
+                          // 表格按钮随选区显隐
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", title: t("vaultCiteBtn"), onClick: citeToChat, children: t("vaultCiteBtn") }),
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void deleteCurrent(), children: t("vaultDelBtn") }),
                           jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbUndo"), onClick: () => rteRef.current?.undo(), children: "↶" }),
@@ -9833,6 +9975,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         ready: cfg.chatOpenFilePreview === true && (cfg.fileTreeEnabled || cfg.sourceControlEnabled),
         cwd,
         openPreview: (p) => setKitUi(openPreviewTab(kitUi, p, "chat", false)),
+        // M4 会话→笔记：vault 内路径点击直达知识库标签（不受预览接管门控）
+        vaultOn: cfg.vaultEnabled !== false,
+        openVaultPage: (p) => {
+          setKitUi(openDockTab(kitUi, "vault"));
+          // 先落地再派发：坞收起时 VaultRootView 未挂载，挂载后消费请求
+          vaultOpenRequest = p;
+          window.dispatchEvent(new CustomEvent("dshk-vault-open"));
+        },
       };
 
       // 卸载时清空模块级接管状态，避免拦截器持有失效闭包
