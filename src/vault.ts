@@ -45,10 +45,11 @@ function dshKitDataDir(): string {
   return path.join(home, 'dsh-kit')
 }
 
-/** vault 默认根（vaultRoot 留空时即开即用）：数据目录下的 knowledge 子树，与
- * browser-profile/screenshots 等运行产物不混居 */
+/** vault 默认根（vaultRoot 留空时即开即用）：数据目录下的 vault 子树（2026-09-09
+ *  起与模块同名；原 knowledge 名不做迁移逻辑，存量库用户自理），与
+ *  browser-profile/screenshots 等运行产物不混居 */
 export function defaultVaultRoot(): string {
-  return path.join(dshKitDataDir(), 'knowledge')
+  return path.join(dshKitDataDir(), 'vault')
 }
 
 /**
