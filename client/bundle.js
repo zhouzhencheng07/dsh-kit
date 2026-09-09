@@ -9314,7 +9314,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                           // 冲突处理；保存全自动（2s 防抖/切页 flush/Ctrl+S），手动
                           // 按钮已无必要。行内格式在泡泡菜单、块插入在斜杠菜单、
                           // 表格按钮随选区显隐
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", title: t("vaultCiteBtn"), onClick: citeToChat, children: t("vaultCiteBtn") }),
+                          // onMouseDown preventDefault：按钮默认行为会先塌掉文档
+                          // 选区（镜像随之清空），拦下后选区保留、click 时才取得到
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", title: t("vaultCiteBtn"), onMouseDown: (e) => e.preventDefault(), onClick: citeToChat, children: t("vaultCiteBtn") }),
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void deleteCurrent(), children: t("vaultDelBtn") }),
                           jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
                           jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbUndo"), onClick: () => rteRef.current?.undo(), children: "↶" }),
