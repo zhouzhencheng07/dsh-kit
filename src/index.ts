@@ -68,7 +68,7 @@ import { multipartBoundary, parseMultipart, safeUploadName, dedupeName } from '.
 import { BrowserService } from './browser.ts'
 import { loadToolsModule, buildBrowserTools } from './browser-tools.ts'
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from './schedule.ts'
-import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton, defaultVaultRoot } from './vault.ts'
+import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton, defaultVaultRoot, buildVaultTools } from './vault.ts'
 import { commitVault, ensureVaultGit, isInsideVault } from './vault-git.ts'
 import { sameOrigin } from './web-guard.ts'
 import { recycleDelete, recycleDeleteBatch } from './recycle.ts'
@@ -671,6 +671,27 @@ export async function apply(ctx: KitCtx): Promise<void> {
       return configured === '' ? defaultVaultRoot() : configured
     } catch {
       return ''
+    }
+  })
+
+  // ── 知识库 agent 工具（vault_search）：wiki 区检索，恒开同日程工具 ──
+  //   vaultRoot 未配置由 execute 降级为提示；不做会话启动注入 wiki 地图
+  //   （用户定稿 2026-09-09），agent 按需检索
+  const vaultDefs =
+    scheduleToolsMod && typeof scheduleToolsMod.defineTool === 'function'
+      ? buildVaultTools({ defineTool: scheduleToolsMod.defineTool, scanner: vaultScanner })
+      : null
+  if (!vaultDefs) {
+    console.warn('dsh-kit: dsh-tools 不可达，知识库检索工具未注册（面板不受影响）')
+  }
+  ctx.inject(['settings', 'tools'], (caps: { tools: { register: (def: unknown) => void } }) => {
+    if (!vaultDefs) return
+    for (const def of vaultDefs) {
+      try {
+        caps.tools.register(def)
+      } catch (error) {
+        console.warn(`dsh-kit: 知识库工具注册失败：${error instanceof Error ? error.message : error}`)
+      }
     }
   })
 
@@ -2816,8 +2837,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
         const file = path.join(dir, `${segs[segs.length - 1] ?? ''}.md`)
         if (fs.existsSync(file)) return { exists: true, path: file, mtimeMs: fs.statSync(file).mtimeMs }
         // 建页不种 frontmatter（用户定稿）：创建/修改时间文件系统本身就有属性，
-        // 外部导入的 md 也不会有这字段——frontmatter 留给真正需要语义的页
-        //（archived: true 表示已归档）
+        // 外部导入的 md 也没有该字段——frontmatter 留给真正需要语义的页
         const template = `# ${segs[segs.length - 1] ?? ''}\n\n`
         fs.writeFileSync(file, template, 'utf8')
         return { path: file, mtimeMs: fs.statSync(file).mtimeMs }
