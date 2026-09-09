@@ -289,35 +289,6 @@ export class VaultScanner {
     results.sort((a, b) => b.score - a.score || a.rel.localeCompare(b.rel))
     return { root: index.root ?? '', results: results.slice(0, limit) }
   }
-
-  /** vault 根 AGENTS.md 引导（首次扫描时补种，已存在绝不覆盖） */
-  async ensureAgentsMd(): Promise<void> {
-    const root = this.root()
-    if (root === null) return
-    const target = path.join(root, 'AGENTS.md')
-    try {
-      await fs.promises.access(target)
-      return
-    } catch {
-      // 不存在 → 创建
-    }
-    const template = [
-      '# vault 约定（人机共读）',
-      '',
-      '- 文件是唯一真源：一切内容都是本目录下的 md 文件，无第二存储。',
-      '- 一题一页：一个主题一页；写前先搜索是否已有同类页，重叠则合并。',
-      '- wikilink 用 `[[页面名]]` 引用其它页（按文件名解析，移动不破链）。',
-      '- frontmatter 可省。',
-      '- 二进制（图片/PDF）放 `attachments/`，页面里用相对链接引用。',
-      '- 单页超过约 16KB 考虑拆分或抽象出索引页。',
-      '',
-    ].join('\n')
-    try {
-      await fs.promises.writeFile(target, template, 'utf8')
-    } catch {
-      // 只读盘等场景静默失败，不阻断索引
-    }
-  }
 }
 
 // ── agent 工具（vault_search）───────────────────────────────────────────────
