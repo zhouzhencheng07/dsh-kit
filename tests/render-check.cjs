@@ -62,7 +62,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, tabCloseConfirm, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount };",
+  "return { TreeNode, FileTreePanel, FileContentPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RightDock, DockStub, openPreviewTab, closePreviewTab, openDockTab, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, dockBounds, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount };",
 );
 const harness = new Function("require", wrapper);
 const comps = harness((name) => {
@@ -352,9 +352,8 @@ check("BrowserPanel 未运行态渲染无异常", !!out && typeof out === "objec
 check("BrowserPanel 渲染出带共驾输入处理器的 canvas", !!canvasHost && !!hasInputHandlers);
 comps.setKitUi({ browserOpen: false });
 
-// 7.2.5) 关页签守卫：agent 活动页（●）的 ✕ 走确认（confirm=false 拦下、=true 放行），
-// 非活动页签不确认直接关。预置 stateStore 走运行态渲染（页签条才出现）；
-// 纯函数分支用 seam 导出的 tabCloseConfirm 直调覆盖
+// 7.2.5) 关页签直关（用户定稿 2026-09-10：宿主 active 识别常不准，「agent 在用」
+// 确认与 ● 标识整体退役）——✕ 点击不弹确认
 stateStore.clear();
 stateSeq = 0;
 stateStore.set(0, { running: true, launching: false, pages: [
@@ -365,17 +364,13 @@ callLog = [];
 out = comps.BrowserPanel({ active: true });
 const tabXs = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-tab-x");
 check("BrowserPanel 运行态渲染出页签 ✕（2 个）", tabXs.length === 2);
-let confirmCalls = 0;
-let confirmArg = null;
-global.window.confirm = (msg) => { confirmCalls++; confirmArg = msg; return false; };
-tabXs[0][2].onClick(fakeEvent);
-check("非活动页签 ✕ 不确认直接关", confirmCalls === 0);
-tabXs[1][2].onClick(fakeEvent);
-check("agent 活动页 ✕ 触发确认弹窗（带文案）", confirmCalls === 1 && typeof confirmArg === "string" && confirmArg.length > 0);
-check("tabCloseConfirm 确认放行", comps.tabCloseConfirm({ active: true }, () => true, (k) => k) === true);
-check("tabCloseConfirm 拒绝拦下", comps.tabCloseConfirm({ active: true }, () => false, (k) => k) === false);
-check("tabCloseConfirm 非活动页不确认", comps.tabCloseConfirm({ active: false }, () => { throw new Error("should not confirm"); }, (k) => k) === true);
+const noDot = callLog.every((c) => !(c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-tab-dot")));
+check("页签条不再渲染 agent 活动圆点", noDot);
+global.window.confirm = (msg) => { throw new Error("confirm should never be called") };
+let threw = null;
+try { tabXs[0][2].onClick(fakeEvent); tabXs[1][2].onClick(fakeEvent); } catch (e) { threw = e; }
 global.window.confirm = undefined;
+check("页签 ✕ 直关不弹确认", threw === null);
 
 // 7.2.6) 全部页签关闭后的空态：运行中 0 页显示「没有打开的页面」提示，
 // 不再留无提示的僵尸画面；预置 running + 空 pages
