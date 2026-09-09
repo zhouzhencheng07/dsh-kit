@@ -858,6 +858,36 @@ export async function apply(ctx) {
                     });
                 },
             });
+            // ── 轻量 stat 端点：GET /dsh-kit/stat?path=<绝对文件> ──
+            // 工作区文件标签的外部修改可见性（8aa58d6 vault 语义同款）：只回 mtime
+            // 不读正文，前端轮询发现变化且本地无脏改才重读整页。安全链与 /read 相同
+            // （validateFile：sameOrigin + cwd 子树 + 存在性）
+            const disposeStat = webCtx.webServer.register({
+                kind: 'exact',
+                path: '/dsh-kit/stat',
+                handler: (req, res) => {
+                    const json = (code, obj) => {
+                        res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
+                        res.end(JSON.stringify(obj));
+                    };
+                    if (req.method !== 'GET') {
+                        json(405, { error: 'method not allowed' });
+                        return;
+                    }
+                    const origin = req.headers.origin;
+                    if (typeof origin === 'string' && origin !== '' && !sameOrigin(req)) {
+                        json(403, { error: 'cross-origin denied' });
+                        return;
+                    }
+                    const url = new URL(req.url ?? '/', 'http://dsh-kit.local');
+                    const file = validateFile(url.searchParams.get('path') ?? '');
+                    if (!file.ok) {
+                        json(400, { error: file.message });
+                        return;
+                    }
+                    json(200, { path: file.path, mtimeMs: file.mtimeMs, size: file.size });
+                },
+            });
             // ── 原始字节端点：GET /dsh-kit/raw?path=<绝对文件> ──
             // 二进制透传（PDF 预览用）：扩展名白名单给 content-type，完整流式返回
             // 不截断，支持 Range/206（pdf.js 渐进加载需要）。安全链与 /read 相同；
@@ -3038,6 +3068,7 @@ export async function apply(ctx) {
                 disposeVendor();
                 disposeTree();
                 disposeRead();
+                disposeStat();
                 disposeRaw();
                 disposeWrite();
                 disposeUpload();
