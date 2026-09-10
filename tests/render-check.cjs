@@ -964,6 +964,20 @@ check(
   !src.includes("cfgOpenCodeSession") && !src.includes('"/dsh-kit/opencode-session"'),
 );
 
+// 文件编辑面（2026-09-10 用户实测两条）：① 自动保存提示条去掉（提示条容器与两枚
+// i18n 键都不得再出现）；② CM 宿主走状态化回调 ref——宿主会被 React 换新节点，
+// 元素不进依赖就等于「切 diff 再切回原文一片空白」，另外那个从没挂到 DOM 上的
+// 只读 ref 也一并删掉了；③ 空文件不再落「文件为空」分支（新建的空文件要能写）
+check(
+  "文件编辑面不再有自动保存提示条（.dshk-editbar 与两枚 i18n 键均移除）",
+  !src.includes("dshk-editbar") && !src.includes("editRteHint") && !src.includes("editAutosaveHint"),
+);
+check(
+  "CM 编辑面宿主走状态化回调 ref（切视图能重建，不留悬空实例/死 ref）",
+  src.includes("ref: setCmHost") && !src.includes("readHostRef") && !src.includes("cmHostRef"),
+);
+check("空文本文件不落「文件为空」分支（可编辑）", !src.includes('b.content === null || b.content === ""'));
+
 // React 桩记录到的组件类型必须包含本插件自定义组件名（防 ReferenceError 被忽略后整段缺失）
 const types = new Set(callLog.flatMap(([, t]) => (typeof t === "string" ? [t] : [])));
 // 至少渲染出来 JSX 元素（说明走到 render 而非静默 null）
