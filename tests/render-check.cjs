@@ -977,6 +977,14 @@ check(
   src.includes("ref: setCmHost") && !src.includes("readHostRef") && !src.includes("cmHostRef"),
 );
 check("空文本文件不落「文件为空」分支（可编辑）", !src.includes('b.content === null || b.content === ""'));
+// 语法配色令牌（--dshk-tok-*）挂在 .dshk-cm-scope 上，而 vendor 的 CM6.create 是把
+// 这个类加到 view.dom（.cm-editor）上的——CM6 首次更新会重写自己的 className，那些类
+// 会被抹掉，于是「打开有高亮、一点击/一输入就没色」。所以宿主 div 必须自己带这个类
+// （React 拥有的稳定祖先，配色变量经继承生效）
+check(
+  "CM 宿主自带 dshk-cm-scope（配色变量靠 React 祖先承载，不靠 vendor 加在 view.dom 上的类）",
+  src.includes('"dshk-editarea dshk-cm-host dshk-cm-scope"'),
+);
 
 // React 桩记录到的组件类型必须包含本插件自定义组件名（防 ReferenceError 被忽略后整段缺失）
 const types = new Set(callLog.flatMap(([, t]) => (typeof t === "string" ? [t] : [])));

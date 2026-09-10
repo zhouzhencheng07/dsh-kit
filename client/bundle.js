@@ -6142,7 +6142,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   onState: (s) => setDirtyDot(s.dirty === true),
                 })
               : cmReady
-                ? jsxRuntime.jsx("div", { className: "dshk-editarea dshk-cm-host", ref: setCmHost })
+                ? jsxRuntime.jsx("div", { className: "dshk-editarea dshk-cm-host dshk-cm-scope", ref: setCmHost })
                 : jsxRuntime.jsx("pre", { className: "dshk-pane-pre", children: b.content }),
           ] });
         }
