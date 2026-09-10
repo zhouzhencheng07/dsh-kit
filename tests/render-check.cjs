@@ -71,7 +71,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultStageSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, StagePane, ScheduleIndexView, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openStageTab, closeStageTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, toggleSchedEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, stageAlive, stageBounds, stageWidthFor, stageIsPinned, stageWidthCommit, stagePinToggle, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, GuideBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, isPathInsideVaultRoot, vaultCiteText };",
+  "return { vaultSideSlot, vaultStageSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, StagePane, ScheduleIndexView, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openStageTab, closeStageTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, toggleSchedEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, stageAlive, stageBounds, stageWidthFor, stageIsPinned, stageWidthCommit, stagePinToggle, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -85,7 +85,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "StagePane", "ScheduleIndexView", "RteEditor", "VaultPagePane", "openStageTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "toggleSchedEntry", "stageBounds", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTakeoverError", "monitorRecoveredTail", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "GuideBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "isPathInsideVaultRoot", "vaultCiteText"];
+const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "StagePane", "ScheduleIndexView", "RteEditor", "VaultPagePane", "openStageTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "toggleSchedEntry", "stageBounds", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTakeoverError", "monitorRecoveredTail", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -604,8 +604,8 @@ check("FilePaneBody 渲染无异常（文档签条 + FileEditorPane 实例）", 
 comps.setKitUi({ files: [], activeFile: null });
 callLog = [];
 out = comps.FilePaneBody({});
-const fpEmpty = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-rbpane-hint");
-check("FilePaneBody 0 文件渲染空态提示", !!out && !!fpEmpty);
+const fpEmpty = callLog.find((c) => (c[0] === "jsx") && c[2] && (c[2].className === "dshk-rbpane-hint" || c[2].className === "dshk-rbguide"));
+check("FilePaneBody 0 文件无空态（最后一页关掉连官方签一起收，用户定稿 2026-09-11）", !!out && !fpEmpty);
 callLog = [];
 out = comps.VaultPaneBody({});
 const vpHost = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-vault-stagehost");
@@ -621,11 +621,9 @@ out = comps.BrowserPaneBody({});
 const bpElemRb = callLog.find((c) => c[1] === comps.BrowserPanel && c[2] && c[2].active === true);
 check("BrowserPaneBody 挂 BrowserPanel（active 恒真：pane 显示即在看）", !!out && !!bpElemRb);
 callLog = [];
-out = comps.GuideBody({});
-const guideItems = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-rbguide-item");
-const guideLabels = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-rbguide-label").map((c) => c[2].children);
-check("GuideBody 渲染功能清单（cfg 默认全开=3 项）", !!out && guideItems.length === 3);
-check("GuideBody 清单不含知识库（被动签同文件，入口在左侧边栏）", !guideLabels.some((s) => ["知识库", "Knowledge base"].includes(s)));
+let rbCloseOk = true;
+try { comps.closeRightbarTab("file"); } catch { rbCloseOk = false; }
+check("closeRightbarTab 服务未就绪时静默不抛", rbCloseOk);
 callLog = [];
 out = comps.HeaderTimer({});
 const timerChip = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-htimer-chip");
