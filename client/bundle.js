@@ -860,8 +860,6 @@ window.__ModuleLoader__.load({
       editCancel: "取消",
       editSaved: "已保存",
       editFail: "保存失败",
-      editRteHint: "自动保存已开启：编辑 2 秒后落盘，Ctrl+S 立即保存",
-      editAutosaveHint: "自动保存已开启：停止输入 2 秒后落盘，Ctrl+S 立即保存",
       editConflict: "文件在打开后被外部修改，重新加载最新版本？",
       diffFail: "diff 加载失败",
       diffEmpty: "（无未暂存差异）",
@@ -1332,8 +1330,6 @@ window.__ModuleLoader__.load({
       editCancel: "Cancel",
       editSaved: "Saved",
       editFail: "Save failed",
-      editRteHint: "Autosave on: changes save 2s after typing; Ctrl+S saves now",
-      editAutosaveHint: "Autosave on: changes save 2s after typing stops; Ctrl+S saves now",
       editConflict: "File changed on disk since it was loaded. Reload the latest version?",
       contentLoading: "Loading…",
       contentBinary: "Binary file, preview unavailable",
@@ -2401,7 +2397,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 .dshk-diff-meta{color:var(--dsw-alias-label-tertiary)}
 /* 编辑模式 */
 .dshk-edithost{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:8px;padding:4px 10px 12px}
-.dshk-editbar{display:flex;align-items:center;gap:6px}
 .dshk-editarea{flex:1 1 auto;min-height:0;width:100%;box-sizing:border-box;resize:none;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;padding:8px 10px;white-space:pre;overflow:auto}
 .dshk-editarea:focus-visible{border-color:var(--dsw-alias-brand-primary);outline:none}
 .dshk-btn-save{appearance:none;border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:#fff;border-radius:6px;font:inherit;font-size:12px;line-height:1;padding:5px 10px;cursor:pointer}
@@ -5550,7 +5545,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [textDraft, setTextDraft] = react.useState("");
       const [textSaved, setTextSaved] = react.useState("");
       const [saving, setSaving] = react.useState(false);
-      const cmHostRef = react.useRef(null);
+      // CM 宿主元素进 state（回调 ref，不是 ref.current）：宿主随视图切换（原文 ⇄
+      // diff）会被 React 换成新节点，元素本身必须是 effect 依赖，编辑器才会重建到
+      // 新宿主上——否则旧实例留在已摘除的节点上，切回来是一片空白（2026-09-10 GUI
+      // 实测抓出）
+      const [cmHost, setCmHost] = react.useState(null);
       const conflictRef = react.useRef(conflict);
       conflictRef.current = conflict;
       const [cmReady, setCmReady] = react.useState(false);
@@ -5570,7 +5569,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const pdfHostRef = react.useRef(null);
       // 标题栏页码指示器槽位（React 只给挂载点，内容归 mountPdfViewer 命令式管理）
       const pdfIndicatorRef = react.useRef(null);
-      const readHostRef = react.useRef(null);
       react.useEffect(() => {
         ensureCmLib().then(() => setCmReady(true)).catch(() => {});
         return undefined;
@@ -5725,12 +5723,18 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         setTextSaved(state.body.content ?? "");
         return undefined;
       }, [cmReady, isMd, ready, path, reloadNonce, state.body?.content]);
+      // CM 编辑面：文档变更 2s 防抖落盘；Ctrl+S 立即；卸载保底 flush。
+      // 截断文件（>512KB）只读——保存会丢 512KB 之后的内容，同一个宿主分两种模式
+      // （此前只读那份用另一个 ref 且从没挂到 DOM 上，截断文件等于空白编辑器）
       react.useEffect(() => {
-        const host = cmHostRef.current;
-        if (!cmReady || isMd || !host || !ready || state.body?.truncated) return undefined;
+        if (!cmReady || isMd || !cmHost || !ready) return undefined;
+        const readOnly = state.body?.truncated === true;
         let timer = null;
-        let mounted = true;
-        const h = window.CM6.create(host, { doc: state.body.content ?? "", readOnly: false, language: extOf(path) });
+        const h = window.CM6.create(cmHost, { doc: state.body.content ?? "", readOnly, language: extOf(path) });
+        if (readOnly) {
+          // 只读：不装自动保存/Ctrl+S（无改动可存）
+          return () => h.destroy();
+        }
         h.onDocChanged((text) => {
           setTextDraft(text);
           if (timer) clearTimeout(timer);
@@ -5758,9 +5762,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             void flushNow();
           }
         };
-        host.addEventListener("keydown", onKeyDown, true);
+        cmHost.addEventListener("keydown", onKeyDown, true);
         return () => {
-          mounted = false;
           if (timer) {
             clearTimeout(timer);
             // 卸载保底：防抖未落盘的改动尽力写一次（冲突放弃）
@@ -5768,10 +5771,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               void saveText(textDraftRef.current, "auto");
             }
           }
-          host.removeEventListener("keydown", onKeyDown, true);
+          cmHost.removeEventListener("keydown", onKeyDown, true);
           h.destroy();
         };
-      }, [cmReady, isMd, ready, path, reloadNonce, state.body?.truncated]);
+      }, [cmHost, cmReady, isMd, ready, path, reloadNonce, state.body?.truncated]);
       // CM 闭包用的最新草稿镜像
       const textDraftRef = react.useRef(textDraft);
       textDraftRef.current = textDraft;
@@ -5908,13 +5911,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           alive = false;
         };
       }, [isDoc, state.phase, path, reloadNonce]);
-      // 只读 CM：截断文件不可编辑（保存会丢 512KB 之后的内容），退化只读
-      react.useEffect(() => {
-        const host = readHostRef.current;
-        if (!cmReady || !host || isMd || mode !== "text" || !ready || !state.body?.truncated) return undefined;
-        const h = window.CM6.create(host, { doc: state.body.content ?? "", readOnly: true, language: extOf(path) });
-        return () => h.destroy();
-      }, [cmReady, isMd, mode, path, ready, state.body?.content, state.body?.truncated]);
+      // 只读 CM 那份已并入上面（同一个宿主按 truncated 决定 readOnly）
 
       /** diff 视图：优先全文件着色（hunk 套回完整新像，删除红/新增绿）；
        *  截断大文件或 hunk 对不上时回退原始 patch 渲染。新像来源两分支——
@@ -6023,14 +6020,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return body;
       };
 
-      /** 编辑面工具条：脏点 + 冲突条（md 与文本共用语义） */
-      const editable = ready && !state.body?.truncated;
-      const renderEditbar = () =>
-        jsxRuntime.jsxs("div", { className: "dshk-editbar", children: [
-          jsxRuntime.jsx("span", { className: "dshk-status", children: isMd ? t("editRteHint") : t("editAutosaveHint") }),
-          jsxRuntime.jsx("span", { className: "dshk-spring" }),
-          dirtyDot || textDraft !== textSaved ? jsxRuntime.jsx("span", { className: "dshk-vault-dirtydot", title: t("vaultUnsaved"), children: "●" }) : null,
-        ] });
       const renderConflictbar = () =>
         conflict !== null
           ? jsxRuntime.jsxs("div", { className: "dshk-vault-conflict", children: [
@@ -6132,32 +6121,28 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           });
         } else if (b.binary) {
           body = jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentBinary") });
-        } else if (b.content === null || b.content === "") {
+        } else if (b.content === null) {
+          // 空文件（content === ""）不落这里：那是个能写的目标，给编辑器；只有
+          // host 给不出文本（content 为 null）才提示空内容
           body = jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentEmpty") });
         } else {
           body = jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
             b.truncated ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentTruncated") }) : null,
             renderConflictbar(),
             isMd
-              ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-                  renderEditbar(),
-                  jsxRuntime.jsx(RteEditor, {
-                    rteRef,
-                    ctlRef: rteCtlRef,
-                    docKey: path,
-                    docTick,
-                    initialMd: mdParts?.rest.trimStart() ?? "",
-                    placeholder: t("rtePlaceholder"),
-                    labels: { codeCopy: t("vaultCopy"), codeCopied: t("vaultCopied") },
-                    onSave: saveMd,
-                    onState: (s) => setDirtyDot(s.dirty === true),
-                  }),
-                ] })
+              ? jsxRuntime.jsx(RteEditor, {
+                  rteRef,
+                  ctlRef: rteCtlRef,
+                  docKey: path,
+                  docTick,
+                  initialMd: mdParts?.rest.trimStart() ?? "",
+                  placeholder: t("rtePlaceholder"),
+                  labels: { codeCopy: t("vaultCopy"), codeCopied: t("vaultCopied") },
+                  onSave: saveMd,
+                  onState: (s) => setDirtyDot(s.dirty === true),
+                })
               : cmReady
-                ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-                    renderEditbar(),
-                    jsxRuntime.jsx("div", { className: "dshk-editarea dshk-cm-host", ref: cmHostRef }),
-                  ] })
+                ? jsxRuntime.jsx("div", { className: "dshk-editarea dshk-cm-host", ref: setCmHost })
                 : jsxRuntime.jsx("pre", { className: "dshk-pane-pre", children: b.content }),
           ] });
         }
@@ -6171,6 +6156,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               // 标题行显示绝对路径（文件名已由页签 chip 承担，重复信息去掉；
               // 用户定稿 2026-09-05：同仓多目录/同名校验场景下绝对路径更有用）
               jsxRuntime.jsx("span", { className: "dshk-title", children: path }),
+              // 未落盘脏点：跟在标题后（此前在编辑面提示条里，2026-09-10 用户要求
+              // 去掉自动保存提示——提示没了，脏点挪过来还不丢这个信息）
+              dirtyDot || textDraft !== textSaved
+                ? jsxRuntime.jsx("span", { className: "dshk-vault-dirtydot", title: t("vaultUnsaved"), children: "●" })
+                : null,
               jsxRuntime.jsx("span", { className: "dshk-spring" }),
               // PDF 页码指示器：挂标题栏固定区不遮内容；文档加载失败时不给槽位
               isPdf && state.phase === "ready" && !pdfError
