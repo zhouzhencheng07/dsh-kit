@@ -8221,6 +8221,34 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return best;
     }
 
+    /** ① 接管判据（纯函数）：可接管的错误 = 对话「最后一条事件」的 turn-error——
+     *  错误的 seq 必须等于全部节点的最大 seq。只按 handledRef 记账不看点位会让
+     *  历史错误被重新接管：429 失败后人工/自动续跑成功、对话正常收尾，那条历史
+     *  turn-error 仍在，切会话回来（记账清空）就误判成当前失败再发一轮「继续」。
+     *  用 max-seq 而非「末条节点恰好是 turn-error」：宿主在尾部追加记账类节点时
+     *  后者会漏判。无 seq 字段时（理论不出现）保守不接管。 */
+    function monitorTakeoverError(nodes) {
+      let lastErr = null;
+      let maxSeq = null;
+      for (const n of nodes ?? []) {
+        if (!n) continue;
+        if (typeof n.seq === "number" && (maxSeq === null || n.seq > maxSeq)) maxSeq = n.seq;
+        if (n.kind === "turn-error") lastErr = n;
+      }
+      if (!lastErr || maxSeq === null || lastErr.seq !== maxSeq) return null;
+      return lastErr;
+    }
+    /** ③ 恢复判定（纯函数）：回合收尾的最后一个节点不是 turn-error（失败收尾）、
+     *  也不是 interrupted 的 assistant（监视器自己 cancel 停的），就算一次正常
+     *  完成的回合。空对话不算恢复。 */
+    function monitorRecoveredTail(nodes) {
+      const last = (nodes ?? [])[(nodes ?? []).length - 1];
+      if (!last) return false;
+      if (last.kind === "turn-error") return false;
+      if (last.kind === "assistant" && last.interrupted === true) return false;
+      return true;
+    }
+
     function MonitorLine(props) {
       const { useChat, useSession, useInput, inputActions, sessionId } = props;
       react.useSyncExternalStore(subscribeLocale, getLocaleVersion);
@@ -8293,13 +8321,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         nodesSeqRef.current = seq;
         nodesTextRef.current = text;
       }, [nodes]);
-      // ① 终态失败检测：空闲 + 出现未接管的可重试 turn-error → 计划等待
+      // ① 终态失败检测：空闲 + 「最后一条事件」是未接管的可重试 turn-error → 计划
+      //    等待（历史错误不接管，见 monitorTakeoverError 注释）
       react.useEffect(() => {
         if (!cfg.monitorEnabled || running || !inputActions) return;
-        let lastErr = null;
-        for (const n of nodes) {
-          if (n && n.kind === "turn-error") lastErr = n;
-        }
+        const lastErr = monitorTakeoverError(nodes);
         if (!lastErr) return;
         const key = String(lastErr.seq);
         if (handledRef.current.has(key)) return;
@@ -8311,17 +8337,27 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
         setPlan({ phase: "waiting", fireAt: Date.now() + cfg.monitorWaitMs, code: lastErr.code, seq: lastErr.seq, reason: "error" });
       }, [nodes, running, cfg.monitorEnabled, cfg.monitorMaxAuto, cfg.monitorWaitMs, autoCount, inputActions]);
-      // 成功推进即重置连续计数：空闲且最后节点是「未被打断的」assistant message
-      // （回合正常收尾）；监视器停止的回合带 interrupted 标记，不算成功。
-      // "继续"落地产生的是 user message，不会误重置
+      // ③ 恢复清零（回合边界判定）：盯 running 由 true→false 的那次收尾，末尾形状
+      //    按 monitorRecoveredTail 判——正常完成即连续计数清零、capped 一并解除。
+      //    旧实现要求「末条节点必须是未打断的 assistant」，工具收尾/宿主尾部记账
+      //    节点都会漏判，计数跨健康回合一路累到 capped，之后再不自动续跑。收尾
+      //    节点可能晚 running 一拍落地，延迟一拍再读 nodesRef；不做 cleanup——
+      //    重复判定幂等（setAutoCount(0) 恒安全），transition 只会排一个
+      const nodesRef = react.useRef(nodes);
+      nodesRef.current = nodes;
+      const prevRunningRef = react.useRef(false);
       react.useEffect(() => {
-        if (running || (autoCount === 0 && plan?.phase !== "capped") || nodes.length === 0) return;
-        const last = nodes[nodes.length - 1];
-        if (last && last.kind === "assistant" && last.interrupted !== true) {
-          setAutoCount(0);
-          if (plan?.phase === "capped") setPlan(null);
-        }
-      }, [nodes, running, autoCount, plan]);
+        const was = prevRunningRef.current;
+        prevRunningRef.current = running;
+        if (!was || running) return;
+        if (autoCount === 0 && plan?.phase !== "capped") return;
+        setTimeout(() => {
+          if (monitorRecoveredTail(nodesRef.current)) {
+            setAutoCount(0);
+            setPlan((p) => (p?.phase === "capped" ? null : p));
+          }
+        }, 50);
+      }, [running, autoCount, plan]);
       // ② 死循环扫描：仅回合运行中轮询（空闲不扫——历史文本不在观察面）。双数据
       //    源取其一：partial（流式中，若宿主广播）优先；否则最新未中断 assistant
       //    节点（步骤落地即全长出现，落地后立扫一次——快速流整段不可分时也有

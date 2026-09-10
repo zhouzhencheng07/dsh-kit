@@ -71,7 +71,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultStageSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, SchedEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, StagePane, SidebarFooterActions, ScheduleIndexView, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openStageTab, closeStageTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, toggleSchedEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, stageAlive, stageBounds, stageWidthFor, stageIsPinned, stageWidthCommit, stagePinToggle, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, isPathInsideVaultRoot, vaultCiteText };",
+  "return { vaultSideSlot, vaultStageSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, SchedEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, StagePane, SidebarFooterActions, ScheduleIndexView, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openStageTab, closeStageTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, toggleSchedEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, stageAlive, stageBounds, stageWidthFor, stageIsPinned, stageWidthCommit, stagePinToggle, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, isPathInsideVaultRoot, vaultCiteText };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -85,7 +85,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "SchedEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "StagePane", "SidebarFooterActions", "ScheduleIndexView", "RteEditor", "VaultPagePane", "openStageTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "toggleSchedEntry", "stageBounds", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "isPathInsideVaultRoot", "vaultCiteText"];
+const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "SchedEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "StagePane", "SidebarFooterActions", "ScheduleIndexView", "RteEditor", "VaultPagePane", "openStageTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "toggleSchedEntry", "stageBounds", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTakeoverError", "monitorRecoveredTail", "isPathInsideVaultRoot", "vaultCiteText"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -989,6 +989,33 @@ check("短于两倍最短块长的文本不误报", comps.monitorTailRepeatCount
 check("短分隔符块（<8字符）不误报", comps.monitorTailRepeatCount("---\n---\n---\n---\n") < 3);
 check("重复不在尾部不算（历史重复已翻篇）", comps.monitorTailRepeatCount(rep("重复片段测样", 5) + "之后是完全不同的收尾内容，正常结束。") < 3);
 check("空串安全", comps.monitorTailRepeatCount("") === 1);
+
+// 10c) 监视条接管/恢复判据（F1/F3 修复的纯函数）：
+//      F1——429 历史错误 + 后续成功收尾的会话，错误不再是最后一条事件，不得接管
+//      （旧实现只按 seq 记账，切会话/刷新后会把这条历史错误当当前失败再发「继续」）
+{
+  const hist = [
+    { kind: "user", seq: 1 },
+    { kind: "assistant", seq: 2 },
+    { kind: "turn-error", seq: 3, code: "RATE_LIMIT" },
+    { kind: "user", seq: 4 }, // 续跑「继续」
+    { kind: "assistant", seq: 5 }, // 正常收尾
+  ];
+  check("F1 历史错误+后续成功：不接管", comps.monitorTakeoverError(hist) === null);
+  check("F1 错误仍在末尾：照常接管", comps.monitorTakeoverError(hist.slice(0, 3))?.code === "RATE_LIMIT");
+  check("F1 无错误：null", comps.monitorTakeoverError([{ kind: "assistant", seq: 9 }]) === null);
+  check("F1 空对话：null", comps.monitorTakeoverError([]) === null);
+  // 宿主若在尾部追加记账类节点，「末条节点恰好是 turn-error」会漏判——max-seq 判据下
+  // 错误仍并列最大 → 接管；错误 seq 落后于记账节点 → 不接管
+  check("F1 尾部记账节点与错误同 seq：仍接管", comps.monitorTakeoverError([{ kind: "turn-error", seq: 7, code: "RATE_LIMIT" }, { kind: "usage", seq: 7 }])?.code === "RATE_LIMIT");
+  check("F1 错误 seq 落后尾部节点：不接管", comps.monitorTakeoverError([{ kind: "turn-error", seq: 7, code: "RATE_LIMIT" }, { kind: "usage", seq: 8 }]) === null);
+  // F3——恢复判定：收尾不是 turn-error、也不是监视器停止的 interrupted assistant
+  check("F3 assistant 正常收尾：算恢复", comps.monitorRecoveredTail([{ kind: "user", seq: 1 }, { kind: "assistant", seq: 2 }]) === true);
+  check("F3 工具/记账节点收尾：也算恢复（旧实现漏判的形状）", comps.monitorRecoveredTail([{ kind: "assistant", seq: 2 }, { kind: "tool", seq: 3 }]) === true);
+  check("F3 turn-error 收尾：不算恢复", comps.monitorRecoveredTail([{ kind: "assistant", seq: 2 }, { kind: "turn-error", seq: 3, code: "RATE_LIMIT" }]) === false);
+  check("F3 监视器停止（interrupted）：不算恢复", comps.monitorRecoveredTail([{ kind: "assistant", seq: 2, interrupted: true }]) === false);
+  check("F3 空对话：不算恢复", comps.monitorRecoveredTail([]) === false);
+}
 
 // 9) KitConfigCard（插件设置卡）：ready 快照 + 覆盖态
 callLog = [];
