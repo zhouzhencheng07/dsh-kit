@@ -509,6 +509,10 @@ export async function apply(ctx: KitCtx): Promise<void> {
     terminalShortcut: z.string().default('Ctrl+/'),
     fileTreeShortcut: z.string().default('Ctrl+,'),
     scShortcut: z.string().default('Ctrl+Alt+.'),
+    // 知识库/日程入口（2026-09-10 定稿：从侧栏底部钮移到输入行，源代码管理与
+    // 终端之间）；语义是开合切换——开=侧栏索引视图 + 舞台标签，关=两者一起收
+    vaultShortcut: z.string().default('Ctrl+Alt+K'),
+    schedShortcut: z.string().default('Ctrl+Alt+S'),
   }) : null
 
   let readSettings: () => any = () => ({})

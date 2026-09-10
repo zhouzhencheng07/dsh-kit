@@ -10,17 +10,51 @@
 // 的版本管理改由知识库技能教会的 git -C add/commit 承担（src/vault-skill.ts）。
 //
 // 降级语义：git 未安装/命令失败/超时一律静默跳过——存档是便利设施，绝不阻断
-// 编辑主流程。附件目录不进存档（.gitignore：attachments/ 是图片 pdf 等二进制，
-// *.tmp 是 vault/write 原子落盘的残件）。已有 .git 的 vault 不接管（不碰用户的
-// 仓库与历史，也不改用户自己的 .gitignore）。
+// 编辑主流程。附件与原始资料不进存档（.gitignore：attachments/ 是图片 pdf 等
+// 二进制，library/ 是外部导入的原始资料——两者都只增不减、进存档只会把仓库
+// 撑爆；*.tmp 是 vault/write 原子落盘的残件）。已有 .git 的 vault 不接管历史，
+// 只对「内容确为本模块所写」的 .gitignore 做增量补齐（见 ownsGitignore）。
 // 并发：提交经模块级 promise 链串行——人工保存与删除同时触发时避免
 // git index.lock 撞车；可用性探测进程内缓存（运行期装 git 属罕见，不追）。
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 const GIT_TIMEOUT_MS = 15000;
-/** .gitignore 只在由本模块 init 仓库时写入；用户自己的仓库一字不改 */
-const GITIGNORE = 'attachments/\n*.tmp\n';
+/** 不进存档的三类内容；.gitignore 由本模块写（用户自己的仓库一字不改） */
+const IGNORE_ENTRIES = ['attachments/', 'library/', '*.tmp'];
+const GITIGNORE = IGNORE_ENTRIES.join('\n') + '\n';
+/** .gitignore 是否可判定为「本模块生成的」：只剩忽略项与注释行即算——
+ *  用户自己加过任何一条别的规则就整体让路，绝不越权改写 */
+function ownsGitignore(text) {
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '');
+    if (lines.length === 0)
+        return true;
+    return lines.every((l) => l.startsWith('#') || IGNORE_ENTRIES.includes(l));
+}
+/** 补齐缺失的忽略项；返回是否改写了文件。用户自己的 .gitignore 不动 */
+function ensureOwnGitignore(root) {
+    const file = path.join(root, '.gitignore');
+    let text = '';
+    try {
+        text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+    }
+    catch {
+        return false;
+    }
+    if (!ownsGitignore(text))
+        return false;
+    const have = new Set(text.split(/\r?\n/).map((l) => l.trim()));
+    const missing = IGNORE_ENTRIES.filter((e) => !have.has(e));
+    if (missing.length === 0)
+        return false;
+    try {
+        fs.writeFileSync(file, text.replace(/\r?\n?$/, '\n') + missing.join('\n') + '\n', 'utf8');
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
 let gitAvailable = null;
 /** git 可用性探测（--version），进程内缓存；任何失败按不可用处理 */
 export async function isGitAvailable() {
@@ -107,7 +141,7 @@ function enqueue(task) {
     return run;
 }
 /**
- * 有变化才提交（porcelain 为空即跳过，attachments 已被忽略不计入）；
+ * 有变化才提交（porcelain 为空即跳过，attachments/library 已被忽略不计入）；
  * 返回是否真的提交了。身份用 -c 兜底，不依赖宿主机 git 全局配置。
  */
 export async function commitVault(root, message) {
@@ -123,25 +157,49 @@ export async function commitVault(root, message) {
     });
 }
 /**
- * 初始存档：vaultRoot 配置建立时调用。无 git / 已是仓库（.git 存在）跳过；
- * 否则 init + 写 .gitignore + 初始提交一次。幂等——重复调用无事发生。
+ * 骨架建立/vaultRoot 变更时调用（插件启动与设置变更都会走到）：无仓库则
+ * init + 写 .gitignore + 初始提交一次；已有仓库只做「补齐忽略项 + 把误入
+ * 索引的 library/ 移出索引」一次（工作区文件不动，历史保留）。幂等——没有
+ * 需要补的东西时一条 git 命令都不发。
  */
 export async function ensureVaultGit(root) {
     await enqueue(async () => {
         if (!(await isGitAvailable()))
             return;
-        if (fs.existsSync(path.join(root, '.git')))
+        if (!fs.existsSync(path.join(root, '.git'))) {
+            if ((await runGit(root, ['init'])) === null)
+                return;
+            try {
+                fs.writeFileSync(path.join(root, '.gitignore'), GITIGNORE, 'utf8');
+            }
+            catch {
+                return;
+            }
+            if ((await runGit(root, ['add', '-A'])) === null)
+                return;
+            await runGit(root, ['-c', 'user.name=dsh-kit', '-c', 'user.email=dsh-kit@local', 'commit', '-m', 'dsh-kit: 初始存档']);
             return;
-        if ((await runGit(root, ['init'])) === null)
-            return;
-        try {
-            fs.writeFileSync(path.join(root, '.gitignore'), GITIGNORE, 'utf8');
         }
-        catch {
+        // 已有仓库：.gitignore 补齐 + library 出索引。`.gitignore` 只对未跟踪文件
+        // 生效，早先版本已把 library/ 提交进索引的库，得显式 --cached 摘掉——
+        // 只动索引，磁盘上的原始资料一个字节都不碰。
+        const wrote = ensureOwnGitignore(root);
+        const tracked = await runGit(root, ['ls-files', '--', 'library']);
+        const untrack = tracked !== null && tracked.trim() !== '';
+        if (untrack)
+            await runGit(root, ['rm', '-r', '--cached', '--quiet', '--ignore-unmatch', '--', 'library']);
+        if (!wrote && !untrack)
             return;
-        }
         if ((await runGit(root, ['add', '-A'])) === null)
             return;
-        await runGit(root, ['-c', 'user.name=dsh-kit', '-c', 'user.email=dsh-kit@local', 'commit', '-m', 'dsh-kit: 初始存档']);
+        await runGit(root, [
+            '-c',
+            'user.name=dsh-kit',
+            '-c',
+            'user.email=dsh-kit@local',
+            'commit',
+            '-m',
+            'dsh-kit: library 移出存档（原始资料不进版本控制）',
+        ]);
     });
 }

@@ -71,7 +71,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultStageSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, StagePane, SidebarFooterActions, ScheduleIndexView, RteEditor, openFileTab, closeFileTab, openStageTab, closeStageTab, openSideIndex, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, stageAlive, stageBounds, stageWidthFor, stageIsPinned, stageWidthCommit, stagePinToggle, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, isPathInsideVaultRoot, vaultCiteText };",
+  "return { vaultSideSlot, vaultStageSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, SchedEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, StagePane, SidebarFooterActions, ScheduleIndexView, RteEditor, VaultPagePane, openFileTab, openStageTab, closeStageTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, toggleSchedEntry, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, stageAlive, stageBounds, stageWidthFor, stageIsPinned, stageWidthCommit, stagePinToggle, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, isPathInsideVaultRoot, vaultCiteText };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -85,7 +85,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "StagePane", "SidebarFooterActions", "ScheduleIndexView", "RteEditor", "openStageTab", "stageBounds", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "isPathInsideVaultRoot", "vaultCiteText"];
+const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "SchedEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "StagePane", "SidebarFooterActions", "ScheduleIndexView", "RteEditor", "VaultPagePane", "openStageTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "toggleVaultEntry", "toggleSchedEntry", "stageBounds", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "isPathInsideVaultRoot", "vaultCiteText"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -263,13 +263,31 @@ const ots = comps.openStageTab({ files: [], jobsOpen: false, browserOpen: false,
 check("openStageTab 日程：置存在+激活（纯补丁不触碰任务标签）", ots.schedOpen === true && ots.stageTab === "schedule" && ots.jobsOpen === undefined);
 const otb = comps.openStageTab({ files: [], jobsOpen: true, browserOpen: false, stageTab: "jobs", stageHidden: false }, "browser");
 check("openStageTab 浏览器：纯补丁不触碰任务标签（合并保留）", otb.browserOpen === true && otb.stageTab === "browser" && otb.jobsOpen === undefined);
-// 侧栏索引单槽轮换：开一个关其它
-const osi = comps.openSideIndex({ treeOpen: true, gitOpen: false, vaultIdxOpen: false, schedIdxOpen: false }, "vault");
-check("openSideIndex 知识库：开自己关文件树", osi.vaultIdxOpen === true && osi.treeOpen === false && osi.schedIdxOpen === false);
-const osi2 = comps.openSideIndex({ treeOpen: false, gitOpen: false, vaultIdxOpen: true, schedIdxOpen: false }, "schedule");
-check("openSideIndex 日程：开自己关知识库", osi2.schedIdxOpen === true && osi2.vaultIdxOpen === false);
-const osi3 = comps.openSideIndex({ treeOpen: false, gitOpen: false, vaultIdxOpen: true, schedIdxOpen: false }, "vault");
-check("openSideIndex 再点同一个 = 关闭（回到会话列表）", osi3.vaultIdxOpen === false);
+// 7.1b) 知识库/日程入口（输入行两钮 + 快捷键同语义）：开=侧栏索引+舞台标签
+// 一起开，再点=两边一起关（用户定稿 2026-09-10）
+const tvOpen = comps.toggleVaultEntry({ treeOpen: true, vaultIdxOpen: false, vaultOpen: false, vaultPages: [], stageTab: null, stageHidden: true });
+check("知识库入口开：索引 + 舞台标签一起开且关掉文件树", tvOpen.vaultIdxOpen === true && tvOpen.vaultOpen === true && tvOpen.stageTab === "vault" && tvOpen.treeOpen === false && tvOpen.stageHidden === false);
+const tvClose = comps.toggleVaultEntry({ vaultIdxOpen: true, vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", vaultHist: { stack: ["D:/v/a.md"], idx: 0 }, stageTab: "vault" });
+check("知识库入口再点：索引回会话 + 中间页标签一并关掉", tvClose.vaultIdxOpen === false && tvClose.vaultOpen === false && tvClose.vaultPages.length === 0 && tvClose.activeVaultPage === null && tvClose.stageTab === null);
+const tsOpen = comps.toggleSchedEntry({ vaultIdxOpen: true, schedIdxOpen: false, schedOpen: false, stageTab: "vault", stageHidden: false });
+check("日程入口开：索引 + 舞台日程标签一起开且关掉知识库索引", tsOpen.schedIdxOpen === true && tsOpen.schedOpen === true && tsOpen.stageTab === "schedule" && tsOpen.vaultIdxOpen === false);
+const tsClose = comps.toggleSchedEntry({ schedIdxOpen: true, schedOpen: true, stageTab: "schedule", files: [{ path: "C:/x/a.js" }] });
+check("日程入口再点：索引回会话 + 日程标签关掉（激活位顺延到文件）", tsClose.schedIdxOpen === false && tsClose.schedOpen === false && tsClose.stageTab === "file");
+// 7.1c) 知识库页标签纯逻辑：多开、激活、单关、关光收摊、← → 访问序剪枝
+const vp1 = comps.openVaultPageTab({ vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 }, stageHidden: true }, "D:/v/a.md");
+const vp2 = comps.openVaultPageTab(vp1, "D:/v/b.md");
+check("openVaultPageTab 多开：一页一签 + 激活 + 访问序", vp2.vaultPages.length === 2 && vp2.activeVaultPage === "D:/v/b.md" && vp2.vaultOpen === true && vp2.stageTab === "vault" && vp2.vaultHist.stack.length === 2 && vp2.vaultHist.idx === 1);
+const vp3 = comps.openVaultPageTab(vp2, "D:/v/a.md");
+check("openVaultPageTab 重开已开页：不重复开签、激活并记历史", vp3.vaultPages.length === 2 && vp3.activeVaultPage === "D:/v/a.md" && vp3.vaultHist.idx === 2);
+const vpAct = comps.activateVaultPage(vp3, "D:/v/b.md");
+check("activateVaultPage 只激活不动访问序", vpAct.activeVaultPage === "D:/v/b.md" && vpAct.vaultHist === undefined && vpAct.vaultPages.length === 2);
+check("activateVaultPage 未开的页不认", Object.keys(comps.activateVaultPage(vp3, "D:/v/zz.md")).length === 0);
+const vpClose = comps.closeVaultPageTab(vp3, "D:/v/b.md");
+check("closeVaultPageTab 单关非激活页：激活位不动 + 历史剪掉该页", vpClose.vaultPages.length === 1 && vpClose.activeVaultPage === undefined && vpClose.vaultOpen === undefined && !vpClose.vaultHist.stack.includes("D:/v/b.md"));
+const vpCloseActive = comps.closeVaultPageTab(vp3, "D:/v/a.md");
+check("closeVaultPageTab 关激活页：激活位顺延邻居", vpCloseActive.vaultPages.length === 1 && vpCloseActive.activeVaultPage === "D:/v/b.md");
+const vpLast = comps.closeVaultPageTab({ vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", vaultOpen: true, vaultHist: { stack: ["D:/v/a.md"], idx: 0 }, stageTab: "vault" }, "D:/v/a.md");
+check("closeVaultPageTab 关最后一个：整片知识库舞台收摊", vpLast.vaultPages.length === 0 && vpLast.vaultOpen === false && vpLast.activeVaultPage === null && vpLast.stageTab === null);
 callLog = [];
 out = comps.JobsPanel({});
 check("JobsPanel 无hooks渲染无异常(空列表)", !!out && typeof out === "object");
@@ -449,8 +467,8 @@ check("取消图钉回默认跟随", comps.stageIsPinned("file") === false);
 const wBackToFactory = comps.stageWidthFor("file", 0);
 check("取消图钉后文件标签跟随共享默认（900）", wBackToFactory === 900);
 
-// 7.2.2) 多文件：文件标签逐个上标签栏（VSCode 式，工作台定稿 2026-09-10），
-// 每个带独立 ✕；图钉恒在
+// 7.2.2) 多文件：文件共用一个「文件」标签（2026-09-10 用户定稿：文件树/源代码
+// 管理点开的页都在一个标签里换内容，标签名跟着当前文件走）；非激活文件仍挂载
 comps.setKitUi({
   files: [
     { path: "C:/x/a.js", from: "tree", untracked: false, usedAt: 1 },
@@ -464,8 +482,9 @@ out = comps.StagePane({ props: {}, cwd: "C:/x" });
 const pvChips = callLog.filter((c) => (c[0] === "jsxs") && c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-tab") && typeof c[2].title === "string" && c[2].title.startsWith("C:/x/"));
 const feElems = callLog.filter((c) => c[1] === comps.FileEditorPane);
 const feWraps = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-pane-view" && c[2].style && typeof c[2].style.display === "string");
+const fileChipLabel = pvChips.length > 0 ? callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-tab-label" && c[2].children === "b.md") : null;
 check("StagePane 多文件渲染无异常", !!out && typeof out === "object");
-check("StagePane 渲染出 2 个文件标签（title=路径）", pvChips.length === 2);
+check("StagePane 两个文件只占一个标签（title=当前文件路径）", pvChips.length === 1 && !!fileChipLabel);
 check("StagePane 多实例挂载 FileEditorPane（激活 flex 非激活 none 保挂载）", feElems.length === 2 && feWraps.filter((c) => c[2].style.display === "flex").length === 1 && feWraps.some((c) => c[2].style.display === "none"));
 comps.setKitUi({ files: [], activeFile: null, stageTab: null });
 
@@ -507,21 +526,37 @@ const schedOn = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className 
 const schedElem = callLog.find((c) => c[1] === comps.ScheduleView);
 check("StagePane 日程标签激活并挂 ScheduleView", !!schedOn && !!schedElem);
 comps.setKitUi({ schedOpen: false, stageTab: null });
-comps.setKitUi({ vaultOpen: true, stageTab: "vault" });
+// 知识库多开：每页一个标签（✕ 单关），激活签标 dshk-tab-on；一页都没开时
+// 退回一张「知识库」空签（入口点开即见舞台）
+comps.setKitUi({ vaultOpen: true, vaultPages: ["D:/v/a.md", "D:/v/b.md"], activeVaultPage: "D:/v/b.md", stageTab: "vault" });
 callLog = [];
 out = comps.StagePane({ props: {}, cwd: "C:/x" });
 const vaultHost = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-vault-stagehost");
+const vaultChips = callLog.filter((c) => (c[0] === "jsxs") && c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-tab") && typeof c[2].title === "string" && c[2].title.startsWith("D:/v/"));
+const vaultOnChip = vaultChips.filter((c) => c[2].className.includes("dshk-tab-on"));
+const vaultPageLabels = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-tab-label" && ["a", "b"].includes(c[2].children)).map((c) => c[2].children);
+check("StagePane 知识库多开：每页一个标签且只激活当前页", vaultChips.length === 2 && vaultOnChip.length === 1 && vaultChips.find((c) => c[2].className.includes("dshk-tab-on"))[2].title === "D:/v/b.md");
+check("StagePane 知识库页签用页名（去 .md）", vaultPageLabels.length === 2);
 check("StagePane 知识库标签渲染 portal 宿主（VaultView 经 KitSurfaces 单实例挂载）", !!vaultHost);
-comps.setKitUi({ vaultOpen: false, stageTab: null });
+const vaultX = vaultChips[0][2].children.find((ch) => ch && ch.props && ch.props.className === "dshk-tab-x");
+check("StagePane 知识库页签各带独立 ✕", !!vaultX);
+comps.setKitUi({ vaultPages: [], activeVaultPage: null, stageTab: "vault" });
+callLog = [];
+out = comps.StagePane({ props: {}, cwd: "C:/x" });
+const emptyVaultTab = callLog.find((c) => (c[0] === "jsxs") && c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-tab") && c[2].children && c[2].children.some((ch) => ch && ch.props && ["知识库", "Knowledge base"].includes(ch.props.children)));
+check("StagePane 无页标签时退回「知识库」空签", !!emptyVaultTab);
+comps.setKitUi({ vaultOpen: false, vaultPages: [], activeVaultPage: null, stageTab: null });
 
-// 7.2.4c) 侧栏底部按钮区：五钮 + 文件被动钮；宽态出文字，收起态纯图标
+// 7.2.4c) 侧栏底部按钮区：任务/浏览器/计时三钮常驻 + 文件被动钮（知识库/日程
+// 2026-09-10 已挪到输入行，不再在这里）；宽态出文字，收起态纯图标
 comps.setKitUi({ vaultIdxOpen: false, schedIdxOpen: false, files: [], jobsOpen: false, browserOpen: false });
 callLog = [];
 out = comps.SidebarFooterActions({ wide: true });
 const fabBtns = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-fab");
 const fabLabels = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-fab-label");
-check("SidebarFooterActions 宽态渲染知识库/日程/任务/浏览器/计时五钮", fabBtns.length === 5);
-check("SidebarFooterActions 宽态出文字标签", fabLabels.length >= 5);
+check("SidebarFooterActions 宽态渲染任务/浏览器/计时三钮（知识库/日程已移输入行）", fabBtns.length === 3);
+check("SidebarFooterActions 宽态出文字标签", fabLabels.length >= 3);
+check("SidebarFooterActions 不再有知识库/日程钮", !fabBtns.some((c) => ["知识库", "日程", "Knowledge base", "Schedule"].includes(c[2]["aria-label"])));
 callLog = [];
 out = comps.SidebarFooterActions({ wide: false });
 const fabNoLabels = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-fab-label");
@@ -619,11 +654,42 @@ check(
   comps.vaultStageSlot.set(null);
   comps.setKitUi({ vaultOpen: false, stageTab: null });
 }
+// 6.9b) VaultPagePane 直渲（一页一个实例的新组件）：预置 state#0（page 已加载）
+// 走完整编辑面，预置 state#2（冲突）走冲突条分支
+{
+  stateSeq = 0;
+  stateStore.clear();
+  stateStore.set(0, { loading: false, body: "# 标题\n\n正文", binary: false, gone: false });
+  callLog = [];
+  let paneErr = null;
+  try {
+    comps.VaultPagePane({ path: "D:/v/wiki/a.md", active: true, root: "D:/v", indexPages: [], onOpenPage: () => {}, onMissingLink: () => {}, onSaved: () => {}, onDeleted: () => {}, toast: () => {} });
+  } catch (e) {
+    paneErr = e;
+  }
+  const editbar = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-vault-editbar");
+  const citeBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["引用到对话", "Cite to chat"].includes(c[2].title));
+  const rte = callLog.find((c) => c[1] === comps.RteEditor);
+  check("VaultPagePane 渲染无异常（页条 + RTE 就位）", paneErr === null && !!editbar && !!citeBtn && !!rte);
+  if (paneErr) console.log("  VaultPagePane error:", paneErr.message);
+  stateSeq = 0;
+  stateStore.clear();
+  stateStore.set(0, { loading: false, body: "x", binary: false, gone: false });
+  stateStore.set(2, { diskMtime: 123 });
+  callLog = [];
+  comps.VaultPagePane({ path: "D:/v/wiki/a.md", active: false, root: "D:/v", indexPages: [], onOpenPage: () => {}, onMissingLink: () => {}, onSaved: () => {}, onDeleted: () => {}, toast: () => {} });
+  const conflictBar = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-vault-conflict");
+  const paneRoot = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-vault-reader" && c[2].style);
+  check("VaultPagePane 冲突态渲染冲突条（覆盖/读取）", !!conflictBar);
+  check("VaultPagePane 非激活标签保挂载但 display:none", !!paneRoot && paneRoot[2].style.display === "none");
+  stateSeq = 0;
+  stateStore.clear();
+}
 // 右坞收起栏已随右坞退役（工作台定稿 2026-09-10）——收起语义由 stageHidden 承担，
 // 上文 7.2.4 覆盖
 
 // 7.2.3) 文件标签 LRU 纯逻辑：默认上限 8，超限开新文件逐出 usedAt 最小者；
-// 重开已存在文件置顶激活不逐出自身；关闭激活文件激活位顺延邻居；开标签解除隐藏
+// 重开已存在文件置顶激活不逐出自身；开文件解除隐藏并切到共用的文件标签
 const lruBase = [];
 for (let i = 1; i <= 8; i++) lruBase.push({ path: `C:/x/f${i}.js`, from: "tree", untracked: false, usedAt: i });
 const opened = comps.openFileTab({ files: lruBase, activeFile: "C:/x/f8.js", stageHidden: true }, "C:/x/f9.js", "tree", false);
@@ -631,10 +697,6 @@ check("openFileTab 超限 LRU 逐出最久未用", opened.files.length === 8 && 
 const reopened = comps.openFileTab({ files: opened.files, activeFile: "C:/x/f9.js" }, "C:/x/f2.js", "scm", false);
 const reopenedItem = reopened.files.find((p) => p.path === "C:/x/f2.js");
 check("openFileTab 重开已存在文件置顶激活不逐出自身", reopened.files.length === 8 && reopened.activeFile === "C:/x/f2.js" && !!reopenedItem && reopenedItem.untracked === false && reopenedItem.from === "scm");
-const closed = comps.closeFileTab({ files: opened.files, activeFile: "C:/x/f9.js" }, "C:/x/f9.js");
-check("closeFileTab 关激活文件激活位顺延邻居", closed.files.length === 7 && closed.activeFile === "C:/x/f8.js");
-const closedLast = comps.closeFileTab({ files: [{ path: "C:/x/only.js", from: "tree", untracked: false, usedAt: 1 }], activeFile: "C:/x/only.js" }, "C:/x/only.js");
-check("closeFileTab 关最后一个文件文件标签随之消失", closedLast.files.length === 0 && closedLast.activeFile === null);
 const delOpen = comps.openFileTab({ files: [], activeFile: null }, "C:/x/gone.js", "scm", false, true);
 check("openFileTab 携带 deleted 标记", delOpen.files.length === 1 && delOpen.files[0].deleted === true && delOpen.activeFile === "C:/x/gone.js");
 // 7.2.3b) commit 钉定（图谱提交详情进入）：条目携带 commit；从 SCM 重开同路径清除钉定

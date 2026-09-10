@@ -11,11 +11,19 @@ dsh browser UI, each independent and dependency-free; with none used, dsh stays 
   bound to the session workspace at open time; hidden docks keep running; prefers
   pwsh on Windows
 - **File tree** (composer-row toggle): browse the session workspace; create/
-  rename/delete (to Recycle Bin)/copy path; click a file for a right-docked
-  preview/edit (mtime CAS)/colored diff; one-click copy on md code blocks
+  rename/delete (to Recycle Bin)/copy path; click a file to open it in the stage
+  **Files tab** (all files share one tab — opening another swaps its content);
+  mtime-CAS autosave for markdown, colored diff; one-click copy on md code blocks
 - **Source control** (composer-row toggle, default **Ctrl+Alt+.**): an in-page git
   workbench — stage/unstage/discard/commit, diff view, branch switch/create/delete,
   one-click push, commit graph; one-click repo init for non-git directories
+- **Schedule** (composer-row toggle, default **Ctrl+Alt+S**): one click opens both
+  the sidebar to-do index and the stage weekly grid; clicking again closes both
+- **Knowledge base** (composer-row toggle, default **Ctrl+Alt+K**): the vault tree
+  lives in the sidebar, every page opens in its own stage tab (multiple tabs, ✕ per
+  tab); TipTap WYSIWYG with 2s autosave + mtime CAS, `[[wikilinks]]`, backlinks,
+  full-text search; git archive on init/save/delete (`attachments/` and `library/`
+  stay out of the archive)
 - **Background jobs** (composer-row toggle): a right-docked panel listing the
   session's running jobs, with output viewing and job termination (official
   `job_output`/`job_kill` semantics)
@@ -36,8 +44,8 @@ dsh browser UI, each independent and dependency-free; with none used, dsh stays 
   (Tavily → Bing → Sogou, failover by priority) replaces the paid
   `deepseek-official`; toggle via the settings card
 - **Settings card**: dsh-kit config card — per-feature switches, shortcut
-  customization (terminal / file tree / source control / sidebar), search-result
-  count, etc.
+  customization (terminal / file tree / source control / knowledge base / schedule /
+  sidebar / stage), search-result count, etc.
 
 ## Install & update
 
@@ -60,9 +68,11 @@ dsh plugin --profile web update dsh-kit
 ```
 
 The package declares `dsh.bundle.patch`, so it is activated as a profile bundle
-layer. After installing/updating, restart `dsh web`: four toggles — Files / Source
-Control / Background Jobs / Terminal — appear on the composer tool row, and the
-agent's `web_search` switches to the free multi-source chain.
+layer. After installing/updating, restart `dsh web`: five toggles — Files / Source
+Control / Knowledge base / Schedule / Terminal — appear on the composer tool row,
+with the sidebar footer and the middle stage hosting the jobs / browser / knowledge
+base / schedule panels, and the agent's `web_search` switches to the free
+multi-source chain.
 
 ## How it works
 
