@@ -11,22 +11,24 @@ dsh browser UI, each independent and dependency-free; with none used, dsh stays 
   bound to the session workspace at open time; hidden docks keep running; prefers
   pwsh on Windows
 - **File tree** (composer-row toggle): browse the session workspace; create/
-  rename/delete (to Recycle Bin)/copy path; click a file to open it in the stage
-  **Files tab** (all files share one tab — opening another swaps its content);
-  mtime-CAS autosave for markdown, colored diff; one-click copy on md code blocks
+  rename/delete (to Recycle Bin)/copy path; click a file to open a document tab
+  inside the stage's **Files area** (one tab per file, click to switch, ✕ to
+  close; beyond the "max file tabs" setting — 8 by default — the least-recently-
+  viewed tab closes); mtime-CAS autosave for markdown, colored diff; one-click
+  copy on md code blocks
 - **Source control** (composer-row toggle, default **Ctrl+Alt+.**): an in-page git
   workbench — stage/unstage/discard/commit, diff view, branch switch/create/delete,
   one-click push, commit graph; one-click repo init for non-git directories
 - **Schedule** (composer-row toggle, default **Ctrl+Alt+S**): one click opens both
   the sidebar to-do index and the stage weekly grid; clicking again closes both
 - **Knowledge base** (composer-row toggle, default **Ctrl+Alt+K**): the vault tree
-  lives in the sidebar, every page opens in its own stage tab (multiple tabs, ✕ per
-  tab); TipTap WYSIWYG with 2s autosave + mtime CAS, `[[wikilinks]]`, backlinks,
-  full-text search; git archive on init/save/delete (`attachments/` and `library/`
-  stay out of the archive)
-- **Background jobs** (composer-row toggle): a right-docked panel listing the
-  session's running jobs, with output viewing and job termination (official
-  `job_output`/`job_kill` semantics)
+  lives in the sidebar, every page opens as a document tab inside the stage's
+  **Knowledge base area** (multiple tabs, ✕ per tab); TipTap WYSIWYG with 2s
+  autosave + mtime CAS, `[[wikilinks]]`, backlinks, full-text search; git archive
+  on init/save/delete (`attachments/` and `library/` stay out of the archive)
+- **Background tasks** (sidebar-footer toggle / stage “+” menu, running-count
+  badge): a stage panel listing the session's running background jobs, with output
+  viewing and job termination (official `job_output`/`job_kill` semantics)
 - **Built-in browser** (composer-row toggle, on by default): the agent drives the
   system Edge via 5 `browser_*` tools (vendored playwright-core, dedicated
   persistent profile) — snapshot → act → assert GUI-testing loops, screenshots
@@ -69,10 +71,15 @@ dsh plugin --profile web update dsh-kit
 
 The package declares `dsh.bundle.patch`, so it is activated as a profile bundle
 layer. After installing/updating, restart `dsh web`: five toggles — Files / Source
-Control / Knowledge base / Schedule / Terminal — appear on the composer tool row,
-with the sidebar footer and the middle stage hosting the jobs / browser / knowledge
-base / schedule panels, and the agent's `web_search` switches to the free
-multi-source chain.
+Control / Knowledge base / Schedule / Terminal — appear on the composer tool row
+(their lit state follows the sidebar view: whichever index the sidebar shows is
+the lit toggle, no matter which stage tabs are open); the sidebar footer hosts
+Background tasks / Browser / Timer. The middle stage carries two tab levels, like
+the built-in browser: one feature tab each for Files / Knowledge base / Background
+tasks / Schedule / Browser (✕ closes the whole area), and the document tabs that
+belong to a feature — one per file, one per knowledge-base page — live in that
+area's own tab row. The stage cannot be collapsed (no hidden state, no shortcut),
+and the agent's `web_search` uses the free multi-source chain.
 
 ## How it works
 
@@ -80,9 +87,11 @@ multi-source chain.
   `/tree`, `/read` (512 KB cap + text decoding), `/write` (cwd subtree + mtime
   CAS), `/fs/op`, `/jobs/kill|output`, `/browser` (built-in browser WS), and the phone-gateway endpoints
 - `client/bundle.js`: browser side (hand-written ModuleLoader bundle, no build) —
-  four toggles on `conversation.input.left`; the file tree and source control
-  share the sidebar slot; self-drawn preview panels and the terminal dock
-  (conversation made room via CSS); settings page + card on the settings slots
+  five toggles on `conversation.input.left` (file tree / source control / knowledge
+  base / schedule / terminal); the file tree, source control, vault index and
+  schedule index share the sidebar slot; the middle stage draws feature tabs plus
+  each feature's own document-tab row, and the terminal dock (the conversation
+  column makes room via CSS); settings page + card on the settings slots
 - `src/web-search.js` + `src/engine-chain.js` + `src/engines/*`: registers the
   `free-search` provider on the web seam, gated by the settings card's
   `searchEnabled`
