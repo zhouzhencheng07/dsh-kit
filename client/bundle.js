@@ -1,24 +1,28 @@
 // dsh-kit 浏览器半边 —— 手写 client bundle，与官方 lib/client.js 产物同形，
 // 无构建步骤：改完本文件刷新浏览器即生效（本地目录 junction 直装）。
 //
-// 结构（工作台三段式 2026-09-10 定稿：左索引 / 中舞台 / 右对话）：
-//   入口两处：conversation.input.left（composer 工具行，文件树/源代码管理/知识库/
-//     日程/终端五个小图标钮，工作区级工具跟 session 走）+ sidebar.footer.action
-//     （官方侧栏底部按钮区，任务/浏览器/计时三钮常驻 + 文件钮被动出现）。
-//     知识库/日程两钮是开合切换：开 = 侧栏索引视图 + 舞台标签一起开，再点 =
-//     侧栏回会话列表且中间那片标签一并关掉（用户定稿，二者成对出现才对得上）。
-//     开合状态放模块级 store（kitUi + useSyncExternalStore），跨槽位共享。
-//   舞台：左锚定（从侧栏右缘起，left 随侧栏宽度 RO 跟随）、顶部标签栏 + 「+」
-//     菜单，挂 shell.overlay（全帧浮层）——不放进 composer，规避其祖先 stacking
-//     context 劫持 position:fixed。对话列 margin-left 让位、在剩余区域居中，
-//     舞台最大宽封顶保对话 400px。宽度模型：全局共享默认值，拖未钉标签=调默认
-//     （所有未钉标签联动），图钉按功能类型钉住当前宽度（localStorage）。
+// 结构（2026-09-11 迁移定稿：五类功能签住官方右栏 sidebar.right，舞台降为
+//   0.1.2 宿主回退）：
+//   入口：conversation.input.left（composer 工具行，文件树/源代码管理/知识库/
+//     终端四个小图标钮，工作区级工具跟 session 走）。知识库钮是开合切换：开 =
+//     侧栏索引视图，再点 = 侧栏回会话列表；日程没有 composer 钮（入口归快捷键
+//     与待办卡，开=侧栏待办+右栏日程签）。右栏 dock 签本身没有按钮：文件/知识库
+//     是被动签（索引/对话链接点开即开），任务/日程/浏览器走右栏开始页清单与
+//     自动跟随。开合状态放模块级 store（kitUi + useSyncExternalStore），跨槽共享。
+//   右栏：sidebarRightTabs 注册五类 dock 签，pane 正文经 slots.inject
+//     （sidebar.right.pane.tab）按 id 提供，pane 内自管文档签条；右栏无签时经
+//     sidebar.right.tab.guide（chain 席位）渲染我们的开始页。
+//   舞台（仅回退）：左锚定（从侧栏右缘起，left 随侧栏宽度 RO 跟随）、顶部标签
+//     栏 + 「+」菜单，挂 shell.overlay（全帧浮层）——不放进 composer，规避其祖先
+//     stacking context 劫持 position:fixed。对话列 margin-left 让位、在剩余区域
+//     居中，舞台最大宽封顶保对话 400px。宽度模型：全局共享默认值，拖未钉标签=调
+//     默认（所有未钉标签联动），图钉按功能类型钉住当前宽度（localStorage）。
 //   终端：底部停靠面板（快捷键亦可切换），数据走宿主半边 /dsh-kit/terminal WS。
-//   舞台标签：文件（可编辑，被动打开——文件树/源代码管理/对话链接点开即开；
-//     2026-09-10 用户定稿只占一个共用标签，点新的就换内容，不然标签太乱）、
-//     后台任务、日程（周网格+统计）、知识库（逐页一个标签，可多开）、浏览器；
-//     索引类视图（知识库目录树/日程待办）住侧栏 sidebar.workspaces 单槽，点条目
-//     开舞台对应标签。
+//   功能签（舞台与右栏 pane 共用同一套 kitUi 状态）：文件（可编辑，被动打开——
+//     文件树/源代码管理/对话链接点开即开；2026-09-10 用户定稿只占一个共用标签，
+//     点新的就换内容，不然标签太乱）、后台任务、日程（周网格+统计）、知识库
+//     （逐页一个标签，可多开）、浏览器；索引类视图（知识库目录树/日程待办）住
+//     侧栏 sidebar.workspaces 单槽，点条目开对应签。
 //   文件树：打开时临时注册进单槽 sidebar.workspaces——把侧边栏浏览区整体换成
 //     文件树，关闭时 dispose 注销、原生工作区列表自动回归。根目录 = 当前会话工作
 //     目录，数据走宿主半边 /dsh-kit/tree。点击文件 → 舞台文件标签展示/编辑内容，
@@ -628,8 +632,8 @@ window.__ModuleLoader__.load({
     // cfg.chatOpenFilePreview 后在这里拦截并把路径交给右侧预览面板。
     // 判定链任何一环不命中都放行官方。
     let chatPreviewHook = null;
-    // KitSurfaces 渲染期 props 桥：sidebar.footer.action 的 inject 闭包经此取
-    // 官方 useSessions（footer 需要在跑任务数做徽标；槽位注册在 effect 里，
+    // KitSurfaces 渲染期 props 桥：右栏 pane/开始页的 inject 闭包经此取官方
+    // useSessions（任务 pane/开始页要在跑任务数做徽标；槽位注册在 effect 里，
     // 拿不到渲染期 props，用模块变量中转）
     const shellShare = { current: null };
 
@@ -1990,22 +1994,6 @@ body.dshk-stage-open [class*="_scroll"] > [class*="_slot"]{display:block!importa
 .dshk-htimer-chip.is-running{color:var(--dsw-alias-brand-primary);border-color:currentColor}
 .dshk-htimer-elapsed{min-width:56px;text-align:left}
 .dshk-timer-pick.is-header{left:auto;right:12px;bottom:auto;top:46px}
-/* 侧栏底部按钮区（sidebar.footer.action）：宽态=图标+文字，收起态=纯图标
-   （官方 footArea 收起样式自带居中）；钉在 footer 一行排开 */
-.dshk-fab-bar{display:flex;flex-wrap:wrap;width:100%;min-width:0;gap:2px 0}
-/* 宽态每行三个（五钮+被动文件钮横排会被压成省略号——2026-08 底部钮因此被
-   撤过一次，这次每钮 1/3 行宽保证图标+文字完整显示）；收起态（铁轨 56px）
-   横排放不下，改竖排纯图标贴底部居中 */
-.dshk-fab{flex:1 1 30%}
-.dshk-fab-bar-narrow{flex-direction:column;flex-wrap:nowrap;width:auto;align-items:center;gap:3px;padding-bottom:4px}
-.dshk-fab-bar-narrow .dshk-fab{flex:none;width:28px;height:26px;padding:0}
-.dshk-fab{appearance:none;border:0;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;height:30px;border-radius:8px;padding:0 7px;flex:1 1 30%;min-width:0}
-.dshk-fab:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-fab[aria-pressed="true"]{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-brand-primary)}
-.dshk-fab-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dshk-fab .dshk-term-badge{position:static}
-.dshk-fab-dot{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:999px;background:var(--dsw-alias-brand-primary)}
-.dshk-fab-timerel{flex:none;font-family:ui-monospace,Consolas,monospace;font-size:10px;color:var(--dsw-alias-brand-primary);font-variant-numeric:tabular-nums}
 /* 侧栏索引宿主（知识库目录/日程待办入口占 sidebar.workspaces） */
 .dshk-sidehost{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;pointer-events:auto}
 /* 技能管理页（settings.section）：三分组卡片；技能行单行布局，操作不换行、描述先收缩 */
@@ -10174,6 +10162,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       if (cfg.browserEnabled !== false) openable.push({ id: "browser", label: t("dockBrowser"), icon: BrowserIcon });
       return openable;
     }
+    /** 右栏开始页清单：任务/日程/浏览器——知识库不进清单（2026-09-11 用户定稿）：
+     *  它跟文件同属被动签，入口在左侧边栏（目录/对话链接点开即开） */
+    function guideOpenable(cfg, liveJobs) {
+      return stageOpenable(cfg, liveJobs).filter((m) => m.id !== "vault");
+    }
     /** 当前会话在跑的后台任务数（ jobs/badge 用）；props 由槽位注入透传 */
     function useLiveJobs(props) {
       const useSessions = props && typeof props.useSessions === "function" ? props.useSessions : null;
@@ -10228,47 +10221,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-primary", onClick: () => { onClose(); stop(); }, children: t("timerStopYes") }),
           ] }),
         ] }),
-      ] });
-    }
-
-    /** 侧栏底部按钮区（官方 sidebar.footer.action 列表槽，入参 wide 旗标）：
-     *  后台任务/浏览器两钮（无索引→直开右栏 dock 签，任务带运行中计数角标）。
-     *  计时 2026-09-11 迁会话 header 工具区（HeaderTimer）；文件的位子在右栏
-     *  「文件」签（被动打开）。宽态=图标+文字，收起态=纯图标（官方 CSS 收起态
-     *  已让 footArea 居中）；收起态点击顺带展开侧栏 */
-    function SidebarFooterActions({ wide, useSessions }) {
-      const ui = useKitUi();
-      const cfg = cfgFromSnapshot(getCfgSnapshot());
-      const liveJobs = useLiveJobs({ useSessions });
-      // 收起态点击任何底部钮都顺带展开侧栏（用户定稿 2026-09-10 §4）
-      const openDock = (id) => {
-        expandSidebarNow();
-        setKitUi(openFeatureDock(kitUi, id));
-      };
-      const items = [];
-      if (cfg.jobsEnabled !== false) {
-        items.push({ id: "jobs", label: t("dockJobs"), icon: JobsIcon, on: ui.jobsOpen === true, badge: liveJobs, click: () => openDock("jobs") });
-      }
-      if (cfg.browserEnabled !== false) {
-        items.push({ id: "browser", label: t("dockBrowser"), icon: BrowserIcon, on: ui.browserOpen === true, click: () => openDock("browser") });
-      }
-      return jsxRuntime.jsxs("div", { className: wide ? "dshk-fab-bar" : "dshk-fab-bar dshk-fab-bar-narrow", role: "toolbar", "aria-label": t("stageLabel"), children: [
-        items.map((m) =>
-          jsxRuntime.jsxs("button", {
-            type: "button",
-            className: `dshk-fab${m.on ? " dshk-fab-on" : ""}`,
-            style: { position: "relative" },
-            "aria-pressed": m.on,
-            title: m.label,
-            "aria-label": m.label,
-            onClick: m.click,
-            children: [
-              jsxRuntime.jsx(m.icon, {}),
-              wide ? jsxRuntime.jsx("span", { className: "dshk-fab-label", children: m.label }) : null,
-              m.badge > 0 ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(m.badge) }) : null,
-            ],
-          }, m.id),
-        ),
       ] });
     }
 
@@ -10624,12 +10576,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           : jsxRuntime.jsx(BrowserPanel, { active: true }),
       });
     }
-    /** dock「+」引导页正文（chain 席位整体替换官方引导页）：我们的功能清单，
-     *  数据源与舞台「+」菜单同源（stageOpenable，cfg 门控） */
+    /** 右栏开始页正文（chain 席位整体替换官方引导页）：可开功能清单
+     *  （guideOpenable，cfg 门控） */
     function GuideBody(props) {
       const cfg = cfgFromSnapshot(getCfgSnapshot());
       const liveJobs = useLiveJobs(props);
-      const openable = stageOpenable(cfg, liveJobs);
+      const openable = guideOpenable(cfg, liveJobs);
       return jsxRuntime.jsxs("div", { className: "dshk-rbguide", children: [
         jsxRuntime.jsx("div", { className: "dshk-rbguide-title", children: t("rbGuideTitle") }),
         jsxRuntime.jsx("div", { className: "dshk-rbguide-list", children:
@@ -10819,13 +10771,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-vault", order: 12 }, VaultEntry)],
           ["terminal", cfg.terminalEnabled, () =>
             slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-terminal", order: 14 }, TerminalEntry)],
-          // 侧栏底部按钮区（工作台定稿 2026-09-10）：任务/浏览器/计时三钮常驻 +
-          // 文件钮被动出现；useSessions 经 shellShare 桥接（footer 要在跑任务数徽标）
-          ["footer", true, () =>
-            slotsCtx.slots.register(
-              { name: "sidebar.footer.action", id: "dsh-kit-footer", order: 10, inject: () => ({ useSessions: shellShare.current?.useSessions }) },
-              SidebarFooterActions,
-            )],
+          // 侧栏底部按钮区 2026-09-11 撤（用户定稿：后台任务/浏览器入口归右栏
+          // 开始页清单与自动跟随，侧栏底部不再驻钮）
           ["skills", cfg.skillsPageEnabled, () =>
             slotsCtx.slots.register(
               { name: "settings.section", id: "kit-skills", order: 40, label: () => t("skillsLabel") },
