@@ -973,6 +973,8 @@ window.__ModuleLoader__.load({
       pvCloseTab: "关闭此标签",
       pvDeletedNote: "文件已删除——此标签仅展示删除 diff；可在源代码管理里 ↩ 恢复文件",
       stageLabel: "舞台",
+  rbProbeHint: "官方右栏试水占位：签条与内容区都复用舞台那套 DOM/CSS，只为量容器手感——全屏、宽度让位、与自建舞台共存。",
+  rbProbeNoPrim: "（官方 primitives 的静态模块表 require 失败，代码块退回纯文本）",
       stagePin: "钉住此宽度（按类型记住）",
       stageUnpin: "取消钉住（回到跟随默认宽）",
       stageAdd: "打开标签",
@@ -1432,6 +1434,8 @@ window.__ModuleLoader__.load({
       pvCloseTab: "Close this tab",
       pvDeletedNote: "File deleted — this tab shows the deletion diff only; restore it via ↩ in source control",
       stageLabel: "Stage",
+  rbProbeHint: "Rightbar probe placeholder: the strip and body reuse the stage's own DOM/CSS, to gauge the container — fullscreen, width yielding, coexistence with the self-built stage.",
+  rbProbeNoPrim: "(official primitives failed to resolve from the static module table; the code block falls back to plain text)",
       stagePin: "Pin this width (remembered per type)",
       stageUnpin: "Unpin (follow the shared default width)",
       stageAdd: "Open a tab",
@@ -1876,6 +1880,10 @@ body.dshk-stage-open [class*="_scroll"] > [class*="_slot"]{display:block!importa
 .dshk-stage-pin{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:12px;line-height:1;width:22px;height:22px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:none}
 .dshk-stage-pin:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-stage-pin[aria-pressed="true"]{color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-button-tool-bar-fill)}
+/* 官方右栏试水正文：复用舞台签条那套 DOM/CSS，量的是容器手感不是内容 */
+.dshk-rbprobe{display:flex;flex-direction:column;height:100%;min-height:0}
+.dshk-rbprobe-body{flex:1 1 auto;min-height:0;overflow:auto;padding:10px 12px;font-size:12px;line-height:1.8;color:var(--dsw-alias-label-secondary)}
+.dshk-rbprobe-note{margin:0 0 10px}
 /* 侧栏底部按钮区（sidebar.footer.action）：宽态=图标+文字，收起态=纯图标
    （官方 footArea 收起样式自带居中）；钉在 footer 一行排开 */
 .dshk-fab-bar{display:flex;flex-wrap:wrap;width:100%;min-width:0;gap:2px 0}
@@ -5509,6 +5517,68 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const dir = fromPath.split(/[\\/]+/).slice(0, -1).join("\\");
       return norm(`${dir}\\${raw}`);
     }
+    // ─────────── 阅读位置记忆（按文件绝对路径）───────────
+    // 内容重载（刷新浏览器 / 外部改动跟随重读 / 手动 ↻ / 冲突回读）后落回用户
+    // 原本看的大致位置。每条记录 = { scrollTop, anchor }：anchor 是光标字符偏移
+    // （内容变了也能落回附近），scrollTop 是精确视口位。运行时 Map + localStorage
+    // 持久化（刷新之后也要在，纯内存不够）。CM6 与 RTE 两条编辑路径共用。
+    const readPosStore = (() => {
+      let map = new Map();
+      try {
+        const raw = JSON.parse(localStorage.getItem("dshk-read-pos") ?? "{}");
+        if (raw && typeof raw === "object") {
+          for (const [k, v] of Object.entries(raw)) {
+            if (v && typeof v === "object" && Number.isFinite(v.scrollTop) && Number.isFinite(v.anchor)) map.set(k, v);
+          }
+        }
+      } catch {
+        /* 坏数据当作没有 */
+      }
+      let flushTimer = null;
+      const persist = () => {
+        if (flushTimer !== null) return;
+        flushTimer = setTimeout(() => {
+          flushTimer = null;
+          try { localStorage.setItem("dshk-read-pos", JSON.stringify(Object.fromEntries(map))); } catch { /* 存不下就只在内存 */ }
+        }, 400);
+      };
+      return {
+        get: (p) => map.get(p),
+        set(p, scrollTop, anchor) {
+          map.delete(p); // 重插=刷新访问序，容量超限时淘汰最旧
+          map.set(p, { scrollTop: Math.max(0, Math.round(scrollTop)), anchor: Math.max(0, Math.round(anchor)) });
+          while (map.size > 300) map.delete(map.keys().next().value);
+          persist();
+        },
+      };
+    })();
+    /** 记录当前位置（调用方节流）。隐藏容器不记：display:none 的 scrollTop 恒 0，
+     *  会把真位置冲掉（非激活标签仍挂载，切走时会有 resize/兜底路径摸到这里） */
+    function recordReadPos(key, el, anchor) {
+      if (!el || el.getClientRects().length === 0) return;
+      readPosStore.set(key, el.scrollTop, typeof anchor === "number" && Number.isFinite(anchor) ? anchor : 0);
+    }
+    /** 恢复：优先锚点（选区落回），再设 scrollTop。恢复必须等内容渲染后——挂载
+     *  即设会白设（maxScroll 未建立）。容器还隐藏着（非激活标签被后台重读）就
+     *  定时重试到可见为止；期间用户自己滚过（偏离顶部）则放弃，不抢滚动权。
+     *  用 setTimeout 不用 rAF：后台/被遮挡的窗口 rAF 会停发，定时器照走 */
+    function restoreReadPos(key, el, applyAnchor) {
+      const rec = readPosStore.get(key);
+      if (!rec || rec.scrollTop <= 0 || !el) return;
+      let tries = 0;
+      const step = () => {
+        tries += 1;
+        if (el.getClientRects().length === 0) {
+          if (tries < 300) setTimeout(step, 60);
+          return;
+        }
+        if (el.scrollTop > 2) return;
+        try { applyAnchor?.(rec.anchor); } catch { /* 选区失效按纯滚动恢复 */ }
+        el.scrollTop = rec.scrollTop;
+      };
+      setTimeout(step, 60);
+    }
+
     function FileEditorPane({ path, source, untracked, deleted, cwd, commit, onOpenFile }) {
       const [state, setState] = react.useState({ phase: "loading" });
       // git/diff 视图状态——xy=null 表示无变更或非仓库；diff 数据懒加载。
@@ -5745,9 +5815,34 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const readOnly = state.body?.truncated === true;
         let timer = null;
         const h = window.CM6.create(cmHost, { doc: state.body.content ?? "", readOnly, language: extOf(path) });
+        // 阅读位置：滚动节流记录 + 内容就绪后恢复（截断只读分支同样适用）
+        const scrollEl = h.view?.scrollDOM ?? null;
+        let posTimer = null;
+        const posAnchor = () => {
+          try { return h.view.state.selection.main.head; } catch { return 0; }
+        };
+        const onPosScroll = () => {
+          if (posTimer !== null) return;
+          posTimer = setTimeout(() => {
+            posTimer = null;
+            recordReadPos(path, scrollEl, posAnchor());
+          }, 300);
+        };
+        scrollEl?.addEventListener("scroll", onPosScroll);
+        restoreReadPos(path, scrollEl, (anchor) => {
+          if (h.view && typeof anchor === "number" && anchor <= h.view.state.doc.length) h.view.dispatch({ selection: { anchor } });
+        });
+        const posCleanup = () => {
+          if (posTimer !== null) clearTimeout(posTimer);
+          scrollEl?.removeEventListener("scroll", onPosScroll);
+          recordReadPos(path, scrollEl, posAnchor()); // 切页/卸载兜底记一次
+        };
         if (readOnly) {
           // 只读：不装自动保存/Ctrl+S（无改动可存）
-          return () => h.destroy();
+          return () => {
+            posCleanup();
+            h.destroy();
+          };
         }
         h.onDocChanged((text) => {
           setTextDraft(text);
@@ -5786,6 +5881,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             }
           }
           cmHost.removeEventListener("keydown", onKeyDown, true);
+          posCleanup();
           h.destroy();
         };
       }, [cmHost, cmReady, isMd, ready, path, reloadNonce, state.body?.truncated]);
@@ -8765,6 +8861,28 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         mdRef.current = initial;
         setMd(initial);
         report();
+        // 阅读位置：滚动节流记录 + create 之后一拍恢复（挂载即恢复会白设——
+        // maxScroll 未建立）。docKey=归属路径，工作区 md 与知识库页同享
+        let posTimer = null;
+        const posAnchor = () => {
+          try { return h.editor.state.selection.from; } catch { return 0; }
+        };
+        const onPosScroll = () => {
+          if (posTimer !== null) return;
+          posTimer = setTimeout(() => {
+            posTimer = null;
+            recordReadPos(mountedKey, host, posAnchor());
+          }, 300);
+        };
+        host.addEventListener("scroll", onPosScroll);
+        restoreReadPos(mountedKey, host, (anchor) => {
+          try {
+            const size = h.editor.state.doc.content.size;
+            if (typeof anchor === "number" && anchor <= size) h.editor.commands.setTextSelection(anchor);
+          } catch {
+            /* 选区失效按纯滚动恢复 */
+          }
+        });
         // 自动保存（wangshu 同款 2s 防抖）：变更后 350ms 算 md（脏点基准），
         // 2s 后落盘；冲突时暂停（pausedRef）
         let mdTimer = null;
@@ -8950,6 +9068,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return () => {
           clearTimeout(mdTimer);
           clearTimeout(saveTimer);
+          // 阅读位置兜底记一次（隐藏容器由 recordReadPos 自行跳过）
+          if (posTimer !== null) clearTimeout(posTimer);
+          host.removeEventListener("scroll", onPosScroll);
+          recordReadPos(mountedKey, host, posAnchor());
           // 有防抖未触发的改动 → 卸载前尽力落盘（wangshu 同款保底；钉住挂载页
           // 路径，冲突时放弃）
           if (
@@ -11570,6 +11692,48 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }
     }
 
+    // ─────────── 官方右侧边栏试水（宿主 0.1.5+）───────────
+    // 目的只有一个：量「我们的面板住进官方右栏」的容器手感（全屏、宽度让位、
+    // 与自建舞台共存）。正文先用占位、复用舞台的签条 DOM/CSS——形态就是将来
+    // 要搬进去的样子。服务按运行期探测取用，**不进 dsh.client.inject**：0.1.2
+    // 宿主没有这个服务，硬注入会让整个插件起不来（正式环境仍是 0.1.2-rc.1）。
+    const RB_KIND = "dshk-workbench";
+    const RB_ID = "dsh-kit-workbench";
+    /** 官方 primitives 顺手验一下 require 能不能拿到（静态平台模块表里的条目，
+     *  按官方包的用法不需要声明 external）；拿不到就退回纯占位，不让正文整片消失 */
+    const RB_PRIM = (() => {
+      try { return require("@deepseek-ai/dsh-client-ui-primitives"); } catch (_e) { return null; }
+    })();
+    const RB_SNIPPET = [
+      "// 官方 CodeBlock（Shiki 高亮）在本插件 bundle 里的实测",
+      "export function stageBounds(type, sidebarW) {",
+      "  const min = STAGE_MIN_W[type] ?? 320;",
+      "  const max = Math.max(min, window.innerWidth - sidebarW - 400);",
+      "  return { min, max };",
+      "}",
+    ].join("\n");
+    function RightbarProbeBody() {
+      const [on, setOn] = react.useState("vault");
+      const feats = [["vault", t("vaultTitle")], ["schedule", t("schedTab")], ["browser", t("dockBrowser")]];
+      const CodeBlock = RB_PRIM ? RB_PRIM.CodeBlock : null;
+      return jsxRuntime.jsxs("div", { className: "dshk-rbprobe", children: [
+        jsxRuntime.jsx("div", { className: "dshk-stage-tabbar", children:
+          jsxRuntime.jsx("span", { className: "dshk-tabs", children: feats.map(([id, label]) =>
+            jsxRuntime.jsx("span", {
+              className: `dshk-tab${on === id ? " dshk-tab-on" : ""}`,
+              title: label,
+              onClick: () => setOn(id),
+              children: jsxRuntime.jsx("span", { className: "dshk-tab-label", children: label }),
+            }, id)) }) }),
+        jsxRuntime.jsxs("div", { className: "dshk-rbprobe-body", children: [
+          jsxRuntime.jsx("div", { className: "dshk-rbprobe-note", children: t("rbProbeHint") }),
+          CodeBlock
+            ? jsxRuntime.jsx(CodeBlock, { code: RB_SNIPPET, lang: "javascript", lineNumbers: true })
+            : jsxRuntime.jsx("div", { className: "dshk-rbprobe-note", children: t("rbProbeNoPrim") }),
+        ] }),
+      ] });
+    }
+
     // ─────────── 插件体 ───────────
     function apply(ctx) {
       slotsCtx = ctx;
@@ -11604,6 +11768,25 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           ),
         );
       }
+      // 官方右侧边栏试水：注册「舞台」页类型 + 正文槽位，只在宿主提供该服务时
+      // 生效（0.1.2 没有，静默跳过）。用 inject 等它就绪而非直接读——官方右栏
+      // 与本插件的客户端加载顺序不保证，直接读可能拿到 undefined。
+      const registerRightbarProbe = (rbCtx) => {
+        const tabs = rbCtx.sidebarRightTabs;
+        if (!tabs || typeof tabs.register !== "function") return;
+        rbCtx.effect(() => tabs.register({
+          id: RB_ID,
+          kind: RB_KIND,
+          title: () => t("stageLabel"),
+          guide: [{ order: 20, title: () => t("stageLabel"), description: () => t("rbProbeHint") }],
+        }), "dsh-kit: rightbar tab type");
+        rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.pane.tab", () => rbCtx.slots.register({
+          name: "sidebar.right.pane.tab",
+          key: RB_ID,
+        }, RightbarProbeBody)), "dsh-kit: rightbar pane body");
+      };
+      if (typeof ctx.inject === "function") ctx.inject(["sidebarRightTabs"], registerRightbarProbe);
+      else registerRightbarProbe(ctx);
       // 计时入口现居侧栏底部按钮区（右坞时代曾挂 composer/坞收起栏，均随右坞
       // 退役迁移）；运行态另有悬浮小窗与舞台日程标签内芯片。组件内部拉
       // /dsh-kit/schedule/* 数据，与 session 无关。
