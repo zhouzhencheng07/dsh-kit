@@ -71,7 +71,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultStageSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, SchedEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, StagePane, SidebarFooterActions, ScheduleIndexView, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openStageTab, closeStageTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, toggleSchedEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, stageAlive, stageBounds, stageWidthFor, stageIsPinned, stageWidthCommit, stagePinToggle, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, isPathInsideVaultRoot, vaultCiteText };",
+  "return { vaultSideSlot, vaultStageSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, SchedEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, StagePane, SidebarFooterActions, ScheduleIndexView, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openStageTab, closeStageTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, toggleSchedEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, stageAlive, stageBounds, stageWidthFor, stageIsPinned, stageWidthCommit, stagePinToggle, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, readPosStore, recordReadPos, isPathInsideVaultRoot, vaultCiteText };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -1015,6 +1015,21 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
   check("F3 turn-error 收尾：不算恢复", comps.monitorRecoveredTail([{ kind: "assistant", seq: 2 }, { kind: "turn-error", seq: 3, code: "RATE_LIMIT" }]) === false);
   check("F3 监视器停止（interrupted）：不算恢复", comps.monitorRecoveredTail([{ kind: "assistant", seq: 2, interrupted: true }]) === false);
   check("F3 空对话：不算恢复", comps.monitorRecoveredTail([]) === false);
+}
+
+// 10d) 阅读位置记忆（F2）：按路径存取 + 隐藏容器不记（display:none 时 scrollTop
+//      恒 0，记了会把真位置冲掉——非激活标签仍挂载，切走后的兜底路径会摸到这里）
+{
+  const visibleEl = { scrollTop: 1234, getClientRects: () => [{}] };
+  const hiddenEl = { scrollTop: 0, getClientRects: () => [] };
+  comps.recordReadPos("D:/w/long.md", visibleEl, 340);
+  check("阅读位置记录：可见容器按路径存 scrollTop+锚点", comps.readPosStore.get("D:/w/long.md")?.scrollTop === 1234 && comps.readPosStore.get("D:/w/long.md")?.anchor === 340);
+  comps.recordReadPos("D:/w/long.md", hiddenEl, 999);
+  check("阅读位置记录：隐藏容器跳过（不冲掉真位置）", comps.readPosStore.get("D:/w/long.md").anchor === 340);
+  comps.recordReadPos("D:/w/other.js", visibleEl, 12);
+  check("阅读位置互不串扰（按路径分键）", comps.readPosStore.get("D:/w/other.js").scrollTop === 1234 && comps.readPosStore.get("D:/w/long.md").anchor === 340);
+  comps.recordReadPos("D:/w/long.md", { scrollTop: 2222, getClientRects: () => [{}] }, 77);
+  check("同路径重记录覆盖旧值", comps.readPosStore.get("D:/w/long.md").scrollTop === 2222 && comps.readPosStore.get("D:/w/long.md").anchor === 77);
 }
 
 // 9) KitConfigCard（插件设置卡）：ready 快照 + 覆盖态
