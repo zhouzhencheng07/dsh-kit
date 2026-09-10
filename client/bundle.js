@@ -57,18 +57,18 @@ window.__ModuleLoader__.load({
     // 入口按钮（composer 工具行 / 侧栏底部钮）与舞台宿主（shell.overlay）是多个
     // 独立槽位组件，状态必须跨槽共享：模块级不可变快照 + useSyncExternalStore 订阅
     // （getSnapshot 返回模块绑定值，恒定引用直到 set 替换）。
-    // 舞台标签（2026-09-10 工作台定稿）：files（文件工作区，可编辑）/jobsOpen/
-    // browserOpen/schedOpen/vaultOpen 是「标签存在性」，stageTab 是当前激活标签，
-    // activeFile 是激活的文件；打开某功能 = 确保标签存在并激活，互斥清场废除
-    // （切走不丢状态）。0 标签 = 舞台不存在，对话回全宽居中（DSH 原生样子）。
-    // stageHidden = 舞台暂时隐藏（快捷键切换，会话态不持久化）：标签存在性全保留，
-    // agent 自动跟随（开浏览器/知识库跳页）会清掉它——agent 干活必须回到用户眼前。
-    // files 是「最近打开过的文件」缓存：2026-09-10 用户定稿只占一个「文件」标签
-    // （文件树/源代码管理/对话链接点开的页都在这一个标签里换内容，不然标签太乱），
-    // 非激活文件仍挂载（display:none）保住滚动与未落盘草稿，超上限按 LRU 逐出。
-    // vaultPages/activeVaultPage 相反：知识库每页一个标签（多开，同文件标签的
-    // 交互：✕ 单关、点击切换），vaultHist 是 ← → 的访问序（与标签存在性解耦）。
-    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, schedIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 }, stageTab: null, stageHidden: false };
+    // 舞台标签（2026-09-10 工作台定稿）：files（文件标签）/jobsOpen/browserOpen/
+    // schedOpen/vaultOpen 是「标签存在性」，stageTab 是当前激活标签，activeFile 是
+    // 激活的文件；打开某功能 = 确保标签存在并激活，互斥清场废除（切走不丢状态）。
+    // 0 标签 = 舞台不存在，对话回全宽居中（DSH 原生样子）。
+    // 舞台不可收起（同日用户定稿，隐藏态与快捷键一并取消）：舞台是工作台的中段，
+    // 藏起来会让「中间那页开着吗」多出一个看不见的第三态。
+    // files 与 vaultPages 同构（浏览器式：顶部一条标签条 + 下面若干内容页）——
+    // 一页一标签、点击切换、✕ 单关；文件树/源代码管理/对话链接点开都往这条标签条里
+    // 加标签，同路径复用一个（重开刷新 diff/未跟踪状态）。文件非激活仍挂载
+    // （display:none）保住滚动与未落盘草稿，超「文件标签数上限」自动关最久没看的
+    // 那张；vaultHist 是知识库 ← → 的访问序（与标签存在性解耦）。
+    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, schedIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 }, stageTab: null };
     const kitUiListeners = new Set();
     function setKitUi(patch) {
       kitUi = { ...kitUi, ...patch };
@@ -85,7 +85,7 @@ window.__ModuleLoader__.load({
      *  无抑制标志（用户定稿 2026-09-10：agent 操作浏览器为安全起见必须可见——
      *  人为关掉/隐藏的浏览器标签，agent 一下次导航照样弹回） */
     function maybeAutoOpenBrowser() {
-      if (kitUi.stageTab === "browser" && kitUi.browserOpen === true && kitUi.stageHidden === false) return;
+      if (kitUi.stageTab === "browser" && kitUi.browserOpen === true) return;
       setKitUi(openStageTab(kitUi, "browser"));
     }
     /** 浏览器没了（优雅关闭/空闲自动关/整只崩溃/页崩光）→ 收掉浏览器面板标签：
@@ -96,17 +96,16 @@ window.__ModuleLoader__.load({
     }
 
     const PREVIEW_MAX_DEFAULT = 8;
-    /** 文件标签上限（设置卡可配 1-20；快照未就绪回落默认 8）——文件工作区
-     *  缓存里最多同时挂多少个编辑器，不是标签条上的数量（标签条只有一个） */
+    /** 文件标签上限（设置卡可配 1-20；快照未就绪回落默认 8）——舞台标签条上
+     *  最多同时开几个文件标签，再开新的就关掉最久没看的那张 */
     function previewLimit() {
       const v = cfgFromSnapshot(getCfgSnapshot()).previewMaxTabs;
       return Math.max(1, Number.isInteger(v) ? v : PREVIEW_MAX_DEFAULT);
     }
     /** 舞台标签共存的活性判定（渲染舞台与否）；0 标签 = 舞台不存在 */
     const stageAlive = (ui) => (ui.files?.length ?? 0) > 0 || ui.jobsOpen === true || ui.browserOpen === true || ui.schedOpen === true || ui.vaultOpen === true;
-    /** 打开文件：不在标签条上新增标签（文件共用一个「文件」标签），只是把内容
-     *  换成这一个文件——已开过则复用（usedAt 刷新，deleted/untracked 同步为本
-     *  次状态）；缓存超过上限按 LRU 逐出最久未用的（绝不含本次）。
+    /** 打开文件 = 舞台标签条上加一个文件标签（已开过则复用、只刷新状态并激活）。
+     *  usedAt 是 LRU 判据（超上限时关掉最久没看的那张，绝不含本次）；
      *  deleted=已删除文件，只承载删除 diff。commit（可选）= 提交钉定模式
      *  （图谱提交详情进入，diff 视图与该提交的第一父对比）；重开同路径时
      *  commit 随入口刷新（从 SCM 更改列表重开即清除钉定） */
@@ -126,7 +125,27 @@ window.__ModuleLoader__.load({
         if (oldest === null) break;
         list = list.filter((x) => x.path !== oldest.path);
       }
-      return { files: list, activeFile: path, stageTab: "file", stageHidden: false };
+      return { files: list, activeFile: path, stageTab: "file" };
+    }
+    /** 只激活一个文件标签（标签条点击走这里）：刷新 usedAt（LRU 判据是「最久没看
+     *  的那张」），不重设 diff/未跟踪状态——那是入口（openFileTab）的事 */
+    function activateFileTab(ui, path) {
+      const items = ui.files ?? [];
+      if (!items.some((x) => x.path === path)) return {};
+      const now = Date.now();
+      return { files: items.map((x) => (x.path === path ? { ...x, usedAt: now } : x)), activeFile: path, stageTab: "file" };
+    }
+    /** 关一个文件标签：激活位顺延邻居；关光了整片文件舞台收摊（走 closeStageTab，
+     *  激活位顺延到余下的存在标签） */
+    function closeFileTab(ui, path) {
+      const items = ui.files ?? [];
+      const idx = items.findIndex((x) => x.path === path);
+      if (idx < 0) return {};
+      const rest = items.filter((x) => x.path !== path);
+      if (rest.length === 0) return { ...closeStageTab(ui, "file"), files: [], activeFile: null };
+      const patch = { files: rest };
+      if (ui.activeFile === path) patch.activeFile = rest[Math.min(idx, rest.length - 1)].path;
+      return patch;
     }
 
     // ── 知识库页标签（多开，2026-09-10 用户定稿：与文件标签同款交互）──
@@ -158,13 +177,12 @@ window.__ModuleLoader__.load({
         vaultOpen: true,
         vaultHist: hist ? vaultHistPush(ui.vaultHist ?? { stack: [], idx: -1 }, path) : (ui.vaultHist ?? { stack: [], idx: -1 }),
         stageTab: "vault",
-        stageHidden: false,
       };
     }
     /** 只激活（标签条点击/← → 走这里，不动访问序） */
     function activateVaultPage(ui, path) {
       if (!(ui.vaultPages ?? []).includes(path)) return {};
-      return { vaultPages: ui.vaultPages, activeVaultPage: path, vaultOpen: true, stageTab: "vault", stageHidden: false };
+      return { vaultPages: ui.vaultPages, activeVaultPage: path, vaultOpen: true, stageTab: "vault" };
     }
     /** 关一个知识库页标签：激活位顺延邻居；关光了则整片知识库舞台收摊
      *  （索引视图不跟着关——那是侧栏的事，输入行入口管它） */
@@ -211,33 +229,46 @@ window.__ModuleLoader__.load({
       return patch;
     }
     /** 打开/激活一个舞台标签（标签栏「+」菜单与输入行入口共用）：确保存在并
-     *  激活、解除隐藏；不清别的标签。浏览器的抑制已废除（agent 干活必回眼前） */
+     *  激活、不清别的标签。浏览器的抑制已废除（agent 干活必回眼前） */
     function openStageTab(ui, tab) {
-      if (tab === "jobs") return { jobsOpen: true, stageTab: "jobs", stageHidden: false };
-      if (tab === "schedule") return { schedOpen: true, stageTab: "schedule", stageHidden: false };
-      if (tab === "vault") return { vaultOpen: true, stageTab: "vault", stageHidden: false };
-      return { browserOpen: true, stageTab: "browser", stageHidden: false };
+      if (tab === "jobs") return { jobsOpen: true, stageTab: "jobs" };
+      if (tab === "schedule") return { schedOpen: true, stageTab: "schedule" };
+      if (tab === "vault") return { vaultOpen: true, stageTab: "vault" };
+      return { browserOpen: true, stageTab: "browser" };
     }
 
-    // ── 知识库/日程入口开合（输入行两钮/快捷键/舞台「+」菜单共用，用户定稿
-    // 2026-09-10）──
+    // ── 侧栏索引视图单槽与入口按钮（文件树/源代码管理/知识库/日程，四个入口
+    // 按钮 + 四个快捷键 + 舞台「+」菜单共用，用户定稿 2026-09-10）──
+    // 侧栏只有一格（会话 ↔ 文件树 ↔ 源代码管理 ↔ 知识库目录 ↔ 日程待办），
+    // 四个按钮的选中态直接取各自的开合位（用户定稿：选中态与侧栏显示相关、与
+    // 舞台标签无关）——所以四者必须互斥：否则同一个侧栏位上会有两个按钮一起亮，
+    // 而视图按优先级只显示其中一个。
+    /** 单槽互斥补丁：view = 'tree' | 'scm' | 'vault' | 'sched' | null */
+    function sidebarViewPatch(view) {
+      return {
+        treeOpen: view === "tree",
+        gitOpen: view === "scm",
+        vaultIdxOpen: view === "vault",
+        schedIdxOpen: view === "sched",
+      };
+    }
     // 语义：关 → 开；开 → 一起关（侧栏索引回会话列表 + 舞台那片标签也关掉）。
     // 「开」= 侧栏索引视图 + 对应舞台标签，一次点击两边到位；收起态顺带展开
     // 侧栏（视图渲染进铁轨等于不可见）。
     function openVaultEntry(ui) {
       expandSidebarNow();
-      return { vaultIdxOpen: true, treeOpen: false, gitOpen: false, schedIdxOpen: false, ...openStageTab(ui, "vault") };
+      return { ...sidebarViewPatch("vault"), ...openStageTab(ui, "vault") };
     }
     function openSchedEntry(ui) {
       expandSidebarNow();
-      return { schedIdxOpen: true, treeOpen: false, gitOpen: false, vaultIdxOpen: false, ...openStageTab(ui, "schedule") };
+      return { ...sidebarViewPatch("sched"), ...openStageTab(ui, "schedule") };
     }
     function toggleVaultEntry(ui) {
-      if (ui.vaultIdxOpen === true) return { ...closeAllVaultTabs(ui), vaultIdxOpen: false };
+      if (ui.vaultIdxOpen === true) return { ...closeAllVaultTabs(ui), ...sidebarViewPatch(null) };
       return openVaultEntry(ui);
     }
     function toggleSchedEntry(ui) {
-      if (ui.schedIdxOpen === true) return { ...closeStageTab(ui, "schedule"), schedIdxOpen: false };
+      if (ui.schedIdxOpen === true) return { ...closeStageTab(ui, "schedule"), ...sidebarViewPatch(null) };
       return openSchedEntry(ui);
     }
 
@@ -400,8 +431,6 @@ window.__ModuleLoader__.load({
       schedShortcut: "Ctrl+Alt+S",
       sidebarShortcut: "Ctrl+B",
       sidebarShortcutEnabled: true,
-      dockShortcut: "Ctrl+Alt+B",
-      dockShortcutEnabled: true,
     };
     /** 组合键规范化主键：单字符统一大写、空格记作 Space */
     function normComboKey(key) {
@@ -503,11 +532,6 @@ window.__ModuleLoader__.load({
             ? v.sidebarShortcut
             : CFG_DEFAULTS.sidebarShortcut,
         sidebarShortcutEnabled: v.sidebarShortcutEnabled !== false,
-        dockShortcut:
-          typeof v.dockShortcut === "string" && parseCombo(v.dockShortcut)
-            ? v.dockShortcut
-            : CFG_DEFAULTS.dockShortcut,
-        dockShortcutEnabled: v.dockShortcutEnabled !== false,
       };
     }
     // 模块级通道（apply 注入 / KitSurfaces 订阅 / 设置卡捕获互斥）
@@ -931,8 +955,8 @@ window.__ModuleLoader__.load({
       monitorErrTIMEOUT: "请求超时",
       monitorErrTRANSPORT: "网络传输错误",
       monitorErrEMPTY_RESPONSE: "模型返回空响应",
-      cfgPreviewMaxTabs: "同时打开的文件数上限",
-      cfgPreviewMaxTabsHint: "文件共用一个「文件」标签，标签里换内容；同时挂着的文件编辑器超过该数时，最早看的那个被卸下（1-20，即时生效）",
+      cfgPreviewMaxTabs: "文件标签数上限",
+      cfgPreviewMaxTabsHint: "舞台文件标签超过该数时，打开新文件自动关掉最久没看的那个（1-20，即时生效）",
       browserUrlPh: "输入网址，回车打开",
       browserGo: "打开",
       browserBack: "后退",
@@ -945,7 +969,7 @@ window.__ModuleLoader__.load({
       browserNotRunning: "浏览器未启动——在上方输入网址回车，或等 agent 首次使用时自动拉起",
       browserNoPages: "没有打开的页面——在上方输入网址回车，或等 agent 下次导航自动出现在这里",
       dockPreview: "预览",
-      dockJobs: "任务",
+      dockJobs: "后台任务",
       dockBrowser: "浏览器",
       dockClose: "关闭标签",
       pvCloseTab: "关闭此标签",
@@ -1174,9 +1198,6 @@ window.__ModuleLoader__.load({
       cfgFileTreeShortcut: "文件树快捷键",
       cfgSidebarShortcut: "侧边栏展开/收起快捷键",
       cfgSidebarShortcutEnabled: "启用侧边栏快捷键",
-      cfgDockShortcut: "舞台展开/收起快捷键",
-      cfgDockShortcutEnabled: "启用舞台快捷键",
-      cfgDockShortcutEnabledHint: "关闭后快捷键不再响应",
       cfgSidebarShortcutEnabledHint: "关闭后快捷键不再响应",
       cfgSourceControlEnabled: "启用源代码管理",
       cfgSourceControlEnabledHint: "关闭后隐藏入口按钮与快捷键",
@@ -1393,8 +1414,8 @@ window.__ModuleLoader__.load({
       monitorErrTIMEOUT: "request timeout",
       monitorErrTRANSPORT: "network transport error",
       monitorErrEMPTY_RESPONSE: "empty model response",
-      cfgPreviewMaxTabs: "Open files kept alive",
-      cfgPreviewMaxTabsHint: "All files share one tab that swaps its content; beyond the limit the least-recently-viewed editor is dropped (1-20, applies immediately)",
+      cfgPreviewMaxTabs: "Max file tabs",
+      cfgPreviewMaxTabsHint: "Beyond the limit, opening a new file closes the least-recently-viewed file tab (1-20, applies immediately)",
       browserUrlPh: "Type a URL and press Enter",
       browserGo: "Go",
       browserBack: "Back",
@@ -1407,7 +1428,7 @@ window.__ModuleLoader__.load({
       browserNotRunning: "Browser not started — type a URL above or wait for the agent's first use",
       browserNoPages: "No open pages — type a URL above, or the agent's next navigation will appear here",
       dockPreview: "Preview",
-      dockJobs: "Jobs",
+      dockJobs: "Background tasks",
       dockBrowser: "Browser",
       dockClose: "Close tab",
       pvCloseTab: "Close this tab",
@@ -1434,9 +1455,6 @@ window.__ModuleLoader__.load({
       cfgFileTreeShortcut: "File tree shortcut",
       cfgSidebarShortcut: "Sidebar toggle shortcut",
       cfgSidebarShortcutEnabled: "Enable sidebar shortcut",
-      cfgDockShortcut: "Stage toggle shortcut",
-      cfgDockShortcutEnabled: "Enable stage shortcut",
-      cfgDockShortcutEnabledHint: "Disables the stage shortcut",
       cfgSidebarShortcutEnabledHint: "Disables the sidebar shortcut",
       cfgSourceControlEnabled: "Enable source control",
       cfgSourceControlEnabledHint: "Hides the entry button and its shortcut",
@@ -1761,8 +1779,9 @@ window.__ModuleLoader__.load({
 /* 多终端：入口图标数量角标 + 标签条 + 堆叠 pane（隐藏 pane 离屏缓冲输出） */
 .dshk-enbtn{position:relative}
 .dshk-term-badge{position:absolute;top:-4px;right:-4px;min-width:14px;height:14px;padding:0 3px;box-sizing:border-box;border-radius:999px;background:var(--dsw-alias-brand-primary);color:#fff;font-size:9px;line-height:14px;text-align:center;font-weight:600}
-.dshk-tabs{display:inline-flex;align-items:center;gap:2px;min-width:0;overflow:hidden}
-.dshk-tab{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 5px 0 9px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap;max-width:170px;user-select:none}
+.dshk-tabs{display:inline-flex;align-items:center;gap:2px;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.dshk-tabs::-webkit-scrollbar{display:none}
+.dshk-tab{display:inline-flex;align-items:center;gap:5px;flex:none;height:22px;padding:0 5px 0 9px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap;max-width:170px;user-select:none}
 .dshk-tab:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-tab-on,.dshk-tab-on:hover{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-label-primary)}
 .dshk-tab-label{overflow:hidden;text-overflow:ellipsis}
@@ -2281,6 +2300,11 @@ body.dshk-stage-open .dshk-timer-pill{left:calc(var(--dshk-stage-left,0px) + var
 /* 内置浏览器面板：URL 栏 + 实时画面 canvas（人机共驾） */
 /* 右侧标签页容器：内容视图占满（非激活标签 display:none 保挂载） */
 .dshk-pane-view{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
+/* 功能内容区（文件/知识库）：顶部文档签条 + 下面的内容页；签条超宽横向滚动
+   （滚动条隐藏），标签多了滑过去点，不被裁掉 */
+.dshk-pane-area{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
+.dshk-subtabs{flex:none;display:flex;align-items:center;gap:2px;min-width:0;padding:6px 8px 4px;border-bottom:1px solid var(--dsw-alias-border-l1);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.dshk-subtabs::-webkit-scrollbar{display:none}
 .dshk-brw-tabrow,.dshk-pv-tabrow{flex:none;display:flex;align-items:center;gap:4px;padding:8px 10px 2px;min-width:0;overflow:hidden}
 .dshk-brw-newtab{padding:0 7px;font-size:13px}
 .dshk-brw-nav{flex:none;min-width:26px}
@@ -6250,6 +6274,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       if (btn) btn.click();
     }
 
+    /** 文件树入口：非文件树态 → 打开文件树（顺带展开收起的侧栏）；已是 → 关闭回
+     *  会话列表。走单槽互斥补丁（打开文件树同时让出源代码管理/知识库目录/日程
+     *  待办那一格），关闭动作保留已打开的文件标签（标签有独立 ✕） */
     function FileTreeEntry() {
       const ui = useKitUi();
       return jsxRuntime.jsx("button", {
@@ -6258,17 +6285,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         "aria-pressed": ui.treeOpen,
         title: t("treeLabel"),
         onClick: () => {
-          // Ctrl+E/按钮同语义：非文件树态 → 打开文件树；已是文件树 → 关闭回会话列表。
-          // 打开动作先兜底展开被收起的侧边栏（否则视图渲染进图标栏等于不可见）；
-          // 关闭动作保留文件预览（预览有独立 ✕，关来源视图不连带关预览）
           if (!ui.treeOpen) expandSidebarNow();
-          setKitUi({ treeOpen: !ui.treeOpen, gitOpen: false });
+          setKitUi(sidebarViewPatch(ui.treeOpen ? null : "tree"));
         },
         children: jsxRuntime.jsx(FolderIcon, {}),
       });
     }
 
-    /** 源代码管理入口：独立开关——非 SCM 态打开(收起文件树)；已开 → 关闭回会话列表 */
+    /** 源代码管理入口：同文件树语义（互斥占格，关闭保留已打开的文件标签） */
     function ScmEntry() {
       const ui = useKitUi();
       return jsxRuntime.jsx("button", {
@@ -6278,7 +6302,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         title: t("scTitle"),
         onClick: () => {
           if (!ui.gitOpen) expandSidebarNow();
-          setKitUi({ gitOpen: !ui.gitOpen, treeOpen: false });
+          setKitUi(sidebarViewPatch(ui.gitOpen ? null : "scm"));
         },
         children: jsxRuntime.jsx(BranchIcon, {}),
       });
@@ -9862,8 +9886,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 侧栏底部按钮区（官方 sidebar.footer.action 列表槽，入参 wide 旗标）：
-     *  知识库/日程（有索引→开侧栏视图）、任务/浏览器（无索引→直开舞台标签）、
-     *  计时（起表/运行态/停表确认）五钮常驻 + 文件钮被动出现（有文件标签才有）。
+     *  后台任务/浏览器（无索引→直开舞台标签，任务带运行中计数角标）、计时
+     *  （起表/运行态/停表确认）三钮常驻。文件没有钮（用户定稿 2026-09-10：
+     *  文件的位子在中间舞台标签条，侧栏底部只放「不由侧栏索引承载」的开关）。
      *  宽态=图标+文字，收起态=纯图标（官方 CSS 收起态已让 footArea 居中）；
      *  收起态点击顺带展开侧栏 */
     function SidebarFooterActions({ wide, useSessions }) {
@@ -9904,16 +9929,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         setKitUi(openStageTab(kitUi, id));
       };
       const items = [];
-      if ((ui.files?.length ?? 0) > 0) {
-        // 文件钮被动出现：激活当前文件标签（无激活位则取第一个）
-        const target = ui.activeFile ?? ui.files[0].path;
-        items.push({ id: "file", label: t("stageFileBtn"), icon: VaultPageIcon, on: ui.stageTab === "file" && ui.stageHidden !== true, click: () => { expandSidebarNow(); setKitUi(openFileTab(kitUi, target)); } });
-      }
       if (cfg.jobsEnabled !== false) {
-        items.push({ id: "jobs", label: t("dockJobs"), icon: JobsIcon, on: ui.jobsOpen === true && ui.stageHidden !== true, badge: liveJobs, click: () => openStage("jobs") });
+        items.push({ id: "jobs", label: t("dockJobs"), icon: JobsIcon, on: ui.jobsOpen === true, badge: liveJobs, click: () => openStage("jobs") });
       }
       if (cfg.browserEnabled !== false) {
-        items.push({ id: "browser", label: t("dockBrowser"), icon: BrowserIcon, on: ui.browserOpen === true && ui.stageHidden !== true, click: () => openStage("browser") });
+        items.push({ id: "browser", label: t("dockBrowser"), icon: BrowserIcon, on: ui.browserOpen === true, click: () => openStage("browser") });
       }
       // 计时钮恒显（日程/计时无 cfg 门控）：空闲=起表弹窗，运行=脉冲点+时长
       items.push({
@@ -9991,9 +10011,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       ] });
     }
 
-    /** 舞台容器：顶部标签栏（文件逐个 + 功能标签 + 「+」菜单 + 图钉）+ 内容区。
-     *  0 标签时不渲染（对话回全宽居中）；stageHidden 只藏不关（快捷键开合），
-     *  agent 自动跟随会清掉它 */
+    /** 舞台容器：顶部标签栏（文件/知识库页/功能标签 + 「+」菜单 + 图钉）+ 内容区。
+     *  0 标签时不渲染（对话回全宽居中）；舞台不可收起（隐藏态与快捷键已取消） */
     function StagePane({ props, cwd }) {
       const ui = useKitUi();
       const sidebarW = useSidebarW();
@@ -10059,22 +10078,73 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         else if (id === "schedule") setKitUi(openSchedEntry(kitUi));
         else setKitUi(openStageTab(kitUi, id));
       };
-      const switchTab = (id) => setKitUi({ stageTab: id, stageHidden: false });
+      const switchTab = (id) => setKitUi({ stageTab: id });
       const closeTab = (id) => setKitUi(closeStageTab(kitUi, id));
       const pinOn = stageIsPinned(type);
       const onPin = () => {
         stagePinToggle(type, width);
         bumpPin((x) => x + 1);
       };
-      // 标签条：文件共用一个标签 + 知识库逐页一签 + 功能标签；「+」紧随其后
+      // 标签分两层（用户定稿 2026-09-10：和内置浏览器一样）——
+      // 顶层是「功能签」：文件/知识库/后台任务/日程/浏览器各一张，✕ 关整片；
+      // 属于一个功能的「文档签」（每个文件、每个知识库页）显示在它自己的内容区
+      // 顶部的子标签条里。顶层因此恒为「每个功能一张」，开多少文件都不会把顶栏
+      // 撑乱。
       const featureLabels = { jobs: t("dockJobs"), schedule: t("schedTab"), vault: t("vaultTitle"), browser: t("dockBrowser") };
       const vaultPages = ui.vaultPages ?? [];
-      const vaultLabel = tab === "vault" && ui.activeVaultPage ? pageBasename(ui.activeVaultPage) || t("vaultTitle") : featureLabels.vault;
+      /** 顶层功能签：点击激活、✕ 关整片（文件=关掉所有文件签，知识库=关掉所有页签） */
+      const featureChip = (id, label, badge) =>
+        jsxRuntime.jsxs("span", {
+          className: `dshk-tab${tab === id ? " dshk-tab-on" : ""}`,
+          title: label,
+          onClick: () => switchTab(id),
+          children: [
+            jsxRuntime.jsx("span", { className: "dshk-tab-label", children: label }),
+            badge > 0 ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(badge) }) : null,
+            jsxRuntime.jsx("button", {
+              type: "button",
+              className: "dshk-tab-x",
+              "aria-label": t("dockClose"),
+              title: t("dockClose"),
+              onClick: (e) => {
+                e.stopPropagation();
+                closeTab(id);
+              },
+              children: "✕",
+            }),
+          ],
+        }, id);
+      /** 内容区子标签条（浏览器式页签）：一文档一签、点击切换、✕ 单关；
+       *  label(path) 决定签名（文件带后缀、知识库页去掉 .md） */
+      const docChips = (paths, activePath, activate, closeOne, label) =>
+        paths.map((p) =>
+          jsxRuntime.jsxs("span", {
+            className: `dshk-tab${p === activePath ? " dshk-tab-on" : ""}`,
+            title: p,
+            onClick: () => setKitUi(activate(p)),
+            children: [
+              jsxRuntime.jsx("span", { className: "dshk-tab-label", children: label(p) }),
+              jsxRuntime.jsx("button", {
+                type: "button",
+                className: "dshk-tab-x",
+                "aria-label": t("pvCloseTab"),
+                title: t("pvCloseTab"),
+                onClick: (e) => {
+                  e.stopPropagation();
+                  setKitUi(closeOne(p));
+                },
+                children: "✕",
+              }),
+            ],
+          }, p),
+        );
+      const fileDocChips = docChips((ui.files ?? []).map((x) => x.path), ui.activeFile, (p) => activateFileTab(kitUi, p), (p) => closeFileTab(kitUi, p), (p) => baseName(p) || t("stageFileBtn"));
+      const vaultDocChips = docChips(vaultPages, ui.activeVaultPage, (p) => activateVaultPage(kitUi, p), (p) => closeVaultPageTab(kitUi, p), (p) => pageBasename(p) || t("vaultTitle"));
       return jsxRuntime.jsxs("div", {
         className: "dshk-stage",
         "data-dragging": dragging || undefined,
         role: "complementary",
-        "aria-label": `${t("stageLabel")} · ${tab === "file" ? t("stageFileBtn") : tab === "vault" ? vaultLabel : featureLabels[tab] ?? t("stageLabel")}`,
+        "aria-label": `${t("stageLabel")} · ${tab === "file" ? baseName(ui.activeFile) || t("stageFileBtn") : tab === "vault" ? pageBasename(ui.activeVaultPage ?? "") || t("vaultTitle") : featureLabels[tab] ?? t("stageLabel")}`,
         children: [
           // 右缘拖拽手柄：拖动实时写 CSS 变量跟手，松手落宽度模型
           jsxRuntime.jsx("div", { className: "dshk-stage-handle", onPointerDown: onHandleDown }),
@@ -10082,95 +10152,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             jsxRuntime.jsx("span", {
               className: "dshk-tabs",
               children: [
-                // 文件：只一个共用标签（2026-09-10 用户定稿）。标签名跟着当前
-                // 文件走——文件树/源代码管理/对话链接点开都在这一个标签里换内容
-                (ui.files ?? []).length > 0
-                  ? jsxRuntime.jsxs("span", {
-                      className: `dshk-tab${tab === "file" ? " dshk-tab-on" : ""}`,
-                      title: ui.activeFile ?? "",
-                      onClick: () => switchTab("file"),
-                      children: [
-                        jsxRuntime.jsx("span", { className: "dshk-tab-label", children: baseName(ui.activeFile) || t("stageFileBtn") }),
-                        jsxRuntime.jsx("button", {
-                          type: "button",
-                          className: "dshk-tab-x",
-                          "aria-label": t("pvCloseTab"),
-                          title: t("pvCloseTab"),
-                          onClick: (e) => {
-                            e.stopPropagation();
-                            closeTab("file");
-                          },
-                          children: "✕",
-                        }),
-                      ],
-                    })
-                  : null,
-                // 知识库页标签（多开）：一页一签、点击切换、✕ 单关（关光了整片收摊）
-                ...vaultPages.map((p) =>
-                  jsxRuntime.jsxs("span", {
-                    className: `dshk-tab${tab === "vault" && p === ui.activeVaultPage ? " dshk-tab-on" : ""}`,
-                    title: p,
-                    onClick: () => setKitUi(activateVaultPage(kitUi, p)),
-                    children: [
-                      jsxRuntime.jsx("span", { className: "dshk-tab-label", children: pageBasename(p) }),
-                      jsxRuntime.jsx("button", {
-                        type: "button",
-                        className: "dshk-tab-x",
-                        "aria-label": t("pvCloseTab"),
-                        title: t("pvCloseTab"),
-                        onClick: (e) => {
-                          e.stopPropagation();
-                          setKitUi(closeVaultPageTab(kitUi, p));
-                        },
-                        children: "✕",
-                      }),
-                    ],
-                  }, p),
-                ),
-                // 一页都没开时的知识库空签：入口点开即见舞台（提示去索引挑页）
-                ui.vaultOpen === true && vaultPages.length === 0
-                  ? jsxRuntime.jsxs("span", {
-                      className: `dshk-tab${tab === "vault" ? " dshk-tab-on" : ""}`,
-                      onClick: () => switchTab("vault"),
-                      children: [
-                        jsxRuntime.jsx("span", { className: "dshk-tab-label", children: featureLabels.vault }),
-                        jsxRuntime.jsx("button", {
-                          type: "button",
-                          className: "dshk-tab-x",
-                          "aria-label": t("dockClose"),
-                          title: t("dockClose"),
-                          onClick: (e) => {
-                            e.stopPropagation();
-                            closeTab("vault");
-                          },
-                          children: "✕",
-                        }),
-                      ],
-                    })
-                  : null,
-                ...(["jobs", "schedule", "browser"].filter((id) => exists[id]).map((id) =>
-                  jsxRuntime.jsxs("span", {
-                    className: `dshk-tab${tab === id ? " dshk-tab-on" : ""}`,
-                    onClick: () => switchTab(id),
-                    children: [
-                      jsxRuntime.jsx("span", { className: "dshk-tab-label", children: featureLabels[id] }),
-                      id === "jobs" && liveJobs > 0
-                        ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(liveJobs) })
-                        : null,
-                      jsxRuntime.jsx("button", {
-                        type: "button",
-                        className: "dshk-tab-x",
-                        "aria-label": t("dockClose"),
-                        title: t("dockClose"),
-                        onClick: (e) => {
-                          e.stopPropagation();
-                          closeTab(id);
-                        },
-                        children: "✕",
-                      }),
-                    ],
-                  }, id),
-                )),
+                // 顶层功能签：文件与知识库各一张（它们的文档签在各自内容区里）
+                (ui.files ?? []).length > 0 ? featureChip("file", t("stageFileBtn"), 0) : null,
+                ui.vaultOpen === true ? featureChip("vault", t("vaultTitle"), 0) : null,
+                ...["jobs", "schedule", "browser"].filter((id) => exists[id]).map((id) => featureChip(id, featureLabels[id], id === "jobs" ? liveJobs : 0)),
               ],
             }),
             openable.length > 0
@@ -10226,23 +10211,31 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             }),
             menuOpen ? jsxRuntime.jsx("div", { className: "dshk-dock-backdrop", onClick: () => setMenuOpen(false) }) : null,
           ] }),
-          // 文件标签：多实例内容（非激活 display:none 保挂载——切回滚动/草稿不丢）
-          (ui.files ?? []).map((pv) =>
-            jsxRuntime.jsx("div", {
-              className: "dshk-pane-view",
-              style: { display: tab === "file" && pv.path === ui.activeFile ? "flex" : "none" },
-              children: jsxRuntime.jsx(FileEditorPane, {
-                key: pv.path,
-                path: pv.path,
-                source: pv.from ?? "tree",
-                untracked: pv.untracked === true,
-                deleted: pv.deleted === true,
-                commit: pv.commit,
-                cwd,
-                onOpenFile: (p, untracked) => setKitUi(openFileTab(kitUi, p, "md-link", untracked === true)),
-              }),
-            }, pv.path),
-          ),
+          // 文件区：顶部它自己的文档签条（一文件一签）+ 多实例内容（非激活
+          // display:none 保挂载——切回滚动/草稿不丢）；整片随顶层「文件」签显隐
+          jsxRuntime.jsxs("div", {
+            className: "dshk-pane-area",
+            style: { display: tab === "file" ? "flex" : "none" },
+            children: [
+              (ui.files ?? []).length > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: fileDocChips }) : null,
+              (ui.files ?? []).map((pv) =>
+                jsxRuntime.jsx("div", {
+                  className: "dshk-pane-view",
+                  style: { display: tab === "file" && pv.path === ui.activeFile ? "flex" : "none" },
+                  children: jsxRuntime.jsx(FileEditorPane, {
+                    key: pv.path,
+                    path: pv.path,
+                    source: pv.from ?? "tree",
+                    untracked: pv.untracked === true,
+                    deleted: pv.deleted === true,
+                    commit: pv.commit,
+                    cwd,
+                    onOpenFile: (p, untracked) => setKitUi(openFileTab(kitUi, p, "md-link", untracked === true)),
+                  }),
+                }, pv.path),
+              ),
+            ],
+          }),
           jsxRuntime.jsx("div", {
             className: "dshk-pane-view",
             style: { display: tab === "jobs" ? "flex" : "none" },
@@ -10258,12 +10251,17 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             style: { display: tab === "schedule" ? "flex" : "none" },
             children: ui.schedOpen ? jsxRuntime.jsx(ScheduleView, { active: tab === "schedule" }) : null,
           }),
-          // 知识库标签：宿主 div——VaultRootView（KitSurfaces 单实例挂载）经
-          // portal 投进页编辑器；宿主登记/注销走 callback ref
-          jsxRuntime.jsx("div", {
-            className: "dshk-vault-stagehost",
+          // 知识库区：顶部它自己的页签条（一页一签，一页都没开时不显示——那会儿
+          // 宿主里是「去索引挑一页」的空态）+ 宿主 div：VaultRootView（KitSurfaces
+          // 单实例挂载）经 portal 把每页的 VaultPagePane 投进来；宿主登记/注销走
+          // callback ref（宿主常驻渲染，避免开合时 portal 目标缺失的时序问题）
+          jsxRuntime.jsxs("div", {
+            className: "dshk-pane-area",
             style: { display: tab === "vault" ? "flex" : "none" },
-            ref: (el) => vaultStageSlot.set(el),
+            children: [
+              vaultPages.length > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: vaultDocChips }) : null,
+              jsxRuntime.jsx("div", { className: "dshk-vault-stagehost", ref: (el) => vaultStageSlot.set(el) }),
+            ],
           }),
         ],
       });
@@ -10492,8 +10490,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
       // 快捷键统一在此监听：组合键来自配置（默认 Ctrl+E / Ctrl+Alt+. 等，capture
       // 拦截避免页面其它快捷键抢先），对应功能关闭时不响应；设置卡录制新键时让路。
-      // Esc 分层：先关当前舞台标签（知识库关当前页标签、文件关那个共用标签），
-      // 再关侧栏视图（不拦截，避免挡掉其它 Esc 行为）。
+      // Esc 分层：先关当前舞台标签（知识库关当前页那张、文件关当前文件那张），
+      // 再关侧栏视图（不拦截，避免挡掉其它 Esc 行为）。舞台收起的隐藏态与快捷键
+      // 已取消（用户定稿 2026-09-10）——舞台是工作台的中段，没有「开着但看不见」态。
       react.useEffect(() => {
         const termCombo = parseCombo(cfg.terminalShortcut);
         const treeCombo = parseCombo(cfg.fileTreeShortcut);
@@ -10501,7 +10500,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const vaultCombo = parseCombo(cfg.vaultShortcut);
         const schedCombo = parseCombo(cfg.schedShortcut);
         const sidebarCombo = parseCombo(cfg.sidebarShortcut);
-        const dockCombo = parseCombo(cfg.dockShortcut);
         const onKey = (e) => {
           if (shortcutCapture !== null) return;
           if (inlineEditCapture) return;
@@ -10515,9 +10513,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           if (treeCombo && cfg.fileTreeEnabled && comboMatches(e, treeCombo)) {
             e.preventDefault();
             e.stopPropagation();
-            // Ctrl+E 只管文件树：非文件树态 → 打开（展开侧边栏）；已是 → 关闭回会话列表
+            // Ctrl+E 只管文件树（与入口按钮同语义，单槽互斥）
             if (!kitUi.treeOpen) expandSidebarNow();
-            setKitUi({ treeOpen: !kitUi.treeOpen, gitOpen: false, vaultIdxOpen: false, schedIdxOpen: false });
+            setKitUi(sidebarViewPatch(kitUi.treeOpen ? null : "tree"));
             return;
           }
           if (scCombo && cfg.sourceControlEnabled && comboMatches(e, scCombo)) {
@@ -10525,7 +10523,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             e.stopPropagation();
             // 源代码管理同语义：非 SCM 态 → 打开（展开侧边栏）；已是 → 关闭回会话列表
             if (!kitUi.gitOpen) expandSidebarNow();
-            setKitUi({ gitOpen: !kitUi.gitOpen, treeOpen: false, vaultIdxOpen: false, schedIdxOpen: false });
+            setKitUi(sidebarViewPatch(kitUi.gitOpen ? null : "scm"));
             return;
           }
           if (vaultCombo && cfg.vaultEnabled !== false && comboMatches(e, vaultCombo)) {
@@ -10547,37 +10545,31 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             toggleSidebar();
             return;
           }
-          if (dockCombo && cfg.dockShortcutEnabled !== false && comboMatches(e, dockCombo)) {
-            // 舞台开合（隐藏不关标签，存在性全保留；agent 自动跟随会解除隐藏）
-            e.preventDefault();
-            e.stopPropagation();
-            setKitUi({ stageHidden: kitUi.stageHidden !== true });
-            return;
-          }
           if (e.key === "Escape") {
             // 日程弹窗开着时让路：Esc 归弹窗自己（只关弹窗，不收标签页）
             if (schedModalOpen) return;
-            // 舞台：Esc 关当前激活标签（知识库关当前页那一个标签，文件关共用的
-            // 文件标签）；隐藏态不吞 Esc（舞台本就不可见）
-            if (stageAlive(kitUi) && kitUi.stageHidden !== true) {
+            // 舞台：Esc 关当前激活那个标签（知识库关当前页那张、文件关当前文件
+            // 那张，各自与标签条的 ✕ 同语义）
+            if (stageAlive(kitUi)) {
               if (kitUi.stageTab === "vault" && kitUi.activeVaultPage) {
                 setKitUi(closeVaultPageTab(kitUi, kitUi.activeVaultPage));
+              } else if (kitUi.stageTab === "file" && kitUi.activeFile) {
+                setKitUi(closeFileTab(kitUi, kitUi.activeFile));
               } else {
                 const tab = kitUi.stageTab ?? ((kitUi.files?.length ?? 0) > 0 ? "file" : kitUi.jobsOpen ? "jobs" : kitUi.schedOpen ? "schedule" : kitUi.vaultOpen ? "vault" : "browser");
                 setKitUi(closeStageTab(kitUi, tab));
               }
-            } else if (kitUi.gitOpen) setKitUi({ gitOpen: false });
-            else if (kitUi.treeOpen) setKitUi({ treeOpen: false });
-            else if (kitUi.vaultIdxOpen) setKitUi({ vaultIdxOpen: false });
-            else if (kitUi.schedIdxOpen) setKitUi({ schedIdxOpen: false });
-            else if (kitUi.termDockOpen) setKitUi({ termDockOpen: false }); // 只隐藏，不杀会话
+            } else if (kitUi.gitOpen || kitUi.treeOpen || kitUi.vaultIdxOpen || kitUi.schedIdxOpen) {
+              // 侧栏视图单槽：关一格即可（四者互斥）；舞台标签不连带关
+              setKitUi(sidebarViewPatch(null));
+            } else if (kitUi.termDockOpen) setKitUi({ termDockOpen: false }); // 只隐藏，不杀会话
           }
         };
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
         // cwd 必须在依赖里：否则闭包缓存首帧（会话未水化时为 null）的工作区，
         // 之后按快捷键开终端永远绑到 null
-      }, [cwd, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.terminalShortcut, cfg.fileTreeShortcut, cfg.scShortcut, cfg.vaultShortcut, cfg.schedShortcut, cfg.sidebarShortcut, cfg.sidebarShortcutEnabled, cfg.dockShortcut, cfg.dockShortcutEnabled]);
+      }, [cwd, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.terminalShortcut, cfg.fileTreeShortcut, cfg.scShortcut, cfg.vaultShortcut, cfg.schedShortcut, cfg.sidebarShortcut, cfg.sidebarShortcutEnabled]);
 
       // ShellBrowserEvents：壳层常驻浏览器事件源（与面板 WS 并存，不订阅帧流）。
       // 面板标签会被收掉（0 页自动收/人为关闭），「agent 开页切到浏览器」不能依赖
@@ -10648,8 +10640,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 onKillAll: () => setKitUi({ terminals: [], activeTermId: null, termDockOpen: false }),
               })
             : null,
-          // 舞台容器：有标签且未隐藏才渲染；隐藏（快捷键）只藏不关
-          stageAlive(ui) && ui.stageHidden !== true
+          // 舞台容器：有标签就渲染（没有「收起」态——0 标签即不存在）
+          stageAlive(ui)
             ? jsxRuntime.jsx(StagePane, { props, cwd })
             : null,
           // 知识库单实例：侧栏目录/舞台页签任一在场即挂载（两侧 portal 自取），
@@ -11056,8 +11048,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { key: "vaultShortcut", kind: "combo" },
       { key: "schedShortcut", kind: "combo" },
       { key: "sidebarShortcut", kind: "combo" },
-      { key: "dockShortcutEnabled", kind: "bool" },
-      { key: "dockShortcut", kind: "combo" },
     ];
     // 分组渲染：开关行 + 该功能启用时才显示的子配置（所见即所得，保存才落盘生效）；
     // switchKey 为 null 的组没有开关行，只列字段（日程无启用开关，只有快捷键）。
@@ -11065,7 +11055,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 手机访问（用户定稿放最下）。远程域名不在此卡——编辑入口在「手机访问」页内。
     const CFG_GROUPS = [
       { switchKey: "sidebarShortcutEnabled", fields: ["sidebarShortcut"] },
-      { switchKey: "dockShortcutEnabled", fields: ["dockShortcut"] },
       { switchKey: "fileTreeEnabled", fields: ["fileTreeShortcut", "previewMaxTabs"] },
       { switchKey: "chatOpenFilePreview", fields: [] },
       { switchKey: "sourceControlEnabled", fields: ["scShortcut"] },
