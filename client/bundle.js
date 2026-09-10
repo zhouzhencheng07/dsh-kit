@@ -1097,6 +1097,8 @@ window.__ModuleLoader__.load({
       vaultSearchPh: "搜索 wiki 笔记，回车执行",
       vaultSearchEmpty: "无结果",
       vaultSearchFail: "搜索失败：{error}",
+      vaultRefresh: "刷新索引与目录树",
+      vaultRefreshed: "已刷新",
       vaultNewAny: "新建页面/目录",
       vaultNewPh: "标题，\\ 开头新建目录，可含 / 多级，回车创建",
       vaultCreate: "创建",
@@ -1577,6 +1579,8 @@ window.__ModuleLoader__.load({
       vaultSearchPh: "Search wiki notes, Enter to run",
       vaultSearchEmpty: "No results",
       vaultSearchFail: "Search failed: {error}",
+      vaultRefresh: "Refresh index and tree",
+      vaultRefreshed: "Refreshed",
       vaultNewAny: "New page/folder",
       vaultNewPh: "Title, \\ prefix creates a folder, / for nesting, Enter to create",
       vaultCreate: "Create",
@@ -2017,9 +2021,11 @@ body.dshk-stage-open [class*="_scroll"] > [class*="_slot"]{display:block!importa
 .dshk-vault{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
 .dshk-vault-hinttitle{font-size:16px;font-weight:600;color:var(--dsw-alias-label-primary);padding:24px 16px 0;text-align:center}
 .dshk-vault-hint{padding:10px 16px;color:var(--dsw-alias-label-tertiary);font-size:12px;text-align:center;line-height:1.7}
-.dshk-vault-toolbar{flex:none;display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--dsw-alias-border-l2)}
-.dshk-vault-spacesel{flex:none;max-width:140px;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;padding:5px 6px;border-radius:6px}
-.dshk-vault-search{flex:1 1 auto;min-width:60px;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 8px;border-radius:6px}
+.dshk-vault-toolbar{flex:none;display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-bottom:1px solid var(--dsw-alias-border-l2)}
+.dshk-vault-tbarrow{display:flex;align-items:center;gap:6px;min-width:0}
+.dshk-vault-tbpush{margin-left:auto}
+.dshk-vault-spacesel{flex:1 1 auto;min-width:0;max-width:200px;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;padding:5px 6px;border-radius:6px}
+.dshk-vault-search{flex:1 1 auto;min-width:0;width:100%;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 8px;border-radius:6px}
 .dshk-vault-searchres{flex:none;max-height:200px;overflow:auto;border-bottom:1px solid var(--dsw-alias-border-l2);padding:4px 6px;display:flex;flex-direction:column;gap:2px}
 .dshk-vault-hitrow{display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:6px;cursor:pointer}
 .dshk-vault-hitrow:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -2027,8 +2033,10 @@ body.dshk-stage-open [class*="_scroll"] > [class*="_slot"]{display:block!importa
 .dshk-vault-hitsnippet{font-size:11px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshk-vault-main{flex:1 1 auto;min-height:0;display:flex}
 .dshk-vault-rail{flex:none;width:150px;border-right:1px solid var(--dsw-alias-border-l2);overflow:auto;padding:4px 3px;display:flex;flex-direction:column}
-/* 知识库拆两半：目录树投进侧栏索引宿主（占满宽，无右缘线），编辑器投进舞台 */
-.dshk-vault-sidewrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;width:100%}
+/* 知识库拆两半：目录树投进侧栏索引宿主（占满宽，无右缘线），编辑器投进舞台；
+   position:relative 是给 .dshk-vault-toast 当定位祖先的——漏了它绝对定位就锚到
+   视口，提示飘在窗口底部正中，看着像没反应 */
+.dshk-vault-sidewrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;width:100%;position:relative}
 .dshk-vault-sidewrap .dshk-vault-rail{flex:1 1 auto;width:auto;border-right:none}
 .dshk-vault-stagehost{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
 .dshk-vault-stagehost .dshk-vault-reader{padding:0 2px}
@@ -9150,13 +9158,42 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       react.useEffect(() => {
         void loadIndex();
       }, [loadIndex]);
+      /** 单层目录重取。silent = 背景重拉：不先清空成「加载中」，失败也保留旧条目
+       *  （目录被删时父层的新条目已不含它，旧条目自然够不着，不必靠清空兜底）。
+       *  非 silent = 交互路径（展开/建页后），要的就是「正在加载」与失败即空。 */
+      const fetchDir = react.useCallback(async (dir, silent = false) => {
+        if (!silent) setTreeDirs((d) => ({ ...d, [dir]: null }));
+        try {
+          const body = await schedFetch(`/dsh-kit/tree?path=${encodeURIComponent(dir)}`);
+          const usable = (body.entries ?? []).filter((e) => {
+            if (e.dir) return !e.name.startsWith(".") && !["attachments", "node_modules"].includes(e.name);
+            return /\.md$/i.test(e.name);
+          });
+          setTreeDirs((d) => ({ ...d, [dir]: usable }));
+        } catch {
+          if (!silent) setTreeDirs((d) => ({ ...d, [dir]: [] }));
+        }
+      }, []);
+
+      // 索引 + 已展开目录一起重拉的唯一实现（工具条 ↻ 与背景自动刷新共用）。
+      // 目录树是懒加载缓存（treeDirs），只调 loadIndex 换不到树上的条目——外部
+      // 增删的文件在侧栏看不见，刷新就等于没刷（2026-09-11 用户报「刷新不可用」）。
+      // 展开态走 ref 读：免得这个回调跟着每次展开动作重建、把背景定时器重置
+      const expandedRef = react.useRef(expanded);
+      expandedRef.current = expanded;
+      const reloadData = react.useCallback(async () => {
+        const dirs = Object.keys(expandedRef.current).filter((d) => expandedRef.current[d] === true);
+        await loadIndex();
+        await Promise.all(dirs.map((d) => fetchDir(d, true)));
+      }, [loadIndex, fetchDir]);
+
       // 外部增删文件及时可见（vscode 式，用户定稿 2026-09-09）：打开页的正文
-      // 刷新由 stat 轮询管，树/索引靠这里——窗口聚焦 + 30s 周期重拉（mtime
-      // 缓存让无变化的重拉接近零成本）
+      // 刷新由 stat 轮询管，树/索引靠这里——窗口聚焦 + 30s 周期重拉；全程静默
+      // （mtime 缓存让无变化的重拉接近零成本，不闪「加载中」也不弹提示）
       react.useEffect(() => {
         const refresh = () => {
           if (document.visibilityState === "hidden") return;
-          void loadIndex();
+          void reloadData();
         };
         window.addEventListener("focus", refresh);
         document.addEventListener("visibilitychange", refresh);
@@ -9166,21 +9203,19 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           document.removeEventListener("visibilitychange", refresh);
           clearInterval(timer);
         };
-      }, [loadIndex]);
+      }, [reloadData]);
 
-      const fetchDir = react.useCallback(async (dir) => {
-        setTreeDirs((d) => ({ ...d, [dir]: null }));
+      // 工具条 ↻：手动刷新要看得见结果，给 toast 回执；刷新中禁用按钮防连点
+      const [refreshing, setRefreshing] = react.useState(false);
+      const manualRefresh = react.useCallback(async () => {
+        setRefreshing(true);
         try {
-          const body = await schedFetch(`/dsh-kit/tree?path=${encodeURIComponent(dir)}`);
-          const usable = (body.entries ?? []).filter((e) => {
-            if (e.dir) return !e.name.startsWith(".") && !["attachments", "node_modules"].includes(e.name);
-            return /\.md$/i.test(e.name);
-          });
-          setTreeDirs((d) => ({ ...d, [dir]: usable }));
-        } catch {
-          setTreeDirs((d) => ({ ...d, [dir]: [] }));
+          await reloadData();
+          setToast(t("vaultRefreshed"));
+        } finally {
+          setRefreshing(false);
         }
-      }, []);
+      }, [reloadData]);
 
       // 空间切换：树状态清空并展开根层（root 未就绪时只清空，不拉树）
       react.useEffect(() => {
@@ -9435,30 +9470,36 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }
 
       // 工具条 + 搜索结果 + 目录树 → 侧栏索引宿主；页编辑器 → 舞台宿主。
-      // 单实例双 portal：两侧各自在场才投递（侧栏关闭/舞台关签互不影响）
+      // 单实例双 portal：两侧各自在场才投递（侧栏关闭/舞台关签互不影响）。
+      // 工具条两行（用户定稿 2026-09-11）：上行导航/空间/刷新，下行搜索独占——
+      // 挤在一行时搜索框只剩半截宽，占位提示都被截掉
       const sideContent = jsxRuntime.jsxs("div", { className: "dshk-vault-sidewrap", children: [
         jsxRuntime.jsxs("div", { className: "dshk-vault-toolbar", children: [
-          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistBack"), title: t("vaultHistBack"), disabled: hist.idx <= 0, onClick: histBack, children: "←" }),
-          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistFwd"), title: t("vaultHistFwd"), disabled: hist.idx >= hist.stack.length - 1, onClick: histFwd, children: "→" }),
-          jsxRuntime.jsxs("select", {
-            className: "dshk-vault-spacesel",
-            value: space,
-            onChange: (e) => setSpace(e.target.value),
-            children: [
-              jsxRuntime.jsx("option", { value: "", children: t("vaultSpaceAll") }),
-              (index?.spaces ?? []).map((s) => jsxRuntime.jsx("option", { value: s, children: s }, s)),
-            ],
-          }),
-          jsxRuntime.jsx("input", {
-            className: "dshk-vault-search",
-            value: searchQ,
-            placeholder: t("vaultSearchPh"),
-            onChange: (e) => setSearchQ(e.target.value),
-            onKeyDown: (e) => {
-              if (e.key === "Enter") void runSearch();
-            },
-          }),
-          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultTitle"), title: t("vaultTitle"), onClick: () => void loadIndex(), children: "↻" }),
+          jsxRuntime.jsxs("div", { className: "dshk-vault-tbarrow", children: [
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistBack"), title: t("vaultHistBack"), disabled: hist.idx <= 0, onClick: histBack, children: "←" }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistFwd"), title: t("vaultHistFwd"), disabled: hist.idx >= hist.stack.length - 1, onClick: histFwd, children: "→" }),
+            jsxRuntime.jsxs("select", {
+              className: "dshk-vault-spacesel",
+              value: space,
+              onChange: (e) => setSpace(e.target.value),
+              children: [
+                jsxRuntime.jsx("option", { value: "", children: t("vaultSpaceAll") }),
+                (index?.spaces ?? []).map((s) => jsxRuntime.jsx("option", { value: s, children: s }, s)),
+              ],
+            }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn dshk-vault-tbpush", "aria-label": t("vaultRefresh"), title: t("vaultRefresh"), disabled: refreshing, onClick: () => void manualRefresh(), children: "↻" }),
+          ] }),
+          jsxRuntime.jsxs("div", { className: "dshk-vault-tbarrow", children: [
+            jsxRuntime.jsx("input", {
+              className: "dshk-vault-search",
+              value: searchQ,
+              placeholder: t("vaultSearchPh"),
+              onChange: (e) => setSearchQ(e.target.value),
+              onKeyDown: (e) => {
+                if (e.key === "Enter") void runSearch();
+              },
+            }),
+          ] }),
         ] }),
         searchRes !== null
           ? jsxRuntime.jsxs("div", { className: "dshk-vault-searchres", children: [

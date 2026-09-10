@@ -699,6 +699,53 @@ check(
   comps.vaultStageSlot.set(null);
   comps.setKitUi({ vaultOpen: false, stageTab: null });
 }
+// 6.9c) VaultRootView 索引就绪态的工具条：搜索框独占第二行（2026-09-11 用户定稿：
+// 挤成一行时搜索框只剩半截宽）+ ↻ 刷新必须连带重拉目录树——树是懒加载缓存，
+// 只刷索引 ⇒ 外部增删的文件在侧栏看不见，用户报的「刷新功能不可用」就是这个
+let vaultRefreshFetched = [];
+let vaultFetchPrev = null;
+{
+  stateSeq = 0;
+  stateStore.clear();
+  stateStore.set(0, { root: "D:/v", spaces: ["library", "wiki"], pages: [{ path: "D:/v/wiki/a.md", rel: "wiki/a", space: "wiki", title: "A", links: [] }] }); // index
+  stateStore.set(1, ""); // indexErr
+  stateStore.set(2, ""); // space = 全部库
+  stateStore.set(3, { "D:/v": [{ name: "wiki", path: "D:/v/wiki", dir: true }], "D:/v/wiki": [{ name: "a.md", path: "D:/v/wiki/a.md", dir: false }] }); // treeDirs
+  stateStore.set(4, { "D:/v": true, "D:/v/wiki": true }); // expanded
+  const fetched = vaultRefreshFetched;
+  const prevFetch = global.fetch;
+  vaultFetchPrev = prevFetch;
+  global.fetch = async (url) => {
+    fetched.push(String(url));
+    return { ok: true, status: 200, json: async () => ({ root: "D:/v", spaces: ["wiki"], pages: [], entries: [] }) };
+  };
+  comps.vaultSideSlot.set({ tagName: "DIV" });
+  comps.setKitUi({ vaultIdxOpen: true, vaultOpen: true, vaultPages: [], activeVaultPage: null, stageTab: "vault" });
+  callLog = [];
+  let barErr = null;
+  try {
+    comps.VaultRootView({});
+  } catch (e) {
+    barErr = e;
+  }
+  const rows = callLog.filter((c) => c[0] === "jsxs" && c[2] && c[2].className === "dshk-vault-tbarrow");
+  check("知识库工具条渲染无异常且分两行", barErr === null && rows.length === 2);
+  if (barErr) console.log("  VaultRootView error:", barErr.message);
+  const barRow1 = rows[0] ? rows[0][2].children : [];
+  const barRow2 = rows[1] ? rows[1][2].children : [];
+  const refreshBtn = barRow1.find((ch) => ch && ch.props && ["刷新索引与目录树", "Refresh index and tree"].includes(ch.props.title));
+  check("搜索框独立一行（第二行只有搜索框）", barRow2.length === 1 && barRow2[0].props.className === "dshk-vault-search");
+  check("上行保留导航/空间/刷新，刷新钮提示走自己的 i18n 键", barRow1.length === 4 && !!refreshBtn);
+  if (refreshBtn) refreshBtn.props.onClick();
+  // fetch 桩同步记账：loadIndex 的请求在 onClick 返回前就已发出；目录树重拉排在
+  // 微任务里，桩要留到收尾结算后（提前还原会让它打真网络，落进 fetchDir 的静默失败）
+  check("↻ 点击立即重拉索引（/dsh-kit/vault/index）", fetched.some((u) => u.includes("/dsh-kit/vault/index")));
+  comps.vaultSideSlot.set(null);
+  comps.vaultStageSlot.set(null);
+  comps.setKitUi({ vaultIdxOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, stageTab: null });
+  stateSeq = 0;
+  stateStore.clear();
+}
 // 6.9b) VaultPagePane 直渲（一页一个实例的新组件）：预置 state#0（page 已加载）
 // 走完整编辑面，预置 state#2（冲突）走冲突条分支
 {
@@ -996,5 +1043,12 @@ const types = new Set(callLog.flatMap(([, t]) => (typeof t === "string" ? [t] : 
 // 至少渲染出来 JSX 元素（说明走到 render 而非静默 null）
 check("渲染体实际产出元素", callLog.length > 0);
 
-console.log(failed === 0 ? "ALL RENDER OK" : `${failed} FAIL`);
-process.exit(failed === 0 ? 0 : 1);
+// 收尾结算放进 setTimeout：6.9c 里 ↻ 刷新的目录树重拉排在 await loadIndex()
+// 之后的微任务里，同步段看不到；微任务先于定时器清空，此刻断言才成立
+setTimeout(() => {
+  const treeHits = vaultRefreshFetched.filter((u) => u.includes("/dsh-kit/tree"));
+  check("↻ 刷新连带重拉每个已展开目录（/dsh-kit/tree ×2）", treeHits.length === 2);
+  global.fetch = vaultFetchPrev;
+  console.log(failed === 0 ? "ALL RENDER OK" : `${failed} FAIL`);
+  process.exit(failed === 0 ? 0 : 1);
+}, 0);
