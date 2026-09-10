@@ -631,6 +631,10 @@ window.__ModuleLoader__.load({
       const btn =
         ev.target.closest("button[title]") || ev.target.closest('button[class*="_fileLink"]');
       if (!btn) return;
+      // 弹层控件（aria-haspopup）不是文件链接，放行官方：模型选择器触发钮的
+      // title=模型名（如 opencode-go/omen-alpha，含分隔符无空格）会被路径判定
+      // 误吞，而 composer 就在对话 scrollBody 内部，位置判定挡不住它
+      if (btn.hasAttribute("aria-haspopup")) return;
       // 插件自身面板/入口的元素不拦（title 可能是路径的只有文件树行等）。
       // 但命中元素必须是真插件容器：面板打开时 body 挂的让位标记类
       // （dshk-pane-open/dshk-open）是全体对话的祖先，若不剔除，预览/终端
