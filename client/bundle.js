@@ -2,20 +2,23 @@
 // 无构建步骤：改完本文件刷新浏览器即生效（本地目录 junction 直装）。
 //
 // 结构（工作台三段式 2026-09-10 定稿：左索引 / 中舞台 / 右对话）：
-//   入口两处：conversation.input.left（composer 工具行，文件树/源代码管理/终端
-//     三个小图标钮，工作区级工具跟 session 走，不动）+ sidebar.footer.action
-//     （官方侧栏底部按钮区，知识库/日程/任务/浏览器/计时五钮常驻 + 文件钮被动
-//     出现；有索引的功能开侧栏视图，无索引的直开舞台标签）。开合状态放模块级
-//     store（kitUi + useSyncExternalStore），跨槽位共享。
+//   入口两处：conversation.input.left（composer 工具行，文件树/源代码管理/知识库/
+//     日程/终端五个小图标钮，工作区级工具跟 session 走）+ sidebar.footer.action
+//     （官方侧栏底部按钮区，任务/浏览器/计时三钮常驻 + 文件钮被动出现）。
+//     知识库/日程两钮是开合切换：开 = 侧栏索引视图 + 舞台标签一起开，再点 =
+//     侧栏回会话列表且中间那片标签一并关掉（用户定稿，二者成对出现才对得上）。
+//     开合状态放模块级 store（kitUi + useSyncExternalStore），跨槽位共享。
 //   舞台：左锚定（从侧栏右缘起，left 随侧栏宽度 RO 跟随）、顶部标签栏 + 「+」
 //     菜单，挂 shell.overlay（全帧浮层）——不放进 composer，规避其祖先 stacking
 //     context 劫持 position:fixed。对话列 margin-left 让位、在剩余区域居中，
 //     舞台最大宽封顶保对话 400px。宽度模型：全局共享默认值，拖未钉标签=调默认
 //     （所有未钉标签联动），图钉按功能类型钉住当前宽度（localStorage）。
-//   终端：底部停靠面板（Ctrl+` 亦可切换），数据走宿主半边 /dsh-kit/terminal WS。
-//   舞台标签：文件（可编辑，被动打开——文件树/源代码管理/对话链接点开即开）、
-//     后台任务、日程（周网格+统计）、知识库（页编辑器）、浏览器；索引类视图
-//     （知识库目录树/日程待办）住侧栏 sidebar.workspaces 单槽，点条目开舞台。
+//   终端：底部停靠面板（快捷键亦可切换），数据走宿主半边 /dsh-kit/terminal WS。
+//   舞台标签：文件（可编辑，被动打开——文件树/源代码管理/对话链接点开即开；
+//     2026-09-10 用户定稿只占一个共用标签，点新的就换内容，不然标签太乱）、
+//     后台任务、日程（周网格+统计）、知识库（逐页一个标签，可多开）、浏览器；
+//     索引类视图（知识库目录树/日程待办）住侧栏 sidebar.workspaces 单槽，点条目
+//     开舞台对应标签。
 //   文件树：打开时临时注册进单槽 sidebar.workspaces——把侧边栏浏览区整体换成
 //     文件树，关闭时 dispose 注销、原生工作区列表自动回归。根目录 = 当前会话工作
 //     目录，数据走宿主半边 /dsh-kit/tree。点击文件 → 舞台文件标签展示/编辑内容，
@@ -54,13 +57,18 @@ window.__ModuleLoader__.load({
     // 入口按钮（composer 工具行 / 侧栏底部钮）与舞台宿主（shell.overlay）是多个
     // 独立槽位组件，状态必须跨槽共享：模块级不可变快照 + useSyncExternalStore 订阅
     // （getSnapshot 返回模块绑定值，恒定引用直到 set 替换）。
-    // 舞台标签（2026-09-10 工作台定稿）：files（文件标签数组，可编辑）/jobsOpen/
+    // 舞台标签（2026-09-10 工作台定稿）：files（文件工作区，可编辑）/jobsOpen/
     // browserOpen/schedOpen/vaultOpen 是「标签存在性」，stageTab 是当前激活标签，
     // activeFile 是激活的文件；打开某功能 = 确保标签存在并激活，互斥清场废除
     // （切走不丢状态）。0 标签 = 舞台不存在，对话回全宽居中（DSH 原生样子）。
     // stageHidden = 舞台暂时隐藏（快捷键切换，会话态不持久化）：标签存在性全保留，
     // agent 自动跟随（开浏览器/知识库跳页）会清掉它——agent 干活必须回到用户眼前。
-    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, schedIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, stageTab: null, stageHidden: false };
+    // files 是「最近打开过的文件」缓存：2026-09-10 用户定稿只占一个「文件」标签
+    // （文件树/源代码管理/对话链接点开的页都在这一个标签里换内容，不然标签太乱），
+    // 非激活文件仍挂载（display:none）保住滚动与未落盘草稿，超上限按 LRU 逐出。
+    // vaultPages/activeVaultPage 相反：知识库每页一个标签（多开，同文件标签的
+    // 交互：✕ 单关、点击切换），vaultHist 是 ← → 的访问序（与标签存在性解耦）。
+    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, schedIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 }, stageTab: null, stageHidden: false };
     const kitUiListeners = new Set();
     function setKitUi(patch) {
       kitUi = { ...kitUi, ...patch };
@@ -88,16 +96,18 @@ window.__ModuleLoader__.load({
     }
 
     const PREVIEW_MAX_DEFAULT = 8;
-    /** 文件标签上限（设置卡可配 1-20；快照未就绪回落默认 8） */
+    /** 文件标签上限（设置卡可配 1-20；快照未就绪回落默认 8）——文件工作区
+     *  缓存里最多同时挂多少个编辑器，不是标签条上的数量（标签条只有一个） */
     function previewLimit() {
       const v = cfgFromSnapshot(getCfgSnapshot()).previewMaxTabs;
       return Math.max(1, Number.isInteger(v) ? v : PREVIEW_MAX_DEFAULT);
     }
     /** 舞台标签共存的活性判定（渲染舞台与否）；0 标签 = 舞台不存在 */
     const stageAlive = (ui) => (ui.files?.length ?? 0) > 0 || ui.jobsOpen === true || ui.browserOpen === true || ui.schedOpen === true || ui.vaultOpen === true;
-    /** 打开/激活文件标签：已存在则置顶激活（usedAt 刷新，deleted/untracked
-     *  同步为本次状态）；超过上限按 LRU 逐出最久未用的（绝不含本次）。
-     *  deleted=已删除文件，标签只承载删除 diff。commit（可选）= 提交钉定模式
+    /** 打开文件：不在标签条上新增标签（文件共用一个「文件」标签），只是把内容
+     *  换成这一个文件——已开过则复用（usedAt 刷新，deleted/untracked 同步为本
+     *  次状态）；缓存超过上限按 LRU 逐出最久未用的（绝不含本次）。
+     *  deleted=已删除文件，只承载删除 diff。commit（可选）= 提交钉定模式
      *  （图谱提交详情进入，diff 视图与该提交的第一父对比）；重开同路径时
      *  commit 随入口刷新（从 SCM 更改列表重开即清除钉定） */
     function openFileTab(ui, path, from, untracked, deleted, commit) {
@@ -118,17 +128,62 @@ window.__ModuleLoader__.load({
       }
       return { files: list, activeFile: path, stageTab: "file", stageHidden: false };
     }
-    /** 关一个文件标签（按 path）：激活位顺延邻居；关完全部文件则文件标签消失 */
-    function closeFileTab(ui, path) {
-      const items = ui.files ?? [];
-      const idx = items.findIndex((x) => x.path === path);
+
+    // ── 知识库页标签（多开，2026-09-10 用户定稿：与文件标签同款交互）──
+    // 一页一标签、点击切换、✕ 单关；vaultOpen 是「知识库这一片舞台有没有」，
+    // 没有任何页标签时它承载一张「请选择页面」空签（入口点开即见舞台，用户
+    // 定稿「打开时中间页面也要相应打开」）。vaultHist 是 ← → 的访问序，与标签
+    // 存在性解耦：标签被关掉的历史项在关闭时剪掉。
+    /** 路径尾名（标签名用）：文件保留后缀，知识库页去掉 .md（与索引树的页名一致） */
+    const baseName = (p) => String(p ?? "").split(/[\\/]/).pop() ?? "";
+    const pageBasename = (p) => baseName(p).replace(/\.(md|markdown)$/i, "");
+    function vaultHistPush(h, path) {
+      const stack = (h?.stack ?? []).slice(0, (h?.idx ?? -1) + 1);
+      if (stack[stack.length - 1] !== path) stack.push(path);
+      return { stack, idx: stack.length - 1 };
+    }
+    /** 剪掉已关闭页的历史项；激活位按剪后的长度夹紧 */
+    function vaultHistPrune(h, gone) {
+      const stack = (h?.stack ?? []).filter((p) => !gone.has(p));
+      return { stack, idx: Math.max(-1, Math.min(h?.idx ?? -1, stack.length - 1)) };
+    }
+    /** 开/激活一个知识库页标签（树/搜索/反链/闲聊路径/wikilink 点击都走这里，
+     *  顺带记一条访问序） */
+    function openVaultPageTab(ui, path, hist = true) {
+      const pages = ui.vaultPages ?? [];
+      const list = pages.includes(path) ? pages : [...pages, path];
+      return {
+        vaultPages: list,
+        activeVaultPage: path,
+        vaultOpen: true,
+        vaultHist: hist ? vaultHistPush(ui.vaultHist ?? { stack: [], idx: -1 }, path) : (ui.vaultHist ?? { stack: [], idx: -1 }),
+        stageTab: "vault",
+        stageHidden: false,
+      };
+    }
+    /** 只激活（标签条点击/← → 走这里，不动访问序） */
+    function activateVaultPage(ui, path) {
+      if (!(ui.vaultPages ?? []).includes(path)) return {};
+      return { vaultPages: ui.vaultPages, activeVaultPage: path, vaultOpen: true, stageTab: "vault", stageHidden: false };
+    }
+    /** 关一个知识库页标签：激活位顺延邻居；关光了则整片知识库舞台收摊
+     *  （索引视图不跟着关——那是侧栏的事，输入行入口管它） */
+    function closeVaultPageTab(ui, path) {
+      const pages = ui.vaultPages ?? [];
+      const idx = pages.indexOf(path);
       if (idx < 0) return {};
-      const rest = items.filter((x) => x.path !== path);
-      const patch = { files: rest };
-      if (ui.activeFile === path) {
-        patch.activeFile = rest.length > 0 ? rest[Math.min(idx, rest.length - 1)].path : null;
+      const rest = pages.filter((p) => p !== path);
+      // 关光了走 closeStageTab：清 vaultOpen 的同时把激活位顺延到别的标签
+      if (rest.length === 0) {
+        return { ...closeStageTab(ui, "vault"), vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 } };
       }
+      const patch = { vaultPages: rest, vaultHist: vaultHistPrune(ui.vaultHist ?? { stack: [], idx: -1 }, new Set([path])) };
+      if (ui.activeVaultPage === path) patch.activeVaultPage = rest[Math.min(idx, rest.length - 1)];
       return patch;
+    }
+    /** 关整片知识库（入口开合切换的「关」）：页标签全关、舞台标签清掉 */
+    function closeAllVaultTabs(ui) {
+      return { ...closeStageTab(ui, "vault"), vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 } };
     }
     /** 关一个舞台标签：清存在性；关的是激活标签时激活位顺延剩余标签 */
     function closeStageTab(ui, tab) {
@@ -138,8 +193,12 @@ window.__ModuleLoader__.load({
         patch.activeFile = null;
       } else if (tab === "jobs") patch.jobsOpen = false;
       else if (tab === "schedule") patch.schedOpen = false;
-      else if (tab === "vault") patch.vaultOpen = false;
-      else patch.browserOpen = false;
+      else if (tab === "vault") {
+        patch.vaultOpen = false;
+        patch.vaultPages = [];
+        patch.activeVaultPage = null;
+        patch.vaultHist = { stack: [], idx: -1 };
+      } else patch.browserOpen = false;
       if (ui.stageTab === tab) {
         const remaining = [];
         if (tab !== "file" && (ui.files?.length ?? 0) > 0) remaining.push("file");
@@ -151,7 +210,7 @@ window.__ModuleLoader__.load({
       }
       return patch;
     }
-    /** 打开/激活一个舞台标签（标签栏「+」菜单与侧栏底部钮共用）：确保存在并
+    /** 打开/激活一个舞台标签（标签栏「+」菜单与输入行入口共用）：确保存在并
      *  激活、解除隐藏；不清别的标签。浏览器的抑制已废除（agent 干活必回眼前） */
     function openStageTab(ui, tab) {
       if (tab === "jobs") return { jobsOpen: true, stageTab: "jobs", stageHidden: false };
@@ -160,18 +219,26 @@ window.__ModuleLoader__.load({
       return { browserOpen: true, stageTab: "browser", stageHidden: false };
     }
 
-    // ── 侧栏索引占用（sidebar.workspaces 单槽轮换）──
-    // 四个占用者互斥：官方会话（全关）↔ 文件树 ↔ 源代码管理 ↔ 知识库目录 ↔ 日程
-    // 待办。有索引的功能（知识库/日程）底部钮开侧栏视图；打开动作顺带展开侧栏
-    // （收起态视图渲染进铁轨等于不可见）。打开时顺带开对应舞台标签由调用点叠加。
-    function openSideIndex(ui, which) {
-      const on = which === "vault" ? ui.vaultIdxOpen !== true : ui.schedIdxOpen !== true;
-      return {
-        vaultIdxOpen: which === "vault" ? on : false,
-        schedIdxOpen: which === "schedule" ? on : false,
-        treeOpen: false,
-        gitOpen: false,
-      };
+    // ── 知识库/日程入口开合（输入行两钮/快捷键/舞台「+」菜单共用，用户定稿
+    // 2026-09-10）──
+    // 语义：关 → 开；开 → 一起关（侧栏索引回会话列表 + 舞台那片标签也关掉）。
+    // 「开」= 侧栏索引视图 + 对应舞台标签，一次点击两边到位；收起态顺带展开
+    // 侧栏（视图渲染进铁轨等于不可见）。
+    function openVaultEntry(ui) {
+      expandSidebarNow();
+      return { vaultIdxOpen: true, treeOpen: false, gitOpen: false, schedIdxOpen: false, ...openStageTab(ui, "vault") };
+    }
+    function openSchedEntry(ui) {
+      expandSidebarNow();
+      return { schedIdxOpen: true, treeOpen: false, gitOpen: false, vaultIdxOpen: false, ...openStageTab(ui, "schedule") };
+    }
+    function toggleVaultEntry(ui) {
+      if (ui.vaultIdxOpen === true) return { ...closeAllVaultTabs(ui), vaultIdxOpen: false };
+      return openVaultEntry(ui);
+    }
+    function toggleSchedEntry(ui) {
+      if (ui.schedIdxOpen === true) return { ...closeStageTab(ui, "schedule"), schedIdxOpen: false };
+      return openSchedEntry(ui);
     }
 
     // ─────────── 舞台宽度模型（用户定稿 2026-09-10）───────────
@@ -329,6 +396,8 @@ window.__ModuleLoader__.load({
       terminalShortcut: "Ctrl+/",
       fileTreeShortcut: "Ctrl+,",
       scShortcut: "Ctrl+Alt+.",
+      vaultShortcut: "Ctrl+Alt+K",
+      schedShortcut: "Ctrl+Alt+S",
       sidebarShortcut: "Ctrl+B",
       sidebarShortcutEnabled: true,
       dockShortcut: "Ctrl+Alt+B",
@@ -421,6 +490,14 @@ window.__ModuleLoader__.load({
           typeof v.scShortcut === "string" && parseCombo(v.scShortcut)
             ? v.scShortcut
             : CFG_DEFAULTS.scShortcut,
+        vaultShortcut:
+          typeof v.vaultShortcut === "string" && parseCombo(v.vaultShortcut)
+            ? v.vaultShortcut
+            : CFG_DEFAULTS.vaultShortcut,
+        schedShortcut:
+          typeof v.schedShortcut === "string" && parseCombo(v.schedShortcut)
+            ? v.schedShortcut
+            : CFG_DEFAULTS.schedShortcut,
         sidebarShortcut:
           typeof v.sidebarShortcut === "string" && parseCombo(v.sidebarShortcut)
             ? v.sidebarShortcut
@@ -854,8 +931,8 @@ window.__ModuleLoader__.load({
       monitorErrTIMEOUT: "请求超时",
       monitorErrTRANSPORT: "网络传输错误",
       monitorErrEMPTY_RESPONSE: "模型返回空响应",
-      cfgPreviewMaxTabs: "文件标签数上限",
-      cfgPreviewMaxTabsHint: "舞台文件标签超过该数时，打开新文件自动关掉最久没看的那个（1-20，即时生效）",
+      cfgPreviewMaxTabs: "同时打开的文件数上限",
+      cfgPreviewMaxTabsHint: "文件共用一个「文件」标签，标签里换内容；同时挂着的文件编辑器超过该数时，最早看的那个被卸下（1-20，即时生效）",
       browserUrlPh: "输入网址，回车打开",
       browserGo: "打开",
       browserBack: "后退",
@@ -1104,6 +1181,8 @@ window.__ModuleLoader__.load({
       cfgSourceControlEnabled: "启用源代码管理",
       cfgSourceControlEnabledHint: "关闭后隐藏入口按钮与快捷键",
       cfgScShortcut: "源代码管理快捷键",
+      cfgVaultShortcut: "知识库快捷键",
+      cfgSchedShortcut: "日程快捷键",
       cfgCapturing: "按下组合键…（Esc 取消）",
       cfgCapture: "修改",
       overridden: "已覆盖",
@@ -1314,8 +1393,8 @@ window.__ModuleLoader__.load({
       monitorErrTIMEOUT: "request timeout",
       monitorErrTRANSPORT: "network transport error",
       monitorErrEMPTY_RESPONSE: "empty model response",
-      cfgPreviewMaxTabs: "Max file tabs",
-      cfgPreviewMaxTabsHint: "Beyond the limit, opening a new file closes the least-recently-viewed file tab (1-20, applies immediately)",
+      cfgPreviewMaxTabs: "Open files kept alive",
+      cfgPreviewMaxTabsHint: "All files share one tab that swaps its content; beyond the limit the least-recently-viewed editor is dropped (1-20, applies immediately)",
       browserUrlPh: "Type a URL and press Enter",
       browserGo: "Go",
       browserBack: "Back",
@@ -1362,6 +1441,8 @@ window.__ModuleLoader__.load({
       cfgSourceControlEnabled: "Enable source control",
       cfgSourceControlEnabledHint: "Hides the entry button and its shortcut",
       cfgScShortcut: "Source control shortcut",
+      cfgVaultShortcut: "Knowledge base shortcut",
+      cfgSchedShortcut: "Schedule shortcut",
       cfgCapturing: "Press a combo… (Esc to cancel)",
       cfgCapture: "Change",
       overridden: "Overridden",
@@ -6203,6 +6284,35 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       });
     }
 
+    /** 知识库入口（输入行，源代码管理与终端之间，2026-09-10 用户定稿）：
+     *  开 = 侧栏索引视图 + 舞台知识库标签一次到位（「打开时中间页面也相应打开」）；
+     *  再点 = 侧栏回会话列表，同时把中间那片页标签一并关掉（不只是收侧栏）。
+     *  按钮与快捷键同语义（toggleVaultEntry） */
+    function VaultEntry() {
+      const ui = useKitUi();
+      return jsxRuntime.jsx("button", {
+        type: "button",
+        className: "dshk-btn dshk-enbtn",
+        "aria-pressed": ui.vaultIdxOpen,
+        title: t("vaultTitle"),
+        onClick: () => setKitUi(toggleVaultEntry(kitUi)),
+        children: jsxRuntime.jsx(VaultIcon, {}),
+      });
+    }
+
+    /** 日程入口（同上，与知识库并排）：开合切换带舞台周网格标签 */
+    function SchedEntry() {
+      const ui = useKitUi();
+      return jsxRuntime.jsx("button", {
+        type: "button",
+        className: "dshk-btn dshk-enbtn",
+        "aria-pressed": ui.schedIdxOpen,
+        title: t("schedTab"),
+        onClick: () => setKitUi(toggleSchedEntry(kitUi)),
+        children: jsxRuntime.jsx(SchedIcon, {}),
+      });
+    }
+
     // ─────────── 手机访问页（settings.section，与技能页同类）───────────
     // 数据源：宿主半边 /dsh-kit/phone/info|link（rotate 无 UI 入口——轮换在
     // 宿主侧随「关闭→开启」自动触发）。这些端点挂在主 webserver
@@ -8938,6 +9048,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       ] });
     }
 
+    /** 知识库索引半边（单实例，portal 进侧栏索引宿主）：空间/目录树/搜索/建页 +
+     *  页标签编排（打开、关闭、← → 访问序）。页编辑器不在本组件——每开一页一个
+     *  VaultPagePane 经 portal 投进舞台宿主，一页一标签（2026-09-10 多开定稿）。 */
     function VaultRootView() {
       const ui = useKitUi();
       const sideHost = useHostSlot(vaultSideSlot);
@@ -8948,18 +9061,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 目录树：path → entries|null(加载中)；expanded: path → bool
       const [treeDirs, setTreeDirs] = react.useState({});
       const [expanded, setExpanded] = react.useState({});
-      // 阅读历史：stack 存绝对路径，idx 是当前位（后退/前进改 idx 不重压栈）
-      const [hist, setHist] = react.useState({ stack: [], idx: -1 });
-      // page: { path, loading, fmText, body(编辑器入参), mtimeMs, binary, gone }
-      // —— fmText 是 frontmatter 字节级原文（保存时原样拼回），body 交给 RTE
-      const [page, setPage] = react.useState(null);
-      // RTE 重挂载 tick：打开新页/冲突回读时 bump；日常保存不重挂
-      const [docTick, setDocTick] = react.useState(0);
-      // CAS 冲突：{ diskMtime } | null —— 自动保存暂停，出冲突条（覆盖/读取）
-      const [conflict, setConflict] = react.useState(null);
-      // 表格上下文按钮随选区显隐（选区落在表格内即亮）+ 脏点（RteEditor 上报）
-      const [inTable, setInTable] = react.useState(false);
-      const [dirtyDot, setDirtyDot] = react.useState(false);
       // 建页/建目录合并入口（用户定稿 2026-09-07）：createDir = 内联输入框所在
       // 目录（null 关闭）；输入 `\` 开头 = 新建目录（剥掉前缀），否则建页面；
       // 两者都还可带 / 多级。区域外点击 = 取消（直接丢弃，理由同文件树）
@@ -8977,25 +9078,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [searchRes, setSearchRes] = react.useState(null);
       const [searching, setSearching] = react.useState(false);
       const [toast, setToast] = react.useState("");
-      // 跳页后待滚动的标题锚（双链 [[页#标题]] 落点）
-      const [pendingAnchor, setPendingAnchor] = react.useState("");
-      const rteRef = react.useRef(null);
-      const rteCtlRef = react.useRef(null);
-      // M4 笔记→会话：舞台编辑器根 ref（引用按钮取选区时判定选区落在知识库内）与选区
-      // 镜像——点击页条按钮会塌掉原生选区，selectionchange 即时留底
-      const vaultPaneRef = react.useRef(null);
-      const selTextRef = react.useRef("");
-      react.useEffect(() => {
-        const onSel = () => {
-          const pane = vaultPaneRef.current;
-          const sel = document.getSelection();
-          selTextRef.current = pane && sel && sel.anchorNode && pane.contains(sel.anchorNode) ? String(sel) : "";
-        };
-        document.addEventListener("selectionchange", onSel);
-        return () => document.removeEventListener("selectionchange", onSel);
-      }, []);
 
-      const current = hist.idx >= 0 ? hist.stack[hist.idx] : null;
+      // 激活页 = 当前标签；页编辑器的全部状态住在各自的 VaultPagePane 里
+      const current = ui.activeVaultPage ?? null;
       // root 从 index 响应取而非入参；null = 索引未就绪（加载中/未配置/失败），
       // 整页态由下方早退分支承担
       const root = index !== null && typeof index.root === "string" && index.root !== "" ? index.root : null;
@@ -9055,30 +9140,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         void fetchDir(treeRoot);
       }, [treeRoot, fetchDir]);
 
-      // 切页跳转统一走 flush：有未保存草稿先自动保存（冲突=留在本页出冲突条，
-      // 绝不丢本地稿）；rteCtlRef 在 RteEditor 挂载时赋值（闭包时序）。
-      // 侧栏目录/搜索/反链/碎链建页的任何开页都顺带拉起舞台知识库标签——
-      // 编辑器住舞台，索引侧的入口点开即看（工作台定稿：索引即入口）
-      const openPath = react.useCallback((path, anchor) => {
-        if (kitUi.vaultOpen !== true || kitUi.stageHidden === true) setKitUi(openStageTab(kitUi, "vault"));
-        const doOpen = () => {
-          setPendingAnchor(typeof anchor === "string" ? anchor : "");
-          setHist((h) => {
-            const stack = h.stack.slice(0, h.idx + 1);
-            if (stack[stack.length - 1] === path) return { stack, idx: stack.length - 1 };
-            stack.push(path);
-            return { stack, idx: stack.length - 1 };
-          });
-        };
-        if (rteCtlRef.current && path !== current && rteCtlRef.current.dirty()) {
-          void rteCtlRef.current.flush().then((outcome) => {
-            // conflict → 留在本页处理冲突条；fail → 照常走（尽力而为，toast 已出）
-            if (outcome !== "conflict") doOpen();
-          });
-          return;
-        }
-        doOpen();
-      }, [current]);
+      // 开页统一入口（侧栏目录/搜索/反链/碎链建页/对话路径/wikilink 都走这里）：
+      // 打开或激活该页的标签并把舞台切到知识库——编辑器住舞台，索引侧点开即见
+      // （工作台定稿：索引即入口）。切页前的未存草稿由被切走的那个 pane 自己
+      // 在失活时 flush（标签仍挂载，草稿不会丢）。
+      const openPath = react.useCallback((path) => {
+        setKitUi(openVaultPageTab(kitUi, path));
+      }, []);
 
       // M4 会话→笔记：消费拦截器转来的开页请求。两种时序都接——舞台未开时点
       // 聊天路径，本组件才挂载（vaultOpenRequest 落地等着）；已挂载时走
@@ -9094,46 +9162,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         window.addEventListener("dshk-vault-open", openReq);
         return () => window.removeEventListener("dshk-vault-open", openReq);
       }, [openPath]);
-
-      // 拉当前页内容（打开/冲突回读共用）：拆 frontmatter，body 交给 RTE，
-      // docTick bump 驱动重挂载对齐盘上内容；fm/mtime 写入共享 ref（保存语境）
-      const loadCurrent = react.useCallback(async () => {
-        if (current === null) return;
-        setConflict(null);
-        try {
-          const body = await schedFetch(`/dsh-kit/read?path=${encodeURIComponent(current)}`);
-          const raw = body.binary ? "" : (body.content ?? "");
-          const { fmText, rest } = body.binary ? { fmText: "", rest: "" } : vaultSplitFrontmatter(raw);
-          fmRef.current = fmText;
-          mtimeRef.current = body.mtimeMs ?? 0;
-          setPage({
-            path: current,
-            loading: false,
-            fmText,
-            body: rest.trimStart(),
-            mtimeMs: body.mtimeMs ?? 0,
-            binary: body.binary === true,
-            gone: false,
-          });
-          setDocTick((t) => t + 1);
-        } catch {
-          fmRef.current = "";
-          mtimeRef.current = 0;
-          setPage({ path: current, loading: false, fmText: "", body: "", mtimeMs: 0, binary: false, gone: true });
-          setDocTick((t) => t + 1);
-        }
-      }, [current]);
-
-      // 当前页变化 → 拉内容（历史前进后退同样走这里）
-      react.useEffect(() => {
-        if (current === null) {
-          setPage(null);
-          return undefined;
-        }
-        setPage({ path: current, loading: true, fmText: "", body: "", mtimeMs: 0, binary: false, gone: false });
-        void loadCurrent();
-        return undefined;
-      }, [current, loadCurrent]);
 
       const createInSpace = react.useCallback(
         async (title, dir) => {
@@ -9195,155 +9223,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         [root, fetchDir],
       );
 
-      /** RTE 版标题锚滚动：vendor 按 doc 里的标题文本 slug 匹配，滚动+光标落点 */
-      const scrollAnchorRte = (anchorRaw) => {
-        const h = rteRef.current;
-        if (!h) return false;
-        return h.scrollToHeading(anchorRaw, vaultHeadingSlug);
-      };
-      // 保存入口（RteEditor 自动保存/Ctrl+S/冲突覆盖都经 onSave 回调到这里）。
-      // content = fmRef（frontmatter 字节级原文）+ 编辑器 md；冲突=出冲突条暂停
-      // 自动保存，绝不静默覆盖。outcome: ok|conflict|fail
-      const fmRef = react.useRef("");
-      const mtimeRef = react.useRef(0);
-      const conflictRef = react.useRef(conflict);
-      conflictRef.current = conflict;
-      const indexRef = react.useRef(index);
-      indexRef.current = index;
-      const saveVaultPage = react.useCallback(
-        async (bodyMd, mode = "auto") => {
-          if (current === null) return "fail";
-          const base = mode === "overwrite" ? (conflictRef.current?.diskMtime ?? 0) : mtimeRef.current;
-          try {
-            const body = await schedFetch("/dsh-kit/vault/write", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ path: current, content: fmRef.current + bodyMd, baseMtime: base }),
-            });
-            if (body.modified === true) {
-              setConflict({ diskMtime: body.mtimeMs ?? 0 });
-              setToast(t("vaultConflict"));
-              return "conflict";
-            }
-            setConflict(null);
-            mtimeRef.current = body.mtimeMs ?? mtimeRef.current;
-            if (mode === "manual" || mode === "overwrite") setToast(t("vaultSaved"));
-            void loadIndex();
-            return "ok";
-          } catch (error) {
-            setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
-            return "fail";
-          }
-        },
-        [current, loadIndex],
-      );
-      // ref 镜像：openPath 切页 flush / 冲突按钮都经它调，闭包永远新鲜
-      const saveEditRef = react.useRef(null);
-      saveEditRef.current = {
-        dirty: () => rteCtlRef.current?.dirty() ?? false,
-        flush: async () => {
-          if (current === null || conflictRef.current !== null) return "fail";
-          return rteCtlRef.current ? rteCtlRef.current.flush() : "fail";
-        },
-        overwrite: async () => (rteCtlRef.current ? rteCtlRef.current.overwrite() : "fail"),
-        reload: () => loadCurrent(),
-      };
-      // 外部修改实时刷新（VS Code 同款）：轮询打开页 mtime + 刷索引。盘上变了
-      // 且本地无脏改、无冲突 → 静默重读整页 + 刷左树（AI/编辑器改文件零手动刷
-      // 新；AI 建页删页左树即时跟进）。有脏改时不动——未保存内容由保存时 CAS
-      // 冲突条保护，绝不静默覆盖。文件被外部删除也重读 → 页面显示已消失。
-      // fetch 失败静默（轮询是尽力而为，不打扰）
-      react.useEffect(() => {
-        if (current === null) return undefined;
-        const timer = setInterval(() => {
-          if (document.visibilityState === "hidden") return;
-          if (conflictRef.current !== null || (rteCtlRef.current && rteCtlRef.current.dirty())) return;
-          void schedFetch(`/dsh-kit/vault/stat?path=${encodeURIComponent(current)}`)
-            .then((body) => {
-              if (typeof body.mtimeMs === "number" && Math.abs(body.mtimeMs - mtimeRef.current) < 1) return;
-              void loadCurrent();
-              void loadIndex();
-            })
-            .catch(() => {});
-        }, 4000);
-        return () => clearInterval(timer);
-      }, [current, loadCurrent, loadIndex]);
-      const deleteCurrent = async () => {
-        if (current === null || !index) return;
-        const doomed = vaultCascadeDelete(index.pages, current);
-        const list = doomed.map((p) => `· ${p.title}`).join("\n");
-        if (!window.confirm(`${t("vaultDelConfirm")}\n${list}`)) return;
-        try {
-          const body = await schedFetch("/dsh-kit/vault/delete", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ paths: doomed.map((p) => p.path) }),
-          });
-          setToast(`${t("vaultDeleted")} ×${String(body.deleted ?? "")}${body.committed === true ? " · git" : ""}`);
-          if (Array.isArray(body.failed) && body.failed.length > 0) {
-            setToast(`${t("vaultDelFail")} ${body.failed.join("、")}`);
-          }
-          const gone = new Set(doomed.map((p) => p.path));
-          setHist((h) => {
-            const stack = h.stack.filter((p) => !gone.has(p));
-            return { stack, idx: Math.max(-1, Math.min(h.idx, stack.length - 1)) };
-          });
-          await loadIndex();
-        } catch (error) {
-          setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
-        }
-      };
-      /** M4 笔记→会话：当前页路径（+ 编辑器选区文本转引用块）追加进对话输入框
-       *  草稿。走官方 InputHub shell（文件树「@到对话」同源），vault 在会话工作
-       *  区外故用纯文本路径而非 @ 芯片（见 vaultCiteText 注释） */
-      const citeToChat = () => {
-        if (current === null) return;
-        const shell = currentComposerShell();
-        if (!shell || typeof shell.actions?.setDraft !== "function") {
-          flashToast(t("vaultCiteUnavailable"));
-          return;
-        }
-        const state = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
-        const draft = state && typeof state.draft === "string" ? state.draft : "";
-        try {
-          shell.actions.setDraft(vaultCiteText(draft, selTextRef.current, current));
-        } catch {
-          flashToast(t("vaultCiteUnavailable"));
-          return;
-        }
-        setToast(t("vaultCited"));
-      };
-      /** 编辑态粘贴截图：图片文件上传到 vault attachments/，光标处插入图片节点。
-       *  上传前先幂等建 attachments/（/dsh-kit/upload 要求目录已存在，新 vault
-       *  首次粘贴不建目录必 400） */
-      const onEditPaste = (e) => {
-        const files = Array.from(e.clipboardData?.files ?? []).filter((f) => /^image\//i.test(f.type));
-        if (files.length === 0) return;
-        e.preventDefault();
-        void (async () => {
-          try {
-            await schedFetch("/dsh-kit/vault/mkdir", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ dir: "attachments" }),
-            });
-          } catch {
-            /* 已存在等幂等失败场景不拦；上传失败另有提示 */
-          }
-          for (const f of files) {
-            const fd = new FormData();
-            fd.append("file", f, f.name || "paste.png");
-            fetch(`/dsh-kit/upload?dir=${encodeURIComponent(`${root}/attachments`)}`, { method: "POST", body: fd })
-              .then((r) => r.json())
-              .then((body) => {
-                const name = body?.saved?.[0]?.name;
-                if (!name) throw new Error(body?.warning || "upload failed");
-                rteRef.current?.insertImage(`attachments/${name}`, f.name || name);
-              })
-              .catch(() => setToast(t("vaultSaveFail")));
-          }
-        })();
-      };
       const runSearch = async () => {
         const q = searchQ.trim();
         if (q === "") {
@@ -9368,21 +9247,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [toast]);
 
       const indexPages = index?.pages ?? [];
-      const backlinks = react.useMemo(
-        () => (current && index ? vaultBacklinks(index.pages, current) : []),
-        [index, current],
-      );
-      // 历史前进/后退同样先 flush（冲突=留在本页）
+      // 历史前进/后退 = 在访问序里挪位并激活对应页标签（标签还在才挪得动，
+      // 被关掉的历史项在关闭时已剪掉）。未落盘草稿由失活的 pane 自己收尾
+      const hist = ui.vaultHist ?? { stack: [], idx: -1 };
       const histGo = (toIdx) => {
         const path = hist.stack[toIdx];
         if (path === undefined) return;
-        if (saveEditRef.current.dirty() && path !== current) {
-          void saveEditRef.current.flush().then((outcome) => {
-            if (outcome !== "conflict") setHist((h) => ({ ...h, idx: toIdx }));
-          });
-          return;
-        }
-        setHist((h) => ({ ...h, idx: toIdx }));
+        setKitUi({ ...activateVaultPage(kitUi, path), vaultHist: { stack: hist.stack, idx: toIdx } });
       };
       const histBack = () => histGo(Math.max(0, hist.idx - 1));
       const histFwd = () => histGo(Math.min(hist.stack.length - 1, hist.idx + 1));
@@ -9569,90 +9440,35 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         toast !== "" ? jsxRuntime.jsx("div", { className: "dshk-vault-toast", role: "status", children: toast }) : null,
       ] });
 
-      const stageContent = jsxRuntime.jsxs("div", { className: "dshk-vault-reader", ref: vaultPaneRef, children: [
-        current === null
-          ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPickPage") })
-          : !page || page.loading === true
-            ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("contentLoading") })
-            : page.gone === true
-              ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPageGone") })
-              : page.binary === true
-                ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultBinaryHint") })
-                : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-                    jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
-                      // 真·所见即所得（用户定稿）：页面恒为 TipTap 富文本编辑器。
-                      // 页条=文档级命令（引用到对话/删除/撤销/重做）+ 脏标记 +
-                      // 冲突处理；保存全自动（2s 防抖/切页 flush/Ctrl+S）。行内
-                      // 格式在泡泡菜单、块插入在斜杠菜单、表格按钮随选区显隐
-                      // onMouseDown preventDefault：按钮默认行为会先塌掉文档
-                      // 选区（镜像随之清空），拦下后选区保留、click 时才取得到
-                      jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", title: t("vaultCiteBtn"), onMouseDown: (e) => e.preventDefault(), onClick: citeToChat, children: t("vaultCiteBtn") }),
-                      jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void deleteCurrent(), children: t("vaultDelBtn") }),
-                      jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
-                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbUndo"), onClick: () => rteRef.current?.undo(), children: "↶" }),
-                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbRedo"), onClick: () => rteRef.current?.redo(), children: "↷" }),
-                      inTable
-                        ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-                            jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
-                            jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableAddRow"), onClick: () => rteRef.current?.tableAddRow(true), children: "＋行" }),
-                            jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableAddCol"), onClick: () => rteRef.current?.tableAddCol(true), children: "＋列" }),
-                            jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDelRow"), onClick: () => rteRef.current?.tableDeleteRow(), children: "－行" }),
-                            jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDelCol"), onClick: () => rteRef.current?.tableDeleteCol(), children: "－列" }),
-                            jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDel"), onClick: () => rteRef.current?.tableDelete(), children: "✕表" }),
-                          ] })
-                        : null,
-                      dirtyDot ? jsxRuntime.jsx("span", { className: "dshk-vault-dirtydot", title: t("vaultUnsaved"), children: "●" }) : null,
-                    ] }),
-                    conflict !== null
-                      ? jsxRuntime.jsxs("div", { className: "dshk-vault-conflict", children: [
-                          jsxRuntime.jsx("span", { children: `⚠ ${t("vaultConflict")}` }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void saveEditRef.current.overwrite(), children: t("vaultConflictOverwrite") }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => saveEditRef.current.reload(), children: t("vaultConflictReload") }),
-                        ] }, "conflict")
-                      : null,
-                    jsxRuntime.jsx(RteEditor, {
-                      rteRef,
-                      ctlRef: rteCtlRef,
-                      docKey: current,
-                      docTick,
-                      initialMd: page.body ?? "",
-                      placeholder: t("rtePlaceholder"),
-                      labels: { codeCopy: t("vaultCopy"), codeCopied: t("vaultCopied") },
-                      onWikiLink: (target, anchor) => {
-                        if (target === "") {
-                          if (anchor !== "") scrollAnchorRte(anchor);
-                          return;
-                        }
-                        const pages = indexRef.current?.pages ?? [];
-                        const ownerSpace = pages.find((p) => p.path === current)?.space ?? "";
-                        const resolved = resolveVaultLink(pages, target, ownerSpace);
-                        if (resolved) openPath(resolved.path, anchor);
-                        else void createInSpace(target);
-                      },
-                      resolveWiki: (target) => resolveVaultLink(indexRef.current?.pages ?? [], target) !== null,
-                      resolveSrc: (src) => {
-                        if (/^(https?:|data:)/i.test(src)) return src;
-                        const pageDir = () => current.split(/[\\/]/).slice(0, -1).join("\\");
-                        const abs = /^attachments\//i.test(src) ? `${root}/${src}` : `${pageDir()}/${src}`;
-                        return `http://${location.host}/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
-                      },
-                      onSave: saveVaultPage,
-                      onState: (s) => {
-                        setDirtyDot(s.dirty === true);
-                        setInTable(s.inTable === true);
-                      },
-                      onPaste: onEditPaste,
-                    }),
-                  ] }),
-        backlinks.length > 0
-          ? jsxRuntime.jsxs("div", { className: "dshk-vault-backlinks", children: [
-              jsxRuntime.jsxs("span", { className: "dshk-sched-cardtitle", children: [t("vaultBacklinks"), " (", String(backlinks.length), ")"] }),
-              backlinks.map((p) =>
-                jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-blrow", onClick: () => { setKitUi(openStageTab(kitUi, "vault")); openPath(p.path); }, children: p.title }, p.path),
-              ),
-            ] })
-          : null,
-      ] });
+      // 舞台半边：每开一页一个 pane（非激活 display:none 保持挂载——切回不丢
+      // 滚动/草稿/撤销栈），一页都没开时是「去索引挑一页」的空态
+      const vaultPages = ui.vaultPages ?? [];
+      const stageContent =
+        vaultPages.length === 0
+          ? jsxRuntime.jsx("div", { className: "dshk-vault-reader", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPickPage") }) })
+          : vaultPages.map((p) =>
+              jsxRuntime.jsx(VaultPagePane, {
+                path: p,
+                active: p === current,
+                root,
+                indexPages,
+                onOpenPage: openPath,
+                onMissingLink: (title) => void createInSpace(title),
+                onSaved: () => void loadIndex(),
+                onDeleted: (paths) => {
+                  // 级联删掉的页连着标签一起关（关的是当前页时激活位自动顺延）
+                  let next = kitUi;
+                  let patch = {};
+                  for (const gonePath of paths) {
+                    patch = { ...patch, ...closeVaultPageTab(next, gonePath) };
+                    next = { ...next, ...patch };
+                  }
+                  setKitUi(patch);
+                  void loadIndex();
+                },
+                toast: setToast,
+              }, p),
+            );
 
       return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
         ui.vaultIdxOpen && sideHost
@@ -9664,12 +9480,305 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       ] });
     }
 
+    /** 知识库单页编辑器（一页一个实例，挂舞台宿主）：正文加载/自动保存/CAS 冲突/
+     *  外部修改跟随/删除/引用到对话/粘贴上传全在这一层，索引侧只管挑页与建页。
+     *  active=false 的 pane 仍挂载（保住滚动与草稿），但停掉 stat 轮询并在失活
+     *  那一刻 flush 未落盘的改动——「切走即存」，不靠卸载兜底。 */
+    function VaultPagePane({ path, active, root, indexPages, onOpenPage, onMissingLink, onSaved, onDeleted, toast }) {
+      // page: { loading, body(编辑器入参), binary, gone }——frontmatter 字节级原文
+      // 存 ref（保存时原样拼回），不进 state（它不驱动渲染）
+      const [page, setPage] = react.useState(null);
+      // RTE 重挂载 tick：首次加载/冲突回读/外部修改时 bump；日常保存不重挂
+      const [docTick, setDocTick] = react.useState(0);
+      // CAS 冲突：{ diskMtime } | null —— 自动保存暂停，出冲突条（覆盖/读取）
+      const [conflict, setConflict] = react.useState(null);
+      // 表格上下文按钮随选区显隐（选区落在表格内即亮）+ 脏点（RteEditor 上报）
+      const [inTable, setInTable] = react.useState(false);
+      const [dirtyDot, setDirtyDot] = react.useState(false);
+      const rteRef = react.useRef(null);
+      const rteCtlRef = react.useRef(null);
+      const fmRef = react.useRef("");
+      const mtimeRef = react.useRef(0);
+      const conflictRef = react.useRef(conflict);
+      conflictRef.current = conflict;
+      const pagesRef = react.useRef(indexPages);
+      pagesRef.current = indexPages;
+      // 引用到对话：编辑器根 ref（判定选区落在本页内）与选区镜像——点页条按钮
+      // 会塌掉原生选区，selectionchange 即时留底
+      const paneRef = react.useRef(null);
+      const selTextRef = react.useRef("");
+      react.useEffect(() => {
+        const onSel = () => {
+          const pane = paneRef.current;
+          const sel = document.getSelection();
+          selTextRef.current = pane && sel && sel.anchorNode && pane.contains(sel.anchorNode) ? String(sel) : "";
+        };
+        document.addEventListener("selectionchange", onSel);
+        return () => document.removeEventListener("selectionchange", onSel);
+      }, []);
+
+      // 拉本页内容（首次加载/冲突回读/外部修改共用）：拆 frontmatter，body 交给
+      // RTE，docTick bump 驱动重挂载对齐盘上内容
+      const loadCurrent = react.useCallback(async () => {
+        setConflict(null);
+        try {
+          const body = await schedFetch(`/dsh-kit/read?path=${encodeURIComponent(path)}`);
+          const raw = body.binary ? "" : (body.content ?? "");
+          const { fmText, rest } = body.binary ? { fmText: "", rest: "" } : vaultSplitFrontmatter(raw);
+          fmRef.current = fmText;
+          mtimeRef.current = body.mtimeMs ?? 0;
+          setPage({ loading: false, body: rest.trimStart(), binary: body.binary === true, gone: false });
+          setDocTick((t) => t + 1);
+        } catch {
+          fmRef.current = "";
+          mtimeRef.current = 0;
+          setPage({ loading: false, body: "", binary: false, gone: true });
+          setDocTick((t) => t + 1);
+        }
+      }, [path]);
+
+      react.useEffect(() => {
+        setPage({ loading: true, body: "", binary: false, gone: false });
+        void loadCurrent();
+        return undefined;
+      }, [loadCurrent]);
+
+      // 保存入口（RteEditor 自动保存/Ctrl+S/冲突覆盖都经 onSave 回调到这里）。
+      // content = fmRef（frontmatter 字节级原文）+ 编辑器 md；冲突=出冲突条暂停
+      // 自动保存，绝不静默覆盖。outcome: ok|conflict|fail
+      const saveVaultPage = react.useCallback(
+        async (bodyMd, mode = "auto") => {
+          const base = mode === "overwrite" ? (conflictRef.current?.diskMtime ?? 0) : mtimeRef.current;
+          try {
+            const body = await schedFetch("/dsh-kit/vault/write", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ path, content: fmRef.current + bodyMd, baseMtime: base }),
+            });
+            if (body.modified === true) {
+              setConflict({ diskMtime: body.mtimeMs ?? 0 });
+              toast(t("vaultConflict"));
+              return "conflict";
+            }
+            setConflict(null);
+            mtimeRef.current = body.mtimeMs ?? mtimeRef.current;
+            if (mode === "manual" || mode === "overwrite") toast(t("vaultSaved"));
+            onSaved();
+            return "ok";
+          } catch (error) {
+            toast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
+            return "fail";
+          }
+        },
+        [path, onSaved, toast],
+      );
+      // ref 镜像：冲突条按钮经它调，闭包永远新鲜
+      const saveEditRef = react.useRef(null);
+      saveEditRef.current = {
+        overwrite: async () => (rteCtlRef.current ? rteCtlRef.current.overwrite() : "fail"),
+        reload: () => loadCurrent(),
+      };
+      // 切走即存：激活位从 true 落到 false 的那一刻把防抖未触发的改动落盘（冲突中
+      // 不动——静默覆盖盘上内容比丢一次自动保存糟得多，等用户切回来处理冲突条）。
+      // 用“上一帧激活位”判定边沿：写进 effect 清理函数会张冠李戴（清理属于上一次
+      // 渲染，激活→失活时清的是「激活那帧」的空清理，等于永不触发）
+      const wasActiveRef = react.useRef(active);
+      react.useEffect(() => {
+        const was = wasActiveRef.current;
+        wasActiveRef.current = active;
+        if (!was || active) return;
+        if (conflictRef.current !== null) return;
+        if (rteCtlRef.current && rteCtlRef.current.dirty()) void rteCtlRef.current.flush();
+      }, [active]);
+      // 外部修改实时刷新（VS Code 同款）：只轮询激活页（后台标签别白烧请求）。
+      // 盘上变了且本地无脏改、无冲突 → 静默重读整页 + 刷索引（AI/编辑器改文件
+      // 零手动刷新）；有脏改时不动——未保存内容由保存时 CAS 冲突条保护。文件
+      // 被外部删除也重读 → 页面显示已消失。fetch 失败静默（尽力而为）
+      react.useEffect(() => {
+        if (!active) return undefined;
+        const timer = setInterval(() => {
+          if (document.visibilityState === "hidden") return;
+          if (conflictRef.current !== null || (rteCtlRef.current && rteCtlRef.current.dirty())) return;
+          void schedFetch(`/dsh-kit/vault/stat?path=${encodeURIComponent(path)}`)
+            .then((body) => {
+              if (typeof body.mtimeMs === "number" && Math.abs(body.mtimeMs - mtimeRef.current) < 1) return;
+              void loadCurrent();
+              onSaved();
+            })
+            .catch(() => {});
+        }, 4000);
+        return () => clearInterval(timer);
+      }, [active, path, loadCurrent, onSaved]);
+
+      const deleteCurrent = async () => {
+        const pages = pagesRef.current ?? [];
+        const doomed = vaultCascadeDelete(pages, path);
+        const list = doomed.map((p) => `· ${p.title}`).join("\n");
+        if (!window.confirm(`${t("vaultDelConfirm")}\n${list}`)) return;
+        try {
+          const body = await schedFetch("/dsh-kit/vault/delete", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ paths: doomed.map((p) => p.path) }),
+          });
+          toast(`${t("vaultDeleted")} ×${String(body.deleted ?? "")}${body.committed === true ? " · git" : ""}`);
+          if (Array.isArray(body.failed) && body.failed.length > 0) {
+            toast(`${t("vaultDelFail")} ${body.failed.join("、")}`);
+          }
+          onDeleted(doomed.map((p) => p.path));
+        } catch (error) {
+          toast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
+        }
+      };
+      /** M4 笔记→会话：本页路径（+ 编辑器选区文本转引用块）追加进对话输入框
+       *  草稿。走官方 InputHub shell（文件树「@到对话」同源），vault 在会话工作
+       *  区外故用纯文本路径而非 @ 芯片（见 vaultCiteText 注释） */
+      const citeToChat = () => {
+        const shell = currentComposerShell();
+        if (!shell || typeof shell.actions?.setDraft !== "function") {
+          flashToast(t("vaultCiteUnavailable"));
+          return;
+        }
+        const state = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
+        const draft = state && typeof state.draft === "string" ? state.draft : "";
+        try {
+          shell.actions.setDraft(vaultCiteText(draft, selTextRef.current, path));
+        } catch {
+          flashToast(t("vaultCiteUnavailable"));
+          return;
+        }
+        toast(t("vaultCited"));
+      };
+      /** 编辑态粘贴截图：图片文件上传到 vault attachments/，光标处插入图片节点。
+       *  上传前先幂等建 attachments/（/dsh-kit/upload 要求目录已存在，新 vault
+       *  首次粘贴不建目录必 400） */
+      const onEditPaste = (e) => {
+        const files = Array.from(e.clipboardData?.files ?? []).filter((f) => /^image\//i.test(f.type));
+        if (files.length === 0) return;
+        e.preventDefault();
+        void (async () => {
+          try {
+            await schedFetch("/dsh-kit/vault/mkdir", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ dir: "attachments" }),
+            });
+          } catch {
+            /* 已存在等幂等失败场景不拦；上传失败另有提示 */
+          }
+          for (const f of files) {
+            const fd = new FormData();
+            fd.append("file", f, f.name || "paste.png");
+            fetch(`/dsh-kit/upload?dir=${encodeURIComponent(`${root}/attachments`)}`, { method: "POST", body: fd })
+              .then((r) => r.json())
+              .then((body) => {
+                const name = body?.saved?.[0]?.name;
+                if (!name) throw new Error(body?.warning || "upload failed");
+                rteRef.current?.insertImage(`attachments/${name}`, f.name || name);
+              })
+              .catch(() => toast(t("vaultSaveFail")));
+          }
+        })();
+      };
+      /** RTE 版标题锚滚动：vendor 按 doc 里的标题文本 slug 匹配，滚动+光标落点 */
+      const scrollAnchorRte = (anchorRaw) => {
+        const h = rteRef.current;
+        if (!h) return false;
+        return h.scrollToHeading(anchorRaw, vaultHeadingSlug);
+      };
+      const backlinks = react.useMemo(() => vaultBacklinks(indexPages ?? [], path), [indexPages, path]);
+
+      return jsxRuntime.jsxs("div", { className: "dshk-vault-reader", style: { display: active ? "flex" : "none" }, ref: paneRef, children: [
+        !page || page.loading === true
+          ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("contentLoading") })
+          : page.gone === true
+            ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPageGone") })
+            : page.binary === true
+              ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultBinaryHint") })
+              : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                  jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
+                    // 真·所见即所得（用户定稿）：页面恒为 TipTap 富文本编辑器。
+                    // 页条=文档级命令（引用到对话/删除/撤销/重做）+ 脏标记 +
+                    // 冲突处理；保存全自动（2s 防抖/失活 flush/Ctrl+S）。行内
+                    // 格式在泡泡菜单、块插入在斜杠菜单、表格按钮随选区显隐
+                    // onMouseDown preventDefault：按钮默认行为会先塌掉文档
+                    // 选区（镜像随之清空），拦下后选区保留、click 时才取得到
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", title: t("vaultCiteBtn"), onMouseDown: (e) => e.preventDefault(), onClick: citeToChat, children: t("vaultCiteBtn") }),
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void deleteCurrent(), children: t("vaultDelBtn") }),
+                    jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbUndo"), onClick: () => rteRef.current?.undo(), children: "↶" }),
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbRedo"), onClick: () => rteRef.current?.redo(), children: "↷" }),
+                    inTable
+                      ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                          jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableAddRow"), onClick: () => rteRef.current?.tableAddRow(true), children: "＋行" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableAddCol"), onClick: () => rteRef.current?.tableAddCol(true), children: "＋列" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDelRow"), onClick: () => rteRef.current?.tableDeleteRow(), children: "－行" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDelCol"), onClick: () => rteRef.current?.tableDeleteCol(), children: "－列" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDel"), onClick: () => rteRef.current?.tableDelete(), children: "✕表" }),
+                        ] })
+                      : null,
+                    dirtyDot ? jsxRuntime.jsx("span", { className: "dshk-vault-dirtydot", title: t("vaultUnsaved"), children: "●" }) : null,
+                  ] }),
+                  conflict !== null
+                    ? jsxRuntime.jsxs("div", { className: "dshk-vault-conflict", children: [
+                        jsxRuntime.jsx("span", { children: `⚠ ${t("vaultConflict")}` }),
+                        jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void saveEditRef.current.overwrite(), children: t("vaultConflictOverwrite") }),
+                        jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => saveEditRef.current.reload(), children: t("vaultConflictReload") }),
+                      ] }, "conflict")
+                    : null,
+                  jsxRuntime.jsx(RteEditor, {
+                    rteRef,
+                    ctlRef: rteCtlRef,
+                    docKey: path,
+                    docTick,
+                    initialMd: page.body ?? "",
+                    placeholder: t("rtePlaceholder"),
+                    labels: { codeCopy: t("vaultCopy"), codeCopied: t("vaultCopied") },
+                    onWikiLink: (target, anchor) => {
+                      if (target === "") {
+                        if (anchor !== "") scrollAnchorRte(anchor);
+                        return;
+                      }
+                      const pages = pagesRef.current ?? [];
+                      const ownerSpace = pages.find((p) => p.path === path)?.space ?? "";
+                      const resolved = resolveVaultLink(pages, target, ownerSpace);
+                      if (resolved) onOpenPage(resolved.path);
+                      else onMissingLink(target);
+                    },
+                    resolveWiki: (target) => resolveVaultLink(pagesRef.current ?? [], target) !== null,
+                    resolveSrc: (src) => {
+                      if (/^(https?:|data:)/i.test(src)) return src;
+                      const pageDir = () => path.split(/[\\/]/).slice(0, -1).join("\\");
+                      const abs = /^attachments\//i.test(src) ? `${root}/${src}` : `${pageDir()}/${src}`;
+                      return `http://${location.host}/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
+                    },
+                    onSave: saveVaultPage,
+                    onState: (s) => {
+                      setDirtyDot(s.dirty === true);
+                      setInTable(s.inTable === true);
+                    },
+                    onPaste: onEditPaste,
+                  }),
+                ] }),
+        backlinks.length > 0
+          ? jsxRuntime.jsxs("div", { className: "dshk-vault-backlinks", children: [
+              jsxRuntime.jsxs("span", { className: "dshk-sched-cardtitle", children: [t("vaultBacklinks"), " (", String(backlinks.length), ")"] }),
+              backlinks.map((p) =>
+                jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-blrow", onClick: () => onOpenPage(p.path), children: p.title }, p.path),
+              ),
+            ] })
+          : null,
+      ] });
+    }
+
     // ─────────── 舞台（左索引 / 中舞台 / 右对话 的工作台中段）───────────
     // 标签存在性（files/jobsOpen/schedOpen/vaultOpen/browserOpen）与激活位
     // （stageTab）分离；打开某功能=确保标签存在并激活，互斥清场废除——切到
     // 浏览器看 agent 干活，文件标签的滚动/草稿还在。非激活标签 display:none
-    // 保持挂载（切回不丢状态）。几何：左锚定（left=侧栏右缘，几何 RO 实测），
-    // 对话列 margin-left 让位、在剩余区域居中；宽度模型见文件头 STAGE 段。
+    // 保持挂载（切回不丢状态）。文件共用一个标签、知识库逐页一签（见上方
+    // openFileTab/openVaultPageTab 注释的由来）。几何：左锚定（left=侧栏右缘，
+    // 几何 RO 实测），对话列 margin-left 让位、在剩余区域居中；宽度模型见文件头。
     const stageGeom = { sidebarW: 0, subs: new Set() };
     function setStageSidebarW(w) {
       const next = Math.max(0, Math.round(w));
@@ -9685,8 +9794,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
     const useSidebarW = () => react.useSyncExternalStore(subscribeStageGeom, () => stageGeom.sidebarW);
 
-    /** 舞台「+」菜单与侧栏底部钮共用的可开标签清单（cfg 门控；文件标签是被动
-     *  标签，无入口——文件树/源代码管理/对话链接点开即开） */
+    /** 舞台「+」菜单的可开标签清单（cfg 门控；文件标签是被动标签，无入口——
+     *  文件树/源代码管理/对话链接点开即开） */
     function stageOpenable(cfg, liveJobs) {
       const openable = [];
       if (cfg.jobsEnabled !== false) openable.push({ id: "jobs", label: t("dockJobs"), icon: JobsIcon, badge: liveJobs });
@@ -9789,21 +9898,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           })
           .catch(() => {});
       };
-      // 收起态点击任何底部钮都顺带展开侧栏（用户定稿 2026-09-10 §4）；
-      // 有索引的功能随后把侧栏浏览区切成自己的索引视图
-      const openSide = (which) => {
-        expandSidebarNow();
-        setKitUi(openSideIndex(kitUi, which));
-      };
+      // 收起态点击任何底部钮都顺带展开侧栏（用户定稿 2026-09-10 §4）
       const openStage = (id) => {
         expandSidebarNow();
         setKitUi(openStageTab(kitUi, id));
       };
       const items = [];
-      if (cfg.vaultEnabled !== false) {
-        items.push({ id: "vault", label: t("vaultTitle"), icon: VaultIcon, on: ui.vaultIdxOpen === true, click: () => openSide("vault") });
-      }
-      items.push({ id: "schedule", label: t("schedTab"), icon: SchedIcon, on: ui.schedIdxOpen === true, click: () => openSide("schedule") });
       if ((ui.files?.length ?? 0) > 0) {
         // 文件钮被动出现：激活当前文件标签（无激活位则取第一个）
         const target = ui.activeFile ?? ui.files[0].path;
@@ -9952,7 +10052,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 「+」菜单：可开标签清单（cfg 门控）
       const [menuOpen, setMenuOpen] = react.useState(false);
       const openable = stageOpenable(cfg, liveJobs);
-      const openTab = (id) => setKitUi(openStageTab(kitUi, id));
+      // 「+」菜单：知识库/日程与输入行入口同语义（侧栏索引 + 舞台标签一起开），
+      // 其余标签直开舞台
+      const openTab = (id) => {
+        if (id === "vault") setKitUi(openVaultEntry(kitUi));
+        else if (id === "schedule") setKitUi(openSchedEntry(kitUi));
+        else setKitUi(openStageTab(kitUi, id));
+      };
       const switchTab = (id) => setKitUi({ stageTab: id, stageHidden: false });
       const closeTab = (id) => setKitUi(closeStageTab(kitUi, id));
       const pinOn = stageIsPinned(type);
@@ -9960,13 +10066,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         stagePinToggle(type, width);
         bumpPin((x) => x + 1);
       };
-      // 标签条：文件逐个（VSCode 式）+ 功能标签；「+」紧随其后
+      // 标签条：文件共用一个标签 + 知识库逐页一签 + 功能标签；「+」紧随其后
       const featureLabels = { jobs: t("dockJobs"), schedule: t("schedTab"), vault: t("vaultTitle"), browser: t("dockBrowser") };
+      const vaultPages = ui.vaultPages ?? [];
+      const vaultLabel = tab === "vault" && ui.activeVaultPage ? pageBasename(ui.activeVaultPage) || t("vaultTitle") : featureLabels.vault;
       return jsxRuntime.jsxs("div", {
         className: "dshk-stage",
         "data-dragging": dragging || undefined,
         role: "complementary",
-        "aria-label": `${t("stageLabel")} · ${tab === "file" ? t("dockPreview") : featureLabels[tab] ?? t("stageLabel")}`,
+        "aria-label": `${t("stageLabel")} · ${tab === "file" ? t("stageFileBtn") : tab === "vault" ? vaultLabel : featureLabels[tab] ?? t("stageLabel")}`,
         children: [
           // 右缘拖拽手柄：拖动实时写 CSS 变量跟手，松手落宽度模型
           jsxRuntime.jsx("div", { className: "dshk-stage-handle", onPointerDown: onHandleDown }),
@@ -9974,13 +10082,37 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             jsxRuntime.jsx("span", {
               className: "dshk-tabs",
               children: [
-                ...(ui.files ?? []).map((pv) =>
+                // 文件：只一个共用标签（2026-09-10 用户定稿）。标签名跟着当前
+                // 文件走——文件树/源代码管理/对话链接点开都在这一个标签里换内容
+                (ui.files ?? []).length > 0
+                  ? jsxRuntime.jsxs("span", {
+                      className: `dshk-tab${tab === "file" ? " dshk-tab-on" : ""}`,
+                      title: ui.activeFile ?? "",
+                      onClick: () => switchTab("file"),
+                      children: [
+                        jsxRuntime.jsx("span", { className: "dshk-tab-label", children: baseName(ui.activeFile) || t("stageFileBtn") }),
+                        jsxRuntime.jsx("button", {
+                          type: "button",
+                          className: "dshk-tab-x",
+                          "aria-label": t("pvCloseTab"),
+                          title: t("pvCloseTab"),
+                          onClick: (e) => {
+                            e.stopPropagation();
+                            closeTab("file");
+                          },
+                          children: "✕",
+                        }),
+                      ],
+                    })
+                  : null,
+                // 知识库页标签（多开）：一页一签、点击切换、✕ 单关（关光了整片收摊）
+                ...vaultPages.map((p) =>
                   jsxRuntime.jsxs("span", {
-                    className: `dshk-tab${tab === "file" && pv.path === ui.activeFile ? " dshk-tab-on" : ""}`,
-                    title: pv.path,
-                    onClick: () => setKitUi(openFileTab(kitUi, pv.path, pv.from, pv.untracked)),
+                    className: `dshk-tab${tab === "vault" && p === ui.activeVaultPage ? " dshk-tab-on" : ""}`,
+                    title: p,
+                    onClick: () => setKitUi(activateVaultPage(kitUi, p)),
                     children: [
-                      jsxRuntime.jsx("span", { className: "dshk-tab-label", children: pv.path.split(/[\\/]/).pop() || pv.path }),
+                      jsxRuntime.jsx("span", { className: "dshk-tab-label", children: pageBasename(p) }),
                       jsxRuntime.jsx("button", {
                         type: "button",
                         className: "dshk-tab-x",
@@ -9988,14 +10120,35 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                         title: t("pvCloseTab"),
                         onClick: (e) => {
                           e.stopPropagation();
-                          setKitUi(closeFileTab(kitUi, pv.path));
+                          setKitUi(closeVaultPageTab(kitUi, p));
                         },
                         children: "✕",
                       }),
                     ],
-                  }, pv.path),
+                  }, p),
                 ),
-                ...(["jobs", "schedule", "vault", "browser"].filter((id) => exists[id]).map((id) =>
+                // 一页都没开时的知识库空签：入口点开即见舞台（提示去索引挑页）
+                ui.vaultOpen === true && vaultPages.length === 0
+                  ? jsxRuntime.jsxs("span", {
+                      className: `dshk-tab${tab === "vault" ? " dshk-tab-on" : ""}`,
+                      onClick: () => switchTab("vault"),
+                      children: [
+                        jsxRuntime.jsx("span", { className: "dshk-tab-label", children: featureLabels.vault }),
+                        jsxRuntime.jsx("button", {
+                          type: "button",
+                          className: "dshk-tab-x",
+                          "aria-label": t("dockClose"),
+                          title: t("dockClose"),
+                          onClick: (e) => {
+                            e.stopPropagation();
+                            closeTab("vault");
+                          },
+                          children: "✕",
+                        }),
+                      ],
+                    })
+                  : null,
+                ...(["jobs", "schedule", "browser"].filter((id) => exists[id]).map((id) =>
                   jsxRuntime.jsxs("span", {
                     className: `dshk-tab${tab === id ? " dshk-tab-on" : ""}`,
                     onClick: () => switchTab(id),
@@ -10189,16 +10342,21 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               { name: "conversation.composer.dock", id: "dsh-kit-monitor", order: 5 },
               MonitorLine,
             )],
-          // 输入框入口排序（左→右）：文件树、源代码管理、终端；手机访问与
-          // 技能页同类，走 settings.section 页面入口（order：技能 40 → 手机 45）
+          // 输入框入口排序（左→右）：文件树、源代码管理、知识库、日程、终端
+          // （知识库/日程 2026-09-10 从侧栏底部钮移到这里，用户定稿）；手机访问
+          // 与技能页同类，走 settings.section 页面入口（order：技能 40 → 手机 45）
           ["filetree", cfg.fileTreeEnabled, () =>
             slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-filetree", order: 10 }, FileTreeEntry)],
           ["scm", cfg.sourceControlEnabled, () =>
             slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-scm", order: 11 }, ScmEntry)],
+          ["vault", cfg.vaultEnabled, () =>
+            slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-vault", order: 12 }, VaultEntry)],
+          ["sched", true, () =>
+            slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-sched", order: 13 }, SchedEntry)],
           ["terminal", cfg.terminalEnabled, () =>
-            slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-terminal", order: 13 }, TerminalEntry)],
-          // 侧栏底部按钮区（工作台定稿 2026-09-10）：五钮 + 文件被动钮；
-          // useSessions 经 shellShare 桥接（footer 需要在跑任务数做徽标）
+            slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-terminal", order: 14 }, TerminalEntry)],
+          // 侧栏底部按钮区（工作台定稿 2026-09-10）：任务/浏览器/计时三钮常驻 +
+          // 文件钮被动出现；useSessions 经 shellShare 桥接（footer 要在跑任务数徽标）
           ["footer", true, () =>
             slotsCtx.slots.register(
               { name: "sidebar.footer.action", id: "dsh-kit-footer", order: 10, inject: () => ({ useSessions: shellShare.current?.useSessions }) },
@@ -10232,7 +10390,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             }
           }
         };
-      }, [cfg.phoneEnabled, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.sourceControlEnabled, cfg.skillsPageEnabled, cfg.monitorEnabled]);
+      }, [cfg.phoneEnabled, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.sourceControlEnabled, cfg.skillsPageEnabled, cfg.monitorEnabled, cfg.vaultEnabled]);
 
       // 配置关闭但视图还开着（如设置卡保存瞬间）：立即归位，文件随来源跟随清掉；
       // 终端功能关闭 = 结束全部终端会话（连 WS 杀 pty，与单终端时代语义一致）
@@ -10332,13 +10490,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         };
       }, [ui.termDockOpen, ui.terminals.length, cfg.terminalEnabled]);
 
-      // 快捷键统一在此监听：组合键来自配置（默认 Ctrl+` / Ctrl+E，capture 拦截
-      // 避免页面其它快捷键抢先），对应功能关闭时不响应；设置卡录制新键时让路。
-      // Esc 分层：先关文件标签再关其它舞台标签（不拦截，避免挡掉其它 Esc 行为）。
+      // 快捷键统一在此监听：组合键来自配置（默认 Ctrl+E / Ctrl+Alt+. 等，capture
+      // 拦截避免页面其它快捷键抢先），对应功能关闭时不响应；设置卡录制新键时让路。
+      // Esc 分层：先关当前舞台标签（知识库关当前页标签、文件关那个共用标签），
+      // 再关侧栏视图（不拦截，避免挡掉其它 Esc 行为）。
       react.useEffect(() => {
         const termCombo = parseCombo(cfg.terminalShortcut);
         const treeCombo = parseCombo(cfg.fileTreeShortcut);
         const scCombo = parseCombo(cfg.scShortcut);
+        const vaultCombo = parseCombo(cfg.vaultShortcut);
+        const schedCombo = parseCombo(cfg.schedShortcut);
         const sidebarCombo = parseCombo(cfg.sidebarShortcut);
         const dockCombo = parseCombo(cfg.dockShortcut);
         const onKey = (e) => {
@@ -10367,6 +10528,19 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             setKitUi({ gitOpen: !kitUi.gitOpen, treeOpen: false, vaultIdxOpen: false, schedIdxOpen: false });
             return;
           }
+          if (vaultCombo && cfg.vaultEnabled !== false && comboMatches(e, vaultCombo)) {
+            e.preventDefault();
+            e.stopPropagation();
+            // 与输入行知识库钮同语义：开=索引+舞台标签，关=两边一起收
+            setKitUi(toggleVaultEntry(kitUi));
+            return;
+          }
+          if (schedCombo && comboMatches(e, schedCombo)) {
+            e.preventDefault();
+            e.stopPropagation();
+            setKitUi(toggleSchedEntry(kitUi));
+            return;
+          }
           if (sidebarCombo && cfg.sidebarShortcutEnabled !== false && comboMatches(e, sidebarCombo)) {
             e.preventDefault();
             e.stopPropagation();
@@ -10383,17 +10557,19 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           if (e.key === "Escape") {
             // 日程弹窗开着时让路：Esc 归弹窗自己（只关弹窗，不收标签页）
             if (schedModalOpen) return;
-            // 舞台：Esc 关当前激活标签（文件标签关当前文件；无激活位则关第一个
-            // 存在的标签）；隐藏态不吞 Esc（舞台本就不可见）
+            // 舞台：Esc 关当前激活标签（知识库关当前页那一个标签，文件关共用的
+            // 文件标签）；隐藏态不吞 Esc（舞台本就不可见）
             if (stageAlive(kitUi) && kitUi.stageHidden !== true) {
-              if (kitUi.stageTab === "file" && kitUi.activeFile) {
-                setKitUi(closeFileTab(kitUi, kitUi.activeFile));
+              if (kitUi.stageTab === "vault" && kitUi.activeVaultPage) {
+                setKitUi(closeVaultPageTab(kitUi, kitUi.activeVaultPage));
               } else {
                 const tab = kitUi.stageTab ?? ((kitUi.files?.length ?? 0) > 0 ? "file" : kitUi.jobsOpen ? "jobs" : kitUi.schedOpen ? "schedule" : kitUi.vaultOpen ? "vault" : "browser");
                 setKitUi(closeStageTab(kitUi, tab));
               }
             } else if (kitUi.gitOpen) setKitUi({ gitOpen: false });
             else if (kitUi.treeOpen) setKitUi({ treeOpen: false });
+            else if (kitUi.vaultIdxOpen) setKitUi({ vaultIdxOpen: false });
+            else if (kitUi.schedIdxOpen) setKitUi({ schedIdxOpen: false });
             else if (kitUi.termDockOpen) setKitUi({ termDockOpen: false }); // 只隐藏，不杀会话
           }
         };
@@ -10401,7 +10577,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return () => window.removeEventListener("keydown", onKey, true);
         // cwd 必须在依赖里：否则闭包缓存首帧（会话未水化时为 null）的工作区，
         // 之后按快捷键开终端永远绑到 null
-      }, [cwd, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.terminalShortcut, cfg.fileTreeShortcut, cfg.scShortcut, cfg.sidebarShortcut, cfg.sidebarShortcutEnabled, cfg.dockShortcut, cfg.dockShortcutEnabled]);
+      }, [cwd, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.terminalShortcut, cfg.fileTreeShortcut, cfg.scShortcut, cfg.vaultShortcut, cfg.schedShortcut, cfg.sidebarShortcut, cfg.sidebarShortcutEnabled, cfg.dockShortcut, cfg.dockShortcutEnabled]);
 
       // ShellBrowserEvents：壳层常驻浏览器事件源（与面板 WS 并存，不订阅帧流）。
       // 面板标签会被收掉（0 页自动收/人为关闭），「agent 开页切到浏览器」不能依赖
@@ -10877,13 +11053,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { key: "terminalShortcut", kind: "combo" },
       { key: "fileTreeShortcut", kind: "combo" },
       { key: "scShortcut", kind: "combo" },
+      { key: "vaultShortcut", kind: "combo" },
+      { key: "schedShortcut", kind: "combo" },
       { key: "sidebarShortcut", kind: "combo" },
       { key: "dockShortcutEnabled", kind: "bool" },
       { key: "dockShortcut", kind: "combo" },
     ];
-    // 分组渲染：开关行 + 该功能启用时才显示的子配置（所见即所得，保存才落盘生效）
-    // 组顺序：文件树 → 源代码管理 → 终端 → 技能页 → 网页搜索 → 手机访问（用户定稿
-    // 放最下）。远程域名不在此卡——编辑入口在「手机访问」页面内（PhoneSection）。
+    // 分组渲染：开关行 + 该功能启用时才显示的子配置（所见即所得，保存才落盘生效）；
+    // switchKey 为 null 的组没有开关行，只列字段（日程无启用开关，只有快捷键）。
+    // 组顺序：文件树 → 源代码管理 → 终端 → 知识库/日程 → 技能页 → 网页搜索 →
+    // 手机访问（用户定稿放最下）。远程域名不在此卡——编辑入口在「手机访问」页内。
     const CFG_GROUPS = [
       { switchKey: "sidebarShortcutEnabled", fields: ["sidebarShortcut"] },
       { switchKey: "dockShortcutEnabled", fields: ["dockShortcut"] },
@@ -10893,7 +11072,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { switchKey: "jobsEnabled", fields: [] },
       { switchKey: "browserEnabled", fields: [] },
       { switchKey: "monitorEnabled", fields: ["monitorWaitMs", "monitorMaxAuto", "monitorRepeatThreshold"] },
-      { switchKey: "vaultEnabled", fields: ["vaultRoot"] },
+      { switchKey: "vaultEnabled", fields: ["vaultRoot", "vaultShortcut"] },
+      { switchKey: null, fields: ["schedShortcut"] },
       { switchKey: "terminalEnabled", fields: ["terminalShortcut"] },
       { switchKey: "skillsPageEnabled", fields: [] },
       { switchKey: "searchEnabled", fields: ["searchMaxResults"] },
@@ -11211,18 +11391,19 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                       : null,
                     available
                       ? CFG_GROUPS.map((group) => {
-                          // 勾选启用才展开该功能的子配置（草稿态即时显隐，保存落盘生效）
-                          const on = fieldState(group.switchKey).text === "true";
+                          // 勾选启用才展开该功能的子配置（草稿态即时显隐，保存落盘生效）；
+                          // switchKey 为 null 的组没有开关行（日程：只有快捷键可配）
+                          const on = group.switchKey === null ? true : fieldState(group.switchKey).text === "true";
                           return jsxRuntime.jsxs(
                             "div",
                             {
                               className: "dshk-cfg-group",
                               children: [
-                                renderField(group.switchKey),
-                                on ? group.fields.map((f) => renderField(f, true)) : null,
+                                group.switchKey === null ? null : renderField(group.switchKey),
+                                on ? group.fields.map((f) => renderField(f, group.switchKey !== null)) : null,
                               ],
                             },
-                            group.switchKey,
+                            group.switchKey ?? group.fields.join("+"),
                           );
                         })
                       : null,
