@@ -2332,7 +2332,7 @@ body.dshk-stage-open .dshk-timer-pill{left:calc(var(--dshk-stage-left,0px) + var
 .dshk-md h1{font-size:1.5em}.dshk-md h2{font-size:1.3em}.dshk-md h3{font-size:1.15em}
 .dshk-md p{margin:.6em 0}
 .dshk-md ul,.dshk-md ol{margin:.6em 0;padding-left:1.5em}
-.dshk-md code{font-family:ui-monospace,Consolas,monospace;font-size:.92em;background:var(--dsw-alias-bg-layer-3);border-radius:4px;padding:.15em .35em}
+.dshk-md code{font-family:ui-monospace,Consolas,monospace;font-size:.92em;background:var(--dsw-alias-interactive-bg-hover);border-radius:4px;padding:.15em .35em}
 .dshk-md pre{background:var(--dsw-alias-bg-layer-3);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:10px 12px;overflow:auto}
 .dshk-md pre code{background:none;padding:0}
 .dshk-md-code{margin:.6em 0;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;overflow:hidden}
