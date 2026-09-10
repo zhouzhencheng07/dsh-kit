@@ -985,6 +985,9 @@ check(
   "CM 宿主自带 dshk-cm-scope（配色变量靠 React 祖先承载，不靠 vendor 加在 view.dom 上的类）",
   src.includes('"dshk-editarea dshk-cm-host dshk-cm-scope"'),
 );
+// CM6 baseTheme 自带 .cm-focused 的 1px dotted #212121 轮廓（点击进编辑器就冒虚线框）：
+// 明写清掉，防日后「顺手」把它删了又冒出来
+check("CM 焦点虚线框已清掉（.cm-focused outline:none）", src.includes(".dshk-cm-host .cm-editor.cm-focused{outline:none}"));
 
 // React 桩记录到的组件类型必须包含本插件自定义组件名（防 ReferenceError 被忽略后整段缺失）
 const types = new Set(callLog.flatMap(([, t]) => (typeof t === "string" ? [t] : [])));
