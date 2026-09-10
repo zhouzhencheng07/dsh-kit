@@ -6911,8 +6911,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     // ─────────── 日程模块（中心区第三 tab：周时间网格 + 待办 + 统计 + 计时）───────────
     // 数据走宿主 /dsh-kit/schedule/* 端点：raw 全量 events + 区间展开 occurrences
-    // （重复展开在宿主做，这里只渲染）+ runningTimer。设计见 .agents/docs/schedule-design.md：
-    // 日程给人看（wangshu 周网格形态），agent 只看汇总走 schedule_query/create 工具。
+    // （重复展开在宿主做，这里只渲染）+ runningTimer。
+    // 日程给人看（周网格形态），agent 只看汇总走 schedule_query/create 工具。
     // 计时全局单实例（timer/start 遇 running 先自动 stop），芯片挂 conversation.composer.dock。
 
     const SCHED_COLORS = ["#228be6", "#40c057", "#fd7e14", "#e64980", "#7048e8", "#f59f00"];

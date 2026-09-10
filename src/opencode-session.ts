@@ -2,8 +2,8 @@
 //
 // 背景：OpenCode Go 网关要求出站推理请求携带 x-opencode-session（每会话稳定
 // ID，网关按它做路由亲和与 prompt 缓存），缺失时 400 MissingSessionID。pi-ai
-// 0.84.x 不原生发该头、宿主 compat 白名单不放行亲和开关（证据链见
-// .agents/docs/opencode-go-session-header.md）——本模块在插件侧补位：给发往
+// 0.84.x 不原生发该头、宿主 compat 白名单不放行亲和开关——本模块在插件侧补位：
+// 给发往
 // opencode / opencode-go 路由、且带会话 id 的模型调用注入
 // x-opencode-session: <DSH 会话 id>。值每会话唯一、跨轮次/压缩/重启稳定，
 // 不同会话天然散在不同网关副本上，不像静态头那样全部流量共用一个 id 互相挤兑。
