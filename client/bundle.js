@@ -2059,6 +2059,7 @@ body.dshk-stage-open [class*="_scroll"] > [class*="_slot"]{display:block!importa
 .dshk-vault-pagebar{flex:none;display:flex;justify-content:flex-end;padding:6px 10px 0}
 .dshk-vault-editwrap{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding:8px 10px}
 .dshk-vault-editbar{flex:none;display:flex;align-items:center;gap:6px;padding-bottom:6px}
+.dshk-vault-crumb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:default;user-select:none}
 .dshk-vault-dirtydot{flex:none;color:var(--dsw-alias-warning,#e8a13c);font-size:10px;line-height:1;margin-left:2px}
 .dshk-vault-rtehost{flex:1 1 auto;min-height:0;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;overflow:hidden;background:var(--dsw-alias-bg-base)}
 /* 复用 .dshk-md 排版（标题/表格/引用/代码），只覆盖编辑态差异：
@@ -8553,11 +8554,40 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const confRef = react.useRef({ onWikiLink, resolveWiki, resolveSrc, labels, placeholder });
       confRef.current = { onWikiLink, resolveWiki, resolveSrc, labels, placeholder };
 
+      // 光标所属标题链（VS Code 面包屑同款）：heading 是顶层块互不嵌套，层级
+      // 归属按「文档顺序」解释——从光标顶层块向前扫，遇到比链尾更高级（level
+      // 更小）的标题就接上，得到 「# 一级 > ## 二级 > ### 三级」；二级标题归属
+      // 它上面最近的同级/上级标题语境（用户定稿：二级属于最近的一级）。
+      // 无任何标题覆盖返回空串隐藏
+      const crumbOf = () => {
+        const ed = rteRef.current?.editor;
+        if (!ed) return "";
+        try {
+          const { $from } = ed.state.selection;
+          const parts = [];
+          let min = 99;
+          for (let i = $from.index(0); i >= 0 && min > 1; i--) {
+            const node = ed.state.doc.child(i);
+            if (node.type.name !== "heading") continue;
+            const level = Number(node.attrs.level ?? 1);
+            if (level >= min) continue;
+            const text = node.textBetween(0, node.content.size, "\n", " ").trim();
+            if (text === "") continue;
+            parts.unshift(`${"#".repeat(level)} ${text}`);
+            min = level;
+          }
+          return parts.join(" > ");
+        } catch {
+          /* 文档替换瞬间 selection 可能短暂失效，按无标题处理 */
+        }
+        return "";
+      };
       const report = () => {
         const h = rteRef.current;
         onStateRef.current?.({
           dirty: h ? h.getMd() !== savedMdRef.current : false,
           inTable: inTableRef.current,
+          crumb: crumbOf(),
         });
       };
       const inTableRef = react.useRef(false);
@@ -8719,6 +8749,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           void localAutosave();
         };
         const offUpdate = h.onUpdate(() => {
+          report(); // 键入改标题文本时面包屑即时跟随（dirty/inTable 同值时 React 直接跳出）
           clearTimeout(mdTimer);
           mdTimer = setTimeout(() => {
             mdTimer = null;
@@ -9518,6 +9549,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 表格上下文按钮随选区显隐（选区落在表格内即亮）+ 脏点（RteEditor 上报）
       const [inTable, setInTable] = react.useState(false);
       const [dirtyDot, setDirtyDot] = react.useState(false);
+      // 页条面包屑：光标所属标题链（VS Code 同款位置指示，RteEditor 上报）
+      const [crumb, setCrumb] = react.useState("");
       const rteRef = react.useRef(null);
       const rteCtlRef = react.useRef(null);
       const fmRef = react.useRef("");
@@ -9721,9 +9754,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
                   jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
                     // 真·所见即所得（用户定稿）：页面恒为 TipTap 富文本编辑器。
-                    // 页条=文档级命令（引用到对话/删除/撤销/重做）+ 脏标记 +
-                    // 冲突处理；保存全自动（2s 防抖/失活 flush/Ctrl+S）。行内
-                    // 格式在泡泡菜单、块插入在斜杠菜单、表格按钮随选区显隐
+                    // 页条=文档级命令（引用到对话/删除/撤销/重做）+ 光标小节
+                    // 面包屑 + 脏标记 + 冲突处理；保存全自动（2s 防抖/失活
+                    // flush/Ctrl+S）。行内格式在泡泡菜单、块插入在斜杠菜单、
+                    // 表格按钮随选区显隐
                     // onMouseDown preventDefault：按钮默认行为会先塌掉文档
                     // 选区（镜像随之清空），拦下后选区保留、click 时才取得到
                     jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", title: t("vaultCiteBtn"), onMouseDown: (e) => e.preventDefault(), onClick: citeToChat, children: t("vaultCiteBtn") }),
@@ -9731,6 +9765,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
                     jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbUndo"), onClick: () => rteRef.current?.undo(), children: "↶" }),
                     jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbRedo"), onClick: () => rteRef.current?.redo(), children: "↷" }),
+                    // 光标所属标题链（VS Code 面包屑同款，二级归属最近一级）：
+                    // 占满余宽、超长省略，title 给全文；无标题覆盖时隐藏
+                    crumb === "" ? null : jsxRuntime.jsx("span", { className: "dshk-vault-crumb", title: crumb, children: crumb }),
                     inTable
                       ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
                           jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
@@ -9780,6 +9817,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     onState: (s) => {
                       setDirtyDot(s.dirty === true);
                       setInTable(s.inTable === true);
+                      setCrumb(typeof s.crumb === "string" ? s.crumb : "");
                     },
                     onPaste: onEditPaste,
                   }),
