@@ -277,9 +277,10 @@ export function vaultSearchSummary(query, items) {
 export function buildVaultTools({ defineTool, scanner, }) {
     const search = defineTool({
         name: 'vault_search',
-        description: '检索用户知识库（vault）wiki 区的页面：全文搜索，多词 AND，文件名/标题命中权重高于正文。' +
-            '用户问「我笔记里有没有…」「知识库/之前记过的 xx」或回答前想查既有知识时使用。' +
-            '返回页面绝对路径与摘要片段，用文件读取工具打开页面；vault 约定见根目录 AGENTS.md。',
+        description: '检索知识库（vault）wiki 区：全文搜索，多词 AND，文件名/标题命中权重高于正文。' +
+            '库里既有用户笔记（学习笔记、本机记录），也有项目知识（项目总览、架构与模块、可复用经验、工程坑）。' +
+            '用户问「我笔记里有没有…」「之前记过的 xx」时用它；开始或接手一个项目、改代码前想了解架构与既有做法时也用它。' +
+            '返回页面绝对路径与摘要片段，用文件读取工具打开页面；页面写法与存档规则见 dsh-kit-vault 技能。',
         parameters: {
             query: { type: 'string', required: true, description: '关键词，可多词（同时命中才返回）' },
         },
