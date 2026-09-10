@@ -277,11 +277,13 @@ check("openStageTab 日程：置存在+激活（纯补丁不触碰任务标签�
 const otb = comps.openStageTab({ files: [], jobsOpen: true, browserOpen: false, stageTab: "jobs" }, "browser");
 check("openStageTab 浏览器：纯补丁不触碰任务标签（合并保留）", otb.browserOpen === true && otb.stageTab === "browser" && otb.jobsOpen === undefined);
 // 7.1b) 知识库/日程入口（输入行两钮 + 快捷键同语义）：开=侧栏索引+舞台标签
-// 一起开，再点=两边一起关（用户定稿 2026-09-10）
+// 一起开；知识库再点=只收侧栏索引回会话、舞台标签保留（用户定稿 2026-09-10：
+// 标签的归宿是标签 ✕ 与配置清场，入口按钮只管侧栏那格）
 const tvOpen = comps.toggleVaultEntry({ treeOpen: true, vaultIdxOpen: false, vaultOpen: false, vaultPages: [], stageTab: null });
 check("知识库入口开：索引 + 舞台标签一起开且关掉文件树", tvOpen.vaultIdxOpen === true && tvOpen.vaultOpen === true && tvOpen.stageTab === "vault" && tvOpen.treeOpen === false);
 const tvClose = comps.toggleVaultEntry({ vaultIdxOpen: true, vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", vaultHist: { stack: ["D:/v/a.md"], idx: 0 }, stageTab: "vault" });
-check("知识库入口再点：索引回会话 + 中间页标签一并关掉", tvClose.vaultIdxOpen === false && tvClose.vaultOpen === false && tvClose.vaultPages.length === 0 && tvClose.activeVaultPage === null && tvClose.stageTab === null);
+// 只收侧栏四键的纯补丁：vaultOpen/页标签等键不存在 = setKitUi 合并时原样保留
+check("知识库入口再点：索引回会话、舞台页标签不动（补丁不含这些键）", tvClose.vaultIdxOpen === false && tvClose.vaultOpen === undefined && tvClose.vaultPages === undefined && tvClose.activeVaultPage === undefined && tvClose.stageTab === undefined);
 const tsOpen = comps.toggleSchedEntry({ vaultIdxOpen: true, schedIdxOpen: false, schedOpen: false, stageTab: "vault" });
 check("日程入口开：索引 + 舞台日程标签一起开且关掉知识库索引", tsOpen.schedIdxOpen === true && tsOpen.schedOpen === true && tsOpen.stageTab === "schedule" && tsOpen.vaultIdxOpen === false);
 const tsClose = comps.toggleSchedEntry({ schedIdxOpen: true, schedOpen: true, stageTab: "schedule", files: [{ path: "C:/x/a.js" }] });
@@ -670,11 +672,11 @@ check("isPathInsideVaultRoot：同名前缀目录不误判", comps.isPathInsideV
 check("isPathInsideVaultRoot：POSIX 大小写敏感", comps.isPathInsideVaultRoot("/home/u/v", "/home/u/V/a.md") === false);
 check("isPathInsideVaultRoot：根本身不算内", comps.isPathInsideVaultRoot("D:\\v", "D:\\v") === false);
 check("isPathInsideVaultRoot：非字符串入参", comps.isPathInsideVaultRoot(null, "D:\\v\\a.md") === false);
-check("vaultCiteText：无选区追加路径", comps.vaultCiteText("", "", "D:\\v\\a.md") === "D:\\v\\a.md\n");
-check("vaultCiteText：续草稿补换行", comps.vaultCiteText("在吗", "", "D:\\v\\a.md") === "在吗\nD:\\v\\a.md\n");
+check("vaultCiteText：无选区原样返回", comps.vaultCiteText("", "") === "");
+check("vaultCiteText：续草稿补换行", comps.vaultCiteText("在吗", "") === "在吗\n");
 check(
   "vaultCiteText：选区转引用块 + 首尾空行剥除",
-  comps.vaultCiteText("在吗", "\n第一行\n第二行\n\n", "D:\\v\\a.md") === "在吗\n> 第一行\n> 第二行\n\nD:\\v\\a.md\n",
+  comps.vaultCiteText("在吗", "\n第一行\n第二行\n\n") === "在吗\n> 第一行\n> 第二行\n\n",
 );
 
 // 6.9) 单态 VaultRootView 直渲（无 hooks 执行的完整渲染体）：槽位渲染器会静默
