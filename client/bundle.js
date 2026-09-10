@@ -2352,6 +2352,11 @@ body.dshk-stage-open .dshk-timer-pill{left:calc(var(--dshk-stage-left,0px) + var
 .dshk-cm-host .cm-scroller{overflow:auto;height:100%;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55}
 /* 短文件长行：内容区至少撑满面板高度，横向滚动条钉在面板底部而非内容中部 */
 .dshk-cm-host .cm-content{min-height:100%}
+/* CM6 baseTheme 自带 .cm-focused 的 1px dotted #212121 轮廓——写死的深灰虚线，点击进
+   编辑器就冒出来（暗色主题下更是深底上的黑线），用户实测报「点击后多个虚线边框」。
+   直接清掉：文本编辑面不需要焦点环（光标本身就是提示，舞台激活签也标着当前文件），
+   容器边框保持常态不随点击变化 */
+.dshk-cm-host .cm-editor.cm-focused{outline:none}
 .dshk-cm-scope{--dshk-tok-keyword:#953800;--dshk-tok-string:#0a3069;--dshk-tok-comment:#697077;--dshk-tok-number:#0550ae;--dshk-tok-fn:#8250df;--dshk-tok-type:#0550ae;--dshk-tok-operator:#953800;--dshk-tok-meta:#6639ba;--dshk-tok-link:#0550ae;--dshk-tok-heading:#0550ae}
 body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-string:#a5d6ff;--dshk-tok-comment:#8b949e;--dshk-tok-number:#79c0ff;--dshk-tok-fn:#d2a8ff;--dshk-tok-type:#ffa657;--dshk-tok-operator:#ff7b72;--dshk-tok-meta:#79c0ff;--dshk-tok-link:#a5d6ff;--dshk-tok-heading:#f0883e}
 /* Live Preview 调色板（亮色兜底在 vendor 主题里，这里只补暗色） */
