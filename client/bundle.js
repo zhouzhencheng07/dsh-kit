@@ -199,10 +199,6 @@ window.__ModuleLoader__.load({
       if (ui.activeVaultPage === path) patch.activeVaultPage = rest[Math.min(idx, rest.length - 1)];
       return patch;
     }
-    /** 关整片知识库（入口开合切换的「关」）：页标签全关、舞台标签清掉 */
-    function closeAllVaultTabs(ui) {
-      return { ...closeStageTab(ui, "vault"), vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 } };
-    }
     /** 关一个舞台标签：清存在性；关的是激活标签时激活位顺延剩余标签 */
     function closeStageTab(ui, tab) {
       const patch = {};
@@ -252,7 +248,8 @@ window.__ModuleLoader__.load({
         schedIdxOpen: view === "sched",
       };
     }
-    // 语义：关 → 开；开 → 一起关（侧栏索引回会话列表 + 舞台那片标签也关掉）。
+    // 语义：关 → 开；开 → 只把侧栏索引收回会话列表（用户定稿 2026-09-10：舞台
+    // 标签不跟着关——标签的归宿是标签 ✕ 与配置清场，入口按钮只管侧栏那格）。
     // 「开」= 侧栏索引视图 + 对应舞台标签，一次点击两边到位；收起态顺带展开
     // 侧栏（视图渲染进铁轨等于不可见）。
     function openVaultEntry(ui) {
@@ -264,7 +261,7 @@ window.__ModuleLoader__.load({
       return { ...sidebarViewPatch("sched"), ...openStageTab(ui, "schedule") };
     }
     function toggleVaultEntry(ui) {
-      if (ui.vaultIdxOpen === true) return { ...closeAllVaultTabs(ui), ...sidebarViewPatch(null) };
+      if (ui.vaultIdxOpen === true) return sidebarViewPatch(null);
       return openVaultEntry(ui);
     }
     function toggleSchedEntry(ui) {
@@ -748,18 +745,17 @@ window.__ModuleLoader__.load({
       return r.every((seg, i) => t[i] === seg);
     }
 
-    /** M4 笔记→会话：「引用到对话」插入文本 = 现有草稿末尾追加（选区转引用块，
-     *  首尾空行剥掉）。纯文本路径而非 @ 芯片：vault 在会话工作区外，官方 @ 引用
-     *  按 cwd 相对语义解析不适用；agent 拿绝对路径走文件工具读，与「文件即接口」
-     *  一致。render-check 直调。 */
-    function vaultCiteText(draft, selText, path) {
+    /** M4 笔记→会话：「引用到对话」的选区文本转引用块续在草稿后（首尾空行剥
+     *  掉）。页面路径本体由 @ 引用芯片承载（2026-09-10 用户定稿：与文件树
+     *  「@到对话」同款方法，此函数只管引用块文本）。render-check 直调。 */
+    function vaultCiteText(draft, selText) {
       const base = typeof draft === "string" ? draft : "";
       const lines = typeof selText === "string" ? selText.replace(/\r\n?/g, "\n").split("\n") : [];
       while (lines.length > 0 && lines[0].trim() === "") lines.shift();
       while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
       const quote = lines.length > 0 ? lines.map((l) => `> ${l}`).join("\n") + "\n\n" : "";
       const joiner = base !== "" && !base.endsWith("\n") ? "\n" : "";
-      return base + joiner + quote + path + "\n";
+      return base + joiner + quote;
     }
 
     // ─────────── 文案 ───────────
@@ -9686,23 +9682,57 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           toast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
         }
       };
-      /** M4 笔记→会话：本页路径（+ 编辑器选区文本转引用块）追加进对话输入框
-       *  草稿。走官方 InputHub shell（文件树「@到对话」同源），vault 在会话工作
-       *  区外故用纯文本路径而非 @ 芯片（见 vaultCiteText 注释） */
+      /** M4 笔记→会话：本页以官方 @ 引用芯片插入对话输入框（2026-09-10 用户
+       *  定稿：与文件树「@到对话」同款方法——insertReference 直插真实芯片，
+       *  失败兜底追加 @ 语法文本）。vault 页在会话工作区外，ref 用正斜杠绝对
+       *  路径：@token 提交后就是提示文本（FILE_REFERENCE_PROMPT 指引模型读
+       *  路径），agent 走文件工具读绝对路径，不受 cwd 相对语义约束。有选区时
+       *  先落引用块再插芯片——芯片按 detectText 末端 + draftRev CAS 定位，
+       *  必须在 setDraft 之后现读 rev（shell 上的都是活getter）。 */
       const citeToChat = () => {
         const shell = currentComposerShell();
         if (!shell || typeof shell.actions?.setDraft !== "function") {
           flashToast(t("vaultCiteUnavailable"));
           return;
         }
-        const state = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
-        const draft = state && typeof state.draft === "string" ? state.draft : "";
-        try {
-          shell.actions.setDraft(vaultCiteText(draft, selTextRef.current, path));
-        } catch {
+        const mention = chatMentionText(path.replace(/\\/g, "/"));
+        if (mention === null) {
           flashToast(t("vaultCiteUnavailable"));
           return;
         }
+        if (selTextRef.current !== "") {
+          const pre = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
+          const draft = pre && typeof pre.draft === "string" ? pre.draft : "";
+          try {
+            shell.actions.setDraft(vaultCiteText(draft, selTextRef.current));
+          } catch {
+            flashToast(t("vaultCiteUnavailable"));
+            return;
+          }
+        }
+        const chipRef = { source: "reference", ref: mention, label: pageBasename(path) || path, appearance: "file", clipboardText: mention };
+        if (typeof shell.insertReference === "function") {
+          const phase = shell.core && shell.core.state ? shell.core.state.phase : null;
+          const detectText = typeof shell.projection?.detectText === "string" ? shell.projection.detectText : "";
+          const rev = typeof shell.rev === "number" ? shell.rev : -1;
+          if ((phase === "plain" || phase === "claimed") && rev >= 0) {
+            const span = { start: detectText.length, end: detectText.length, draftRev: rev };
+            let applied = false;
+            try {
+              applied = shell.insertReference(chipRef, span) === true;
+            } catch {
+              applied = false;
+            }
+            if (applied) {
+              toast(t("vaultCited"));
+              return;
+            }
+          }
+        }
+        // 兜底：@ 语法文本追加草稿末尾（与手打 @ 一致，此时面板可见属官方行为）
+        const state = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
+        const draft = state && typeof state.draft === "string" ? state.draft : "";
+        shell.actions.setDraft(draft === "" ? mention : `${draft} ${mention}`);
         toast(t("vaultCited"));
       };
       /** 编辑态粘贴截图：图片文件上传到 vault attachments/，光标处插入图片节点。
