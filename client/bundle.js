@@ -86,12 +86,14 @@ window.__ModuleLoader__.load({
      *  人为关掉/隐藏的浏览器标签，agent 一下次导航照样弹回） */
     function maybeAutoOpenBrowser() {
       if (kitUi.stageTab === "browser" && kitUi.browserOpen === true) return;
-      setKitUi(openStageTab(kitUi, "browser"));
+      setKitUi(openFeatureDock(kitUi, "browser"));
     }
     /** 浏览器没了（优雅关闭/空闲自动关/整只崩溃/页崩光）→ 收掉浏览器面板标签：
-     *  正常浏览器语义「没了就没了」。agent 下次开页面板照常弹回 */
+     *  正常浏览器语义「没了就没了」。agent 下次开页面板照常弹回。
+     *  右栏路径收不了官方签（无关闭 API）——kitUi 存在性不动，面板自身的
+     *  空态/错误态承担「没了」的显示 */
     function closeBrowserDockForGone() {
-      if (!kitUi.browserOpen) return;
+      if (!kitUi.browserOpen || rightbarStore.active) return;
       setKitUi(closeStageTab(kitUi, "browser"));
     }
 
@@ -233,6 +235,74 @@ window.__ModuleLoader__.load({
       return { browserOpen: true, stageTab: "browser" };
     }
 
+    // ─────────── 官方右侧边栏（宿主 0.1.5+，舞台的接替者）───────────
+    // 工作台整体搬进官方右栏：每个功能一张 dock 签（页类型），pane 正文是我们
+    // 的组件。服务是宿主内部实现，**运行期探测取用、绝不写进 dsh.client.inject**
+    // ——0.1.2 宿主没有该服务，硬声明整个插件起不来（正式环境仍是 0.1.2-rc.1）。
+    // 探测成功 = rightbarActive 翻真，舞台不再渲染；不可用则整条回退舞台路径
+    // （今天的行为），见 KitSurfaces 的渲染门控。
+    const rightbarStore = {
+      active: false,
+      subs: new Set(),
+      setActive(v) {
+        if (this.active === v) return;
+        this.active = v;
+        for (const s of this.subs) s();
+      },
+      subscribe(s) {
+        this.subs.add(s);
+        return () => this.subs.delete(s);
+      },
+    };
+    const useRightbarActive = () => react.useSyncExternalStore((s) => rightbarStore.subscribe(s), () => rightbarStore.active);
+    /** 功能 → dock 签映射（页类型注册表；kind 即 openTab 用的类型名） */
+    const RB_FEATURES = [
+      { id: "dsh-kit-file", kind: "dshk-file", feature: "file", titleKey: "stageFileBtn" },
+      { id: "dsh-kit-vault", kind: "dshk-vault", feature: "vault", titleKey: "vaultTitle" },
+      { id: "dsh-kit-schedule", kind: "dshk-schedule", feature: "schedule", titleKey: "schedTab" },
+      { id: "dsh-kit-jobs", kind: "dshk-jobs", feature: "jobs", titleKey: "dockJobs" },
+      { id: "dsh-kit-browser", kind: "dshk-browser", feature: "browser", titleKey: "dockBrowser" },
+    ];
+    /** sidebarRight 服务实例（openTab 用）：apply 时 ctx.inject(["sidebarRight"])
+     *  捕获——服务属性不能直接读（`cannot get property without inject`），又不能
+     *  写进 exports.inject（0.1.2 无此服务，硬声明整插件起不来） */
+    let rightbarSr = null;
+    /** 打开/聚焦右栏 dock 签（UI 事件路径）。服务未就绪或宿主不支持时静默放弃
+     *  ——调用方都已先走了 kitUi 侧的开签补丁，签内容状态不会丢 */
+    function openRightbarTab(feature) {
+      const sr = rightbarSr;
+      if (!sr || typeof sr.openTab !== "function") return;
+      const f = RB_FEATURES.find((x) => x.feature === feature);
+      if (!f) return;
+      try {
+        sr.openTab(f.kind);
+      } catch {
+        /* 右栏异常不拖垮入口动作 */
+      }
+    }
+    /** 右栏路径的「开功能签」：dock 签交给官方 openTab；kitUi 只补存在性
+     *  （入口按钮选中态 / JobsBadge / Browser 自动跟随判定还要读它）。
+     *  舞台路径回退 = 原样 openStageTab。 */
+    function openFeatureDock(ui, feature) {
+      if (rightbarStore.active) {
+        openRightbarTab(feature);
+        return openStageTab(ui, feature);
+      }
+      return openStageTab(ui, feature);
+    }
+    /** 打开文件并确保「文件」dock 签在眼前（文件树/源代码管理/图谱/对话链接
+     *  统一入口；舞台路径下 openFileTab 已带 stageTab:"file"，等价） */
+    function openFileAndDock(path, from, untracked, deleted, commit) {
+      setKitUi(openFileTab(kitUi, path, from, untracked === true, deleted === true, typeof commit === "string" && commit !== "" ? commit : undefined));
+      if (rightbarStore.active) openRightbarTab("file");
+    }
+    /** 打开知识库页并确保「知识库」dock 签在眼前（目录/搜索/反链/wikilink/
+     *  对话路径统一走 VaultRootView 的 openPath） */
+    function openVaultPageAndDock(path) {
+      setKitUi(openVaultPageTab(kitUi, path));
+      if (rightbarStore.active) openRightbarTab("vault");
+    }
+
     // ── 侧栏索引视图单槽与入口按钮（文件树/源代码管理/知识库/日程，四个入口
     // 按钮 + 四个快捷键 + 舞台「+」菜单共用，用户定稿 2026-09-10）──
     // 侧栏只有一格（会话 ↔ 文件树 ↔ 源代码管理 ↔ 知识库目录 ↔ 日程待办），
@@ -252,12 +322,20 @@ window.__ModuleLoader__.load({
     // 标签不跟着关——标签的归宿是标签 ✕ 与配置清场，入口按钮只管侧栏那格）。
     // 「开」= 侧栏索引视图 + 对应舞台标签，一次点击两边到位；收起态顺带展开
     // 侧栏（视图渲染进铁轨等于不可见）。
+    // 右栏路径（用户定稿 2026-09-11）：知识库钮**只切左侧目录**，点具体页才开
+    // 右栏 tab；日程开 = 侧栏待办 + 右栏日程签两边到位，再点只收侧栏待办
+    // （右栏签的关闭归官方 ✕）。
     function openVaultEntry(ui) {
       expandSidebarNow();
+      if (rightbarStore.active) return sidebarViewPatch("vault");
       return { ...sidebarViewPatch("vault"), ...openStageTab(ui, "vault") };
     }
     function openSchedEntry(ui) {
       expandSidebarNow();
+      if (rightbarStore.active) {
+        openRightbarTab("schedule");
+        return sidebarViewPatch("sched");
+      }
       return { ...sidebarViewPatch("sched"), ...openStageTab(ui, "schedule") };
     }
     function toggleVaultEntry(ui) {
@@ -265,7 +343,10 @@ window.__ModuleLoader__.load({
       return openVaultEntry(ui);
     }
     function toggleSchedEntry(ui) {
-      if (ui.schedIdxOpen === true) return { ...closeStageTab(ui, "schedule"), ...sidebarViewPatch(null) };
+      if (ui.schedIdxOpen === true) {
+        if (rightbarStore.active) return sidebarViewPatch(null);
+        return { ...closeStageTab(ui, "schedule"), ...sidebarViewPatch(null) };
+      }
       return openSchedEntry(ui);
     }
 
@@ -973,8 +1054,10 @@ window.__ModuleLoader__.load({
       pvCloseTab: "关闭此标签",
       pvDeletedNote: "文件已删除——此标签仅展示删除 diff；可在源代码管理里 ↩ 恢复文件",
       stageLabel: "舞台",
-  rbProbeHint: "官方右栏试水占位：签条与内容区都复用舞台那套 DOM/CSS，只为量容器手感——全屏、宽度让位、与自建舞台共存。",
-  rbProbeNoPrim: "（官方 primitives 的静态模块表 require 失败，代码块退回纯文本）",
+      rbGuideTitle: "打开哪个功能",
+      rbGuideNote: "文件与知识库页各自带一条标签条，可多开；终端仍在底部停靠。",
+      rbFileEmpty: "尚未打开文件——从文件树、源代码管理或对话里点开一个",
+      rbFeatureDisabled: "该功能已在设置中停用",
       stagePin: "钉住此宽度（按类型记住）",
       stageUnpin: "取消钉住（回到跟随默认宽）",
       stageAdd: "打开标签",
@@ -1434,8 +1517,10 @@ window.__ModuleLoader__.load({
       pvCloseTab: "Close this tab",
       pvDeletedNote: "File deleted — this tab shows the deletion diff only; restore it via ↩ in source control",
       stageLabel: "Stage",
-  rbProbeHint: "Rightbar probe placeholder: the strip and body reuse the stage's own DOM/CSS, to gauge the container — fullscreen, width yielding, coexistence with the self-built stage.",
-  rbProbeNoPrim: "(official primitives failed to resolve from the static module table; the code block falls back to plain text)",
+      rbGuideTitle: "Open a tool",
+      rbGuideNote: "Files and knowledge pages each keep their own tab strip; the terminal still docks at the bottom.",
+      rbFileEmpty: "No file open — pick one from the file tree, source control, or chat",
+      rbFeatureDisabled: "This feature is disabled in settings",
       stagePin: "Pin this width (remembered per type)",
       stageUnpin: "Unpin (follow the shared default width)",
       stageAdd: "Open a tab",
@@ -1880,10 +1965,31 @@ body.dshk-stage-open [class*="_scroll"] > [class*="_slot"]{display:block!importa
 .dshk-stage-pin{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:12px;line-height:1;width:22px;height:22px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:none}
 .dshk-stage-pin:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-stage-pin[aria-pressed="true"]{color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-button-tool-bar-fill)}
-/* 官方右栏试水正文：复用舞台签条那套 DOM/CSS，量的是容器手感不是内容 */
-.dshk-rbprobe{display:flex;flex-direction:column;height:100%;min-height:0}
-.dshk-rbprobe-body{flex:1 1 auto;min-height:0;overflow:auto;padding:10px 12px;font-size:12px;line-height:1.8;color:var(--dsw-alias-label-secondary)}
-.dshk-rbprobe-note{margin:0 0 10px}
+/* 官方右栏 dock pane 正文（sidebar.right.pane.tab）：pane 内是普通文档流，
+   外壳占满 100%×100%、内容区自己滚——舞台的 fixed 外壳与 body 让位类在右栏
+   路径下全不参与 */
+.dshk-rbpane{width:100%;height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base)}
+.dshk-rbpane-scroll{overflow:auto}
+.dshk-rbpane-hint{flex:1;display:flex;align-items:center;justify-content:center;padding:20px;color:var(--dsw-alias-label-tertiary);font-size:12px;text-align:center}
+.dshk-rbpane .dshk-pane-view{flex:1 1 auto;min-height:0}
+.dshk-rbpane .dshk-vault-stagehost{flex:1 1 auto;min-height:0}
+/* 「+」引导页正文（chain 席位整体替换官方引导页）：我们的功能清单 */
+.dshk-rbguide{width:100%;height:100%;overflow:auto;padding:18px 16px;display:flex;flex-direction:column;gap:12px;box-sizing:border-box}
+.dshk-rbguide-title{font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary)}
+.dshk-rbguide-list{display:flex;flex-direction:column;gap:6px}
+.dshk-rbguide-item{appearance:none;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-3);font:inherit;font-size:13px;color:var(--dsw-alias-label-primary);display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;text-align:left;min-width:0}
+.dshk-rbguide-item:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-rbguide-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.dshk-rbguide-go{color:var(--dsw-alias-label-tertiary)}
+.dshk-rbguide-note{font-size:12px;color:var(--dsw-alias-label-tertiary);line-height:1.6}
+/* 计时芯片（会话 header 工具区）：空闲=▶，运行=脉冲点+实时时长；起表浮层
+   复用 .dshk-timer-pick、贴 header 右缘 */
+.dshk-htimer{position:relative;display:inline-flex}
+.dshk-htimer-chip{appearance:none;border:1px solid var(--dsw-alias-border-l1);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;cursor:pointer;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dshk-htimer-chip:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-htimer-chip.is-running{color:var(--dsw-alias-brand-primary);border-color:currentColor}
+.dshk-htimer-elapsed{min-width:56px;text-align:left}
+.dshk-timer-pick.is-header{left:auto;right:12px;bottom:auto;top:46px}
 /* 侧栏底部按钮区（sidebar.footer.action）：宽态=图标+文字，收起态=纯图标
    （官方 footArea 收起样式自带居中）；钉在 footer 一行排开 */
 .dshk-fab-bar{display:flex;flex-wrap:wrap;width:100%;min-width:0;gap:2px 0}
@@ -2173,7 +2279,7 @@ body.dshk-stage-open [class*="_scroll"] > [class*="_slot"]{display:block!importa
 .dshk-sched-weeklabel{min-width:104px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:12px}
 .dshk-sched-navbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
 .dshk-sched-navbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-sched-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.dshk-sched-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:row;min-width:0}
 /* y 轴 mandatory 吸附到整点行：静止位置恒为「某小时标签贴在表头带下方」，
 标签既不会被 sticky 角格盖掉半截，也不会漂进表头区（2026-09-06 两轮反馈的根治）；
 scroll-padding 与 --dshk-sched-band 绑定，改带高只需改一处 */
@@ -2207,7 +2313,7 @@ ellipsis，窄列只截字不破版 */
    短块维持单行省略，避免半截字被容器裁掉 */
 .dshk-sched-event.is-tall .dshk-sched-evtitle{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;word-break:break-word;line-clamp:2}
 /* 上条下网（用户定稿 2026-09-06）：待办/统计横条在上，周网格在下吃满坞宽 */
-.dshk-sched-side{flex:none;display:flex;flex-direction:row;align-items:flex-start;gap:10px;padding:10px;border-bottom:1px solid var(--dsw-alias-border-l2);overflow:auto}
+.dshk-sched-sidecol{flex:0 0 240px;min-width:0;display:flex;flex-direction:column;gap:10px;padding:10px;border-right:1px solid var(--dsw-alias-border-l2);overflow:auto}
 /* 日程拆两半：待办列表投进侧栏索引宿主（竖排占满），周网格+统计留舞台 */
 .dshk-sched-sidewrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;width:100%;overflow:auto;padding:6px}
 .dshk-sched-sidewrap .dshk-sched-card.is-tasks{flex:1 1 auto}
@@ -3647,27 +3753,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       );
     }
 
-    /** 计时图标：秒表（圆体 + 顶部按钮 + 左上斜柄 + 指针），与终端/任务描边体系一致 */
-    function TimerIcon() {
-      return jsxRuntime.jsxs(
-        "svg",
-        {
-          width: 15,
-          height: 15,
-          viewBox: "0 0 16 16",
-          "aria-hidden": true,
-          fill: "none",
-          stroke: "currentColor",
-          strokeWidth: 1.2,
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          children: [
-            jsxRuntime.jsx("circle", { cx: 8, cy: 9, r: 5.2 }),
-            jsxRuntime.jsx("path", { d: "M6.6 1.6h2.8M8 1.6v2.2M8 9V6.6M4.4 3.9 3.3 2.8" }),
-          ],
-        },
-      );
-    }
 
     /** 知识库图标：书堆（三枚书脊，第三本微倾斜），与终端/任务描边体系一致 */
     function VaultIcon() {
@@ -6424,19 +6509,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       });
     }
 
-    /** 日程入口（同上，与知识库并排）：开合切换带舞台周网格标签 */
-    function SchedEntry() {
-      const ui = useKitUi();
-      return jsxRuntime.jsx("button", {
-        type: "button",
-        className: "dshk-btn dshk-enbtn",
-        "aria-pressed": ui.schedIdxOpen,
-        title: t("schedTab"),
-        onClick: () => setKitUi(toggleSchedEntry(kitUi)),
-        children: jsxRuntime.jsx(SchedIcon, {}),
-      });
-    }
-
     // ─────────── 手机访问页（settings.section，与技能页同类）───────────
     // 数据源：宿主半边 /dsh-kit/phone/info|link（rotate 无 UI 入口——轮换在
     // 宿主侧随「关闭→开启」自动触发）。这些端点挂在主 webserver
@@ -7151,9 +7223,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     /** 侧栏待办索引（sidebar.workspaces 占用，日程拆两半的待办半）：勾选/计时
      *  就地完成，点标题开舞台日程标签并出编辑弹窗（点待办开舞台对应标签）。
      *  wide=false（侧栏收起）不渲染，同知识库目录占用 */
-    function ScheduleIndexView(owner) {
-      const side = owner ?? {};
-      const { data, mutate } = useScheduleData();
+    /** 待办卡（侧栏待办索引与日程 pane 左列共用）：勾选完成、标题点击编辑
+     *  （顺带把日程签带到眼前）、▶ 起表。数据由调用方给（useScheduleData 的
+     *  data/mutate），编辑弹窗卡内自理 */
+    function ScheduleTasksCard({ data, mutate }) {
       const [modal, setModal] = react.useState(null);
       const tasks = react.useMemo(
         () =>
@@ -7164,52 +7237,60 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             .sort((a, b) => (a.due ?? "9999") < (b.due ?? "9999") ? -1 : 1),
         [data.events],
       );
-      if (side.wide === false) return null;
       const today = schedToday();
-      return jsxRuntime.jsx("div", { className: "dshk-sidehost", children:
-        jsxRuntime.jsxs("div", { className: "dshk-sched-sidewrap", children: [
-          jsxRuntime.jsxs("div", { className: "dshk-sched-card is-tasks", children: [
-            jsxRuntime.jsxs("div", { className: "dshk-sched-cardhead", children: [
-              jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedTasks") }),
-              // 待办与日程同一数据形状（无 start 而已）——创建走同一个弹窗（task 模式）
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", onClick: () => setModal({ id: null, kind: "task", values: { title: "", due: schedToday() } }), children: `+ ${t("schedAdd")}` }),
-            ] }),
-            tasks.length === 0
-              ? jsxRuntime.jsx("div", { className: "dshk-sched-emptytasks", children: t("schedTasksEmpty") })
-              : tasks.map((task) => {
-                  const overdue = !task.completedAt && task.due !== undefined && task.due < today;
-                  return jsxRuntime.jsxs("div", { className: "dshk-sched-task", children: [
-                    jsxRuntime.jsx("input", {
-                      type: "checkbox",
-                      checked: task.completedAt != null,
-                      onChange: () => void mutate("/dsh-kit/schedule/done", { id: task.id, done: task.completedAt == null }),
-                    }),
-                    jsxRuntime.jsx("span", { className: "dshk-sched-tasktitle", title: task.title, onClick: () => { setKitUi(openStageTab(kitUi, "schedule")); setModal({ id: task.id, kind: "task", values: { ...task } }); }, children: task.title }),
-                    task.due
-                      ? jsxRuntime.jsx("span", { className: `dshk-sched-taskduebadge${overdue ? " is-overdue" : ""}`, children: overdue ? `${t("schedOverdue")} ${task.due.slice(5)}` : task.due.slice(5) })
-                      : null,
-                    task.completedAt == null
-                      ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-tasktimer", title: t("timerStartBtn"), onClick: () => void mutate("/dsh-kit/schedule/timer-start", { id: task.id }), children: "▶" })
-                      : null,
-                  ] }, task.id);
-                }),
+      return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+        jsxRuntime.jsxs("div", { className: "dshk-sched-card is-tasks", children: [
+          jsxRuntime.jsxs("div", { className: "dshk-sched-cardhead", children: [
+            jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedTasks") }),
+            // 待办与日程同一数据形状（无 start 而已）——创建走同一个弹窗（task 模式）
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", onClick: () => setModal({ id: null, kind: "task", values: { title: "", due: schedToday() } }), children: `+ ${t("schedAdd")}` }),
           ] }),
-          modal
-            ? jsxRuntime.jsx(ScheduleModal, {
-                modal,
-                onClose: () => setModal(null),
-                onSave: async (id, values) => {
-                  if (id) await mutate("/dsh-kit/schedule/update", { id, ...values });
-                  else await mutate("/dsh-kit/schedule/create", values);
-                  setModal(null);
-                },
-                onDelete: async (id) => {
-                  await mutate("/dsh-kit/schedule/delete", { id });
-                  setModal(null);
-                },
-              })
-            : null,
+          tasks.length === 0
+            ? jsxRuntime.jsx("div", { className: "dshk-sched-emptytasks", children: t("schedTasksEmpty") })
+            : tasks.map((task) => {
+                const overdue = !task.completedAt && task.due !== undefined && task.due < today;
+                return jsxRuntime.jsxs("div", { className: "dshk-sched-task", children: [
+                  jsxRuntime.jsx("input", {
+                    type: "checkbox",
+                    checked: task.completedAt != null,
+                    onChange: () => void mutate("/dsh-kit/schedule/done", { id: task.id, done: task.completedAt == null }),
+                  }),
+                  jsxRuntime.jsx("span", { className: "dshk-sched-tasktitle", title: task.title, onClick: () => { setKitUi(openFeatureDock(kitUi, "schedule")); setModal({ id: task.id, kind: "task", values: { ...task } }); }, children: task.title }),
+                  task.due
+                    ? jsxRuntime.jsx("span", { className: `dshk-sched-taskduebadge${overdue ? " is-overdue" : ""}`, children: overdue ? `${t("schedOverdue")} ${task.due.slice(5)}` : task.due.slice(5) })
+                    : null,
+                  task.completedAt == null
+                    ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-tasktimer", title: t("timerStartBtn"), onClick: () => void mutate("/dsh-kit/schedule/timer-start", { id: task.id }), children: "▶" })
+                    : null,
+                ] }, task.id);
+              }),
         ] }),
+        modal
+          ? jsxRuntime.jsx(ScheduleModal, {
+              modal,
+              onClose: () => setModal(null),
+              onSave: async (id, values) => {
+                if (id) await mutate("/dsh-kit/schedule/update", { id, ...values });
+                else await mutate("/dsh-kit/schedule/create", values);
+                setModal(null);
+              },
+              onDelete: async (id) => {
+                await mutate("/dsh-kit/schedule/delete", { id });
+                setModal(null);
+              },
+            })
+          : null,
+      ] });
+    }
+
+    function ScheduleIndexView(owner) {
+      const side = owner ?? {};
+      const { data, mutate } = useScheduleData();
+      if (side.wide === false) return null;
+      return jsxRuntime.jsx("div", { className: "dshk-sidehost", children:
+        jsxRuntime.jsx("div", { className: "dshk-sched-sidewrap", children:
+          jsxRuntime.jsx(ScheduleTasksCard, { data, mutate }),
+        }),
       });
     }
 
@@ -7399,10 +7480,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         ],
       });
 
-      // 上条下网（用户定稿 2026-09-06）：窄坞里左右分栏会挤得周网格只剩横向
-      // 上条下网（用户定稿 2026-09-06）：统计条在上、网格在下吃满舞台宽。
-      // 待办列表已拆去侧栏索引（2026-09-10 工作台化），舞台只留周网格+统计
-      const topCol = jsxRuntime.jsxs("div", { className: "dshk-sched-side", children: [
+      // 左待办 + 右周网格（右栏 pane 定稿 2026-09-11，待办卡回归 pane）：左列
+      // 待办+统计卡片、右列网格吃满余宽；侧栏待办索引与左列共用待办卡组件
+      const sideCol = jsxRuntime.jsxs("div", { className: "dshk-sched-sidecol", children: [
+        jsxRuntime.jsx(ScheduleTasksCard, { data, mutate }),
         stats
           ? jsxRuntime.jsxs("div", { className: "dshk-sched-card is-stats", children: [
               jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedStatsTitle") }),
@@ -7419,7 +7500,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return jsxRuntime.jsxs("div", { className: "dshk-sched-root", children: [
         head,
         jsxRuntime.jsxs("div", { className: "dshk-sched-body", children: [
-          topCol,
+          sideCol,
           jsxRuntime.jsx("div", { className: "dshk-sched-gridwrap", ref: gridRef, children: jsxRuntime.jsx("div", { className: "dshk-sched-gridinner", children: grid }) }),
         ] }),
         modal
@@ -9384,11 +9465,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [treeRoot, fetchDir]);
 
       // 开页统一入口（侧栏目录/搜索/反链/碎链建页/对话路径/wikilink 都走这里）：
-      // 打开或激活该页的标签并把舞台切到知识库——编辑器住舞台，索引侧点开即见
-      // （工作台定稿：索引即入口）。切页前的未存草稿由被切走的那个 pane 自己
-      // 在失活时 flush（标签仍挂载，草稿不会丢）。
+      // 打开或激活该页的知识库页签，右栏路径顺带把「知识库」dock 签带到眼前
+      // （索引即入口）。切页前的未存草稿由被切走的那个 pane 自己在失活时
+      // flush（标签仍挂载，草稿不会丢）。
       const openPath = react.useCallback((path) => {
-        setKitUi(openVaultPageTab(kitUi, path));
+        openVaultPageAndDock(path);
       }, []);
 
       // M4 会话→笔记：消费拦截器转来的开页请求。两种时序都接——舞台未开时点
@@ -9594,9 +9675,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             {
               className: `dshk-vault-treerow${e.path === current ? " is-active" : ""}`,
               style: { paddingLeft: 10 + (depth + 1) * 14 },
-              // 点目录条目 = 开舞台知识库标签看页（索引即入口，工作台定稿）
+              // 点目录条目 = 开右栏知识库签看页（索引即入口，工作台定稿）
               onClick: () => {
-                setKitUi(openStageTab(kitUi, "vault"));
                 openPath(e.path);
               },
               title: e.path,
@@ -9663,7 +9743,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           ? jsxRuntime.jsxs("div", { className: "dshk-vault-searchres", children: [
               searchRes.length === 0 ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultSearchEmpty") }) : null,
               searchRes.map((r) =>
-                jsxRuntime.jsxs("div", { className: "dshk-vault-hitrow", onClick: () => { setSearchRes(null); setKitUi(openStageTab(kitUi, "vault")); openPath(r.path); }, children: [
+                jsxRuntime.jsxs("div", { className: "dshk-vault-hitrow", onClick: () => { setSearchRes(null); openPath(r.path); }, children: [
                   jsxRuntime.jsx("span", { className: "dshk-vault-hittitle", children: r.title }),
                   jsxRuntime.jsx("span", { className: "dshk-vault-hitsnippet", children: r.snippet }),
                 ] }, r.path),
@@ -10152,64 +10232,26 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 侧栏底部按钮区（官方 sidebar.footer.action 列表槽，入参 wide 旗标）：
-     *  后台任务/浏览器（无索引→直开舞台标签，任务带运行中计数角标）、计时
-     *  （起表/运行态/停表确认）三钮常驻。文件没有钮（用户定稿 2026-09-10：
-     *  文件的位子在中间舞台标签条，侧栏底部只放「不由侧栏索引承载」的开关）。
-     *  宽态=图标+文字，收起态=纯图标（官方 CSS 收起态已让 footArea 居中）；
-     *  收起态点击顺带展开侧栏 */
+     *  后台任务/浏览器两钮（无索引→直开右栏 dock 签，任务带运行中计数角标）。
+     *  计时 2026-09-11 迁会话 header 工具区（HeaderTimer）；文件的位子在右栏
+     *  「文件」签（被动打开）。宽态=图标+文字，收起态=纯图标（官方 CSS 收起态
+     *  已让 footArea 居中）；收起态点击顺带展开侧栏 */
     function SidebarFooterActions({ wide, useSessions }) {
       const ui = useKitUi();
       const cfg = cfgFromSnapshot(getCfgSnapshot());
       const liveJobs = useLiveJobs({ useSessions });
-      const { running, nowTick, stop } = useRunningTimer();
-      const [timerPick, setTimerPick] = react.useState(false);
-      const [confirming, setConfirming] = react.useState(false);
-      const [pickLabel, setPickLabel] = react.useState("");
-      const [pickTasks, setPickTasks] = react.useState([]);
-      react.useEffect(() => {
-        if (!timerPick) return undefined;
-        let alive = true;
-        void schedFetch(`/dsh-kit/schedule/data?from=${encodeURIComponent(schedToday())}&to=${encodeURIComponent(schedToday())}`)
-          .then((b) => {
-            if (!alive) return;
-            const evs = Array.isArray(b && b.events) ? b.events : [];
-            setPickTasks(evs.filter((e) => e.start === undefined && !e.completedAt).sort((a, b2) => ((a.due ?? "9999") < (b2.due ?? "9999") ? -1 : 1)));
-          })
-          .catch(() => {});
-        return () => {
-          alive = false;
-        };
-      }, [timerPick]);
-      const startTimer = (payload) => {
-        void schedFetch("/dsh-kit/schedule/timer-start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
-          .then(() => {
-            setTimerPick(false);
-            setPickLabel("");
-            window.dispatchEvent(new Event("dshk-sched-changed"));
-          })
-          .catch(() => {});
-      };
       // 收起态点击任何底部钮都顺带展开侧栏（用户定稿 2026-09-10 §4）
-      const openStage = (id) => {
+      const openDock = (id) => {
         expandSidebarNow();
-        setKitUi(openStageTab(kitUi, id));
+        setKitUi(openFeatureDock(kitUi, id));
       };
       const items = [];
       if (cfg.jobsEnabled !== false) {
-        items.push({ id: "jobs", label: t("dockJobs"), icon: JobsIcon, on: ui.jobsOpen === true, badge: liveJobs, click: () => openStage("jobs") });
+        items.push({ id: "jobs", label: t("dockJobs"), icon: JobsIcon, on: ui.jobsOpen === true, badge: liveJobs, click: () => openDock("jobs") });
       }
       if (cfg.browserEnabled !== false) {
-        items.push({ id: "browser", label: t("dockBrowser"), icon: BrowserIcon, on: ui.browserOpen === true, click: () => openStage("browser") });
+        items.push({ id: "browser", label: t("dockBrowser"), icon: BrowserIcon, on: ui.browserOpen === true, click: () => openDock("browser") });
       }
-      // 计时钮恒显（日程/计时无 cfg 门控）：空闲=起表弹窗，运行=脉冲点+时长
-      items.push({
-        id: "timer",
-        label: running ? `${running.title || t("schedTimerStandalone")} · ${timerElapsedStr(nowTick, running.start)}` : t("timerStartBtn"),
-        icon: TimerIcon,
-        on: timerPick || running !== null,
-        timer: running !== null,
-        click: () => { if (running) setConfirming(true); else setTimerPick(!timerPick); },
-      });
       return jsxRuntime.jsxs("div", { className: wide ? "dshk-fab-bar" : "dshk-fab-bar dshk-fab-bar-narrow", role: "toolbar", "aria-label": t("stageLabel"), children: [
         items.map((m) =>
           jsxRuntime.jsxs("button", {
@@ -10222,60 +10264,39 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             onClick: m.click,
             children: [
               jsxRuntime.jsx(m.icon, {}),
-              wide ? jsxRuntime.jsx("span", { className: "dshk-fab-label", children: m.id === "timer" && running ? timerElapsedStr(nowTick, running.start) : m.label }) : null,
+              wide ? jsxRuntime.jsx("span", { className: "dshk-fab-label", children: m.label }) : null,
               m.badge > 0 ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(m.badge) }) : null,
-              m.timer ? jsxRuntime.jsx("span", { className: "dshk-sched-timerdot", "aria-hidden": true }) : null,
             ],
           }, m.id),
         ),
-        timerPick
-          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-              jsxRuntime.jsx("div", { className: "dshk-timer-pickback", onClick: () => setTimerPick(false) }),
-              jsxRuntime.jsxs("div", { className: "dshk-timer-pick", onClick: (e) => e.stopPropagation(), children: [
-                jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedPickTimer") }),
-                pickTasks.length === 0
-                  ? jsxRuntime.jsx("div", { className: "dshk-sched-emptytasks", children: t("schedTasksEmpty") })
-                  : pickTasks.map((task) =>
-                      jsxRuntime.jsxs("button", {
-                        type: "button",
-                        className: "dshk-timer-picktask",
-                        onClick: () => startTimer({ id: task.id }),
-                        children: [
-                          jsxRuntime.jsx("span", { className: "dshk-sched-tasktitle", title: task.title, children: task.title }),
-                          task.due ? jsxRuntime.jsx("span", { className: "dshk-sched-taskduebadge", children: task.due.slice(5) }) : null,
-                        ],
-                      }, task.id),
-                    ),
-                jsxRuntime.jsxs("div", { className: "dshk-timer-pickrow", children: [
-                  jsxRuntime.jsx("input", {
-                    className: "dshk-sched-taskinput",
-                    value: pickLabel,
-                    maxLength: SCHED_TITLE_MAX,
-                    placeholder: t("timerLabelPh"),
-                    onChange: (e) => setPickLabel(e.target.value.slice(0, SCHED_TITLE_MAX)),
-                    onKeyDown: (e) => {
-                      if (e.key === "Enter" && pickLabel.trim() !== "") startTimer({ title: pickLabel.trim() });
-                    },
-                  }),
-                  jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-sched-primary",
-                    disabled: pickLabel.trim() === "",
-                    title: pickLabel.trim() === "" ? t("timerTitleRequired") : undefined,
-                    onClick: () => {
-                      if (pickLabel.trim() !== "") startTimer({ title: pickLabel.trim() });
-                    },
-                    children: "▶",
-                  }),
-                ] }),
-              ] }),
-            ] })
-          : null,
-        confirming && running
-          ? jsxRuntime.jsx(TimerStopModal, { running, nowTick, stop, onClose: () => setConfirming(false) })
-          : null,
       ] });
     }
+
+    /** 内容区文档签条（浏览器式页签）：一文档一签、点击切换、✕ 单关；
+     *  label(path) 决定签名（文件带后缀、知识库页去掉 .md）。舞台与右栏 pane
+     *  两个外壳共用 */
+    const docChips = (paths, activePath, activate, closeOne, label) =>
+      paths.map((p) =>
+        jsxRuntime.jsxs("span", {
+          className: `dshk-tab${p === activePath ? " dshk-tab-on" : ""}`,
+          title: p,
+          onClick: () => setKitUi(activate(p)),
+          children: [
+            jsxRuntime.jsx("span", { className: "dshk-tab-label", children: label(p) }),
+            jsxRuntime.jsx("button", {
+              type: "button",
+              className: "dshk-tab-x",
+              "aria-label": t("pvCloseTab"),
+              title: t("pvCloseTab"),
+              onClick: (e) => {
+                e.stopPropagation();
+                setKitUi(closeOne(p));
+              },
+              children: "✕",
+            }),
+          ],
+        }, p),
+      );
 
     /** 舞台容器：顶部标签栏（文件/知识库页/功能标签 + 「+」菜单 + 图钉）+ 内容区。
      *  0 标签时不渲染（对话回全宽居中）；舞台不可收起（隐藏态与快捷键已取消） */
@@ -10380,30 +10401,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             }),
           ],
         }, id);
-      /** 内容区子标签条（浏览器式页签）：一文档一签、点击切换、✕ 单关；
-       *  label(path) 决定签名（文件带后缀、知识库页去掉 .md） */
-      const docChips = (paths, activePath, activate, closeOne, label) =>
-        paths.map((p) =>
-          jsxRuntime.jsxs("span", {
-            className: `dshk-tab${p === activePath ? " dshk-tab-on" : ""}`,
-            title: p,
-            onClick: () => setKitUi(activate(p)),
-            children: [
-              jsxRuntime.jsx("span", { className: "dshk-tab-label", children: label(p) }),
-              jsxRuntime.jsx("button", {
-                type: "button",
-                className: "dshk-tab-x",
-                "aria-label": t("pvCloseTab"),
-                title: t("pvCloseTab"),
-                onClick: (e) => {
-                  e.stopPropagation();
-                  setKitUi(closeOne(p));
-                },
-                children: "✕",
-              }),
-            ],
-          }, p),
-        );
       const fileDocChips = docChips((ui.files ?? []).map((x) => x.path), ui.activeFile, (p) => activateFileTab(kitUi, p), (p) => closeFileTab(kitUi, p), (p) => baseName(p) || t("stageFileBtn"));
       const vaultDocChips = docChips(vaultPages, ui.activeVaultPage, (p) => activateVaultPage(kitUi, p), (p) => closeVaultPageTab(kitUi, p), (p) => pageBasename(p) || t("vaultTitle"));
       return jsxRuntime.jsxs("div", {
@@ -10542,6 +10539,209 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return jsxRuntime.jsx("div", { className: "dshk-sidehost", ref: (el) => vaultSideSlot.set(el) });
     }
 
+    // ─────────── 右栏 pane 正文（每个 dock 签一个，key = 页类型 id）───────────
+    // 官方 pane 是普通文档流：外壳 .dshk-rbpane 占满 100%×100%，内容区自己滚，
+    // 不再有任何 position:fixed 舞台外壳与 body.dshk-stage-open 让位类。
+    // pane 挂载 = 官方签开着：把 kitUi 的功能存在性同步为真（入口按钮选中态、
+    // 角标、自动跟随判定都读它）；pane 卸载（用户点官方签 ✕）同步回假——
+    // 「签开着吗」以官方 pane 的挂载为准。文件/知识库的文档签状态（files/
+    // vaultPages）在卸载后保留，重开签即恢复，与关签前一致。
+    /** 功能存在性跟随 pane 挂载（jobs/schedule/browser 用） */
+    function useFeaturePresence(feature) {
+      react.useEffect(() => {
+        setKitUi(openStageTab(kitUi, feature));
+        return () => setKitUi(closeStageTab(kitUi, feature));
+      }, [feature]);
+    }
+    /** 文件 pane：文档签条 + 多实例 FileEditorPane（非激活 display:none 保挂载
+     *  ——滚动/草稿/撤销栈不丢，与舞台时代同策略）。不做存在性同步：
+     *  files 状态本来就在 kitUi，官方签关了重开，文档签原样恢复 */
+    function FilePaneBody(props) {
+      const ui = useKitUi();
+      const cwd = useCurrentCwd(props);
+      const files = ui.files ?? [];
+      return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
+        files.length > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(files.map((x) => x.path), ui.activeFile, (p) => activateFileTab(kitUi, p), (p) => closeFileTab(kitUi, p), (p) => baseName(p) || t("stageFileBtn")) }) : null,
+        files.length === 0
+          ? jsxRuntime.jsx("div", { className: "dshk-rbpane-hint", children: t("rbFileEmpty") })
+          : files.map((pv) =>
+              jsxRuntime.jsx("div", {
+                className: "dshk-pane-view",
+                style: { display: pv.path === ui.activeFile ? "flex" : "none" },
+                children: jsxRuntime.jsx(FileEditorPane, {
+                  key: pv.path,
+                  path: pv.path,
+                  source: pv.from ?? "tree",
+                  untracked: pv.untracked === true,
+                  deleted: pv.deleted === true,
+                  commit: pv.commit,
+                  cwd,
+                  onOpenFile: (p, untracked) => openFileAndDock(p, "md-link", untracked === true),
+                }),
+              }, pv.path),
+            ),
+      ] });
+    }
+    /** 知识库 pane：页签条 + portal 宿主（VaultRootView 单实例投页编辑器进来）。
+     *  vaultOpen 跟随挂载——KitSurfaces 靠它决定挂不挂 VaultView；挂载期间
+     *  vaultOpen 被别处收掉（Esc 关光页签的「收摊」分支）也强制回真，pane 在
+     *  官方签就得有内容（0 页时显示「去索引挑一页」空态） */
+    function VaultPaneBody() {
+      const ui = useKitUi();
+      react.useEffect(() => {
+        if (!ui.vaultOpen) setKitUi({ vaultOpen: true });
+      }, [ui.vaultOpen]);
+      react.useEffect(() => () => setKitUi({ vaultOpen: false }), []);
+      const vaultPages = ui.vaultPages ?? [];
+      return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
+        vaultPages.length > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(vaultPages, ui.activeVaultPage, (p) => activateVaultPage(kitUi, p), (p) => closeVaultPageTab(kitUi, p), (p) => pageBasename(p) || t("vaultTitle")) }) : null,
+        // 宿主常驻渲染（页签条之后），portal 目标缺失的时序问题不存在
+        jsxRuntime.jsx("div", { className: "dshk-vault-stagehost", ref: (el) => vaultStageSlot.set(el) }),
+      ] });
+    }
+    /** 日程 pane：ScheduleView（pane 内左待办 + 右周网格） */
+    function SchedulePaneBody() {
+      useFeaturePresence("schedule");
+      return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(ScheduleView, { active: true }) });
+    }
+    /** 后台任务 pane */
+    function JobsPaneBody(props) {
+      useFeaturePresence("jobs");
+      const cfg = cfgFromSnapshot(getCfgSnapshot());
+      return jsxRuntime.jsx("div", { className: "dshk-rbpane dshk-rbpane-scroll", children:
+        cfg.jobsEnabled === false
+          ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("rbFeatureDisabled") })
+          : jsxRuntime.jsx(JobsPanel, { ...props }),
+      });
+    }
+    /** 浏览器 pane（agent 驱动 + 人机共驾 + 自动跟随，与舞台时代同构不加功能） */
+    function BrowserPaneBody() {
+      useFeaturePresence("browser");
+      const cfg = cfgFromSnapshot(getCfgSnapshot());
+      return jsxRuntime.jsx("div", { className: "dshk-rbpane", children:
+        cfg.browserEnabled === false
+          ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("rbFeatureDisabled") })
+          : jsxRuntime.jsx(BrowserPanel, { active: true }),
+      });
+    }
+    /** dock「+」引导页正文（chain 席位整体替换官方引导页）：我们的功能清单，
+     *  数据源与舞台「+」菜单同源（stageOpenable，cfg 门控） */
+    function GuideBody(props) {
+      const cfg = cfgFromSnapshot(getCfgSnapshot());
+      const liveJobs = useLiveJobs(props);
+      const openable = stageOpenable(cfg, liveJobs);
+      return jsxRuntime.jsxs("div", { className: "dshk-rbguide", children: [
+        jsxRuntime.jsx("div", { className: "dshk-rbguide-title", children: t("rbGuideTitle") }),
+        jsxRuntime.jsx("div", { className: "dshk-rbguide-list", children:
+          openable.map((m) =>
+            jsxRuntime.jsxs("button", {
+              type: "button",
+              className: "dshk-rbguide-item",
+              onClick: () => setKitUi(openFeatureDock(kitUi, m.id)),
+              children: [
+                jsxRuntime.jsx(m.icon, {}),
+                jsxRuntime.jsx("span", { className: "dshk-rbguide-label", children: m.label }),
+                m.badge > 0 ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(m.badge) }) : null,
+                jsxRuntime.jsx("span", { className: "dshk-rbguide-go", children: "›" }),
+              ],
+            }, m.id),
+          ),
+        }),
+        jsxRuntime.jsx("div", { className: "dshk-rbguide-note", children: t("rbGuideNote") }),
+      ] });
+    }
+    /** 计时芯片（会话 header 工具区，自侧栏底部迁来）：空闲=开始钮（弹起表
+     *  浮层：待办清单 + 自由名目），运行=脉冲点 + 实时时长（点击弹停表确认）。
+     *  浮层改挂 header 右缘（fixed），其余与侧栏底部钮同一套数据流 */
+    function HeaderTimer() {
+      const { running, nowTick, stop } = useRunningTimer();
+      const [timerPick, setTimerPick] = react.useState(false);
+      const [confirming, setConfirming] = react.useState(false);
+      const [pickLabel, setPickLabel] = react.useState("");
+      const [pickTasks, setPickTasks] = react.useState([]);
+      react.useEffect(() => {
+        if (!timerPick) return undefined;
+        let alive = true;
+        void schedFetch(`/dsh-kit/schedule/data?from=${encodeURIComponent(schedToday())}&to=${encodeURIComponent(schedToday())}`)
+          .then((b) => {
+            if (!alive) return;
+            const evs = Array.isArray(b && b.events) ? b.events : [];
+            setPickTasks(evs.filter((e) => e.start === undefined && !e.completedAt).sort((a, b2) => ((a.due ?? "9999") < (b2.due ?? "9999") ? -1 : 1)));
+          })
+          .catch(() => {});
+        return () => {
+          alive = false;
+        };
+      }, [timerPick]);
+      const startTimer = (payload) => {
+        void schedFetch("/dsh-kit/schedule/timer-start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
+          .then(() => {
+            setTimerPick(false);
+            setPickLabel("");
+            window.dispatchEvent(new Event("dshk-sched-changed"));
+          })
+          .catch(() => {});
+      };
+      return jsxRuntime.jsxs("div", { className: "dshk-htimer", children: [
+        jsxRuntime.jsxs("button", {
+          type: "button",
+          className: `dshk-htimer-chip${running ? " is-running" : ""}`,
+          title: running ? `${running.title || t("schedTimerStandalone")} · ${timerElapsedStr(nowTick, running.start)}` : t("timerStartBtn"),
+          onClick: () => { if (running) setConfirming(true); else setTimerPick(!timerPick); },
+          children: [
+            running ? jsxRuntime.jsx("span", { className: "dshk-sched-timerdot", "aria-hidden": true }) : "▶",
+            running ? jsxRuntime.jsx("span", { className: "dshk-htimer-elapsed", children: timerElapsedStr(nowTick, running.start) }) : null,
+          ],
+        }),
+        timerPick
+          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+              jsxRuntime.jsx("div", { className: "dshk-timer-pickback", onClick: () => setTimerPick(false) }),
+              jsxRuntime.jsxs("div", { className: "dshk-timer-pick is-header", onClick: (e) => e.stopPropagation(), children: [
+                jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedPickTimer") }),
+                pickTasks.length === 0
+                  ? jsxRuntime.jsx("div", { className: "dshk-sched-emptytasks", children: t("schedTasksEmpty") })
+                  : pickTasks.map((task) =>
+                      jsxRuntime.jsxs("button", {
+                        type: "button",
+                        className: "dshk-timer-picktask",
+                        onClick: () => startTimer({ id: task.id }),
+                        children: [
+                          jsxRuntime.jsx("span", { className: "dshk-sched-tasktitle", title: task.title, children: task.title }),
+                          task.due ? jsxRuntime.jsx("span", { className: "dshk-sched-taskduebadge", children: task.due.slice(5) }) : null,
+                        ],
+                      }, task.id),
+                    ),
+                jsxRuntime.jsxs("div", { className: "dshk-timer-pickrow", children: [
+                  jsxRuntime.jsx("input", {
+                    className: "dshk-sched-taskinput",
+                    value: pickLabel,
+                    maxLength: SCHED_TITLE_MAX,
+                    placeholder: t("timerLabelPh"),
+                    onChange: (e) => setPickLabel(e.target.value.slice(0, SCHED_TITLE_MAX)),
+                    onKeyDown: (e) => {
+                      if (e.key === "Enter" && pickLabel.trim() !== "") startTimer({ title: pickLabel.trim() });
+                    },
+                  }),
+                  jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-sched-primary",
+                    disabled: pickLabel.trim() === "",
+                    title: pickLabel.trim() === "" ? t("timerTitleRequired") : undefined,
+                    onClick: () => {
+                      if (pickLabel.trim() !== "") startTimer({ title: pickLabel.trim() });
+                    },
+                    children: "▶",
+                  }),
+                ] }),
+              ] }),
+            ] })
+          : null,
+        confirming && running
+          ? jsxRuntime.jsx(TimerStopModal, { running, nowTick, stop, onClose: () => setConfirming(false) })
+          : null,
+      ] });
+    }
+
     // ─────────── 面板宿主（shell.overlay 全帧浮层）───────────
     // 终端停靠面板与文件预览面板在这里渲染（fixed 定位不受 composer 祖先
     // stacking context 影响）；文件树的 sidebar.workspaces 动态注册、让位 body 类、
@@ -10554,6 +10754,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
       const cwd = useCurrentCwd(props);
       const ui = useKitUi();
+      const rbActive = useRightbarActive();
       const snap = react.useSyncExternalStore(subscribeCfg, getCfgSnapshot);
       const cfg = cfgFromSnapshot(snap);
       // useSessions 透传给侧栏底部钮（在跑任务徽标）：footer 槽位的 inject 闭包
@@ -10564,11 +10765,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       chatPreviewHook = {
         ready: cfg.chatOpenFilePreview === true && (cfg.fileTreeEnabled || cfg.sourceControlEnabled),
         cwd,
-        openPreview: (p) => setKitUi(openFileTab(kitUi, p, "chat", false)),
+        openPreview: (p) => openFileAndDock(p, "chat", false),
         // M4 会话→笔记：vault 内路径点击直达知识库标签（不受预览接管门控）
         vaultOn: cfg.vaultEnabled !== false,
         openVaultPage: (p) => {
-          setKitUi(openStageTab(kitUi, "vault"));
+          openVaultPageAndDock(p);
           // 先落地再派发：知识库未挂载时 VaultRootView 未挂载，挂载后消费请求
           vaultOpenRequest = p;
           window.dispatchEvent(new CustomEvent("dshk-vault-open"));
@@ -10606,17 +10807,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               { name: "conversation.composer.dock", id: "dsh-kit-monitor", order: 5 },
               MonitorLine,
             )],
-          // 输入框入口排序（左→右）：文件树、源代码管理、知识库、日程、终端
-          // （知识库/日程 2026-09-10 从侧栏底部钮移到这里，用户定稿）；手机访问
-          // 与技能页同类，走 settings.section 页面入口（order：技能 40 → 手机 45）
+          // 输入框入口排序（左→右）：文件树、源代码管理、知识库、终端
+          // （日程钮 2026-09-11 撤——日程走右栏 dock 签 + 左栏待办索引，入口在
+          // 快捷键与待办卡；知识库/日程 2026-09-10 从侧栏底部钮移到这里，用户定稿；
+          // 手机访问与技能页同类，走 settings.section 页面入口（order：技能 40 → 手机 45）
           ["filetree", cfg.fileTreeEnabled, () =>
             slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-filetree", order: 10 }, FileTreeEntry)],
           ["scm", cfg.sourceControlEnabled, () =>
             slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-scm", order: 11 }, ScmEntry)],
           ["vault", cfg.vaultEnabled, () =>
             slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-vault", order: 12 }, VaultEntry)],
-          ["sched", true, () =>
-            slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-sched", order: 13 }, SchedEntry)],
           ["terminal", cfg.terminalEnabled, () =>
             slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-terminal", order: 14 }, TerminalEntry)],
           // 侧栏底部按钮区（工作台定稿 2026-09-10）：任务/浏览器/计时三钮常驻 +
@@ -10686,10 +10886,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             const side = owner ?? {};
             if (side.wide === false) return null;
             if (ui.gitOpen) {
-              return jsxRuntime.jsx(GitChangesPanel, { cwd, onOpenFile: (p, untracked, deleted, commit) => setKitUi(openFileTab(kitUi, p, "scm", untracked === true, deleted === true, typeof commit === "string" && commit !== "" ? commit : undefined)), ...owner });
+              return jsxRuntime.jsx(GitChangesPanel, { cwd, onOpenFile: (p, untracked, deleted, commit) => openFileAndDock(p, "scm", untracked === true, deleted === true, commit), ...owner });
             }
             if (ui.treeOpen) {
-              return jsxRuntime.jsx(FileTreePanel, { cwd, onOpenFile: (p) => setKitUi(openFileTab(kitUi, p, "tree", false)), ...owner });
+              return jsxRuntime.jsx(FileTreePanel, { cwd, onOpenFile: (p) => openFileAndDock(p, "tree", false), ...owner });
             }
             if (ui.vaultIdxOpen) return jsxRuntime.jsx(SidebarVaultIndex, { ...owner });
             return jsxRuntime.jsx(ScheduleIndexView, { ...owner });
@@ -10814,14 +11014,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           if (e.key === "Escape") {
             // 日程弹窗开着时让路：Esc 归弹窗自己（只关弹窗，不收标签页）
             if (schedModalOpen) return;
-            // 舞台：Esc 关当前激活那个标签（知识库关当前页那张、文件关当前文件
-            // 那张，各自与标签条的 ✕ 同语义）
+            // Esc 关当前激活那张文档签（知识库关当前页那张、文件关当前文件
+            // 那张，各自与标签条的 ✕ 同语义）。右栏路径功能签归官方 ✕，
+            // Esc 不收功能签（kitUi 收了 pane 还在，状态会对不上）
             if (stageAlive(kitUi)) {
               if (kitUi.stageTab === "vault" && kitUi.activeVaultPage) {
                 setKitUi(closeVaultPageTab(kitUi, kitUi.activeVaultPage));
               } else if (kitUi.stageTab === "file" && kitUi.activeFile) {
                 setKitUi(closeFileTab(kitUi, kitUi.activeFile));
-              } else {
+              } else if (!rightbarStore.active) {
                 const tab = kitUi.stageTab ?? ((kitUi.files?.length ?? 0) > 0 ? "file" : kitUi.jobsOpen ? "jobs" : kitUi.schedOpen ? "schedule" : kitUi.vaultOpen ? "vault" : "browser");
                 setKitUi(closeStageTab(kitUi, tab));
               }
@@ -10906,8 +11107,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 onKillAll: () => setKitUi({ terminals: [], activeTermId: null, termDockOpen: false }),
               })
             : null,
-          // 舞台容器：有标签就渲染（没有「收起」态——0 标签即不存在）
-          stageAlive(ui)
+          // 舞台容器：仅右栏不可用的回退路径渲染（宿主 0.1.5+ 上舞台整体退役，
+          // 有标签就渲染、0 标签即不存在——没有「收起」态）
+          !rbActive && stageAlive(ui)
             ? jsxRuntime.jsx(StagePane, { props, cwd })
             : null,
           // 知识库单实例：侧栏目录/舞台页签任一在场即挂载（两侧 portal 自取），
@@ -11692,46 +11894,56 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }
     }
 
-    // ─────────── 官方右侧边栏试水（宿主 0.1.5+）───────────
-    // 目的只有一个：量「我们的面板住进官方右栏」的容器手感（全屏、宽度让位、
-    // 与自建舞台共存）。正文先用占位、复用舞台的签条 DOM/CSS——形态就是将来
-    // 要搬进去的样子。服务按运行期探测取用，**不进 dsh.client.inject**：0.1.2
-    // 宿主没有这个服务，硬注入会让整个插件起不来（正式环境仍是 0.1.2-rc.1）。
-    const RB_KIND = "dshk-workbench";
-    const RB_ID = "dsh-kit-workbench";
-    /** 官方 primitives 顺手验一下 require 能不能拿到（静态平台模块表里的条目，
-     *  按官方包的用法不需要声明 external）；拿不到就退回纯占位，不让正文整片消失 */
-    const RB_PRIM = (() => {
-      try { return require("@deepseek-ai/dsh-client-ui-primitives"); } catch (_e) { return null; }
-    })();
-    const RB_SNIPPET = [
-      "// 官方 CodeBlock（Shiki 高亮）在本插件 bundle 里的实测",
-      "export function stageBounds(type, sidebarW) {",
-      "  const min = STAGE_MIN_W[type] ?? 320;",
-      "  const max = Math.max(min, window.innerWidth - sidebarW - 400);",
-      "  return { min, max };",
-      "}",
-    ].join("\n");
-    function RightbarProbeBody() {
-      const [on, setOn] = react.useState("vault");
-      const feats = [["vault", t("vaultTitle")], ["schedule", t("schedTab")], ["browser", t("dockBrowser")]];
-      const CodeBlock = RB_PRIM ? RB_PRIM.CodeBlock : null;
-      return jsxRuntime.jsxs("div", { className: "dshk-rbprobe", children: [
-        jsxRuntime.jsx("div", { className: "dshk-stage-tabbar", children:
-          jsxRuntime.jsx("span", { className: "dshk-tabs", children: feats.map(([id, label]) =>
-            jsxRuntime.jsx("span", {
-              className: `dshk-tab${on === id ? " dshk-tab-on" : ""}`,
-              title: label,
-              onClick: () => setOn(id),
-              children: jsxRuntime.jsx("span", { className: "dshk-tab-label", children: label }),
-            }, id)) }) }),
-        jsxRuntime.jsxs("div", { className: "dshk-rbprobe-body", children: [
-          jsxRuntime.jsx("div", { className: "dshk-rbprobe-note", children: t("rbProbeHint") }),
-          CodeBlock
-            ? jsxRuntime.jsx(CodeBlock, { code: RB_SNIPPET, lang: "javascript", lineNumbers: true })
-            : jsxRuntime.jsx("div", { className: "dshk-rbprobe-note", children: t("rbProbeNoPrim") }),
-        ] }),
-      ] });
+    // ─────────── 官方右侧边栏注册（宿主 0.1.5+，替换已退役的探针）───────────
+    // 五个功能各注册一张 dock 页类型（id=正文槽 key，kind=openTab 类型名）+
+    // pane 正文；「+」引导页正文整体替换成功能清单；计时挂会话 header 工具区。
+    // 引导页的逐项入口（tabs.register 的 guide）与正文清单并存：万一宿主某天
+    // 不再给 chain 席位，入口项仍在。服务运行期探测（见 RB_FEATURES 处注释）。
+    const RB_BODY = {
+      file: FilePaneBody,
+      vault: VaultPaneBody,
+      schedule: SchedulePaneBody,
+      jobs: JobsPaneBody,
+      browser: BrowserPaneBody,
+    };
+    function registerRightbar(rbCtx) {
+      const tabs = rbCtx.sidebarRightTabs;
+      if (!tabs || typeof tabs.register !== "function") return;
+      for (const f of RB_FEATURES) {
+        const Body = RB_BODY[f.feature];
+        rbCtx.effect(() => tabs.register({
+          id: f.id,
+          kind: f.kind,
+          title: () => t(f.titleKey),
+          guide: [{ order: 20, title: () => t(f.titleKey), description: () => t("rbGuideTitle") }],
+        }), `dsh-kit: rightbar tab type ${f.kind}`);
+        rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.pane.tab", () => rbCtx.slots.register({
+          name: "sidebar.right.pane.tab",
+          key: f.id,
+          // cwd / 运行中任务数经 shellShare 桥接（pane 注册发生在 effect，
+          // 渲染期的 props 由 KitSurfaces 的常驻桥供最新值）
+          inject: () => ({
+            useSessions: shellShare.current?.useSessions,
+            useWorkspaces: shellShare.current?.useWorkspaces,
+          }),
+        }, Body)), `dsh-kit: rightbar pane body ${f.kind}`);
+      }
+      // 「+」引导页正文：chain 子席位（挂在官方引导签的 pane 注册下）。select
+      // 返回非 null 即当选——整体替换官方引导页；咱不玩让位，恒接管
+      rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.tab.guide", () => rbCtx.slots.register({
+        name: "sidebar.right.tab.guide",
+        select: () => ({}),
+        inject: () => ({ useSessions: shellShare.current?.useSessions, useWorkspaces: shellShare.current?.useWorkspaces }),
+      }, GuideBody)), "dsh-kit: rightbar guide body");
+      // 计时：会话 header 右对齐工具区（list 型）。corner 席位是 single 型且被
+      // 官方右栏展开钮占着，不去抢
+      rbCtx.effect(() => rbCtx.slots.inject("conversation.session.header.utilities", () => rbCtx.slots.register({
+        name: "conversation.session.header.utilities",
+        id: "dsh-kit-timer",
+        order: 10,
+      }, HeaderTimer)), "dsh-kit: header timer chip");
+      // 探测落地：此后入口走右栏、舞台不再渲染（KitSurfaces 订阅本标志重渲染）
+      rightbarStore.setActive(true);
     }
 
     // ─────────── 插件体 ───────────
@@ -11768,25 +11980,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           ),
         );
       }
-      // 官方右侧边栏试水：注册「舞台」页类型 + 正文槽位，只在宿主提供该服务时
-      // 生效（0.1.2 没有，静默跳过）。用 inject 等它就绪而非直接读——官方右栏
-      // 与本插件的客户端加载顺序不保证，直接读可能拿到 undefined。
-      const registerRightbarProbe = (rbCtx) => {
-        const tabs = rbCtx.sidebarRightTabs;
-        if (!tabs || typeof tabs.register !== "function") return;
-        rbCtx.effect(() => tabs.register({
-          id: RB_ID,
-          kind: RB_KIND,
-          title: () => t("stageLabel"),
-          guide: [{ order: 20, title: () => t("stageLabel"), description: () => t("rbProbeHint") }],
-        }), "dsh-kit: rightbar tab type");
-        rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.pane.tab", () => rbCtx.slots.register({
-          name: "sidebar.right.pane.tab",
-          key: RB_ID,
-        }, RightbarProbeBody)), "dsh-kit: rightbar pane body");
-      };
-      if (typeof ctx.inject === "function") ctx.inject(["sidebarRightTabs"], registerRightbarProbe);
-      else registerRightbarProbe(ctx);
+      // 官方右侧边栏：五个功能 dock 签 + 引导页清单 + header 计时。只在宿主
+      // 提供该服务时生效（0.1.2 没有，静默跳过=整条回退舞台路径）。用 inject
+      // 等它就绪而非直接读——官方右栏与本插件的客户端加载顺序不保证
+      if (typeof ctx.inject === "function") {
+        ctx.inject(["sidebarRightTabs"], registerRightbar);
+        ctx.inject(["sidebarRight"], (srCtx) => { rightbarSr = srCtx.sidebarRight; });
+      } else {
+        registerRightbar(ctx);
+      }
       // 计时入口现居侧栏底部按钮区（右坞时代曾挂 composer/坞收起栏，均随右坞
       // 退役迁移）；运行态另有悬浮小窗与舞台日程标签内芯片。组件内部拉
       // /dsh-kit/schedule/* 数据，与 session 无关。

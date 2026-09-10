@@ -71,7 +71,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultStageSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, SchedEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, StagePane, SidebarFooterActions, ScheduleIndexView, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openStageTab, closeStageTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, toggleSchedEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, stageAlive, stageBounds, stageWidthFor, stageIsPinned, stageWidthCommit, stagePinToggle, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, readPosStore, recordReadPos, isPathInsideVaultRoot, vaultCiteText };",
+  "return { vaultSideSlot, vaultStageSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, GitActionsMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, StagePane, SidebarFooterActions, ScheduleIndexView, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openStageTab, closeStageTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, toggleSchedEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, stageAlive, stageBounds, stageWidthFor, stageIsPinned, stageWidthCommit, stagePinToggle, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, GuideBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, isPathInsideVaultRoot, vaultCiteText };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -85,7 +85,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "SchedEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "StagePane", "SidebarFooterActions", "ScheduleIndexView", "RteEditor", "VaultPagePane", "openStageTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "toggleSchedEntry", "stageBounds", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTakeoverError", "monitorRecoveredTail", "isPathInsideVaultRoot", "vaultCiteText"];
+const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "GitActionsMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "StagePane", "SidebarFooterActions", "ScheduleIndexView", "RteEditor", "VaultPagePane", "openStageTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "toggleSchedEntry", "stageBounds", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTakeoverError", "monitorRecoveredTail", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "GuideBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "isPathInsideVaultRoot", "vaultCiteText"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -598,8 +598,8 @@ callLog = [];
 out = comps.SidebarFooterActions({ wide: true });
 const fabBtns = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-fab");
 const fabLabels = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-fab-label");
-check("SidebarFooterActions 宽态渲染后台任务/浏览器/计时三钮（知识库/日程已移输入行）", fabBtns.length === 3);
-check("SidebarFooterActions 宽态出文字标签", fabLabels.length >= 3);
+check("SidebarFooterActions 宽态渲染后台任务/浏览器两钮（计时 2026-09-11 迁 header 工具区）", fabBtns.length === 2);
+check("SidebarFooterActions 宽态出文字标签", fabLabels.length >= 2);
 check("SidebarFooterActions 后台任务钮用改名后的标签（与面板标题一致，不再与日程待办撞名）", fabBtns.some((c) => ["后台任务", "Background tasks"].includes(c[2]["aria-label"])));
 check("SidebarFooterActions 不再有知识库/日程钮", !fabBtns.some((c) => ["知识库", "日程", "Knowledge base", "Schedule"].includes(c[2]["aria-label"])));
 callLog = [];
@@ -612,6 +612,52 @@ out = comps.SidebarFooterActions({ wide: true });
 const fabFile = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-fab" && ["文件", "Files"].includes(c[2]["aria-label"]));
 check("SidebarFooterActions 有文件标签也不出文件钮（文件的位子在中间舞台）", !fabFile);
 comps.setKitUi({ files: [], activeFile: null });
+
+// 7.2.4e) 右栏 pane 正文组件（迁移 2026-09-11）：桩环境 rightbar 未激活（舞台
+// 回退路径），这里直接渲染各 pane 正文验证渲染体；存在性同步走 effect（桩不执行）
+comps.setKitUi({ files: [{ path: "C:/x/a.js", from: "tree", untracked: false, usedAt: 1 }], activeFile: "C:/x/a.js" });
+callLog = [];
+out = comps.FilePaneBody({});
+const fpChips = callLog.filter((c) => (c[0] === "jsxs") && c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-tab") && c[2].title === "C:/x/a.js");
+const fpEditors = callLog.filter((c) => c[1] === comps.FileEditorPane);
+check("FilePaneBody 渲染无异常（文档签条 + FileEditorPane 实例）", !!out && fpChips.length === 1 && fpEditors.length === 1);
+comps.setKitUi({ files: [], activeFile: null });
+callLog = [];
+out = comps.FilePaneBody({});
+const fpEmpty = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-rbpane-hint");
+check("FilePaneBody 0 文件渲染空态提示", !!out && !!fpEmpty);
+callLog = [];
+out = comps.VaultPaneBody({});
+const vpHost = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-vault-stagehost");
+check("VaultPaneBody 渲染 portal 宿主（VaultRootView 投页编辑器）", !!out && !!vpHost);
+callLog = [];
+out = comps.SchedulePaneBody({});
+check("SchedulePaneBody 挂 ScheduleView（pane 内左待办+右网格）", !!out && callLog.some((c) => c[1] === comps.ScheduleView));
+callLog = [];
+out = comps.JobsPaneBody(jobsHooks);
+check("JobsPaneBody 挂 JobsPanel（透传 hooks 供运行中角标）", !!out && callLog.some((c) => c[1] === comps.JobsPanel));
+callLog = [];
+out = comps.BrowserPaneBody({});
+const bpElemRb = callLog.find((c) => c[1] === comps.BrowserPanel && c[2] && c[2].active === true);
+check("BrowserPaneBody 挂 BrowserPanel（active 恒真：pane 显示即在看）", !!out && !!bpElemRb);
+callLog = [];
+out = comps.GuideBody({});
+const guideItems = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-rbguide-item");
+check("GuideBody 渲染功能清单（cfg 默认全开=4 项）", !!out && guideItems.length === 4);
+callLog = [];
+out = comps.HeaderTimer({});
+const timerChip = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-htimer-chip");
+check("HeaderTimer 空闲渲染 ▶ 起表芯片", !!out && !!timerChip);
+callLog = [];
+out = comps.ScheduleTasksCard({ data: { events: [] }, mutate: () => {} });
+check("ScheduleTasksCard 空待办渲染卡壳", !!out && typeof out === "object");
+// openFileAndDock / openVaultPageAndDock：kitUi 侧补丁在桩环境（右栏未激活）=
+// 原开签语义，右栏 openTab 在 effect 外不可达所以不触
+comps.openFileAndDock("C:/x/new.js", "tree", false);
+check("openFileAndDock 落 kitUi 文件签", comps.getKitUi().activeFile === "C:/x/new.js" && comps.getKitUi().stageTab === "file");
+comps.openVaultPageAndDock("D:/v/p.md");
+check("openVaultPageAndDock 落 kitUi 知识库页签", comps.getKitUi().activeVaultPage === "D:/v/p.md" && comps.getKitUi().vaultOpen === true);
+comps.setKitUi({ files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 }, stageTab: null });
 
 // 7.2.4d) 侧栏待办索引：勾选/标题点击开舞台日程标签
 comps.setKitUi({ schedIdxOpen: true });
