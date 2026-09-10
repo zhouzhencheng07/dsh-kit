@@ -648,10 +648,10 @@ export async function apply(ctx: KitCtx): Promise<void> {
   })
 
   // ── 日程模块（src/schedule.ts）：结构化日程/待办/计时 ──
-  //   agent 工具恒开（schedule_query 只给日/周/月汇总，schedule_create 只建不
-  //   改删）——「agent 只看汇总、只做总结/查/创建」的工具面锁死；中心区第三
-  //   tab 与输入区计时芯片在 client/bundle.js 挂 conversation.view /
-  //   conversation.composer.dock 槽位；HTTP 端点在下方 webServer 注入块注册。
+  //   agent 工具恒开（schedule_query 只给日/周/月汇总；schedule_create 只建、
+  //   schedule_delete 按 id 删，不给 update）——工具面锁死；舞台日程签、侧栏
+  //   待办索引与输入区计时芯片在 client/bundle.js 挂各自槽位；
+  //   HTTP 端点在下方 webServer 注入块注册。
   // 日程存储固定 $DSH_HOME/dsh-kit/schedule.json，与知识库（vaultRoot）无关，
   // 无配置门槛
   const scheduleStore = syncScheduleStore()
@@ -714,7 +714,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
   //   （fs/observed 的 emit 能到、write-intent 的 waterfall 到不了，global 监听
   //   同样收不到），且拦截语义复杂、随宿主升级难维护——agent 的版本管理改由知识
   //   库技能教会的 git -C add/commit 承担（src/vault-skill.ts，trackVaultRoot 处
-  //   随 vaultRoot 变化重写）。恢复点语义见 .agents/docs/vault-git-archive.md。
+  //   随 vaultRoot 变化重写）。
 
   // webServer 可能在本插件 apply 之后才挂载，用动态注入等它就绪
   ctx.inject(['webServer', 'credentials'], (webCtx: KitWebCtx) => {
@@ -2140,9 +2140,9 @@ export async function apply(ctx: KitCtx): Promise<void> {
       // 0 时停流）/ open {url}（URL 栏导航）/ activate {tabId}（切观察页）/
       // closeTab {tabId}（关页）/ nav {op}（back/forward/reload）/ newTab（＋）
       // → 宿主。服务事件（state/navigated/crashed/closed）广播给所有连接，
-      // 帧 {t:'frame', data(jpeg base64)} 同通道。面板常驻挂载（右侧标签页容器），
-      // 关闭标签即断 WS——顺带就是「agent 导航自动打开」的事件源与抑制开关。
-      // 同源校验同终端；开关关闭时面板入口在浏览器端已隐藏，此处不再重复门控。
+      // 帧 {t:'frame', data(jpeg base64)} 同通道。面板挂舞台「浏览器」功能签，
+      // 关闭标签即断 WS。同源校验同终端；开关关闭时面板入口在浏览器端已隐藏，
+      // 此处不再重复门控。
       if (browserService.available) {
         const browserSockets = new Set<any>()
         const sendTo = (ws: any, obj: unknown) => {
