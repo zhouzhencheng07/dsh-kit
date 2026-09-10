@@ -10,8 +10,9 @@
 //     是被动签（索引/对话链接点开即开），任务/日程/浏览器走右栏开始页清单与
 //     自动跟随。开合状态放模块级 store（kitUi + useSyncExternalStore），跨槽共享。
 //   右栏：sidebarRightTabs 注册五类 dock 签，pane 正文经 slots.inject
-//     （sidebar.right.pane.tab）按 id 提供，pane 内自管文档签条；右栏无签时经
-//     sidebar.right.tab.guide（chain 席位）渲染我们的开始页。
+//     （sidebar.right.pane.tab）按 id 提供，pane 内自管文档签条。开始页保留
+//     官方 ShippedGuide（罗盘 + 胶囊条目），我们只贡献 guide 条目：日程/浏览器/
+//     后台任务三枚（文件/知识库是被动签，不给条目），官方「文件」条目垫底。
 //   舞台（仅回退）：左锚定（从侧栏右缘起，left 随侧栏宽度 RO 跟随）、顶部标签
 //     栏 + 「+」菜单，挂 shell.overlay（全帧浮层）——不放进 composer，规避其祖先
 //     stacking context 劫持 position:fixed。对话列 margin-left 让位、在剩余区域
@@ -50,6 +51,19 @@ window.__ModuleLoader__.load({
     let react = require("react");
     let jsxRuntime = require("react/jsx-runtime");
     let reactDom = require("react-dom");
+
+    // ─────────── 官方 primitives 图标复用（用户定稿 2026-09-11：能复用就不自绘）───
+    // primitives 随宿主前端注册进 ModuleLoader（官方各 client lib 同款 require）；
+    // 取不到（0.1.2 老宿主/异常环境）时各图标回退自绘版本，不挡启动。
+    let dswPrimIcons = null;
+    try { dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 回退自绘 */ }
+    const dswIcon = (...names) => {
+      for (const n of names) {
+        const c = dswPrimIcons ? dswPrimIcons[n] : null;
+        if (typeof c === "function" || typeof c === "object") return c;
+      }
+      return null;
+    };
 
     /** 终端面板高度（与让位 padding 共用一个变量） */
     const DOCK_H = "min(34vh, 330px)";
@@ -93,11 +107,14 @@ window.__ModuleLoader__.load({
       setKitUi(openFeatureDock(kitUi, "browser"));
     }
     /** 浏览器没了（优雅关闭/空闲自动关/整只崩溃/页崩光）→ 收掉浏览器面板标签：
-     *  正常浏览器语义「没了就没了」。agent 下次开页面板照常弹回。
-     *  右栏路径收不了官方签（无关闭 API）——kitUi 存在性不动，面板自身的
-     *  空态/错误态承担「没了」的显示 */
+     *  正常浏览器语义「没了就没了」（右栏路径也收官方签——sidebarRight.close；
+     *  agent 下次开页面板照常弹回） */
     function closeBrowserDockForGone() {
-      if (!kitUi.browserOpen || rightbarStore.active) return;
+      if (!kitUi.browserOpen) return;
+      if (rightbarStore.active) {
+        closeRightbarTab("browser");
+        return;
+      }
       setKitUi(closeStageTab(kitUi, "browser"));
     }
 
@@ -280,6 +297,26 @@ window.__ModuleLoader__.load({
       if (!f) return;
       try {
         sr.openTab(f.kind);
+      } catch {
+        /* 右栏异常不拖垮入口动作 */
+      }
+    }
+    /** 关掉右栏的某类 dock 签（官方 close API：按 kind 在 mounted surface 的
+     *  签表里找到 id 再关）。服务未就绪或签不在时静默——调用点都在「签该
+     *  消失」的语义位（最后一页文档签关掉 / 浏览器没了） */
+    /** 关掉右栏的某类 dock 签（官方 close API：按 kind 在 mounted surface 的
+     *  layout 签表里找到 id 再关）。服务未就绪或签不在时静默——调用点都在
+     *  「签该消失」的语义位（最后一页文档签关掉 / 浏览器没了） */
+    function closeRightbarTab(feature) {
+      const sr = rightbarSr;
+      const f = RB_FEATURES.find((x) => x.feature === feature);
+      if (!sr || !f || typeof sr.close !== "function") return;
+      try {
+        // mounted() 返回 surface {layout, history, minted}——签表在 layout.tabs
+        const surface = typeof sr.mounted === "function" ? sr.mounted() : undefined;
+        const tabsMap = surface && surface.layout ? surface.layout.tabs : undefined;
+        const tab = tabsMap ? Object.values(tabsMap).find((x) => x && x.kind === f.kind) : null;
+        if (tab && tab.id !== undefined) sr.close(tab.id);
       } catch {
         /* 右栏异常不拖垮入口动作 */
       }
@@ -1058,9 +1095,9 @@ window.__ModuleLoader__.load({
       pvCloseTab: "关闭此标签",
       pvDeletedNote: "文件已删除——此标签仅展示删除 diff；可在源代码管理里 ↩ 恢复文件",
       stageLabel: "舞台",
-      rbGuideTitle: "打开哪个功能",
-      rbGuideNote: "文件与知识库页各自带一条标签条，可多开；终端仍在底部停靠。",
-      rbFileEmpty: "尚未打开文件——从文件树、源代码管理或对话里点开一个",
+      rbGuideSchedDesc: "周网格、待办与计时",
+      rbGuideBrowserDesc: "agent 驱动的内置浏览器",
+      rbGuideJobsDesc: "后台任务的输出与停止",
       rbFeatureDisabled: "该功能已在设置中停用",
       stagePin: "钉住此宽度（按类型记住）",
       stageUnpin: "取消钉住（回到跟随默认宽）",
@@ -1166,14 +1203,8 @@ window.__ModuleLoader__.load({
       schedDelDone: "已删除",
       schedSaved: "已保存",
       schedOpFail: "操作失败：{error}",
-      archivedTab: "归档会话",
-      archivedRestore: "恢复",
-      archivedEmpty: "没有已存档的会话",
-      archivedHint: "已归档的会话不出现在会话列表；点「恢复」回到原工作区位置",
-      archivedFilterCurrent: "当前工作区",
-      archivedFilterAll: "全部",
       cfgVaultEnabled: "启用知识库",
-      cfgVaultEnabledHint: "侧栏底部「知识库」钮：侧栏目录树 + 舞台页编辑器（目录未配置时标签内显示引导）",
+      cfgVaultEnabledHint: "知识库入口（输入行工具条）：侧栏目录树 + 右栏页编辑器",
       cfgVaultRoot: "知识库目录",
       cfgVaultRootHint: "vault 根目录绝对路径（如 D:\\notes），默认 数据目录下 dsh-kit\\knowledge。其内一切 md 即页面；attachments/ 与点前缀目录不进索引，根目录自动生成 AGENTS.md 约定",
       vaultTitle: "知识库",
@@ -1521,9 +1552,9 @@ window.__ModuleLoader__.load({
       pvCloseTab: "Close this tab",
       pvDeletedNote: "File deleted — this tab shows the deletion diff only; restore it via ↩ in source control",
       stageLabel: "Stage",
-      rbGuideTitle: "Open a tool",
-      rbGuideNote: "Files and knowledge pages each keep their own tab strip; the terminal still docks at the bottom.",
-      rbFileEmpty: "No file open — pick one from the file tree, source control, or chat",
+      rbGuideSchedDesc: "Weekly grid, todos, and a timer",
+      rbGuideBrowserDesc: "Built-in browser driven by the agent",
+      rbGuideJobsDesc: "Output and controls for background tasks",
       rbFeatureDisabled: "This feature is disabled in settings",
       stagePin: "Pin this width (remembered per type)",
       stageUnpin: "Unpin (follow the shared default width)",
@@ -1652,14 +1683,8 @@ window.__ModuleLoader__.load({
       schedDelDone: "Deleted",
       schedSaved: "Saved",
       schedOpFail: "Operation failed: {error}",
-      archivedTab: "Archived",
-      archivedRestore: "Restore",
-      archivedEmpty: "No archived sessions",
-      archivedHint: "Archived sessions are hidden from the session list; restore returns them to their workspace slot",
-      archivedFilterCurrent: "Current workspace",
-      archivedFilterAll: "All",
       cfgVaultEnabled: "Enable knowledge base",
-      cfgVaultEnabledHint: "Knowledge base button in the sidebar footer: sidebar directory tree + stage page editor (shows setup hint until a directory is configured)",
+      cfgVaultEnabledHint: "Knowledge base entry (composer toolbar): sidebar directory tree + right-dock page editor",
       cfgVaultRoot: "Knowledge base directory",
       cfgVaultRootHint: "Absolute path of the vault root (e.g. D:\\notes); defaults to dsh-kit\\knowledge inside the data directory. Every md file inside is a page; attachments/ and dot-directories are not indexed; an AGENTS.md convention file is generated at the root",
       vaultTitle: "Knowledge base",
@@ -1974,18 +1999,8 @@ body.dshk-stage-open [class*="_scroll"] > [class*="_slot"]{display:block!importa
    路径下全不参与 */
 .dshk-rbpane{width:100%;height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base)}
 .dshk-rbpane-scroll{overflow:auto}
-.dshk-rbpane-hint{flex:1;display:flex;align-items:center;justify-content:center;padding:20px;color:var(--dsw-alias-label-tertiary);font-size:12px;text-align:center}
 .dshk-rbpane .dshk-pane-view{flex:1 1 auto;min-height:0}
 .dshk-rbpane .dshk-vault-stagehost{flex:1 1 auto;min-height:0}
-/* 「+」引导页正文（chain 席位整体替换官方引导页）：我们的功能清单 */
-.dshk-rbguide{width:100%;height:100%;overflow:auto;padding:18px 16px;display:flex;flex-direction:column;gap:12px;box-sizing:border-box}
-.dshk-rbguide-title{font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary)}
-.dshk-rbguide-list{display:flex;flex-direction:column;gap:6px}
-.dshk-rbguide-item{appearance:none;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-3);font:inherit;font-size:13px;color:var(--dsw-alias-label-primary);display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;text-align:left;min-width:0}
-.dshk-rbguide-item:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-rbguide-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
-.dshk-rbguide-go{color:var(--dsw-alias-label-tertiary)}
-.dshk-rbguide-note{font-size:12px;color:var(--dsw-alias-label-tertiary);line-height:1.6}
 /* 计时芯片（会话 header 工具区）：空闲=▶，运行=脉冲点+实时时长；起表浮层
    复用 .dshk-timer-pick、贴 header 右缘 */
 .dshk-htimer{position:relative;display:inline-flex}
@@ -2360,23 +2375,11 @@ textarea.dshk-sched-input{resize:vertical}
 /* 舞台打开时贴着舞台与对话列交界（舞台右缘外 12px）；零标签时落在视口右缘 */
 body.dshk-stage-open .dshk-timer-pill{left:calc(var(--dshk-stage-left,0px) + var(--dshk-stage-w,560px) + 12px);right:auto}
 .dshk-timer-pill:hover{border-color:var(--dsw-alias-brand-primary)}
-.dshk-arch-root{padding:14px 16px;overflow:auto;height:100%;display:flex;flex-direction:column;gap:8px}
 /* 会话监视条（composer 上方细条，仅有动作时出现） */
 .dshk-monitor-line{display:flex;align-items:center;gap:10px;padding:5px 12px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 35%,transparent);border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 8%,transparent);font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-monitor-text{flex:1;min-width:0}
 .dshk-monitor-cancel{appearance:none;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:none;padding:2px 10px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer}
 .dshk-monitor-cancel:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-tertiary)}
-.dshk-arch-bar{display:flex;align-items:center;gap:10px}
-.dshk-arch-bar .dshk-arch-hint{flex:1;min-width:0}
-.dshk-arch-scope{display:inline-flex;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;overflow:hidden}
-.dshk-arch-scopebtn{appearance:none;border:0;background:none;padding:3px 10px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer}
-.dshk-arch-scopebtn.is-active{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-arch-hint{font-size:12px;color:var(--dsw-alias-label-secondary)}
-.dshk-arch-empty{font-size:13px;color:var(--dsw-alias-label-tertiary);padding:18px 0;text-align:center}
-.dshk-arch-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-2)}
-.dshk-arch-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.dshk-arch-title{font-size:13px;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dshk-arch-ws{font-size:11px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshk-timer-pilltitle{min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--dsw-alias-label-primary)}
 .dshk-timer-pilltime{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dsw-alias-label-primary);font-variant-numeric:tabular-nums}
 .dshk-timer-stopmeta{display:flex;align-items:center;gap:10px;min-width:0;margin:2px 0 8px}
@@ -3607,7 +3610,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return seenHunk ? rows : null;
     }
 
-    function FolderIcon() {
+    function FolderIcon(props) {
+      const _official = dswIcon("IconFolderOpenOutline16");
+      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
       return jsxRuntime.jsx(
         "svg",
         {
@@ -3627,7 +3632,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 分支图标（进入更改视图的入口钮）：git branch 风格两节点一弧线 */
-    function BranchIcon() {
+    function BranchIcon(props) {
+      const _official = dswIcon("IconBranchOutline16");
+      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
       return jsxRuntime.jsxs(
         "svg",
         {
@@ -3651,7 +3658,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 终端图标：与 FolderIcon 同为描边风格（16 网格），保证两个 footer 按钮观感一致 */
-    function TerminalIcon() {
+    function TerminalIcon(props) {
+      const _official = dswIcon("IconCodeOutline16");
+      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
       return jsxRuntime.jsxs(
         "svg",
         {
@@ -3675,12 +3684,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     /** 后台任务图标：正方形框（用户定稿：任务标记用方框，不要待办清单样式）。
     外框圆角方 + 顶部短横线（窗口/任务语义），与终端描边体系一致 */
-    function JobsIcon() {
+    // 三个图标吃 size/className——官方开始页胶囊条目按条目状态传 22/26 号
+    function JobsIcon(props) {
+      const _official = dswIcon("IconQueueOutline14");
+      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
       return jsxRuntime.jsxs(
         "svg",
         {
-          width: 15,
-          height: 15,
+          width: (props && props.size) ?? 15,
+          height: (props && props.size) ?? 15,
+          className: props && props.className,
           viewBox: "0 0 16 16",
           "aria-hidden": true,
           fill: "none",
@@ -3697,12 +3710,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 浏览器图标：地球（圆 + 经纬弧线），与终端/任务描边体系一致 */
-    function BrowserIcon() {
+    function BrowserIcon(props) {
+      const _official = dswIcon("IconBrowseOutline16");
+      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
       return jsxRuntime.jsxs(
         "svg",
         {
-          width: 15,
-          height: 15,
+          width: (props && props.size) ?? 15,
+          height: (props && props.size) ?? 15,
+          className: props && props.className,
           viewBox: "0 0 16 16",
           "aria-hidden": true,
           fill: "none",
@@ -3720,12 +3736,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 日程图标：日历（圆角框 + 两枚吊耳 + 头部分隔线），与终端/任务描边体系一致 */
-    function SchedIcon() {
+    function SchedIcon(props) {
+      const _official = dswIcon("IconAlarmClockOutline16");
+      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
       return jsxRuntime.jsxs(
         "svg",
         {
-          width: 15,
-          height: 15,
+          width: (props && props.size) ?? 15,
+          height: (props && props.size) ?? 15,
+          className: props && props.className,
           viewBox: "0 0 16 16",
           "aria-hidden": true,
           fill: "none",
@@ -3764,29 +3783,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       );
     }
 
-    /** 面板开合图标（圆角矩形 + 右侧分隔竖线）：坞头最小化与收起栏展开共用一枚，
-    语义对齐原生侧边栏的开合钮；与终端/任务描边体系一致 */
-    function PaneToggleIcon() {
-      return jsxRuntime.jsxs(
-        "svg",
-        {
-          width: 15,
-          height: 15,
-          viewBox: "0 0 16 16",
-          "aria-hidden": true,
-          fill: "none",
-          stroke: "currentColor",
-          strokeWidth: 1.2,
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          children: [
-            jsxRuntime.jsx("rect", { x: 2.8, y: 3.2, width: 10.4, height: 9.6, rx: 1.6 }),
-            jsxRuntime.jsx("path", { d: "M10.4 3.2v9.6" }),
-          ],
-        },
-      );
-    }
-
     /** 上传图标：向上箭头 + 底部托盘 */
     function UploadIcon() {
       return jsxRuntime.jsxs(
@@ -3811,7 +3807,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 新建文件图标：文件折角 + 加号（文件/目录共用单入口后唯一的新建图标） */
-    function FilePlusIcon() {
+    function FilePlusIcon(props) {
+      const _official = dswIcon("IconPlusOutline16");
+      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
       return jsxRuntime.jsxs(
         "svg",
         {
@@ -3834,7 +3832,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 树行小图标（13px 暗淡，随 currentColor）：空目录无箭头后靠它区分文件/目录 */
-    function TreeFolderIcon() {
+    function TreeFolderIcon(props) {
+      const _official = dswIcon("IconFolderClose16");
+      if (_official) return jsxRuntime.jsx(_official, { className: "dshk-vault-ticon" });
       return jsxRuntime.jsx(
         "svg",
         {
@@ -3874,7 +3874,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 删除图标：垃圾桶 */
-    function TrashIcon() {
+    function TrashIcon(props) {
+      const _official = dswIcon("IconTrashOutline16");
+      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
       return jsxRuntime.jsxs(
         "svg",
         {
@@ -3896,7 +3898,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 复制绝对路径图标：经典双矩形 copy */
-    function CopyAbsIcon() {
+    function CopyAbsIcon(props) {
+      const _official = dswIcon("IconCopyOutline16");
+      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
       return jsxRuntime.jsxs(
         "svg",
         {
@@ -3939,8 +3943,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       );
     }
 
-    /** 展开箭头：对齐原生工作区树的 IconTriangleRightFill14（右向实心三角，展开时 rotate 90° 朝下） */
+    /** 展开箭头：官方 IconTriangleRightFill14（右向实心三角，展开时 rotate 90° 朝下） */
     function ChevronIcon({ open }) {
+      const _official = dswIcon("IconTriangleRightFill14");
+      if (_official) return jsxRuntime.jsx(_official, { className: `dshk-arrow${open ? " dshk-arrow-open" : ""}` });
       return jsxRuntime.jsx(
         "svg",
         {
@@ -8261,8 +8267,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 左树行图标（单色 svg，随 currentColor 走主题）：目录 / 页面 / 目录+新增 */
-    const VaultFolderIcon = () =>
-      jsxRuntime.jsx("svg", { className: "dshk-vault-ticon", viewBox: "0 0 16 16", children: jsxRuntime.jsx("path", { d: "M1.5 4.5a1 1 0 0 1 1-1h3.1l1.7 1.9h5.7a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1v-8.5z", fill: "none", stroke: "currentColor", strokeWidth: "1.2", strokeLinejoin: "round" }) });
+    const VaultFolderIcon = (props) => {
+      const _official = dswIcon("IconFolderClose16");
+      return _official
+        ? jsxRuntime.jsx(_official, { className: "dshk-vault-ticon" })
+        : jsxRuntime.jsx("svg", { className: "dshk-vault-ticon", viewBox: "0 0 16 16", children: jsxRuntime.jsx("path", { d: "M1.5 4.5a1 1 0 0 1 1-1h3.1l1.7 1.9h5.7a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1v-8.5z", fill: "none", stroke: "currentColor", strokeWidth: "1.2", strokeLinejoin: "round" }) });
+    };
     const VaultPageIcon = () =>
       jsxRuntime.jsx("svg", { className: "dshk-vault-ticon", viewBox: "0 0 16 16", children: jsxRuntime.jsx("path", { d: "M4 2.2a0.7 0.7 0 0 1 0.7-0.7h4.2l3.6 3.6v8.6a0.7 0.7 0 0 1-0.7 0.7H4.7a0.7 0.7 0 0 1-0.7-0.7v-11.5z M9 1.8v3.3h3.3", fill: "none", stroke: "currentColor", strokeWidth: "1.2", strokeLinejoin: "round" }) });
 
@@ -8341,10 +8351,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         .join("")}`;
     }
 
-    /** 已存档会话视图（conversation.view 槽位，排在对话/轨迹之后）：宿主
-     *  侧栏菜单只能归档（进 registry 全局归档集，列表即隐藏），恢复入口宿主
-     *  没做——这里列归档集合并提供「恢复」按钮（dsh-kit 宿主端点原位剔除，
-     *  domain/changed 广播让侧栏即时重过滤） */
     // ─────────── 会话监视器（conversation.composer.dock 座位）───────────
     // 对话页内监视当前打开的会话，两条自动化路径：
     // ① 终态失败续跑：回合以可重试类错误终态（RATE_LIMIT/SERVER/TIMEOUT/
@@ -8637,70 +8643,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             : null,
         ],
       });
-    }
-
-    function ArchivedSessionsView(props) {
-      // 当前工作区归属：当前会话挂在哪个工作区（与归档行的 workspaceId 同一口
-      // 径——workspace.sessionIds 成员判定），作为默认筛选范围
-      const sessions = props && typeof props.useSessions === "function" ? props.useSessions((s2) => s2) : null;
-      const workspaces = props && typeof props.useWorkspaces === "function" ? props.useWorkspaces((w) => w) : null;
-      const [scope, setScope] = react.useState("current");
-      const [rows, setRows] = react.useState(null); // null=加载中
-      const [busy, setBusy] = react.useState("");
-      const currentWsId = (() => {
-        const items = workspaces && Array.isArray(workspaces.items) ? workspaces.items : [];
-        const sid = props ? props.sessionId : undefined;
-        if (sid === undefined || sessions === null) return "";
-        for (const w of items) {
-          if (Array.isArray(w.sessionIds) && w.sessionIds.includes(sid)) return String(w.workspaceId ?? "");
-        }
-        return "";
-      })();
-      const load = react.useCallback(async () => {
-        try {
-          const body = await schedFetch("/dsh-kit/workspace/archived");
-          setRows(Array.isArray(body && body.sessions) ? body.sessions : []);
-        } catch {
-          setRows([]);
-        }
-      }, []);
-      react.useEffect(() => {
-        void load();
-      }, [load]);
-      const restore = async (id) => {
-        setBusy(id);
-        try {
-          await schedFetch("/dsh-kit/workspace/unarchive", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId: id }) });
-          await load();
-        } catch {
-          // 静默：失败项留在列表，下一轮刷新对账
-        }
-        setBusy("");
-      };
-      const all = rows === null ? [] : rows;
-      const visible = scope === "current" && currentWsId !== "" ? all.filter((r) => r.workspaceId === currentWsId) : all;
-      return jsxRuntime.jsxs("div", { className: "dshk-arch-root", children: [
-        jsxRuntime.jsxs("div", { className: "dshk-arch-bar", children: [
-          jsxRuntime.jsx("div", { className: "dshk-arch-hint", children: t("archivedHint") }),
-          jsxRuntime.jsxs("div", { className: "dshk-arch-scope", children: [
-            jsxRuntime.jsx("button", { type: "button", className: `dshk-arch-scopebtn${scope === "current" ? " is-active" : ""}`, onClick: () => setScope("current"), children: t("archivedFilterCurrent") }),
-            jsxRuntime.jsx("button", { type: "button", className: `dshk-arch-scopebtn${scope === "all" ? " is-active" : ""}`, onClick: () => setScope("all"), children: t("archivedFilterAll") }),
-          ] }),
-        ] }),
-        rows === null
-          ? jsxRuntime.jsx("div", { className: "dshk-arch-empty", children: t("loadingCfg") })
-          : visible.length === 0
-            ? jsxRuntime.jsx("div", { className: "dshk-arch-empty", children: t("archivedEmpty") })
-            : visible.map((r) =>
-                jsxRuntime.jsxs("div", { className: "dshk-arch-row", children: [
-                  jsxRuntime.jsxs("div", { className: "dshk-arch-main", children: [
-                    jsxRuntime.jsx("span", { className: "dshk-arch-title", title: r.title, children: r.title }),
-                    jsxRuntime.jsx("span", { className: "dshk-arch-ws", title: r.cwd, children: r.workspaceTitle || r.cwd }),
-                  ] }),
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-primary", disabled: busy === r.id, onClick: () => void restore(r.id), children: t("archivedRestore") }),
-                ] }, r.id),
-              ),
-      ] });
     }
 
     function VaultView() {
@@ -10162,11 +10104,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       if (cfg.browserEnabled !== false) openable.push({ id: "browser", label: t("dockBrowser"), icon: BrowserIcon });
       return openable;
     }
-    /** 右栏开始页清单：任务/日程/浏览器——知识库不进清单（2026-09-11 用户定稿）：
-     *  它跟文件同属被动签，入口在左侧边栏（目录/对话链接点开即开） */
-    function guideOpenable(cfg, liveJobs) {
-      return stageOpenable(cfg, liveJobs).filter((m) => m.id !== "vault");
-    }
     /** 当前会话在跑的后台任务数（ jobs/badge 用）；props 由槽位注入透传 */
     function useLiveJobs(props) {
       const useSessions = props && typeof props.useSessions === "function" ? props.useSessions : null;
@@ -10507,16 +10444,20 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
     /** 文件 pane：文档签条 + 多实例 FileEditorPane（非激活 display:none 保挂载
      *  ——滚动/草稿/撤销栈不丢，与舞台时代同策略）。不做存在性同步：
-     *  files 状态本来就在 kitUi，官方签关了重开，文档签原样恢复 */
+     *  files 状态本来就在 kitUi，官方签关了重开，文档签原样恢复。
+     *  最后一页文档签关掉 → 官方「文件」dock 签一起关（用户定稿 2026-09-11，
+     *  同浏览器「没了就没了」，没有空页状态；再点文件时 openFileAndDock 重开签） */
     function FilePaneBody(props) {
       const ui = useKitUi();
       const cwd = useCurrentCwd(props);
       const files = ui.files ?? [];
+      const fileCount = files.length;
+      react.useEffect(() => {
+        if (rightbarStore.active && fileCount === 0) closeRightbarTab("file");
+      }, [fileCount]);
       return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
-        files.length > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(files.map((x) => x.path), ui.activeFile, (p) => activateFileTab(kitUi, p), (p) => closeFileTab(kitUi, p), (p) => baseName(p) || t("stageFileBtn")) }) : null,
-        files.length === 0
-          ? jsxRuntime.jsx("div", { className: "dshk-rbpane-hint", children: t("rbFileEmpty") })
-          : files.map((pv) =>
+        fileCount > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(files.map((x) => x.path), ui.activeFile, (p) => activateFileTab(kitUi, p), (p) => closeFileTab(kitUi, p), (p) => baseName(p) || t("stageFileBtn")) }) : null,
+        files.map((pv) =>
               jsxRuntime.jsx("div", {
                 className: "dshk-pane-view",
                 style: { display: pv.path === ui.activeFile ? "flex" : "none" },
@@ -10545,6 +10486,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [ui.vaultOpen]);
       react.useEffect(() => () => setKitUi({ vaultOpen: false }), []);
       const vaultPages = ui.vaultPages ?? [];
+      // 最后一页关掉 → 官方「知识库」dock 签一起关（2026-09-11 用户定稿，同文件
+      // 「没了就没了」，没有空页状态）；页签状态留在 kitUi，重开即恢复
+      const pageCount = vaultPages.length;
+      react.useEffect(() => {
+        if (rightbarStore.active && pageCount === 0) closeRightbarTab("vault");
+      }, [pageCount]);
       return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
         vaultPages.length > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(vaultPages, ui.activeVaultPage, (p) => activateVaultPage(kitUi, p), (p) => closeVaultPageTab(kitUi, p), (p) => pageBasename(p) || t("vaultTitle")) }) : null,
         // 宿主常驻渲染（页签条之后），portal 目标缺失的时序问题不存在
@@ -10575,32 +10522,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("rbFeatureDisabled") })
           : jsxRuntime.jsx(BrowserPanel, { active: true }),
       });
-    }
-    /** 右栏开始页正文（chain 席位整体替换官方引导页）：可开功能清单
-     *  （guideOpenable，cfg 门控） */
-    function GuideBody(props) {
-      const cfg = cfgFromSnapshot(getCfgSnapshot());
-      const liveJobs = useLiveJobs(props);
-      const openable = guideOpenable(cfg, liveJobs);
-      return jsxRuntime.jsxs("div", { className: "dshk-rbguide", children: [
-        jsxRuntime.jsx("div", { className: "dshk-rbguide-title", children: t("rbGuideTitle") }),
-        jsxRuntime.jsx("div", { className: "dshk-rbguide-list", children:
-          openable.map((m) =>
-            jsxRuntime.jsxs("button", {
-              type: "button",
-              className: "dshk-rbguide-item",
-              onClick: () => setKitUi(openFeatureDock(kitUi, m.id)),
-              children: [
-                jsxRuntime.jsx(m.icon, {}),
-                jsxRuntime.jsx("span", { className: "dshk-rbguide-label", children: m.label }),
-                m.badge > 0 ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(m.badge) }) : null,
-                jsxRuntime.jsx("span", { className: "dshk-rbguide-go", children: "›" }),
-              ],
-            }, m.id),
-          ),
-        }),
-        jsxRuntime.jsx("div", { className: "dshk-rbguide-note", children: t("rbGuideNote") }),
-      ] });
     }
     /** 计时芯片（会话 header 工具区，自侧栏底部迁来）：空闲=开始钮（弹起表
      *  浮层：待办清单 + 自由名目），运行=脉冲点 + 实时时长（点击弹停表确认）。
@@ -10747,12 +10668,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (!slotsCtx) return undefined;
         const handles = [];
         const want = [
-          // 已存档会话视图：对话/轨迹之后的第三个 View 标签（order 100 排尾）
-          ["archived", true, () =>
-            slotsCtx.slots.register(
-              { name: "conversation.view", id: "dsh-kit-archived", order: 100, label: () => t("archivedTab") },
-              ArchivedSessionsView,
-            )],
+          // 归档会话视图 2026-09-11 整个退役（用户定稿：会话量大了加载慢、实际
+          // 无恢复需求；官方侧栏菜单的归档动作本身不受影响）
           // 会话监视条：composer 上方环境条（官方 StatsLine order 0，排其后）
           ["monitor", cfg.monitorEnabled, () =>
             slotsCtx.slots.register(
@@ -11843,9 +11760,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     // ─────────── 官方右侧边栏注册（宿主 0.1.5+，替换已退役的探针）───────────
     // 五个功能各注册一张 dock 页类型（id=正文槽 key，kind=openTab 类型名）+
-    // pane 正文；「+」引导页正文整体替换成功能清单；计时挂会话 header 工具区。
-    // 引导页的逐项入口（tabs.register 的 guide）与正文清单并存：万一宿主某天
-    // 不再给 chain 席位，入口项仍在。服务运行期探测（见 RB_FEATURES 处注释）。
+    // pane 正文。开始页归官方 ShippedGuide（罗盘 + 胶囊条目，条目按 order 升序）：
+    // 我们只贡献 guide 条目（RB_GUIDE：日程→浏览器→后台任务，官方「文件」条目
+    // order 10 垫底）；文件/知识库是被动签，不给条目——入口在左侧边栏
+    // （用户定稿 2026-09-11）。服务运行期探测（见 RB_FEATURES 处注释）。
     const RB_BODY = {
       file: FilePaneBody,
       vault: VaultPaneBody,
@@ -11856,13 +11774,19 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     function registerRightbar(rbCtx) {
       const tabs = rbCtx.sidebarRightTabs;
       if (!tabs || typeof tabs.register !== "function") return;
+      const RB_GUIDE = {
+        schedule: { order: 7, icon: SchedIcon, descKey: "rbGuideSchedDesc" },
+        browser: { order: 8, icon: BrowserIcon, descKey: "rbGuideBrowserDesc" },
+        jobs: { order: 9, icon: JobsIcon, descKey: "rbGuideJobsDesc" },
+      };
       for (const f of RB_FEATURES) {
         const Body = RB_BODY[f.feature];
+        const guide = RB_GUIDE[f.feature];
         rbCtx.effect(() => tabs.register({
           id: f.id,
           kind: f.kind,
           title: () => t(f.titleKey),
-          guide: [{ order: 20, title: () => t(f.titleKey), description: () => t("rbGuideTitle") }],
+          ...guide ? { guide: [{ order: guide.order, title: () => t(f.titleKey), description: () => t(guide.descKey), icon: guide.icon }] } : {},
         }), `dsh-kit: rightbar tab type ${f.kind}`);
         rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.pane.tab", () => rbCtx.slots.register({
           name: "sidebar.right.pane.tab",
@@ -11875,13 +11799,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           }),
         }, Body)), `dsh-kit: rightbar pane body ${f.kind}`);
       }
-      // 「+」引导页正文：chain 子席位（挂在官方引导签的 pane 注册下）。select
-      // 返回非 null 即当选——整体替换官方引导页；咱不玩让位，恒接管
-      rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.tab.guide", () => rbCtx.slots.register({
-        name: "sidebar.right.tab.guide",
-        select: () => ({}),
-        inject: () => ({ useSessions: shellShare.current?.useSessions, useWorkspaces: shellShare.current?.useWorkspaces }),
-      }, GuideBody)), "dsh-kit: rightbar guide body");
       // 计时：会话 header 右对齐工具区（list 型）。corner 席位是 single 型且被
       // 官方右栏展开钮占着，不去抢
       rbCtx.effect(() => rbCtx.slots.inject("conversation.session.header.utilities", () => rbCtx.slots.register({
