@@ -662,20 +662,24 @@ let vaultFetchPrev = null;
   // 文件夹选择器换成自绘搜索式（可选任意层级）：那一格现在是组件，不再是原生 select
   const pickerEl = barRow1[2];
   check("上行第三格是搜索式文件夹选择器", barRow1.length === 4 && !!(pickerEl && pickerEl.props && Array.isArray(pickerEl.props.folders)));
-  // 树上行操作（用户定稿：页条上那个 @ 挪到树的文件行）：@ + ⋯ 同容器；
-  // 目录行也有 ⋯（2026-09-11 用户定稿：非根目录的文件夹同样能改名/删除）
+  // 树上行操作（用户定稿）：页行与目录行同形状 = `@` + `⋯`（目录行的 + 收进菜单，
+  // 行上不挂常驻钮——那枚 + 只留给左轨头部/根级；也顺带没了 hover 挤位）
   const actSpans = callLog.filter((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[2] && c[2].className === "dshk-rowact");
   const actsOf = (sp) => (Array.isArray(sp[2].children) ? sp[2].children : [sp[2].children]);
-  const pageActs = actSpans.map(actsOf).find((b) => b.length === 2);
-  const dirActs = actSpans.map(actsOf).find((b) => b.length === 1);
-  const actBtns = pageActs ?? [];
+  const twoBtnSpans = actSpans.filter((sp) => actsOf(sp).length === 2);
   check(
-    "知识库树文件行 hover 出 @ 与 ⋯",
-    actBtns.length === 2 && ["@ 到对话", "Insert @ mention"].includes(actBtns[0].props.title) && actBtns[1].props.children === "⋯",
+    "知识库树页行与目录行 hover 都是 @ + ⋯（两行同形状）",
+    twoBtnSpans.length === 2 &&
+      twoBtnSpans.every((sp) => {
+        const b = actsOf(sp);
+        return ["@ 到对话", "Insert @ mention"].includes(b[0].props.title) && b[1].props.children === "⋯";
+      }),
   );
   check(
-    "知识库树目录行 hover 出 ⋯（不带 @，改名/删除在菜单里）",
-    !!dirActs && dirActs.length === 1 && dirActs[0].props.children === "⋯" && ["更多操作", "More actions"].includes(dirActs[0].props.title),
+    "树行不再挂常驻 +（只剩左轨头部一枚，且没被 hover 挤位）",
+    actSpans.every((sp) => actsOf(sp).every((b) => b.props.className !== "dshk-vault-treeplus")) &&
+      (src.match(/className: "dshk-vault-treeplus"/g) ?? []).length === 1 &&
+      !src.includes(".dshk-vault-treerow:hover .dshk-vault-treeplus"),
   );
   // 图标改走文件树那套（用户定稿）：自绘的页面/目录图标整链不存在，行图标来自共用组件
   check(
@@ -691,12 +695,12 @@ let vaultFetchPrev = null;
       src.includes('names: ["IconRefreshOutline16", "IconRefreshOutline14"]') &&
       src.includes('jsxRuntime.jsx(ChevronIcon, { open: expanded[e.path] === true })'),
   );
-  // 行 ⋯ 的 actions：重命名 + 删除（菜单项由 TreeRowMenu 按 actions 出，见下一段直渲）
+  // 行 ⋯ 的 actions：新建（目录行才出项）+ 重命名 + 删除（菜单项由 TreeRowMenu 按 actions 出）
   const rowMenuEl = callLog.find((c) => c[1] === comps.TreeRowMenu);
   const rowMenuActs = rowMenuEl ? rowMenuEl[2].actions : null;
   check(
-    "知识库行 ⋯ 接线：重命名 + 删除都挂上（删除不再只在页条）",
-    !!rowMenuActs && typeof rowMenuActs.onRename === "function" && typeof rowMenuActs.onDelete === "function",
+    "知识库行 ⋯ 接线：新建 + 重命名 + 删除都挂上（删除不再只在页条）",
+    !!rowMenuActs && typeof rowMenuActs.onCreate === "function" && typeof rowMenuActs.onRename === "function" && typeof rowMenuActs.onDelete === "function",
   );
   // 删除分流：目录行走目录版（整棵子树，确认文案带「目录」），页面行仍走单页级联
   const confirmLog = [];
@@ -713,15 +717,27 @@ let vaultFetchPrev = null;
     confirmLog.length === 2 && /folder|目录/i.test(confirmLog[0]) && !/folder|目录/i.test(confirmLog[1]),
   );
   // ⋯ 触发钮是开关：再点一次关掉自己。落在触发钮上的那次点击由按钮自己判（菜单的
-  // 点外关闭会忽略它，否则先被关掉、再被 onClick 判成重新打开＝点了没反应）
+  // 点外关闭会忽略它，否则先被关掉、再被 onClick 判成重新打开＝点了没反应）。
+  // 第一枚 = 目录行（先渲目录、后渲页），第二枚 = 页行：两枚都要认对各自的条目
   const anchorEl = { getBoundingClientRect: () => ({ left: 10, top: 100, bottom: 120, right: 30, width: 20, height: 20 }) };
   const clickEv = { stopPropagation: () => {}, currentTarget: anchorEl };
-  actBtns[1].props.onClick(clickEv);
+  const dirMenuBtn = actsOf(twoBtnSpans[0])[1];
+  const pageMenuBtn = actsOf(twoBtnSpans[1])[1];
+  dirMenuBtn.props.onClick(clickEv);
+  const dirOpened = stateStore.get(8);
+  dirMenuBtn.props.onClick(clickEv);
+  pageMenuBtn.props.onClick(clickEv);
   const menuOpened = stateStore.get(8);
-  actBtns[1].props.onClick(clickEv);
+  pageMenuBtn.props.onClick(clickEv);
   check(
-    "行 ⋯ 再点一次关掉（触发钮当开关，锚点认的是同一颗按钮）",
-    !!menuOpened && menuOpened.anchor === anchorEl && menuOpened.entry.path === "D:/v/wiki/a.md" && stateStore.get(8) === null,
+    "行 ⋯ 再点一次关掉 + 目录行认自己的条目（锚点认的是同一颗按钮）",
+    !!dirOpened &&
+      dirOpened.entry.dir === true &&
+      dirOpened.entry.path === "D:/v/wiki" &&
+      !!menuOpened &&
+      menuOpened.anchor === anchorEl &&
+      menuOpened.entry.path === "D:/v/wiki/a.md" &&
+      stateStore.get(8) === null,
   );
   if (refreshBtn) refreshBtn.props.onClick();
   // fetch 桩同步记账：loadIndex 的请求在 onClick 返回前就已发出；目录树重拉排在
@@ -781,6 +797,20 @@ let vaultFetchPrev = null;
   comps.TreeRowMenu({ entry, rect, actions: { onRename: () => {} }, onClose: () => {} });
   const onlyRename = callLog.find((c) => c[2] && c[2].className === "dshk-menu");
   check("行 ⋯ 菜单：没传的 actions 不出项（不会点出空菜单项）", !!onlyRename && onlyRename[2].children.length === 1);
+  // 目录行：多出「新建」一项，标签由宿主覆盖（文件树=新建文件/目录、知识库=新建页面/目录）
+  callLog = [];
+  comps.TreeRowMenu({
+    entry: { dir: true, name: "wiki", path: "D:/v/wiki" },
+    rect,
+    actions: { onCreate: () => {}, newLabel: "新建页面/目录", onRename: () => {}, onDelete: () => {} },
+    onClose: () => {},
+  });
+  const dirMenu = callLog.find((c) => c[2] && c[2].className === "dshk-menu");
+  const dirLabels = dirMenu ? dirMenu[2].children.map((b) => b.props.children) : [];
+  check(
+    "目录行 ⋯ 三项：新建（标签可覆盖）+ 重命名 + 删除",
+    dirLabels.length === 3 && dirLabels[0] === "新建页面/目录" && ["重命名", "Rename"].includes(dirLabels[1]) && ["删除", "Delete"].includes(dirLabels[2]),
+  );
   check(
     "「点菜单外关闭」只有 TreeRowMenu 一份实现",
     (src.match(/closest\("\.dshk-menu"\)/g) ?? []).length === 1,

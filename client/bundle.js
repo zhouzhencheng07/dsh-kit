@@ -2062,13 +2062,12 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-vault-sidewrap .dshk-vault-rail{flex:1 1 auto;width:auto;border-right:none}
 .dshk-vault-panehost{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
 .dshk-vault-panehost .dshk-vault-reader{padding:0 2px}
-/* 左轨细头部：当前空间名 + 根级新建（+ 按钮常驻淡显，悬停加深） */
+/* 左轨细头部：当前空间名 + 根级新建（+ 常驻淡显，悬停加深）；树行不再挂 + */
 .dshk-vault-railhead{display:flex;align-items:center;gap:4px;padding:2px 4px 4px;flex:none}
 .dshk-vault-railtitle{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-tertiary)}
 .dshk-vault-treeplus{flex:none;display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:4px;color:var(--dsw-alias-label-tertiary);font-size:12px}
 .dshk-vault-treeplus:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-vault-treerow:hover .dshk-vault-treeplus{visibility:visible}
-.dshk-vault-railhead .dshk-vault-treeplus{visibility:visible;opacity:.6}
+.dshk-vault-railhead .dshk-vault-treeplus{opacity:.6}
 .dshk-vault-railhead .dshk-vault-treeplus:hover{opacity:1}
 /* 树内建页输入行（出现在目标目录行下方） */
 .dshk-vault-createrow{display:flex;align-items:center;gap:2px;padding:2px 4px}
@@ -4312,7 +4311,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [onClose, anchor]);
       const items = [];
       if (entry.dir && actions.onCreate) {
-        items.push({ key: "nany", label: t("treeNewAny"), run: () => actions.onCreate(entry.path) });
+        items.push({ key: "nany", label: typeof actions.newLabel === "string" ? actions.newLabel : t("treeNewAny"), run: () => actions.onCreate(entry.path) });
       }
       if (actions.onCopyPath) items.push({ key: "cr", label: t("treeCopyRel"), run: () => actions.onCopyPath(entry, true) });
       if (actions.onRename) items.push({ key: "rn", label: t("treeRename"), run: () => actions.onRename(entry) });
@@ -9659,6 +9658,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 placeholder: t("vaultNewPh"),
                 onChange: (e) => setCreateTitle(e.target.value),
                 onKeyDown: (e) => {
+                  // Esc = 收掉这一行；宿主同时把 Escape 当「收左栏」处理（捕获相，
+                  // 插件侧 stopPropagation/preventDefault 实测都拦不住），所以整条
+                  // 轨会跟着收——点外/失焦同样是取消，见 createDir 的 pointerdown
+                  e.stopPropagation();
                   if (e.key === "Enter") submitCreate(dir);
                   if (e.key === "Escape") setCreateDir(null);
                   if (e.key === "Backspace" && createTitle === "") setCreateDir(null);
@@ -9680,8 +9683,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             const rel = e.path.slice(treeRoot.length).split(/[\\/]+/).filter(Boolean).join("/");
             const prefix = space === "" ? `${rel}/` : `${space}/${rel}/`;
             const hasPage = indexPages.some((p) => p.rel.startsWith(prefix));
-            // 目录行也是「hover 出操作」的行（用户定稿 2026-09-11：非根目录的文件夹
-            // 同样能改名/删除）：`+` 在该目录下建页，`⋯` = 重命名/删除
+            // 目录行与页行同形状（用户定稿 2026-09-11）：`@` + `⋯`——新建/重命名/
+            // 删除都收进 ⋯ 菜单，行上不再挂常驻 `+`（那枚 + 只留给左轨头部 = 根级新建，
+            // 顺带没了「hover 出 ⋯ 时把 + 挤走」的位移）
             const renamingDir = renamingPath === e.path;
             return jsxRuntime.jsxs(
               "div",
@@ -9702,21 +9706,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                       renamingDir ? renameInput(e.path, e.name, (v) => void submitDirRename(e.path, v)) : jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
                       renamingDir
                         ? null
-                        : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-                            jsxRuntime.jsx("span", {
-                              className: "dshk-vault-treeplus",
-                              title: `${t("vaultNewAny")} · ${e.name}`,
-                              onClick: (ev) => {
-                                ev.stopPropagation();
-                                startCreate(e.path);
-                              },
-                              children: jsxRuntime.jsx(FilePlusIcon, {}),
-                            }),
-                            jsxRuntime.jsx("span", {
-                              className: "dshk-rowact",
-                              children: jsxRuntime.jsx("button", { type: "button", title: t("treeMenu"), onClick: (ev) => { ev.stopPropagation(); openRowMenu(ev.currentTarget, { dir: true, name: e.name, path: e.path }); }, children: "⋯" }),
-                            }),
-                          ] }),
+                        : jsxRuntime.jsxs("span", {
+                            className: "dshk-rowact",
+                            children: [
+                              // 保住选区：mousedown 默认行为会先塌掉编辑器里的选区
+                              jsxRuntime.jsx("button", { type: "button", title: t("treeAt"), onMouseDown: (ev) => ev.preventDefault(), onClick: (ev) => { ev.stopPropagation(); citeFromTree(e.path); }, children: "@" }),
+                              jsxRuntime.jsx("button", { type: "button", title: t("treeMenu"), onClick: (ev) => { ev.stopPropagation(); openRowMenu(ev.currentTarget, { dir: true, name: e.name, path: e.path }); }, children: "⋯" }),
+                            ],
+                          }),
                     ],
                   }),
                   createDir === e.path ? createRow(e.path, depth + 1, `${e.path}#create`) : null,
@@ -9850,9 +9847,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               entry: rowMenu.entry,
               rect: rowMenu.rect,
               anchor: rowMenu.anchor,
-              // 行 ⋯ = 条目级命令（重命名/删除），与文件树同一套菜单组件；目录行走
-              // 目录版删除（整棵子树），页面行走单页级联（用户定稿：删除挪到行上）
+              // 行 ⋯ = 条目级命令，与文件树同一套菜单组件：目录行多一项新建（行上
+              // 那枚常驻 + 已收进菜单），删除按目录/页面分流（目录整棵子树）
               actions: {
+                onCreate: (dirPath) => startCreate(dirPath),
+                newLabel: t("vaultNewAny"),
                 onRename: (entry) => setRenamingPath(entry.path),
                 onDelete: (entry) => (entry.dir === true ? void deleteVaultDir(entry) : void deleteVaultEntry(entry)),
               },
