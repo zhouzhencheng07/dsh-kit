@@ -2299,6 +2299,20 @@ export async function apply(ctx) {
             /** 重启后保留开启：勾选时启动才恢复上次启用位；不勾=每次启动网关都是关的 */
             const phoneKeepGatewayOn = () => readSettings().phoneKeepGatewayOn === true;
             const warnLog = (msg) => console.warn(`dsh-kit: ${msg}`);
+            // 远程视图（走网关）下要不要连挑选入口一起锁：宿主 picker 是 browse（应用内列目录/
+            // 建文件夹，远程客户端自己就能选）时不该锁；native 或未挂载（判据未知，按宿主的
+            // hide the affordance 语义）则锁——native 的 pick 在宿主屏幕弹 OS 对话框，远程端点了
+            // 对话框开在电脑上、自己这边零反馈。逐次读服务而不缓存对象：profile patch 换后端的
+            // 热重载后立刻跟随。
+            const lockPickerEntries = () => {
+                try {
+                    const picker = ctx.get('directoryPicker');
+                    return picker?.capability?.()?.kind !== 'browse';
+                }
+                catch {
+                    return true;
+                }
+            };
             // dsh web ≥ v0.1.2-alpha.5 的浏览器鉴权：网关反代须自带签名会话 cookie，
             // 否则手机端访问 index 一律 401。密钥即 credentials 服务的
             // client-connection/browser-session 记录（与 dsh web 共享），b64url 解码回
@@ -2379,7 +2393,7 @@ export async function apply(ctx) {
                     }
                     try {
                         gwPort = phonePort();
-                        phoneGw = startPhoneGateway({ port: gwPort, upstreamPort: webCtx.webServer.port, log: warnLog, sessionSecret: () => dshSessionSecret });
+                        phoneGw = startPhoneGateway({ port: gwPort, upstreamPort: webCtx.webServer.port, log: warnLog, sessionSecret: () => dshSessionSecret, lockPickerEntries });
                         phoneGwError = null;
                     }
                     catch (error) {
