@@ -7842,6 +7842,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     //                 镜像置位，文本含原始错误（如 `429: {"message":"inference
     //                 exceeds tpm/rpm limit",...}`）；binding() 对列表内会话惰性
     //                 物化镜像，事件窗口（open）完全不参与——错误走控制流广播。
+    //   归档过滤  ← workspaces.list 快照 archivedSessionIds（侧栏同款归档集）。
+    //                 归档不从 sessions.list 移除会话（宿主只在 UI 展示层过滤），
+    //                 监视器须自行排除：不监视不续跑、待发射计划作废、状态回收，
+    //                 否则归档会话残留的 429 标记会被静默续跑。
     //   续跑动作    ← binding.session.prompt([{"继续"}],"queue")（composer 同款
     //                 发送通道）；prompt 第一行同步清空 lastAgentError，同一条
     //                 失败天然不会重复触发。
@@ -7917,7 +7921,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       } catch {
         return;
       }
-      monitorTickCore(sessions, cfg, Date.now());
+      // 归档集合与 sessions 同源于 slots 的 workspaces 服务；读失败按空集退回
+      // 全员监视（服务缺位只可能出现在基线之外的宿主，静默全员比误伤全员安全）
+      let archived = new Set();
+      try {
+        const ids = slotsCtx.get("workspaces").list.getSnapshot().archivedSessionIds;
+        if (Array.isArray(ids)) archived = new Set(ids);
+      } catch {
+        /* workspaces 服务缺位 / 形状不符：按无归档处理 */
+      }
+      monitorTickCore(sessions, cfg, Date.now(), archived);
     }
 
     /** 续跑器核心（依赖注入，render-check 直测）：单次遍历 O(会话数)，读的全是
@@ -7927,7 +7940,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
      *  还没置位（实测踩过）。改以镜像 lastAgentError 的「新文本」为触发——以
      *  handledErr 记账去重，免疫到达顺序；文本级去重也天然放行续跑后的再次失败
      *  （发射即清 handledErr）。 */
-    function monitorTickCore(sessions, cfg, now) {
+    function monitorTickCore(sessions, cfg, now, archived = new Set()) {
       if (!sessions || !sessions.list || typeof sessions.binding !== "function") return;
       let list;
       try {
@@ -7938,6 +7951,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       for (const id of list.ids ?? []) {
         const summary = list.byId[id];
         if (!summary) continue;
+        if (archived.has(id)) continue; // 归档会话：不监视不续跑，状态在尾部回收
         let st = monitorSessions.get(id);
         if (!st) {
           st = { running: false, continues: 0, capped: false, plan: null, materialized: false, handledErr: null, title: null, max: 0 };
@@ -7996,9 +8010,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           }
         }
       }
-      // 已移除会话的状态回收
+      // 已移除/已归档会话的状态回收（归档时若有待发射 plan 一并作废）
       for (const id of [...monitorSessions.keys()]) {
-        if (!list.byId[id]) monitorSessions.delete(id);
+        if (!list.byId[id] || archived.has(id)) monitorSessions.delete(id);
       }
       monitorRebuildItems();
     }

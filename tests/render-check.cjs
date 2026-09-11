@@ -1055,6 +1055,23 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
   comps.monitorTickCore(s5, baseCfg, T0 + 70000);
   check("G 到点时回合已在跑：放弃且不发", r5.prompts === undefined && itemOf("session-g5") === undefined);
   comps.monitorSessions.delete("session-g5");
+
+  // —— 归档会话排除（workspaces.archivedSessionIds，侧栏同款归档集）：归档不
+  //    从 sessions.list 移除会话，监视器须自行跳过；已排计划在归档 tick 作废 ——
+  const r6 = { id: "session-g6", running: true, err: null };
+  const s6 = mkSessions([r6]);
+  comps.monitorTickCore(s6, baseCfg, T0); // 基线：运行中（未归档）
+  r6.running = false;
+  r6.err = "429: limited";
+  comps.monitorTickCore(s6, baseCfg, T0 + 2000);
+  check("G 归档前照常排计划", itemOf("session-g6")?.phase === "waiting");
+  comps.monitorTickCore(s6, baseCfg, T0 + 4000, new Set(["session-g6"]));
+  check("G 归档后排队计划作废、状态回收", itemOf("session-g6") === undefined && !comps.monitorSessions.has("session-g6"));
+  comps.monitorTickCore(s6, baseCfg, T0 + 6000, new Set(["session-g6"]));
+  check("G 归档会话不排新计划不发射", itemOf("session-g6") === undefined && r6.prompts === undefined);
+  comps.monitorTickCore(s6, baseCfg, T0 + 8000);
+  check("G 取消归档后恢复监视", itemOf("session-g6")?.phase === "waiting");
+  comps.monitorSessions.delete("session-g6");
 }
 
 // 10d) 阅读位置记忆（F2）：按路径存取 + 隐藏容器不记（display:none 时 scrollTop
