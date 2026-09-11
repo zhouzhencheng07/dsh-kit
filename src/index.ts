@@ -68,7 +68,7 @@ import { multipartBoundary, parseMultipart, safeUploadName, dedupeName } from '.
 import { BrowserService } from './browser.ts'
 import { loadToolsModule, buildBrowserTools } from './browser-tools.ts'
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from './schedule.ts'
-import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton, defaultVaultRoot, buildVaultTools } from './vault.ts'
+import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton, defaultVaultRoot, buildVaultTools, rewriteWikiLinks } from './vault.ts'
 import { commitVault, ensureVaultGit } from './vault-git.ts'
 import { sameOrigin } from './web-guard.ts'
 import { recycleDelete, recycleDeleteBatch } from './recycle.ts'
@@ -2988,7 +2988,15 @@ export async function apply(ctx: KitCtx): Promise<void> {
         } catch (error) {
           throw new Error(`读取文件失败：${error instanceof Error ? error.message : error}`)
         }
-        if (stat.mtimeMs !== baseMtime) return { modified: true, mtimeMs: stat.mtimeMs }
+        // 自动保存的「最后写者赢」（VSCode 自动保存语义，用户定）：调用方带 stash 就是
+        // 明确要求覆盖（客户端已经知道盘上被改过），**无条件**先把盘上那份提交存档再写——
+        // 不能挂在 mtime 比较里：客户端重试时传的就是盘上新 mtime，那样永远比不出差异、
+        // stash 一次都不会发生（实测踩到）。不带 stash 仍按 CAS 回冲突信息。
+        if (body.stash === true) {
+          await commitVault(root, `dsh-kit: 覆盖前存档 ${path.basename(resolved)}`)
+        } else if (stat.mtimeMs !== baseMtime) {
+          return { modified: true, mtimeMs: stat.mtimeMs }
+        }
         // tmp+rename 原子落盘（schedule.json 同款）：写一半崩溃/断电不会留下截断页
         const tmp = `${resolved}.tmp`
         fs.writeFileSync(tmp, content, 'utf8')
@@ -3047,6 +3055,49 @@ export async function apply(ctx: KitCtx): Promise<void> {
         // 不阻断删除本身，提交失败静默
         committed = await commitVault(root, `dsh-kit: 删除 ${deleted} 页（含孤儿级联）`)
         return { deleted, committed, ...(failed.length > 0 ? { failed } : {}) }
+      })
+
+      // 重命名页面（左侧树上行内改名）：只改文件名、留在原目录。双链按新名改写——
+      // wikilink 靠文件名解析，不改写等于重命名一次就把全库指向它的引用改碎；改写
+      // 顺序是先改名再扫索引（扫描结果里旧页已不在，引用页的 links 仍是旧名）。
+      vaultPost('/dsh-kit/vault/rename', async (body, root) => {
+        const resolved = path.resolve(String(body.path ?? ''))
+        const rel = path.relative(root, resolved)
+        if (rel.startsWith('..') || path.isAbsolute(rel) || rel === '') throw new Error('页面不在 vault 内')
+        if (!/\.md$/i.test(resolved)) throw new Error('只允许重命名 md 文件')
+        const name = sanitizePageTitle(String(body.name ?? ''))
+        if (name === '') throw new Error('缺少新文件名')
+        const target = path.join(path.dirname(resolved), `${name}.md`)
+        if (target === resolved) return { ok: true, path: resolved, links: 0, committed: false }
+        if (fs.existsSync(target)) throw new Error('同名页面已存在')
+        const oldName = path.basename(resolved).replace(/\.md$/i, '')
+        const oldRel = path.relative(root, resolved).split(path.sep).join('/').replace(/\.md$/i, '')
+        fs.renameSync(resolved, target)
+        const scanned = await vaultScanner.scan()
+        let links = 0
+        for (const page of scanned?.pages ?? []) {
+          if (page.path === target) continue
+          if (!page.links.some((l) => l === oldName || l === oldRel)) continue
+          let text: string
+          try {
+            text = fs.readFileSync(page.path, 'utf8')
+          } catch {
+            continue
+          }
+          const next = rewriteWikiLinks(text, [oldName, oldRel], name)
+          if (next === text) continue
+          try {
+            fs.writeFileSync(page.path, next, 'utf8')
+            links += 1
+          } catch {
+            // 单页写不了就跳过，改名本身已成立
+          }
+        }
+        const committed = await commitVault(
+          root,
+          `dsh-kit: 重命名 ${oldName} → ${name}${links > 0 ? `（改写 ${String(links)} 页双链）` : ''}`,
+        )
+        return { ok: true, path: target, links, committed }
       })
 
       // 已存档会话视图与 /dsh-kit/workspace/archived|unarchive 两端点 2026-09-11

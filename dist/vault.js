@@ -72,6 +72,17 @@ export function extractTitle(content, fallbackName) {
     }
     return fallbackName;
 }
+/** 重命名页面时改写指向旧名的双链：`[[旧]]` / `[[旧#锚]]` / `[[旧|别名]]` → `[[新…]]`，
+ *  锚点与别名原样保留。只认整名匹配（`[[旧x]]` 不动，names 里也含带目录的相对名形态）。
+ *  wikilink 靠文件名解析（见本文件 rel/links），不改写等于重命名一次就把全库引用改碎。 */
+export function rewriteWikiLinks(content, names, next) {
+    const use = names.filter((n) => n !== '');
+    if (use.length === 0 || next === '')
+        return content;
+    const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`\\[\\[(?:${use.map(escape).join('|')})(?=[\\]#|])`, 'gi');
+    return content.replace(re, `[[${next}`);
+}
 /** 正文 wikilink 提取：[[目标]] / [[目标|别名]]，目标剥 #锚点；去重保序 */
 export function extractWikiLinks(content) {
     const out = [];
@@ -125,7 +136,7 @@ export class VaultScanner {
         const root = this.root();
         if (root === null)
             return null;
-        const spaces = new Set();
+        const folders = new Set();
         const pages = [];
         let truncated = false;
         const walk = async (dir, depth) => {
@@ -149,8 +160,7 @@ export class VaultScanner {
                 if (dirent.isDirectory()) {
                     if (dirent.name.startsWith('.') || SKIP_DIRS.has(dirent.name))
                         continue;
-                    if (depth === 0)
-                        spaces.add(dirent.name);
+                    folders.add(path.relative(root, full).split(path.sep).join('/'));
                     await walk(full, depth + 1);
                     continue;
                 }
@@ -203,7 +213,12 @@ export class VaultScanner {
                 this.cache.delete(key);
         }
         pages.sort((a, b) => a.rel.localeCompare(b.rel, undefined, { sensitivity: 'base', numeric: true }));
-        return { root, spaces: [...spaces].sort(), pages, truncated };
+        return {
+            root,
+            folders: [...folders].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true })),
+            pages,
+            truncated,
+        };
     }
     /** 全文搜索，仅 wiki/ 区（用户定稿 2026-09-09）：library 是原始资料、根级散页
      *  不属策展层，都不进检索池——检索面收窄后 archived 出池概念不再需要（原 M5

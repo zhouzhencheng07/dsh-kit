@@ -211,6 +211,17 @@ window.__ModuleLoader__.load({
       if (ui.activeVaultPage === path) patch.activeVaultPage = rest[Math.min(idx, rest.length - 1)];
       return patch;
     }
+    /** 页文件改名后把页签路径一起搬家（否则 pane 还指着旧路径、读不到文件）：
+     *  标签表、激活位、访问序三处同改；本就不在标签表里就返回空补丁 */
+    function renameVaultPageTab(ui, oldPath, newPath) {
+      const pages = ui.vaultPages ?? [];
+      if (!pages.includes(oldPath)) return {};
+      const patch = { vaultPages: pages.map((p) => (p === oldPath ? newPath : p)) };
+      if (ui.activeVaultPage === oldPath) patch.activeVaultPage = newPath;
+      const hist = ui.vaultHist ?? { stack: [], idx: -1 };
+      patch.vaultHist = { ...hist, stack: hist.stack.map((p) => (p === oldPath ? newPath : p)) };
+      return patch;
+    }
     /** 关一个功能签：清存在性；关的是激活签时激活位顺延剩余签 */
     function closeFeatureTab(ui, tab) {
       const patch = {};
@@ -789,6 +800,11 @@ window.__ModuleLoader__.load({
       return r.every((seg, i) => t[i] === seg);
     }
 
+    /** 页内选区镜像（模块级、只由**当前激活**的页编辑器写）：左侧树的 @ 按钮在
+     *  mousedown 时 preventDefault 保住选区，但点击本身仍会塌掉原生选区——所以引用
+     *  时读这份镜像。多个页签同时挂载时只有激活那个能写，避免后台页清掉它。 */
+    let vaultSelMirror = "";
+
     /** M4 笔记→会话：「引用到对话」的选区文本转引用块续在草稿后（首尾空行剥
      *  掉）。页面路径本体由 @ 引用芯片承载（2026-09-10 用户定稿：与文件树
      *  「@到对话」同款方法，此函数只管引用块文本）。render-check 直调。 */
@@ -800,6 +816,56 @@ window.__ModuleLoader__.load({
       const quote = lines.length > 0 ? lines.map((l) => `> ${l}`).join("\n") + "\n\n" : "";
       const joiner = base !== "" && !base.endsWith("\n") ? "\n" : "";
       return base + joiner + quote;
+    }
+
+    /** 一页 @ 进对话输入框（左侧树行按钮与页条按钮同一实现）：以官方 @ 引用芯片直插
+     *  （与文件树「@到对话」同款方法），selText 非空时先落引用块。失败原因经 notify
+     *  回报（组件各自有自己的 toast 通道）。 */
+    function citeVaultPageToChat(pagePath, selText, notify) {
+      const shell = currentComposerShell();
+      if (!shell || typeof shell.actions?.setDraft !== "function") {
+        notify("vaultCiteUnavailable");
+        return;
+      }
+      const mention = chatMentionText(pagePath.replace(/\\/g, "/"));
+      if (mention === null) {
+        notify("vaultCiteUnavailable");
+        return;
+      }
+      if (typeof selText === "string" && selText !== "") {
+        const pre = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
+        const draft = pre && typeof pre.draft === "string" ? pre.draft : "";
+        try {
+          shell.actions.setDraft(vaultCiteText(draft, selText));
+        } catch {
+          notify("vaultCiteUnavailable");
+          return;
+        }
+      }
+      const chipRef = { source: "reference", ref: mention, label: pageBasename(pagePath) || pagePath, appearance: "file", clipboardText: mention };
+      if (typeof shell.insertReference === "function") {
+        const phase = shell.core && shell.core.state ? shell.core.state.phase : null;
+        const detectText = typeof shell.projection?.detectText === "string" ? shell.projection.detectText : "";
+        const rev = typeof shell.rev === "number" ? shell.rev : -1;
+        if ((phase === "plain" || phase === "claimed") && rev >= 0) {
+          const span = { start: detectText.length, end: detectText.length, draftRev: rev };
+          let applied = false;
+          try {
+            applied = shell.insertReference(chipRef, span) === true;
+          } catch {
+            applied = false;
+          }
+          if (applied) {
+            notify("vaultCited");
+            return;
+          }
+        }
+      }
+      // 兜底：@ 语法文本追加草稿末尾（与手打 @ 一致，此时面板可见属官方行为）
+      const state = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
+      const draft = state && typeof state.draft === "string" ? state.draft : "";
+      shell.actions.setDraft(draft === "" ? mention : `${draft} ${mention}`);
+      notify("vaultCited");
     }
 
     // ─────────── 文案 ───────────
@@ -1122,9 +1188,13 @@ window.__ModuleLoader__.load({
       vaultPickPage: "从左侧选择一页开始",
       vaultPageGone: "页面不存在（可能已被移动或删除）",
       vaultDelBtn: "删除",
-      vaultCiteBtn: "引用到对话",
       vaultCited: "已插入对话输入框",
       vaultCiteUnavailable: "对话输入框未就绪（无会话或不可用）",
+      vaultFolderSearch: "搜索文件夹…",
+      vaultFolderEmpty: "没有匹配的文件夹",
+      vaultRenamed: "已重命名",
+      vaultRenamedLinks: "已重命名（改写 {n} 页双链）",
+      vaultSavedOverwrite: "盘上改动已存进 git，已用本地内容覆盖",
       vaultDelConfirm: "确认删除以下页面？（移入回收站；vault 为 git 仓库时自动生成一个提交，可整体撤回）",
       vaultDeleted: "已删除",
       vaultDelFail: "删除失败（文件被占用？已保留）：",
@@ -1560,9 +1630,13 @@ window.__ModuleLoader__.load({
       vaultPickPage: "Pick a page on the left to start",
       vaultPageGone: "Page not found (it may have been moved or deleted)",
       vaultDelBtn: "Delete",
-      vaultCiteBtn: "Cite to chat",
       vaultCited: "Inserted into composer",
       vaultCiteUnavailable: "Composer is not ready (no active session)",
+      vaultFolderSearch: "Search folders…",
+      vaultFolderEmpty: "No matching folder",
+      vaultRenamed: "Renamed",
+      vaultRenamedLinks: "Renamed ({n} pages of links rewritten)",
+      vaultSavedOverwrite: "Disk version stashed to git, local content written",
       vaultDelConfirm: "Delete these pages? (Moved to recycle bin; if the vault is a git repo one commit is created so this is fully revertible)",
       vaultDeleted: "Deleted",
       vaultDelFail: "Delete failed (file locked? kept):",
@@ -1957,7 +2031,21 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-vault-toolbar{flex:none;display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dshk-vault-tbarrow{display:flex;align-items:center;gap:6px;min-width:0}
 .dshk-vault-tbpush{margin-left:auto}
-.dshk-vault-spacesel{flex:1 1 auto;min-width:0;max-width:200px;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;padding:5px 6px;border-radius:6px}
+/* 文件夹选择器（工具条那格）：搜索式自绘下拉——要能挑根目录下任意层级的文件夹，
+   原生 select 在几十上百个选项里翻不动。弹层 fixed 定位（与树行 ⋯ 菜单同款，
+   侧栏滚动裁切不影响） */
+.dshk-vault-fpickbtn{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:4px;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;padding:5px 6px;border-radius:6px;cursor:pointer}
+.dshk-vault-fpickbtn:hover{border-color:var(--dsw-alias-label-dimmed)}
+.dshk-vault-fpicklabel{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.dshk-vault-fpickcaret{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-fpick{position:fixed;z-index:1200;display:flex;flex-direction:column;max-height:min(60vh,320px);background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18));overflow:hidden}
+.dshk-vault-fpickq{margin:6px;padding:5px 8px;font:inherit;font-size:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
+.dshk-vault-fpickq:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
+.dshk-vault-fpicklist{flex:1 1 auto;min-height:0;overflow:auto;padding:0 4px 4px;display:flex;flex-direction:column;gap:1px}
+.dshk-vault-fpickrow{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;cursor:pointer}
+.dshk-vault-fpickrow.is-cur{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-vault-fpickrow.is-on{font-weight:600;color:var(--dsw-alias-brand-primary)}
+.dshk-vault-fpickempty{padding:8px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
 .dshk-vault-search{flex:1 1 auto;min-width:0;width:100%;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 8px;border-radius:6px}
 .dshk-vault-searchres{flex:none;max-height:200px;overflow:auto;border-bottom:1px solid var(--dsw-alias-border-l2);padding:4px 6px;display:flex;flex-direction:column;gap:2px}
 .dshk-vault-hitrow{display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:6px;cursor:pointer}
@@ -2296,7 +2384,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 .dshk-chg-chev{flex:none;font-size:9px;line-height:1;color:var(--dsw-alias-label-tertiary);transition:transform .15s var(--ds-ease-in-out);display:inline-block}
 .dshk-chg-chev[data-open]{transform:rotate(90deg)}
 .dshk-rowact{display:none;gap:2px;align-items:center;margin-left:auto}
-.dshk-row:hover .dshk-rowact,.dshk-chg-row:hover .dshk-rowact{display:inline-flex}
+.dshk-row:hover .dshk-rowact,.dshk-chg-row:hover .dshk-rowact,.dshk-vault-treerow:hover .dshk-rowact{display:inline-flex}
 .dshk-rowact button{appearance:none;width:20px;height:20px;font-size:11px;line-height:1;border:0;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;padding:0}
 .dshk-rowact button:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 /* 行 ⋯ 菜单：fixed 全局浮层（不受树 body 滚动裁切影响），主题令牌跟随 */
@@ -8982,6 +9070,115 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     /** 知识库索引半边（单实例，portal 进侧栏索引宿主）：空间/目录树/搜索/建页 +
      *  页标签编排（打开、关闭、← → 访问序）。页编辑器不在本组件——每开一页一个
      *  VaultPagePane 经 portal 投进右栏 pane 宿主，一页一标签（2026-09-10 多开定稿）。 */
+    /** 知识库文件夹选择器：搜索式自绘下拉，可挑根目录下**任意层级**的文件夹
+     *  （原来那格是原生 `<select>`，只能选顶层 space，几十个目录就翻不动了）。
+     *  选项 = 全部 + index.folders（宿主扫描时收集的全部目录）；输入即过滤（按相对
+     *  路径子串，大小写不敏感），↑↓ 移动、回车选中、Esc/点外关闭。弹层 fixed 定位，
+     *  与树行 ⋯ 菜单同款（侧栏滚动裁切不影响）。 */
+    function VaultFolderPicker({ value, folders, allLabel, searchLabel, emptyLabel, onPick }) {
+      const [open, setOpen] = react.useState(false);
+      const [q, setQ] = react.useState("");
+      const [idx, setIdx] = react.useState(0);
+      const [rect, setRect] = react.useState(null);
+      const btnRef = react.useRef(null);
+      const rows = react.useMemo(() => {
+        const all = [{ rel: "", label: allLabel }].concat((folders ?? []).map((f) => ({ rel: f, label: f })));
+        const needle = q.trim().toLowerCase();
+        return needle === "" ? all : all.filter((r) => r.label.toLowerCase().includes(needle));
+      }, [q, folders, allLabel]);
+      const rowCount = rows.length;
+      const cur = Math.min(idx, Math.max(0, rowCount - 1));
+      react.useEffect(() => {
+        if (!open) return undefined;
+        const onDown = (e) => {
+          if (e.target instanceof Element && !e.target.closest(".dshk-vault-fpick") && !e.target.closest(".dshk-vault-fpickbtn")) setOpen(false);
+        };
+        document.addEventListener("pointerdown", onDown, true);
+        return () => document.removeEventListener("pointerdown", onDown, true);
+      }, [open]);
+      const pick = (rel) => {
+        setOpen(false);
+        setQ("");
+        if (rel !== value) onPick(rel);
+      };
+      return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+        jsxRuntime.jsxs("button", {
+          type: "button",
+          ref: btnRef,
+          className: "dshk-vault-fpickbtn",
+          title: value === "" ? allLabel : value,
+          onClick: () => {
+            const r = btnRef.current ? btnRef.current.getBoundingClientRect() : null;
+            setRect(r);
+            setQ("");
+            setIdx(0);
+            setOpen((v) => !v);
+          },
+          children: [
+            jsxRuntime.jsx("span", { className: "dshk-vault-fpicklabel", children: value === "" ? allLabel : value.split("/").pop() }),
+            jsxRuntime.jsx("span", { className: "dshk-vault-fpickcaret", children: "▾" }),
+          ],
+        }),
+        open && rect
+          ? jsxRuntime.jsxs("div", {
+              className: "dshk-vault-fpick",
+              style: { left: Math.max(8, Math.min(rect.left, (window.innerWidth || 1200) - 248)), top: rect.bottom + 4, width: Math.max(rect.width, 230) },
+              children: [
+                jsxRuntime.jsx("input", {
+                  className: "dshk-vault-fpickq",
+                  value: q,
+                  autoFocus: true,
+                  spellCheck: false,
+                  placeholder: searchLabel,
+                  onChange: (e) => {
+                    setQ(e.target.value);
+                    setIdx(0);
+                  },
+                  onKeyDown: (e) => {
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      setOpen(false);
+                    } else if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setIdx((i) => Math.min(i + 1, Math.max(0, rowCount - 1)));
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setIdx((i) => Math.max(i - 1, 0));
+                    } else if (e.key === "Enter") {
+                      e.preventDefault();
+                      const row = rows[cur];
+                      if (row) pick(row.rel);
+                    }
+                  },
+                }),
+                jsxRuntime.jsx("div", {
+                  className: "dshk-vault-fpicklist",
+                  children:
+                    rowCount === 0
+                      ? jsxRuntime.jsx("div", { className: "dshk-vault-fpickempty", children: emptyLabel })
+                      : rows.map((r, i) =>
+                          jsxRuntime.jsxs(
+                            "div",
+                            {
+                              className: `dshk-vault-fpickrow${i === cur ? " is-cur" : ""}${r.rel === value ? " is-on" : ""}`,
+                              style: { paddingLeft: 8 + (r.rel === "" ? 0 : (r.rel.split("/").length - 1) * 12) },
+                              title: r.rel === "" ? allLabel : r.rel,
+                              onMouseEnter: () => setIdx(i),
+                              // mousedown 别抢输入框焦点（否则 blur 之类会把列表关掉/打字中断）
+                              onMouseDown: (e) => e.preventDefault(),
+                              onClick: () => pick(r.rel),
+                              children: [jsxRuntime.jsx(VaultFolderIcon, {}), jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: r.label })],
+                            },
+                            r.rel === "" ? "#all" : r.rel,
+                          ),
+                        ),
+                }),
+              ],
+            })
+          : null,
+      ] });
+    }
+
     function VaultRootView() {
       const ui = useKitUi();
       const sideHost = useHostSlot(vaultSideSlot);
@@ -8997,6 +9194,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 两者都还可带 / 多级。区域外点击 = 取消（直接丢弃，理由同文件树）
       const [createDir, setCreateDir] = react.useState(null);
       const [createTitle, setCreateTitle] = react.useState("");
+      // 树上行操作：renamingPath = 行内改名输入框所在页；rowMenu = ⋯ 菜单（条目 + 锚点矩形）
+      const [renamingPath, setRenamingPath] = react.useState(null);
+      const [rowMenu, setRowMenu] = react.useState(null);
       react.useEffect(() => {
         if (createDir === null) return undefined;
         const onDown = (e) => {
@@ -9181,6 +9381,33 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         [root, fetchDir],
       );
 
+      /** 树上 `@`：把这一页 @ 进对话输入框（页条上那个 @ 已按用户定稿挪到树上）。
+       *  只有点的就是当前激活页时才带选区镜像——拿别的页的选区去引用本页会张冠李戴。 */
+      const citeFromTree = (pagePath) => {
+        citeVaultPageToChat(pagePath, pagePath === current ? vaultSelMirror : "", (key) => flashToast(t(key)));
+      };
+      /** 树上行内改名：交宿主 /dsh-kit/vault/rename（改文件名 + 按新名改写全库双链），
+       *  成功后把页签路径、所在目录、索引一起跟进——页签不搬家的话 pane 还指着旧路径。 */
+      const submitRename = async (oldPath, rawName) => {
+        const name = String(rawName ?? "").trim();
+        setRenamingPath(null);
+        if (name === "" || name === pageBasename(oldPath)) return;
+        try {
+          const body = await kitJson("/dsh-kit/vault/rename", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ path: oldPath, name }),
+          });
+          if (typeof body.path === "string" && body.path !== "") setKitUi(renameVaultPageTab(kitUi, oldPath, body.path));
+          flashToast(body.links > 0 ? tf("vaultRenamedLinks", { n: String(body.links) }) : t("vaultRenamed"));
+          const cut = Math.max(oldPath.lastIndexOf("/"), oldPath.lastIndexOf("\\"));
+          if (cut > 0) void fetchDir(oldPath.slice(0, cut));
+          await loadIndex();
+        } catch (error) {
+          flashToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
+        }
+      };
+
       const runSearch = async () => {
         const q = searchQ.trim();
         if (q === "") {
@@ -9304,19 +9531,63 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               e.path,
             );
           }
-          return jsxRuntime.jsx(
+          // 文件行：hover 出 `@`（引用到对话）与 `⋯`（重命名）——与文件树同形状
+          // （用户定稿：页条上那个 @ 挪到树上来，一个文件一个入口）
+          const renaming = renamingPath === e.path;
+          const label = e.name.replace(/\.(md|markdown)$/i, "");
+          return jsxRuntime.jsxs(
             "div",
             {
               className: `dshk-vault-treerow${e.path === current ? " is-active" : ""}`,
               style: { paddingLeft: 10 + (depth + 1) * 14 },
-              // 点目录条目 = 开右栏知识库签看页（索引即入口，工作台定稿）
+              // 点目录条目 = 开右栏知识库签看页（索引即入口，工作台定稿）；改名中点击不跳
               onClick: () => {
-                openPath(e.path);
+                if (!renaming) openPath(e.path);
               },
               title: e.path,
               children: [
                 jsxRuntime.jsx(VaultPageIcon, {}),
-                jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name.replace(/\.(md|markdown)$/i, "") }),
+                renaming
+                  ? jsxRuntime.jsx("input", {
+                      className: "dshk-rename",
+                      defaultValue: label,
+                      spellCheck: false,
+                      autoFocus: true,
+                      "aria-label": t("treeRename"),
+                      onClick: (ev) => ev.stopPropagation(),
+                      onKeyDown: (ev) => {
+                        ev.stopPropagation();
+                        if (ev.key === "Enter") {
+                          ev.preventDefault();
+                          void submitRename(e.path, ev.currentTarget.value);
+                        } else if (ev.key === "Escape") {
+                          ev.preventDefault();
+                          setRenamingPath(null);
+                        }
+                      },
+                      onBlur: () => {
+                        if (renamingPath === e.path) setRenamingPath(null);
+                      },
+                    })
+                  : jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: label }),
+                renaming
+                  ? null
+                  : jsxRuntime.jsxs("span", {
+                      className: "dshk-rowact",
+                      children: [
+                        // 保住选区：mousedown 默认行为会先塌掉编辑器里的选区
+                        jsxRuntime.jsx("button", { type: "button", title: t("treeAt"), onMouseDown: (ev) => ev.preventDefault(), onClick: (ev) => { ev.stopPropagation(); citeFromTree(e.path); }, children: "@" }),
+                        jsxRuntime.jsx("button", {
+                          type: "button",
+                          title: t("treeMenu"),
+                          onClick: (ev) => {
+                            ev.stopPropagation();
+                            setRowMenu({ entry: { dir: false, name: label, path: e.path }, rect: ev.currentTarget.getBoundingClientRect() });
+                          },
+                          children: "⋯",
+                        }),
+                      ],
+                    }),
               ],
             },
             e.path,
@@ -9350,14 +9621,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           jsxRuntime.jsxs("div", { className: "dshk-vault-tbarrow", children: [
             jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistBack"), title: t("vaultHistBack"), disabled: hist.idx <= 0, onClick: histBack, children: "←" }),
             jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistFwd"), title: t("vaultHistFwd"), disabled: hist.idx >= hist.stack.length - 1, onClick: histFwd, children: "→" }),
-            jsxRuntime.jsxs("select", {
-              className: "dshk-vault-spacesel",
+            jsxRuntime.jsx(VaultFolderPicker, {
               value: space,
-              onChange: (e) => setSpace(e.target.value),
-              children: [
-                jsxRuntime.jsx("option", { value: "", children: t("vaultSpaceAll") }),
-                (index?.spaces ?? []).map((s) => jsxRuntime.jsx("option", { value: s, children: s }, s)),
-              ],
+              folders: index?.folders ?? [],
+              allLabel: t("vaultSpaceAll"),
+              searchLabel: t("vaultFolderSearch"),
+              emptyLabel: t("vaultFolderEmpty"),
+              onPick: setSpace,
             }),
             jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn dshk-vault-tbpush", "aria-label": t("vaultRefresh"), title: t("vaultRefresh"), disabled: refreshing, onClick: () => void manualRefresh(), children: "↻" }),
           ] }),
@@ -9400,6 +9670,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           createDir === treeRoot ? createRow(treeRoot, 0, `${treeRoot}#create`) : null,
           renderDir(treeRoot, 0),
         ] }),
+        rowMenu
+          ? jsxRuntime.jsx(TreeRowMenu, {
+              entry: rowMenu.entry,
+              rect: rowMenu.rect,
+              actions: { onRename: (entry) => setRenamingPath(entry.path) },
+              onClose: () => setRowMenu(null),
+            })
+          : null,
         toast !== "" ? jsxRuntime.jsx("div", { className: "dshk-vault-toast", role: "status", children: toast }) : null,
       ] });
 
@@ -9468,15 +9746,18 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       conflictRef.current = conflict;
       const pagesRef = react.useRef(indexPages);
       pagesRef.current = indexPages;
-      // 引用到对话：编辑器根 ref（判定选区落在本页内）与选区镜像——点页条按钮
-      // 会塌掉原生选区，selectionchange 即时留底
+      // 引用到对话：页条上的 @ 已按用户定稿挪到左侧树的行上（见 VaultRootView），
+      // 这里只负责把**激活页**的选区写进模块级镜像供那边读——非激活页不写，免得
+      // 后台页签把镜像清掉。paneRef 仍用于判定选区是否落在本页内
       const paneRef = react.useRef(null);
-      const selTextRef = react.useRef("");
+      const activeRef = react.useRef(active);
+      activeRef.current = active;
       react.useEffect(() => {
         const onSel = () => {
+          if (!activeRef.current) return;
           const pane = paneRef.current;
           const sel = document.getSelection();
-          selTextRef.current = pane && sel && sel.anchorNode && pane.contains(sel.anchorNode) ? String(sel) : "";
+          vaultSelMirror = pane && sel && sel.anchorNode && pane.contains(sel.anchorNode) ? String(sel) : "";
         };
         document.addEventListener("selectionchange", onSel);
         return () => document.removeEventListener("selectionchange", onSel);
@@ -9509,21 +9790,31 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [loadCurrent]);
 
       // 保存入口（RteEditor 自动保存/Ctrl+S/冲突覆盖都经 onSave 回调到这里）。
-      // content = fmRef（frontmatter 字节级原文）+ 编辑器 md；冲突=出冲突条暂停
-      // 自动保存，绝不静默覆盖。outcome: ok|conflict|fail
+      // content = fmRef（frontmatter 字节级原文）+ 编辑器 md。outcome: ok|conflict|fail
+      // 盘上被改过时**不弹冲突条**：让宿主先把盘上那份提交存档（stash）再以本地内容
+      // 覆盖——VSCode 自动保存的「最后写者赢」语义（用户定稿），差别是覆盖不丢东西
+      // （旧版 git show 可找回）。第二次再被抢写（agent 恰在同一秒落盘）才退回冲突条。
       const saveVaultPage = react.useCallback(
         async (bodyMd, mode = "auto") => {
-          const base = mode === "overwrite" ? (conflictRef.current?.diskMtime ?? 0) : mtimeRef.current;
-          try {
-            const body = await kitJson("/dsh-kit/vault/write", {
+          const content = fmRef.current + bodyMd;
+          const attempt = (baseMtime, stash) =>
+            kitJson("/dsh-kit/vault/write", {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ path, content: fmRef.current + bodyMd, baseMtime: base }),
+              body: JSON.stringify({ path, content, baseMtime, ...(stash ? { stash: true } : {}) }),
             });
+          try {
+            const first = mode === "overwrite" ? (conflictRef.current?.diskMtime ?? 0) : mtimeRef.current;
+            let body = await attempt(first, mode === "overwrite");
             if (body.modified === true) {
-              setConflict({ diskMtime: body.mtimeMs ?? 0 });
-              toast(t("vaultConflict"));
-              return "conflict";
+              const fresh = body.mtimeMs ?? 0;
+              body = await attempt(fresh, true);
+              if (body.modified === true) {
+                setConflict({ diskMtime: body.mtimeMs ?? fresh });
+                toast(t("vaultConflict"));
+                return "conflict";
+              }
+              toast(t("vaultSavedOverwrite"));
             }
             setConflict(null);
             mtimeRef.current = body.mtimeMs ?? mtimeRef.current;
@@ -9595,59 +9886,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           toast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
         }
       };
-      /** M4 笔记→会话：本页以官方 @ 引用芯片插入对话输入框（2026-09-10 用户
-       *  定稿：与文件树「@到对话」同款方法——insertReference 直插真实芯片，
-       *  失败兜底追加 @ 语法文本）。vault 页在会话工作区外，ref 用正斜杠绝对
-       *  路径：@token 提交后就是提示文本（FILE_REFERENCE_PROMPT 指引模型读
-       *  路径），agent 走文件工具读绝对路径，不受 cwd 相对语义约束。有选区时
-       *  先落引用块再插芯片——芯片按 detectText 末端 + draftRev CAS 定位，
-       *  必须在 setDraft 之后现读 rev（shell 上的都是活getter）。 */
-      const citeToChat = () => {
-        const shell = currentComposerShell();
-        if (!shell || typeof shell.actions?.setDraft !== "function") {
-          flashToast(t("vaultCiteUnavailable"));
-          return;
-        }
-        const mention = chatMentionText(path.replace(/\\/g, "/"));
-        if (mention === null) {
-          flashToast(t("vaultCiteUnavailable"));
-          return;
-        }
-        if (selTextRef.current !== "") {
-          const pre = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
-          const draft = pre && typeof pre.draft === "string" ? pre.draft : "";
-          try {
-            shell.actions.setDraft(vaultCiteText(draft, selTextRef.current));
-          } catch {
-            flashToast(t("vaultCiteUnavailable"));
-            return;
-          }
-        }
-        const chipRef = { source: "reference", ref: mention, label: pageBasename(path) || path, appearance: "file", clipboardText: mention };
-        if (typeof shell.insertReference === "function") {
-          const phase = shell.core && shell.core.state ? shell.core.state.phase : null;
-          const detectText = typeof shell.projection?.detectText === "string" ? shell.projection.detectText : "";
-          const rev = typeof shell.rev === "number" ? shell.rev : -1;
-          if ((phase === "plain" || phase === "claimed") && rev >= 0) {
-            const span = { start: detectText.length, end: detectText.length, draftRev: rev };
-            let applied = false;
-            try {
-              applied = shell.insertReference(chipRef, span) === true;
-            } catch {
-              applied = false;
-            }
-            if (applied) {
-              toast(t("vaultCited"));
-              return;
-            }
-          }
-        }
-        // 兜底：@ 语法文本追加草稿末尾（与手打 @ 一致，此时面板可见属官方行为）
-        const state = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
-        const draft = state && typeof state.draft === "string" ? state.draft : "";
-        shell.actions.setDraft(draft === "" ? mention : `${draft} ${mention}`);
-        toast(t("vaultCited"));
-      };
       /** 编辑态粘贴截图：图片文件上传到 vault attachments/，光标处插入图片节点。
        *  上传前先幂等建 attachments/（/dsh-kit/upload 要求目录已存在，新 vault
        *  首次粘贴不建目录必 400） */
@@ -9702,7 +9940,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     // 表格按钮随选区显隐
                     // onMouseDown preventDefault：按钮默认行为会先塌掉文档
                     // 选区（镜像随之清空），拦下后选区保留、click 时才取得到
-                    jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", title: t("vaultCiteBtn"), onMouseDown: (e) => e.preventDefault(), onClick: citeToChat, children: "@" }),
                     jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void deleteCurrent(), children: t("vaultDelBtn") }),
                     jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
                     jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbUndo"), onClick: () => rteRef.current?.undo(), children: "↶" }),

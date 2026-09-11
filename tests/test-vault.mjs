@@ -9,6 +9,7 @@ import {
   sanitizePageRel,
   extractTitle,
   extractWikiLinks,
+  rewriteWikiLinks,
   VaultScanner,
   ensureVaultSkeleton,
   vaultSearchSummary,
@@ -74,12 +75,27 @@ let index
 await test('scan：md 建页、跳过 attachments/点前缀、space 归属正确', async () => {
   index = await scanner.scan()
   assert.equal(index.root, fs.realpathSync(root))
-  assert.deepEqual(index.spaces, ['library', 'wiki'])
+  // folders = 全部目录（含各级），选择器据此可挑任意层级；空目录也在
+  assert.deepEqual(index.folders, ['library', 'wiki', 'wiki/Python'])
   assert.equal(index.pages.length, 5)
   const base = index.pages.find((p) => p.rel === 'wiki/Python/基础')
   assert.equal(base.space, 'wiki')
   assert.equal(base.title, 'Python 基础')
   assert.deepEqual(base.links, ['工具链', 'AGENTS 常见问题'])
+})
+
+await test('rewriteWikiLinks：整名匹配改写，锚点/别名保留，近似名不动', () => {
+  const md = '见 [[基础]]、[[基础#小节]]、[[基础|别名]]、[[基础x]] 与 [[ wiki/基础 ]]。'
+  const out = rewriteWikiLinks(md, ['基础'], 'Python 基础')
+  assert.ok(out.includes('[[Python 基础]]'), '裸链改写')
+  assert.ok(out.includes('[[Python 基础#小节]]'), '锚点保留')
+  assert.ok(out.includes('[[Python 基础|别名]]'), '别名保留')
+  assert.ok(out.includes('[[基础x]]'), '近似名不动')
+  assert.ok(out.includes('[[ wiki/基础 ]]'), '带空格的目标不算整名匹配（不动）')
+  assert.equal(rewriteWikiLinks(md, [], 'X'), md, '同名列表为空原样返回')
+  // 带目录的相对名形态也要能改写（索引里 links 可能写成 wiki/基础）
+  const rel = rewriteWikiLinks('见 [[wiki/基础]]。', ['基础', 'wiki/基础'], 'Python 基础')
+  assert.ok(rel.includes('[[Python 基础]]'), '相对路径形态改写')
 })
 
 await test('scan：mtime 缓存命中不重读（改缓存时间戳探测）', async () => {
