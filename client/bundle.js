@@ -3313,7 +3313,38 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** git 状态轮询周期：可见时低频拉取，回窗口/聚焦立即补一次 */
-    const GIT_POLL_MS = 4000;
+    // git 轮询间隔：每次轮询都要 spawn 一个 git 进程（实测本机 status 54–276ms、
+  // log 81–110ms），4s 一拍在 SCM 视图常开时是稳定可见的后台开销。动作后的刷新
+  // （stage/commit/branch 成功后各自 kick）与「可见性/焦点变化立即补一拍」不受影响，
+  // 所以拉长到 8s 只影响"放着不动时的自动跟随"这一档。
+  const GIT_POLL_MS = 8000;
+  /** git 轮询共享时钟：状态/图谱/文件 diff 三处轮询共用一条 interval（各自挂载时
+   *  订阅、卸载退订），避免同一拍上叠出多条定时器；谁在看才轮谁由各视图的挂载与
+   *  可见性门控负责，这里只管节拍。全部退订后时钟自己停掉。 */
+  const gitTickSubs = new Set();
+  let gitTickTimer = null;
+  function subscribeGitTick(fn) {
+    gitTickSubs.add(fn);
+    if (gitTickTimer === null) {
+      gitTickTimer = window.setInterval(() => {
+        if (document.visibilityState === "hidden") return;
+        for (const sub of [...gitTickSubs]) {
+          try {
+            sub();
+          } catch {
+            // 单个订阅异常不拖垮其它视图
+          }
+        }
+      }, GIT_POLL_MS);
+    }
+    return () => {
+      gitTickSubs.delete(fn);
+      if (gitTickSubs.size === 0 && gitTickTimer !== null) {
+        window.clearInterval(gitTickTimer);
+        gitTickTimer = null;
+      }
+    };
+  }
 
     /**
      * 把 unified patch 的 hunk 套回完整新文件内容，产出全文件着色行：
@@ -4271,23 +4302,25 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           })
           .catch(() => {});
       };
+      // 视图：changes（更改清单，默认）⇄ graph（提交图谱）；分支浮层内联展开
+      const [view, setView] = react.useState("changes");
+      // 图谱视图激活时本面板不轮 status：图谱面板自己轮 log，两个都轮等于同一拍上
+      // 多 spawn 一个 git 进程；切回 changes 视图时 effect 重跑会立即补一拍
       react.useEffect(() => {
-        if (fetchRef.current) fetchRef.current();
+        if (view !== "graph" && fetchRef.current) fetchRef.current();
         const tick = () => {
+          if (view === "graph") return;
           if (document.visibilityState !== "hidden" && fetchRef.current) fetchRef.current();
         };
-        const timer = window.setInterval(tick, GIT_POLL_MS);
+        const unsubscribe = subscribeGitTick(tick);
         document.addEventListener("visibilitychange", tick);
         window.addEventListener("focus", tick);
         return () => {
-          window.clearInterval(timer);
+          unsubscribe();
           document.removeEventListener("visibilitychange", tick);
           window.removeEventListener("focus", tick);
         };
-      }, [cwd]);
-
-      // 视图：changes（更改清单，默认）⇄ graph（提交图谱）；分支浮层内联展开
-      const [view, setView] = react.useState("changes");
+      }, [cwd, view]);
       const [branchOpen, setBranchOpen] = react.useState(false);
       const [branches, setBranches] = react.useState(null); // null=未加载；{current, branches[]}
       const [newBranch, setNewBranch] = react.useState("");
@@ -4904,11 +4937,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const tick = () => {
           if (document.visibilityState !== "hidden" && fetchRef.current) fetchRef.current();
         };
-        const timer = window.setInterval(tick, GIT_POLL_MS);
+        const unsubscribe = subscribeGitTick(tick);
         document.addEventListener("visibilitychange", tick);
         window.addEventListener("focus", tick);
         return () => {
-          window.clearInterval(timer);
+          unsubscribe();
           document.removeEventListener("visibilitychange", tick);
           window.removeEventListener("focus", tick);
         };
@@ -5304,11 +5337,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const tick = () => {
           if (document.visibilityState !== "hidden" && diffFetchRef.current) diffFetchRef.current();
         };
-        const timer = window.setInterval(tick, GIT_POLL_MS);
+        const unsubscribe = subscribeGitTick(tick);
         document.addEventListener("visibilitychange", tick);
         window.addEventListener("focus", tick);
         return () => {
-          window.clearInterval(timer);
+          unsubscribe();
           document.removeEventListener("visibilitychange", tick);
           window.removeEventListener("focus", tick);
         };
@@ -7306,9 +7339,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // agent 导航 → 自动切到浏览器标签：统一走模块级 maybeAutoOpenBrowser（壳层
       // 常驻事件源与面板共用同一入口，抑制与「已在浏览器标签」的判断都在那边）
 
-      // 帧绘制：base64 jpeg → Image 解码 → canvas（尺寸随帧更新，宽 100% 等比）
+      // 帧绘制：base64 jpeg → Image 解码 → canvas（尺寸随帧更新，宽 100% 等比）。
+      // Image 实例复用：每帧 new Image 会把分配与 GC 压进帧路径（每秒几十帧），
+      // 复用同一个对象只换 src——上一帧没解完就被新 src 顶掉，正是我们要的（旧帧已过期）
+      const frameImgRef = react.useRef(null);
       const drawFrame = react.useCallback((data) => {
-        const img = new Image();
+        let img = frameImgRef.current;
+        if (!img) {
+          img = new Image();
+          frameImgRef.current = img;
+        }
         img.onload = () => {
           const canvas = canvasRef.current;
           if (!canvas) return;
