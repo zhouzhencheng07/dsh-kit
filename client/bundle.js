@@ -430,8 +430,8 @@ window.__ModuleLoader__.load({
       jobsEnabled: true,
       browserEnabled: true,
       monitorEnabled: true,
-      monitorWaitMs: 15000,
-      monitorMaxAuto: 3,
+      monitorWaitMs: 60000,
+      monitorMaxAuto: 10,
       monitorRepeatThreshold: 3,
       vaultEnabled: true,
       vaultRoot: "",
@@ -930,7 +930,7 @@ window.__ModuleLoader__.load({
       cfgBrowserEnabled: "启用内置浏览器",
       cfgBrowserEnabledHint: "实时查看并操作 agent 的浏览器（重启生效）",
       cfgMonitorEnabled: "启用会话监视",
-      cfgMonitorEnabledHint: "回合失败自动续跑、死循环自动打断；只看当前会话",
+      cfgMonitorEnabledHint: "会话因 429 中断自动续跑（所有会话）、死循环自动打断",
       cfgMonitorWaitMs: "失败后等待(毫秒)",
       cfgMonitorWaitMsHint: "等多久自动发「继续」（5000-600000）",
       cfgMonitorMaxAuto: "自动继续上限(次)",
@@ -945,10 +945,9 @@ window.__ModuleLoader__.load({
       monitorCapped: "监视：已连续自动继续 {max} 次，暂停自动续跑（重复输出仍会中止）",
       monitorAutoIn: "监视：检测到{err}，{sec} 秒后自动继续（第 {n}/{max} 次）",
       monitorErr429: "请求被限流（429）",
-      monitorErrSERVER: "服务端错误",
-      monitorErrTIMEOUT: "请求超时",
-      monitorErrTRANSPORT: "网络传输错误",
-      monitorErrEMPTY_RESPONSE: "模型返回空响应",
+      monitorBgTitle: "429 自动续跑",
+      monitorBgItem: "{title}：{sec} 秒后自动继续（第 {n}/{max} 次）",
+      monitorBgCapped: "{title}：已连续自动继续 {max} 次，暂停（正常完成一轮后恢复）",
       cfgPreviewMaxTabs: "文件标签数上限",
       cfgPreviewMaxTabsHint: "超限自动关最久没看的（1-20）",
       browserUrlPh: "输入网址，回车打开",
@@ -1345,7 +1344,7 @@ window.__ModuleLoader__.load({
       cfgBrowserEnabled: "Enable built-in browser",
       cfgBrowserEnabledHint: "Watch and operate the agent's browser (restart to apply)",
       cfgMonitorEnabled: "Enable session monitor",
-      cfgMonitorEnabledHint: "Auto-continue after failures, break output dead-loops; current session only",
+      cfgMonitorEnabledHint: "Auto-continue 429-interrupted sessions (all sessions), break output dead-loops",
       cfgMonitorWaitMs: "Wait after failure (ms)",
       cfgMonitorWaitMsHint: "Wait before auto-\"Continue\" (5000-600000)",
       cfgMonitorMaxAuto: "Auto-continue limit",
@@ -1360,10 +1359,9 @@ window.__ModuleLoader__.load({
       monitorCapped: "Monitor: auto-continued {max} times in a row, pausing auto-continue (repeats are still stopped)",
       monitorAutoIn: "Monitor: {err}; auto-continue in {sec}s (attempt {n}/{max})",
       monitorErr429: "rate limit (429)",
-      monitorErrSERVER: "server error",
-      monitorErrTIMEOUT: "request timeout",
-      monitorErrTRANSPORT: "network transport error",
-      monitorErrEMPTY_RESPONSE: "empty model response",
+      monitorBgTitle: "429 auto-continue",
+      monitorBgItem: "{title}: auto-continue in {sec}s (attempt {n}/{max})",
+      monitorBgCapped: "{title}: paused after {max} consecutive continues (resumes after one clean round)",
       cfgPreviewMaxTabs: "Max file tabs",
       cfgPreviewMaxTabsHint: "Closes the least-recently-viewed tab over the limit (1-20)",
       browserUrlPh: "Type a URL and press Enter",
@@ -7833,30 +7831,210 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       },
     ];
 
-    // ─────────── 会话监视器（conversation.composer.dock 座位）───────────
-    // 对话页内监视当前打开的会话，两条自动化路径：
-    // ① 终态失败续跑：回合以可重试类错误终态（RATE_LIMIT/SERVER/TIMEOUT/
-    //    TRANSPORT/EMPTY_RESPONSE——宿主 llm-retry 链内部 5 次退避耗尽后才落到
-    //    turn-error）结束时，等 monitorWaitMs 再 inputActions.setDraft("继续")+
-    //    submit()（官方停止按钮同款 wire 语义的用户侧续跑通道）。
-    // ② 死循环停止：仅回合运行中每 1s 扫描「当前流文本」（双源：宿主 partial
-    //    投影优先，退最新未中断 assistant 节点——本宿主 legacy.partial 恒 null
-    //    且节点落地即全长），尾部自重叠连续重复 ≥monitorRepeatThreshold 次判
-    //    死循环 → sessions 服务 cancel() 停止当前回合（官方停止按钮同款调用），
-    //    停止完成后照 ① 等待续跑。
-    // 约束：连续自动续跑达 monitorMaxAuto 次暂停（一次正常完成的回合即重置）；
-    // 停止动作不受上限（防死循环烧 token），续跑受上限；等待期间用户介入（手动
-    // 发消息使回合运行 / 草稿非空）即放弃本次自动续跑；同一条 turn-error 只自动
-    // 接管一次。仅监视当前打开的会话——dock 座位随会话页挂载/卸载，切走即停。
-    const MONITOR_RETRYABLE = new Set(["RATE_LIMIT", "SERVER", "TIMEOUT", "TRANSPORT", "EMPTY_RESPONSE"]);
+    // ─────────── 全局 429 续跑器（所有会话）+ 死循环停止（仅当前会话）───────────
+    // 续跑是单一全局机制（monitorTick 轮询）：监视会话列表里【所有】会话——人
+    // 发起任务后离开，任何会话被 429 打断都自动续到任务完成，不要求该会话页开着。
+    // 数据源全是官方面（宿主 0.1.5-rc.2 运行时实证）：
+    //   枚举+running ← sessions.list 快照（宿主经 api-session/status 推送，与
+    //                  会话页是否打开无关）；
+    //   失败判定    ← binding(id).session 快照 lastAgentError——agent-loop 对每次
+    //                 回合失败发 agent/error → 网关 api-session/error 广播 → 客户端
+    //                 镜像置位，文本含原始错误（如 `429: {"message":"inference
+    //                 exceeds tpm/rpm limit",...}`）；binding() 对列表内会话惰性
+    //                 物化镜像，事件窗口（open）完全不参与——错误走控制流广播。
+    //   续跑动作    ← binding.session.prompt([{"继续"}],"queue")（composer 同款
+    //                 发送通道）；prompt 第一行同步清空 lastAgentError，同一条
+    //                 失败天然不会重复触发。
+    // 判定：空闲（list running=false）+ 镜像 lastAgentError 匹配限流特征 + 该错
+    // 误文本未处置过（handledErr 记账去重——list 的 running 推送与错误广播到达
+    // 顺序无保证，沿驱动在沿时刻会读到未置位的镜像，实测踩过）。只认措辞不认
+    // body code——sensenova 的 429 形态不定（insufficient_quota/429001/
+    // quota_exceeded_error 都见过，前者会被宿主误分类成 QUOTA 而不内部重试），
+    // 稳定的只有 "429: " 前缀（宿主 formatProviderError 拼的 HTTP 状态）和限流
+    // 措辞本身。不匹配的失败（AUTH/上下文超限等终态类）不自动续。
+    // 计数（用户定稿）：每会话独立，继续后一轮正常收尾（lastAgentError 为 null）
+    // 即清零；连续续跑达 monitorMaxAuto 暂停（capped）。等待期到点时回合又跑起来
+    // （用户手动介入）即放弃本次。
+    // 约束：浏览器页必须开着（浏览器端方案的天性）；页面关着的兜底是宿主
+    // provider 级 retryPolicy（retryableCodes），与本监视器无关。
+    // 死循环停止（MonitorLine，composer.dock）：仅当前打开的会话，回合运行中每
+    // 1s 扫描流文本尾部自重叠 ≥monitorRepeatThreshold 次 → sessions.cancel() 停
+    // 止当前回合，停止完成后发循环打断话术——检测→停→话术一条链，独立于续跑器。
+    const MONITOR_TICK_MS = 2000; // 轮询周期：429 是分钟级窗口，2s 跟踪绰绰有余
+    const MONITOR_RATE_LIMIT_RE = /\b429\b|rate.?limit|tpm\/rpm/i;
     const MONITOR_SCAN_MS = 1000; // 扫描周期：检测延迟 1-2s；真实死循环以分钟计，绰绰有余
     const MONITOR_MIN_BLOCK = 8; // 重复块最短长度：放过短分隔符/标点（--- 、换行噪声）
     const MONITOR_MAX_BLOCK = 128; // 重复块最长扫描长度：兜住长句循环，扫描成本封顶
-    /** 错误码 → 本地化短语；未知码原样显示 */
-    function monitorErrText(code) {
-      const key = `monitorErr${code}`;
-      const s = tf(key);
-      return s === key ? String(code || "") : s;
+
+    /** 续跑器活动状态快照（仅待续跑 / capped 会话上屏）：snapshot.items ×
+     *  {id,title,phase,fireAt,continues,max}。MonitorLine（当前会话条）与工作台
+     *  状态块共同订阅。快照整体换身（不可变），uSES 靠身份对比触发重渲染。 */
+    const monitorStore = {
+      snapshot: { items: [] },
+      __sig: "[]",
+      subs: new Set(),
+      emit() {
+        for (const s of this.subs) s();
+      },
+      subscribe(s) {
+        this.subs.add(s);
+        return () => this.subs.delete(s);
+      },
+    };
+    /** 每会话运行态（只在 tick 内读写）：running 上次已知位、continues 连续续跑
+     *  计数、capped 暂停标记、plan 待发射续跑、handledErr 已处置的错误文本（去重
+     *  记账）、materialized 镜像是否已物化、title/max 失败时缓存的展示字段 */
+    const monitorSessions = new Map();
+
+    /** 取会话镜像快照；顺带完成惰性物化（binding 对列表内会话恒成功）。异常按
+     *  无镜像处理——调用方各自兜底。 */
+    function monitorSnapOf(sessions, id, st) {
+      try {
+        const b = sessions.binding(id);
+        if (b) {
+          st.materialized = true;
+          return b.session.getSnapshot();
+        }
+      } catch {
+        /* 会话刚移除 / 服务异常：按无镜像处理 */
+      }
+      return null;
+    }
+
+    /** 续跑器主循环入口：读真实依赖（slots/settings）后进核心 */
+    function monitorTick() {
+      if (!slotsCtx) return;
+      let cfg;
+      try {
+        cfg = cfgFromSnapshot(getCfgSnapshot());
+      } catch {
+        return;
+      }
+      if (!cfg.monitorEnabled) return;
+      let sessions;
+      try {
+        sessions = slotsCtx.get("sessions");
+      } catch {
+        return;
+      }
+      monitorTickCore(sessions, cfg, Date.now());
+    }
+
+    /** 续跑器核心（依赖注入，render-check 直测）：单次遍历 O(会话数)，读的全是
+     *  内存快照，无网络调用（prompt 仅在发射瞬间一次）。
+     *  触发采用「错误标记驱动」而非 running 沿：list 的 running 推送（api-session/
+     *  status）与错误广播（api-session/error）到达顺序无保证，沿时刻读镜像可能
+     *  还没置位（实测踩过）。改以镜像 lastAgentError 的「新文本」为触发——以
+     *  handledErr 记账去重，免疫到达顺序；文本级去重也天然放行续跑后的再次失败
+     *  （发射即清 handledErr）。 */
+    function monitorTickCore(sessions, cfg, now) {
+      if (!sessions || !sessions.list || typeof sessions.binding !== "function") return;
+      let list;
+      try {
+        list = sessions.list.getSnapshot();
+      } catch {
+        return;
+      }
+      for (const id of list.ids ?? []) {
+        const summary = list.byId[id];
+        if (!summary) continue;
+        let st = monitorSessions.get(id);
+        if (!st) {
+          st = { running: false, continues: 0, capped: false, plan: null, materialized: false, handledErr: null, title: null, max: 0 };
+          monitorSessions.set(id, st);
+        }
+        if (summary.running) {
+          // 运行中：物化镜像（之后失败才有人接 lastAgentError）；等待期回合跑起来
+          // = 用户介入，放弃本次 plan；上一条失败的记账一并清除——新回合的失败是
+          // 新失败，即使文本相同也要重新触发
+          if (!st.materialized) monitorSnapOf(sessions, id, st);
+          if (st.plan) st.plan = null;
+          st.handledErr = null;
+          st.running = true;
+          continue;
+        }
+        st.running = false;
+        const snap = monitorSnapOf(sessions, id, st);
+        const lastErr = snap?.lastAgentError ?? null;
+        if (lastErr && MONITOR_RATE_LIMIT_RE.test(lastErr)) {
+          if (st.handledErr === lastErr) {
+            // 已处置过的同一条失败：不重排（取消后静默，直到正常收尾）
+          } else if (!st.capped && st.continues < cfg.monitorMaxAuto) {
+            st.handledErr = lastErr;
+            st.title = summary.displayTitle;
+            st.max = cfg.monitorMaxAuto;
+            st.plan = { fireAt: now + cfg.monitorWaitMs };
+          } else if (!st.capped) {
+            st.handledErr = lastErr;
+            st.title = summary.displayTitle;
+            st.max = cfg.monitorMaxAuto;
+            st.capped = true;
+          }
+        } else if (!lastErr) {
+          // 空闲且无错误标记：一次正常收尾 → 连续计数清零、capped 解除（用户定
+          // 稿：继续成功即清零）。幂等，重复 tick 无害。
+          if (st.continues !== 0 || st.capped || st.handledErr !== null) {
+            st.continues = 0;
+            st.capped = false;
+            st.handledErr = null;
+          }
+        }
+        // plan 到点发射：镜像仍在失败态且没人在跑才发；prompt 同步清 lastAgentError
+        // 与 handledErr——续跑后再失败（同文本新失败）可再次触发
+        if (st.plan && now >= st.plan.fireAt) {
+          st.plan = null;
+          const snapAtFire = monitorSnapOf(sessions, id, st);
+          if (snapAtFire && !snapAtFire.running && snapAtFire.lastAgentError && MONITOR_RATE_LIMIT_RE.test(snapAtFire.lastAgentError)) {
+            st.continues += 1;
+            st.handledErr = null;
+            try {
+              const b = sessions.binding(id);
+              void b.session.prompt([{ type: "text", text: tf("monitorContinueText") }], "queue").catch(() => {});
+            } catch {
+              /* 发送通道异常：放弃本次，错误标记仍在，下个 tick 重新排期 */
+            }
+          }
+        }
+      }
+      // 已移除会话的状态回收
+      for (const id of [...monitorSessions.keys()]) {
+        if (!list.byId[id]) monitorSessions.delete(id);
+      }
+      monitorRebuildItems();
+    }
+
+    /** 快照重建（tick 与取消按钮共用）：内容不变不 emit（轮询 2s 一次，序列化
+     *  对比成本可忽略）。条目字段取自会话态缓存（title/max 在失败沿时记录），
+     *  不依赖 list/slots——取消路径随时可调。 */
+    function monitorRebuildItems() {
+      const items = [];
+      for (const [id, st] of monitorSessions) {
+        if (!st.plan && !st.capped) continue;
+        items.push({
+          id,
+          title: st.title ?? id,
+          phase: st.plan ? "waiting" : "capped",
+          fireAt: st.plan ? st.plan.fireAt : 0,
+          continues: st.continues,
+          max: st.max ?? 10,
+        });
+      }
+      items.sort((a, b) => a.id.localeCompare(b.id));
+      const next = JSON.stringify(items);
+      if (next !== monitorStore.__sig) {
+        monitorStore.__sig = next;
+        monitorStore.snapshot = { items };
+        monitorStore.emit();
+      }
+    }
+
+    /** UI 取消按钮：丢弃待发射 plan（失败沿已消费，不会重排） */
+    function monitorCancelPlan(id) {
+      const st = monitorSessions.get(id);
+      if (st && st.plan) {
+        st.plan = null;
+        monitorRebuildItems(); // 立即重建快照并 emit
+      }
     }
 
     /** 尾部自重叠扫描：返回累计文本末尾连续重复块的最大次数（块长在
@@ -7874,34 +8052,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return best;
     }
 
-    /** ① 接管判据（纯函数）：可接管的错误 = 对话「最后一条事件」的 turn-error——
-     *  错误的 seq 必须等于全部节点的最大 seq。只按 handledRef 记账不看点位会让
-     *  历史错误被重新接管：429 失败后人工/自动续跑成功、对话正常收尾，那条历史
-     *  turn-error 仍在，切会话回来（记账清空）就误判成当前失败再发一轮「继续」。
-     *  用 max-seq 而非「末条节点恰好是 turn-error」：宿主在尾部追加记账类节点时
-     *  后者会漏判。无 seq 字段时（理论不出现）保守不接管。 */
-    function monitorTakeoverError(nodes) {
-      let lastErr = null;
-      let maxSeq = null;
-      for (const n of nodes ?? []) {
-        if (!n) continue;
-        if (typeof n.seq === "number" && (maxSeq === null || n.seq > maxSeq)) maxSeq = n.seq;
-        if (n.kind === "turn-error") lastErr = n;
-      }
-      if (!lastErr || maxSeq === null || lastErr.seq !== maxSeq) return null;
-      return lastErr;
-    }
-    /** ③ 恢复判定（纯函数）：回合收尾的最后一个节点不是 turn-error（失败收尾）、
-     *  也不是 interrupted 的 assistant（监视器自己 cancel 停的），就算一次正常
-     *  完成的回合。空对话不算恢复。 */
-    function monitorRecoveredTail(nodes) {
-      const last = (nodes ?? [])[(nodes ?? []).length - 1];
-      if (!last) return false;
-      if (last.kind === "turn-error") return false;
-      if (last.kind === "assistant" && last.interrupted === true) return false;
-      return true;
-    }
-
     function MonitorLine(props) {
       const { useChat, useSession, useInput, inputActions, sessionId } = props;
       react.useSyncExternalStore(subscribeLocale, getLocaleVersion);
@@ -7913,21 +8063,28 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const partial = typeof useChat === "function" ? useChat((s) => s.legacy.partial) : null;
       const running = typeof useSession === "function" ? useSession((s) => s.running) : false;
       const draft = typeof useInput === "function" ? useInput((s) => s.draft) : "";
-      // plan: null | {phase:"waiting",fireAt,code,seq,reason} | {phase:"stopping"} | {phase:"capped",max}
+      // 全局续跑器对本会话的活动状态（waiting/capped）；null = 无。subscribe 箭头
+      // 包装保 this（方法解引用传入 uSES 会丢 this 导致订阅崩溃、条永不渲染）
+      const watcherSnap = react.useSyncExternalStore(
+        (s) => monitorStore.subscribe(s),
+        () => monitorStore.snapshot,
+      );
+      const watcherItem = watcherSnap.items.find((x) => x.id === sessionId) ?? null;
+      // plan（本地态，仅死循环链路）：null | {phase:"stopping"} | {phase:"waiting",fireAt,reason:"repeat"}；
+      // 失败续跑的 waiting/capped 一律来自 watcherItem，本地不再管
       const [plan, setPlan] = react.useState(null);
       const [now, setNow] = react.useState(() => Date.now());
-      const [autoCount, setAutoCount] = react.useState(0);
-      const handledRef = react.useRef(new Set()); // 已接管的 turn-error seq（会话切换清空）
+      const loopBreaksRef = react.useRef(0); // 死循环话术已发次数（达上限只停不发，防循环烧 token）
       const partialTextRef = react.useRef(null); // 最新流式文本（partial.blocks 拼接）
       const partialKeyRef = react.useRef(null); // 镜像侧记录的当前流 turn/step
       const lastStreamKeyRef = react.useRef(null); // 上次扫描的数据源标识（换源 = 新回合）
       const lastLenRef = react.useRef(0); // 本源扫描基线
       const nodesSeqRef = react.useRef(null); // 最新「未中断」assistant 节点 seq
       const nodesTextRef = react.useRef(null); // 该节点的文本（回合内步骤落地即扫一次）
-      const stoppingRef = react.useRef(false); // cancel 已发出（防重复触发；续跑后复位）
-      // 会话切换：监视状态全部归零
+      const stoppingRef = react.useRef(false); // cancel 已发出（防重复触发；话术后复位）
+      // 会话切换：死循环链路状态归零（续跑计数在全局续跑器，随会话独立）
       react.useEffect(() => {
-        handledRef.current = new Set();
+        loopBreaksRef.current = 0;
         partialTextRef.current = null;
         partialKeyRef.current = null;
         lastStreamKeyRef.current = null;
@@ -7936,7 +8093,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         nodesTextRef.current = null;
         stoppingRef.current = false;
         setPlan(null);
-        setAutoCount(0);
       }, [sessionId]);
       // 流式文本镜像：partial 随 chunk 变化，只写 ref 不 setState（渲染开销趋零）。
       // 部分宿主版本 legacy.partial 恒 null（运行中步骤不进投影或不广播），此路
@@ -7974,43 +8130,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         nodesSeqRef.current = seq;
         nodesTextRef.current = text;
       }, [nodes]);
-      // ① 终态失败检测：空闲 + 「最后一条事件」是未接管的可重试 turn-error → 计划
-      //    等待（历史错误不接管，见 monitorTakeoverError 注释）
-      react.useEffect(() => {
-        if (!cfg.monitorEnabled || running || !inputActions) return;
-        const lastErr = monitorTakeoverError(nodes);
-        if (!lastErr) return;
-        const key = String(lastErr.seq);
-        if (handledRef.current.has(key)) return;
-        handledRef.current.add(key);
-        if (!MONITOR_RETRYABLE.has(lastErr.code)) return; // AUTH 等不可重试类不自动续
-        if (autoCount >= cfg.monitorMaxAuto) {
-          setPlan({ phase: "capped", max: cfg.monitorMaxAuto });
-          return;
-        }
-        setPlan({ phase: "waiting", fireAt: Date.now() + cfg.monitorWaitMs, code: lastErr.code, seq: lastErr.seq, reason: "error" });
-      }, [nodes, running, cfg.monitorEnabled, cfg.monitorMaxAuto, cfg.monitorWaitMs, autoCount, inputActions]);
-      // ③ 恢复清零（回合边界判定）：盯 running 由 true→false 的那次收尾，末尾形状
-      //    按 monitorRecoveredTail 判——正常完成即连续计数清零、capped 一并解除。
-      //    旧实现要求「末条节点必须是未打断的 assistant」，工具收尾/宿主尾部记账
-      //    节点都会漏判，计数跨健康回合一路累到 capped，之后再不自动续跑。收尾
-      //    节点可能晚 running 一拍落地，延迟一拍再读 nodesRef；不做 cleanup——
-      //    重复判定幂等（setAutoCount(0) 恒安全），transition 只会排一个
-      const nodesRef = react.useRef(nodes);
-      nodesRef.current = nodes;
-      const prevRunningRef = react.useRef(false);
-      react.useEffect(() => {
-        const was = prevRunningRef.current;
-        prevRunningRef.current = running;
-        if (!was || running) return;
-        if (autoCount === 0 && plan?.phase !== "capped") return;
-        setTimeout(() => {
-          if (monitorRecoveredTail(nodesRef.current)) {
-            setAutoCount(0);
-            setPlan((p) => (p?.phase === "capped" ? null : p));
-          }
-        }, 50);
-      }, [running, autoCount, plan]);
       // ② 死循环扫描：仅回合运行中轮询（空闲不扫——历史文本不在观察面）。双数据
       //    源取其一：partial（流式中，若宿主广播）优先；否则最新未中断 assistant
       //    节点（步骤落地即全长出现，落地后立扫一次——快速流整段不可分时也有
@@ -8054,13 +8173,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }, MONITOR_SCAN_MS);
         return () => clearInterval(timer);
       }, [running, cfg.monitorEnabled, cfg.monitorRepeatThreshold, sessionId]);
-      // stopping → 停止完成转等待（上限内）或 capped（超限：停而不续）；
-      // 停止超时（cancel 失败/被拒）放弃并复位
+      // stopping → 停止完成转等待发循环话术（连续次数达上限只停不发，防循环烧
+      // token）；停止超时（cancel 失败/被拒）放弃并复位
       react.useEffect(() => {
         if (plan?.phase !== "stopping") return undefined;
         if (!running) {
-          if (autoCount >= cfg.monitorMaxAuto) setPlan({ phase: "capped", max: cfg.monitorMaxAuto });
-          else setPlan({ phase: "waiting", fireAt: Date.now() + 2500, code: "", seq: 0, reason: "repeat" });
+          if (loopBreaksRef.current >= cfg.monitorMaxAuto) return undefined;
+          setPlan({ phase: "waiting", fireAt: Date.now() + 2500, reason: "repeat" });
           return undefined;
         }
         const giveUp = setTimeout(() => {
@@ -8068,58 +8187,63 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           setPlan(null);
         }, 15000);
         return () => clearTimeout(giveUp);
-      }, [plan, running, autoCount, cfg.monitorMaxAuto]);
-      // 等待期间用户介入（手动发消息使回合运行）→ 放弃本次自动续跑
+      }, [plan, running, cfg.monitorMaxAuto]);
+      // 等待期间用户介入（手动发消息使回合运行）→ 放弃本次（仅死循环链路；失败
+      // 续跑的介入放弃在全局续跑器 tick 里）
       react.useEffect(() => {
         if (plan?.phase === "waiting" && running) setPlan(null);
       }, [running, plan]);
-      // 倒计时跳动
+      // 倒计时跳动（死循环链路 waiting 与全局续跑器 waiting 都要跳）。进入等待
+      // 先立即对表一次——now 可能是组件挂载时的陈旧值，首帧会把剩余秒数显示得偏大
       react.useEffect(() => {
-        if (plan?.phase !== "waiting") return undefined;
+        if (plan?.phase !== "waiting" && watcherItem?.phase !== "waiting") return undefined;
+        setNow(Date.now());
         const timer = setInterval(() => setNow(Date.now()), 500);
         return () => clearInterval(timer);
-      }, [plan]);
-      // 到点执行：草稿非空（用户在打字）或回合又跑起来都视为介入，放弃续跑；
-      // 超限兜底转 capped（正常路径到不了这里——stopping 转换已挡）
+      }, [plan, watcherItem]);
+      // 到点执行（仅死循环链路）：草稿非空（用户在打字）或回合又跑起来都视为
+      // 介入，放弃话术
       react.useEffect(() => {
         if (plan?.phase !== "waiting") return;
         if (Date.now() < plan.fireAt) return;
-        if (autoCount >= cfg.monitorMaxAuto) {
-          setPlan({ phase: "capped", max: cfg.monitorMaxAuto });
-          return;
-        }
         if (running || String(draft ?? "").trim() !== "") {
           setPlan(null);
           return;
         }
-        // 话术分流（用户定稿）：429 等失败发「继续」；死循环发带循环提示的话——
-        // 让 agent 知道自己卡在循环里，停止重复并换方式推进
-        inputActions.setDraft(tf(plan.reason === "repeat" ? "monitorLoopBreakText" : "monitorContinueText"));
+        // 死循环话术（用户定稿）：让 agent 知道自己卡在循环里，停止重复并换方式推进
+        inputActions.setDraft(tf("monitorLoopBreakText"));
         inputActions.submit();
-        stoppingRef.current = false; // 续跑已发出：本会话下一回合的死循环仍要接管
-        setAutoCount((c) => c + 1);
+        stoppingRef.current = false; // 话术已发：本会话下一回合的死循环仍要接管
+        loopBreaksRef.current += 1;
         setPlan(null);
-      }, [plan, now, running, draft, autoCount, cfg.monitorMaxAuto, inputActions]);
-      if (!plan || !cfg.monitorEnabled) return null;
+      }, [plan, now, running, draft, inputActions]);
+      if (!cfg.monitorEnabled) return null;
+      // 展示优先级：死循环链路本地态在前（正在发生），全局续跑器状态兜底
       let line = "";
-      if (plan.phase === "waiting") {
+      let cancellable = false;
+      if (plan?.phase === "waiting") {
         const sec = Math.max(0, Math.ceil((plan.fireAt - now) / 1000));
-        const err = plan.reason === "repeat" ? tf("monitorRepeatErr") : monitorErrText(plan.code);
-        line = tf("monitorAutoIn", { err, sec: String(sec), n: String(autoCount + 1), max: String(cfg.monitorMaxAuto) });
-      } else if (plan.phase === "stopping") {
+        line = tf("monitorAutoIn", { err: tf("monitorRepeatErr"), sec: String(sec), n: String(loopBreaksRef.current + 1), max: String(cfg.monitorMaxAuto) });
+        cancellable = true;
+      } else if (plan?.phase === "stopping") {
         line = tf("monitorStopping");
-      } else if (plan.phase === "capped") {
-        line = tf("monitorCapped", { max: String(cfg.monitorMaxAuto) });
+      } else if (watcherItem?.phase === "waiting") {
+        const sec = Math.max(0, Math.ceil((watcherItem.fireAt - now) / 1000));
+        line = tf("monitorAutoIn", { err: tf("monitorErr429"), sec: String(sec), n: String(watcherItem.continues + 1), max: String(watcherItem.max) });
+        cancellable = true;
+      } else if (watcherItem?.phase === "capped") {
+        line = tf("monitorCapped", { max: String(watcherItem.max) });
       }
+      if (!line) return null;
       return jsxRuntime.jsxs("div", {
         className: "dshk-monitor-line",
         children: [
           jsxRuntime.jsx("span", { className: "dshk-monitor-text", children: line }),
-          plan.phase === "waiting"
+          cancellable
             ? jsxRuntime.jsx("button", {
                 type: "button",
                 className: "dshk-monitor-cancel",
-                onClick: () => setPlan(null),
+                onClick: () => (plan ? setPlan(null) : monitorCancelPlan(sessionId)),
                 children: t("monitorCancel"),
               })
             : null,
@@ -9734,11 +9858,51 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     function JobsPaneBody(props) {
       useFeaturePresence("jobs");
       const cfg = cfgFromSnapshot(getCfgSnapshot());
-      return jsxRuntime.jsx("div", { className: "dshk-rbpane dshk-rbpane-scroll", children:
+      // 全局 429 续跑器状态块：有待续跑 / capped 会话才出现（零常驻空间）。
+      // 挂在后台任务签顶部——「正在跑的东西」同一语境；jobs 关闭不影响本块。
+      const watcherSnap = react.useSyncExternalStore(
+        (s) => monitorStore.subscribe(s),
+        () => monitorStore.snapshot,
+      );
+      const [bgNow, setBgNow] = react.useState(() => Date.now());
+      const hasWaiting = watcherSnap.items.some((x) => x.phase === "waiting");
+      react.useEffect(() => {
+        if (!hasWaiting) return undefined;
+        setBgNow(Date.now());
+        const timer = setInterval(() => setBgNow(Date.now()), 500);
+        return () => clearInterval(timer);
+      }, [hasWaiting]);
+      return jsxRuntime.jsxs("div", { className: "dshk-rbpane dshk-rbpane-scroll", children: [
+        cfg.monitorEnabled !== false && watcherSnap.items.length > 0
+          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+              jsxRuntime.jsx("div", { className: "dshk-note", children: t("monitorBgTitle") }),
+              watcherSnap.items.map((x) => {
+                const line = x.phase === "waiting"
+                  ? tf("monitorBgItem", {
+                      title: x.title,
+                      sec: String(Math.max(0, Math.ceil((x.fireAt - bgNow) / 1000))),
+                      n: String(x.continues + 1),
+                      max: String(x.max),
+                    })
+                  : tf("monitorBgCapped", { title: x.title, max: String(x.max) });
+                return jsxRuntime.jsxs("div", { className: "dshk-monitor-line", children: [
+                  jsxRuntime.jsx("span", { className: "dshk-monitor-text", children: line }),
+                  x.phase === "waiting"
+                    ? jsxRuntime.jsx("button", {
+                        type: "button",
+                        className: "dshk-monitor-cancel",
+                        onClick: () => monitorCancelPlan(x.id),
+                        children: t("monitorCancel"),
+                      })
+                    : null,
+                ] }, x.id);
+              }),
+            ] })
+          : null,
         cfg.jobsEnabled === false
           ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("rbFeatureDisabled") })
           : jsxRuntime.jsx(JobsPanel, { ...props }),
-      });
+      ] });
     }
     /** 浏览器 pane（agent 驱动 + 人机共驾 + 自动跟随；与独立面板同构，不加功能） */
     function BrowserPaneBody() {
@@ -10994,6 +11158,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // ─────────── 插件体 ───────────
     function apply(ctx) {
       slotsCtx = ctx;
+      // 全局 429 续跑器主循环：轮询自守卫（slots/settings 未就绪直接跳过），
+      // monitorEnabled 关闭时 tick 空转；模块随页面销毁，无独立清理需求
+      setInterval(monitorTick, MONITOR_TICK_MS);
       injectStyles();
       // 插件配置数据通道：官方 settings scope 绑定本插件命名空间（宿主半边
       // 已按 ctx.settings.installSection 注册 dsh-kit）。绑定失败（老宿主缺 settingsScope）
