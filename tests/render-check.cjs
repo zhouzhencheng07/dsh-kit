@@ -1061,10 +1061,11 @@ const fakeScope = {
 out = comps.KitConfigCard({ scope: fakeScope });
 check("KitConfigCard 渲染无异常", !!out && typeof out === "object");
 // 设置卡布局整理（2026-09-11 用户定稿）：两个侧边栏快捷键并入「侧边栏」组（组头
-// + 左栏启用位 + 左/右两键），字段行走官方通用设置模型（标题+说明左列、控件右置）
+// + 左/右两键，启用开关 2026-09-11 撤——Ctrl+B 恒生效），字段行走官方通用设置
+// 模型（标题+说明左列、控件右置）
 check(
-  "侧边栏组含左右两键且带组头",
-  src.includes('{ title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcutEnabled", "sidebarShortcut", "rightbarShortcut"] }') && src.includes('cfgGroupSidebar: "侧边栏"'),
+  "侧边栏组只含左右两键且带组头、无启用位",
+  src.includes('{ title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut"] }') && src.includes('cfgGroupSidebar: "侧边栏"') && !src.includes("sidebarShortcutEnabled"),
 );
 // 默认值与宿主 schema、开发环境现值三方同步（恢复默认回落宿主 base，客户端默认
 // 与其漂移会出现「恢复默认后跳到别的值」）——钉住五处 2026-09-11 改动
