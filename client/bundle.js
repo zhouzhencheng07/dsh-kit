@@ -2068,7 +2068,9 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-dayhead{position:sticky;top:0;z-index:3;box-sizing:border-box;height:var(--dshk-sched-band);text-align:center;padding:6px 0 4px;background:var(--dsw-alias-bg-base);border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dshk-sched-wd{display:block;font-size:11px;color:var(--dshk-sched-wdcolor,var(--dsw-alias-label-tertiary))}
 .dshk-sched-dnum{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;border-radius:999px;font-size:12px;margin-top:2px}
-.dshk-sched-dayhead.is-today .dshk-sched-dnum{background:var(--dsw-alias-brand-primary);color:#fff}
+/* 主色底上的文字用 bg-base 而不是写死 #fff：品牌主色是单色令牌（浅色近黑 / 深色近白），
+   写死白在深色主题就是白底白字（用户 2026-09-12：日程字体颜色不随深暗色变） */
+.dshk-sched-dayhead.is-today .dshk-sched-dnum{background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
 .dshk-sched-allday{grid-row:2;border-left:1px solid var(--dsw-alias-border-l2);border-bottom:1px solid var(--dsw-alias-border-l2);padding:2px 4px;font-size:11px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-fill-l2);border-radius:4px;margin:2px 2px;min-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dshk-sched-timeline{border-right:1px solid var(--dsw-alias-border-l2)}
 .dshk-sched-hourlabel{height:42px;padding-right:6px;font-size:10px;color:var(--dsw-alias-label-tertiary);text-align:right;scroll-snap-align:start}
@@ -2077,7 +2079,9 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-cell:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-sched-nowline{position:absolute;left:0;right:0;height:2px;background:var(--dsw-alias-danger,#cd3131);z-index:2;pointer-events:none}
 .dshk-sched-nowline::before{content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:999px;background:var(--dsw-alias-danger,#cd3131)}
-.dshk-sched-event{position:absolute;z-index:1;overflow:hidden;border-radius:6px;padding:2px 6px;color:#fff;font-size:11px;line-height:1.35;cursor:pointer;background:var(--dsw-alias-brand-primary);box-shadow:inset 0 0 0 1px color-mix(in srgb,#fff 30%,transparent);box-sizing:border-box}
+/* 底色由渲染层给（条目 color，缺省按标题从六色盘派生）；这里的 background 只是兜底，
+   不能用 brand-primary——单色令牌在深色主题近白，配上块内固定白字就是白底白字 */
+.dshk-sched-event{position:absolute;z-index:1;overflow:hidden;border-radius:6px;padding:2px 6px;color:#fff;font-size:11px;line-height:1.35;cursor:pointer;background:#228be6;box-shadow:inset 0 0 0 1px color-mix(in srgb,#fff 30%,transparent);box-sizing:border-box}
 .dshk-sched-event:hover{filter:brightness(1.08)}
 /* 短段（按比例高度不足 18px）：紧凑排版把下限压到 14px 仍容得下单行标题，
    高度尽量贴合真实时长比例（border-box 后渲染高度=style 高度，不再被 padding 抬高） */
@@ -2138,14 +2142,14 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-sched-field{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--dsw-alias-label-secondary)}
 .dshk-sched-check{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer}
 .dshk-sched-wdchip{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
-.dshk-sched-wdchip.is-active{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:#fff}
+.dshk-sched-wdchip.is-active{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
 .dshk-sched-colors{display:flex;gap:6px;flex-wrap:wrap}
 .dshk-sched-color{appearance:none;width:18px;height:18px;border-radius:999px;border:2px solid transparent;cursor:pointer;padding:0}
 .dshk-sched-color.is-active{border-color:var(--dsw-alias-label-primary)}
 .dshk-sched-actions{display:flex;align-items:center;gap:8px;margin-top:2px}
 .dshk-sched-ghost{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;padding:7px 12px;border-radius:8px;cursor:pointer}
 .dshk-sched-ghost:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-sched-primary{appearance:none;border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:#fff;font:inherit;font-size:12px;line-height:1;padding:7px 14px;border-radius:8px;cursor:pointer}
+.dshk-sched-primary{appearance:none;border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);font:inherit;font-size:12px;line-height:1;padding:7px 14px;border-radius:8px;cursor:pointer}
 .dshk-sched-primary:disabled{opacity:.5;cursor:default}
 .dshk-sched-danger{appearance:none;border:1px solid color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);background:none;color:var(--dsw-alias-danger,#cd3131);font:inherit;font-size:12px;line-height:1;padding:7px 12px;border-radius:8px;cursor:pointer}
 /* 计时：悬浮小窗（运行中且不在计时页时漂浮内容区右下，坞展开自动让位）+
@@ -6601,6 +6605,17 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 计时全局单实例（timer/start 遇 running 先自动 stop），芯片挂 conversation.composer.dock。
 
     const SCHED_COLORS = ["#228be6", "#40c057", "#fd7e14", "#e64980", "#7048e8", "#f59f00"];
+    /**
+     * 没选颜色的事件（面板建的手动都会选，agent 经 schedule_create 建的不带 color）在网格上的
+     * 兜底色：按标题散列取六色盘里的一色，同一标题恒同色。**不落回 `--dsw-alias-brand-primary`**
+     * ——那是单色令牌（浅色主题近黑、深色主题近白），块内文字固定白，深色主题下成白底白字。
+     */
+    function schedFallbackColor(seed) {
+      const s = String(seed ?? "");
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+      return SCHED_COLORS[h % SCHED_COLORS.length];
+    }
     // 标题字数上限：与宿主 store 截断/工具描述同一口径（重要信息做标题，其余写备注）
     const SCHED_TITLE_MAX = 16;
     const SCHED_DAY_START = 0; // 网格起点 00:00（全天制，起止时刻零裁剪）
@@ -6951,7 +6966,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     // 泳道均分且零内缩：块边缘与列网格线严丝合缝（用户定稿 2026-09-08）
                     left: `${(o.lane * 100) / o.lanes}%`,
                     width: `${100 / o.lanes}%`,
-                    ...(o.color && !o.isTimed ? { background: o.color } : {}),
+                    // 没选颜色的块不能落回 CSS 的 brand-primary——它是单色（浅色主题近黑、
+                    // 深色主题近白），块内文字固定白，深色下就是白底白字（用户 2026-09-12：
+                    // 字体颜色不随深暗色变、agent 建的黑块）。所以无 color 时按标题派一个
+                    // 六色盘里的稳定色：同一门课每周同色，两个主题都压得住白字
+                    ...(!o.isTimed ? { background: o.color ?? schedFallbackColor(o.title || o.baseId) } : {}),
                   },
                   title: tipParts.filter(Boolean).join("\n"),
                   onClick: (e) => {
