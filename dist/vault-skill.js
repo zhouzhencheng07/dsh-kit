@@ -2,9 +2,9 @@
 // 为什么是技能而不是 vault 根的 AGENTS.md：AGENTS.md 只是躺在目录里的文件，agent
 // 不会自动加载它，写在那里的约定等于不存在；技能由 DSH 技能扫描发现并进模型上下文
 // （chokidar 热生效），规则才真正生效（用户定稿 2026-09-09，AGENTS.md 自动生成随之
-// 退役）。为什么有格式手册：双链/提示卡/折叠块/公式是本库超出标准 markdown 的约定，
-// 有 md 经验的 agent 不认识这些语法——手册逐条给写法示例，agent 照抄即可产出面板
-// 可正确渲染的页面。检索用 vault_search 工具（保持工具形态，技能只教用法）；git 存
+// 退役）。为什么有格式手册：收「渲染效果超出标准 markdown」的约定（双链/提示卡/折叠
+// 块/公式）——不教 agent 不确定面板支不支持；任务列表/图片/行内标记这类标准 md/GFM
+// agent 本来就会，不教（用户定稿 2026-09-11）。检索用 vault_search 工具（保持工具形态，技能只教用法）；git 存
 // 档靠技能教会的 git -C 命令，agent 拿到 add/commit 能力，插件不拦 fs 工具瀑布。
 // 生命周期：vaultRoot 配置变化（含首次就绪）时整体重写，根路径随设置自动更新；插件
 // 卸载/禁用时收走（removeVaultSkill，HMR 更新=卸载+重装，重装即重写）。文件由插件
@@ -28,9 +28,8 @@ export function vaultSkillMarkdown(root) {
         'name: dsh-kit-vault',
         'description:',
         '  知识库（vault）使用规则——记笔记/查知识/整理知识库前必读：库里既有用户笔记（学习、',
-        '  本机记录），也有项目知识（项目总览、架构与可复用经验）。含一题一页与查重、目录分区、',
-        '  双链/提示卡/折叠块/公式等本库扩展格式的写法手册、vault_search 检索工具用法、改完页面',
-        '  后的 git add/commit 存档命令。',
+        '  本机记录），也有项目知识（项目总览、架构与可复用经验）。当用户要「记一下 X」「写进',
+        '  知识库」「整理/合并笔记」或回答前想查已有笔记时使用，即使用户没说「知识库」三个字。',
         '---',
         '',
         '# 知识库（vault）使用规则',
@@ -76,7 +75,7 @@ export function vaultSkillMarkdown(root) {
         '',
         '类型：note / info / tip / success / question / warning / danger / example / quote。',
         '',
-        '**折叠块**（默认收起；`<details open>` 即默认展开；summary 与正文间留空行可写任意 markdown）：',
+        '**折叠块**（标准 md 没有折叠，面板按 HTML 渲染；默认收起，`<details open>` 即默认展开；summary 与正文间留空行才能写任意 markdown）：',
         '',
         '    <details>',
         '    <summary>摘要标题</summary>',
@@ -85,19 +84,11 @@ export function vaultSkillMarkdown(root) {
         '',
         '    </details>',
         '',
-        '**数学公式**：行内 `$E=mc^2$`；行间公式用 `$$` 单独成行包裹：',
+        '**数学公式**（面板按 LaTeX 渲染）：行内 `$E=mc^2$`；行间公式用 `$$` 单独成行包裹：',
         '',
         '    $$',
         '    \\int_0^1 f(x)\\,dx',
         '    $$',
-        '',
-        '**任务列表**：`- [ ] 待办` / `- [x] 已完成`（面板里可点击勾选，落盘回源码）。',
-        '',
-        '**图片**：文件先放 `attachments/`，页面里 `![说明](attachments/文件名.png)`。',
-        '',
-        '**行内补充**（可选）：下划线 `<u>文字</u>`、高亮 `<mark>文字</mark>`、',
-        '文字颜色 `<span style="color:#c00000">文字</span>`；粗体/斜体/删除线/行内代码',
-        '与标准 markdown 相同。',
         '',
         '## git 存档（你有提交权限）',
         '',

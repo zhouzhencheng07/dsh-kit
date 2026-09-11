@@ -30,9 +30,9 @@ await test('vaultSkillMarkdown：frontmatter/根路径/格式手册/git 命令�
   assert.ok(md.includes('> [!warning] 标题文字'), '提示卡带正文示例')
   assert.ok(md.includes('<details>') && md.includes('<summary>摘要标题</summary>'), '折叠块语法')
   assert.ok(md.includes('$$') && md.includes('\\int_0^1'), '行间公式示例')
-  assert.ok(md.includes('- [ ] 待办'), '任务列表')
-  assert.ok(md.includes('![说明](attachments/文件名.png)'), '图片相对链接')
-  assert.ok(md.includes('<mark>文字</mark>'), '行内高亮')
+  // 格式手册只收渲染效果超出标准 md 的约定（用户定稿 2026-09-11）：标准 md/GFM 不教
+  assert.ok(!md.includes('- [ ] 待办'), '任务列表已砍')
+  assert.ok(!md.includes('<mark>'), '行内高亮已砍')
   assert.ok(md.includes(`git -C "${root}" add -A`), 'git add 命令带根路径')
   assert.ok(md.includes('commit -m'), 'git commit 命令')
   assert.ok(md.includes('wiki/'), '分区约定')
