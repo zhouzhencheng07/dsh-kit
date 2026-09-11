@@ -71,7 +71,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultStageSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, StagePane, ScheduleIndexView, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openStageTab, closeStageTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, toggleSchedEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, stageAlive, stageBounds, stageWidthFor, stageIsPinned, stageWidthCommit, stagePinToggle, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText };",
+  "return { vaultSideSlot, vaultStageSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, StagePane, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openStageTab, closeStageTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, stageAlive, stageBounds, stageWidthFor, stageIsPinned, stageWidthCommit, stagePinToggle, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -85,7 +85,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "StagePane", "ScheduleIndexView", "RteEditor", "VaultPagePane", "openStageTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "toggleSchedEntry", "stageBounds", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTakeoverError", "monitorRecoveredTail", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText"];
+const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "StagePane", "RteEditor", "VaultPagePane", "openStageTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "stageBounds", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTakeoverError", "monitorRecoveredTail", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -255,13 +255,13 @@ check("FileTreeEntry 渲染无异常", !!out && typeof out === "object");
 callLog = [];
 out = comps.ScmEntry({});
 check("ScmEntry 渲染无异常", !!out && typeof out === "object");
-// 7.0) 侧栏索引单槽互斥（工具行四钮的选中态 = 侧栏正在显示谁，用户定稿
-// 2026-09-10）：点源代码管理必须让出知识库目录那一格，否则两个钮同时亮而侧栏
-// 只按优先级显示一个
-const sidebarResetPatch = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, schedIdxOpen: false, files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null };
-const svp = comps.sidebarViewPatch("sched");
-check("sidebarViewPatch 单槽互斥：只亮指定位", svp.schedIdxOpen === true && svp.treeOpen === false && svp.gitOpen === false && svp.vaultIdxOpen === false);
-comps.setKitUi({ vaultIdxOpen: true, vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", gitOpen: false, treeOpen: false, schedIdxOpen: false });
+// 7.0) 侧栏索引单槽互斥（工具行三钮的选中态 = 侧栏正在显示谁，用户定稿
+// 2026-09-10；日程待办索引 2026-09-11 退役）：点源代码管理必须让出知识库目录
+// 那一格，否则两个钮同时亮而侧栏只按优先级显示一个
+const sidebarResetPatch = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null };
+const svp = comps.sidebarViewPatch("vault");
+check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultIdxOpen === true && svp.treeOpen === false && svp.gitOpen === false);
+comps.setKitUi({ vaultIdxOpen: true, vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", gitOpen: false, treeOpen: false });
 callLog = [];
 comps.ScmEntry({});
 const scmBtnEl = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-enbtn"));
@@ -276,18 +276,14 @@ const ots = comps.openStageTab({ files: [], jobsOpen: false, browserOpen: false,
 check("openStageTab 日程：置存在+激活（纯补丁不触碰任务标签）", ots.schedOpen === true && ots.stageTab === "schedule" && ots.jobsOpen === undefined);
 const otb = comps.openStageTab({ files: [], jobsOpen: true, browserOpen: false, stageTab: "jobs" }, "browser");
 check("openStageTab 浏览器：纯补丁不触碰任务标签（合并保留）", otb.browserOpen === true && otb.stageTab === "browser" && otb.jobsOpen === undefined);
-// 7.1b) 知识库/日程入口（输入行两钮 + 快捷键同语义）：开=侧栏索引+舞台标签
-// 一起开；知识库再点=只收侧栏索引回会话、舞台标签保留（用户定稿 2026-09-10：
+// 7.1b) 知识库入口（输入行钮 + 快捷键同语义）：开=侧栏索引+舞台标签
+// 一起开；再点=只收侧栏索引回会话、舞台标签保留（用户定稿 2026-09-10：
 // 标签的归宿是标签 ✕ 与配置清场，入口按钮只管侧栏那格）
 const tvOpen = comps.toggleVaultEntry({ treeOpen: true, vaultIdxOpen: false, vaultOpen: false, vaultPages: [], stageTab: null });
 check("知识库入口开：索引 + 舞台标签一起开且关掉文件树", tvOpen.vaultIdxOpen === true && tvOpen.vaultOpen === true && tvOpen.stageTab === "vault" && tvOpen.treeOpen === false);
 const tvClose = comps.toggleVaultEntry({ vaultIdxOpen: true, vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", vaultHist: { stack: ["D:/v/a.md"], idx: 0 }, stageTab: "vault" });
-// 只收侧栏四键的纯补丁：vaultOpen/页标签等键不存在 = setKitUi 合并时原样保留
+// 只收侧栏三键的纯补丁：vaultOpen/页标签等键不存在 = setKitUi 合并时原样保留
 check("知识库入口再点：索引回会话、舞台页标签不动（补丁不含这些键）", tvClose.vaultIdxOpen === false && tvClose.vaultOpen === undefined && tvClose.vaultPages === undefined && tvClose.activeVaultPage === undefined && tvClose.stageTab === undefined);
-const tsOpen = comps.toggleSchedEntry({ vaultIdxOpen: true, schedIdxOpen: false, schedOpen: false, stageTab: "vault" });
-check("日程入口开：索引 + 舞台日程标签一起开且关掉知识库索引", tsOpen.schedIdxOpen === true && tsOpen.schedOpen === true && tsOpen.stageTab === "schedule" && tsOpen.vaultIdxOpen === false);
-const tsClose = comps.toggleSchedEntry({ schedIdxOpen: true, schedOpen: true, stageTab: "schedule", files: [{ path: "C:/x/a.js" }] });
-check("日程入口再点：索引回会话 + 日程标签关掉（激活位顺延到文件）", tsClose.schedIdxOpen === false && tsClose.schedOpen === false && tsClose.stageTab === "file");
 // 7.1c) 知识库页标签纯逻辑：多开、激活、单关、关光收摊、← → 访问序剪枝
 const vp1 = comps.openVaultPageTab({ vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 } }, "D:/v/a.md");
 const vp2 = comps.openVaultPageTab(vp1, "D:/v/b.md");
@@ -639,16 +635,8 @@ comps.openVaultPageAndDock("D:/v/p.md");
 check("openVaultPageAndDock 落 kitUi 知识库页签", comps.getKitUi().activeVaultPage === "D:/v/p.md" && comps.getKitUi().vaultOpen === true);
 comps.setKitUi({ files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 }, stageTab: null });
 
-// 7.2.4d) 侧栏待办索引：勾选/标题点击开舞台日程标签
-comps.setKitUi({ schedIdxOpen: true });
-callLog = [];
-out = comps.ScheduleIndexView({ wide: true });
-const schedIdxRoot = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-sidehost");
-check("ScheduleIndexView 宽态渲染侧栏待办宿主", !!out && typeof out === "object" && !!schedIdxRoot);
-callLog = [];
-out = comps.ScheduleIndexView({ wide: false });
-check("ScheduleIndexView 收起态不渲染", out === null);
-comps.setKitUi({ schedIdxOpen: false });
+// 侧栏待办索引 2026-09-11 退役（日程只剩右栏 dock 签）：ScheduleIndexView 与
+// toggleSchedEntry 已随之删除，这里不再有渲染用例
 
 // 6.6) 知识库纯函数：frontmatter 拆分 / 解析优先级 / 反链
 //（wikilink/数学变换已并入 RTE vendor，往返断言在 tests/test-vault-rte.mjs）
@@ -1103,6 +1091,24 @@ check(
 // CM6 baseTheme 自带 .cm-focused 的 1px dotted #212121 轮廓（点击进编辑器就冒虚线框）：
 // 明写清掉，防日后「顺手」把它删了又冒出来
 check("CM 焦点虚线框已清掉（.cm-focused outline:none）", src.includes(".dshk-cm-host .cm-editor.cm-focused{outline:none}"));
+
+// 日程左侧半边退役（2026-09-11 用户定稿：日程只剩右栏 dock 签，入口归右栏开始页
+// 与待办卡）——侧栏待办索引、日程快捷键及其设置项都不得再出现；右栏开合快捷键
+// （Ctrl+Alt+B，可配置）取而代之
+check(
+  "日程侧栏索引与专属快捷键已退役（schedIdxOpen/schedShortcut 全链移除）",
+  !src.includes("schedIdxOpen") && !src.includes("schedShortcut") && !src.includes("cfgSchedShortcut") && !src.includes("ScheduleIndexView"),
+);
+check("右栏收起/展开快捷键已接入（默认 Ctrl+Alt+B，走 sidebarRight.toggleExpanded）", src.includes('rightbarShortcut: "Ctrl+Alt+B"') && src.includes("sr.toggleExpanded()"));
+// 文件树「上传文件到当前目录」退役（2026-09-11 用户定稿）：按钮/隐藏 input/上传
+// 逻辑/i18n 键整链移除；vault 附件上传仍走 /dsh-kit/upload（端点保留）
+check(
+  "文件树上传按钮与逻辑已整链移除（vault 附件上传不受影响）",
+  !src.includes("UploadIcon") && !src.includes("treeUpload") && !src.includes("uploadDone") && !src.includes("uploadFail"),
+);
+// SCM 面板分支按钮曾被 .dshk-btn 的 26px 方钮定宽压扁（svg/分支名 0 宽只剩 ▾，
+// 用户截图「源代码管理图标没了」）——分支按钮必须显式 width:auto 反制
+check("分支按钮不被 .dshk-btn 定宽压扁（width:auto 修正恒在）", src.includes(".dshk-branchbtn{display:inline-flex;flex:none;width:auto"));
 
 // React 桩记录到的组件类型必须包含本插件自定义组件名（防 ReferenceError 被忽略后整段缺失）
 const types = new Set(callLog.flatMap(([, t]) => (typeof t === "string" ? [t] : [])));

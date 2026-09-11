@@ -5,8 +5,9 @@
 //   0.1.2 宿主回退）：
 //   入口：conversation.input.left（composer 工具行，文件树/源代码管理/知识库/
 //     终端四个小图标钮，工作区级工具跟 session 走）。知识库钮是开合切换：开 =
-//     侧栏索引视图，再点 = 侧栏回会话列表；日程没有 composer 钮（入口归快捷键
-//     与待办卡，开=侧栏待办+右栏日程签）。右栏 dock 签本身没有按钮：文件/知识库
+//     侧栏索引视图，再点 = 侧栏回会话列表；日程没有 composer 钮（日程只有一个
+//     家：右栏 dock 签，入口归右栏开始页条目与待办卡，2026-09-11 用户定稿，
+//     侧栏待办索引与专属快捷键一并退役）。右栏 dock 签本身没有按钮：文件/知识库
 //     是被动签（索引/对话链接点开即开），任务/日程/浏览器走右栏开始页清单与
 //     自动跟随。开合状态放模块级 store（kitUi + useSyncExternalStore），跨槽共享。
 //   右栏：sidebarRightTabs 注册五类 dock 签，pane 正文经 slots.inject
@@ -22,7 +23,7 @@
 //   功能签（舞台与右栏 pane 共用同一套 kitUi 状态）：文件（可编辑，被动打开——
 //     文件树/源代码管理/对话链接点开即开；2026-09-10 用户定稿只占一个共用标签，
 //     点新的就换内容，不然标签太乱）、后台任务、日程（周网格+统计）、知识库
-//     （逐页一个标签，可多开）、浏览器；索引类视图（知识库目录树/日程待办）住
+//     （逐页一个标签，可多开）、浏览器；索引类视图（知识库目录树）住
 //     侧栏 sidebar.workspaces 单槽，点条目开对应签。
 //   文件树：打开时临时注册进单槽 sidebar.workspaces——把侧边栏浏览区整体换成
 //     文件树，关闭时 dispose 注销、原生工作区列表自动回归。根目录 = 当前会话工作
@@ -86,7 +87,7 @@ window.__ModuleLoader__.load({
     // 加标签，同路径复用一个（重开刷新 diff/未跟踪状态）。文件非激活仍挂载
     // （display:none）保住滚动与未落盘草稿，超「文件标签数上限」自动关最久没看的
     // 那张；vaultHist 是知识库 ← → 的访问序（与标签存在性解耦）。
-    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, schedIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 }, stageTab: null };
+    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 }, stageTab: null };
     const kitUiListeners = new Set();
     function setKitUi(patch) {
       kitUi = { ...kitUi, ...patch };
@@ -302,9 +303,6 @@ window.__ModuleLoader__.load({
       }
     }
     /** 关掉右栏的某类 dock 签（官方 close API：按 kind 在 mounted surface 的
-     *  签表里找到 id 再关）。服务未就绪或签不在时静默——调用点都在「签该
-     *  消失」的语义位（最后一页文档签关掉 / 浏览器没了） */
-    /** 关掉右栏的某类 dock 签（官方 close API：按 kind 在 mounted surface 的
      *  layout 签表里找到 id 再关）。服务未就绪或签不在时静默——调用点都在
      *  「签该消失」的语义位（最后一页文档签关掉 / 浏览器没了） */
     function closeRightbarTab(feature) {
@@ -344,19 +342,19 @@ window.__ModuleLoader__.load({
       if (rightbarStore.active) openRightbarTab("vault");
     }
 
-    // ── 侧栏索引视图单槽与入口按钮（文件树/源代码管理/知识库/日程，四个入口
-    // 按钮 + 四个快捷键 + 舞台「+」菜单共用，用户定稿 2026-09-10）──
-    // 侧栏只有一格（会话 ↔ 文件树 ↔ 源代码管理 ↔ 知识库目录 ↔ 日程待办），
-    // 四个按钮的选中态直接取各自的开合位（用户定稿：选中态与侧栏显示相关、与
-    // 舞台标签无关）——所以四者必须互斥：否则同一个侧栏位上会有两个按钮一起亮，
+    // ── 侧栏索引视图单槽与入口按钮（文件树/源代码管理/知识库，三个入口按钮
+    // + 快捷键 + 舞台「+」菜单共用；日程待办索引 2026-09-11 退役——日程只剩
+    // 右栏 dock 签一个家，入口归右栏开始页条目与待办卡，用户定稿）──
+    // 侧栏只有一格（会话 ↔ 文件树 ↔ 源代码管理 ↔ 知识库目录），三个按钮的
+    // 选中态直接取各自的开合位（用户定稿：选中态与侧栏显示相关、与舞台标签
+    // 无关）——所以三者必须互斥：否则同一个侧栏位上会有两个按钮一起亮，
     // 而视图按优先级只显示其中一个。
-    /** 单槽互斥补丁：view = 'tree' | 'scm' | 'vault' | 'sched' | null */
+    /** 单槽互斥补丁：view = 'tree' | 'scm' | 'vault' | null */
     function sidebarViewPatch(view) {
       return {
         treeOpen: view === "tree",
         gitOpen: view === "scm",
         vaultIdxOpen: view === "vault",
-        schedIdxOpen: view === "sched",
       };
     }
     // 语义：关 → 开；开 → 只把侧栏索引收回会话列表（用户定稿 2026-09-10：舞台
@@ -364,31 +362,15 @@ window.__ModuleLoader__.load({
     // 「开」= 侧栏索引视图 + 对应舞台标签，一次点击两边到位；收起态顺带展开
     // 侧栏（视图渲染进铁轨等于不可见）。
     // 右栏路径（用户定稿 2026-09-11）：知识库钮**只切左侧目录**，点具体页才开
-    // 右栏 tab；日程开 = 侧栏待办 + 右栏日程签两边到位，再点只收侧栏待办
-    // （右栏签的关闭归官方 ✕）。
+    // 右栏 tab。
     function openVaultEntry(ui) {
       expandSidebarNow();
       if (rightbarStore.active) return sidebarViewPatch("vault");
       return { ...sidebarViewPatch("vault"), ...openStageTab(ui, "vault") };
     }
-    function openSchedEntry(ui) {
-      expandSidebarNow();
-      if (rightbarStore.active) {
-        openRightbarTab("schedule");
-        return sidebarViewPatch("sched");
-      }
-      return { ...sidebarViewPatch("sched"), ...openStageTab(ui, "schedule") };
-    }
     function toggleVaultEntry(ui) {
       if (ui.vaultIdxOpen === true) return sidebarViewPatch(null);
       return openVaultEntry(ui);
-    }
-    function toggleSchedEntry(ui) {
-      if (ui.schedIdxOpen === true) {
-        if (rightbarStore.active) return sidebarViewPatch(null);
-        return { ...closeStageTab(ui, "schedule"), ...sidebarViewPatch(null) };
-      }
-      return openSchedEntry(ui);
     }
 
     // ─────────── 舞台宽度模型（用户定稿 2026-09-10）───────────
@@ -547,7 +529,7 @@ window.__ModuleLoader__.load({
       fileTreeShortcut: "Ctrl+,",
       scShortcut: "Ctrl+Alt+.",
       vaultShortcut: "Ctrl+Alt+K",
-      schedShortcut: "Ctrl+Alt+S",
+      rightbarShortcut: "Ctrl+Alt+B",
       sidebarShortcut: "Ctrl+B",
       sidebarShortcutEnabled: true,
     };
@@ -642,10 +624,10 @@ window.__ModuleLoader__.load({
           typeof v.vaultShortcut === "string" && parseCombo(v.vaultShortcut)
             ? v.vaultShortcut
             : CFG_DEFAULTS.vaultShortcut,
-        schedShortcut:
-          typeof v.schedShortcut === "string" && parseCombo(v.schedShortcut)
-            ? v.schedShortcut
-            : CFG_DEFAULTS.schedShortcut,
+        rightbarShortcut:
+          typeof v.rightbarShortcut === "string" && parseCombo(v.rightbarShortcut)
+            ? v.rightbarShortcut
+            : CFG_DEFAULTS.rightbarShortcut,
         sidebarShortcut:
           typeof v.sidebarShortcut === "string" && parseCombo(v.sidebarShortcut)
             ? v.sidebarShortcut
@@ -902,9 +884,6 @@ window.__ModuleLoader__.load({
       treeTruncated: "条目过多，列表已截断",
       treeNewAny: "新建文件/目录",
       treeNewPh: "名称，\\ 开头新建文件夹，可含 / 多级，回车创建",
-      treeUpload: "上传文件到当前目录",
-      uploadDone: "已上传 {n} 个文件",
-      uploadFail: "上传失败",
       treeRename: "重命名",
       treeDelete: "删除",
       treeCopyAbs: "复制绝对路径",
@@ -1319,7 +1298,7 @@ window.__ModuleLoader__.load({
       cfgSourceControlEnabledHint: "关闭后隐藏入口按钮与快捷键",
       cfgScShortcut: "源代码管理快捷键",
       cfgVaultShortcut: "知识库快捷键",
-      cfgSchedShortcut: "日程快捷键",
+      cfgRightbarShortcut: "右栏收起/展开快捷键",
       cfgCapturing: "按下组合键…（Esc 取消）",
       cfgCapture: "修改",
       overridden: "已覆盖",
@@ -1355,9 +1334,7 @@ window.__ModuleLoader__.load({
       treeTruncated: "Too many entries, list truncated",
       treeNewAny: "New file/folder",
       treeNewPh: "Name, \\ prefix creates a folder, / for nesting, Enter to create",
-      treeUpload: "Upload files to this folder",
-      uploadDone: "Uploaded {n} file(s)",
-      uploadFail: "Upload failed",
+      treeRename: "Rename",
       treeRename: "Rename",
       treeDelete: "Delete",
       treeCopyAbs: "Copy absolute path",
@@ -1574,7 +1551,7 @@ window.__ModuleLoader__.load({
       cfgSourceControlEnabledHint: "Hides the entry button and its shortcut",
       cfgScShortcut: "Source control shortcut",
       cfgVaultShortcut: "Knowledge base shortcut",
-      cfgSchedShortcut: "Schedule shortcut",
+      cfgRightbarShortcut: "Rightbar toggle shortcut",
       cfgCapturing: "Press a combo… (Esc to cancel)",
       cfgCapture: "Change",
       overridden: "Overridden",
@@ -2517,7 +2494,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 /* 源代码管理：分支/推送/图谱（头部工具、分支浮层、提交图谱） */
 .dshk-headbtn{flex:none}
 .dshk-headbtn-on{color:var(--dsw-alias-brand-primary)}
-.dshk-branchbtn{display:inline-flex;align-items:center;gap:4px;max-width:150px;padding:2px 7px;border-color:var(--dsw-alias-border-l2)}
+/* width:auto 覆盖 .dshk-btn 的 26px 方钮定宽——否则按钮恒 26 宽，图标与分支名
+   被 flex 压成 0 宽，只剩 ▾ 可见（「源代码管理图标没了」的根因） */
+.dshk-branchbtn{display:inline-flex;flex:none;width:auto;align-items:center;gap:4px;max-width:150px;padding:2px 7px;border-color:var(--dsw-alias-border-l2)}
 .dshk-branchbtn .dshk-branch-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshk-caret{font-size:9px;color:var(--dsw-alias-label-tertiary)}
 .dshk-pushhint{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:var(--dsw-alias-label-secondary)}
@@ -3623,7 +3602,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       );
     }
 
-    /** 分支图标（进入更改视图的入口钮）：git branch 风格两节点一弧线 */
     /** 分支图标（进入更改视图的入口钮）：git branch 风格两节点一弧线——官方
      *  IconBranchOutline16 用户过目后觉得不像分支，2026-09-11 还原自绘 */
     function BranchIcon(props) {
@@ -3768,29 +3746,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           children: [
             jsxRuntime.jsx("path", { d: "M3 2.6v10.8M6.6 2.6v10.8" }),
             jsxRuntime.jsx("rect", { x: 9.4, y: 2.6, width: 3.4, height: 10.8, rx: 0.9 }),
-          ],
-        },
-      );
-    }
-
-    /** 上传图标：向上箭头 + 底部托盘 */
-    function UploadIcon() {
-      return jsxRuntime.jsxs(
-        "svg",
-        {
-          width: 15,
-          height: 15,
-          viewBox: "0 0 16 16",
-          "aria-hidden": true,
-          fill: "none",
-          stroke: "currentColor",
-          strokeWidth: 1.2,
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          children: [
-            jsxRuntime.jsx("path", { d: "M8 10.5V2.5" }),
-            jsxRuntime.jsx("path", { d: "M4.8 5.7L8 2.5l3.2 3.2" }),
-            jsxRuntime.jsx("path", { d: "M2.5 10.5v3h11v-3" }),
           ],
         },
       );
@@ -4304,34 +4259,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         pruneExpandedFrom(entry.path);
         loadDir(parentOf(entry.path));
       };
-      // 上传：input[type=file] 唤起设备自己的选择器（手机上是手机相册/文件——
-      // 原生对话框只弹在运行它的机器上，手机够不到电脑端），选完 POST
-      // /dsh-kit/upload 写入当前目录，成功后 bump nonce 刷新树
-      const uploadInputRef = react.useRef(null);
-      const uploadFiles = async (fileList) => {
-        const files = [...(fileList ?? [])];
-        if (!cwd || files.length === 0) return;
-        const saved = [];
-        const fails = [];
-        for (const f of files) {
-          try {
-            const fd = new FormData();
-            fd.append("file", f, f.name);
-            const r = await fetch(`/dsh-kit/upload?dir=${encodeURIComponent(cwd)}`, { method: "POST", body: fd });
-            const j = await r.json().catch(() => ({}));
-            if (r.ok) saved.push(...(j.saved ?? []));
-            else fails.push(`${f.name}：${j.error ?? `HTTP ${r.status}`}`);
-          } catch (error) {
-            fails.push(`${f.name}：${error?.message ?? error}`);
-          }
-        }
-        if (saved.length > 0) {
-          flashToast(t("uploadDone").replace("{n}", String(saved.length)));
-          setNonce((n) => n + 1);
-        }
-        if (fails.length > 0) flashToast(`${t("uploadFail")}：${fails[0]}`);
-      };
-
       const treeActions = {
         onCreate: startCreate,
         onDelete: deleteEntry,
@@ -4374,33 +4301,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     children: jsxRuntime.jsx(FilePlusIcon, {}),
                   })
                 : null,
-              cwd
-                ? jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-btn",
-                    title: t("treeUpload"),
-                    onClick: () => uploadInputRef.current?.click(),
-                    children: jsxRuntime.jsx(UploadIcon, {}),
-                  })
-                : null,
               jsxRuntime.jsx("button", {
                 type: "button",
                 className: "dshk-btn",
                 title: t("treeRefresh"),
                 onClick: () => setNonce((n) => n + 1),
                 children: "⟳",
-              }),
-              // 隐藏的文件选择器：按钮只负责 click()，选择结果走 uploadFiles
-              jsxRuntime.jsx("input", {
-                ref: uploadInputRef,
-                type: "file",
-                multiple: true,
-                style: { display: "none" },
-                onChange: (e) => {
-                  const files = e.target.files;
-                  uploadFiles(files);
-                  e.target.value = "";
-                },
               }),
             ],
           }),
@@ -7098,12 +7004,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return { data, stats, nowTick, fetchData, fetchStats, mutate };
     }
 
-    /** 侧栏待办索引（sidebar.workspaces 占用，日程拆两半的待办半）：勾选/计时
-     *  就地完成，点标题开舞台日程标签并出编辑弹窗（点待办开舞台对应标签）。
-     *  wide=false（侧栏收起）不渲染，同知识库目录占用 */
-    /** 待办卡（侧栏待办索引与日程 pane 左列共用）：勾选完成、标题点击编辑
-     *  （顺带把日程签带到眼前）、▶ 起表。数据由调用方给（useScheduleData 的
-     *  data/mutate），编辑弹窗卡内自理 */
+    /** 待办卡（日程 pane 左列；侧栏待办索引半边 2026-09-11 随索引视图退役）：
+     *  勾选完成、标题点击编辑（顺带把日程签带到眼前）、▶ 起表。数据由调用方给
+     *  （useScheduleData 的 data/mutate），编辑弹窗卡内自理 */
     function ScheduleTasksCard({ data, mutate }) {
       const [modal, setModal] = react.useState(null);
       const tasks = react.useMemo(
@@ -7159,17 +7062,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             })
           : null,
       ] });
-    }
-
-    function ScheduleIndexView(owner) {
-      const side = owner ?? {};
-      const { data, mutate } = useScheduleData();
-      if (side.wide === false) return null;
-      return jsxRuntime.jsx("div", { className: "dshk-sidehost", children:
-        jsxRuntime.jsx("div", { className: "dshk-sched-sidewrap", children:
-          jsxRuntime.jsx(ScheduleTasksCard, { data, mutate }),
-        }),
-      });
     }
 
     function ScheduleView({ active }) {
@@ -10131,12 +10023,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 「+」菜单：可开标签清单（cfg 门控）
       const [menuOpen, setMenuOpen] = react.useState(false);
       const openable = stageOpenable(cfg, liveJobs);
-      // 「+」菜单：知识库/日程与输入行入口同语义（侧栏索引 + 舞台标签一起开），
-      // 其余标签直开舞台
+      // 「+」菜单：知识库与输入行入口同语义（侧栏索引 + 舞台标签一起开），
+      // 其余标签（含日程，2026-09-11 起无侧栏半边）直开舞台/右栏 dock
       const openTab = (id) => {
         if (id === "vault") setKitUi(openVaultEntry(kitUi));
-        else if (id === "schedule") setKitUi(openSchedEntry(kitUi));
-        else setKitUi(openStageTab(kitUi, id));
+        else setKitUi(openFeatureDock(kitUi, id));
       };
       const switchTab = (id) => setKitUi({ stageTab: id });
       const closeTab = (id) => setKitUi(closeStageTab(kitUi, id));
@@ -10305,7 +10196,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     /** 侧栏索引宿主（知识库目录/日程待办占 sidebar.workspaces 单槽）：
      *  wide=false（侧栏收起）不渲染——视图挤进铁轨等于不可见；宿主 div 交给
-     *  portal 投递方（VaultRootView / ScheduleIndexView）填内容 */
+     *  portal 投递方（VaultRootView）填内容 */
     function SidebarVaultIndex(owner) {
       const side = owner ?? {};
       if (side.wide === false) return null;
@@ -10561,8 +10452,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               MonitorLine,
             )],
           // 输入框入口排序（左→右）：文件树、源代码管理、知识库、终端
-          // （日程钮 2026-09-11 撤——日程走右栏 dock 签 + 左栏待办索引，入口在
-          // 快捷键与待办卡；知识库/日程 2026-09-10 从侧栏底部钮移到这里，用户定稿；
+          // （日程钮 2026-09-11 撤——日程只剩右栏 dock 签，入口归右栏开始页
+          // 条目与待办卡，侧栏待办索引同日退役；知识库 2026-09-10 从侧栏底部钮
+          // 移到这里，用户定稿；
           // 手机访问与技能页同类，走 settings.section 页面入口（order：技能 40 → 手机 45）
           ["filetree", cfg.fileTreeEnabled, () =>
             slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-filetree", order: 10 }, FileTreeEntry)],
@@ -10621,10 +10513,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.sourceControlEnabled, cfg.jobsEnabled, cfg.browserEnabled, cfg.vaultEnabled]);
 
       // 侧边栏浏览区占用：单槽轮换（工作台定稿）——源代码管理 ↔ 文件树 ↔ 知识库
-      // 目录 ↔ 日程待办，全关回官方会话列表。动态注册若在运行时抛错，捕获并回滚
-      // 开合状态，避免入口被错误边界退役。
+      // 目录，全关回官方会话列表（日程待办索引 2026-09-11 退役，见入口按钮注释）。
+      // 动态注册若在运行时抛错，捕获并回滚开合状态，避免入口被错误边界退役。
       react.useEffect(() => {
-        if (!slotsCtx || (!ui.treeOpen && !ui.gitOpen && !ui.vaultIdxOpen && !ui.schedIdxOpen)) return undefined;
+        if (!slotsCtx || (!ui.treeOpen && !ui.gitOpen && !ui.vaultIdxOpen)) return undefined;
         let dispose;
         try {
           // 单槽遮蔽原生需要更低 priority（数字越小越先渲染，原生在 priority 0）。
@@ -10639,12 +10531,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             if (ui.treeOpen) {
               return jsxRuntime.jsx(FileTreePanel, { cwd, onOpenFile: (p) => openFileAndDock(p, "tree", false), ...owner });
             }
-            if (ui.vaultIdxOpen) return jsxRuntime.jsx(SidebarVaultIndex, { ...owner });
-            return jsxRuntime.jsx(ScheduleIndexView, { ...owner });
+            return jsxRuntime.jsx(SidebarVaultIndex, { ...owner });
           });
         } catch (error) {
           console.error("[dsh-kit] 注册 sidebar.workspaces 面板失败：", error);
-          setKitUi({ treeOpen: false, gitOpen: false, vaultIdxOpen: false, schedIdxOpen: false, files: [], activeFile: null });
+          setKitUi({ treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null });
           return undefined;
         }
         return () => {
@@ -10654,7 +10545,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             // 忽略注销异常
           }
         };
-      }, [ui.treeOpen, ui.gitOpen, ui.vaultIdxOpen, ui.schedIdxOpen, cwd]);
+      }, [ui.treeOpen, ui.gitOpen, ui.vaultIdxOpen, cwd]);
 
       // 舞台几何：侧栏列宽实测（ResizeObserver 常驻）写 --dshk-stage-left，舞台
       // left 锚定侧栏右缘、计时弹窗贴边共用。官方侧栏收起是 grid 轨道动画，RO
@@ -10712,7 +10603,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const treeCombo = parseCombo(cfg.fileTreeShortcut);
         const scCombo = parseCombo(cfg.scShortcut);
         const vaultCombo = parseCombo(cfg.vaultShortcut);
-        const schedCombo = parseCombo(cfg.schedShortcut);
+        const rbCombo = parseCombo(cfg.rightbarShortcut);
         const sidebarCombo = parseCombo(cfg.sidebarShortcut);
         const onKey = (e) => {
           if (shortcutCapture !== null) return;
@@ -10747,10 +10638,20 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             setKitUi(toggleVaultEntry(kitUi));
             return;
           }
-          if (schedCombo && comboMatches(e, schedCombo)) {
+          if (rbCombo && comboMatches(e, rbCombo)) {
             e.preventDefault();
             e.stopPropagation();
-            setKitUi(toggleSchedEntry(kitUi));
+            // 右栏收起/展开走官方 sidebarRight 服务（无参 toggle）；服务未就绪
+            // 或宿主无此能力（0.1.2）时静默。日程快捷键 2026-09-11 撤（用户定稿：
+            // 日程无左侧栏半边，不需要全局键），这个位让给右栏开合
+            const sr = rightbarSr;
+            if (sr && typeof sr.toggleExpanded === "function") {
+              try {
+                sr.toggleExpanded();
+              } catch {
+                /* 右栏异常不拖垮其它快捷键 */
+              }
+            }
             return;
           }
           if (sidebarCombo && cfg.sidebarShortcutEnabled !== false && comboMatches(e, sidebarCombo)) {
@@ -10774,7 +10675,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 const tab = kitUi.stageTab ?? ((kitUi.files?.length ?? 0) > 0 ? "file" : kitUi.jobsOpen ? "jobs" : kitUi.schedOpen ? "schedule" : kitUi.vaultOpen ? "vault" : "browser");
                 setKitUi(closeStageTab(kitUi, tab));
               }
-            } else if (kitUi.gitOpen || kitUi.treeOpen || kitUi.vaultIdxOpen || kitUi.schedIdxOpen) {
+            } else if (kitUi.gitOpen || kitUi.treeOpen || kitUi.vaultIdxOpen) {
               // 侧栏视图单槽：关一格即可（四者互斥）；舞台标签不连带关
               setKitUi(sidebarViewPatch(null));
             } else if (kitUi.termDockOpen) setKitUi({ termDockOpen: false }); // 只隐藏，不杀会话
@@ -10784,7 +10685,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return () => window.removeEventListener("keydown", onKey, true);
         // cwd 必须在依赖里：否则闭包缓存首帧（会话未水化时为 null）的工作区，
         // 之后按快捷键开终端永远绑到 null
-      }, [cwd, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.terminalShortcut, cfg.fileTreeShortcut, cfg.scShortcut, cfg.vaultShortcut, cfg.schedShortcut, cfg.sidebarShortcut, cfg.sidebarShortcutEnabled]);
+      }, [cwd, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.terminalShortcut, cfg.fileTreeShortcut, cfg.scShortcut, cfg.vaultShortcut, cfg.rightbarShortcut, cfg.sidebarShortcut, cfg.sidebarShortcutEnabled]);
 
       // ShellBrowserEvents：壳层常驻浏览器事件源（与面板 WS 并存，不订阅帧流）。
       // 面板标签会被收掉（0 页自动收/人为关闭），「agent 开页切到浏览器」不能依赖
@@ -11262,12 +11163,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { key: "fileTreeShortcut", kind: "combo" },
       { key: "scShortcut", kind: "combo" },
       { key: "vaultShortcut", kind: "combo" },
-      { key: "schedShortcut", kind: "combo" },
+      { key: "rightbarShortcut", kind: "combo" },
       { key: "sidebarShortcut", kind: "combo" },
     ];
     // 分组渲染：开关行 + 该功能启用时才显示的子配置（所见即所得，保存才落盘生效）；
-    // switchKey 为 null 的组没有开关行，只列字段（日程无启用开关，只有快捷键）。
-    // 组顺序：文件树 → 源代码管理 → 终端 → 知识库/日程 → 技能页 → 网页搜索 →
+    // switchKey 为 null 的组没有开关行，只列字段（右栏开合无启用开关，只有快捷键；
+    // 日程快捷键 2026-09-11 撤）。
+    // 组顺序：文件树 → 源代码管理 → 终端 → 知识库/右栏开合 → 技能页 → 网页搜索 →
     // 手机访问（用户定稿放最下）。远程域名不在此卡——编辑入口在「手机访问」页内。
     const CFG_GROUPS = [
       { switchKey: "sidebarShortcutEnabled", fields: ["sidebarShortcut"] },
@@ -11278,7 +11180,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { switchKey: "browserEnabled", fields: [] },
       { switchKey: "monitorEnabled", fields: ["monitorWaitMs", "monitorMaxAuto", "monitorRepeatThreshold"] },
       { switchKey: "vaultEnabled", fields: ["vaultRoot", "vaultShortcut"] },
-      { switchKey: null, fields: ["schedShortcut"] },
+      { switchKey: null, fields: ["rightbarShortcut"] },
       { switchKey: "terminalEnabled", fields: ["terminalShortcut"] },
       { switchKey: "skillsPageEnabled", fields: [] },
       { switchKey: "searchEnabled", fields: ["searchMaxResults"] },
