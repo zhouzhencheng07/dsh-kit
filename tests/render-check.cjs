@@ -624,6 +624,9 @@ let vaultFetchPrev = null;
   stateStore.set(2, ""); // space = 全部库
   stateStore.set(3, { "D:/v": [{ name: "wiki", path: "D:/v/wiki", dir: true }], "D:/v/wiki": [{ name: "a.md", path: "D:/v/wiki/a.md", dir: false }] }); // treeDirs
   stateStore.set(4, { "D:/v": true, "D:/v/wiki": true }); // expanded
+  // 行 ⋯ 菜单（state#8，见 VaultRootView 的 useState 次序）：预置成「某页的行菜单已打开」，
+  // 校验树上那套 actions 接线（重命名 + 删除；删除是 2026-09-11 从页条挪过来的）
+  stateStore.set(8, { entry: { dir: false, name: "a", path: "D:/v/wiki/a.md" }, rect: { left: 10, top: 100, bottom: 120, right: 30, width: 20, height: 20 } });
   const fetched = vaultRefreshFetched;
   const prevFetch = global.fetch;
   vaultFetchPrev = prevFetch;
@@ -657,6 +660,24 @@ let vaultFetchPrev = null;
   check(
     "知识库树文件行 hover 出 @ 与 ⋯",
     actBtns.length === 2 && ["@ 到对话", "Insert @ mention"].includes(actBtns[0].props.title) && actBtns[1].props.children === "⋯",
+  );
+  // 行 ⋯ 的 actions：重命名 + 删除（菜单项由 TreeRowMenu 按 actions 出，见下一段直渲）
+  const rowMenuEl = callLog.find((c) => c[1] === comps.TreeRowMenu);
+  const rowMenuActs = rowMenuEl ? rowMenuEl[2].actions : null;
+  check(
+    "知识库行 ⋯ 接线：重命名 + 删除都挂上（删除不再只在页条）",
+    !!rowMenuActs && typeof rowMenuActs.onRename === "function" && typeof rowMenuActs.onDelete === "function",
+  );
+  // ⋯ 触发钮是开关：再点一次关掉自己。落在触发钮上的那次点击由按钮自己判（菜单的
+  // 点外关闭会忽略它，否则先被关掉、再被 onClick 判成重新打开＝点了没反应）
+  const anchorEl = { getBoundingClientRect: () => ({ left: 10, top: 100, bottom: 120, right: 30, width: 20, height: 20 }) };
+  const clickEv = { stopPropagation: () => {}, currentTarget: anchorEl };
+  actBtns[1].props.onClick(clickEv);
+  const menuOpened = stateStore.get(8);
+  actBtns[1].props.onClick(clickEv);
+  check(
+    "行 ⋯ 再点一次关掉（触发钮当开关，锚点认的是同一颗按钮）",
+    !!menuOpened && menuOpened.anchor === anchorEl && menuOpened.entry.path === "D:/v/wiki/a.md" && stateStore.get(8) === null,
   );
   if (refreshBtn) refreshBtn.props.onClick();
   // fetch 桩同步记账：loadIndex 的请求在 onClick 返回前就已发出；目录树重拉排在
@@ -697,6 +718,30 @@ let vaultFetchPrev = null;
   stateSeq = 0;
   stateStore.clear();
 }
+// 6.9a2b) TreeRowMenu 直渲（文件树与知识库共用）：菜单项按 actions 有无决定——
+// 两个宿主都传的只有 onRename/onDelete，知识库行 ⋯ 因此是「重命名 + 删除」。
+// 同时守一条结构事实：「点菜单外关闭」只能有 TreeRowMenu 里那一份实现（宿主各写
+// 一份必漏——知识库就是这么漏成「菜单点不开也点不掉」的）
+{
+  const rect = { left: 10, top: 100, bottom: 120, right: 30, width: 20, height: 20 };
+  const entry = { dir: false, name: "a.md", path: "D:/v/wiki/a.md" };
+  callLog = [];
+  comps.TreeRowMenu({ entry, rect, actions: { onRename: () => {}, onDelete: () => {} }, onClose: () => {} });
+  const menu = callLog.find((c) => c[2] && c[2].className === "dshk-menu");
+  const labels = menu ? menu[2].children.map((b) => b.props.children) : [];
+  check(
+    "行 ⋯ 菜单：重命名 + 删除（两枚都在，顺序稳定）",
+    labels.length === 2 && ["重命名", "Rename"].includes(labels[0]) && ["删除", "Delete"].includes(labels[1]),
+  );
+  callLog = [];
+  comps.TreeRowMenu({ entry, rect, actions: { onRename: () => {} }, onClose: () => {} });
+  const onlyRename = callLog.find((c) => c[2] && c[2].className === "dshk-menu");
+  check("行 ⋯ 菜单：没传的 actions 不出项（不会点出空菜单项）", !!onlyRename && onlyRename[2].children.length === 1);
+  check(
+    "「点菜单外关闭」只有 TreeRowMenu 一份实现",
+    (src.match(/closest\("\.dshk-menu"\)/g) ?? []).length === 1,
+  );
+}
 // 6.9a3) 页文件改名后页签路径搬家（否则 pane 还指着旧路径）
 {
   const patched = comps.renameVaultPageTab({ vaultPages: ["D:/v/a.md", "D:/v/b.md"], activeVaultPage: "D:/v/a.md", vaultHist: { stack: ["D:/v/a.md"], idx: 0 } }, "D:/v/a.md", "D:/v/c.md");
@@ -713,22 +758,25 @@ let vaultFetchPrev = null;
   callLog = [];
   let paneErr = null;
   try {
-    comps.VaultPagePane({ path: "D:/v/wiki/a.md", active: true, root: "D:/v", indexPages: [], onOpenPage: () => {}, onMissingLink: () => {}, onSaved: () => {}, onDeleted: () => {}, toast: () => {} });
+    comps.VaultPagePane({ path: "D:/v/wiki/a.md", active: true, root: "D:/v", indexPages: [], onOpenPage: () => {}, onMissingLink: () => {}, onSaved: () => {}, toast: () => {} });
   } catch (e) {
     paneErr = e;
   }
   const editbar = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-vault-editbar");
   // @ 已按用户定稿挪到左侧树的文件行上，页条里不该再有它（这是「删掉右侧 @」的回归哨兵）
   const citeBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["引用到对话", "Cite to chat"].includes(c[2].title));
+  // 删除同理挪到树上行的 ⋯ 菜单（用户定稿）：页条里不得再有「删除」按钮/文案
+  const delBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["删除", "Delete"].includes(c[2].children));
   const rte = callLog.find((c) => c[1] === comps.RteEditor);
   check("VaultPagePane 渲染无异常（页条 + RTE 就位，页条不再带 @）", paneErr === null && !!editbar && !citeBtn && !!rte);
+  check("页条不再带删除按钮（删除已挪到左侧树的行 ⋯）", !delBtn);
   if (paneErr) console.log("  VaultPagePane error:", paneErr.message);
   stateSeq = 0;
   stateStore.clear();
   stateStore.set(0, { loading: false, body: "x", binary: false, gone: false });
   stateStore.set(2, { diskMtime: 123 });
   callLog = [];
-  comps.VaultPagePane({ path: "D:/v/wiki/a.md", active: false, root: "D:/v", indexPages: [], onOpenPage: () => {}, onMissingLink: () => {}, onSaved: () => {}, onDeleted: () => {}, toast: () => {} });
+  comps.VaultPagePane({ path: "D:/v/wiki/a.md", active: false, root: "D:/v", indexPages: [], onOpenPage: () => {}, onMissingLink: () => {}, onSaved: () => {}, toast: () => {} });
   const conflictBar = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-vault-conflict");
   const paneRoot = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-vault-reader" && c[2].style);
   check("VaultPagePane 冲突态渲染冲突条（覆盖/读取）", !!conflictBar);
