@@ -469,7 +469,6 @@ export async function apply(ctx) {
         monitorMaxAuto: z.number().step(1).min(1).max(10).default(3),
         monitorRepeatThreshold: z.number().step(1).min(2).max(10).default(3),
         sidebarShortcut: z.string().default('Ctrl+B'),
-        sidebarShortcutEnabled: z.boolean().default(true),
         rightbarShortcut: z.string().default('Ctrl+Alt+B'),
         terminalShortcut: z.string().default('Ctrl+/'),
         fileTreeShortcut: z.string().default('Ctrl+,'),

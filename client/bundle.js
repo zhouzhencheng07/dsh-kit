@@ -533,7 +533,6 @@ window.__ModuleLoader__.load({
       vaultShortcut: "Ctrl+Alt+K",
       rightbarShortcut: "Ctrl+Alt+B",
       sidebarShortcut: "Ctrl+B",
-      sidebarShortcutEnabled: true,
     };
     /** 组合键规范化主键：单字符统一大写、空格记作 Space */
     function normComboKey(key) {
@@ -634,7 +633,6 @@ window.__ModuleLoader__.load({
           typeof v.sidebarShortcut === "string" && parseCombo(v.sidebarShortcut)
             ? v.sidebarShortcut
             : CFG_DEFAULTS.sidebarShortcut,
-        sidebarShortcutEnabled: v.sidebarShortcutEnabled !== false,
       };
     }
     // 模块级通道（apply 注入 / KitSurfaces 订阅 / 设置卡捕获互斥）
@@ -1013,34 +1011,34 @@ window.__ModuleLoader__.load({
       skDone: "完成",
       skDeleted: "已删除",
       cfgTitle: "套件（dsh-kit）",
-      cfgDesc: "工作台功能开关与快捷键、会话监视、知识库、手机访问等套件配置。",
+      cfgDesc: "功能开关、快捷键与套件配置。",
       cfgGroupSidebar: "侧边栏",
       cfgTerminalEnabled: "启用终端",
-      cfgTerminalEnabledHint: "关闭后隐藏入口按钮与快捷键",
+      cfgTerminalEnabledHint: "隐藏入口与快捷键",
       cfgFileTreeEnabled: "启用文件树",
-      cfgFileTreeEnabledHint: "关闭后隐藏入口按钮与快捷键",
+      cfgFileTreeEnabledHint: "隐藏入口与快捷键",
       cfgChatOpenFilePreview: "对话文件用插件预览打开",
-      cfgChatOpenFilePreviewHint: "对话中的产物/提及文件点击后用插件预览打开；关闭后交回系统默认程序",
+      cfgChatOpenFilePreviewHint: "关 = 交回系统默认程序",
       cfgSkillsPageEnabled: "启用技能页",
-      cfgSkillsPageEnabledHint: "关闭后设置里不显示「技能」页",
+      cfgSkillsPageEnabledHint: "关 = 不显示「技能」页",
       cfgSearchEnabled: "启用网页搜索",
-      cfgSearchEnabledHint: "关闭后走官方搜索渠道（重启生效）",
+      cfgSearchEnabledHint: "关 = 走官方搜索（重启生效）",
       cfgSearchMaxResults: "搜索结果条数",
-      cfgSearchMaxResultsHint: "1-8，默认 2；越多越耗上下文，保存即生效",
+      cfgSearchMaxResultsHint: "1-8，默认 2",
       cfgPhoneEnabled: "显示「手机访问」页",
-      cfgPhoneEnabledHint: "在设置中显示「手机访问」页",
+      cfgPhoneEnabledHint: "设置里的「手机访问」页入口",
       cfgJobsEnabled: "启用后台任务面板",
-      cfgJobsEnabledHint: "右栏「后台任务」签与开始页条目：查看并结束后台任务",
+      cfgJobsEnabledHint: "查看并结束后台任务",
       cfgBrowserEnabled: "启用内置浏览器",
-      cfgBrowserEnabledHint: "右栏「浏览器」签与开始页条目：实时画面查看并操作 agent 的浏览器（工具注册重启生效）",
+      cfgBrowserEnabledHint: "实时查看并操作 agent 的浏览器（重启生效）",
       cfgMonitorEnabled: "启用会话监视",
-      cfgMonitorEnabledHint: "回合因 429 限流等可重试错误结束后等待自动发「继续」；流式输出重复内容（死循环征兆）时停止回合并续跑。只监视当前打开的会话",
+      cfgMonitorEnabledHint: "回合失败自动续跑、死循环自动打断；只看当前会话",
       cfgMonitorWaitMs: "失败后等待(毫秒)",
-      cfgMonitorWaitMsHint: "回合以可重试错误结束后，等待这么久再自动发送「继续」（5000-600000）",
+      cfgMonitorWaitMsHint: "等多久自动发「继续」（5000-600000）",
       cfgMonitorMaxAuto: "自动继续上限(次)",
-      cfgMonitorMaxAutoHint: "连续自动续跑达到该次数后暂停，等你手动处理；出现一次正常完成的回合即重置（1-10）",
+      cfgMonitorMaxAutoHint: "连续续跑达到即暂停（1-10）",
       cfgMonitorRepeatThreshold: "重复判定(次)",
-      cfgMonitorRepeatThresholdHint: "流式文本尾部出现连续重复片段达到该次数即判定死循环，停止并续跑（2-10）",
+      cfgMonitorRepeatThresholdHint: "重复片段达此次数判死循环（2-10）",
       monitorContinueText: "继续",
       monitorLoopBreakText: "检测到你的输出在重复相同内容，可能陷入了死循环。请立即停止重复，简要说明当前状态，换一种方式继续完成任务。",
       monitorCancel: "取消",
@@ -1054,7 +1052,7 @@ window.__ModuleLoader__.load({
       monitorErrTRANSPORT: "网络传输错误",
       monitorErrEMPTY_RESPONSE: "模型返回空响应",
       cfgPreviewMaxTabs: "文件标签数上限",
-      cfgPreviewMaxTabsHint: "文件签超过该数时，打开新文件自动关掉最久没看的那个（1-20，即时生效）",
+      cfgPreviewMaxTabsHint: "超限自动关最久没看的（1-20）",
       browserUrlPh: "输入网址，回车打开",
       browserGo: "打开",
       browserBack: "后退",
@@ -1090,9 +1088,9 @@ window.__ModuleLoader__.load({
       cfgRemoteHint: "非本机访问：上游把设置镜像钉在本机浏览器，配置在手机/远程只读——请在电脑端查看与修改。",
       cfgPhoneRemoteDomain: "远程域名",
       cfgPhonePort: "网关端口",
-      cfgPhonePortHint: "手机网关监听端口，1-65535（默认 3090）；保存后网关自动按新端口重启。",
+      cfgPhonePortHint: "网关端口，1-65535；保存即重启网关",
       cfgPhoneKeepGatewayOn: "重启后保留开启",
-      cfgPhoneKeepGatewayOnHint: "重启后恢复上次的开启状态（保存后下次启动生效）",
+      cfgPhoneKeepGatewayOnHint: "重启后恢复上次开启状态",
       phoneTitle: "手机访问",
       phoneStatusOn: "网关运行中 · 端口 {port}",
       phoneStatusErr: "网关未运行：{error}",
@@ -1181,9 +1179,9 @@ window.__ModuleLoader__.load({
       schedSaved: "已保存",
       schedOpFail: "操作失败：{error}",
       cfgVaultEnabled: "启用知识库",
-      cfgVaultEnabledHint: "知识库入口（输入行工具条）：侧栏目录树 + 右栏页编辑器",
+      cfgVaultEnabledHint: "输入行入口：侧栏目录 + 右栏页编辑",
       cfgVaultRoot: "知识库目录",
-      cfgVaultRootHint: "vault 根目录绝对路径（如 D:\\notes），默认 数据目录下 dsh-kit\\knowledge。其内一切 md 即页面；attachments/ 与点前缀目录不进索引，根目录自动生成 AGENTS.md 约定",
+      cfgVaultRootHint: "vault 根目录绝对路径；空 = 数据目录下 dsh-kit\\knowledge",
       vaultTitle: "知识库",
       vaultNotConfigured: "未配置知识库目录",
       vaultNotConfiguredHint: "在 设置 → 插件 → dsh-kit 里填写「知识库目录」后即可使用：目录内一切 md 文件即页面，支持双链跳转与全文搜索",
@@ -1294,10 +1292,8 @@ window.__ModuleLoader__.load({
       cfgTerminalShortcut: "终端快捷键",
       cfgFileTreeShortcut: "文件树快捷键",
       cfgSidebarShortcut: "左栏开合快捷键",
-      cfgSidebarShortcutEnabled: "启用左栏开合快捷键",
-      cfgSidebarShortcutEnabledHint: "关闭后 Ctrl+B 不再响应",
       cfgSourceControlEnabled: "启用源代码管理",
-      cfgSourceControlEnabledHint: "关闭后隐藏入口按钮与快捷键",
+      cfgSourceControlEnabledHint: "隐藏入口与快捷键",
       cfgScShortcut: "源代码管理快捷键",
       cfgVaultShortcut: "知识库快捷键",
       cfgRightbarShortcut: "右栏开合快捷键",
@@ -1312,8 +1308,8 @@ window.__ModuleLoader__.load({
       readOnly: "本部署的设置为只读。",
       loadingCfg: "正在读取配置…",
       saveFailed: "本部署没有接受这些值，已保留供你修改。",
-      invalidCombo: "组合键需包含一个主键和至少一个修饰键。",
-      invalidNumber: "数值无效或超出允许范围。",
+      invalidCombo: "需一个主键 + 至少一个修饰键。",
+      invalidNumber: "超出允许范围。",
     };
     const en = {
       label: "Terminal",
@@ -1464,34 +1460,34 @@ window.__ModuleLoader__.load({
       skDone: "Done",
       skDeleted: "Deleted",
       cfgTitle: "Kit (dsh-kit)",
-      cfgDesc: "Feature switches and shortcuts, session monitor, knowledge base, phone access.",
+      cfgDesc: "Feature switches, shortcuts and kit settings.",
       cfgGroupSidebar: "Sidebars",
       cfgTerminalEnabled: "Enable terminal",
-      cfgTerminalEnabledHint: "Hides the entry button and its shortcut",
+      cfgTerminalEnabledHint: "Hides entry and shortcut",
       cfgFileTreeEnabled: "Enable file tree",
-      cfgFileTreeEnabledHint: "Hides the entry button and its shortcut",
+      cfgFileTreeEnabledHint: "Hides entry and shortcut",
       cfgChatOpenFilePreview: "Open chat files in plugin preview",
-      cfgChatOpenFilePreviewHint: "Chat produced/mentioned file links open in the plugin preview pane; off = system default app",
+      cfgChatOpenFilePreviewHint: "Off = system default app",
       cfgSkillsPageEnabled: "Enable skills page",
-      cfgSkillsPageEnabledHint: "Hides the Skills page in Settings",
+      cfgSkillsPageEnabledHint: "Off = no Skills page in Settings",
       cfgSearchEnabled: "Enable web search",
-      cfgSearchEnabledHint: "Off = the official search channel (restart to apply)",
+      cfgSearchEnabledHint: "Off = official search (restart to apply)",
       cfgSearchMaxResults: "Search result count",
-      cfgSearchMaxResultsHint: "1-8, default 2; more uses more context; applies on save",
+      cfgSearchMaxResultsHint: "1-8, default 2",
       cfgPhoneEnabled: "Show phone access page",
-      cfgPhoneEnabledHint: "Shows the \"Phone access\" page in Settings",
+      cfgPhoneEnabledHint: "Entry for the \"Phone access\" page",
       cfgJobsEnabled: "Enable background jobs panel",
-      cfgJobsEnabledHint: "Rightbar jobs tab + guide entry: watch and stop background jobs",
+      cfgJobsEnabledHint: "Watch and stop background jobs",
       cfgBrowserEnabled: "Enable built-in browser",
-      cfgBrowserEnabledHint: "Rightbar browser tab + guide entry: watch and operate the agent's browser (tool registration applies on restart)",
+      cfgBrowserEnabledHint: "Watch and operate the agent's browser (restart to apply)",
       cfgMonitorEnabled: "Enable session monitor",
-      cfgMonitorEnabledHint: "After a turn ends with a retryable error (429 rate limit etc.), wait then auto-send \"Continue\"; stop the turn and continue when streamed output repeats (dead-loop sign). Watches the currently open session only",
+      cfgMonitorEnabledHint: "Auto-continue after failures, break output dead-loops; current session only",
       cfgMonitorWaitMs: "Wait after failure (ms)",
-      cfgMonitorWaitMsHint: "How long to wait after a retryable terminal failure before auto-sending \"Continue\" (5000-600000)",
+      cfgMonitorWaitMsHint: "Wait before auto-\"Continue\" (5000-600000)",
       cfgMonitorMaxAuto: "Auto-continue limit",
-      cfgMonitorMaxAutoHint: "Pause auto-continue after this many consecutive automatic resumes until a turn completes normally (1-10)",
+      cfgMonitorMaxAutoHint: "Pause after this many consecutive resumes (1-10)",
       cfgMonitorRepeatThreshold: "Repeat threshold",
-      cfgMonitorRepeatThresholdHint: "Stop and continue once this many consecutive repeated blocks appear at the stream tail (2-10)",
+      cfgMonitorRepeatThresholdHint: "Repeated blocks counted as dead-loop (2-10)",
       monitorContinueText: "Continue",
       monitorLoopBreakText: "Your output appears to be repeating itself, which suggests an infinite loop. Stop repeating immediately, briefly state the current status, and continue the task in a different way.",
       monitorCancel: "Cancel",
@@ -1505,7 +1501,7 @@ window.__ModuleLoader__.load({
       monitorErrTRANSPORT: "network transport error",
       monitorErrEMPTY_RESPONSE: "empty model response",
       cfgPreviewMaxTabs: "Max file tabs",
-      cfgPreviewMaxTabsHint: "Beyond the limit, opening a new file closes the least-recently-viewed file tab (1-20, applies immediately)",
+      cfgPreviewMaxTabsHint: "Closes the least-recently-viewed tab over the limit (1-20)",
       browserUrlPh: "Type a URL and press Enter",
       browserGo: "Go",
       browserBack: "Back",
@@ -1541,16 +1537,14 @@ window.__ModuleLoader__.load({
       cfgRemoteHint: "Non-local access: upstream pins the settings mirror to the local machine, so config stays read-only here — please view and edit it on the computer.",
       cfgPhoneRemoteDomain: "Remote domain",
       cfgPhonePort: "Gateway port",
-      cfgPhonePortHint: "Port the phone gateway listens on, 1-65535 (default 3090); the gateway restarts on the new port after saving.",
+      cfgPhonePortHint: "Gateway port, 1-65535; gateway restarts on save",
       cfgPhoneKeepGatewayOn: "Keep enabled across restarts",
-      cfgPhoneKeepGatewayOnHint: "Restores the last enabled state on restart (applies next start)",
+      cfgPhoneKeepGatewayOnHint: "Restores last enabled state on restart",
       cfgTerminalShortcut: "Terminal shortcut",
       cfgFileTreeShortcut: "File tree shortcut",
       cfgSidebarShortcut: "Left sidebar toggle",
-      cfgSidebarShortcutEnabled: "Enable left sidebar toggle",
-      cfgSidebarShortcutEnabledHint: "Disables the Ctrl+B shortcut",
       cfgSourceControlEnabled: "Enable source control",
-      cfgSourceControlEnabledHint: "Hides the entry button and its shortcut",
+      cfgSourceControlEnabledHint: "Hides entry and shortcut",
       cfgScShortcut: "Source control shortcut",
       cfgVaultShortcut: "Knowledge base shortcut",
       cfgRightbarShortcut: "Right sidebar toggle",
@@ -1565,8 +1559,8 @@ window.__ModuleLoader__.load({
       readOnly: "This deployment stores settings read-only.",
       loadingCfg: "Reading configuration…",
       saveFailed: "The deployment did not accept these values; they were left for you to correct.",
-      invalidCombo: "A combo needs one key plus at least one modifier.",
-      invalidNumber: "Invalid or out of the allowed range.",
+      invalidCombo: "One main key plus at least one modifier.",
+      invalidNumber: "Out of the allowed range.",
       phoneTitle: "Phone access",
       phoneStatusOn: "Gateway running · port {port}",
       phoneStatusErr: "Gateway not running: {error}",
@@ -1655,9 +1649,9 @@ window.__ModuleLoader__.load({
       schedSaved: "Saved",
       schedOpFail: "Operation failed: {error}",
       cfgVaultEnabled: "Enable knowledge base",
-      cfgVaultEnabledHint: "Knowledge base entry (composer toolbar): sidebar directory tree + right-dock page editor",
+      cfgVaultEnabledHint: "Composer entry: sidebar directory + right-dock page editor",
       cfgVaultRoot: "Knowledge base directory",
-      cfgVaultRootHint: "Absolute path of the vault root (e.g. D:\\notes); defaults to dsh-kit\\knowledge inside the data directory. Every md file inside is a page; attachments/ and dot-directories are not indexed; an AGENTS.md convention file is generated at the root",
+      cfgVaultRootHint: "Vault root absolute path; empty = dsh-kit\\knowledge in the data directory",
       vaultTitle: "Knowledge base",
       vaultNotConfigured: "Knowledge base directory not configured",
       vaultNotConfiguredHint: "Set the knowledge base directory in Settings → Plugins → dsh-kit: every md file inside becomes a page, with wiki-links and full-text search",
@@ -10659,7 +10653,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             }
             return;
           }
-          if (sidebarCombo && cfg.sidebarShortcutEnabled !== false && comboMatches(e, sidebarCombo)) {
+          if (sidebarCombo && comboMatches(e, sidebarCombo)) {
             e.preventDefault();
             e.stopPropagation();
             toggleSidebar();
@@ -10690,7 +10684,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return () => window.removeEventListener("keydown", onKey, true);
         // cwd 必须在依赖里：否则闭包缓存首帧（会话未水化时为 null）的工作区，
         // 之后按快捷键开终端永远绑到 null
-      }, [cwd, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.terminalShortcut, cfg.fileTreeShortcut, cfg.scShortcut, cfg.vaultShortcut, cfg.rightbarShortcut, cfg.sidebarShortcut, cfg.sidebarShortcutEnabled]);
+      }, [cwd, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.terminalShortcut, cfg.fileTreeShortcut, cfg.scShortcut, cfg.vaultShortcut, cfg.rightbarShortcut, cfg.sidebarShortcut]);
 
       // ShellBrowserEvents：壳层常驻浏览器事件源（与面板 WS 并存，不订阅帧流）。
       // 面板标签会被收掉（0 页自动收/人为关闭），「agent 开页切到浏览器」不能依赖
@@ -11163,7 +11157,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { key: "monitorRepeatThreshold", kind: "number", min: 2, max: 10 },
       { key: "vaultEnabled", kind: "bool" },
       { key: "vaultRoot", kind: "text" },
-      { key: "sidebarShortcutEnabled", kind: "bool" },
       { key: "terminalShortcut", kind: "combo" },
       { key: "fileTreeShortcut", kind: "combo" },
       { key: "scShortcut", kind: "combo" },
@@ -11172,14 +11165,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { key: "sidebarShortcut", kind: "combo" },
     ];
     // 分组渲染：开关行 + 该功能启用时才显示的子配置（所见即所得，保存才落盘生效）；
-    // switchKey 为 null 的组没有开关行，只列字段（侧边栏开合：左右两键 + 左栏启用位）。
+    // switchKey 为 null 的组没有开关行，只列字段（侧边栏组：左右两键，无启用开关）。
     // title 组头（侧边栏这类无单一开关的组）——其余组的功能开关行本身就是组头。
     // 组顺序（2026-09-11 用户定稿整理）：侧边栏（左右放一起）→ 文件树 → 源代码管理
     // → 终端 → 知识库 → 后台任务 → 浏览器 → 会话监视 → 对话文件预览 → 技能页
     // → 网页搜索 → 手机访问（用户定稿放最下）。远程域名不在此卡——编辑入口在
     // 「手机访问」页内。
     const CFG_GROUPS = [
-      { title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcutEnabled", "sidebarShortcut", "rightbarShortcut"] },
+      { title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut"] },
       { switchKey: "fileTreeEnabled", fields: ["fileTreeShortcut", "previewMaxTabs"] },
       { switchKey: "sourceControlEnabled", fields: ["scShortcut"] },
       { switchKey: "terminalEnabled", fields: ["terminalShortcut"] },
