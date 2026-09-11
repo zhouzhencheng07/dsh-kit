@@ -72,7 +72,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, VaultFolderPicker, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, renameVaultPageTab, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
+  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, VaultFolderPicker, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, renameVaultPageTab, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultCascadeDeleteMany, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -86,7 +86,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "VaultFolderPicker", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "renameVaultPageTab", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTickCore", "monitorCancelPlan", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "VaultFolderPicker", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "renameVaultPageTab", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultCascadeDeleteMany", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTickCore", "monitorCancelPlan", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -564,6 +564,14 @@ check("vaultHeadingSlug：空白压成 -", comps.vaultHeadingSlug("  Some 标题
   check("孤儿级联：递归闭包 + AGENTS 保护", doomed.length === 3 && doomed.some((p) => p.rel === "入门") && doomed.some((p) => p.rel === "速记") && !doomed.some((p) => p.rel === "AGENTS"));
   const doomed2 = comps.vaultCascadeDelete(pages, "D:/v/速记.md");
   check("孤儿级联：删叶子不连坐他人", doomed2.length === 1 && doomed2[0].rel === "速记");
+  // 目录删除走多种子版：种子 = 目录下全部页，外部页里因此变孤儿的一样连坐
+  const seeds = ["D:/v/index.md", "D:/v/入门.md"];
+  const many = comps.vaultCascadeDeleteMany(pages, seeds);
+  check(
+    "孤儿级联（多种子）：目录整棵 + 外部孤儿连坐、不动无关页",
+    many.length === 3 && ["index", "入门", "速记"].every((r) => many.some((p) => p.rel === r)) && !many.some((p) => p.rel === "AGENTS"),
+  );
+  check("孤儿级联（多种子）：空种子返回空", comps.vaultCascadeDeleteMany(pages, []).length === 0);
 }
 
 // 6.8) M4 互通纯函数：vault 路径归属 + 引用到对话文本构造
@@ -654,12 +662,34 @@ let vaultFetchPrev = null;
   // 文件夹选择器换成自绘搜索式（可选任意层级）：那一格现在是组件，不再是原生 select
   const pickerEl = barRow1[2];
   check("上行第三格是搜索式文件夹选择器", barRow1.length === 4 && !!(pickerEl && pickerEl.props && Array.isArray(pickerEl.props.folders)));
-  // 树上行操作（用户定稿：页条上那个 @ 挪到树的文件行）：@ + ⋯ 同容器
-  const actSpan = callLog.find((c) => c[0] === "jsxs" && c[2] && c[2].className === "dshk-rowact" && Array.isArray(c[2].children));
-  const actBtns = actSpan ? actSpan[2].children : [];
+  // 树上行操作（用户定稿：页条上那个 @ 挪到树的文件行）：@ + ⋯ 同容器；
+  // 目录行也有 ⋯（2026-09-11 用户定稿：非根目录的文件夹同样能改名/删除）
+  const actSpans = callLog.filter((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[2] && c[2].className === "dshk-rowact");
+  const actsOf = (sp) => (Array.isArray(sp[2].children) ? sp[2].children : [sp[2].children]);
+  const pageActs = actSpans.map(actsOf).find((b) => b.length === 2);
+  const dirActs = actSpans.map(actsOf).find((b) => b.length === 1);
+  const actBtns = pageActs ?? [];
   check(
     "知识库树文件行 hover 出 @ 与 ⋯",
     actBtns.length === 2 && ["@ 到对话", "Insert @ mention"].includes(actBtns[0].props.title) && actBtns[1].props.children === "⋯",
+  );
+  check(
+    "知识库树目录行 hover 出 ⋯（不带 @，改名/删除在菜单里）",
+    !!dirActs && dirActs.length === 1 && dirActs[0].props.children === "⋯" && ["更多操作", "More actions"].includes(dirActs[0].props.title),
+  );
+  // 图标改走文件树那套（用户定稿）：自绘的页面/目录图标整链不存在，行图标来自共用组件
+  check(
+    "知识库树图标不再自绘（无 VaultPageIcon/VaultFolderIcon，走 FileTypeIcon16/TreeFolderIcon）",
+    !src.includes("VaultPageIcon") &&
+      !src.includes("VaultFolderIcon") &&
+      src.includes("jsxRuntime.jsx(FileTypeIcon16, { name: e.name })") &&
+      src.includes("jsxRuntime.jsx(TreeFolderIcon, {})"),
+  );
+  check(
+    "vault 工具条/选择器/新建钮复用官方图标（OfficialIcon/FilePlusIcon/ChevronIcon）",
+    (src.match(/jsxRuntime\.jsx\(OfficialIcon, \{/g) ?? []).length >= 4 &&
+      src.includes('names: ["IconRefreshOutline16", "IconRefreshOutline14"]') &&
+      src.includes('jsxRuntime.jsx(ChevronIcon, { open: expanded[e.path] === true })'),
   );
   // 行 ⋯ 的 actions：重命名 + 删除（菜单项由 TreeRowMenu 按 actions 出，见下一段直渲）
   const rowMenuEl = callLog.find((c) => c[1] === comps.TreeRowMenu);
@@ -667,6 +697,20 @@ let vaultFetchPrev = null;
   check(
     "知识库行 ⋯ 接线：重命名 + 删除都挂上（删除不再只在页条）",
     !!rowMenuActs && typeof rowMenuActs.onRename === "function" && typeof rowMenuActs.onDelete === "function",
+  );
+  // 删除分流：目录行走目录版（整棵子树，确认文案带「目录」），页面行仍走单页级联
+  const confirmLog = [];
+  const prevConfirm = global.window.confirm;
+  global.window.confirm = (msg) => {
+    confirmLog.push(String(msg));
+    return false;
+  };
+  rowMenuActs.onDelete({ dir: true, name: "wiki", path: "D:/v/wiki" });
+  rowMenuActs.onDelete({ dir: false, name: "a", path: "D:/v/wiki/a.md" });
+  global.window.confirm = prevConfirm;
+  check(
+    "行 ⋯ 删除分流：目录 = 整棵子树确认、页面 = 单页级联确认",
+    confirmLog.length === 2 && /folder|目录/i.test(confirmLog[0]) && !/folder|目录/i.test(confirmLog[1]),
   );
   // ⋯ 触发钮是开关：再点一次关掉自己。落在触发钮上的那次点击由按钮自己判（菜单的
   // 点外关闭会忽略它，否则先被关掉、再被 onClick 判成重新打开＝点了没反应）

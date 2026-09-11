@@ -3041,36 +3041,46 @@ export async function apply(ctx) {
                     const rel = path.relative(root, resolved);
                     if (rel.startsWith('..') || path.isAbsolute(rel) || rel === '')
                         throw new Error(`页面不在 vault 内：${rawPath}`);
-                    if (!/\.md$/i.test(resolved))
-                        throw new Error(`只允许删 md 文件：${resolved}`);
                     resolvedSet.add(resolved);
                 }
+                // 只允许 md 文件与目录；目录由回收站 API 整棵递归删（vault 根上面已挡掉）
                 const targets = [];
+                const targetIsDir = [];
                 for (const resolved of resolvedSet) {
+                    let stat;
                     try {
-                        fs.accessSync(resolved);
+                        stat = fs.statSync(resolved);
                     }
                     catch {
                         continue;
                     }
+                    if (!stat.isDirectory() && !/\.md$/i.test(resolved))
+                        throw new Error(`只允许删 md 文件或目录：${resolved}`);
                     targets.push(resolved);
+                    targetIsDir.push(stat.isDirectory());
                 }
                 let deleted = 0;
+                let dirsDeleted = 0;
                 const failed = [];
                 if (process.platform === 'win32') {
                     const results = await recycleDeleteBatch(targets);
                     targets.forEach((p, i) => {
-                        if (results[i] === true)
+                        if (results[i] === true) {
                             deleted += 1;
+                            if (targetIsDir[i] === true)
+                                dirsDeleted += 1;
+                        }
                         else
                             failed.push(path.basename(p));
                     });
                 }
                 else {
-                    for (const p of targets) {
+                    for (const [i, p] of targets.entries()) {
                         try {
-                            await fs.promises.rm(p);
+                            await fs.promises.rm(p, { recursive: targetIsDir[i] === true, force: true });
                             deleted += 1;
+                            if (targetIsDir[i] === true)
+                                dirsDeleted += 1;
                         }
                         catch {
                             failed.push(path.basename(p));
@@ -3082,22 +3092,46 @@ export async function apply(ctx) {
                     return { deleted, committed, ...(failed.length > 0 ? { failed } : {}) };
                 // 有删除即整体提交一次（用户定稿：一个提交即可整体撤回）；git 不可用
                 // 不阻断删除本身，提交失败静默
-                committed = await commitVault(root, `dsh-kit: 删除 ${deleted} 页（含孤儿级联）`);
+                const pagesDeleted = deleted - dirsDeleted;
+                committed = await commitVault(root, dirsDeleted > 0
+                    ? pagesDeleted > 0
+                        ? `dsh-kit: 删除 ${String(dirsDeleted)} 个目录 + ${String(pagesDeleted)} 页（含孤儿级联）`
+                        : `dsh-kit: 删除 ${String(dirsDeleted)} 个目录（含孤儿级联）`
+                    : `dsh-kit: 删除 ${String(pagesDeleted)} 页（含孤儿级联）`);
                 return { deleted, committed, ...(failed.length > 0 ? { failed } : {}) };
             });
-            // 重命名页面（左侧树上行内改名）：只改文件名、留在原目录。双链按新名改写——
-            // wikilink 靠文件名解析，不改写等于重命名一次就把全库指向它的引用改碎；改写
-            // 顺序是先改名再扫索引（扫描结果里旧页已不在，引用页的 links 仍是旧名）。
+            // 重命名页面或目录（左侧树上行内改名）：只改名字、留在原位置。
+            // 页面：双链按新名改写——wikilink 靠文件名解析，不改写等于重命名一次就把全库
+            // 指向它的引用改碎；改写顺序是先改名再扫索引（扫描结果里旧页已不在，引用页的
+            // links 仍是旧名）。目录：文件名不变，wikilink 解析不受影响，因此不改写双链。
             vaultPost('/dsh-kit/vault/rename', async (body, root) => {
                 const resolved = path.resolve(String(body.path ?? ''));
                 const rel = path.relative(root, resolved);
                 if (rel.startsWith('..') || path.isAbsolute(rel) || rel === '')
-                    throw new Error('页面不在 vault 内');
-                if (!/\.md$/i.test(resolved))
-                    throw new Error('只允许重命名 md 文件');
+                    throw new Error('目标不在 vault 内');
                 const name = sanitizePageTitle(String(body.name ?? ''));
                 if (name === '')
-                    throw new Error('缺少新文件名');
+                    throw new Error('缺少新名字');
+                let stat;
+                try {
+                    stat = fs.statSync(resolved);
+                }
+                catch {
+                    throw new Error('目标不存在');
+                }
+                if (stat.isDirectory()) {
+                    const dirTarget = path.join(path.dirname(resolved), name);
+                    if (dirTarget === resolved)
+                        return { ok: true, path: resolved, links: 0, committed: false };
+                    if (fs.existsSync(dirTarget))
+                        throw new Error('同名目录已存在');
+                    const oldDirName = path.basename(resolved);
+                    fs.renameSync(resolved, dirTarget);
+                    const dirCommitted = await commitVault(root, `dsh-kit: 重命名目录 ${oldDirName} → ${name}`);
+                    return { ok: true, path: dirTarget, links: 0, committed: dirCommitted };
+                }
+                if (!/\.md$/i.test(resolved))
+                    throw new Error('只允许重命名 md 文件或目录');
                 const target = path.join(path.dirname(resolved), `${name}.md`);
                 if (target === resolved)
                     return { ok: true, path: resolved, links: 0, committed: false };
