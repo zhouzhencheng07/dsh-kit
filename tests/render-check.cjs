@@ -71,7 +71,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
+  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -1057,9 +1057,45 @@ check("渲染体实际产出元素", callLog.length > 0);
 
 // 收尾结算放进 setTimeout：6.9c 里 ↻ 刷新的目录树重拉排在 await loadIndex()
 // 之后的微任务里，同步段看不到；微任务先于定时器清空，此刻断言才成立
-setTimeout(() => {
+setTimeout(async () => {
   const treeHits = vaultRefreshFetched.filter((u) => u.includes("/dsh-kit/tree"));
   check("↻ 刷新连带重拉每个已展开目录（/dsh-kit/tree ×2）", treeHits.length === 2);
+  // kit 端点包装（kitGetJson/kitPostJson/kitJson）：回包约定收在一处后的行为契约。
+  // 2xx 且形状断言通过才算成功，失败带宿主 error 原文与 status——写文件的 409
+  // 冲突分流就靠 status/body，这里把契约钉死
+  {
+    const calls = [];
+    let scripted = { status: 200, body: {} };
+    global.fetch = async (url, opts) => {
+      calls.push({ url: String(url), opts: opts || {} });
+      return { ok: scripted.status >= 200 && scripted.status < 300, status: scripted.status, json: async () => scripted.body };
+    };
+    const rejection = async (p) => {
+      try { await p; return null; } catch (e) { return e; }
+    };
+    scripted = { status: 200, body: { entries: [{ name: "a" }] } };
+    const tree = await comps.fetchTree("/w");
+    check("kitGetJson：2xx + 形状通过 → 回包直通", tree.entries.length === 1 && calls[0].url === "/dsh-kit/tree?path=%2Fw");
+    scripted = { status: 200, body: { nope: 1 } };
+    const shapeErr = await rejection(comps.fetchTree("/w"));
+    check("kitGetJson：形状不符 → 抛错（半个回包不当成功）", !!shapeErr && shapeErr.message === "HTTP 200");
+    scripted = { status: 500, body: { error: "boom" } };
+    const netErr = await rejection(comps.fetchGitStatus("C:/w"));
+    check("kitGetJson：非 2xx → 抛错带宿主 error 与 status", !!netErr && netErr.message === "boom" && netErr.status === 500);
+    scripted = { status: 200, body: { ok: false, error: "nope" } };
+    const okErr = await rejection(comps.postFsOp({ cwd: "C:/w", op: "create" }));
+    check("kitPostJson：回包显式 ok:false → 也算失败", !!okErr && okErr.message === "nope");
+    scripted = { status: 200, body: { ok: true, created: true } };
+    const init = await comps.fetchGitInit("C:/w");
+    const last = calls[calls.length - 1];
+    check(
+      "kitPostJson：POST + JSON 头 + body 原样发出",
+      init.created === true && last.opts.method === "POST" && last.opts.headers["content-type"] === "application/json" && JSON.parse(last.opts.body).cwd === "C:/w",
+    );
+    scripted = { status: 409, body: { error: "conflict", mtimeMs: 7 } };
+    const conflict = await rejection(comps.kitPostJson("/dsh-kit/write", {}));
+    check("kitPostJson：失败带 status/body（写文件按 409 进冲突条）", !!conflict && conflict.status === 409 && conflict.body.mtimeMs === 7);
+  }
   global.fetch = vaultFetchPrev;
   console.log(failed === 0 ? "ALL RENDER OK" : `${failed} FAIL`);
   process.exit(failed === 0 ? 0 : 1);

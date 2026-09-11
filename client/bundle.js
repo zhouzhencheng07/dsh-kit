@@ -576,7 +576,7 @@ window.__ModuleLoader__.load({
     function ensureVaultRootHint() {
       if (vaultRootHint !== null) return Promise.resolve(vaultRootHint);
       if (vaultRootHintFetching === null) {
-        vaultRootHintFetching = schedFetch("/dsh-kit/vault/index")
+        vaultRootHintFetching = kitJson("/dsh-kit/vault/index")
           .then((body) => {
             vaultRootHint = body && typeof body.root === "string" && body.root !== "" ? body.root : null;
             return vaultRootHint;
@@ -3204,60 +3204,82 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
 
+    // ─────────── kit 端点公共调用 ───────────
+    // 宿主端点回包约定：成功 2xx（写端点另带 ok:true），失败非 2xx + { error }。
+    // 取用口径收在这一处，省得每个调用点重写一遍 json().catch() 与错误报文；
+    // validate 是调用点自己的形状断言（缺项按失败处理，免得半个回包被当成功
+    // 往下传）——各端点形状不同，所以断言留在调用点。
+    /** GET /dsh-kit/* 取 JSON；抛出的错误带 status/body，供按状态码分流
+        （如写文件的 409 冲突） */
+    async function kitGetJson(url, signal, validate) {
+      const res = await fetch(url, { signal });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body || (validate && !validate(body))) {
+        const error = new Error((body && body.error) || "HTTP " + res.status);
+        error.status = res.status;
+        error.body = body;
+        throw error;
+      }
+      return body;
+    }
+    /** POST /dsh-kit/*（JSON body，缺省 {}）；显式 ok:false 也算失败 */
+    async function kitPostJson(url, payload, validate) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload ?? {}),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body.ok === false || (validate && !validate(body))) {
+        const error = new Error(body.error || "HTTP " + res.status);
+        error.status = res.status;
+        error.body = body;
+        throw error;
+      }
+      return body;
+    }
+    /** 其它 method / 自定义 opts 的 kit 取 JSON：日程、知识库、附件目录等端点
+        回包不带 ok 字段，只按状态码判成败 */
+    async function kitJson(url, opts, validate) {
+      const res = await fetch(url, opts);
+      const body = await res.json().catch(() => null);
+      if (!res.ok || (validate && !validate(body))) {
+        const error = new Error((body && body.error) || "HTTP " + res.status);
+        error.status = res.status;
+        error.body = body;
+        throw error;
+      }
+      return body;
+    }
+
     // ─────────── 文件树 ───────────
     // 数据走宿主半边只读端点 /dsh-kit/tree（官方 browse RPC 只列目录不列文件）。
     function fetchTree(path, signal) {
-      return fetch(`/dsh-kit/tree?path=${encodeURIComponent(path)}`, { signal }).then(async (res) => {
-        const body = await res.json().catch(() => null);
-        if (!res.ok || !body || !Array.isArray(body.entries)) {
-          throw new Error((body && body.error) || `HTTP ${res.status}`);
-        }
-        return body;
-      });
+      return kitGetJson(`/dsh-kit/tree?path=${encodeURIComponent(path)}`, signal, (b) => Array.isArray(b.entries));
     }
 
     /** git 状态：available:false = 非 git 目录，前端隐藏徽标；available 时含
         branch/upstream/ahead/behind/detached/unborn（宿主 status -b 分支摘要） */
     function fetchGitStatus(cwd, signal) {
-      return fetch(`/dsh-kit/git/status?cwd=${encodeURIComponent(cwd)}`, { signal }).then(async (res) => {
-        const body = await res.json().catch(() => null);
-        if (!res.ok || !body || typeof body.available !== "boolean") {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        return body;
-      });
+      return kitGetJson(`/dsh-kit/git/status?cwd=${encodeURIComponent(cwd)}`, signal, (b) => typeof b.available === "boolean");
     }
     /** git 图谱：available:false = 非 git 目录/失败；records 空数组 = 尚无提交；
         hasMore = 还有更早提交（load more 用 skip=已取条数续传） */
     function fetchGitLog(cwd, n, skip, signal) {
       const url = `/dsh-kit/git/log?cwd=${encodeURIComponent(cwd)}&n=${Number(n) || 120}&skip=${Number(skip) || 0}`;
-      return fetch(url, { signal }).then(async (res) => {
-        const body = await res.json().catch(() => null);
-        if (!res.ok || !body || typeof body.available !== "boolean") {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        return body;
-      });
+      return kitGetJson(url, signal, (b) => typeof b.available === "boolean");
     }
     /** git 单个提交详情（图谱点开行用） */
     function fetchGitShow(cwd, commit, signal) {
-      return fetch(`/dsh-kit/git/show?cwd=${encodeURIComponent(cwd)}&commit=${encodeURIComponent(commit)}`, { signal }).then(async (res) => {
-        const body = await res.json().catch(() => null);
-        if (!res.ok || !body || typeof body.available !== "boolean") {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        return body;
-      });
+      return kitGetJson(
+        `/dsh-kit/git/show?cwd=${encodeURIComponent(cwd)}&commit=${encodeURIComponent(commit)}`,
+        signal,
+        (b) => typeof b.available === "boolean",
+      );
     }
     /** git 本地分支列表（{current, branches:[{name,isHead,upstream,track,trackParsed}]}） */
     function fetchGitBranch(cwd, signal) {
-      return fetch(`/dsh-kit/git/branch?cwd=${encodeURIComponent(cwd)}`, { signal }).then(async (res) => {
-        const body = await res.json().catch(() => null);
-        if (!res.ok || !body || typeof body.available !== "boolean") {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        return body;
-      });
+      return kitGetJson(`/dsh-kit/git/branch?cwd=${encodeURIComponent(cwd)}`, signal, (b) => typeof b.available === "boolean");
     }
     /** 图谱引用装饰解析（与宿主侧 src/git.js parseDecoration 保持同步，入参为 %D 原文） */
     function parseDecoration(text) {
@@ -3276,28 +3298,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     /** 在目录初始化仓库（源代码管理空态按钮用；已是仓库则幂等返回 created:false） */
     function fetchGitInit(cwd) {
-      return fetch("/dsh-kit/git/init", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ cwd }),
-      }).then(async (res) => {
-        const b = await res.json().catch(() => ({}));
-        if (!res.ok || typeof b.created !== "boolean") throw new Error(b.error || `HTTP ${res.status}`);
-        return b;
-      });
+      return kitPostJson("/dsh-kit/git/init", { cwd }, (b) => typeof b.created === "boolean");
     }
 
     /** 文件管理操作（新建/重命名/删除）：POST /dsh-kit/fs/op，宿主做子树与名称校验 */
     function postFsOp(payload) {
-      return fetch("/dsh-kit/fs/op", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      }).then(async (res) => {
-        const b = await res.json().catch(() => ({}));
-        if (!res.ok || !b.ok) throw new Error(b.error || `HTTP ${res.status}`);
-        return b;
-      });
+      return kitPostJson("/dsh-kit/fs/op", payload, (b) => b.ok === true);
     }
 
     /** 文件行尾的 git 状态小徽标（M/A/D/R/U）：porcelain 未跟踪是 "??"，统一显示 U */
@@ -4381,13 +4387,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (pushing || !cwd || !available) return false;
         setPushing(true);
         try {
-          const res = await fetch("/dsh-kit/git/op", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ cwd, op: "push", upstream: withUpstream === true }),
-          });
-          const b = await res.json().catch(() => ({}));
-          if (!res.ok || !b.ok) throw new Error(b.error || `HTTP ${res.status}`);
+          await kitPostJson("/dsh-kit/git/op", { cwd, op: "push", upstream: withUpstream === true });
           flashToast(t("scPushDone"));
           setPushHint(false);
           if (fetchRef.current) fetchRef.current();
@@ -4408,13 +4408,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (pulling || !cwd || !available) return false;
         setPulling(true);
         try {
-          const res = await fetch("/dsh-kit/git/op", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ cwd, op: "pull" }),
-          });
-          const b = await res.json().catch(() => ({}));
-          if (!res.ok || !b.ok) throw new Error(b.error || `HTTP ${res.status}`);
+          await kitPostJson("/dsh-kit/git/op", { cwd, op: "pull" });
           flashToast(t("scPullDone"));
           if (fetchRef.current) fetchRef.current();
           if (graphRef.current) graphRef.current();
@@ -4433,13 +4427,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (confirmText !== undefined && confirmText !== null && !window.confirm(confirmText)) return false;
         setBranchBusy(true);
         try {
-          const res = await fetch("/dsh-kit/git/op", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ cwd, ...payload }),
-          });
-          const b = await res.json().catch(() => ({}));
-          if (!res.ok || !b.ok) throw new Error(b.error || `HTTP ${res.status}`);
+          await kitPostJson("/dsh-kit/git/op", { cwd, ...payload });
           if (fetchRef.current) fetchRef.current();
           if (branchRef.current) branchRef.current();
           setNewBranch("");
@@ -4473,13 +4461,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (confirmText !== undefined && confirmText !== null && !window.confirm(confirmText)) return false;
         setBusy(true);
         try {
-          const res = await fetch("/dsh-kit/git/op", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ cwd, ...payload }),
-          });
-          const b = await res.json().catch(() => ({}));
-          if (!res.ok || !b.ok) throw new Error(b.error || `HTTP ${res.status}`);
+          await kitPostJson("/dsh-kit/git/op", { cwd, ...payload });
           if (fetchRef.current) fetchRef.current();
           return true;
         } catch (error) {
@@ -5304,12 +5286,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       diffFetchRef.current = () => {
         const c = new AbortController();
         const commitQ = commit ? `&commit=${encodeURIComponent(commit)}` : "";
-        fetch(`/dsh-kit/git/diff?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? path)}${commitQ}`, { signal: c.signal })
-          .then(async (res) => {
-            const b = await res.json().catch(() => null);
-            if (!res.ok || !b || b.available !== true) throw new Error(b?.error ?? `HTTP ${res.status}`);
-            return b;
-          })
+        kitGetJson(`/dsh-kit/git/diff?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? path)}${commitQ}`, c.signal, (b) => b.available === true)
           .then((b) => {
             if (!c.signal.aborted)
               setDiff({
@@ -5357,14 +5334,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
         const controller = new AbortController();
         setState({ phase: "loading" });
-        fetch(`/dsh-kit/read?path=${encodeURIComponent(path)}`, { signal: controller.signal })
-          .then(async (res) => {
-            const body = await res.json().catch(() => null);
-            if (!res.ok || !body || typeof body.content === "undefined") {
-              throw new Error((body && body.error) || `HTTP ${res.status}`);
-            }
-            return body;
-          })
+        kitGetJson(`/dsh-kit/read?path=${encodeURIComponent(path)}`, controller.signal, (b) => typeof b.content !== "undefined")
           .then((body) => {
             if (controller.signal.aborted) return;
             setState({ phase: "ready", body });
@@ -5402,17 +5372,17 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // ── 保存：POST /dsh-kit/write（cwd 子树校验 + mtime CAS）；409 → 冲突条
       // （覆盖盘上/读取盘上），绝不静默覆盖。mode ∈ auto|manual|overwrite ──
       const writeFile = async (content, baseMtime, mode) => {
-        const res = await fetch("/dsh-kit/write", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ path, cwd, content, baseMtime }),
-        });
-        const b = await res.json().catch(() => ({}));
-        if (res.status === 409) {
-          setConflict({ diskMtime: typeof b.mtimeMs === "number" ? b.mtimeMs : 0 });
-          return "conflict";
+        let b;
+        try {
+          b = await kitPostJson("/dsh-kit/write", { path, cwd, content, baseMtime });
+        } catch (error) {
+          // 409 = 盘上已被改：进冲突条，不算保存失败
+          if (error.status === 409) {
+            setConflict({ diskMtime: typeof error.body?.mtimeMs === "number" ? error.body.mtimeMs : 0 });
+            return "conflict";
+          }
+          throw error;
         }
-        if (!res.ok || !b.ok) throw new Error(b.error || `HTTP ${res.status}`);
         setConflict(null);
         setState((s) => (s.phase === "ready" && s.body ? { ...s, body: { ...s.body, content, mtimeMs: typeof b.mtimeMs === "number" ? b.mtimeMs : s.body.mtimeMs } } : s));
         if (mode === "manual") flashToast(t("editSaved"));
@@ -6078,19 +6048,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // qrcode-generator（/dsh-kit/vendor/qrcode.js），首次打开面板时按需加载，
     // 与 xterm 同策略。
     function fetchPhoneInfo(signal) {
-      return fetch("/dsh-kit/phone/info", { signal }).then(async (res) => {
-        const body = await res.json().catch(() => null);
-        // 字段以宿主回包为准：visible 是页面可见性，网关状态看 gatewayOn/running
-        if (!res.ok || !body || typeof body.visible !== "boolean") throw new Error(`HTTP ${res.status}`);
-        return body;
-      });
+      // 字段以宿主回包为准：visible 是页面可见性，网关状态看 gatewayOn/running
+      return kitGetJson("/dsh-kit/phone/info", signal, (b) => typeof b.visible === "boolean");
     }
     function fetchPhoneLinks(signal) {
-      return fetch("/dsh-kit/phone/link", { signal }).then(async (res) => {
-        const body = await res.json().catch(() => null);
-        if (!res.ok || !body || !Array.isArray(body.links)) throw new Error((body && body.error) || `HTTP ${res.status}`);
-        return body;
-      });
+      return kitGetJson("/dsh-kit/phone/link", signal, (b) => Array.isArray(b.links));
     }
     /** 把链接画上 canvas：白色静区 + 码点，按 devicePixelRatio 输出清晰图 */
     function drawPhoneQr(canvas, text) {
@@ -6141,13 +6103,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (gateBusy) return;
         setGateBusy(true);
         try {
-          const res = await fetch("/dsh-kit/phone/gateway", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ on: next }),
-          });
-          const body = await res.json().catch(() => null);
-          if (!res.ok || !body || typeof body.gatewayOn !== "boolean") throw new Error(`HTTP ${res.status}`);
+          const body = await kitPostJson("/dsh-kit/phone/gateway", { on: next }, (b) => typeof b.gatewayOn === "boolean");
           // 以端点回包为准更新状态（不依赖 settings 读取器，无滞后）
           setInfo((info) =>
             info === null
@@ -6169,13 +6125,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (gateBusy) return;
         setGateBusy(true);
         try {
-          const res = await fetch("/dsh-kit/phone/rotate", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: "{}",
-          });
-          const body = await res.json().catch(() => null);
-          if (!res.ok || !body || !Array.isArray(body.links)) throw new Error(`HTTP ${res.status}`);
+          const body = await kitPostJson("/dsh-kit/phone/rotate", {}, (b) => Array.isArray(b.links));
           setLinkData(body);
           setNotice(t("phoneRotated"));
           setTimeout(() => setNotice(""), 3000);
@@ -6529,13 +6479,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const killJob = async (job) => {
         setKilling(job.id);
         try {
-          const res = await fetch("/dsh-kit/jobs/kill", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ sessionId: current, jobId: job.id }),
-          });
-          const body = await res.json().catch(() => null);
-          if (!res.ok) throw new Error((body && body.error) || `HTTP ${res.status}`);
+          await kitPostJson("/dsh-kit/jobs/kill", { sessionId: current, jobId: job.id });
           flashToast(t("jobsKillDone"));
         } catch (error) {
           flashToast(tf("jobsKillFail", { error: String(error?.message ?? error) }));
@@ -6676,12 +6620,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return h > 0 ? (resolveZh() ? `${h}小时${m}分` : `${h}h ${m}m`) : resolveZh() ? `${m}分钟` : `${m}m`;
     };
 
-    const schedFetch = async (path, opts) => {
-      const res = await fetch(path, opts);
-      const body = await res.json().catch(() => null);
-      if (!res.ok) throw new Error((body && body.error) || `HTTP ${res.status}`);
-      return body;
-    };
 
     // 并行事件分列（贪心：按开始时间排序，塞进第一条不重叠的泳道）
     const schedAssignLanes = (items) => {
@@ -6712,7 +6650,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [nowTick, setNowTick] = react.useState(() => Date.now());
       const fetchData = react.useCallback(async () => {
         try {
-          const body = await schedFetch(
+          const body = await kitJson(
             `/dsh-kit/schedule/data?from=${encodeURIComponent(schedAddDays(schedToday(), -8))}&to=${encodeURIComponent(schedAddDays(schedToday(), 60))}`,
           );
           setData({
@@ -6727,7 +6665,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, []);
       const fetchStats = react.useCallback(async () => {
         try {
-          setStats(await schedFetch(`/dsh-kit/schedule/stats?scope=week&date=${encodeURIComponent(schedToday())}`));
+          setStats(await kitJson(`/dsh-kit/schedule/stats?scope=week&date=${encodeURIComponent(schedToday())}`));
         } catch {
           setStats(null);
         }
@@ -6761,7 +6699,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const mutate = react.useCallback(
         async (path, body) => {
           try {
-            await schedFetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });
+            await kitJson(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });
             // 刷新走 dshk-sched-changed 事件：日程 pane/悬浮计时件共用一条
             // 同步通道，一处写操作全部即时跟进（避免各轮询节奏的 10~30s 滞后）
             window.dispatchEvent(new Event("dshk-sched-changed"));
@@ -7234,7 +7172,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [nowTick, setNowTick] = react.useState(() => Date.now());
       const refresh = react.useCallback(async () => {
         try {
-          const body = await schedFetch("/dsh-kit/schedule/timer");
+          const body = await kitJson("/dsh-kit/schedule/timer");
           setRunning(body.runningTimer ?? null);
         } catch {
           /* 静默：计时件不打扰 */
@@ -7261,7 +7199,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return () => clearInterval(tick);
       }, [running && running.id, running && running.start]);
       const stop = react.useCallback(() => {
-        schedFetch("/dsh-kit/schedule/timer-stop", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
+        kitJson("/dsh-kit/schedule/timer-stop", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
           .then(() => {
             setRunning(null);
             window.dispatchEvent(new Event("dshk-sched-changed"));
@@ -8871,7 +8809,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
       const loadIndex = react.useCallback(async () => {
         try {
-          const body = await schedFetch("/dsh-kit/vault/index");
+          const body = await kitJson("/dsh-kit/vault/index");
           setIndex(body);
           setIndexErr(body && body.root ? "" : "vault-not-configured");
           // M4：同步给对话拦截器做 vault 路径路由判定
@@ -8889,7 +8827,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const fetchDir = react.useCallback(async (dir, silent = false) => {
         if (!silent) setTreeDirs((d) => ({ ...d, [dir]: null }));
         try {
-          const body = await schedFetch(`/dsh-kit/tree?path=${encodeURIComponent(dir)}`);
+          const body = await kitJson(`/dsh-kit/tree?path=${encodeURIComponent(dir)}`);
           const usable = (body.entries ?? []).filter((e) => {
             if (e.dir) return !e.name.startsWith(".") && !["attachments", "node_modules"].includes(e.name);
             return /\.md$/i.test(e.name);
@@ -8987,7 +8925,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             if (prefix !== "") trimmed = `${prefix}/${trimmed}`;
           }
           try {
-            const body = await schedFetch("/dsh-kit/vault/page", {
+            const body = await kitJson("/dsh-kit/vault/page", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ space: sp, title: trimmed }),
@@ -9017,7 +8955,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           const prefix = segs.slice(1).join("/");
           if (prefix !== "") trimmed = `${prefix}/${trimmed}`;
           try {
-            await schedFetch("/dsh-kit/vault/mkdir", {
+            await kitJson("/dsh-kit/vault/mkdir", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ space: sp, dir: trimmed }),
@@ -9041,7 +8979,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
         setSearching(true);
         try {
-          const body = await schedFetch(`/dsh-kit/vault/search?q=${encodeURIComponent(q)}`);
+          const body = await kitJson(`/dsh-kit/vault/search?q=${encodeURIComponent(q)}`);
           setSearchRes(body.results ?? []);
         } catch (error) {
           setToast(`${t("vaultSearchFail")} ${String(error?.message ?? error)}`);
@@ -9339,7 +9277,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const loadCurrent = react.useCallback(async () => {
         setConflict(null);
         try {
-          const body = await schedFetch(`/dsh-kit/read?path=${encodeURIComponent(path)}`);
+          const body = await kitJson(`/dsh-kit/read?path=${encodeURIComponent(path)}`);
           const raw = body.binary ? "" : (body.content ?? "");
           const { fmText, rest } = body.binary ? { fmText: "", rest: "" } : vaultSplitFrontmatter(raw);
           fmRef.current = fmText;
@@ -9367,7 +9305,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         async (bodyMd, mode = "auto") => {
           const base = mode === "overwrite" ? (conflictRef.current?.diskMtime ?? 0) : mtimeRef.current;
           try {
-            const body = await schedFetch("/dsh-kit/vault/write", {
+            const body = await kitJson("/dsh-kit/vault/write", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ path, content: fmRef.current + bodyMd, baseMtime: base }),
@@ -9416,7 +9354,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const timer = setInterval(() => {
           if (document.visibilityState === "hidden") return;
           if (conflictRef.current !== null || (rteCtlRef.current && rteCtlRef.current.dirty())) return;
-          void schedFetch(`/dsh-kit/vault/stat?path=${encodeURIComponent(path)}`)
+          void kitJson(`/dsh-kit/vault/stat?path=${encodeURIComponent(path)}`)
             .then((body) => {
               if (typeof body.mtimeMs === "number" && Math.abs(body.mtimeMs - mtimeRef.current) < 1) return;
               void loadCurrent();
@@ -9433,7 +9371,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const list = doomed.map((p) => `· ${p.title}`).join("\n");
         if (!window.confirm(`${t("vaultDelConfirm")}\n${list}`)) return;
         try {
-          const body = await schedFetch("/dsh-kit/vault/delete", {
+          const body = await kitJson("/dsh-kit/vault/delete", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ paths: doomed.map((p) => p.path) }),
@@ -9509,7 +9447,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         e.preventDefault();
         void (async () => {
           try {
-            await schedFetch("/dsh-kit/vault/mkdir", {
+            await kitJson("/dsh-kit/vault/mkdir", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ dir: "attachments" }),
@@ -9520,8 +9458,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           for (const f of files) {
             const fd = new FormData();
             fd.append("file", f, f.name || "paste.png");
-            fetch(`/dsh-kit/upload?dir=${encodeURIComponent(`${root}/attachments`)}`, { method: "POST", body: fd })
-              .then((r) => r.json())
+            kitJson(`/dsh-kit/upload?dir=${encodeURIComponent(`${root}/attachments`)}`, { method: "POST", body: fd })
               .then((body) => {
                 const name = body?.saved?.[0]?.name;
                 if (!name) throw new Error(body?.warning || "upload failed");
@@ -9657,8 +9594,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const finishAndDone = async () => {
         onClose();
         try {
-          await schedFetch("/dsh-kit/schedule/timer-stop", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-          if (running.id) await schedFetch("/dsh-kit/schedule/done", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: running.id, done: true }) });
+          await kitJson("/dsh-kit/schedule/timer-stop", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+          if (running.id) await kitJson("/dsh-kit/schedule/done", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: running.id, done: true }) });
         } catch {
           /* 失败静默：下一轮轮询会校正运行态 */
         }
@@ -9825,7 +9762,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       react.useEffect(() => {
         if (!timerPick) return undefined;
         let alive = true;
-        void schedFetch(`/dsh-kit/schedule/data?from=${encodeURIComponent(schedToday())}&to=${encodeURIComponent(schedToday())}`)
+        void kitJson(`/dsh-kit/schedule/data?from=${encodeURIComponent(schedToday())}&to=${encodeURIComponent(schedToday())}`)
           .then((b) => {
             if (!alive) return;
             const evs = Array.isArray(b && b.events) ? b.events : [];
@@ -9837,7 +9774,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         };
       }, [timerPick]);
       const startTimer = (payload) => {
-        void schedFetch("/dsh-kit/schedule/timer-start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
+        void kitJson("/dsh-kit/schedule/timer-start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
           .then(() => {
             setTimerPick(false);
             setPickLabel("");
@@ -10257,29 +10194,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 插件自带/运行时来源只读展示。删除=移入池内 .trash，禁用=改 frontmatter 双键。
     function fetchSkillsPage(cwd, signal) {
       const query = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
-      return fetch(`/dsh-kit/skills${query}`, { signal }).then(async (res) => {
-        const body = await res.json().catch(() => null);
-        if (!res.ok || !body || !Array.isArray(body.groups)) {
-          throw new Error((body && body.error) || `HTTP ${res.status}`);
-        }
-        return body;
-      });
+      return kitGetJson(`/dsh-kit/skills${query}`, signal, (b) => Array.isArray(b.groups));
     }
 
     function postSkillOp(payload) {
-      return fetch("/dsh-kit/skills/op", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      }).then(async (res) => {
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const error = new Error(body.error || `HTTP ${res.status}`);
-          error.status = res.status;
-          throw error;
-        }
-        return body;
-      });
+      return kitPostJson("/dsh-kit/skills/op", payload);
     }
 
     /** 物理根短标签（行内徽标与目标选择条共用） */
@@ -10366,12 +10285,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       react.useEffect(() => {
         const controller = new AbortController();
         setState({ phase: "loading", text: "" });
-        fetch(`/dsh-kit/read?path=${encodeURIComponent(file)}`, { signal: controller.signal })
-          .then(async (res) => {
-            const body = await res.json().catch(() => null);
-            if (!res.ok || !body) throw new Error((body && body.error) || `HTTP ${res.status}`);
-            return body;
-          })
+        kitGetJson(`/dsh-kit/read?path=${encodeURIComponent(file)}`, controller.signal)
           .then((body) =>
             setState({
               phase: "ready",
