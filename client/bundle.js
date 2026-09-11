@@ -4995,7 +4995,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           jsxRuntime.jsxs("div", {
             className: "dshk-head",
             children: [
-              jsxRuntime.jsx(BranchIcon, {}),
+              // 分支位（面板头，分支名左侧）：官方 IconBranchOutline16（2026-09-11
+              // 用户定稿「分支用分支」；输入行 SCM 钮保持自绘弧线，两处分开定稿）
+              jsxRuntime.jsx(dswIcon("IconBranchOutline16") ?? BranchIcon, {}),
               // 分支按钮（vs 式：名称为主，推送计数不在这里——2026-09-07 用户定稿
               // 迁到独立推送按钮，分支显示不与推送语义重叠）：点击开固定悬浮分支浮层
               available && data
