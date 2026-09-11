@@ -1699,7 +1699,9 @@ window.__ModuleLoader__.load({
 .dshk-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);font-size:13px}
 /* 多终端：入口图标数量角标 + 标签条 + 堆叠 pane（隐藏 pane 离屏缓冲输出） */
 .dshk-enbtn{position:relative}
-.dshk-term-badge{position:absolute;top:-4px;right:-4px;min-width:14px;height:14px;padding:0 3px;box-sizing:border-box;border-radius:999px;background:var(--dsw-alias-brand-primary);color:#fff;font-size:9px;line-height:14px;text-align:center;font-weight:600}
+/* 品牌主色是单色令牌（浅色主题近黑、深色主题近白），主色底上的文字一律用 bg-base 取反——
+   写死 #fff 在深色主题就是白底白字（终端角标、配置/文件/Git 的保存钮、手机设置签同此） */
+.dshk-term-badge{position:absolute;top:-4px;right:-4px;min-width:14px;height:14px;padding:0 3px;box-sizing:border-box;border-radius:999px;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);font-size:9px;line-height:14px;text-align:center;font-weight:600}
 .dshk-tabs{display:inline-flex;align-items:center;gap:2px;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .dshk-tabs::-webkit-scrollbar{display:none}
 .dshk-tab{display:inline-flex;align-items:center;gap:5px;flex:none;height:22px;padding:0 5px 0 9px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap;max-width:170px;user-select:none}
@@ -1859,7 +1861,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-cfg-err{flex:1;min-width:0;margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-state-error-primary)}
 .dshk-cfg-btn{appearance:none;font:inherit;cursor:pointer;font-size:13px;line-height:1.5;border-radius:8px;padding:5px 14px}
 .dshk-cfg-btn-discard{background:none;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
-.dshk-cfg-btn-save{border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:#fff}
+.dshk-cfg-btn-save{border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
 .dshk-cfg-btn[disabled]{opacity:.5;cursor:default}
 /* 手机访问页（settings.section 内联区块，与技能页同级） */
 .dshk-phone{width:100%;max-width:460px}
@@ -1870,7 +1872,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-phone-body{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding-bottom:4px}
 .dshk-phone-tabs{display:inline-flex;gap:4px;padding:3px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-layer-3)}
 .dshk-phone-tab{appearance:none;border:0;background:none;font:inherit;font-size:11px;line-height:1;padding:5px 12px;border-radius:999px;color:var(--dsw-alias-label-secondary);cursor:pointer}
-.dshk-phone-tab[aria-pressed="true"]{background:var(--dsw-alias-brand-primary);color:#fff}
+.dshk-phone-tab[aria-pressed="true"]{background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
 .dshk-phone-qrwrap{display:flex;align-items:center;justify-content:center;min-height:120px;border-radius:10px;background:#fff;padding:6px;align-self:center}
 .dshk-phone-urlrow{display:flex;align-items:center;gap:6px;width:100%}
 .dshk-phone-copybtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:11px;line-height:1;padding:7px 10px;border-radius:8px;cursor:pointer}
@@ -2046,14 +2048,17 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-vault-slashback:hover{color:var(--dsw-alias-label-primary)}
 .dshk-vault-slashmore{font-size:10px;color:var(--dsw-alias-label-tertiary)}
 /* 日程模块：中心区第三 tab——周时间网格 + 待办/统计侧栏；计时芯片挂输入区 dock */
-.dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px;container-type:inline-size}
+.dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px}
 .dshk-sched-head{flex:none;display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dshk-sched-title{font-weight:600;font-size:15px}
 .dshk-sched-weeknav{display:flex;align-items:center;gap:6px}
 .dshk-sched-weeklabel{min-width:104px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:12px}
 .dshk-sched-navbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
 .dshk-sched-navbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-sched-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:row;min-width:0}
+/* 上待办 + 下网格（用户 2026-09-12 定稿，所有坞宽一致）：待办/统计横条在上、网格在下
+   吃满宽。左右分栏已废弃——待办行的固定件（勾选/截止徽章/计时钮）占 ~150px，坞宽一紧
+   就只剩把网格挤成每天十几像素这一条路（默认 300px 右栏、手机竖屏都实测过） */
+.dshk-sched-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;min-width:0}
 /* y 轴 mandatory 吸附到整点行：静止位置恒为「某小时标签贴在表头带下方」，
 标签既不会被 sticky 角格盖掉半截，也不会漂进表头区（2026-09-06 两轮反馈的根治）；
 scroll-padding 与 --dshk-sched-band 绑定，改带高只需改一处 */
@@ -2090,24 +2095,13 @@ ellipsis，窄列只截字不破版 */
 /* 够高的块（≥48px）标题放开两行，行数由 line-clamp 限死——
    短块维持单行省略，避免半截字被容器裁掉 */
 .dshk-sched-event.is-tall .dshk-sched-evtitle{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;word-break:break-word;line-clamp:2}
-/* 左列宽度跟着 pane 宽走：flex-basis 用 clamp(200px,30%,240px)（用户 2026-09-12：
-   固定 240 的问题是待办不随实际宽度变、只有网格在变）。240 是宽坞上限，30% 让网格在
-   中等坞宽多分到几十像素，200 是待办行（勾选+标题+截止徽章+计时钮）还能看的底线——
-   再窄就交给下面的窄坞断点，不在这里继续压 */
-.dshk-sched-sidecol{flex:0 1 clamp(200px,30%,240px);min-width:0;display:flex;flex-direction:column;gap:10px;padding:10px;border-right:1px solid var(--dsw-alias-border-l2);overflow:auto}
-/* 日程：待办卡与周网格同住日程 pane（待办列表在左列） */
-.dshk-sched-card.is-tasks{flex:1 1 auto;min-width:0}
-/* 统计卡跟着左列宽（原来钉 230px，左列一收窄就顶出去） */
+/* 顶部横条：待办卡 + 统计卡纵向堆成全宽，最高占 44%（再高就把网格压没了），
+   超出部分自己滚（待办列表 min-height:0 + overflow:auto，卡内滚动不顶出横条） */
+.dshk-sched-sidecol{flex:none;width:auto;min-width:0;max-height:44%;display:flex;flex-direction:column;gap:10px;padding:10px;border-bottom:1px solid var(--dsw-alias-border-l2);overflow:auto}
+/* 日程：待办卡与周网格同住日程 pane（待办列表在上，网格在下） */
+.dshk-sched-card.is-tasks{flex:1 1 auto;min-width:0;min-height:0;overflow:auto}
+/* 统计卡跟横条同宽（原来钉 230px 是左右分栏时代的尺寸） */
 .dshk-sched-card.is-stats{flex:none;width:auto}
-/* 窄坞（手机竖屏）回落到「上条下网」：240px 固定左列会把网格挤成每天十几像素
-   （用户 2026-09-12 手机实测：待办很宽、日程很窄），故窄坞里待办/统计堆在顶部、
-   网格吃满宽度。判据用**容器宽**不是视口宽——日程住在可缩放/可全屏的右栏 pane 里，
-   同一视口下 pane 宽可差数倍；横屏与电脑模式 pane 变宽即自动回到左右分栏。 */
-@container (max-width:560px){
-  .dshk-sched-body{flex-direction:column}
-  .dshk-sched-sidecol{flex:none;width:auto;max-height:44%;border-right:0;border-bottom:1px solid var(--dsw-alias-border-l2)}
-  .dshk-sched-card.is-tasks{min-height:0;overflow:auto}
-}
 .dshk-sched-card{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-3)}
 .dshk-sched-cardtitle{font-weight:600;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-sched-cardhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}
@@ -2278,7 +2272,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 /* 编辑模式 */
 .dshk-editarea{flex:1 1 auto;min-height:0;width:100%;box-sizing:border-box;resize:none;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;padding:8px 10px;white-space:pre;overflow:auto}
 .dshk-editarea:focus-visible{border-color:var(--dsw-alias-brand-primary);outline:none}
-.dshk-btn-save{appearance:none;border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:#fff;border-radius:6px;font:inherit;font-size:12px;line-height:1;padding:5px 10px;cursor:pointer}
+.dshk-btn-save{appearance:none;border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);border-radius:6px;font:inherit;font-size:12px;line-height:1;padding:5px 10px;cursor:pointer}
 .dshk-btn-save[disabled]{opacity:.6;cursor:default}
 .dshk-btn-cancel{appearance:none;background:none;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);border-radius:6px;font:inherit;font-size:12px;line-height:1;padding:5px 10px;cursor:pointer}
 .dshk-btn-cancel:hover:not([disabled]){background:var(--dsw-alias-interactive-bg-hover)}
@@ -6738,7 +6732,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return { data, stats, nowTick, fetchData, fetchStats, mutate };
     }
 
-    /** 待办卡（日程 pane 左列；侧栏待办索引半边 2026-09-11 随索引视图退役）：
+    /** 待办卡（日程 pane 顶部横条；侧栏待办索引半边 2026-09-11 随索引视图退役）：
      *  勾选完成、标题点击编辑（顺带把日程签带到眼前）、▶ 起表。数据由调用方给
      *  （useScheduleData 的 data/mutate），编辑弹窗卡内自理 */
     function ScheduleTasksCard({ data, mutate }) {
@@ -6988,8 +6982,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         ],
       });
 
-      // 左待办 + 右周网格（右栏 pane 定稿 2026-09-11，待办卡回归 pane）：左列
-      // 待办+统计卡片、右列网格吃满余宽；侧栏待办索引与左列共用待办卡组件
+      // 上待办 + 下网格（用户 2026-09-12 定稿，所有坞宽一致）：顶部横条放待办卡 +
+      // 统计卡（各自吃满宽），周网格在下方吃满余宽；侧栏待办索引与待办卡共用组件
       const sideCol = jsxRuntime.jsxs("div", { className: "dshk-sched-sidecol", children: [
         jsxRuntime.jsx(ScheduleTasksCard, { data, mutate }),
         stats
@@ -9895,7 +9889,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         jsxRuntime.jsx("div", { className: "dshk-vault-panehost", ref: (el) => vaultPaneSlot.set(el) }),
       ] });
     }
-    /** 日程 pane：ScheduleView（pane 内左待办 + 右周网格） */
+    /** 日程 pane：ScheduleView（pane 内上待办 + 下网格） */
     function SchedulePaneBody() {
       useFeaturePresence("schedule");
       return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(ScheduleView, { active: true }) });
