@@ -44,6 +44,11 @@ function dshHome() {
     const env = process.env.DSH_HOME;
     return env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh');
 }
+/** 技能池目录（$DSH_HOME/skill-pool）：不是 DSH 扫描根，只作跨工作区流通的货架。
+ *  池路径真相只此一处（vault 的「知识库目录」等用户配置与它无关）。 */
+export function defaultPoolDir() {
+    return path.join(dshHome(), POOL_DIRNAME);
+}
 /** 自 start 向上找 .git（目录或文件都算），找不到退回 start 本身（对齐 skill-filesystem 语义）。
  *  git 相关端点也用它定位项目根。 */
 export function findProjectRoot(start) {
@@ -66,7 +71,7 @@ export function findProjectRoot(start) {
 export function resolveRoots(cwd) {
     const home = dshHome();
     const dirById = {
-        pool: path.join(home, POOL_DIRNAME),
+        pool: defaultPoolDir(),
         'user-dsh': path.join(home, 'skills'),
         'user-agents': path.join(os.homedir(), '.agents', 'skills'),
     };
@@ -220,6 +225,7 @@ function scanRoot(root) {
         skills.push({
             name: typeof fm.data.name === 'string' && fm.data.name !== '' ? fm.data.name : ent.name.replace(/\.md$/i, ''),
             description: typeof fm.data.description === 'string' ? fm.data.description : '',
+            ...(typeof fm.data.version === 'string' && fm.data.version !== '' ? { version: fm.data.version } : {}),
             path: entryPath,
             file: skillFile,
             kind,

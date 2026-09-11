@@ -419,6 +419,7 @@ window.__ModuleLoader__.load({
       fileTreeEnabled: true,
       sourceControlEnabled: true,
       chatOpenFilePreview: true,
+      chatOpenLinkInBrowser: true,
       skillsPageEnabled: true,
       searchEnabled: true,
       searchMaxResults: 2,
@@ -433,7 +434,7 @@ window.__ModuleLoader__.load({
       monitorWaitMs: 60000,
       monitorMaxAuto: 10,
       monitorRepeatThreshold: 3,
-      vaultEnabled: true,
+      vaultEnabled: false,
       vaultRoot: "",
       terminalShortcut: "Ctrl+/",
       fileTreeShortcut: "Ctrl+,",
@@ -492,6 +493,7 @@ window.__ModuleLoader__.load({
         fileTreeEnabled: v.fileTreeEnabled !== false,
         sourceControlEnabled: v.sourceControlEnabled !== false,
         chatOpenFilePreview: v.chatOpenFilePreview === true,
+        chatOpenLinkInBrowser: v.chatOpenLinkInBrowser === true,
         skillsPageEnabled: v.skillsPageEnabled !== false,
         searchEnabled: v.searchEnabled !== false,
         previewMaxTabs:
@@ -515,7 +517,7 @@ window.__ModuleLoader__.load({
           Number.isInteger(v.monitorRepeatThreshold) && v.monitorRepeatThreshold >= 2 && v.monitorRepeatThreshold <= 10
             ? v.monitorRepeatThreshold
             : CFG_DEFAULTS.monitorRepeatThreshold,
-        vaultEnabled: v.vaultEnabled !== false,
+        vaultEnabled: v.vaultEnabled === true,
         vaultRoot: typeof v.vaultRoot === "string" ? v.vaultRoot : "",
         terminalShortcut:
           typeof v.terminalShortcut === "string" && parseCombo(v.terminalShortcut)
@@ -693,6 +695,36 @@ window.__ModuleLoader__.load({
       ev.preventDefault();
       ev.stopPropagation();
       hook.openPreview(resolved);
+    }
+
+    // ─────────── 对话链接改投内置浏览器（设置项 chatOpenLinkInBrowser，默认开）───────────
+    /** 官方 markdown 把链接渲染成 `<a target="_blank">`（新标签打开，系统浏览器接管）。
+     *  开启后把对话滚动区内的 http(s) 链接改投右栏浏览器签：宿主端点
+     *  /dsh-kit/browser/open 与面板 URL 栏同一条 humanOpen 语义（作用于观察页、浏览器
+     *  没在跑时拉起），点击即达，不依赖面板是否已挂载/已连上 WS。
+     *  判定链任何一环不命中都放行官方：自家面板元素、非 http(s)（相对链接/mailto/锚点）、
+     *  浏览器总开关关着（那开关关时入口与面板都隐藏，改投只会开出一个空壳）。 */
+    function onChatLinkClick(ev) {
+      if (!ev.isTrusted) return;
+      const cfg = cfgFromSnapshot(getCfgSnapshot());
+      if (cfg.chatOpenLinkInBrowser !== true || cfg.browserEnabled !== true) return;
+      if (!(ev.target instanceof Element)) return;
+      const kitAnc = ev.target.closest('[class*="dshk-"]');
+      if (kitAnc && kitAnc !== document.body && kitAnc !== document.documentElement) return;
+      const anchor = ev.target.closest("a[href]");
+      if (!anchor || anchor.hasAttribute("download")) return;
+      // 仅官方对话滚动区内的链接（markdown 正文、工具输出、web_search 结果都在其中）
+      if (!anchor.closest('[class*="_scroll"]')) return;
+      const href = (anchor.getAttribute("href") || "").trim();
+      if (!/^https?:\/\//i.test(href)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      setKitUi(openFeatureDock(kitUi, "browser"));
+      kitJson("/dsh-kit/browser/open", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: href }),
+      }).catch((error) => flashToast(tf("browserOpenFail", { error: String(error?.message ?? error) })));
     }
 
     // ─────────── 对话 @ 引用（文件树 → 输入框）───────────
@@ -893,6 +925,7 @@ window.__ModuleLoader__.load({
       skDisabled: "已禁用",
       skShadowed: "被覆盖",
       skShadowTip: "同名技能在更高优先级位置生效（优先级：.dsh > .agents > $DSH_HOME/skills > ~/.agents/skills）",
+      skVersionTip: "技能自带版本（frontmatter version）：用来对照自己手上这份抄的是哪版",
       skByPlugin: "随插件",
       skHide: "收起",
       skView: "详情",
@@ -917,6 +950,8 @@ window.__ModuleLoader__.load({
       cfgFileTreeEnabledHint: "隐藏入口与快捷键",
       cfgChatOpenFilePreview: "对话文件用插件预览打开",
       cfgChatOpenFilePreviewHint: "关 = 交回系统默认程序",
+      cfgChatOpenLinkInBrowser: "对话中的网址用内置浏览器打开",
+      cfgChatOpenLinkInBrowserHint: "关 = 交回系统浏览器新标签",
       cfgSkillsPageEnabled: "启用技能页",
       cfgSkillsPageEnabledHint: "关 = 不显示「技能」页",
       cfgSearchEnabled: "启用网页搜索",
@@ -960,6 +995,7 @@ window.__ModuleLoader__.load({
       browserReconnect: "连接断开，重连中…",
       browserNotRunning: "浏览器未启动——在上方输入网址回车，或等 agent 首次使用时自动拉起",
       browserNoPages: "没有打开的页面——在上方输入网址回车，或等 agent 下次导航自动出现在这里",
+      browserOpenFail: "内置浏览器打开失败：{error}",
       dockJobs: "后台任务",
       dockBrowser: "浏览器",
       pvCloseTab: "关闭此标签",
@@ -1059,7 +1095,7 @@ window.__ModuleLoader__.load({
       schedWeekdays: "一,二,三,四,五,六,日",
       schedOpFail: "操作失败：{error}",
       cfgVaultEnabled: "启用知识库",
-      cfgVaultEnabledHint: "输入行入口：侧栏目录 + 右栏页编辑",
+      cfgVaultEnabledHint: "输入行入口 + 右栏页编辑 + agent 检索工具（默认关；改开关重启生效）",
       cfgVaultRoot: "知识库目录",
       cfgVaultRootHint: "vault 根目录绝对路径；空 = 数据目录下 dsh-kit\\knowledge",
       vaultTitle: "知识库",
@@ -1307,6 +1343,7 @@ window.__ModuleLoader__.load({
       skDisabled: "Disabled",
       skShadowed: "Shadowed",
       skShadowTip: "A same-name skill at a higher-priority location takes effect (priority: .dsh > .agents > $DSH_HOME/skills > ~/.agents/skills)",
+      skVersionTip: "Skill's own version (frontmatter version), to compare against your own copy",
       skByPlugin: "Plugin-bundled",
       skHide: "Hide",
       skView: "Details",
@@ -1331,6 +1368,8 @@ window.__ModuleLoader__.load({
       cfgFileTreeEnabledHint: "Hides entry and shortcut",
       cfgChatOpenFilePreview: "Open chat files in plugin preview",
       cfgChatOpenFilePreviewHint: "Off = system default app",
+      cfgChatOpenLinkInBrowser: "Open chat links in the built-in browser",
+      cfgChatOpenLinkInBrowserHint: "Off = system browser new tab",
       cfgSkillsPageEnabled: "Enable skills page",
       cfgSkillsPageEnabledHint: "Off = no Skills page in Settings",
       cfgSearchEnabled: "Enable web search",
@@ -1374,6 +1413,7 @@ window.__ModuleLoader__.load({
       browserReconnect: "Reconnecting…",
       browserNotRunning: "Browser not started — type a URL above or wait for the agent's first use",
       browserNoPages: "No open pages — type a URL above, or the agent's next navigation will appear here",
+      browserOpenFail: "Failed to open in the built-in browser: {error}",
       dockJobs: "Background tasks",
       dockBrowser: "Browser",
       pvCloseTab: "Close this tab",
@@ -1493,7 +1533,7 @@ window.__ModuleLoader__.load({
       schedWeekdays: "Mo,Tu,We,Th,Fr,Sa,Su",
       schedOpFail: "Operation failed: {error}",
       cfgVaultEnabled: "Enable knowledge base",
-      cfgVaultEnabledHint: "Composer entry: sidebar directory + right-dock page editor",
+      cfgVaultEnabledHint: "Composer entry + right-dock editor + agent search tool (off by default; restart to apply)",
       cfgVaultRoot: "Knowledge base directory",
       cfgVaultRootHint: "Vault root absolute path; empty = dsh-kit\\knowledge in the data directory",
       vaultTitle: "Knowledge base",
@@ -2055,9 +2095,11 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-sched-weeklabel{min-width:104px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:12px}
 .dshk-sched-navbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
 .dshk-sched-navbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-/* 上待办 + 下网格（用户 2026-09-12 定稿，所有坞宽一致）：待办/统计横条在上、网格在下
-   吃满宽。左右分栏已废弃——待办行的固定件（勾选/截止徽章/计时钮）占 ~150px，坞宽一紧
-   就只剩把网格挤成每天十几像素这一条路（默认 300px 右栏、手机竖屏都实测过） */
+/* 顶部一条（左待办 + 右统计）→ 下网格（用户 2026-09-12 定稿，所有坞宽一致）。为什么要
+   左右并排而不是上下叠：叠起来待办行数一多就把顶部撑到上限，网格只剩半屏，而周视图
+   要的正是高度。整体左右分栏（待办+统计整列在左、网格在右）也已废弃——待办行的固定件
+   （勾选/截止徽章/计时钮）占 ~150px，坞宽一紧就只剩把网格挤成每天十几像素这一条路
+   （默认 300px 右栏、手机竖屏都实测过） */
 .dshk-sched-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;min-width:0}
 /* y 轴 mandatory 吸附到整点行：静止位置恒为「某小时标签贴在表头带下方」，
 标签既不会被 sticky 角格盖掉半截，也不会漂进表头区（2026-09-06 两轮反馈的根治）；
@@ -2095,13 +2137,16 @@ ellipsis，窄列只截字不破版 */
 /* 够高的块（≥48px）标题放开两行，行数由 line-clamp 限死——
    短块维持单行省略，避免半截字被容器裁掉 */
 .dshk-sched-event.is-tall .dshk-sched-evtitle{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;word-break:break-word;line-clamp:2}
-/* 顶部横条：待办卡 + 统计卡纵向堆成全宽，最高占 44%（再高就把网格压没了），
-   超出部分自己滚（待办列表 min-height:0 + overflow:auto，卡内滚动不顶出横条） */
-.dshk-sched-sidecol{flex:none;width:auto;min-width:0;max-height:44%;display:flex;flex-direction:column;gap:10px;padding:10px;border-bottom:1px solid var(--dsw-alias-border-l2);overflow:auto}
-/* 日程：待办卡与周网格同住日程 pane（待办列表在上，网格在下） */
-.dshk-sched-card.is-tasks{flex:1 1 auto;min-width:0;min-height:0;overflow:auto}
-/* 统计卡跟横条同宽（原来钉 230px 是左右分栏时代的尺寸） */
-.dshk-sched-card.is-stats{flex:none;width:auto}
+/* 顶部一条最高 36%（border-box：padding 也算进去，不然百分比会被 10px 内边距顶出去）；
+   整条高度由待办卡（限高 202px）与统计卡里较高的那个决定，与待办条数无关 */
+.dshk-sched-sidecol{flex:none;width:auto;min-width:0;max-height:36%;box-sizing:border-box;display:flex;flex-direction:row;align-items:stretch;gap:10px;padding:10px;border-bottom:1px solid var(--dsw-alias-border-l2)}
+/* 待办卡限高 202px（border-box）：正好容下 4 整行（卡内 10 内边距 + 28 表头 + 每行
+   28 + 行间距 8 = 58 + 36×4），条数再多也只占这么高、超出卡内滚——网格高度不该被待办
+   条数拽着走，也不该出现半截行。整条另有 36% 上限兜住矮坞（卡会更早被压住） */
+.dshk-sched-card.is-tasks{flex:1 1 auto;min-width:0;min-height:0;max-height:202px;box-sizing:border-box;overflow:auto}
+/* 统计卡窄而固定（数值列不需要宽度）；窄坞下限 118px——手机竖屏（≈390px pane）下
+   把它再撑宽就只剩待办标题被截成两三个字，落成一列读统计反而更划算 */
+.dshk-sched-card.is-stats{flex:0 0 clamp(118px,30%,220px);width:auto}
 .dshk-sched-card{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-3)}
 .dshk-sched-cardtitle{font-weight:600;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-sched-cardhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}
@@ -2114,7 +2159,8 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-tasktimer{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:1;width:20px;height:20px;border-radius:999px;cursor:pointer;flex:none}
 .dshk-sched-tasktimer:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-brand-primary)}
 .dshk-sched-emptytasks{font-size:12px;color:var(--dsw-alias-label-tertiary);text-align:center;padding:8px 0}
-.dshk-sched-statsgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+/* auto-fit + 64px 下限：统计卡窄到塞不下两列时自动落成一列，数值不互相挤 */
+.dshk-sched-statsgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:8px}
 .dshk-sched-stat{display:flex;flex-direction:column;gap:2px}
 .dshk-sched-stat b{font-size:15px;font-weight:600}
 .dshk-sched-stat span{font-size:11px;color:var(--dsw-alias-label-tertiary)}
@@ -6982,8 +7028,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         ],
       });
 
-      // 上待办 + 下网格（用户 2026-09-12 定稿，所有坞宽一致）：顶部横条放待办卡 +
-      // 统计卡（各自吃满宽），周网格在下方吃满余宽；侧栏待办索引与待办卡共用组件
+      // 顶部一条：待办卡（左，吃满余宽）+ 统计卡（右，固定窄列），周网格在下方吃满
+      // 余高（用户 2026-09-12 定稿，所有坞宽一致）；待办卡与侧栏待办索引共用组件
       const sideCol = jsxRuntime.jsxs("div", { className: "dshk-sched-sidecol", children: [
         jsxRuntime.jsx(ScheduleTasksCard, { data, mutate }),
         stats
@@ -10561,6 +10607,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 ? jsxRuntime.jsx("span", { className: "dshk-sk-badge", title: `${skRootShort(skill.root)} · ${t("skRankTip")}`, children: `(${skill.rank})` })
                 : null,
               skill.disabled ? jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", children: t("skDisabled") }) : null,
+              // 版本号（技能 frontmatter 的 version，自有约定）：池里的参考技能与个人
+              // 副本靠它对照「抄的是哪版」
+              typeof skill.version === "string" && skill.version !== ""
+                ? jsxRuntime.jsx("span", { className: "dshk-sk-badge", title: t("skVersionTip"), children: `v${skill.version}` })
+                : null,
               skill.shadowed ? jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", title: t("skShadowTip"), children: t("skShadowed") }) : null,
               typeof skill.description === "string" && skill.description !== ""
                 ? jsxRuntime.jsx("span", { className: "dshk-sk-desc", title: skill.description, children: skill.description })
@@ -10741,6 +10792,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { key: "previewMaxTabs", kind: "number", max: 20 },
       { key: "sourceControlEnabled", kind: "bool" },
       { key: "chatOpenFilePreview", kind: "bool" },
+      { key: "chatOpenLinkInBrowser", kind: "bool" },
       { key: "skillsPageEnabled", kind: "bool" },
       { key: "searchEnabled", kind: "bool" },
       { key: "searchMaxResults", kind: "number" },
@@ -10778,6 +10830,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { switchKey: "browserEnabled", fields: [] },
       { switchKey: "monitorEnabled", fields: ["monitorWaitMs", "monitorMaxAuto", "monitorRepeatThreshold"] },
       { switchKey: "chatOpenFilePreview", fields: [] },
+      { switchKey: "chatOpenLinkInBrowser", fields: [] },
       { switchKey: "skillsPageEnabled", fields: [] },
       { switchKey: "searchEnabled", fields: ["searchMaxResults"] },
       { switchKey: "phoneEnabled", fields: ["phoneKeepGatewayOn"] },
@@ -11225,7 +11278,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               name: "settings.plugin.item",
               key: "dsh-kit",
               id: "dsh-kit",
-              order: 30,
+              // 卡片顺序只认 priority：keyed 槽的注册排序不排 order（见
+              // dsh-client-ui-renderer 的 slots 核心），priority 全默认 0 时顺序 =
+              // 各客户端半边谁先 apply，本卡因此在首位/末位之间跳。给个大值把
+              // dsh-kit 钉在最后一张（用户定稿）
+              priority: 1000,
               inject: () => ({ scope: cfgScope }),
             },
             KitConfigCard,
@@ -11248,6 +11305,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       document.addEventListener("click", scheduleSkillIconSwap, true);
       // 对话文件点击接管（默认关闭：设置卡 chatOpenFilePreview 开启才生效）
       document.addEventListener("click", onChatOpenFileClick, true);
+      // 对话链接改投内置浏览器（默认开：设置卡 chatOpenLinkInBrowser）
+      document.addEventListener("click", onChatLinkClick, true);
     }
 
     exports.inject = ["slots", "settingsScope"];
