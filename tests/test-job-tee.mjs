@@ -94,5 +94,32 @@ function makeJob(producer) {
   check('形状不符静默不装', true)
 }
 
+// 8) 缓冲上限（JOB_TEE_BUFFER_CAP）：双方都在读就即时回收，一方长期不读则封顶
+{
+  // 8a) 双游标都在读：已读前缀即时回收（缓冲不会随任务时长线性增长）
+  let pending = 0
+  const job = { id: 'cap-a', status: 'running', readOutput: () => (pending > 0 ? ((pending -= 1), 'z'.repeat(1024)) : '') }
+  const st = installJobTee(job)
+  pending = 60
+  for (let i = 0; i < 30; i++) {
+    job.readOutput()
+    panelReadJobOutput(job)
+  }
+  check('双方都在读：缓冲即时回收（远小于累计产出）', st.buffer.length < 8 * 1024)
+
+  // 8b) 面板长期不读（面板没看那个任务）：缓冲封顶在 CAP，不随产出无限增长；
+  //     模型读到的是保留尾巴（超限的最旧增量按设计丢弃）
+  const CHUNK = 256 * 1024
+  let n = 0
+  const big = { id: 'cap-b', status: 'running', readOutput: () => (n < 40 ? `${n++}|` + 'x'.repeat(CHUNK - 8) : '') }
+  const st2 = installJobTee(big)
+  for (let i = 0; i < 40; i++) panelReadJobOutput(big)
+  check('一方不读：缓冲封顶不超 CAP', st2.buffer.length <= 2 * 1024 * 1024)
+  check('保留的是最新尾巴（含最后一段标记）', st2.buffer.includes('39|'))
+  check('最旧已丢弃（不含第一段标记）', !st2.buffer.includes('0|'))
+  const modelTail = big.readOutput()
+  check('模型首读：拿到保留尾巴且不超 CAP', modelTail.length > 0 && modelTail.length <= 2 * 1024 * 1024 && modelTail.includes('39|'))
+}
+
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAIL`)
 process.exit(failed === 0 ? 0 : 1)

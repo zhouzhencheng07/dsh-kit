@@ -2154,6 +2154,17 @@ export async function apply(ctx: KitCtx): Promise<void> {
         const broadcast = (obj: unknown) => {
           for (const ws of browserSockets) sendTo(ws, obj)
         }
+        /** 预序列化广播：帧体是几百 KB 的 base64 字符串，逐连接 JSON.stringify 会把
+         *  同一份大字符串重复编码 N 次——一次编好，所有连接复用同一个串 */
+        const broadcastJson = (json: string) => {
+          for (const ws of browserSockets) {
+            try {
+              if (ws.readyState === 1) ws.send(json)
+            } catch {
+              // 连接正在断开
+            }
+          }
+        }
         const offBrowserEvent = browserService.on((evt) => {
           // ws 投影统一字段形状：state/closed 无 tabId/url/title（投影为 undefined，JSON 序列化时丢弃）
           const flat = evt as { kind: string; tabId?: number; url?: string; title?: string }
@@ -2180,7 +2191,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
               if (msg.on === true && !watched) {
                 watched = true
                 // onFrame 只保留一份（服务内单回调），帧经 broadcast 扇出到全部连接
-                void browserService.watcherOpen((data) => broadcast({ t: 'frame', data }))
+                void browserService.watcherOpen((data) => broadcastJson(JSON.stringify({ t: 'frame', data })))
               } else if (msg.on === true) {
                 // 已订阅的连接重发 watch = 面板重新激活：浏览器若已收摊（关最后一页/
                 // 空闲关闭），懒启动拉回并自带空白页签——点开浏览器面板就该是

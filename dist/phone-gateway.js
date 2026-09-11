@@ -33,8 +33,50 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import zlib from 'node:zlib';
 /** 网关下发的授权 Cookie 名 */
 export const PHONE_COOKIE = 'dshk_phone';
+/** 小于这个体积不值得压（压完头开销都不够，还多占一次 CPU） */
+const COMPRESS_MIN_BYTES = 1024;
+/**
+ * 值得压的响应类型：文本类（JS/CSS/JSON/SVG/HTML…）。图片/字体/视频本身已压过，
+ * 再压只是白烧宿主的 CPU。**text/event-stream 明确排除**：SSE 靠逐条 flush 保实时，
+ * 过一遍压缩流会被攒成块，等于把实时性压没了。
+ */
+const COMPRESSIBLE_TYPE_RE = /^(?:text\/(?!event-stream)|application\/(?:json|javascript|xml|xhtml\+xml|wasm)|image\/svg\+xml)/i;
+export function isCompressibleType(contentType) {
+    return typeof contentType === 'string' && COMPRESSIBLE_TYPE_RE.test(contentType.trim());
+}
+/**
+ * 客户端 accept-encoding 里我们能提供的编码，按偏好取最优（br > gzip > deflate）；
+ * 缺失或不含任何可支持编码返回 null。q=0 视为明确拒绝。
+ */
+export function pickEncoding(acceptEncoding) {
+    if (typeof acceptEncoding !== 'string' || acceptEncoding.trim() === '')
+        return null;
+    const raw = acceptEncoding.toLowerCase();
+    for (const enc of ['br', 'gzip', 'deflate']) {
+        const m = new RegExp('(?:^|,)\\s*' + enc + '\\s*(?:;\\s*q=([0-9.]+))?').exec(raw);
+        if (m && (m[1] === undefined || Number(m[1]) > 0))
+            return enc;
+    }
+    return null;
+}
+/** 按编码名取压缩流/一次性压缩器 */
+function compressor(enc) {
+    return enc === 'br' ? zlib.createBrotliCompress() : enc === 'gzip' ? zlib.createGzip() : zlib.createDeflate();
+}
+function compressBuffer(enc, buf) {
+    return new Promise((resolve, reject) => {
+        const cb = (err, out) => (err ? reject(err) : resolve(out));
+        if (enc === 'br')
+            zlib.brotliCompress(buf, cb);
+        else if (enc === 'gzip')
+            zlib.gzip(buf, cb);
+        else
+            zlib.deflate(buf, cb);
+    });
+}
 /**
  * insecure-context 兜底：前端用 crypto.randomUUID 生成 rpcId，该 API 仅在
  * 安全上下文（HTTPS / localhost）存在，局域网明文 HTTP 访问会全站抛
@@ -191,7 +233,8 @@ export function startPhoneGateway({ port, upstreamPort, stateFile = defaultState
         const headers = { ...src };
         headers.host = `127.0.0.1:${upstreamPort}`;
         delete headers.origin;
-        // 统一要未压缩响应：HTML 注入需要原文；远程层由 VPS caddy 重新压缩给手机
+        // 统一要未压缩响应：上游（dsh 自身）不做压缩，拿到原文才能注入 HTML；
+        // 客户端要的压缩由本层按能力自己做（见 maybeCompress）
         delete headers['accept-encoding'];
         // 合并 Cookie：上游原值 + 自铸的 dsh web 会话 cookie（新版 dsh web 鉴权必需），
         // 再摘掉网关令牌，其余原样透传
@@ -254,21 +297,50 @@ export function startPhoneGateway({ port, upstreamPort, stateFile = defaultState
             delete out.connection;
             delete out['keep-alive'];
             delete out['transfer-encoding'];
+            const status = upRes.statusCode ?? 502;
+            const enc = pickEncoding(req.headers['accept-encoding']);
+            const bodyless = status === 204 || status === 304 || req.method === 'HEAD' || out['content-length'] === '0';
+            const alreadyEncoded = out['content-encoding'] !== undefined;
             if (/text\/html/i.test(String(out['content-type'] ?? '')) && req.method !== 'HEAD') {
-                // HTML 需注入兜底脚本：缓冲整个页面（dsh 首页仅十余 KB）再回写
+                // HTML 需注入兜底脚本：缓冲整个页面（dsh 首页仅十余 KB）再回写；
+                // 压不压另说——Caddy 层还会再压一次，这里只按客户端能力做
                 const chunks = [];
                 upRes.on('data', (c) => chunks.push(c));
                 upRes.on('end', () => {
-                    const injected = injectHeadScript(Buffer.concat(chunks).toString('utf8'), POLYFILL_SCRIPT);
-                    out['content-length'] = String(Buffer.byteLength(injected));
+                    const injected = Buffer.from(injectHeadScript(Buffer.concat(chunks).toString('utf8'), POLYFILL_SCRIPT), 'utf8');
                     delete out.etag;
-                    res.writeHead(upRes.statusCode ?? 502, out);
+                    if (enc !== null && !alreadyEncoded && injected.length >= COMPRESS_MIN_BYTES) {
+                        compressBuffer(enc, injected).then((zipped) => {
+                            res.writeHead(status, { ...out, 'content-encoding': enc, 'content-length': String(zipped.length), vary: 'accept-encoding' });
+                            res.end(zipped);
+                        }, () => {
+                            // 压缩失败退回原文（可用性优先；此时头还没发出去）
+                            res.writeHead(status, { ...out, 'content-length': String(injected.length) });
+                            res.end(injected);
+                        });
+                        return;
+                    }
+                    res.writeHead(status, { ...out, 'content-length': String(injected.length) });
                     res.end(injected);
                 });
                 upRes.on('error', () => res.destroy());
                 return;
             }
-            res.writeHead(upRes.statusCode ?? 502, out);
+            // 静态资源（JS/CSS/JSON/SVG…）：本地局域网直连时手机拿到的是明文，
+            // dsh 自己又不压——这里按客户端 accept-encoding 过一遍压缩流（不缓冲，边压边发）
+            if (enc !== null && !bodyless && !alreadyEncoded && isCompressibleType(out['content-type'])) {
+                const known = Number(out['content-length']);
+                if (!Number.isFinite(known) || known >= COMPRESS_MIN_BYTES) {
+                    delete out['content-length'];
+                    res.writeHead(status, { ...out, 'content-encoding': enc, vary: 'accept-encoding' });
+                    const gz = compressor(enc);
+                    gz.on('error', () => res.destroy());
+                    upRes.on('error', () => { gz.destroy(); res.destroy(); });
+                    upRes.pipe(gz).pipe(res);
+                    return;
+                }
+            }
+            res.writeHead(status, out);
             upRes.pipe(res);
             upRes.on('error', () => res.destroy());
         });
