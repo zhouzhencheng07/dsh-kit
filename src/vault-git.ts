@@ -7,7 +7,8 @@
 // 原第四时机「agent 编辑工具落盘前拦 fs/write-intent、fs/edit-intent 瀑布」已退役
 // （2026-09-09 用户定稿 + 实测：该瀑布对 profile 插件不可达——fs/observed 的 emit
 // 能到插件 ctx、intent waterfall 收不到；且拦截语义复杂、宿主升级难维护）。agent
-// 的版本管理改由知识库技能教会的 git -C add/commit 承担（src/vault-skill.ts）。
+// 的版本管理改由知识库使用技能教会的 git -C add/commit 承担（技能由用户自备，
+// 插件不随包分发）。
 //
 // 降级语义：git 未安装/命令失败/超时一律静默跳过——存档是便利设施，绝不阻断
 // 编辑主流程。附件与原始资料不进存档（.gitignore：attachments/ 是图片 pdf 等

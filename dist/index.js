@@ -75,7 +75,6 @@ import { loadToolsModule, buildBrowserTools } from "./browser-tools.js";
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from "./schedule.js";
 import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton, defaultVaultRoot, buildVaultTools } from "./vault.js";
 import { commitVault, ensureVaultGit } from "./vault-git.js";
-import { defaultSkillsDir, removeVaultSkill, writeVaultSkill } from "./vault-skill.js";
 import { sameOrigin } from "./web-guard.js";
 import { recycleDelete, recycleDeleteBatch } from "./recycle.js";
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在设置里改（phonePort，1-65535） */
@@ -433,6 +432,9 @@ export async function apply(ctx) {
         fileTreeEnabled: z.boolean().default(true),
         sourceControlEnabled: z.boolean().default(true),
         chatOpenFilePreview: z.boolean().default(true),
+        // 对话里的 http(s) 链接点击改投内置浏览器（默认开）。门控在浏览器半边（需要
+        // browserEnabled 同时开），宿主只提供 /dsh-kit/browser/open 这条管道
+        chatOpenLinkInBrowser: z.boolean().default(true),
         skillsPageEnabled: z.boolean().default(true),
         searchEnabled: z.boolean().default(true),
         searchMaxResults: z.number().step(1).min(1).max(8).default(2),
@@ -446,10 +448,12 @@ export async function apply(ctx) {
         phonePort: z.number().step(1).min(1).max(65535).default(3090),
         phoneKeepGatewayOn: z.boolean().default(false),
         jobsEnabled: z.boolean().default(true),
-        // 知识库（vault）：vaultEnabled = 右坞「知识库」标签入口可见性；vaultRoot =
-        // 知识库根目录（绝对路径；schema 默认值 = defaultVaultRoot()，字段恒有值）。
+        // 知识库（vault）：总开关，默认关（用户定）——关 = 不注册 vault_search、不开
+        // vault 端点、不种骨架（默认根是 $DSH_HOME 下的固定位置，没开功能就不该在盘上
+        // 凭空出现目录）；开 = 右坞「知识库」标签入口 + 检索工具 + 端点（改开关重启生效）。
+        // vaultRoot = 知识库根目录（绝对路径；schema 默认值 = defaultVaultRoot()，字段恒有值）。
         // 宿主据此提供索引/搜索/建页/写回端点，数据契约见 src/vault.ts 头注释。
-        vaultEnabled: z.boolean().default(true),
+        vaultEnabled: z.boolean().default(false),
         // schema 默认值即默认根：设置面与运行时读到的都是实际路径（与其他配置项
         // 同一口径——字段恒有值），用户显式清空保存为 '' 时由读取侧兜底回默认
         vaultRoot: z.string().default(defaultVaultRoot()),
@@ -490,31 +494,29 @@ export async function apply(ctx) {
     // vaultRoot 上次已知值：onChange 对任意保存都触发，靠值比对识别「知识库位置
     // 真的变了」，变了才补种骨架目录（null = 尚未见过值）
     let lastVaultRoot = null;
-    /** vaultRoot 配置变化时补建骨架（root + wiki/attachments，见 ensureVaultSkeleton）。
-     *  留空 = 用默认根（即开即用），骨架与 git 初始存档对默认根同样生效 */
+    /** 知识库开着时，vaultRoot 变化（含首次就绪）补建骨架（root + wiki/attachments，
+     *  见 ensureVaultSkeleton）。留空 = 用默认根；总开关关着时直接返回、不记
+     *  lastVaultRoot——盘上不留痕，之后开启还会正常补种 */
     function trackVaultRoot() {
         let configured = '';
+        let enabled = false;
         try {
             configured = String(readSettings().vaultRoot ?? '').trim();
+            enabled = readSettings().vaultEnabled === true;
         }
         catch {
             return;
         }
+        if (!enabled)
+            return;
         const root = configured === '' ? defaultVaultRoot() : configured;
         if (root === lastVaultRoot)
             return;
         lastVaultRoot = root;
-        // 骨架补种后做 git 初始存档（无 git / 已是仓库自动跳过，见 vault-git.ts），
-        // 再重写知识库使用技能（根路径随设置更新，见 vault-skill.ts）
+        // 骨架补种后做 git 初始存档（无 git / 已是仓库自动跳过，见 vault-git.ts）
         void ensureVaultSkeleton(root)
             .catch(() => { })
-            .then(() => ensureVaultGit(root))
-            .then(() => writeVaultSkill(defaultSkillsDir(), root));
-    }
-    // 卸载/禁用时收走生成的知识库技能（HMR 更新=卸载+重装，重装时 trackVaultRoot
-    // 会重写；回收站删除，失败静默）
-    if (typeof ctx.effect === 'function') {
-        ctx.effect(() => () => void removeVaultSkill(defaultSkillsDir()), 'dsh-kit.vault-skill.cleanup');
+            .then(() => ensureVaultGit(root));
     }
     /** setSource/onChange 钩子：settings 首次就绪时触发网关启用位检查（此时 readSettings
      *  才读到真实值）；注意 onSettingsReady 在 webServer 注入回填前是空函数——如果注入
@@ -654,9 +656,10 @@ export async function apply(ctx) {
             return '';
         }
     });
-    // ── 知识库 agent 工具（vault_search）：wiki 区检索，恒开同日程工具 ──
-    //   vaultRoot 未配置由 execute 降级为提示；不做会话启动注入 wiki 地图
-    //   （用户定稿 2026-09-09），agent 按需检索
+    // ── 知识库 agent 工具（vault_search）：wiki 区检索 ──
+    //   与总开关同命（默认关，重启生效，同浏览器工具先例）：关着就不注册，避免工具面
+    //   挂着一个必失败的工具。vaultRoot 未配置由 execute 降级为提示；不做会话启动注入
+    //   wiki 地图（用户定稿 2026-09-09），agent 按需检索
     const vaultDefs = scheduleToolsMod && typeof scheduleToolsMod.defineTool === 'function'
         ? buildVaultTools({ defineTool: scheduleToolsMod.defineTool, scanner: vaultScanner })
         : null;
@@ -665,6 +668,8 @@ export async function apply(ctx) {
     }
     ctx.inject(['settings', 'tools'], (caps) => {
         if (!vaultDefs)
+            return;
+        if (readSettings().vaultEnabled !== true)
             return;
         for (const def of vaultDefs) {
             try {
@@ -680,9 +685,8 @@ export async function apply(ctx) {
     //   原第四时机「agent 编辑工具落盘前拦 fs/write-intent、fs/edit-intent 瀑布」
     //   已退役（用户定稿 2026-09-09）：实测本宿主该瀑布对 profile 插件不可达
     //   （fs/observed 的 emit 能到、write-intent 的 waterfall 到不了，global 监听
-    //   同样收不到），且拦截语义复杂、随宿主升级难维护——agent 的版本管理改由知识
-    //   库技能教会的 git -C add/commit 承担（src/vault-skill.ts，trackVaultRoot 处
-    //   随 vaultRoot 变化重写）。
+    //   同样收不到），且拦截语义复杂、随宿主升级难维护——agent 的版本管理改由知识库
+    //   技能教会的 git -C add/commit 承担（技能是用户自己的资产，插件不随包分发）。
     // webServer 可能在本插件 apply 之后才挂载，用动态注入等它就绪
     ctx.inject(['webServer', 'credentials'], (webCtx) => {
         webCtx.effect(() => {
@@ -2135,6 +2139,8 @@ export async function apply(ctx) {
             // 帧 {t:'frame', data(jpeg base64)} 同通道。面板挂舞台「浏览器」功能签，
             // 关闭标签即断 WS。同源校验同终端；开关关闭时面板入口在浏览器端已隐藏，
             // 此处不再重复门控。
+            // 另有 HTTP 侧的 /dsh-kit/browser/open（见下）：对话链接点击改投内置浏览器，
+            // 走它而不是 WS——点击发生时面板未必已挂载/已连上，HTTP 不依赖任一状态。
             if (browserService.available) {
                 const browserSockets = new Set();
                 const sendTo = (ws, obj) => {
@@ -2282,6 +2288,56 @@ export async function apply(ctx) {
                 });
                 void disposeBrowserUpgrade;
                 void disposeBrowserProbe;
+                // 对话里的链接改投内置浏览器（浏览器半边 onChatLinkClick 调用）。语义与面板
+                // URL 栏一致（humanOpen：作用于观察页、不动 agent 活动页；浏览器没在跑时
+                // ensure() 拉起），好处是点击不必等面板挂载与 WS 就绪。browserEnabled 关时
+                // 客户端已不拦（改回官方新标签行为），这里再挡一道防止直接打端点。
+                const disposeBrowserOpen = webCtx.webServer.register({
+                    kind: 'exact',
+                    path: '/dsh-kit/browser/open',
+                    handler: (req, res) => {
+                        const json = (code, obj) => {
+                            res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+                            res.end(JSON.stringify(obj));
+                        };
+                        if (req.method !== 'POST') {
+                            json(405, { error: 'method not allowed' });
+                            return;
+                        }
+                        if (req.headers.origin !== undefined && !sameOrigin(req)) {
+                            json(403, { error: 'cross-origin denied' });
+                            return;
+                        }
+                        if (readSettings().browserEnabled === false) {
+                            json(503, { error: '内置浏览器已关闭' });
+                            return;
+                        }
+                        let raw = '';
+                        req.on('data', (c) => { raw += c.toString('utf8'); });
+                        req.on('end', () => {
+                            let body;
+                            try {
+                                body = JSON.parse(raw || '{}');
+                            }
+                            catch {
+                                json(400, { error: 'bad json' });
+                                return;
+                            }
+                            const url = String(body?.url ?? '').trim();
+                            if (!/^https?:\/\//i.test(url)) {
+                                json(400, { error: '仅支持 http/https URL' });
+                                return;
+                            }
+                            void browserService.humanOpen(url).then((r) => {
+                                if (r.ok)
+                                    json(200, { ok: true, tabId: r.tabId, url: r.url });
+                                else
+                                    json(502, { error: r.error });
+                            });
+                        });
+                    },
+                });
+                void disposeBrowserOpen;
             }
             // ── 手机访问网关（src/phone-gateway.ts）──
             // 网关启用位以状态文件直管（loadGatewayState/enabled 字段）：settings 读取器
@@ -2818,6 +2874,13 @@ export async function apply(ctx) {
                 }));
             };
             const vaultGuard = (res) => {
+                // 总开关关着就整片端点一起拒：知识库默认关（用户定），前端入口同步隐藏，
+                // 这里挡的是直接打端点的路径
+                if (readSettings().vaultEnabled !== true) {
+                    res.writeHead(403, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
+                    res.end(JSON.stringify({ error: 'vault-disabled' }));
+                    return null;
+                }
                 const root = vaultScanner.root();
                 if (root === null) {
                     res.writeHead(400, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
