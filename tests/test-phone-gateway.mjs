@@ -10,7 +10,7 @@ import path from 'node:path'
 
 import zlib from 'node:zlib'
 
-import { startPhoneGateway, PHONE_COOKIE, lanAddresses, pickEncoding, isCompressibleType } from '../src/phone-gateway.ts'
+import { startPhoneGateway, PHONE_COOKIE, PHONE_VIEW_COOKIE, lanAddresses, pickEncoding, isCompressibleType } from '../src/phone-gateway.ts'
 
 let failed = 0
 const check = (label, ok) => {
@@ -205,6 +205,49 @@ try {
   const page = await request(gwPort, { path: '/page', headers: { cookie: cookieHeader } })
   check('HTML 页注入了兜底脚本', page.status === 200 && page.body.includes('randomUUID'))
   check('注入位置在 <head> 开标签后', page.body.indexOf('randomUUID') > page.body.indexOf('<head>') && page.body.includes('<title>'))
+  // 远程视图辅助脚本：自动关内测声明弹窗 + 锁住宿主专属入口（置灰 + 点击同一句提示，不隐藏）
+  // 「在应用中打开」与设置页「打开配置文件」一律锁；宿主 picker 非 browse 时连挑选入口一起锁
+  check('HTML 页注入了远程视图辅助脚本', page.body.includes('dismissNotice') && page.body.includes('选择打开方式') && page.body.includes('中打开工作目录') && page.body.includes('添加工作区') && page.body.includes('打开配置文件'))
+  // 官方右侧边栏开始页的「工作区文件」胶囊（kit 自己那份文件树才是手机端用的）
+  check('官方「工作区文件」入口入列置灰', page.body.includes('data-sidebar-right-guide-entry=\\"files\\"'))
+  // 「选择工作区」是工作区切换 chip（aria-label 恒定，选中的工作区名只在文本里），锁了就没法切工作区
+  check('不锁「选择工作区」chip（只能切不能新增）', !page.body.includes('选择工作区') && !page.body.includes('Select workspace'))
+  check('锁的方式是置灰 + 点击提示（不是 display:none）', page.body.includes('opacity:.45!important') && !page.body.includes('display:none!important'))
+  // 文本可认的锁（菜单项/设置页按钮）也要置灰，不只是拦点击：弹层扫描覆盖 menu 与 dialog
+  check('弹层文本命中项一起置灰（dialog + menu + menuitem）', page.body.includes('graySurfaces') && page.body.includes('[role="menu"]') && page.body.includes('menuitem'))
+  check('提示只有一句（不逐钮写文案）', page.body.includes('"hint":"请在电脑端操作"') && !page.body.includes('该操作会在电脑上执行'))
+  // 远程端要能读改宿主的设置（模型/插件配置）：宣告 ownsHost，让 isLoopback 成立、持久化模式取 host
+  check('远程视图注入 ownsHost（设置通道走 host 持久化）', page.body.includes('ownsHost:true'))
+  // 触屏 sticky hover/focus：点过的按钮会一直算"悬停 + 聚焦"，宿主 Tooltip 气泡就挂在屏幕上
+  check('远程视图挂触屏 hover/focus 清理（touchend 后合成 focusout/mouseout）', page.body.includes('applyLock();armTouchCleanup();') && page.body.includes('touchend') && page.body.includes('focusout'))
+  // 宿主 picker 是 browse（远程客户端在页面里就能列目录/建文件夹）→ 挑选入口不锁，「在应用中打开」照旧锁
+  {
+    const gwBrowse = startPhoneGateway({
+      port: 0,
+      upstreamPort: upstream.port,
+      stateFile,
+      log: () => {},
+      lockPickerEntries: () => false,
+    })
+    try {
+      await new Promise((r) => setTimeout(r, 120))
+      const browsePage = await request(gwBrowse.port(), { path: '/page', headers: { cookie: cookieHeader } })
+      // 挑选入口是否锁住，用只在该分支出现的文本正则判别（选择器在 JSON 里是转义过的）
+      check('宿主 picker 为 browse：挑选入口不锁、宿主专属入口仍锁', browsePage.body.includes('dismissNotice') && !browsePage.body.includes('添加工作区|Add workspace') && browsePage.body.includes('打开配置文件') && browsePage.body.includes('选择打开方式'))
+    } finally {
+      gwBrowse.close()
+    }
+  }
+  // 视图覆盖：?dshk_view=desktop 落 Cookie 后退出远程视图（只剩内测弹窗那段）
+  {
+    const rr = await request(gwPort, { path: `/page?dshk_view=desktop`, headers: { cookie: cookieHeader } })
+    const viewSetCookie = Array.isArray(rr.headers['set-cookie']) ? rr.headers['set-cookie'][0] : rr.headers['set-cookie']
+    check('?dshk_view=desktop → 302 + 落 Cookie', rr.status === 302 && String(viewSetCookie).includes(`${PHONE_VIEW_COOKIE}=desktop`))
+    const desktopView = await request(gwPort, { path: '/page', headers: { cookie: `${cookieHeader}; ${PHONE_VIEW_COOKIE}=desktop` } })
+    check('desktop 视图：不锁任何入口、也不宣告 ownsHost（内测弹窗那段仍在）', desktopView.body.includes('dismissNotice') && !desktopView.body.includes('选择打开方式') && !desktopView.body.includes('ownsHost') && !desktopView.body.includes('applyLock();armTouchCleanup();'))
+    const back = await request(gwPort, { path: '/page', headers: { cookie: cookieHeader } })
+    check('未带视图 Cookie：回到远程视图（入口又锁上）', back.body.includes('选择打开方式'))
+  }
   const lenOk = Number(page.headers['content-length']) === Buffer.byteLength(page.body)
   check('content-length 已按注入后重算', lenOk)
   r = await request(gwPort, { path: '/', headers: { cookie: cookieHeader } })
@@ -230,7 +273,8 @@ try {
     const sse = await request(gwPort, { path: '/stream', headers: { cookie: cookieHeader, 'accept-encoding': 'gzip' } })
     check('SSE 不压（压了就没实时性）', sse.headers['content-encoding'] === undefined && sse.body.includes('data: hello'))
     const smallPageGz = await request(gwPort, { path: '/page', headers: { cookie: cookieHeader, 'accept-encoding': 'gzip' } })
-    check('小于 1KB 的注入页不压（原样明文）', smallPageGz.headers['content-encoding'] === undefined && smallPageGz.body.includes('randomUUID'))
+    const smallDec = smallPageGz.headers['content-encoding'] === 'gzip' ? zlib.gunzipSync(smallPageGz.raw).toString('utf8') : smallPageGz.body
+    check('小注入页压缩与否均内容完整（两个注入脚本抬高了体积，是否过 1KB 阈值不作断言）', smallDec.includes('randomUUID') && smallDec.includes('<title>'))
     const pageGz = await request(gwPort, { path: '/bigpage', headers: { cookie: cookieHeader, 'accept-encoding': 'gzip' } })
     const pageDec = zlib.gunzipSync(pageGz.raw).toString('utf8')
     check('大注入页按能力压（解回来仍含兜底脚本与原文）', pageGz.headers['content-encoding'] === 'gzip' && pageDec.includes('randomUUID') && pageDec.includes('<title>big</title>') && pageDec.includes('<p>fill</p>'.repeat(3)))
