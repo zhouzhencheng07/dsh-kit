@@ -2175,18 +2175,21 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-vault-slashback{padding:4px 10px 6px;font-size:11px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-bottom:1px dashed var(--dsw-alias-border-l1);margin-bottom:2px}
 .dshk-vault-slashback:hover{color:var(--dsw-alias-label-primary)}
 .dshk-vault-slashmore{font-size:10px;color:var(--dsw-alias-label-tertiary)}
-/* 日程模块：中心区第三 tab——周时间网格 + 待办/统计侧栏；计时芯片挂输入区 dock */
-.dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px}
+/* 日程模块：中心区第三 tab——周时间网格 + 待办/统计侧栏；计时芯片挂输入区 dock。
+   --dshk-sched-toprow = 顶部一条里统计卡的自然高度（单列四格：标题 17 + 四格各
+   「值 21 + 标签 15 + 格内缝 2」+ 格间距 8×3 + 标题与格 8 + 内边距 20 ≈ 218）；
+   待办卡的限高取同一个值（用户定稿：待办最高只到统计卡那么高，再多卡内滚）——
+   改统计的行数/字号时这个常量要跟着改 */
+.dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px;--dshk-sched-toprow:218px}
 .dshk-sched-head{flex:none;display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dshk-sched-title{font-weight:600;font-size:15px}
 .dshk-sched-weeknav{display:flex;align-items:center;gap:6px}
 .dshk-sched-weeklabel{min-width:104px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:12px}
 .dshk-sched-navbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
 .dshk-sched-navbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-/* 顶部一条（左待办 + 右统计）→ 下网格（用户 2026-09-12 定稿，所有坞宽一致）。为什么要
-   左右并排而不是上下叠：叠起来待办行数一多就把顶部撑到上限，网格只剩半屏，而周视图
-   要的正是高度。整体左右分栏（待办+统计整列在左、网格在右）也已废弃——待办行的固定件
-   （勾选/截止徽章/计时钮）占 ~150px，坞宽一紧就只剩把网格挤成每天十几像素这一条路
+/* 顶部一条（左待办 + 右统计）→ 下网格（用户 2026-09-12 定稿，所有坞宽一致）。
+   整体左右分栏（待办+统计整列在左、网格在右）已废弃——待办行的固定件（勾选/截止
+   徽章/计时钮）占 ~150px，坞宽一紧就只剩把网格挤成每天十几像素这一条路
    （默认 300px 右栏、手机竖屏都实测过） */
 .dshk-sched-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;min-width:0}
 /* y 轴 mandatory 吸附到整点行：静止位置恒为「某小时标签贴在表头带下方」，
@@ -2225,17 +2228,18 @@ ellipsis，窄列只截字不破版 */
 /* 够高的块（≥48px）标题放开两行，行数由 line-clamp 限死——
    短块维持单行省略，避免半截字被容器裁掉 */
 .dshk-sched-event.is-tall .dshk-sched-evtitle{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;word-break:break-word;line-clamp:2}
-/* 顶部一条最高 36%（border-box：padding 也算进去，不然百分比会被 10px 内边距顶出去）；
-   整条高度由待办卡（限高 202px）与统计卡里较高的那个决定，与待办条数无关 */
-.dshk-sched-sidecol{flex:none;width:auto;min-width:0;max-height:36%;box-sizing:border-box;display:flex;flex-direction:row;align-items:stretch;gap:10px;padding:10px;border-bottom:1px solid var(--dsw-alias-border-l2)}
-/* 待办卡限高 202px（border-box）：正好容下 4 整行（卡内 10 内边距 + 28 表头 + 每行
-   28 + 行间距 8 = 58 + 36×4），条数再多也只占这么高、超出卡内滚——网格高度不该被待办
-   条数拽着走，也不该出现半截行。整条另有 36% 上限兜住矮坞（卡会更早被压住） */
-.dshk-sched-card.is-tasks{flex:1 1 auto;min-width:0;min-height:0;max-height:202px;box-sizing:border-box;overflow:auto}
-/* 统计卡窄而固定（数值列不需要宽度）；窄坞下限 118px——手机竖屏（≈390px pane）下
-   把它再撑宽就只剩待办标题被截成两三个字，落成一列读统计反而更划算 */
+/* 顶部一条最高 = 统计卡高度 + 上下内边距（36% 是矮坞的第二道闸：pane 一矮，
+   --dshk-sched-toprow 会占掉大半屏，得让网格先活）。整条高度由待办卡（限高
+   --dshk-sched-toprow）与统计卡里较高的那个决定，与待办条数无关 */
+.dshk-sched-sidecol{flex:none;width:auto;min-width:0;max-height:min(36%,calc(var(--dshk-sched-toprow) + 20px));box-sizing:border-box;display:flex;flex-direction:row;align-items:stretch;gap:10px;padding:10px;border-bottom:1px solid var(--dsw-alias-border-l2)}
+/* 待办卡限高 = 统计卡自然高度（用户定稿）：条数再多也只占这么高、超出卡内滚，
+   网格高度不该被待办条数拽着走；常见高度下正好 4 整行（内边距 10 + 表头 28 +
+   行间距 8 + 每行 36），不会出现半截行 */
+.dshk-sched-card.is-tasks{flex:1 1 auto;min-width:0;min-height:0;max-height:var(--dshk-sched-toprow);box-sizing:border-box;overflow:auto}
+/* 统计卡窄而固定（数值列不需要宽度）；单列而非两列：四格两列时每格只剩约 80px，
+   「13小时46分」这种值（固有宽 82px）会被折断成两行（实测 576 坞宽下正是如此） */
 .dshk-sched-card.is-stats{flex:0 0 clamp(118px,30%,220px);width:auto}
-.dshk-sched-card{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-3)}
+.dshk-sched-card{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-3);min-height:0;overflow:auto}
 .dshk-sched-cardtitle{font-weight:600;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-sched-cardhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}
 .dshk-sched-taskinput{flex:1;min-width:0;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 8px;border-radius:6px}
@@ -2247,8 +2251,9 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-tasktimer{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:1;width:20px;height:20px;border-radius:999px;cursor:pointer;flex:none}
 .dshk-sched-tasktimer:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-brand-primary)}
 .dshk-sched-emptytasks{font-size:12px;color:var(--dsw-alias-label-tertiary);text-align:center;padding:8px 0}
-/* auto-fit + 64px 下限：统计卡窄到塞不下两列时自动落成一列，数值不互相挤 */
-.dshk-sched-statsgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:8px}
+/* 统计栅格恒单列：值（「13小时46分」固有宽 82px）在任何卡片宽度下都排得下，
+   不会折行——两列时每格只剩 ~80px，必折 */
+.dshk-sched-statsgrid{display:grid;grid-template-columns:1fr;gap:8px}
 .dshk-sched-stat{display:flex;flex-direction:column;gap:2px}
 .dshk-sched-stat b{font-size:15px;font-weight:600}
 .dshk-sched-stat span{font-size:11px;color:var(--dsw-alias-label-tertiary)}
