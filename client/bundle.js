@@ -73,7 +73,7 @@ window.__ModuleLoader__.load({
     let slotsCtx = null;
 
     // ─────────── 跨槽开合状态 ───────────
-    // 入口按钮（composer 工具行 / 侧栏底部钮）与舞台宿主（shell.overlay）是多个
+    // 入口按钮（composer 工具行）与右栏 pane/舞台宿主是多个
     // 独立槽位组件，状态必须跨槽共享：模块级不可变快照 + useSyncExternalStore 订阅
     // （getSnapshot 返回模块绑定值，恒定引用直到 set 替换）。
     // 舞台标签（2026-09-10 工作台定稿）：files（文件标签）/jobsOpen/browserOpen/
@@ -119,9 +119,9 @@ window.__ModuleLoader__.load({
       setKitUi(closeStageTab(kitUi, "browser"));
     }
 
-    const PREVIEW_MAX_DEFAULT = 8;
-    /** 文件标签上限（设置卡可配 1-20；快照未就绪回落默认 8）——舞台标签条上
-     *  最多同时开几个文件标签，再开新的就关掉最久没看的那张 */
+    const PREVIEW_MAX_DEFAULT = 3;
+    /** 文件标签上限（设置卡可配 1-20；快照未就绪回落默认 3，与 CFG_DEFAULTS
+     *  同值）——标签条上最多同时开几个文件标签，再开新的就关掉最久没看的那张 */
     function previewLimit() {
       const v = cfgFromSnapshot(getCfgSnapshot()).previewMaxTabs;
       return Math.max(1, Number.isInteger(v) ? v : PREVIEW_MAX_DEFAULT);
@@ -503,24 +503,26 @@ window.__ModuleLoader__.load({
 
     // ─────────── 插件配置 ───────────
     // 数据通道：官方 settings scope（宿主 installSettingsSection 注册的
-    // dsh-kit 命名空间）。快照未就绪时一律回退内置默认——功能全开、默认键位。
+    // dsh-kit 命名空间）。默认值与宿主 Config schema（src/index.ts）逐项同值——
+    // 恢复默认回落的是宿主 base，两处不同步会出现「默认值漂移」。
+    // 快照未就绪时一律回退内置默认——功能全开、默认键位。
     const CFG_DEFAULTS = {
       terminalEnabled: true,
       fileTreeEnabled: true,
       sourceControlEnabled: true,
-      chatOpenFilePreview: false,
+      chatOpenFilePreview: true,
       skillsPageEnabled: true,
       searchEnabled: true,
-      searchMaxResults: 5,
-      previewMaxTabs: 8,
-      phoneEnabled: false,
+      searchMaxResults: 2,
+      previewMaxTabs: 3,
+      phoneEnabled: true,
       phoneRemoteDomain: "",
       phonePort: 3090,
       phoneKeepGatewayOn: false,
       jobsEnabled: true,
       browserEnabled: true,
       monitorEnabled: true,
-      monitorWaitMs: 30000,
+      monitorWaitMs: 15000,
       monitorMaxAuto: 3,
       monitorRepeatThreshold: 3,
       vaultEnabled: true,
@@ -1011,25 +1013,26 @@ window.__ModuleLoader__.load({
       skDone: "完成",
       skDeleted: "已删除",
       cfgTitle: "套件（dsh-kit）",
-      cfgDesc: "终端 / 文件树 / 技能页 / 网页搜索的功能开关与快捷键。",
+      cfgDesc: "工作台功能开关与快捷键、会话监视、知识库、手机访问等套件配置。",
+      cfgGroupSidebar: "侧边栏",
       cfgTerminalEnabled: "启用终端",
       cfgTerminalEnabledHint: "关闭后隐藏入口按钮与快捷键",
       cfgFileTreeEnabled: "启用文件树",
       cfgFileTreeEnabledHint: "关闭后隐藏入口按钮与快捷键",
       cfgChatOpenFilePreview: "对话文件用插件预览打开",
-      cfgChatOpenFilePreviewHint: "对话中的产物/提及文件点击后改用插件预览（默认由系统程序打开）",
+      cfgChatOpenFilePreviewHint: "对话中的产物/提及文件点击后用插件预览打开；关闭后交回系统默认程序",
       cfgSkillsPageEnabled: "启用技能页",
       cfgSkillsPageEnabledHint: "关闭后设置里不显示「技能」页",
       cfgSearchEnabled: "启用网页搜索",
       cfgSearchEnabledHint: "关闭后走官方搜索渠道（重启生效）",
       cfgSearchMaxResults: "搜索结果条数",
-      cfgSearchMaxResultsHint: "1-8，默认 5；越多越耗上下文，保存即生效",
+      cfgSearchMaxResultsHint: "1-8，默认 2；越多越耗上下文，保存即生效",
       cfgPhoneEnabled: "显示「手机访问」页",
       cfgPhoneEnabledHint: "在设置中显示「手机访问」页",
       cfgJobsEnabled: "启用后台任务面板",
-      cfgJobsEnabledHint: "侧栏底部「任务」钮与舞台标签：查看并结束后台任务",
+      cfgJobsEnabledHint: "右栏「后台任务」签与开始页条目：查看并结束后台任务",
       cfgBrowserEnabled: "启用内置浏览器",
-      cfgBrowserEnabledHint: "侧栏底部「浏览器」钮与舞台标签：实时画面查看并操作 agent 的浏览器（重启生效）",
+      cfgBrowserEnabledHint: "右栏「浏览器」签与开始页条目：实时画面查看并操作 agent 的浏览器（工具注册重启生效）",
       cfgMonitorEnabled: "启用会话监视",
       cfgMonitorEnabledHint: "回合因 429 限流等可重试错误结束后等待自动发「继续」；流式输出重复内容（死循环征兆）时停止回合并续跑。只监视当前打开的会话",
       cfgMonitorWaitMs: "失败后等待(毫秒)",
@@ -1051,7 +1054,7 @@ window.__ModuleLoader__.load({
       monitorErrTRANSPORT: "网络传输错误",
       monitorErrEMPTY_RESPONSE: "模型返回空响应",
       cfgPreviewMaxTabs: "文件标签数上限",
-      cfgPreviewMaxTabsHint: "舞台文件标签超过该数时，打开新文件自动关掉最久没看的那个（1-20，即时生效）",
+      cfgPreviewMaxTabsHint: "文件签超过该数时，打开新文件自动关掉最久没看的那个（1-20，即时生效）",
       browserUrlPh: "输入网址，回车打开",
       browserGo: "打开",
       browserBack: "后退",
@@ -1079,7 +1082,6 @@ window.__ModuleLoader__.load({
       stageAdd: "打开标签",
       stageFileBtn: "文件",
       vaultIdxTitle: "知识库目录",
-      schedIdxTitle: "待办",
       browserStarting: "正在拉起浏览器…",
       browserErr: "浏览器出错：{error}",
       phoneGateStart: "启动网关",
@@ -1291,14 +1293,14 @@ window.__ModuleLoader__.load({
       vtbClearColor: "清除",
       cfgTerminalShortcut: "终端快捷键",
       cfgFileTreeShortcut: "文件树快捷键",
-      cfgSidebarShortcut: "侧边栏展开/收起快捷键",
-      cfgSidebarShortcutEnabled: "启用侧边栏快捷键",
-      cfgSidebarShortcutEnabledHint: "关闭后快捷键不再响应",
+      cfgSidebarShortcut: "左栏开合快捷键",
+      cfgSidebarShortcutEnabled: "启用左栏开合快捷键",
+      cfgSidebarShortcutEnabledHint: "关闭后 Ctrl+B 不再响应",
       cfgSourceControlEnabled: "启用源代码管理",
       cfgSourceControlEnabledHint: "关闭后隐藏入口按钮与快捷键",
       cfgScShortcut: "源代码管理快捷键",
       cfgVaultShortcut: "知识库快捷键",
-      cfgRightbarShortcut: "右栏收起/展开快捷键",
+      cfgRightbarShortcut: "右栏开合快捷键",
       cfgCapturing: "按下组合键…（Esc 取消）",
       cfgCapture: "修改",
       overridden: "已覆盖",
@@ -1311,7 +1313,7 @@ window.__ModuleLoader__.load({
       loadingCfg: "正在读取配置…",
       saveFailed: "本部署没有接受这些值，已保留供你修改。",
       invalidCombo: "组合键需包含一个主键和至少一个修饰键。",
-      invalidNumber: "需为 1-8 的整数。",
+      invalidNumber: "数值无效或超出允许范围。",
     };
     const en = {
       label: "Terminal",
@@ -1462,25 +1464,26 @@ window.__ModuleLoader__.load({
       skDone: "Done",
       skDeleted: "Deleted",
       cfgTitle: "Kit (dsh-kit)",
-      cfgDesc: "Feature switches and shortcuts for terminal / files / skills / web search.",
+      cfgDesc: "Feature switches and shortcuts, session monitor, knowledge base, phone access.",
+      cfgGroupSidebar: "Sidebars",
       cfgTerminalEnabled: "Enable terminal",
       cfgTerminalEnabledHint: "Hides the entry button and its shortcut",
       cfgFileTreeEnabled: "Enable file tree",
       cfgFileTreeEnabledHint: "Hides the entry button and its shortcut",
       cfgChatOpenFilePreview: "Open chat files in plugin preview",
-      cfgChatOpenFilePreviewHint: "Chat produced/mentioned file links open in the plugin preview pane (system default app otherwise)",
+      cfgChatOpenFilePreviewHint: "Chat produced/mentioned file links open in the plugin preview pane; off = system default app",
       cfgSkillsPageEnabled: "Enable skills page",
       cfgSkillsPageEnabledHint: "Hides the Skills page in Settings",
       cfgSearchEnabled: "Enable web search",
       cfgSearchEnabledHint: "Off = the official search channel (restart to apply)",
       cfgSearchMaxResults: "Search result count",
-      cfgSearchMaxResultsHint: "1-8, default 5; more uses more context; applies on save",
+      cfgSearchMaxResultsHint: "1-8, default 2; more uses more context; applies on save",
       cfgPhoneEnabled: "Show phone access page",
       cfgPhoneEnabledHint: "Shows the \"Phone access\" page in Settings",
       cfgJobsEnabled: "Enable background jobs panel",
-      cfgJobsEnabledHint: "Jobs button in the sidebar footer + stage tab: watch and stop background jobs",
+      cfgJobsEnabledHint: "Rightbar jobs tab + guide entry: watch and stop background jobs",
       cfgBrowserEnabled: "Enable built-in browser",
-      cfgBrowserEnabledHint: "Browser button in the sidebar footer + stage tab: watch and operate the agent's browser (restart to apply)",
+      cfgBrowserEnabledHint: "Rightbar browser tab + guide entry: watch and operate the agent's browser (tool registration applies on restart)",
       cfgMonitorEnabled: "Enable session monitor",
       cfgMonitorEnabledHint: "After a turn ends with a retryable error (429 rate limit etc.), wait then auto-send \"Continue\"; stop the turn and continue when streamed output repeats (dead-loop sign). Watches the currently open session only",
       cfgMonitorWaitMs: "Wait after failure (ms)",
@@ -1530,7 +1533,6 @@ window.__ModuleLoader__.load({
       stageAdd: "Open a tab",
       stageFileBtn: "Files",
       vaultIdxTitle: "Knowledge base",
-      schedIdxTitle: "To-dos",
       browserStarting: "Starting browser…",
       browserErr: "Browser error: {error}",
       phoneGateStart: "Start gateway",
@@ -1544,14 +1546,14 @@ window.__ModuleLoader__.load({
       cfgPhoneKeepGatewayOnHint: "Restores the last enabled state on restart (applies next start)",
       cfgTerminalShortcut: "Terminal shortcut",
       cfgFileTreeShortcut: "File tree shortcut",
-      cfgSidebarShortcut: "Sidebar toggle shortcut",
-      cfgSidebarShortcutEnabled: "Enable sidebar shortcut",
-      cfgSidebarShortcutEnabledHint: "Disables the sidebar shortcut",
+      cfgSidebarShortcut: "Left sidebar toggle",
+      cfgSidebarShortcutEnabled: "Enable left sidebar toggle",
+      cfgSidebarShortcutEnabledHint: "Disables the Ctrl+B shortcut",
       cfgSourceControlEnabled: "Enable source control",
       cfgSourceControlEnabledHint: "Hides the entry button and its shortcut",
       cfgScShortcut: "Source control shortcut",
       cfgVaultShortcut: "Knowledge base shortcut",
-      cfgRightbarShortcut: "Rightbar toggle shortcut",
+      cfgRightbarShortcut: "Right sidebar toggle",
       cfgCapturing: "Press a combo… (Esc to cancel)",
       cfgCapture: "Change",
       overridden: "Overridden",
@@ -1564,7 +1566,7 @@ window.__ModuleLoader__.load({
       loadingCfg: "Reading configuration…",
       saveFailed: "The deployment did not accept these values; they were left for you to correct.",
       invalidCombo: "A combo needs one key plus at least one modifier.",
-      invalidNumber: "Must be an integer from 1-8.",
+      invalidNumber: "Invalid or out of the allowed range.",
       phoneTitle: "Phone access",
       phoneStatusOn: "Gateway running · port {port}",
       phoneStatusErr: "Gateway not running: {error}",
@@ -2017,17 +2019,20 @@ body.dshk-stage-open [class*="_scroll"] > [class*="_slot"]{display:block!importa
 .dshk-cfg-chev{flex:none;color:var(--dsw-alias-label-tertiary);transition:transform .16s var(--ds-ease-in-out);display:block}
 .dshk-cfg-chev[data-open]{transform:rotate(180deg)}
 .dshk-cfg-body{border-top:1px solid var(--dsw-alias-border-l2);margin:0 16px;padding-bottom:8px}
-.dshk-cfg-field{display:flex;align-items:center;gap:8px;padding:8px 0}
-.dshk-cfg-group ~ .dshk-cfg-group{border-top:1px solid var(--dsw-alias-border-l2)}
+.dshk-cfg-field{display:flex;align-items:center;gap:8px;padding:12px 0;border-bottom:.8px solid var(--dsw-alias-border-l1)}
+.dshk-cfg-group ~ .dshk-cfg-group{margin-top:10px}
+.dshk-cfg-grouptitle{font-size:12px;font-weight:500;line-height:18px;color:var(--dsw-alias-label-secondary);padding:6px 0 2px}
+.dshk-cfg-field:last-child{border-bottom:none}
 .dshk-cfg-sub{margin-left:14px}
-.dshk-cfg-label{flex:none;font-size:13px;font-weight:500;line-height:1.5;color:var(--dsw-alias-label-primary)}
-.dshk-cfg-badges{display:inline-flex;align-items:center;gap:8px;flex:none;height:19px;margin-left:auto}
+.dshk-cfg-fieldtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.dshk-cfg-label{font-size:14px;font-weight:400;line-height:22px;color:var(--dsw-alias-label-primary)}
+.dshk-cfg-badges{display:inline-flex;align-items:center;gap:8px;flex:none;height:19px}
 .dshk-cfg-badge{display:inline-flex;align-items:center;height:19px;box-sizing:border-box;padding:0 8px;border-radius:999px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary);font-size:11px;font-weight:500;line-height:17px;white-space:nowrap}
 .dshk-cfg-reset{font:inherit;background:none;border:0;padding:0;height:18px;display:inline-flex;align-items:center;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5}
 .dshk-cfg-reset:hover:not(:disabled){color:var(--dsw-alias-label-primary)}
 .dshk-cfg-check{flex:none;width:16px;height:16px;accent-color:var(--dsw-alias-brand-primary)}
-.dshk-cfg-hint{flex:1;min-width:0;font-size:12px;line-height:1.4;color:var(--dsw-alias-label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dshk-cfg-invalid{flex:1;min-width:0;font-size:12px;line-height:1.4;color:var(--dsw-alias-state-error-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dshk-cfg-hint{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
+.dshk-cfg-invalid{font-size:12px;line-height:18px;color:var(--dsw-alias-state-error-primary)}
 .dshk-cfg-status{padding:6px 0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5;margin:0}
 .dshk-cfg-combo{appearance:none;flex:1;min-width:0;font:inherit;font-family:ui-monospace,Consolas,monospace;font-size:12px;cursor:pointer;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);border-radius:8px;padding:6px 12px;line-height:1.5}
 .dshk-cfg-combo:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -6651,8 +6656,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     // ─────────── 后台任务面板 ───────────
-    // 入口在舞台标签栏「+」菜单与侧栏底部钮（标签带运行中计数徽标）；
-    // 面板本体由 KitSurfaces 在
+    // 入口在右栏开始页条目与舞台标签栏「+」菜单（回退路径；标签带运行中计数徽标）；
+    // 右栏路径由官方 dock 签承载 pane，回退路径由 KitSurfaces 在
     // shell.overlay 渲染——舞台任务标签。任务数据源与官方
     // JobListAction 相同——useSessions 的 jobsBySession（session/jobs 推送）。
     // 「结束」走 dsh-kit 宿主端点（/dsh-kit/jobs/kill，权限按 session 隔离，
@@ -10298,9 +10303,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           : jsxRuntime.jsx(BrowserPanel, { active: true }),
       });
     }
-    /** 计时芯片（会话 header 工具区，自侧栏底部迁来）：空闲=开始钮（弹起表
+    /** 计时芯片（会话 header 工具区）：空闲=开始钮（弹起表
      *  浮层：待办清单 + 自由名目），运行=脉冲点 + 实时时长（点击弹停表确认）。
-     *  浮层改挂 header 右缘（fixed），其余与侧栏底部钮同一套数据流 */
+     *  浮层挂 header 右缘（fixed） */
     function HeaderTimer() {
       const { running, nowTick, stop } = useRunningTimer();
       const [timerPick, setTimerPick] = react.useState(false);
@@ -10397,7 +10402,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // ─────────── 面板宿主（shell.overlay 全帧浮层）───────────
     // 舞台容器与终端停靠在这里渲染（fixed 定位不受 composer 祖先
     // stacking context 影响）；知识库单实例挂载、文件树/索引的 sidebar.workspaces
-    // 动态注册、侧栏底部按钮区、几何 RO、快捷键监听全部挂在这个常驻根组件里。
+    // 动态注册、几何 RO、快捷键监听全部挂在这个常驻根组件里。
     function KitSurfaces(props) {
       react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
       const cwd = useCurrentCwd(props);
@@ -10405,7 +10410,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const rbActive = useRightbarActive();
       const snap = react.useSyncExternalStore(subscribeCfg, getCfgSnapshot);
       const cfg = cfgFromSnapshot(snap);
-      // useSessions 透传给侧栏底部钮（在跑任务徽标）：footer 槽位的 inject 闭包
+      // useSessions 透传给右栏任务 pane/开始页（在跑任务徽标）：inject 闭包
       // 从这里取最新值（槽位注册发生在 effect，渲染期的 props 用模块变量桥接）
       shellShare.current = props;
       // 对话文件点击接管状态：面板门控（文件标签可用）与当前会话 cwd 每次渲染同步，
@@ -10436,7 +10441,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return undefined;
       }, [cfg.vaultEnabled]);
 
-      // 座位门控：按配置动态注册/注销输入框入口、侧栏底部按钮区与技能页（设置卡
+      // 座位门控：按配置动态注册/注销输入框入口与技能页（设置卡
       // 本体不受门控，否则关掉就再也打不开）。快照未就绪按默认全开处理，首个
       // ready 快照到达后本效果自动重跑纠正。
       react.useEffect(() => {
@@ -11167,21 +11172,22 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { key: "sidebarShortcut", kind: "combo" },
     ];
     // 分组渲染：开关行 + 该功能启用时才显示的子配置（所见即所得，保存才落盘生效）；
-    // switchKey 为 null 的组没有开关行，只列字段（右栏开合无启用开关，只有快捷键；
-    // 日程快捷键 2026-09-11 撤）。
-    // 组顺序：文件树 → 源代码管理 → 终端 → 知识库/右栏开合 → 技能页 → 网页搜索 →
-    // 手机访问（用户定稿放最下）。远程域名不在此卡——编辑入口在「手机访问」页内。
+    // switchKey 为 null 的组没有开关行，只列字段（侧边栏开合：左右两键 + 左栏启用位）。
+    // title 组头（侧边栏这类无单一开关的组）——其余组的功能开关行本身就是组头。
+    // 组顺序（2026-09-11 用户定稿整理）：侧边栏（左右放一起）→ 文件树 → 源代码管理
+    // → 终端 → 知识库 → 后台任务 → 浏览器 → 会话监视 → 对话文件预览 → 技能页
+    // → 网页搜索 → 手机访问（用户定稿放最下）。远程域名不在此卡——编辑入口在
+    // 「手机访问」页内。
     const CFG_GROUPS = [
-      { switchKey: "sidebarShortcutEnabled", fields: ["sidebarShortcut"] },
+      { title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcutEnabled", "sidebarShortcut", "rightbarShortcut"] },
       { switchKey: "fileTreeEnabled", fields: ["fileTreeShortcut", "previewMaxTabs"] },
-      { switchKey: "chatOpenFilePreview", fields: [] },
       { switchKey: "sourceControlEnabled", fields: ["scShortcut"] },
+      { switchKey: "terminalEnabled", fields: ["terminalShortcut"] },
+      { switchKey: "vaultEnabled", fields: ["vaultRoot", "vaultShortcut"] },
       { switchKey: "jobsEnabled", fields: [] },
       { switchKey: "browserEnabled", fields: [] },
       { switchKey: "monitorEnabled", fields: ["monitorWaitMs", "monitorMaxAuto", "monitorRepeatThreshold"] },
-      { switchKey: "vaultEnabled", fields: ["vaultRoot", "vaultShortcut"] },
-      { switchKey: null, fields: ["rightbarShortcut"] },
-      { switchKey: "terminalEnabled", fields: ["terminalShortcut"] },
+      { switchKey: "chatOpenFilePreview", fields: [] },
       { switchKey: "skillsPageEnabled", fields: [] },
       { switchKey: "searchEnabled", fields: ["searchMaxResults"] },
       { switchKey: "phoneEnabled", fields: ["phoneKeepGatewayOn"] },
@@ -11399,8 +11405,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 ? jsxRuntime.jsx("input", {
                     type: "number",
                     className: "dshk-cfg-text dshk-cfg-num",
-                    min: 1,
-                    max: 8,
+                    min: spec.min ?? 1,
+                    max: spec.max ?? 8,
                     step: 1,
                     value: state.text,
                     disabled: !writable,
@@ -11424,30 +11430,27 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     onClick: () => startCapture(field),
                     children: capturing === field ? t("cfgCapturing") : state.text,
                   });
-          // 紧凑单行（用户定稿）：勾选框在标题前，其余控件跟在标题后，短说明
-          // 占据剩余宽度（超长省略号 + 悬停看全），覆盖徽标恒右对齐；组合键
-          // 字段无说明——按钮文本即当前值，非法时原位显示错误
-          const hintEl = state.invalid
-            ? jsxRuntime.jsx("span", {
-                className: "dshk-cfg-invalid",
-                children: t(spec.kind === "number" ? "invalidNumber" : "invalidCombo"),
-              })
-            : spec.kind === "combo"
-              ? null
-              : jsxRuntime.jsx("span", {
-                  className: "dshk-cfg-hint",
-                  title: t(cfgLabelKey(field, "Hint")),
-                  children: t(cfgLabelKey(field, "Hint")),
-                });
+          // 官方行模型（对齐通用设置页）：左列 = 标题(14px) + 说明(12px 三级色)
+          // 纵排，控件恒右置。组合键字段无说明——按钮文本即当前值，非法时说明位
+          // 原位显示错误；「已覆盖/恢复默认」徽标插在文本列与控件之间。
+          const hintText = t(cfgLabelKey(field, "Hint"));
+          const textCol = jsxRuntime.jsxs("div", {
+            className: "dshk-cfg-fieldtext",
+            children: [
+              jsxRuntime.jsx("span", { className: "dshk-cfg-label", children: t(cfgLabelKey(field, "")) }),
+              state.invalid
+                ? jsxRuntime.jsx("span", {
+                    className: "dshk-cfg-invalid",
+                    children: t(spec.kind === "number" ? "invalidNumber" : "invalidCombo"),
+                  })
+                : spec.kind === "combo" || !hintText
+                  ? null
+                  : jsxRuntime.jsx("span", { className: "dshk-cfg-hint", children: hintText }),
+            ],
+          });
           return jsxRuntime.jsxs("div", {
             className: isSub ? "dshk-cfg-field dshk-cfg-sub" : "dshk-cfg-field",
-            children: [
-              spec.kind === "bool" ? control : null,
-              jsxRuntime.jsx("span", { className: "dshk-cfg-label", children: t(cfgLabelKey(field, "")) }),
-              spec.kind === "bool" ? null : control,
-              hintEl,
-              badges(state, field),
-            ],
+            children: [textCol, badges(state, field), control],
           });
         };
 
@@ -11499,18 +11502,20 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     available
                       ? CFG_GROUPS.map((group) => {
                           // 勾选启用才展开该功能的子配置（草稿态即时显隐，保存落盘生效）；
-                          // switchKey 为 null 的组没有开关行（日程：只有快捷键可配）
+                          // switchKey 为 null 的组没有开关行（侧边栏组：左右两键 + 左栏
+                          // 启用位平铺，title 作组头）
                           const on = group.switchKey === null ? true : fieldState(group.switchKey).text === "true";
                           return jsxRuntime.jsxs(
                             "div",
                             {
                               className: "dshk-cfg-group",
                               children: [
+                                group.title ? jsxRuntime.jsx("div", { className: "dshk-cfg-grouptitle", children: t(group.title) }) : null,
                                 group.switchKey === null ? null : renderField(group.switchKey),
                                 on ? group.fields.map((f) => renderField(f, group.switchKey !== null)) : null,
                               ],
                             },
-                            group.switchKey ?? group.fields.join("+"),
+                            group.switchKey ?? group.title ?? group.fields.join("+"),
                           );
                         })
                       : null,
@@ -11639,8 +11644,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       } else {
         registerRightbar(ctx);
       }
-      // 计时入口现居侧栏底部按钮区（右坞时代曾挂 composer/坞收起栏，均随右坞
-      // 退役迁移）；运行态另有悬浮小窗与舞台日程标签内芯片。组件内部拉
+      // 计时入口现居会话 header 工具区（右坞时代曾挂 composer/坞收起栏/侧栏底部
+      // 按钮，均随迁移退役）；运行态另有悬浮小窗与日程 pane 内芯片。组件内部拉
       // /dsh-kit/schedule/* 数据，与 session 无关。
       // 导航图标替换是点击驱动的轻量方案：打开设置/面板内切换都源于一次 click
       document.addEventListener("click", scheduleSkillIconSwap, true);
