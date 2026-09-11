@@ -951,13 +951,9 @@ window.__ModuleLoader__.load({
       scBranchOpFail: "分支操作失败",
       scBranchUpstream: "上游",
       scDetached: "分离头",
-      scActions: "更多操作",
       scPublish: "发布分支",
-      scPush: "推送到远程",
-      scPull: "从远程拉取",
       scPullDone: "已拉取",
       scPullFail: "拉取失败",
-      scStageAll: "暂存全部更改",
       scSynced: "已同步，无待推送提交",
       scPushAhead: "推送 {n} 个提交到远程",
       scBehind: "落后 {n} 个提交",
@@ -1408,13 +1404,9 @@ window.__ModuleLoader__.load({
       scBranchOpFail: "Branch operation failed",
       scBranchUpstream: "upstream",
       scDetached: "detached HEAD",
-      scActions: "More actions…",
       scPublish: "Publish branch",
-      scPush: "Push to remote",
-      scPull: "Pull from remote",
       scPullDone: "Pulled",
       scPullFail: "Pull failed",
-      scStageAll: "Stage all changes",
       scSynced: "Synced — nothing to push",
       scPushAhead: "Push {n} commit(s) to remote",
       scBehind: "{n} commit(s) behind",
@@ -3851,26 +3843,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         },
       );
     }
-    function TreeFileIcon() {
-      return jsxRuntime.jsx(
-        "svg",
-        {
-          className: "dshk-vault-ticon",
-          width: 13,
-          height: 13,
-          viewBox: "0 0 16 16",
-          "aria-hidden": true,
-          children: jsxRuntime.jsx("path", {
-            d: "M4 2.2a0.7 0.7 0 0 1 0.7-0.7h4.2l3.6 3.6v8.6a0.7 0.7 0 0 1-0.7 0.7H4.7a0.7 0.7 0 0 1-0.7-0.7v-11.5z M9 1.8v3.3h3.3",
-            fill: "none",
-            stroke: "currentColor",
-            strokeWidth: 1.2,
-            strokeLinejoin: "round",
-          }),
-        },
-      );
+    /** 官方文件类型图标（primitives FileTypeIcon + classifyFileType，官方 files
+     *  树同款，2026-09-11 用户定稿「文件图标用官方的」）：按扩展名出图形；
+     *  primitives 不可用时回退空位（行内不留自绘图形） */
+    function FileTypeIcon16({ name }) {
+      const C = dswPrimIcons ? dswPrimIcons.FileTypeIcon : null;
+      const kind = C && typeof dswPrimIcons.classifyFileType === "function" ? dswPrimIcons.classifyFileType(name) : null;
+      return kind ? jsxRuntime.jsx(C, { kind, size: 13 }) : null;
     }
-
     /** 删除图标：垃圾桶 */
     function TrashIcon(props) {
       const _official = dswIcon("IconTrashOutline16");
@@ -4030,7 +4010,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         // 行本身保留——空目录有"看得见"的必要（用户定稿 2026-09-07）；目录/文件
         // 图标常驻（箭头消失后空目录靠它和文件区分，2026-09-08）
         jsxRuntime.jsx("span", { className: "dshk-chev", children: entry.dir && entry.empty !== true ? jsxRuntime.jsx(ChevronIcon, { open: !!info }) : null }, "chev"),
-        jsxRuntime.jsx("span", { className: "dshk-ticonwrap", children: entry.dir ? jsxRuntime.jsx(TreeFolderIcon, {}) : jsxRuntime.jsx(TreeFileIcon, {}) }, "dicon"),
+        jsxRuntime.jsx("span", { className: "dshk-ticonwrap", children: entry.dir ? jsxRuntime.jsx(TreeFolderIcon, {}) : jsxRuntime.jsx(FileTypeIcon16, { name: entry.name }) }, "dicon"),
         nameEl,
       ];
       if (rowActions.length > 0) {
@@ -4629,65 +4609,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return jsxRuntime.jsx("span", { className: "dshk-branch-track", title: b.track || b.upstream, children: `${tp.ahead ? "↑" + tp.ahead : ""}${tp.behind ? "↓" + tp.behind : ""}` });
     }
 
-    // ─────────── ⋯ 操作菜单（vs 式：推送/发布分支收敛在标题行）───────────
-    // 事件面与 GitBranchMenu 相同：Esc / 外部点击关闭，触发按钮以 data-popkey="actions"
-    // 豁免（自身 toggle）。items: [{key, label, disabled?, run}]。
-    function GitActionsMenu({ rect, items, onClose }) {
-      const hostRef = react.useRef(null);
-      react.useEffect(() => {
-        const onKey = (e) => { if (e.key === "Escape") onClose(); };
-        const onDown = (e) => {
-          if (e.target instanceof Element) {
-            const el = e.target.closest("[data-popkey]");
-            if (el && el.getAttribute("data-popkey") === "actions") return;
-          }
-          if (hostRef.current && e.target instanceof Element && !hostRef.current.contains(e.target)) onClose();
-        };
-        window.addEventListener("keydown", onKey, true);
-        window.addEventListener("pointerdown", onDown, true);
-        return () => {
-          window.removeEventListener("keydown", onKey, true);
-          window.removeEventListener("pointerdown", onDown, true);
-        };
-      }, [onClose]);
-      const viewportW = typeof window !== "undefined" && window.innerWidth ? window.innerWidth : 1200;
-      const viewportH = typeof window !== "undefined" && window.innerHeight ? window.innerHeight : 800;
-      const style = {
-        left: Math.min(Math.max(8, rect.left), Math.max(8, viewportW - 200)),
-        top: Math.min(Math.max(8, rect.top), Math.max(8, viewportH - 140)),
-      };
-      return jsxRuntime.jsx("div", {
-        ref: hostRef,
-        className: "dshk-menu",
-        style,
-        children: items.map((item) =>
-          jsxRuntime.jsx(
-            "button",
-            {
-              type: "button",
-              disabled: item.disabled === true,
-              onClick: () => {
-                onClose();
-                item.run();
-              },
-              children: item.label,
-            },
-            item.key,
-          ),
-        ),
-      });
-    }
-
     // ─────────── 源代码管理视图（sidebar.workspaces 的 git 模式）───────────
     // 文件树头部分支按钮进入；与文件树互斥占用同一单槽，**无 ✕**——原文件树入口
     // 按钮（及 Ctrl+E）就是切换开关：树 ⇄ 源代码管理 来回切。
-    // 布局：标题行（分支图标+分支按钮（名称+↑N↓M）+条目数+图谱/⋯/刷新）
-    // →「暂存的更改」组 →「更改」组（未跟踪 U 归入更改组）；分支浮层与 ⋯ 菜单是
+    // 布局：标题行（分支按钮（官方分支图形+名称）+条目数+图谱/同步/刷新）
+    // →「暂存的更改」组 →「更改」组（未跟踪 U 归入更改组）；分支浮层是
     // fixed 悬浮层（不参与面板布局，更改条目再多分支也完整显示；Esc/外部点击关闭，
     // 分支列表自带滚动；新建分支输入打开即聚焦，仅新建不切换时浮层保留、新分支
     // 打「新建」标记）。非 git 目录给「初始化仓库」按钮（POST /git/init，幂等）。
-    // 图谱视图（⧉ 切换）见 GitGraphPanel；⋯ 菜单 = 推送（有上游）/ 发布分支
-    // （无上游，push -u），失败且无上游时给「设置上游并推送」提示。
+    // 图谱视图（⧉ 切换）见 GitGraphPanel；同步钮 = 拉取+推送（有上游）/
+    // 发布分支（无上游，push -u），失败且无上游时给「设置上游并推送」提示。
     function GitChangesPanel({ cwd, onOpenFile }) {
       const [data, setData] = react.useState(null); // null=加载中；{available, root?, entries?}
       const [initializing, setInitializing] = react.useState(false);
@@ -4728,12 +4659,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [branchBusy, setBranchBusy] = react.useState(false);
       const [pushing, setPushing] = react.useState(false);
       const [pulling, setPulling] = react.useState(false);
-      // ⋯ 操作菜单 / 分支浮层（fixed 悬浮）：anchor 为按钮矩形锚点 {left, top}
-      const [actionsOpen, setActionsOpen] = react.useState(false);
-      const [actionsAnchor, setActionsAnchor] = react.useState(null);
+      // 分支浮层（fixed 悬浮）：anchor 为按钮矩形锚点 {left, top}（⋯ 菜单
+      // 2026-09-11 用户定稿撤除，拉取推送收敛进 ↑↓ 同步钮）
       const [branchAnchor, setBranchAnchor] = react.useState(null);
       const branchBtnRef = react.useRef(null);
-      const actionsBtnRef = react.useRef(null);
       /** 按钮锚点：按钮左下 + 6px，视口内 clamp（浮层自带内部滚动，上限留高） */
       const anchorOf = (ref) => {
         const el = ref.current;
@@ -4747,8 +4676,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         };
       };
       const openBranch = () => {
-        setActionsOpen(false);
-        setActionsAnchor(null);
         setBranchAnchor(anchorOf(branchBtnRef));
         setBranchOpen(true);
       };
@@ -4760,16 +4687,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const toggleBranch = () => {
         if (branchOpen) closeBranch();
         else openBranch();
-      };
-      const openActions = () => {
-        setBranchOpen(false);
-        setBranchAnchor(null);
-        setActionsAnchor(anchorOf(actionsBtnRef));
-        setActionsOpen(true);
-      };
-      const closeActions = () => {
-        setActionsOpen(false);
-        setActionsAnchor(null);
       };
       const [pushHint, setPushHint] = react.useState(false); // 无上游时的「设置上游并推送」提示
       // 图谱面板暴露的刷新句柄（图谱挂载后由 GitGraphPanel 回填），供头部 ⟳ 一并刷新
@@ -4995,10 +4912,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           jsxRuntime.jsxs("div", {
             className: "dshk-head",
             children: [
-              // 分支位（面板头，分支名左侧）：官方 IconBranchOutline16（2026-09-11
-              // 用户定稿「分支用分支」；输入行 SCM 钮保持自绘弧线，两处分开定稿）
-              jsxRuntime.jsx(dswIcon("IconBranchOutline16") ?? BranchIcon, {}),
-              // 分支按钮（vs 式：名称为主，推送计数不在这里——2026-09-07 用户定稿
+              // 分支按钮（vs 式：官方分支图形 + 名称，2026-09-11 用户定稿「分支
+              // 按钮换成分支」；推送计数不在这里——2026-09-07 用户定稿迁同步钮）
               // 迁到独立推送按钮，分支显示不与推送语义重叠）：点击开固定悬浮分支浮层
               available && data
                 ? jsxRuntime.jsx("button", {
@@ -5010,6 +4925,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     "aria-pressed": branchOpen || undefined,
                     onClick: toggleBranch,
                     children: [
+                      jsxRuntime.jsx(dswIcon("IconBranchOutline16") ?? BranchIcon, {}),
                       jsxRuntime.jsx("span", {
                         className: "dshk-branch-name",
                         children: data.detached === true ? t("scDetached") : data.branch || "—",
@@ -5022,22 +4938,28 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 ? jsxRuntime.jsx("span", { className: "dshk-status", children: String(entries.length) })
                 : null,
               jsxRuntime.jsx("span", { className: "dshk-spring" }),
-              // 推送按钮（vs 式同步钮位）：↑n=待推提交数；无上游=发布（首次推送）；
-              // 已同步置灰。↓ 待拉取数在分支浮层徽标与 ⋯拉取里，不占这里
+              // 同步钮（vs 式 ↑↓，2026-09-11 用户定稿接管原 ⋯ 菜单职责）：有上游=
+              // 先拉后推，无上游=发布（首次推送）；错误原文 toast
               available && data && data.detached !== true
                 ? jsxRuntime.jsx("button", {
                     type: "button",
                     className: "dshk-btn dshk-headbtn",
-                    disabled: pushing || data.unborn === true || (!!data.upstream && ahead === 0),
-                    title: pushing
+                    disabled: pushing || pulling || data.unborn === true,
+                    title: pushing || pulling
                       ? t("saving")
                       : !data.upstream
                         ? t("scPublish")
                         : ahead > 0
                           ? t("scPushAhead").replace("{n}", String(ahead))
                           : t("scSynced"),
-                    onClick: () => void doPush(!(data.upstream)),
-                    children: pushing ? "…" : ahead > 0 ? `↑${ahead}` : "↑↓",
+                    onClick: () => void (async () => {
+                      if (data.upstream) {
+                        const ok = await doPull();
+                        if (!ok) return;
+                      }
+                      await doPush(!(data.upstream));
+                    })(),
+                    children: pushing || pulling ? "…" : ahead > 0 ? `↑${ahead}` : "↑↓",
                   })
                 : null,
               jsxRuntime.jsx("button", {
@@ -5048,19 +4970,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 onClick: () => setView((v) => (v === "graph" ? "changes" : "graph")),
                 children: "⧉",
               }),
-              // ⋯ 操作菜单（vs 式）：推送 / 发布分支收敛在这里
-              available && data
-                ? jsxRuntime.jsx("button", {
-                    type: "button",
-                    ref: actionsBtnRef,
-                    className: "dshk-btn dshk-headbtn" + (actionsOpen ? " dshk-headbtn-on" : ""),
-                    title: ahead > 0 ? t("scPushAhead").replace("{n}", String(ahead)) : t("scActions"),
-                    "data-popkey": "actions",
-                    "aria-pressed": actionsOpen || undefined,
-                    onClick: openActions,
-                    children: pushing ? t("saving") : "⋯",
-                  })
-                : null,
+              // ⋯ 操作菜单 2026-09-11 用户定稿撤除（拉取推送收敛进 ↑↓ 同步钮）
               jsxRuntime.jsx("button", {
                 type: "button",
                 className: "dshk-btn",
@@ -5105,32 +5015,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   }
                 },
                 onClose: closeBranch,
-              })
-            : null,
-          actionsOpen && actionsAnchor
-            ? jsxRuntime.jsx(GitActionsMenu, {
-                rect: actionsAnchor,
-                items: [
-                  {
-                    key: "push",
-                    label: data && data.upstream ? t("scPush") : t("scPublish"),
-                    disabled: pushing || !available || data?.detached === true || data?.branch === "",
-                    run: () => doPush(!(data && data.upstream)),
-                  },
-                  {
-                    key: "pull",
-                    label: t("scPull"),
-                    disabled: pulling || !available || data?.detached === true || data?.branch === "",
-                    run: () => void doPull(),
-                  },
-                  {
-                    key: "stageAll",
-                    label: t("scStageAll"),
-                    disabled: busy || !available,
-                    run: () => void runOp({ op: "stageAll" }),
-                  },
-                ],
-                onClose: closeActions,
               })
             : null,
           // 无上游提示（push 失败后出现）：一键设置上游并重推
