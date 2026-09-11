@@ -1187,7 +1187,6 @@ window.__ModuleLoader__.load({
       vaultBacklinks: "反链",
       vaultPickPage: "从左侧选择一页开始",
       vaultPageGone: "页面不存在（可能已被移动或删除）",
-      vaultDelBtn: "删除",
       vaultCited: "已插入对话输入框",
       vaultCiteUnavailable: "对话输入框未就绪（无会话或不可用）",
       vaultFolderSearch: "搜索文件夹…",
@@ -1629,7 +1628,6 @@ window.__ModuleLoader__.load({
       vaultBacklinks: "Backlinks",
       vaultPickPage: "Pick a page on the left to start",
       vaultPageGone: "Page not found (it may have been moved or deleted)",
-      vaultDelBtn: "Delete",
       vaultCited: "Inserted into composer",
       vaultCiteUnavailable: "Composer is not ready (no active session)",
       vaultFolderSearch: "Search folders…",
@@ -4181,20 +4179,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         onRename: startRename,
         onCopyPath: copyEntryPath,
         onMention: mentionEntry,
-        onMenu: (entry, anchor) => setMenuFor({ entry, rect: anchor.getBoundingClientRect() }),
+        onMenu: (entry, anchor) => setMenuFor((prev) => (prev && prev.anchor === anchor ? null : { entry, rect: anchor.getBoundingClientRect(), anchor })),
         renamingPath,
         onRenameSubmit: submitRename,
         onRenameCancel: cancelRename,
       };
-      // ⋯ 菜单：点菜单外任意处关闭
-      react.useEffect(() => {
-        if (!menuFor) return undefined;
-        const onDoc = (e) => {
-          if (!(e.target instanceof Element) || !e.target.closest(".dshk-menu")) setMenuFor(null);
-        };
-        document.addEventListener("click", onDoc, true);
-        return () => document.removeEventListener("click", onDoc, true);
-      }, [menuFor]);
 
       const rootInfo = cwd ? expanded[cwd] : undefined;
 
@@ -4270,6 +4259,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             ? jsxRuntime.jsx(TreeRowMenu, {
                 entry: menuFor.entry,
                 rect: menuFor.rect,
+                anchor: menuFor.anchor,
                 actions: treeActions,
                 onClose: () => setMenuFor(null),
               })
@@ -4281,14 +4271,32 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // ─────────── 树行 ⋯ 菜单（收敛操作：新建/复制相对/重命名/删除）───────────
     // fixed 定位浮层（树 body 滚动裁切不影响的全局层），按钮下方左缘对齐、
     // 向右展开（与官方对话三点菜单方向一致），右侧空间不足时回退左移。
-    function TreeRowMenu({ entry, rect, actions, onClose }) {
+    // anchor = 开菜单的那颗触发钮：宿主据此把它做成开关（再点一次关掉）。
+    function TreeRowMenu({ entry, rect, anchor, actions, onClose }) {
+      // 关闭手势（Esc / 点菜单外）必须长在本组件里：菜单是 fixed 浮层、渲染在各宿主
+      // 自己的容器中，交给宿主各写一份必然有人漏（知识库就是这样漏成「菜单点不掉」的）。
+      // click 走捕获相：宿主子树里的 stopPropagation 拦不住它；落在触发钮上的那次
+      // 交给按钮自己——不然「再点一次关掉」会被这里先关掉再被 onClick 判成重新打开
       react.useEffect(() => {
         const onKey = (e) => {
           if (e.key === "Escape") onClose();
         };
+        const onDoc = (e) => {
+          if (!(e.target instanceof Element)) {
+            onClose();
+            return;
+          }
+          if (e.target.closest(".dshk-menu")) return;
+          if (anchor && anchor.contains(e.target)) return;
+          onClose();
+        };
         window.addEventListener("keydown", onKey, true);
-        return () => window.removeEventListener("keydown", onKey, true);
-      }, [onClose]);
+        document.addEventListener("click", onDoc, true);
+        return () => {
+          window.removeEventListener("keydown", onKey, true);
+          document.removeEventListener("click", onDoc, true);
+        };
+      }, [onClose, anchor]);
       const items = [];
       if (entry.dir && actions.onCreate) {
         items.push({ key: "nany", label: t("treeNewAny"), run: () => actions.onCreate(entry.path) });
@@ -9437,6 +9445,46 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [toast]);
 
       const indexPages = index?.pages ?? [];
+      /** 删除后的收尾：级联删掉的页连着标签一起关（关的是当前页时激活位自动顺延）+
+       *  索引与所在目录重拉。目录树是懒加载缓存，只换索引换不掉树上的行——不重拉，
+       *  刚删掉的页会一直挂在树上（外部增删那次的同一个坑）。 */
+      const closeVaultPages = (paths) => {
+        let next = kitUi;
+        let patch = {};
+        for (const gonePath of paths) {
+          patch = { ...patch, ...closeVaultPageTab(next, gonePath) };
+          next = { ...next, ...patch };
+        }
+        setKitUi(patch);
+        const dirs = new Set();
+        for (const gonePath of paths) {
+          const cut = Math.max(gonePath.lastIndexOf("/"), gonePath.lastIndexOf("\\"));
+          if (cut > 0) dirs.add(gonePath.slice(0, cut));
+        }
+        for (const dir of dirs) void fetchDir(dir);
+        void loadIndex();
+      };
+      /** 行 ⋯ 删除（用户定稿：删除从页条挪到树行上）：孤儿级联（反链全落在删除集内的
+       *  页一起删，git 单提交可整体撤回）+ 二次确认 */
+      const deleteVaultEntry = async (entry) => {
+        const doomed = vaultCascadeDelete(indexPages, entry.path);
+        const list = doomed.map((p) => `· ${p.title}`).join("\n");
+        if (!window.confirm(`${t("vaultDelConfirm")}\n${list}`)) return;
+        try {
+          const body = await kitJson("/dsh-kit/vault/delete", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ paths: doomed.map((p) => p.path) }),
+          });
+          setToast(`${t("vaultDeleted")} ×${String(body.deleted ?? "")}${body.committed === true ? " · git" : ""}`);
+          if (Array.isArray(body.failed) && body.failed.length > 0) {
+            setToast(`${t("vaultDelFail")} ${body.failed.join("、")}`);
+          }
+          closeVaultPages(doomed.map((p) => p.path));
+        } catch (error) {
+          setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
+        }
+      };
       // 历史前进/后退 = 在访问序里挪位并激活对应页标签（标签还在才挪得动，
       // 被关掉的历史项在关闭时已剪掉）。未落盘草稿由失活的 pane 自己收尾
       const hist = ui.vaultHist ?? { stack: [], idx: -1 };
@@ -9587,7 +9635,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                           title: t("treeMenu"),
                           onClick: (ev) => {
                             ev.stopPropagation();
-                            setRowMenu({ entry: { dir: false, name: label, path: e.path }, rect: ev.currentTarget.getBoundingClientRect() });
+                            const anchor = ev.currentTarget;
+                            const entry = { dir: false, name: label, path: e.path };
+                            // 再点一次关掉自己（文件树同款开关；锚点认的是同一颗按钮，
+                            // 菜单的点外关闭会跳过落在它上面的点击）
+                            setRowMenu((prev) => (prev && prev.anchor === anchor ? null : { entry, rect: anchor.getBoundingClientRect(), anchor }));
                           },
                           children: "⋯",
                         }),
@@ -9679,7 +9731,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           ? jsxRuntime.jsx(TreeRowMenu, {
               entry: rowMenu.entry,
               rect: rowMenu.rect,
-              actions: { onRename: (entry) => setRenamingPath(entry.path) },
+              anchor: rowMenu.anchor,
+              // 行 ⋯ = 页面级命令（重命名/删除），与文件树文件行同一套菜单组件
+              // （用户定稿：删除从页条挪到行上）
+              actions: {
+                onRename: (entry) => setRenamingPath(entry.path),
+                onDelete: (entry) => void deleteVaultEntry(entry),
+              },
               onClose: () => setRowMenu(null),
             })
           : null,
@@ -9701,17 +9759,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 onOpenPage: openPath,
                 onMissingLink: (title) => void createInSpace(title),
                 onSaved: () => void loadIndex(),
-                onDeleted: (paths) => {
-                  // 级联删掉的页连着标签一起关（关的是当前页时激活位自动顺延）
-                  let next = kitUi;
-                  let patch = {};
-                  for (const gonePath of paths) {
-                    patch = { ...patch, ...closeVaultPageTab(next, gonePath) };
-                    next = { ...next, ...patch };
-                  }
-                  setKitUi(patch);
-                  void loadIndex();
-                },
                 toast: setToast,
               }, p),
             );
@@ -9727,10 +9774,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 知识库单页编辑器（一页一个实例，挂右栏 pane 宿主）：正文加载/自动保存/CAS 冲突/
-     *  外部修改跟随/删除/引用到对话/粘贴上传全在这一层，索引侧只管挑页与建页。
+     *  外部修改跟随/引用到对话/粘贴上传全在这一层，索引侧只管挑页与建页。
+     *  删除不在这里——页条上的删除已按用户定稿挪到左侧树的行 ⋯ 菜单（见 VaultRootView）。
      *  active=false 的 pane 仍挂载（保住滚动与草稿），但停掉 stat 轮询并在失活
      *  那一刻 flush 未落盘的改动——「切走即存」，不靠卸载兜底。 */
-    function VaultPagePane({ path, active, root, indexPages, onOpenPage, onMissingLink, onSaved, onDeleted, toast }) {
+    function VaultPagePane({ path, active, root, indexPages, onOpenPage, onMissingLink, onSaved, toast }) {
       // page: { loading, body(编辑器入参), binary, gone }——frontmatter 字节级原文
       // 存 ref（保存时原样拼回），不进 state（它不驱动渲染）
       const [page, setPage] = react.useState(null);
@@ -9871,26 +9919,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return () => clearInterval(timer);
       }, [active, path, loadCurrent, onSaved]);
 
-      const deleteCurrent = async () => {
-        const pages = pagesRef.current ?? [];
-        const doomed = vaultCascadeDelete(pages, path);
-        const list = doomed.map((p) => `· ${p.title}`).join("\n");
-        if (!window.confirm(`${t("vaultDelConfirm")}\n${list}`)) return;
-        try {
-          const body = await kitJson("/dsh-kit/vault/delete", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ paths: doomed.map((p) => p.path) }),
-          });
-          toast(`${t("vaultDeleted")} ×${String(body.deleted ?? "")}${body.committed === true ? " · git" : ""}`);
-          if (Array.isArray(body.failed) && body.failed.length > 0) {
-            toast(`${t("vaultDelFail")} ${body.failed.join("、")}`);
-          }
-          onDeleted(doomed.map((p) => p.path));
-        } catch (error) {
-          toast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
-        }
-      };
       /** 编辑态粘贴截图：图片文件上传到 vault attachments/，光标处插入图片节点。
        *  上传前先幂等建 attachments/（/dsh-kit/upload 要求目录已存在，新 vault
        *  首次粘贴不建目录必 400） */
@@ -9939,14 +9967,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
                   jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
                     // 真·所见即所得（用户定稿）：页面恒为 TipTap 富文本编辑器。
-                    // 页条=文档级命令（引用到对话/删除/撤销/重做）+ 光标小节
-                    // 面包屑 + 脏标记 + 冲突处理；保存全自动（2s 防抖/失活
-                    // flush/Ctrl+S）。行内格式在泡泡菜单、块插入在斜杠菜单、
-                    // 表格按钮随选区显隐
+                    // 页条=文档级命令（撤销/重做）+ 光标小节面包屑 + 脏标记 + 冲突
+                    // 处理；保存全自动（2s 防抖/失活 flush/Ctrl+S）。行内格式在泡泡
+                    // 菜单、块插入在斜杠菜单、表格按钮随选区显隐
                     // onMouseDown preventDefault：按钮默认行为会先塌掉文档
                     // 选区（镜像随之清空），拦下后选区保留、click 时才取得到
-                    jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void deleteCurrent(), children: t("vaultDelBtn") }),
-                    jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
                     jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbUndo"), onClick: () => rteRef.current?.undo(), children: "↶" }),
                     jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbRedo"), onClick: () => rteRef.current?.redo(), children: "↷" }),
                     // 光标所属标题链（VS Code 面包屑同款，二级归属最近一级）：
