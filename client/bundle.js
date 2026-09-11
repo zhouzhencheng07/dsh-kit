@@ -1195,6 +1195,8 @@ window.__ModuleLoader__.load({
       vaultRenamedLinks: "已重命名（改写 {n} 页双链）",
       vaultSavedOverwrite: "盘上改动已存进 git，已用本地内容覆盖",
       vaultDelConfirm: "确认删除以下页面？（移入回收站；vault 为 git 仓库时自动生成一个提交，可整体撤回）",
+      vaultDirDelConfirm: "确认删除目录「{name}」及其下 {n} 页？（整棵子树移入回收站；vault 为 git 仓库时自动生成一个提交，可整体撤回）",
+      vaultDirDeleted: "已删除目录「{name}」（{n} 页）",
       vaultDeleted: "已删除",
       vaultDelFail: "删除失败（文件被占用？已保留）：",
       vaultConflict: "页面在盘上已被修改，自动保存已暂停",
@@ -1636,6 +1638,8 @@ window.__ModuleLoader__.load({
       vaultRenamedLinks: "Renamed ({n} pages of links rewritten)",
       vaultSavedOverwrite: "Disk version stashed to git, local content written",
       vaultDelConfirm: "Delete these pages? (Moved to recycle bin; if the vault is a git repo one commit is created so this is fully revertible)",
+      vaultDirDelConfirm: "Delete folder \"{name}\" and its {n} pages? (Whole subtree to the recycle bin; if the vault is a git repo one commit is created so this is fully revertible)",
+      vaultDirDeleted: "Deleted folder \"{name}\" ({n} pages)",
       vaultDeleted: "Deleted",
       vaultDelFail: "Delete failed (file locked? kept):",
       vaultConflict: "The page was modified on disk; autosave paused",
@@ -2061,7 +2065,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 /* 左轨细头部：当前空间名 + 根级新建（+ 按钮常驻淡显，悬停加深） */
 .dshk-vault-railhead{display:flex;align-items:center;gap:4px;padding:2px 4px 4px;flex:none}
 .dshk-vault-railtitle{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-tertiary)}
-.dshk-vault-treeplus{flex:none;width:17px;height:17px;line-height:15px;text-align:center;border-radius:4px;color:var(--dsw-alias-label-tertiary);font-size:12px}
+.dshk-vault-treeplus{flex:none;display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:4px;color:var(--dsw-alias-label-tertiary);font-size:12px}
 .dshk-vault-treeplus:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-vault-treerow:hover .dshk-vault-treeplus{visibility:visible}
 .dshk-vault-railhead .dshk-vault-treeplus{visibility:visible;opacity:.6}
@@ -2072,8 +2076,8 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-vault-treerow{display:flex;align-items:center;gap:4px;padding:3px 4px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden}
 .dshk-vault-treerow:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-vault-treerow.is-active{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-label-primary)}
-.dshk-vault-twist{flex:none;display:inline-block;width:10px;text-align:center;transition:transform .12s var(--ds-ease-in-out);font-size:10px;color:var(--dsw-alias-label-tertiary)}
-.dshk-vault-twist.is-open{transform:rotate(90deg)}
+/* 展开箭头位（内容 = 官方 IconTriangleRightFill14，自己管旋转），空目录留空位对齐 */
+.dshk-vault-twist{flex:none;display:inline-flex;align-items:center;justify-content:center;width:14px;color:var(--dsw-alias-label-tertiary)}
 .dshk-vault-treename{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis}
 .dshk-vault-ticon{width:13px;height:13px;flex:none;opacity:.75}
 .dshk-vault-treeload{padding:3px 4px;color:var(--dsw-alias-label-tertiary);font-size:11px}
@@ -3734,6 +3738,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           ],
         },
       );
+    }
+
+    /** 单个官方图标（取不到退回给定字形）：navigation / 刷新 / 下拉箭头这类
+     *  单件图标共用。回退字形保底——primitives 缺席时按钮仍然可读 */
+    function OfficialIcon({ names, glyph, className }) {
+      const C = dswIcon(...names);
+      return C ? jsxRuntime.jsx(C, { className }) : jsxRuntime.jsx("span", { className, children: glyph });
     }
 
     /** 树行小图标（13px 暗淡，随 currentColor）：空目录无箭头后靠它区分文件/目录 */
@@ -7836,11 +7847,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 孤儿级联（用户定稿：删除时同步删掉因此变孤儿的页，git 单提交可整体撤回）。
-     *  返回应删页面清单：目标自身 + 「全部反链都在删除集内」的递归闭包；删除前
-     *  就已零入链的页不动（那是既有状态，不连坐）；根 AGENTS.md 约定文件受保护 */
-    function vaultCascadeDelete(pages, targetPath) {
-      const current = pages.find((p) => p.path === targetPath);
-      if (!current) return [];
+     *  返回应删页面清单：种子页 + 「全部反链都在删除集内」的递归闭包；删除前
+     *  就已零入链的页不动（那是既有状态，不连坐）；根 AGENTS.md 约定文件受保护。
+     *  目录删除用多种子版：目录在索引里没有对应页，种子是它下面的全部页 */
+    function vaultCascadeDeleteMany(pages, seedPaths) {
       const linkers = new Map(); // 页面 path → 引用它的页面 path 集合
       for (const p of pages) {
         for (const l of p.links) {
@@ -7850,7 +7860,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           linkers.get(hit.path).add(p.path);
         }
       }
-      const doomed = new Set([targetPath]);
+      const doomed = new Set(seedPaths);
       let changed = true;
       while (changed) {
         changed = false;
@@ -7872,6 +7882,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
       }
       return pages.filter((p) => doomed.has(p.path) && p.rel.toUpperCase() !== "AGENTS");
+    }
+
+    /** 单页级联（多种子版的特例）：目标页不存在时返回空清单 */
+    function vaultCascadeDelete(pages, targetPath) {
+      if (!pages.some((p) => p.path === targetPath)) return [];
+      return vaultCascadeDeleteMany(pages, [targetPath]);
     }
 
     /** 标题锚 slug：压空白为 -（中英混排原样保留，仅保证锚点匹配一致） */
@@ -7928,15 +7944,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       });
     }
 
-    /** 左树行图标（单色 svg，随 currentColor 走主题）：目录 / 页面 / 目录+新增 */
-    const VaultFolderIcon = (props) => {
-      const _official = dswIcon("IconFolderClose16");
-      return _official
-        ? jsxRuntime.jsx(_official, { className: "dshk-vault-ticon" })
-        : jsxRuntime.jsx("svg", { className: "dshk-vault-ticon", viewBox: "0 0 16 16", children: jsxRuntime.jsx("path", { d: "M1.5 4.5a1 1 0 0 1 1-1h3.1l1.7 1.9h5.7a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1v-8.5z", fill: "none", stroke: "currentColor", strokeWidth: "1.2", strokeLinejoin: "round" }) });
-    };
-    const VaultPageIcon = () =>
-      jsxRuntime.jsx("svg", { className: "dshk-vault-ticon", viewBox: "0 0 16 16", children: jsxRuntime.jsx("path", { d: "M4 2.2a0.7 0.7 0 0 1 0.7-0.7h4.2l3.6 3.6v8.6a0.7 0.7 0 0 1-0.7 0.7H4.7a0.7 0.7 0 0 1-0.7-0.7v-11.5z M9 1.8v3.3h3.3", fill: "none", stroke: "currentColor", strokeWidth: "1.2", strokeLinejoin: "round" }) });
+    // 左树行图标（2026-09-11 用户定稿：与文件树同一套官方 primitives）——
+    // 目录 = TreeFolderIcon、页面 = FileTypeIcon16、展开箭头 = ChevronIcon，
+    // 三个都在文件树那边定义，这里不再自绘
 
     /** 斜杠菜单：两级（wangshu 同款）——根级为分组（标题/列表含子级，多级标题
      *  快速插），叶级为插入模板。label 走 i18n，match 是中英过滤词 */
@@ -9129,7 +9139,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           },
           children: [
             jsxRuntime.jsx("span", { className: "dshk-vault-fpicklabel", children: value === "" ? allLabel : value.split("/").pop() }),
-            jsxRuntime.jsx("span", { className: "dshk-vault-fpickcaret", children: "▾" }),
+            jsxRuntime.jsx(OfficialIcon, { names: ["IconChevronDownOutline14"], glyph: "▾", className: "dshk-vault-fpickcaret" }),
           ],
         }),
         open && rect
@@ -9180,7 +9190,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                               // mousedown 别抢输入框焦点（否则 blur 之类会把列表关掉/打字中断）
                               onMouseDown: (e) => e.preventDefault(),
                               onClick: () => pick(r.rel),
-                              children: [jsxRuntime.jsx(VaultFolderIcon, {}), jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: r.label })],
+                              children: [jsxRuntime.jsx(TreeFolderIcon, {}), jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: r.label })],
                             },
                             r.rel === "" ? "#all" : r.rel,
                           ),
@@ -9445,10 +9455,66 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [toast]);
 
       const indexPages = index?.pages ?? [];
+      /** 行 ⋯ 开关：同一颗触发钮再点一次关掉（菜单的关闭手势会跳过落在它上面的点击） */
+      const openRowMenu = (anchor, entry) => {
+        setRowMenu((prev) => (prev && prev.anchor === anchor ? null : { entry, rect: anchor.getBoundingClientRect(), anchor }));
+      };
+      /** 树行内改名输入框（页与目录共用）：Enter 提交、Esc/失焦取消；事件不外泄，
+       *  免得触发行本身的「打开页/展开目录」 */
+      const renameInput = (path, defaultValue, submit) =>
+        jsxRuntime.jsx("input", {
+          className: "dshk-rename",
+          defaultValue,
+          spellCheck: false,
+          autoFocus: true,
+          "aria-label": t("treeRename"),
+          onClick: (ev) => ev.stopPropagation(),
+          onKeyDown: (ev) => {
+            ev.stopPropagation();
+            if (ev.key === "Enter") {
+              ev.preventDefault();
+              submit(ev.currentTarget.value);
+            } else if (ev.key === "Escape") {
+              ev.preventDefault();
+              setRenamingPath(null);
+            }
+          },
+          onBlur: () => {
+            if (renamingPath === path) setRenamingPath(null);
+          },
+        });
+      /** 末段去掉 = 所在目录；盘上路径可能是 \ 也可能是 /，两种都认 */
+      const parentDirOf = (p) => {
+        const cut = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+        return cut > 0 ? p.slice(0, cut) : "";
+      };
+      const isUnderPath = (p, dir) => p === dir || p.startsWith(`${dir}\\`) || p.startsWith(`${dir}/`);
+      /** 目录改名/删除后：以它为首的树缓存与展开态全部过期（懒加载缓存的键就是绝对路径） */
+      const pruneTreeCache = (prefix) => {
+        const stale = (k) => isUnderPath(k, prefix);
+        const keep = (m) => {
+          const next = {};
+          for (const k of Object.keys(m)) if (!stale(k)) next[k] = m[k];
+          return next;
+        };
+        setTreeDirs(keep);
+        setExpanded(keep);
+      };
+      /** 文件夹选择器跟着目录改名搬家（null = 目录没了，回到「全部库」） */
+      const remapSpaceFor = (oldAbs, newAbs) => {
+        const spaceAbs = root === null ? "" : root + (space === "" ? "" : `/${space}`);
+        if (spaceAbs === "" || !isUnderPath(spaceAbs, oldAbs)) return;
+        if (newAbs === null) {
+          setSpace("");
+          return;
+        }
+        const moved = newAbs + spaceAbs.slice(oldAbs.length);
+        setSpace(root !== null && moved.startsWith(root) ? moved.slice(root.length).replace(/^[\\/]+/, "").split("\\").join("/") : "");
+      };
       /** 删除后的收尾：级联删掉的页连着标签一起关（关的是当前页时激活位自动顺延）+
        *  索引与所在目录重拉。目录树是懒加载缓存，只换索引换不掉树上的行——不重拉，
        *  刚删掉的页会一直挂在树上（外部增删那次的同一个坑）。 */
-      const closeVaultPages = (paths) => {
+      const closeVaultPages = (paths, extraDirs) => {
         let next = kitUi;
         let patch = {};
         for (const gonePath of paths) {
@@ -9456,16 +9522,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           next = { ...next, ...patch };
         }
         setKitUi(patch);
-        const dirs = new Set();
+        const dirs = new Set(extraDirs ?? []);
         for (const gonePath of paths) {
-          const cut = Math.max(gonePath.lastIndexOf("/"), gonePath.lastIndexOf("\\"));
-          if (cut > 0) dirs.add(gonePath.slice(0, cut));
+          const dir = parentDirOf(gonePath);
+          if (dir !== "") dirs.add(dir);
         }
         for (const dir of dirs) void fetchDir(dir);
         void loadIndex();
       };
-      /** 行 ⋯ 删除（用户定稿：删除从页条挪到树行上）：孤儿级联（反链全落在删除集内的
-       *  页一起删，git 单提交可整体撤回）+ 二次确认 */
+      /** 行 ⋯ 删除单页（用户定稿：删除从页条挪到树行上）：孤儿级联（反链全落在删除
+       *  集内的页一起删，git 单提交可整体撤回）+ 二次确认 */
       const deleteVaultEntry = async (entry) => {
         const doomed = vaultCascadeDelete(indexPages, entry.path);
         const list = doomed.map((p) => `· ${p.title}`).join("\n");
@@ -9483,6 +9549,66 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           closeVaultPages(doomed.map((p) => p.path));
         } catch (error) {
           setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
+        }
+      };
+      /** 行 ⋯ 删除目录（用户定稿：非根目录的文件夹也能改名/删除）：整棵子树交宿主
+       *  递归进回收站，种子 = 目录下全部页（目录在索引里没有对应页），因此外部页里
+       *  的孤儿照旧级联。确认清单只列页面，目录名单独放标题 */
+      const deleteVaultDir = async (entry) => {
+        const dir = entry.path;
+        const inside = indexPages.filter((p) => isUnderPath(p.path, dir));
+        const doomed = vaultCascadeDeleteMany(indexPages, inside.map((p) => p.path));
+        const orphans = doomed.filter((p) => !isUnderPath(p.path, dir));
+        const list = [...inside.map((p) => `· ${p.title}`), ...orphans.map((p) => `· ${p.title}`)].join("\n");
+        if (!window.confirm(`${tf("vaultDirDelConfirm", { name: entry.name, n: String(inside.length) })}\n${list}`)) return;
+        try {
+          const body = await kitJson("/dsh-kit/vault/delete", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ paths: [dir, ...orphans.map((p) => p.path)] }),
+          });
+          setToast(`${tf("vaultDirDeleted", { name: entry.name, n: String(inside.length) })}${body.committed === true ? " · git" : ""}`);
+          if (Array.isArray(body.failed) && body.failed.length > 0) {
+            setToast(`${t("vaultDelFail")} ${body.failed.join("、")}`);
+          }
+          const gone = [...inside, ...orphans].map((p) => p.path);
+          pruneTreeCache(dir);
+          remapSpaceFor(dir, null);
+          closeVaultPages(gone, [parentDirOf(dir)]);
+        } catch (error) {
+          setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
+        }
+      };
+      /** 行 ⋯ 目录改名：只改盘上目录名（wikilink 按文件名解析，不必改写双链），
+       *  打开中的页签按新前缀搬家、树缓存与展开态按旧前缀清掉 */
+      const submitDirRename = async (oldPath, rawName) => {
+        const name = String(rawName ?? "").trim();
+        setRenamingPath(null);
+        if (name === "" || name === oldPath.split(/[\\/]/).pop()) return;
+        try {
+          const body = await kitJson("/dsh-kit/vault/rename", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ path: oldPath, name }),
+          });
+          const nextPath = typeof body.path === "string" && body.path !== "" ? body.path : oldPath;
+          if (nextPath !== oldPath) {
+            let ui = kitUi;
+            let patch = {};
+            for (const p of ui.vaultPages ?? []) {
+              if (!isUnderPath(p, oldPath)) continue;
+              patch = { ...patch, ...renameVaultPageTab(ui, p, nextPath + p.slice(oldPath.length)) };
+              ui = { ...ui, ...patch };
+            }
+            setKitUi(patch);
+            remapSpaceFor(oldPath, nextPath);
+            pruneTreeCache(oldPath);
+          }
+          flashToast(t("vaultRenamed"));
+          void fetchDir(parentDirOf(oldPath));
+          await loadIndex();
+        } catch (error) {
+          flashToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
         }
       };
       // 历史前进/后退 = 在访问序里挪位并激活对应页标签（标签还在才挪得动，
@@ -9552,6 +9678,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             const rel = e.path.slice(treeRoot.length).split(/[\\/]+/).filter(Boolean).join("/");
             const prefix = space === "" ? `${rel}/` : `${space}/${rel}/`;
             const hasPage = indexPages.some((p) => p.rel.startsWith(prefix));
+            // 目录行也是「hover 出操作」的行（用户定稿 2026-09-11：非根目录的文件夹
+            // 同样能改名/删除）：`+` 在该目录下建页，`⋯` = 重命名/删除
+            const renamingDir = renamingPath === e.path;
             return jsxRuntime.jsxs(
               "div",
               {
@@ -9559,22 +9688,33 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   jsxRuntime.jsxs("div", {
                     className: "dshk-vault-treerow",
                     style: { paddingLeft: 10 + depth * 14 },
+                    title: e.path,
                     onClick: () => {
-                      if (hasPage) toggleDir(e.path);
+                      if (!renamingDir && hasPage) toggleDir(e.path);
                     },
                     children: [
-                      hasPage ? jsxRuntime.jsx("span", { className: `dshk-vault-twist${expanded[e.path] === true ? " is-open" : ""}`, children: "▸" }) : jsxRuntime.jsx("span", { className: "dshk-vault-twist" }),
-                      jsxRuntime.jsx(VaultFolderIcon, {}),
-                      jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
-                      jsxRuntime.jsx("span", {
-                        className: "dshk-vault-treeplus",
-                        title: `${t("vaultNewAny")} · ${e.name}`,
-                        onClick: (ev) => {
-                          ev.stopPropagation();
-                          startCreate(e.path);
-                        },
-                        children: "+",
-                      }),
+                      // 展开箭头与文件树同一枚（官方 IconTriangleRightFill14）；
+                      // 空目录没有可展开内容：只留占位，保证同层名字左缘对齐
+                      jsxRuntime.jsx("span", { className: "dshk-vault-twist", children: hasPage ? jsxRuntime.jsx(ChevronIcon, { open: expanded[e.path] === true }) : null }),
+                      jsxRuntime.jsx(TreeFolderIcon, {}),
+                      renamingDir ? renameInput(e.path, e.name, (v) => void submitDirRename(e.path, v)) : jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
+                      renamingDir
+                        ? null
+                        : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                            jsxRuntime.jsx("span", {
+                              className: "dshk-vault-treeplus",
+                              title: `${t("vaultNewAny")} · ${e.name}`,
+                              onClick: (ev) => {
+                                ev.stopPropagation();
+                                startCreate(e.path);
+                              },
+                              children: jsxRuntime.jsx(FilePlusIcon, {}),
+                            }),
+                            jsxRuntime.jsx("span", {
+                              className: "dshk-rowact",
+                              children: jsxRuntime.jsx("button", { type: "button", title: t("treeMenu"), onClick: (ev) => { ev.stopPropagation(); openRowMenu(ev.currentTarget, { dir: true, name: e.name, path: e.path }); }, children: "⋯" }),
+                            }),
+                          ] }),
                     ],
                   }),
                   createDir === e.path ? createRow(e.path, depth + 1, `${e.path}#create`) : null,
@@ -9599,29 +9739,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               },
               title: e.path,
               children: [
-                jsxRuntime.jsx(VaultPageIcon, {}),
+                jsxRuntime.jsx(FileTypeIcon16, { name: e.name }),
                 renaming
-                  ? jsxRuntime.jsx("input", {
-                      className: "dshk-rename",
-                      defaultValue: label,
-                      spellCheck: false,
-                      autoFocus: true,
-                      "aria-label": t("treeRename"),
-                      onClick: (ev) => ev.stopPropagation(),
-                      onKeyDown: (ev) => {
-                        ev.stopPropagation();
-                        if (ev.key === "Enter") {
-                          ev.preventDefault();
-                          void submitRename(e.path, ev.currentTarget.value);
-                        } else if (ev.key === "Escape") {
-                          ev.preventDefault();
-                          setRenamingPath(null);
-                        }
-                      },
-                      onBlur: () => {
-                        if (renamingPath === e.path) setRenamingPath(null);
-                      },
-                    })
+                  ? renameInput(e.path, label, (v) => void submitRename(e.path, v))
                   : jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: label }),
                 renaming
                   ? null
@@ -9635,11 +9755,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                           title: t("treeMenu"),
                           onClick: (ev) => {
                             ev.stopPropagation();
-                            const anchor = ev.currentTarget;
-                            const entry = { dir: false, name: label, path: e.path };
-                            // 再点一次关掉自己（文件树同款开关；锚点认的是同一颗按钮，
-                            // 菜单的点外关闭会跳过落在它上面的点击）
-                            setRowMenu((prev) => (prev && prev.anchor === anchor ? null : { entry, rect: anchor.getBoundingClientRect(), anchor }));
+                            openRowMenu(ev.currentTarget, { dir: false, name: label, path: e.path });
                           },
                           children: "⋯",
                         }),
@@ -9676,8 +9792,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const sideContent = jsxRuntime.jsxs("div", { className: "dshk-vault-sidewrap", children: [
         jsxRuntime.jsxs("div", { className: "dshk-vault-toolbar", children: [
           jsxRuntime.jsxs("div", { className: "dshk-vault-tbarrow", children: [
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistBack"), title: t("vaultHistBack"), disabled: hist.idx <= 0, onClick: histBack, children: "←" }),
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistFwd"), title: t("vaultHistFwd"), disabled: hist.idx >= hist.stack.length - 1, onClick: histFwd, children: "→" }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistBack"), title: t("vaultHistBack"), disabled: hist.idx <= 0, onClick: histBack, children: jsxRuntime.jsx(OfficialIcon, { names: ["IconChevronLeftOutline14"], glyph: "←" }) }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistFwd"), title: t("vaultHistFwd"), disabled: hist.idx >= hist.stack.length - 1, onClick: histFwd, children: jsxRuntime.jsx(OfficialIcon, { names: ["IconChevronRightOutline14"], glyph: "→" }) }),
             jsxRuntime.jsx(VaultFolderPicker, {
               value: space,
               folders: index?.folders ?? [],
@@ -9686,7 +9802,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               emptyLabel: t("vaultFolderEmpty"),
               onPick: setSpace,
             }),
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn dshk-vault-tbpush", "aria-label": t("vaultRefresh"), title: t("vaultRefresh"), disabled: refreshing, onClick: () => void manualRefresh(), children: "↻" }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn dshk-vault-tbpush", "aria-label": t("vaultRefresh"), title: t("vaultRefresh"), disabled: refreshing, onClick: () => void manualRefresh(), children: jsxRuntime.jsx(OfficialIcon, { names: ["IconRefreshOutline16", "IconRefreshOutline14"], glyph: "↻" }) }),
           ] }),
           jsxRuntime.jsxs("div", { className: "dshk-vault-tbarrow", children: [
             jsxRuntime.jsx("input", {
@@ -9721,7 +9837,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               className: "dshk-vault-treeplus",
               title: `${t("vaultNewAny")} · ${space === "" ? t("vaultSpaceAll") : space}`,
               onClick: () => startCreate(treeRoot),
-              children: "+",
+              children: jsxRuntime.jsx(FilePlusIcon, {}),
             }),
           ] }),
           createDir === treeRoot ? createRow(treeRoot, 0, `${treeRoot}#create`) : null,
@@ -9732,11 +9848,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               entry: rowMenu.entry,
               rect: rowMenu.rect,
               anchor: rowMenu.anchor,
-              // 行 ⋯ = 页面级命令（重命名/删除），与文件树文件行同一套菜单组件
-              // （用户定稿：删除从页条挪到行上）
+              // 行 ⋯ = 条目级命令（重命名/删除），与文件树同一套菜单组件；目录行走
+              // 目录版删除（整棵子树），页面行走单页级联（用户定稿：删除挪到行上）
               actions: {
                 onRename: (entry) => setRenamingPath(entry.path),
-                onDelete: (entry) => void deleteVaultEntry(entry),
+                onDelete: (entry) => (entry.dir === true ? void deleteVaultDir(entry) : void deleteVaultEntry(entry)),
               },
               onClose: () => setRowMenu(null),
             })
