@@ -828,6 +828,37 @@ let vaultFetchPrev = null;
   stateSeq = 0;
   stateStore.clear();
 }
+// 6.9b2) 反链小节：来源页 chip 横排（2026-09-11 用户定稿：一行一个太占高度）——
+// 渲染出容器 + 每个来源页一个可点 chip，chip 带全名 tooltip（超长省略后仍看得到全称）
+{
+  stateSeq = 0;
+  stateStore.clear();
+  stateStore.set(0, { loading: false, body: "x", binary: false, gone: false });
+  callLog = [];
+  comps.VaultPagePane({
+    path: "D:/v/wiki/a.md",
+    active: true,
+    root: "D:/v",
+    indexPages: [
+      { path: "D:/v/wiki/a.md", rel: "wiki/a", space: "wiki", title: "A", links: [] },
+      { path: "D:/v/wiki/b.md", rel: "wiki/b", space: "wiki", title: "B", links: ["a"] },
+    ],
+    onOpenPage: () => {},
+    onMissingLink: () => {},
+    onSaved: () => {},
+    toast: () => {},
+  });
+  const blBox = callLog.find((c) => c[2] && c[2].className === "dshk-vault-backlinks");
+  const chips = callLog.filter((c) => c[2] && c[2].className === "dshk-vault-blrow");
+  const chipProps = chips.length > 0 ? chips[0][2] : null;
+  check(
+    "反链小节：标题 + 来源页 chip（带全名 tooltip、点击可跳）",
+    !!blBox && !!chipProps && chipProps.children === "B" && chipProps.title === "B" && typeof chipProps.onClick === "function",
+  );
+  check("反链小节 chip 横排换行（CSS 不再是 column）", /\.dshk-vault-backlinks\{[^}]*flex-wrap:wrap/.test(src) && !/\.dshk-vault-backlinks\{[^}]*flex-direction:column/.test(src));
+  stateSeq = 0;
+  stateStore.clear();
+}
 // 文件标签（多开）在 7.2.2 覆盖，舞台不可收起在 7.2.4 覆盖
 
 // 7.2.3) 文件标签 LRU 纯逻辑：默认上限 3，超限开新文件逐出 usedAt 最小者（=关掉

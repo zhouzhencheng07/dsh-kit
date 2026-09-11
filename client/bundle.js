@@ -2134,8 +2134,10 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 /* frontmatter 属性条 + CAS 冲突条 */
 .dshk-vault-conflict{flex:none;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dsw-alias-warning,#e8a13c);padding:4px 2px 8px}
 .dshk-vault-rtefallback{flex:1 1 auto;min-height:0;resize:none;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:1.7;padding:10px 12px}
-.dshk-vault-backlinks{border-top:1px dashed var(--dsw-alias-border-l2);margin:16px 0 4px;padding:8px 2px 12px;display:flex;flex-direction:column;gap:4px}
-.dshk-vault-blrow{appearance:none;text-align:left;border:0;background:none;font:inherit;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:2px 4px;border-radius:5px}
+/* 反链小节：chip 横排自动换行（一行一个太占高度）；标题独占一行 */
+.dshk-vault-backlinks{border-top:1px dashed var(--dsw-alias-border-l2);margin:16px 0 4px;padding:8px 2px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.dshk-vault-backlinks>.dshk-sched-cardtitle{flex:1 0 100%;margin-bottom:2px}
+.dshk-vault-blrow{appearance:none;max-width:min(240px,100%);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);font:inherit;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:2px 10px;border-radius:999px}
 .dshk-vault-blrow:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-vault-wl{color:var(--dsw-alias-brand-primary);text-decoration:underline dotted}
 .dshk-vault-wl-broken{color:var(--dsw-alias-label-tertiary);text-decoration:underline wavy}
@@ -10156,8 +10158,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         backlinks.length > 0
           ? jsxRuntime.jsxs("div", { className: "dshk-vault-backlinks", children: [
               jsxRuntime.jsxs("span", { className: "dshk-sched-cardtitle", children: [t("vaultBacklinks"), " (", String(backlinks.length), ")"] }),
+              // 来源页 chip（超长省略，title 给全名）：点开即跳到那一页
               backlinks.map((p) =>
-                jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-blrow", onClick: () => onOpenPage(p.path), children: p.title }, p.path),
+                jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-blrow", title: p.title, onClick: () => onOpenPage(p.path), children: p.title }, p.path),
               ),
             ] })
           : null,
