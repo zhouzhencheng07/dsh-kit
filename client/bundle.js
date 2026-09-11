@@ -3632,9 +3632,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 分支图标（进入更改视图的入口钮）：git branch 风格两节点一弧线 */
+    /** 分支图标（进入更改视图的入口钮）：git branch 风格两节点一弧线——官方
+     *  IconBranchOutline16 用户过目后觉得不像分支，2026-09-11 还原自绘 */
     function BranchIcon(props) {
-      const _official = dswIcon("IconBranchOutline16");
-      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
       return jsxRuntime.jsxs(
         "svg",
         {
@@ -3658,9 +3658,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 终端图标：与 FolderIcon 同为描边风格（16 网格），保证两个 footer 按钮观感一致 */
+    /** 终端图标：与 FolderIcon 同为描边风格（16 网格），保证两个 footer 按钮观感一致
+     *  （官方 IconCodeOutline16 是「代码」不是「终端」，2026-09-11 用户定稿还原自绘） */
     function TerminalIcon(props) {
-      const _official = dswIcon("IconCodeOutline16");
-      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
       return jsxRuntime.jsxs(
         "svg",
         {
@@ -3686,8 +3686,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     外框圆角方 + 顶部短横线（窗口/任务语义），与终端描边体系一致 */
     // 三个图标吃 size/className——官方开始页胶囊条目按条目状态传 22/26 号
     function JobsIcon(props) {
-      const _official = dswIcon("IconQueueOutline14");
-      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
+      // 官方 IconQueueOutline14 用户过目后觉得不合理，2026-09-11 还原自绘
       return jsxRuntime.jsxs(
         "svg",
         {
@@ -3711,8 +3710,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     /** 浏览器图标：地球（圆 + 经纬弧线），与终端/任务描边体系一致 */
     function BrowserIcon(props) {
-      const _official = dswIcon("IconBrowseOutline16");
-      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
+      // 官方 IconBrowseOutline16 用户过目后觉得不合理，2026-09-11 还原自绘
       return jsxRuntime.jsxs(
         "svg",
         {
