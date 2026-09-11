@@ -35,7 +35,8 @@ const reactStub = {
   useCallback: (fn) => fn,
   useRef: (v) => ({ current: v }),
   useMemo: (fn) => fn(),
-  useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
+  // subscribe 真调用（上下文无关调用——方法解引用传参导致的 this 丢失在此暴露）
+  useSyncExternalStore: (subscribe, getSnapshot) => { subscribe(() => {}); return getSnapshot(); },
   Fragment: function Fragment() {},
 };
 const jsxRuntimeStub = {
@@ -71,7 +72,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
+  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -85,7 +86,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTakeoverError", "monitorRecoveredTail", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTickCore", "monitorCancelPlan", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -889,6 +890,37 @@ out = comps.MonitorLine({
 });
 check("MonitorLine 空闲渲染无异常（null/条）", out === null || (typeof out === "object" && !!out));
 
+// 10a) MonitorLine 渲染全局续跑器状态：watcherStore 有本会话 waiting 条目 →
+//      输出监视条（限流文案 + 取消按钮）；capped 条目 → capped 文案
+{
+  comps.monitorStore.snapshot = {
+    items: [{ id: "s1", title: "t", phase: "waiting", fireAt: Date.now() + 30000, continues: 0, max: 10 }],
+  };
+  callLog = [];
+  out = comps.MonitorLine({
+    useChat: (sel) => sel(fakeSnap),
+    useSession: (sel) => sel({ running: false }),
+    useInput: (sel) => sel({ draft: "" }),
+    inputActions: { setDraft() {}, submit() {} },
+    sessionId: "s1",
+  });
+  const rendered = JSON.stringify(out);
+  // harness 无 documentElement → resolveZh() false → 英文文案
+  check("MonitorLine 渲染全局续跑等待条", typeof out === "object" && rendered.includes("auto-continue in") && rendered.includes("rate limit (429)") && rendered.includes("Cancel"));
+  comps.monitorStore.snapshot = {
+    items: [{ id: "s1", title: "t", phase: "capped", fireAt: 0, continues: 10, max: 10 }],
+  };
+  out = comps.MonitorLine({
+    useChat: (sel) => sel(fakeSnap),
+    useSession: (sel) => sel({ running: false }),
+    useInput: (sel) => sel({ draft: "" }),
+    inputActions: { setDraft() {}, submit() {} },
+    sessionId: "s1",
+  });
+  check("MonitorLine 渲染 capped 条", typeof out === "object" && JSON.stringify(out).includes("pausing auto-continue"));
+  comps.monitorStore.snapshot = { items: [] };
+}
+
 // 10b) monitorTailRepeatCount：死循环判定的纯函数（尾部自重叠扫描）
 const rep = (unit, n) => unit.repeat(n);
 check("尾部重复块 ≥3 次被检出", comps.monitorTailRepeatCount(rep("我不能继续回答这个问题。", 5)) >= 3);
@@ -899,31 +931,130 @@ check("短分隔符块（<8字符）不误报", comps.monitorTailRepeatCount("--
 check("重复不在尾部不算（历史重复已翻篇）", comps.monitorTailRepeatCount(rep("重复片段测样", 5) + "之后是完全不同的收尾内容，正常结束。") < 3);
 check("空串安全", comps.monitorTailRepeatCount("") === 1);
 
-// 10c) 监视条接管/恢复判据（F1/F3 修复的纯函数）：
-//      F1——429 历史错误 + 后续成功收尾的会话，错误不再是最后一条事件，不得接管
-//      （旧实现只按 seq 记账，切会话/刷新后会把这条历史错误当当前失败再发「继续」）
+// 10c) 全局 429 续跑器核心（monitorTickCore 依赖注入直测）：沿检测（running
+//      true→false）+ lastAgentError 措辞判定 + 到点发射 + 恢复清零 + capped。
+//      旧 F1（历史 turn-error 误接管）在新机制下结构性消失：lastAgentError 是活
+//      镜像（prompt 即清、页面刷新即无），不是持久历史——历史错误没有可触发的沿。
 {
-  const hist = [
-    { kind: "user", seq: 1 },
-    { kind: "assistant", seq: 2 },
-    { kind: "turn-error", seq: 3, code: "RATE_LIMIT" },
-    { kind: "user", seq: 4 }, // 续跑「继续」
-    { kind: "assistant", seq: 5 }, // 正常收尾
-  ];
-  check("F1 历史错误+后续成功：不接管", comps.monitorTakeoverError(hist) === null);
-  check("F1 错误仍在末尾：照常接管", comps.monitorTakeoverError(hist.slice(0, 3))?.code === "RATE_LIMIT");
-  check("F1 无错误：null", comps.monitorTakeoverError([{ kind: "assistant", seq: 9 }]) === null);
-  check("F1 空对话：null", comps.monitorTakeoverError([]) === null);
-  // 宿主若在尾部追加记账类节点，「末条节点恰好是 turn-error」会漏判——max-seq 判据下
-  // 错误仍并列最大 → 接管；错误 seq 落后于记账节点 → 不接管
-  check("F1 尾部记账节点与错误同 seq：仍接管", comps.monitorTakeoverError([{ kind: "turn-error", seq: 7, code: "RATE_LIMIT" }, { kind: "usage", seq: 7 }])?.code === "RATE_LIMIT");
-  check("F1 错误 seq 落后尾部节点：不接管", comps.monitorTakeoverError([{ kind: "turn-error", seq: 7, code: "RATE_LIMIT" }, { kind: "usage", seq: 8 }]) === null);
-  // F3——恢复判定：收尾不是 turn-error、也不是监视器停止的 interrupted assistant
-  check("F3 assistant 正常收尾：算恢复", comps.monitorRecoveredTail([{ kind: "user", seq: 1 }, { kind: "assistant", seq: 2 }]) === true);
-  check("F3 工具/记账节点收尾：也算恢复（旧实现漏判的形状）", comps.monitorRecoveredTail([{ kind: "assistant", seq: 2 }, { kind: "tool", seq: 3 }]) === true);
-  check("F3 turn-error 收尾：不算恢复", comps.monitorRecoveredTail([{ kind: "assistant", seq: 2 }, { kind: "turn-error", seq: 3, code: "RATE_LIMIT" }]) === false);
-  check("F3 监视器停止（interrupted）：不算恢复", comps.monitorRecoveredTail([{ kind: "assistant", seq: 2, interrupted: true }]) === false);
-  check("F3 空对话：不算恢复", comps.monitorRecoveredTail([]) === false);
+  const mkSessions = (rows) => ({
+    list: {
+      getSnapshot: () => ({
+        ids: rows.map((r) => r.id),
+        byId: Object.fromEntries(rows.map((r) => [r.id, { running: r.running, displayTitle: "标题" + r.id.slice(-4) }])),
+      }),
+    },
+    binding: (id) => {
+      const row = rows.find((r) => r.id === id);
+      return {
+        session: {
+          getSnapshot: () => ({ running: row.running, lastAgentError: row.err }),
+          prompt: () => { row.prompts = (row.prompts ?? 0) + 1; return Promise.resolve({ accepted: true }); },
+        },
+      };
+    },
+  });
+  const baseCfg = { monitorEnabled: true, monitorWaitMs: 60000, monitorMaxAuto: 10 };
+  const T0 = 1_000_000;
+  const itemOf = (id) => comps.monitorStore.snapshot.items.find((x) => x.id === id);
+
+  // —— 429 失败沿 → 排等待计划 → 到点发射（sensenova 误标 quota 形态）——
+  const r1 = { id: "session-g1", running: true, err: null };
+  const s1 = mkSessions([r1]);
+  comps.monitorTickCore(s1, baseCfg, T0);
+  check("G 运行中不排计划", comps.monitorStore.snapshot.items.length === 0);
+  r1.running = false;
+  r1.err = '429: {"message":"inference exceeds tpm/rpm limit","type":"rate_limit_error","code":"insufficient_quota"}';
+  comps.monitorTickCore(s1, baseCfg, T0 + 2000);
+  check("G 429(误标quota)失败沿排等待计划", itemOf("session-g1")?.phase === "waiting");
+  comps.monitorTickCore(s1, baseCfg, T0 + 2000 + 60001);
+  check("G 到点发 prompt 续跑", r1.prompts === 1);
+  check("G 发射后计划清除", itemOf("session-g1") === undefined);
+  // —— 第二次失败：continues 累加；同文本新失败在发射后可再次触发（发射即清
+  //    handledErr 记账）——
+  r1.running = true;
+  comps.monitorTickCore(s1, baseCfg, T0 + 70000);
+  r1.running = false;
+  r1.err = '429: {"message":"inference exceeds tpm/rpm limit","type":"rate_limit_error","code":"insufficient_quota"}';
+  comps.monitorTickCore(s1, baseCfg, T0 + 72000);
+  check("G 同文本新失败再次排计划", itemOf("session-g1")?.phase === "waiting");
+  check("G 计划条目带连续计数", itemOf("session-g1")?.continues === 1);
+  comps.monitorTickCore(s1, baseCfg, T0 + 72000 + 60001);
+  check("G 第二次续跑发出", r1.prompts === 2);
+  // —— 继续成功（正常收尾）→ 连续计数清零 ——
+  r1.running = true;
+  comps.monitorTickCore(s1, baseCfg, T0 + 80000);
+  r1.running = false;
+  r1.err = null;
+  comps.monitorTickCore(s1, baseCfg, T0 + 82000);
+  check("G 正常收尾清零计数", comps.monitorSessions.get("session-g1")?.continues === 0);
+  comps.monitorSessions.delete("session-g1");
+
+  // —— 达上限转 capped：停而不续，正常收尾后解除 ——
+  const r2 = { id: "session-g2", running: true, err: null };
+  const cfg2 = { ...baseCfg, monitorMaxAuto: 2 };
+  const s2 = mkSessions([r2]);
+  comps.monitorTickCore(s2, cfg2, T0 - 1000); // 基线：运行中（沿检测需要先见过 true）
+  for (let round = 0; round < 2; round++) {
+    r2.running = false;
+    r2.err = "429: rate limited";
+    comps.monitorTickCore(s2, cfg2, T0 + round * 100000);
+    comps.monitorTickCore(s2, cfg2, T0 + round * 100000 + 60001);
+    r2.running = true; // 续跑使回合运行
+    comps.monitorTickCore(s2, cfg2, T0 + round * 100000 + 61000);
+  }
+  r2.running = false;
+  r2.err = "429: rate limited";
+  comps.monitorTickCore(s2, cfg2, T0 + 300000);
+  check("G 连续达上限转 capped 不再排计划", itemOf("session-g2")?.phase === "capped" && r2.prompts === 2);
+  r2.running = true; // 用户手动重试（prompt 清错误标记）
+  comps.monitorTickCore(s2, cfg2, T0 + 305000);
+  r2.running = false;
+  r2.err = null;
+  comps.monitorTickCore(s2, cfg2, T0 + 310000);
+  check("G 正常收尾解除 capped", itemOf("session-g2") === undefined);
+  comps.monitorSessions.delete("session-g2");
+
+  // —— 非限流失败（AUTH/终态）不自动续 ——
+  const r3 = { id: "session-g3", running: true, err: null };
+  const s3 = mkSessions([r3]);
+  comps.monitorTickCore(s3, baseCfg, T0 - 1000); // 基线：运行中
+  r3.running = false;
+  r3.err = "401: {\"message\":\"invalid api key\"}";
+  comps.monitorTickCore(s3, baseCfg, T0);
+  check("G 非限流失败不排计划", itemOf("session-g3") === undefined);
+  comps.monitorSessions.delete("session-g3");
+
+  // —— 取消按钮：计划丢弃且不重排（失败沿已消费）——
+  const r4 = { id: "session-g4", running: true, err: null };
+  const s4 = mkSessions([r4]);
+  comps.monitorTickCore(s4, baseCfg, T0 - 1000); // 基线：运行中
+  r4.running = false;
+  r4.err = "429: too many requests";
+  comps.monitorTickCore(s4, baseCfg, T0);
+  check("G 取消前有计划", itemOf("session-g4")?.phase === "waiting");
+  comps.monitorCancelPlan("session-g4");
+  check("G 取消后计划清除", itemOf("session-g4") === undefined);
+  comps.monitorTickCore(s4, baseCfg, T0 + 70000);
+  check("G 取消后同一条失败不重排", itemOf("session-g4") === undefined && r4.prompts === undefined);
+  // 用户手动重跑一轮后又失败（同文本）→ 运行即清记账，新失败重新触发
+  r4.running = true;
+  comps.monitorTickCore(s4, baseCfg, T0 + 80000);
+  r4.running = false;
+  r4.err = "429: too many requests";
+  comps.monitorTickCore(s4, baseCfg, T0 + 82000);
+  check("G 取消后手动重跑再失败：重新触发", itemOf("session-g4")?.phase === "waiting");
+  comps.monitorSessions.delete("session-g4");
+
+  // —— 到点时回合已被用户手动跑起来：放弃本次（不重复发）——
+  const r5 = { id: "session-g5", running: true, err: null };
+  const s5 = mkSessions([r5]);
+  r5.running = false;
+  r5.err = "429: limited";
+  comps.monitorTickCore(s5, baseCfg, T0);
+  r5.running = true; // 用户介入
+  comps.monitorTickCore(s5, baseCfg, T0 + 70000);
+  check("G 到点时回合已在跑：放弃且不发", r5.prompts === undefined && itemOf("session-g5") === undefined);
+  comps.monitorSessions.delete("session-g5");
 }
 
 // 10d) 阅读位置记忆（F2）：按路径存取 + 隐藏容器不记（display:none 时 scrollTop
