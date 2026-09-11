@@ -30,6 +30,10 @@ await test('vaultSkillMarkdown：frontmatter/根路径/格式手册/git 命令�
   assert.ok(md.includes('> [!warning] 标题文字'), '提示卡带正文示例')
   assert.ok(md.includes('<details>') && md.includes('<summary>摘要标题</summary>'), '折叠块语法')
   assert.ok(md.includes('$$') && md.includes('\\int_0^1'), '行间公式示例')
+  // 写页规则（用户定）：只记唯一事实、不写流水账——描述与正文都要说清（agent 未必读到正文）
+  assert.ok(md.includes('唯一事实') && md.includes('不写流水账'), '写页规则进正文')
+  assert.ok(md.includes('不写日期') && md.includes('不写谁定的'), '流水账判据说清')
+  assert.ok(md.split('---')[1].includes('唯一事实'), '写页规则进 description')
   // 格式手册只收渲染效果超出标准 md 的约定（用户定稿 2026-09-11）：标准 md/GFM 不教
   assert.ok(!md.includes('- [ ] 待办'), '任务列表已砍')
   assert.ok(!md.includes('<mark>'), '行内高亮已砍')
