@@ -783,7 +783,6 @@ window.__ModuleLoader__.load({
       termCloseAll: "结束全部终端",
       vendorFail: "终端组件加载失败",
       treeLabel: "文件树",
-      treeClose: "关闭文件树",
       treeRefresh: "刷新",
       treeLoading: "加载中…",
       treeEmpty: "（空目录）",
@@ -823,7 +822,6 @@ window.__ModuleLoader__.load({
       scBranchNew: "新分支名（Enter 新建）",
       scBranchCreate: "新建",
       scBranchCreateSwitch: "新建并切换",
-      scBranchSwitch: "切换分支",
       scBranchDelete: "删除分支",
       scBranchDeleteConfirm: "删除分支「{name}」？",
       scBranchForceConfirm: "该分支未合并，强制删除？（分支上的提交可能丢失）",
@@ -835,14 +833,12 @@ window.__ModuleLoader__.load({
       scBranchSwitched: "已切换到 {name}",
       scBranchDeleted: "已删除分支 {name}",
       scBranchOpFail: "分支操作失败",
-      scBranchUpstream: "上游",
       scDetached: "分离头",
       scPublish: "发布分支",
       scPullDone: "已拉取",
       scPullFail: "拉取失败",
       scSynced: "已同步，无待推送提交",
       scPushAhead: "推送 {n} 个提交到远程",
-      scBehind: "落后 {n} 个提交",
       scPushDone: "已推送",
       scPushFail: "推送失败",
       scPushNoUpstream: "当前分支没有上游，首次推送前需先设置",
@@ -856,22 +852,16 @@ window.__ModuleLoader__.load({
       scMergedCommit: "合并提交",
       scAuthored: "作者",
       scFiles: "更改的文件",
-      contentClose: "关闭预览",
       toDiff: "切换到 diff 视图",
       toText: "切换到原文视图",
       edit: "编辑",
-      editSave: "保存",
-      editCancel: "取消",
       editSaved: "已保存",
       editFail: "保存失败",
-      editConflict: "文件在打开后被外部修改，重新加载最新版本？",
       diffFail: "diff 加载失败",
       diffEmpty: "（无未暂存差异）",
       diffUntracked: "未跟踪文件，暂无 diff",
       diffBaseParent: "与上一版（父提交 {base}）对比",
       diffBaseRoot: "根提交：与空树对比（全部为新增）",
-      mdCopyCode: "复制代码",
-      mdCopied: "已复制",
       gitM: "已修改",
       gitA: "新文件",
       gitD: "已删除",
@@ -967,11 +957,9 @@ window.__ModuleLoader__.load({
       browserReload: "刷新",
       browserNewTab: "新建页签",
       browserCloseTab: "关闭页签",
-      browserStarting: "浏览器启动中…",
       browserReconnect: "连接断开，重连中…",
       browserNotRunning: "浏览器未启动——在上方输入网址回车，或等 agent 首次使用时自动拉起",
       browserNoPages: "没有打开的页面——在上方输入网址回车，或等 agent 下次导航自动出现在这里",
-      dockPreview: "预览",
       dockJobs: "后台任务",
       dockBrowser: "浏览器",
       pvCloseTab: "关闭此标签",
@@ -981,9 +969,7 @@ window.__ModuleLoader__.load({
       rbGuideJobsDesc: "后台任务的输出与停止",
       rbFeatureDisabled: "该功能已在设置中停用",
       fileTabLabel: "文件",
-      vaultIdxTitle: "知识库目录",
       browserStarting: "正在拉起浏览器…",
-      browserErr: "浏览器出错：{error}",
       phoneGateStart: "启动网关",
       phoneGateStop: "关闭网关",
       phoneStoppedHint: "网关未启动。开启后可用「刷新链接」作废旧链接。",
@@ -1023,16 +1009,13 @@ window.__ModuleLoader__.load({
       jobsRowCloseHint: "从列表移除（任务已结束，仅收起显示）",
       jobsKillDone: "已请求结束",
       jobsKillFail: "结束失败：{error}",
-      jobsClose: "关闭任务面板",
       jobsOutputEmpty: "（暂无输出）",
       jobsOutputTransient: "输出读取失败：{error}",
       schedTab: "日程",
-      schedNew: "新建",
       schedToday: "今天",
       schedEdit: "编辑日程",
       schedCreate: "新建日程",
       schedCreateTask: "新建待办",
-      schedTitle: "标题",
       schedTitlePh: "事项标题…",
       schedDesc: "备注",
       schedLoc: "地点",
@@ -1057,7 +1040,6 @@ window.__ModuleLoader__.load({
       schedTasks: "待办",
       schedAdd: "添加",
       schedTaskDue: "截止",
-      schedNoDue: "无日期",
       schedOverdue: "逾期",
       schedTasksEmpty: "暂无待办",
       schedStatsTotal: "总时长",
@@ -1065,7 +1047,6 @@ window.__ModuleLoader__.load({
       schedStatsDone: "已完成",
       schedStatsOpen: "待办",
       schedStatsTitle: "本周统计",
-      schedEmptyWeek: "本周暂无日程安排",
       schedPickTimer: "选择要计时的待办",
       schedTimerStandalone: "独立计时（不挂待办）",
       schedEditEntry: "编辑计时",
@@ -1075,10 +1056,7 @@ window.__ModuleLoader__.load({
       timerStopConfirm: "确定结束计时？",
       timerDoneStop: "完成",
       timerStopYes: "是",
-      timerGridBadge: "计时",
       schedWeekdays: "一,二,三,四,五,六,日",
-      schedDelDone: "已删除",
-      schedSaved: "已保存",
       schedOpFail: "操作失败：{error}",
       cfgVaultEnabled: "启用知识库",
       cfgVaultEnabledHint: "输入行入口：侧栏目录 + 右栏页编辑",
@@ -1098,17 +1076,13 @@ window.__ModuleLoader__.load({
       vaultRefreshed: "已刷新",
       vaultNewAny: "新建页面/目录",
       vaultNewPh: "标题，\\ 开头新建目录，可含 / 多级，回车创建",
-      vaultCreate: "创建",
       vaultSaved: "已保存",
       vaultUnsaved: "有未保存修改",
       vaultBinaryHint: "二进制文件，知识库不渲染",
       vaultCopy: "复制",
       vaultCopied: "已复制",
       vaultSaveFail: "保存失败：{error}",
-      vaultConflict: "页面已被外部修改——已加载最新版，请重试",
       vaultBacklinks: "反链",
-      vaultBroken: "页面不存在，点击创建",
-      vaultEmptySpace: "此库还没有页面",
       vaultPickPage: "从左侧选择一页开始",
       vaultPageGone: "页面不存在（可能已被移动或删除）",
       vaultDelBtn: "删除",
@@ -1127,7 +1101,6 @@ window.__ModuleLoader__.load({
       vaultTableDelCol: "删列",
       vaultTableDel: "删表",
       rtePlaceholder: "输入正文，/ 唤出命令菜单",
-      rteLoadFail: "富文本引擎加载失败，已退回纯文本编辑",
       vmenuGHead: "标题与正文",
       vmenuH1: "标题 1",
       vmenuH1Desc: "一级标题",
@@ -1200,7 +1173,6 @@ window.__ModuleLoader__.load({
       cfgVaultShortcut: "知识库快捷键",
       cfgRightbarShortcut: "右栏开合快捷键",
       cfgCapturing: "按下组合键…（Esc 取消）",
-      cfgCapture: "修改",
       overridden: "已覆盖",
       resetDefault: "恢复默认",
       save: "保存",
@@ -1226,7 +1198,6 @@ window.__ModuleLoader__.load({
       termCloseAll: "Kill all terminals",
       vendorFail: "Failed to load terminal components",
       treeLabel: "Files",
-      treeClose: "Close file tree",
       treeRefresh: "Refresh",
       treeLoading: "Loading…",
       treeEmpty: "(empty)",
@@ -1234,7 +1205,6 @@ window.__ModuleLoader__.load({
       treeTruncated: "Too many entries, list truncated",
       treeNewAny: "New file/folder",
       treeNewPh: "Name, \\ prefix creates a folder, / for nesting, Enter to create",
-      treeRename: "Rename",
       treeRename: "Rename",
       treeDelete: "Delete",
       treeCopyAbs: "Copy absolute path",
@@ -1267,7 +1237,6 @@ window.__ModuleLoader__.load({
       scBranchNew: "New branch name (Enter to create)",
       scBranchCreate: "Create",
       scBranchCreateSwitch: "Create & switch",
-      scBranchSwitch: "Switch branch",
       scBranchDelete: "Delete branch",
       scBranchDeleteConfirm: "Delete branch \"{name}\"?",
       scBranchForceConfirm: "This branch is not fully merged. Force delete? (commits on it may be lost)",
@@ -1279,14 +1248,12 @@ window.__ModuleLoader__.load({
       scBranchSwitched: "Switched to {name}",
       scBranchDeleted: "Deleted branch {name}",
       scBranchOpFail: "Branch operation failed",
-      scBranchUpstream: "upstream",
       scDetached: "detached HEAD",
       scPublish: "Publish branch",
       scPullDone: "Pulled",
       scPullFail: "Pull failed",
       scSynced: "Synced — nothing to push",
       scPushAhead: "Push {n} commit(s) to remote",
-      scBehind: "{n} commit(s) behind",
       scPushDone: "Pushed",
       scPushFail: "Push failed",
       scPushNoUpstream: "This branch has no upstream; set one before the first push",
@@ -1300,7 +1267,6 @@ window.__ModuleLoader__.load({
       scMergedCommit: "Merge commit",
       scAuthored: "Author",
       scFiles: "Changed files",
-      contentClose: "Close preview",
       toDiff: "Switch to diff view",
       toText: "Switch to plain view",
       diffFail: "Failed to load diff",
@@ -1308,8 +1274,6 @@ window.__ModuleLoader__.load({
       diffUntracked: "Untracked file, no diff yet",
       diffBaseParent: "Compared with parent commit {base}",
       diffBaseRoot: "Root commit: diffed against empty tree (all additions)",
-      mdCopyCode: "Copy",
-      mdCopied: "Copied",
       gitM: "Modified",
       gitA: "Added",
       gitD: "Deleted",
@@ -1317,11 +1281,8 @@ window.__ModuleLoader__.load({
       gitU: "Untracked",
       gitTip: "git change",
       edit: "Edit",
-      editSave: "Save",
-      editCancel: "Cancel",
       editSaved: "Saved",
       editFail: "Save failed",
-      editConflict: "File changed on disk since it was loaded. Reload the latest version?",
       contentLoading: "Loading…",
       contentBinary: "Binary file, preview unavailable",
       pdfNewTab: "Open in new tab",
@@ -1411,11 +1372,9 @@ window.__ModuleLoader__.load({
       browserReload: "Reload",
       browserNewTab: "New tab",
       browserCloseTab: "Close tab",
-      browserStarting: "Browser starting…",
       browserReconnect: "Reconnecting…",
       browserNotRunning: "Browser not started — type a URL above or wait for the agent's first use",
       browserNoPages: "No open pages — type a URL above, or the agent's next navigation will appear here",
-      dockPreview: "Preview",
       dockJobs: "Background tasks",
       dockBrowser: "Browser",
       pvCloseTab: "Close this tab",
@@ -1425,9 +1384,7 @@ window.__ModuleLoader__.load({
       rbGuideJobsDesc: "Output and controls for background tasks",
       rbFeatureDisabled: "This feature is disabled in settings",
       fileTabLabel: "Files",
-      vaultIdxTitle: "Knowledge base",
       browserStarting: "Starting browser…",
-      browserErr: "Browser error: {error}",
       phoneGateStart: "Start gateway",
       phoneGateStop: "Stop gateway",
       phoneStoppedHint: "Gateway is off. Use \"New link\" after starting to invalidate old links.",
@@ -1446,7 +1403,6 @@ window.__ModuleLoader__.load({
       cfgVaultShortcut: "Knowledge base shortcut",
       cfgRightbarShortcut: "Right sidebar toggle",
       cfgCapturing: "Press a combo… (Esc to cancel)",
-      cfgCapture: "Change",
       overridden: "Overridden",
       resetDefault: "Reset to default",
       save: "Save",
@@ -1488,16 +1444,13 @@ window.__ModuleLoader__.load({
       jobsRowCloseHint: "Remove from list (job has finished; display only)",
       jobsKillDone: "Stop requested",
       jobsKillFail: "Failed to stop: {error}",
-      jobsClose: "Close tasks panel",
       jobsOutputEmpty: "(no output yet)",
       jobsOutputTransient: "Failed to read output: {error}",
       schedTab: "Schedule",
-      schedNew: "New",
       schedToday: "Today",
       schedEdit: "Edit entry",
       schedCreate: "New entry",
       schedCreateTask: "New task",
-      schedTitle: "Title",
       schedTitlePh: "Entry title…",
       schedDesc: "Notes",
       schedLoc: "Location",
@@ -1522,7 +1475,6 @@ window.__ModuleLoader__.load({
       schedTasks: "Tasks",
       schedAdd: "Add",
       schedTaskDue: "Due",
-      schedNoDue: "No date",
       schedOverdue: "Overdue",
       schedTasksEmpty: "No tasks",
       schedStatsTotal: "Total time",
@@ -1530,7 +1482,6 @@ window.__ModuleLoader__.load({
       schedStatsDone: "Done",
       schedStatsOpen: "Open",
       schedStatsTitle: "This week",
-      schedEmptyWeek: "No events this week",
       schedPickTimer: "Pick a task to time",
       schedTimerStandalone: "Standalone timer (no task)",
       schedEditEntry: "Edit timer entry",
@@ -1540,10 +1491,7 @@ window.__ModuleLoader__.load({
       timerStopConfirm: "Stop this timer?",
       timerDoneStop: "Done",
       timerStopYes: "Yes",
-      timerGridBadge: "Timer",
       schedWeekdays: "Mo,Tu,We,Th,Fr,Sa,Su",
-      schedDelDone: "Deleted",
-      schedSaved: "Saved",
       schedOpFail: "Operation failed: {error}",
       cfgVaultEnabled: "Enable knowledge base",
       cfgVaultEnabledHint: "Composer entry: sidebar directory + right-dock page editor",
@@ -1563,17 +1511,13 @@ window.__ModuleLoader__.load({
       vaultRefreshed: "Refreshed",
       vaultNewAny: "New page/folder",
       vaultNewPh: "Title, \\ prefix creates a folder, / for nesting, Enter to create",
-      vaultCreate: "Create",
       vaultSaved: "Saved",
       vaultUnsaved: "Unsaved changes",
       vaultBinaryHint: "Binary file — not rendered in the vault",
       vaultCopy: "Copy",
       vaultCopied: "Copied",
       vaultSaveFail: "Save failed: {error}",
-      vaultConflict: "Page changed externally — latest version loaded, please retry",
       vaultBacklinks: "Backlinks",
-      vaultBroken: "Page does not exist, click to create",
-      vaultEmptySpace: "No pages in this space yet",
       vaultPickPage: "Pick a page on the left to start",
       vaultPageGone: "Page not found (it may have been moved or deleted)",
       vaultDelBtn: "Delete",
@@ -1592,7 +1536,6 @@ window.__ModuleLoader__.load({
       vaultTableDelCol: "Del col",
       vaultTableDel: "Del table",
       rtePlaceholder: "Type '/' for commands",
-      rteLoadFail: "Rich text engine failed to load; fell back to plain text editing",
       vmenuGHead: "Headings & text",
       vmenuH1: "Heading 1",
       vmenuH1Desc: "Level 1 heading",
@@ -1752,7 +1695,6 @@ window.__ModuleLoader__.load({
 .dshk-spring{flex:1}
 .dshk-btn{appearance:none;background:transparent;border:0;color:var(--dsw-alias-label-secondary);width:26px;height:26px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;line-height:1;padding:0}
 .dshk-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-body{flex:1 1 auto;min-height:0;padding:4px 8px 8px;position:relative}
 .dshk-term{height:100%}
 .dshk-term .xterm{height:100%}
 .dshk-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);font-size:13px}
@@ -1951,8 +1893,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-jobs-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 8px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .dshk-jobs-headside{display:flex;align-items:center;gap:6px}
 .dshk-jobs-count{font-weight:400;color:var(--dsw-alias-label-tertiary);font-size:11px}
-.dshk-jobs-close{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:14px;line-height:1;width:22px;height:22px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
-.dshk-jobs-close:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-jobs-list{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:1px;overflow:auto;padding:0 10px 10px}
 .dshk-jobs-row{display:flex;flex-direction:column;gap:4px;padding:7px 8px;border-radius:8px;background:var(--dsw-alias-fill-l2,transparent)}
 .dshk-jobs-row[data-live="true"]{background:var(--dsw-alias-interactive-bg-hover,transparent)}
@@ -1983,7 +1923,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-vault-hitrow:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-vault-hittitle{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .dshk-vault-hitsnippet{font-size:11px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dshk-vault-main{flex:1 1 auto;min-height:0;display:flex}
 .dshk-vault-rail{flex:none;width:150px;border-right:1px solid var(--dsw-alias-border-l2);overflow:auto;padding:4px 3px;display:flex;flex-direction:column}
 /* 知识库拆两半：目录树投进侧栏索引宿主（占满宽，无右缘线），编辑器投进右栏签；
    position:relative 是给 .dshk-vault-toast 当定位祖先的——漏了它绝对定位就锚到
@@ -2012,7 +1951,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-vault-ticon{width:13px;height:13px;flex:none;opacity:.75}
 .dshk-vault-treeload{padding:3px 4px;color:var(--dsw-alias-label-tertiary);font-size:11px}
 .dshk-vault-reader{flex:1 1 auto;min-width:0;overflow:auto;display:flex;flex-direction:column}
-.dshk-vault-pagebar{flex:none;display:flex;justify-content:flex-end;padding:6px 10px 0}
 .dshk-vault-editwrap{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding:8px 10px}
 .dshk-vault-editbar{flex:none;display:flex;align-items:center;gap:6px;padding-bottom:6px}
 .dshk-vault-crumb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:default;user-select:none}
@@ -2074,7 +2012,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-codebox{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;overflow:hidden;margin:10px 0}
 .dshk-codebox pre{margin:0;border:0;border-radius:0}
 .dshk-codebar{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:rgba(135,131,120,.12);font-size:11px}
-.dshk-codelang{text-transform:uppercase;letter-spacing:.4px;color:var(--dsw-alias-label-tertiary);font-family:ui-monospace,Consolas,monospace}
 .dshk-codecopy{appearance:none;border:0;background:none;color:var(--dsw-alias-label-secondary);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:5px}
 .dshk-codecopy:hover{background:rgba(135,131,120,.2);color:var(--dsw-alias-label-primary)}
 /* 数学公式（KaTeX 渲染结果 + 库未就绪时的原文回退） */
@@ -2153,15 +2090,12 @@ ellipsis，窄列只截字不破版 */
 /* 上条下网（用户定稿 2026-09-06）：待办/统计横条在上，周网格在下吃满坞宽 */
 .dshk-sched-sidecol{flex:0 0 240px;min-width:0;display:flex;flex-direction:column;gap:10px;padding:10px;border-right:1px solid var(--dsw-alias-border-l2);overflow:auto}
 /* 日程：待办卡与周网格同住日程 pane（待办列表在左列） */
-.dshk-sched-sidewrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;width:100%;overflow:auto;padding:6px}
-.dshk-sched-sidewrap .dshk-sched-card.is-tasks{flex:1 1 auto}
 .dshk-sched-card.is-tasks{flex:1 1 auto;min-width:0}
 .dshk-sched-card.is-stats{flex:none;width:230px}
 .dshk-sched-card{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-3)}
 .dshk-sched-cardtitle{font-weight:600;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-sched-cardhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}
 .dshk-sched-taskinput{flex:1;min-width:0;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 8px;border-radius:6px}
-.dshk-sched-taskdue{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;padding:4px 6px;border-radius:6px}
 .dshk-sched-task{display:flex;align-items:center;gap:7px;padding:4px 4px;border-radius:6px}
 .dshk-sched-task:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-sched-tasktitle{flex:1;min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;cursor:pointer;font-size:12px}
@@ -2224,21 +2158,6 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-timer-picktask:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-timer-picktask .dshk-sched-tasktitle{flex:1;min-width:0}
 .dshk-timer-pickrow{display:flex;gap:6px;align-items:center;margin-top:2px}
-.dshk-timer-root{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:0 12px 12px}
-.dshk-timer-nowline{display:flex;align-items:center;gap:7px}
-.dshk-timer-nowlabel{font-size:11px;color:var(--dsw-alias-label-secondary)}
-.dshk-timer-bigelapsed{font-family:ui-monospace,Consolas,monospace;font-size:30px;line-height:1.25;color:var(--dsw-alias-label-primary);font-variant-numeric:tabular-nums}
-.dshk-timer-nowmeta{display:flex;align-items:center;gap:8px;min-width:0}
-.dshk-timer-nowtitle{flex:1;min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:12px;color:var(--dsw-alias-label-primary)}
-.dshk-timer-hint{font-size:12px;color:var(--dsw-alias-label-tertiary)}
-.dshk-timer-startrow{display:flex;gap:6px;align-items:center}
-.dshk-timer-startrow .dshk-sched-taskinput{flex:1;min-width:0}
-.dshk-timer-rec{display:flex;align-items:center;gap:8px;padding:4px 2px;border-radius:6px;font-size:12px}
-.dshk-timer-rec:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-timer-rectitle{flex:1;min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;color:var(--dsw-alias-label-primary)}
-.dshk-timer-rectime{flex:none;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary)}
-.dshk-timer-recdur{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary)}
-.dshk-timer-total{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--dsw-alias-border-l2);padding-top:8px;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-sched-event.is-timed{background:color-mix(in srgb,#fd7e14 16%,transparent);color:var(--dsw-alias-label-primary);box-shadow:none;border-left:3px solid #fd7e14}
 /* 内置浏览器面板：URL 栏 + 实时画面 canvas（人机共驾） */
 /* 右侧标签页容器：内容视图占满（非激活标签 display:none 保挂载） */
@@ -2247,7 +2166,7 @@ textarea.dshk-sched-input{resize:vertical}
    （滚动条隐藏），标签多了滑过去点，不被裁掉 */
 .dshk-subtabs{flex:none;display:flex;align-items:center;gap:2px;min-width:0;padding:6px 8px 4px;border-bottom:1px solid var(--dsw-alias-border-l1);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .dshk-subtabs::-webkit-scrollbar{display:none}
-.dshk-brw-tabrow,.dshk-pv-tabrow{flex:none;display:flex;align-items:center;gap:4px;padding:8px 10px 2px;min-width:0;overflow:hidden}
+.dshk-brw-tabrow{flex:none;display:flex;align-items:center;gap:4px;padding:8px 10px 2px;min-width:0;overflow:hidden}
 .dshk-brw-newtab{padding:0 7px;font-size:13px}
 .dshk-brw-nav{flex:none;min-width:26px}
 .dshk-jobs-btn:disabled{opacity:.4;cursor:default}
@@ -2271,7 +2190,7 @@ textarea.dshk-sched-input{resize:vertical}
 /* 轻提示（双击复制路径等的单例浮层） */
 .dshk-toast{position:fixed;left:50%;bottom:56px;transform:translateX(-50%) translateY(8px);z-index:950;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);font-size:12px;line-height:1;padding:8px 14px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);box-shadow:0 4px 16px rgba(0,0,0,.12);opacity:0;pointer-events:none;transition:opacity .15s var(--ds-ease-in-out),transform .15s var(--ds-ease-in-out)}
 .dshk-toast[data-show]{opacity:1;transform:translateX(-50%) translateY(0)}
-/* 预览 Markdown 渲染视图 */
+/* markdown 排版（RTE 宿主编辑态 + docx 预览共用）*/
 .dshk-md{flex:1;min-height:0;overflow:auto;padding:12px 16px;font-size:13px;line-height:1.7;color:var(--dsw-alias-label-primary);user-select:text}
 .dshk-md h1,.dshk-md h2,.dshk-md h3,.dshk-md h4{margin:1.2em 0 .5em;line-height:1.3}
 .dshk-md h1{font-size:1.5em}.dshk-md h2{font-size:1.3em}.dshk-md h3{font-size:1.15em}
@@ -2280,12 +2199,6 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-md code{font-family:ui-monospace,Consolas,monospace;font-size:.92em;background:var(--dsw-alias-interactive-bg-hover);border-radius:4px;padding:.15em .35em}
 .dshk-md pre{background:var(--dsw-alias-bg-layer-3);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:10px 12px;overflow:auto}
 .dshk-md pre code{background:none;padding:0}
-.dshk-md-code{margin:.6em 0;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;overflow:hidden}
-.dshk-md-code pre{margin:0;border:0;border-radius:0}
-.dshk-md-codebar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:3px 10px;background:var(--dsw-alias-bg-layer-3);border-bottom:1px solid var(--dsw-alias-border-l2)}
-.dshk-md-lang{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary)}
-.dshk-md-copy{appearance:none;border:0;background:none;font:inherit;font-size:11px;line-height:1.4;cursor:pointer;color:var(--dsw-alias-label-secondary);padding:2px 6px;border-radius:4px}
-.dshk-md-copy:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-md blockquote{margin:.6em 0;padding:2px 12px;border-left:3px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
 .dshk-md table{border-collapse:collapse;margin:.6em 0;font-size:12px}
 .dshk-md th,.dshk-md td{border:1px solid var(--dsw-alias-border-l2);padding:4px 10px;text-align:left}
@@ -2347,7 +2260,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 .dshk-diff-hunk{color:#4daafc}
 .dshk-diff-meta{color:var(--dsw-alias-label-tertiary)}
 /* 编辑模式 */
-.dshk-edithost{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:8px;padding:4px 10px 12px}
 .dshk-editarea{flex:1 1 auto;min-height:0;width:100%;box-sizing:border-box;resize:none;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;padding:8px 10px;white-space:pre;overflow:auto}
 .dshk-editarea:focus-visible{border-color:var(--dsw-alias-brand-primary);outline:none}
 .dshk-btn-save{appearance:none;border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:#fff;border-radius:6px;font:inherit;font-size:12px;line-height:1;padding:5px 10px;cursor:pointer}
@@ -2364,7 +2276,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 .dshk-caret{font-size:9px;color:var(--dsw-alias-label-tertiary)}
 .dshk-pushhint{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:var(--dsw-alias-label-secondary)}
 .dshk-pushhint span{flex:1;min-width:0}
-.dshk-branch{margin:2px 4px 6px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;overflow:hidden}
 .dshk-branch-title{padding:5px 10px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:11px}
 .dshk-branch-row{display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:12px;cursor:pointer}
 .dshk-branch-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -2382,7 +2293,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 .dshk-branch-newtag{flex:none;font-size:10px;color:var(--dsw-alias-brand-primary)}
 .dshk-branch-del:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 /* 分支按钮的领先/落后计数（vs 式 main ↑1↓2） */
-.dshk-branch-ar{flex:none;font-family:ui-monospace,Consolas,monospace;font-size:10px;color:var(--dsw-alias-label-tertiary)}
 /* 分支浮层（fixed 悬浮面板）：自带内部滚动，不参与 .dshk-tree 的 flex 挤压 */
 .dshk-branch-menu{width:236px;max-height:min(70vh,420px);display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
 .dshk-branch-menu .dshk-branch-title{flex:none;padding:6px 10px 4px;background:none;border-bottom:1px solid var(--dsw-alias-border-l1)}
@@ -2457,12 +2367,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         document.head.appendChild(s);
       });
     }
-    /** 预览增强库按需加载：md 渲染（marked+DOMPurify）/ 代码读写（CodeMirror 6）。
-     *  全部走 /dsh-kit/vendor/*，不打开对应文件类型就一个字节都不下载。 */
-    function ensureMdLibs() {
+    /** KaTeX 公式按需加载（RTE 阅读与编辑都要）：js + css 一起上，重复调用只下一次 */
+    function ensureKatex() {
       const jobs = [];
-      if (typeof window.marked === "undefined") jobs.push(loadScript("/dsh-kit/vendor/marked.min.js"));
-      if (typeof window.DOMPurify === "undefined") jobs.push(loadScript("/dsh-kit/vendor/purify.min.js"));
       if (typeof window.katex === "undefined") jobs.push(loadScript("/dsh-kit/vendor/katex.min.js"));
       if (!document.querySelector('link[data-dshk-katex]')) {
         const link = document.createElement("link");
@@ -2472,6 +2379,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         document.head.appendChild(link);
       }
       return Promise.all(jobs);
+    }
+    /** docx 预览的 HTML 消毒（mammoth 输出不可信，只有这条路径要 DOMPurify） */
+    function ensurePurify() {
+      return typeof window.DOMPurify === "undefined"
+        ? loadScript("/dsh-kit/vendor/purify.min.js")
+        : Promise.resolve();
     }
     function ensureCmLib() {
       return typeof window.CM6 === "object" && window.CM6 !== null
@@ -3669,30 +3582,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const kind = C && typeof dswPrimIcons.classifyFileType === "function" ? dswPrimIcons.classifyFileType(name) : null;
       return kind ? jsxRuntime.jsx(C, { kind, size: 13 }) : null;
     }
-    /** 删除图标：垃圾桶 */
-    function TrashIcon(props) {
-      const _official = dswIcon("IconTrashOutline16");
-      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
-      return jsxRuntime.jsxs(
-        "svg",
-        {
-          width: 15,
-          height: 15,
-          viewBox: "0 0 16 16",
-          "aria-hidden": true,
-          fill: "none",
-          stroke: "currentColor",
-          strokeWidth: 1.2,
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          children: [
-            jsxRuntime.jsx("path", { d: "M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 10h6.6L12 4" }),
-            jsxRuntime.jsx("path", { d: "M6.7 6.8v4.6M9.3 6.8v4.6" }),
-          ],
-        },
-      );
-    }
-
     /** 复制绝对路径图标：经典双矩形 copy */
     function CopyAbsIcon(props) {
       const _official = dswIcon("IconCopyOutline16");
@@ -3712,28 +3601,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           children: [
             jsxRuntime.jsx("path", { d: "M9.5 3.5h-5a1 1 0 0 0-1 1v5" }),
             jsxRuntime.jsx("rect", { x: "6.5", y: "6.5", width: "7", height: "7", rx: "1" }),
-          ],
-        },
-      );
-    }
-
-    /** 复制相对路径图标：单矩形 + 省略点（前缀被略去） */
-    function CopyRelIcon() {
-      return jsxRuntime.jsxs(
-        "svg",
-        {
-          width: 15,
-          height: 15,
-          viewBox: "0 0 16 16",
-          "aria-hidden": true,
-          fill: "none",
-          stroke: "currentColor",
-          strokeWidth: 1.2,
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          children: [
-            jsxRuntime.jsx("rect", { x: "3.5", y: "4.5", width: "9.5", height: "7.5", rx: "1" }),
-            jsxRuntime.jsx("path", { d: "M6 8.25h.01M8.25 8.25h.01M10.5 8.25h.01", strokeWidth: 1.6 }),
           ],
         },
       );
@@ -5222,9 +5089,17 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // （2s 防抖 + Ctrl+S + 卸载保底 + mtime CAS 冲突条），保存走 /dsh-kit/write。
     // 外部修改可见性（vault 同款）：/dsh-kit/stat 轮询 mtime，无脏改时静默重读
     // ——AI 改文件页面自动跟随。PDF/Excel/docx 只读视图与 diff 视图保持原样。
+    /** 链接点击要不要交给我们：页内锚点与带协议/协议的 href 放行（RTE 的 Link
+     *  扩展配了 openOnClick:false，点了本来也不跳），其余（相对路径 / 站内 / 裸
+     *  路径）都算「文档内链接」候选，由调用方决定能不能解析成文件。 */
+    function isDocHref(href) {
+      const h = String(href ?? "").trim();
+      if (h === "" || h.startsWith("#")) return false;
+      return !/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(h);
+    }
     /** 把 md 里的相对/站内链接解析为可打开的绝对路径；解析不出返回 null。
-     *  fromPath 为当前文件绝对路径（正反斜杠皆可），cwd 为工作区根
-     *  （合成站内 / 开头链接用），href 已剥过 query/hash。 */
+     *  fromPath 为当前文件绝对路径（正反斜杠皆可），cwd 为根（工作区或知识库根，
+     *  合成 / 开头链接用）；href 的 query/hash 在这里剥掉，%xx 就地解码。 */
     function resolveMdLink(fromPath, cwd, href) {
       const raw = (() => {
       try {
@@ -5739,7 +5614,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             return r.arrayBuffer();
           }),
           ensureDocBox(),
-          ensureMdLibs(),
+          ensurePurify(),
         ])
           .then(([buf, win]) => win.__dshkDocxParse(new Uint8Array(buf)))
           .then((html) => {
@@ -5980,6 +5855,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   initialMd: mdParts?.rest.trimStart() ?? "",
                   placeholder: t("rtePlaceholder"),
                   labels: { codeCopy: t("vaultCopy"), codeCopied: t("vaultCopied") },
+                  // 相对/站内链接 → 工作区文件签打开（原 md 预览时代的能力，RTE 接管后
+                  // 由这层补回）：解析按「当前文件所在目录」，/ 开头按工作区根
+                  onRelLink: (href) => {
+                    const target = resolveMdLink(path, cwd, href);
+                    if (target && typeof onOpenFile === "function") onOpenFile(target);
+                  },
                   onSave: saveMd,
                   onState: (s) => setDirtyDot(s.dirty === true),
                 })
@@ -6750,14 +6631,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [y, m, d] = s.split("-").map(Number);
       const dt = new Date(y, m - 1, d);
       return schedAddDays(s, -((dt.getDay() + 6) % 7));
-    };
-    /** "YYYY-MM-DDTHH:mm" → 当日分钟数；解析不了返回 null */
-    const schedMins = (dt) => {
-      if (typeof dt !== "string") return null;
-      const m = dt.split("T")[1];
-      if (!m) return null;
-      const [hh, mm] = m.split(":").map(Number);
-      return hh * 60 + mm;
     };
     const schedHHmm = (mins) => `${schedPad2(Math.floor(mins / 60) % 24)}:${schedPad2(mins % 60)}`;
     const schedWeekdays = () => (resolveZh() ? ["一", "二", "三", "四", "五", "六", "日"] : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]);
@@ -7981,15 +7854,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       },
     ];
 
-    /** rows×cols markdown 表格模板：首行表头 + 分隔线 + rows-1 空白行体 */
-    function vaultTableTemplate(rows, cols) {
-      const row = (fill) => `| ${Array(cols).fill(fill).join(" | ")} |`;
-      return `${row("列")}\n${row("---")}${Array(Math.max(rows - 1, 0))
-        .fill("")
-        .map(() => `\n${row(" ")}`)
-        .join("")}`;
-    }
-
     // ─────────── 会话监视器（conversation.composer.dock 座位）───────────
     // 对话页内监视当前打开的会话，两条自动化路径：
     // ① 终态失败续跑：回合以可重试类错误终态（RATE_LIMIT/SERVER/TIMEOUT/
@@ -8306,7 +8170,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 自动保存，直到父层重载（docTick bump 重挂）或 overwrite 成功。
     // rteRef 直通 RTE 句柄（父层页条按钮 undo/redo/表格等照旧调用）；
     // ctlRef 暴露 { dirty, flush, flushManual, overwrite } 供切页 flush。
-    function RteEditor({ rteRef, ctlRef, docKey, docTick, initialMd, placeholder, labels, onWikiLink, resolveWiki, resolveSrc, onSave, onState, onPaste }) {
+    function RteEditor({ rteRef, ctlRef, docKey, docTick, initialMd, placeholder, labels, onWikiLink, resolveWiki, resolveSrc, onRelLink, onSave, onState, onPaste }) {
       const [libsReady, setLibsReady] = react.useState(false);
       const [libsFailed, setLibsFailed] = react.useState(false);
       const [md, setMd] = react.useState(initialMd ?? "");
@@ -8337,8 +8201,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       onSaveRef.current = onSave;
       const onStateRef = react.useRef(onState);
       onStateRef.current = onState;
-      const confRef = react.useRef({ onWikiLink, resolveWiki, resolveSrc, labels, placeholder });
-      confRef.current = { onWikiLink, resolveWiki, resolveSrc, labels, placeholder };
+      const confRef = react.useRef({ onWikiLink, resolveWiki, resolveSrc, onRelLink, labels, placeholder });
+      confRef.current = { onWikiLink, resolveWiki, resolveSrc, onRelLink, labels, placeholder };
 
       // 光标所属标题链（VS Code 面包屑同款）：heading 是顶层块互不嵌套，层级
       // 归属按「文档顺序」解释——从光标顶层块向前扫，遇到比链尾更高级（level
@@ -8380,7 +8244,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
       react.useEffect(() => {
         ensureRteLib()
-          .then(() => ensureMdLibs())
+          .then(() => ensureKatex())
           .then(() => setLibsReady(true))
           .catch(() => setLibsFailed(true));
       }, []);
@@ -8782,7 +8646,19 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         },
       };
 
-      return jsxRuntime.jsxs("div", { className: "dshk-vault-editwrap", onPaste, children: [
+      // 文档内链接点击：RTE 的 Link 扩展 openOnClick:false（点了不跳），相对链接
+      // 不接管就等于「点了没反应」——捕获期拦下来交父层解析成文件/页再打开
+      const onLinkClick = (e) => {
+        const el = e.target && typeof e.target.closest === "function" ? e.target.closest("a[href]") : null;
+        if (!el) return;
+        const href = el.getAttribute("href") || "";
+        const cb = confRef.current.onRelLink;
+        if (!isDocHref(href) || typeof cb !== "function") return;
+        e.preventDefault();
+        e.stopPropagation();
+        cb(href, el.textContent || "");
+      };
+      return jsxRuntime.jsxs("div", { className: "dshk-vault-editwrap", onPaste, onClickCapture: onLinkClick, children: [
         libsFailed
           ? jsxRuntime.jsx("textarea", { className: "dshk-vault-rtefallback", value: md, onChange: (e) => setMd(e.target.value), spellCheck: false })
           : jsxRuntime.jsx("div", { className: "dshk-vault-rtehost dshk-md", ref: rteHostRef }),
@@ -9690,6 +9566,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                       const pageDir = () => path.split(/[\\/]/).slice(0, -1).join("\\");
                       const abs = /^attachments\//i.test(src) ? `${root}/${src}` : `${pageDir()}/${src}`;
                       return `http://${location.host}/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
+                    },
+                    // 相对/站内链接解析到库内 md 页 → 按页打开（库外或非 md 不接管，
+                    // 免得把「保存走 write 端点」的语义混进知识库文件）
+                    onRelLink: (href) => {
+                      const target = resolveMdLink(path, root, href);
+                      if (target && /\.md$/i.test(target) && isPathInsideVaultRoot(root, target)) onOpenPage(target);
                     },
                     onSave: saveVaultPage,
                     onState: (s) => {
