@@ -71,7 +71,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
+  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTakeoverError, monitorRecoveredTail, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -964,11 +964,35 @@ check(
   "侧边栏组只含左右两键且带组头、无启用位",
   src.includes('{ title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut"] }') && src.includes('cfgGroupSidebar: "侧边栏"') && !src.includes("sidebarShortcutEnabled"),
 );
-// 默认值与宿主 schema、开发环境现值三方同步（恢复默认回落宿主 base，客户端默认
-// 与其漂移会出现「恢复默认后跳到别的值」）——钉住五处 2026-09-11 改动
+// 默认值与宿主 Config schema（src/index.ts）逐项同值：恢复默认拿的是宿主组合基座
+// （base 只带 vaultRoot 一项，2026-09-11 dev 环境实测），其余键由 cfgFormat 回落
+// 客户端内置默认——两处漂移就会出现「恢复默认后跳到别的值」
+{
+  const hostSrc = fs.readFileSync(__dirname + "/../src/index.ts", "utf8");
+  const drift = [];
+  const missing = [];
+  let compared = 0;
+  for (const m of hostSrc.matchAll(/^ {4}(\w+): z\.(?:boolean|number|string)\(\)[^,\n]*\.default\(([^)]*)\),?$/gm)) {
+    const key = m[1];
+    if (!Object.prototype.hasOwnProperty.call(comps.CFG_DEFAULTS, key)) { missing.push(key); continue; }
+    const raw = m[2].trim();
+    const expected =
+      raw === "true" ? true : raw === "false" ? false : /^-?\d+$/.test(raw) ? Number(raw) : /^'[^']*'$/.test(raw) ? raw.slice(1, -1) : undefined;
+    if (expected === undefined) continue; // 表达式默认（defaultVaultRoot() 之类）不比对
+    compared++;
+    if (comps.CFG_DEFAULTS[key] !== expected) drift.push(key + "(bundle=" + comps.CFG_DEFAULTS[key] + ",host=" + expected + ")");
+  }
+  check("设置卡内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 20);
+}
+// 开关类字段的「恢复默认」显示：基座缺该项时按内置默认渲染。默认关的
+// phoneKeepGatewayOn 曾被 cfgFormat 的 undefined → "true" 兜底成勾选态——
+// 界面显示已恢复默认、实际保存后是关，两边对不上（2026-09-11 用户实测）
 check(
-  "默认值五项同步（search 2 / preview 3 / monitorWait 15000 / 对话预览开 / 手机页开）",
-  src.includes("searchMaxResults: 2,") && src.includes("previewMaxTabs: 3,") && src.includes("monitorWaitMs: 15000,") && src.includes("chatOpenFilePreview: true,") && src.includes("phoneEnabled: true,"),
+  "恢复默认：bool 字段缺基座项回落内置默认（phoneKeepGatewayOn 默认 false）",
+  comps.cfgFormat("phoneKeepGatewayOn", undefined) === "false" &&
+    comps.cfgFormat("terminalEnabled", undefined) === "true" &&
+    comps.cfgFormat("phoneKeepGatewayOn", true) === "true" &&
+    comps.cfgFormat("phoneKeepGatewayOn", false) === "false",
 );
 // 过时文案清理：现行说明不得再提「侧栏底部『任务』钮」（该入口 2026-09-11 撤）、
 // 搜索默认改 2、日程索引标题键已废（历史迁移记录型注释不算）

@@ -411,7 +411,8 @@ window.__ModuleLoader__.load({
     // ─────────── 插件配置 ───────────
     // 数据通道：官方 settings scope（宿主 installSettingsSection 注册的
     // dsh-kit 命名空间）。默认值与宿主 Config schema（src/index.ts）逐项同值——
-    // 恢复默认回落的是宿主 base，两处不同步会出现「默认值漂移」。
+    // 恢复默认拿的是宿主组合基座（base），基座只有 vaultRoot 一项，其余键在
+    // cfgFormat 里回落这里的默认值，两处不同步会出现「默认值漂移」。
     // 快照未就绪时一律回退内置默认——功能全开、默认键位。
     const CFG_DEFAULTS = {
       terminalEnabled: true,
@@ -10667,9 +10668,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     const cfgLabelKey = (field, suffix) =>
       `cfg${field[0].toUpperCase()}${field.slice(1)}${suffix}`;
 
-    /** 字段显示文本：bool → "true"/"false"；number → 整数字符串；text/combo → 字符串（空回落内置默认） */
+    /** 字段显示文本：bool → "true"/"false"；number → 整数字符串；text/combo → 字符串（空/缺项回落内置默认） */
     function cfgFormat(field, value) {
-      if (cfgSpec[field].kind === "bool") return value === false ? "false" : "true";
+      // 非布尔（快照未就绪，或恢复默认时基座缺该项）回落内置默认：基座 base 只带
+      // vaultRoot 一项，其余键取到的是 undefined，写死 "true" 会让默认关的开关
+      // （phoneKeepGatewayOn）在「恢复默认」后仍显示为开
+      if (cfgSpec[field].kind === "bool") return (typeof value === "boolean" ? value : CFG_DEFAULTS[field] === true) ? "true" : "false";
       if (cfgSpec[field].kind === "number") return String(Number.isFinite(value) ? value : CFG_DEFAULTS[field]);
       return typeof value === "string" && value.trim() !== "" ? value : CFG_DEFAULTS[field];
     }
@@ -10782,7 +10786,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           setDrafts((d) => ({ ...d, [field]: { text, clear: false } }));
           setFailed(false);
         };
-        // 恢复默认：暂存 base 值 + clear 标记（保存时 unset，回落 schema 默认）
+        // 恢复默认：暂存基座值 + clear 标记（保存时 unset，回落 schema 默认）。
+        // 基座只带 vaultRoot 一项，其余键由 cfgFormat 回落内置默认
         const resetField = (field) => {
           const base = snapshot.base && typeof snapshot.base === "object" ? snapshot.base[field] : undefined;
           setDrafts((d) => ({ ...d, [field]: { text: cfgFormat(field, base), clear: true } }));
