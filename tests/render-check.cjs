@@ -793,15 +793,15 @@ let vaultFetchPrev = null;
 }
 // 文件标签（多开）在 7.2.2 覆盖，舞台不可收起在 7.2.4 覆盖
 
-// 7.2.3) 文件标签 LRU 纯逻辑：默认上限 8，超限开新文件逐出 usedAt 最小者（=关掉
+// 7.2.3) 文件标签 LRU 纯逻辑：默认上限 3，超限开新文件逐出 usedAt 最小者（=关掉
 // 最久没看的那张标签）；重开已存在文件置顶激活不逐出自身
 const lruBase = [];
-for (let i = 1; i <= 8; i++) lruBase.push({ path: `C:/x/f${i}.js`, from: "tree", untracked: false, usedAt: i });
-const opened = comps.openFileTab({ files: lruBase, activeFile: "C:/x/f8.js" }, "C:/x/f9.js", "tree", false);
-check("openFileTab 超限 LRU 逐出最久未用", opened.files.length === 8 && !opened.files.some((p) => p.path === "C:/x/f1.js") && opened.files.some((p) => p.path === "C:/x/f9.js") && opened.activeFile === "C:/x/f9.js" && opened.stageTab === "file");
-const reopened = comps.openFileTab({ files: opened.files, activeFile: "C:/x/f9.js" }, "C:/x/f2.js", "scm", false);
+for (let i = 1; i <= 3; i++) lruBase.push({ path: `C:/x/f${i}.js`, from: "tree", untracked: false, usedAt: i });
+const opened = comps.openFileTab({ files: lruBase, activeFile: "C:/x/f3.js" }, "C:/x/f4.js", "tree", false);
+check("openFileTab 超限 LRU 逐出最久未用", opened.files.length === 3 && !opened.files.some((p) => p.path === "C:/x/f1.js") && opened.files.some((p) => p.path === "C:/x/f4.js") && opened.activeFile === "C:/x/f4.js" && opened.stageTab === "file");
+const reopened = comps.openFileTab({ files: opened.files, activeFile: "C:/x/f4.js" }, "C:/x/f2.js", "scm", false);
 const reopenedItem = reopened.files.find((p) => p.path === "C:/x/f2.js");
-check("openFileTab 重开已存在文件置顶激活不逐出自身", reopened.files.length === 8 && reopened.activeFile === "C:/x/f2.js" && !!reopenedItem && reopenedItem.untracked === false && reopenedItem.from === "scm");
+check("openFileTab 重开已存在文件置顶激活不逐出自身", reopened.files.length === 3 && reopened.activeFile === "C:/x/f2.js" && !!reopenedItem && reopenedItem.untracked === false && reopenedItem.from === "scm");
 const delOpen = comps.openFileTab({ files: [], activeFile: null }, "C:/x/gone.js", "scm", false, true);
 check("openFileTab 携带 deleted 标记", delOpen.files.length === 1 && delOpen.files[0].deleted === true && delOpen.activeFile === "C:/x/gone.js");
 // 7.2.3b) commit 钉定（图谱提交详情进入）：条目携带 commit；从 SCM 重开同路径清除钉定
@@ -1060,6 +1060,24 @@ const fakeScope = {
 };
 out = comps.KitConfigCard({ scope: fakeScope });
 check("KitConfigCard 渲染无异常", !!out && typeof out === "object");
+// 设置卡布局整理（2026-09-11 用户定稿）：两个侧边栏快捷键并入「侧边栏」组（组头
+// + 左栏启用位 + 左/右两键），字段行走官方通用设置模型（标题+说明左列、控件右置）
+check(
+  "侧边栏组含左右两键且带组头",
+  src.includes('{ title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcutEnabled", "sidebarShortcut", "rightbarShortcut"] }') && src.includes('cfgGroupSidebar: "侧边栏"'),
+);
+// 默认值与宿主 schema、开发环境现值三方同步（恢复默认回落宿主 base，客户端默认
+// 与其漂移会出现「恢复默认后跳到别的值」）——钉住五处 2026-09-11 改动
+check(
+  "默认值五项同步（search 2 / preview 3 / monitorWait 15000 / 对话预览开 / 手机页开）",
+  src.includes("searchMaxResults: 2,") && src.includes("previewMaxTabs: 3,") && src.includes("monitorWaitMs: 15000,") && src.includes("chatOpenFilePreview: true,") && src.includes("phoneEnabled: true,"),
+);
+// 过时文案清理：现行说明不得再提「侧栏底部『任务』钮」（该入口 2026-09-11 撤）、
+// 搜索默认改 2、日程索引标题键已废（历史迁移记录型注释不算）
+check(
+  "设置卡过时文案已更新（无侧栏底部钮现行说法/默认 5/schedIdxTitle）",
+  !src.includes("侧栏底部「") && !src.includes("默认 5") && !src.includes("schedIdxTitle"),
+);
 // OpenCode Go 会话头已非配置项（内置行为，2026-09-08 用户定）：i18n 键与旧
 // 写入端点都必须不存在；注入机制本身由 test-opencode-session.mjs 覆盖
 check(

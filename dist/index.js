@@ -413,7 +413,7 @@ export async function apply(ctx) {
     // 不能拿 ctx.get('settings') 判存在后跳过。
     // 宿主消费的开关：searchEnabled 在启动期决定 free-search provider 挂哪种
     // 实现——开=免费引擎链，关=同 id 转发官方渠道（见 web-search.ts）；
-    // searchMaxResults 是每次搜索的来源条数上限（1-8，默认 5），provider 每次
+    // searchMaxResults 是每次搜索的来源条数上限（1-8，默认 2），provider 每次
     // 调用现读，改完即生效。phoneEnabled 同为宿主消费：经 onChange 热同步网关
     // 启停/端口，改开关立即生效无需重启。其余开关全在浏览器端门控入口按钮，
     // 宿主不读。先注册设置层再挂搜索，确保注入回调读到的是已落定值。
@@ -433,16 +433,16 @@ export async function apply(ctx) {
         terminalEnabled: z.boolean().default(true),
         fileTreeEnabled: z.boolean().default(true),
         sourceControlEnabled: z.boolean().default(true),
-        chatOpenFilePreview: z.boolean().default(false),
+        chatOpenFilePreview: z.boolean().default(true),
         skillsPageEnabled: z.boolean().default(true),
         searchEnabled: z.boolean().default(true),
-        searchMaxResults: z.number().step(1).min(1).max(8).default(5),
+        searchMaxResults: z.number().step(1).min(1).max(8).default(2),
         // 文件预览标签上限（预览大标签内的文件小标签数）：超过时打开新文件按 LRU
         // 逐出最久未看的预览（客户端即时生效）
-        previewMaxTabs: z.number().step(1).min(1).max(20).default(8),
+        previewMaxTabs: z.number().step(1).min(1).max(20).default(3),
         // phoneEnabled = 「手机访问」页入口可见性（配置卡最下，纯显示开关）。
         // 网关启停不走 settings（读取器回填滞后），改由状态文件 + kit 端点直管。
-        phoneEnabled: z.boolean().default(false),
+        phoneEnabled: z.boolean().default(true),
         phoneRemoteDomain: z.string().default(''),
         phonePort: z.number().step(1).min(1).max(65535).default(3090),
         phoneKeepGatewayOn: z.boolean().default(false),
@@ -465,18 +465,19 @@ export async function apply(ctx) {
         // ② 流式输出出现重复增量（死循环征兆）达 monitorRepeatThreshold 次时
         //    停止当前回合并续跑（停止不受上限，防烧 token；续跑受上限）。
         monitorEnabled: z.boolean().default(true),
-        monitorWaitMs: z.number().step(1).min(5000).max(600000).default(30000),
+        monitorWaitMs: z.number().step(1).min(5000).max(600000).default(15000),
         monitorMaxAuto: z.number().step(1).min(1).max(10).default(3),
         monitorRepeatThreshold: z.number().step(1).min(2).max(10).default(3),
         sidebarShortcut: z.string().default('Ctrl+B'),
         sidebarShortcutEnabled: z.boolean().default(true),
+        rightbarShortcut: z.string().default('Ctrl+Alt+B'),
         terminalShortcut: z.string().default('Ctrl+/'),
         fileTreeShortcut: z.string().default('Ctrl+,'),
         scShortcut: z.string().default('Ctrl+Alt+.'),
-        // 知识库/日程入口（2026-09-10 定稿：从侧栏底部钮移到输入行，源代码管理与
-        // 终端之间）；语义是开合切换——开=侧栏索引视图 + 舞台标签，关=两者一起收
+        // 知识库入口（2026-09-10 定稿：从侧栏底部钮移到输入行）；语义是开合切换——
+        // 开=侧栏索引视图 + 舞台标签，关=两者一起收。日程快捷键 2026-09-11 撤
+        // （日程无侧栏半边），右栏开合快捷键顶位（客户端消费 sidebarRight.toggleExpanded）
         vaultShortcut: z.string().default('Ctrl+Alt+K'),
-        schedShortcut: z.string().default('Ctrl+Alt+S'),
     }) : null;
     let readSettings = () => ({});
     /** phoneSettingsReady：setSource 首次触发时置 true，下游 webServer 注入段由此判断
