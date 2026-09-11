@@ -891,12 +891,15 @@ export class BrowserService {
                 catch { }
                 cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => { });
             });
+            // everyNthFrame: 2 —— screencast 每次重绘画一帧，60fps 的页面就是 60 帧/秒的
+            // JPEG 编码 + base64 + WS 发送；面板是"看 agent 在干什么"的观察窗，30fps 足够，
+            // 砍一半是这条链上最省的一刀（分辨率/质量不动，画质与可读性不受影响）
             await cdp.send('Page.startScreencast', {
                 format: 'jpeg',
                 quality: 60,
                 maxWidth: 1600,
                 maxHeight: 1200,
-                everyNthFrame: 1,
+                everyNthFrame: 2,
             });
             this._stream = { cdp, tabId: page.__dshTabId };
             // 首帧兜底：screencast 只在重绘时推帧，静态页面可能长时间没有首帧（面板

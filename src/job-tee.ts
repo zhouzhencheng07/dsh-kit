@@ -27,6 +27,33 @@ const isTerminal = (status: string): boolean =>
 
 const tees = new WeakMap<object, JobOutputTee>()
 
+/** 公共缓冲上限（导出供单测引用）。长跑任务的输出会一直喂进来，而两个游标可能
+ *  长期不读——不设上限就是把该任务的整段历史常驻内存。超限只丢最旧的已读前缀。 */
+export const JOB_TEE_BUFFER_CAP = 2 * 1024 * 1024
+
+/**
+ * 追加新块并裁剪缓冲：先丢掉两边游标都已消费的前缀（这是纯省内存，读取语义不变），
+ * 再按上限兜底丢最旧——上限触发时未读的旧增量会丢，属刻意的取舍（runaway 日志
+ *  不该撑爆宿主内存；两个读取方都按"自上次读取以来的增量"消费，丢的只会是很久
+ * 以前没人读的部分）。裁剪后两个游标一起前移，切片起点保持指向同一逻辑位置。
+ */
+function appendOutput(st: JobOutputTee, inc: string): void {
+  if (inc === '') return
+  st.buffer += inc
+  const consumed = Math.min(st.modelCursor, st.panelCursor)
+  if (consumed > 0) {
+    st.buffer = st.buffer.slice(consumed)
+    st.modelCursor -= consumed
+    st.panelCursor -= consumed
+  }
+  if (st.buffer.length > JOB_TEE_BUFFER_CAP) {
+    const drop = st.buffer.length - JOB_TEE_BUFFER_CAP
+    st.buffer = st.buffer.slice(drop)
+    st.modelCursor = Math.max(0, st.modelCursor - drop)
+    st.panelCursor = Math.max(0, st.panelCursor - drop)
+  }
+}
+
 /** 给单个 job 装分身（幂等）：包住 readOutput，模型路径排水 + 按模型游标切片。 */
 export function installJobTee(job: JobRecord): JobOutputTee {
   const existing = tees.get(job)
@@ -36,8 +63,7 @@ export function installJobTee(job: JobRecord): JobOutputTee {
     const orig = job.readOutput
     st.orig = orig
     job.readOutput = () => {
-      const inc = orig()
-      if (inc !== '') st.buffer += inc
+      appendOutput(st, orig())
       const text = st.buffer.slice(st.modelCursor)
       st.modelCursor = st.buffer.length
       return text
@@ -52,8 +78,7 @@ export function installJobTee(job: JobRecord): JobOutputTee {
 export function panelReadJobOutput(job: JobRecord): string {
   const st = installJobTee(job)
   if (!st.orig) return isTerminal(job.status) ? job.output ?? '' : ''
-  const inc = st.orig()
-  if (inc !== '') st.buffer += inc
+  appendOutput(st, st.orig())
   const text = st.buffer.slice(st.panelCursor)
   st.panelCursor = st.buffer.length
   return text

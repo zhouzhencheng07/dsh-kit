@@ -8,7 +8,9 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 
-import { startPhoneGateway, PHONE_COOKIE, lanAddresses } from '../src/phone-gateway.ts'
+import zlib from 'node:zlib'
+
+import { startPhoneGateway, PHONE_COOKIE, lanAddresses, pickEncoding, isCompressibleType } from '../src/phone-gateway.ts'
 
 let failed = 0
 const check = (label, ok) => {
@@ -44,6 +46,29 @@ function startUpstream() {
         res.end('<!doctype html><html><head><title>t</title></head><body>up</body></html>')
         return
       }
+      if (req.method === 'GET' && req.url === '/bigpage') {
+        const body = '<!doctype html><html><head><title>big</title></head><body>' + '<p>fill</p>'.repeat(400) + '</body></html>'
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'content-length': String(Buffer.byteLength(body)) })
+        res.end(body)
+        return
+      }
+      if (req.method === 'GET' && req.url === '/big.js') {
+        const body = 'var x = 1; // 可压文本\n'.repeat(2000)
+        res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'content-length': String(Buffer.byteLength(body)) })
+        res.end(body)
+        return
+      }
+      if (req.method === 'GET' && req.url === '/small.js') {
+        const body = 'var small = 1;'
+        res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'content-length': String(Buffer.byteLength(body)) })
+        res.end(body)
+        return
+      }
+      if (req.method === 'GET' && req.url === '/stream') {
+        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store' })
+        res.end('data: hello\n\n')
+        return
+      }
       const chunks = []
       req.on('data', (c) => chunks.push(c))
       req.on('end', () => {
@@ -76,7 +101,10 @@ function request(port, { path: reqPath, method = 'GET', headers = {}, body = nul
       (res) => {
         const chunks = []
         res.on('data', (c) => chunks.push(c))
-        res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString('utf8') }))
+        res.on('end', () => {
+          const raw = Buffer.concat(chunks)
+          resolve({ status: res.statusCode, headers: res.headers, raw, body: raw.toString('utf8') })
+        })
       },
     )
     req.on('error', reject)
@@ -181,6 +209,33 @@ try {
   check('content-length 已按注入后重算', lenOk)
   r = await request(gwPort, { path: '/', headers: { cookie: cookieHeader } })
   check('非 HTML 响应不注入', !r.body.includes('randomUUID'))
+
+  // ── 压缩：按客户端能力压文本类（dsh 自身不压；局域网直连时这是最大的一笔带宽）──
+  {
+    check('pickEncoding：br 优先、gzip 次之、q=0 视为拒绝', pickEncoding('gzip, deflate, br') === 'br' && pickEncoding('gzip') === 'gzip' && pickEncoding('gzip;q=0') === null && pickEncoding(undefined) === null)
+    check('isCompressibleType：文本可压、SSE 与图片不可压', isCompressibleType('text/javascript; charset=utf-8') === true && isCompressibleType('application/json') === true && isCompressibleType('text/event-stream') === false && isCompressibleType('image/png') === false)
+    const plain = await request(gwPort, { path: '/big.js', headers: { cookie: cookieHeader } })
+    check('未声明 accept-encoding：原样明文', plain.headers['content-encoding'] === undefined && plain.raw.length === Buffer.byteLength(plain.body))
+    const pref = await request(gwPort, { path: '/big.js', headers: { cookie: cookieHeader, 'accept-encoding': 'gzip, deflate, br' } })
+    check('声明多种编码：取 br', pref.headers['content-encoding'] === 'br')
+    check('压缩响应带 vary: accept-encoding', String(pref.headers['vary'] ?? '').includes('accept-encoding'))
+    const prefDec = zlib.brotliDecompressSync(pref.raw).toString('utf8')
+    check('br 解回原文且体积明显变小（<40%）', prefDec === plain.body && pref.raw.length < plain.raw.length * 0.4)
+    const gz = await request(gwPort, { path: '/big.js', headers: { cookie: cookieHeader, 'accept-encoding': 'gzip' } })
+    check('只声明 gzip：用 gzip 且可解回原文', gz.headers['content-encoding'] === 'gzip' && zlib.gunzipSync(gz.raw).toString('utf8') === plain.body)
+    const tiny = await request(gwPort, { path: '/small.js', headers: { cookie: cookieHeader, 'accept-encoding': 'gzip' } })
+    check('小响应不压（1KB 以下不值得）', tiny.headers['content-encoding'] === undefined && tiny.body.includes('small'))
+    const refused = await request(gwPort, { path: '/big.js', headers: { cookie: cookieHeader, 'accept-encoding': 'gzip;q=0' } })
+    check('q=0 明确拒绝：不压', refused.headers['content-encoding'] === undefined && refused.raw.length === Buffer.byteLength(refused.body))
+    const sse = await request(gwPort, { path: '/stream', headers: { cookie: cookieHeader, 'accept-encoding': 'gzip' } })
+    check('SSE 不压（压了就没实时性）', sse.headers['content-encoding'] === undefined && sse.body.includes('data: hello'))
+    const smallPageGz = await request(gwPort, { path: '/page', headers: { cookie: cookieHeader, 'accept-encoding': 'gzip' } })
+    check('小于 1KB 的注入页不压（原样明文）', smallPageGz.headers['content-encoding'] === undefined && smallPageGz.body.includes('randomUUID'))
+    const pageGz = await request(gwPort, { path: '/bigpage', headers: { cookie: cookieHeader, 'accept-encoding': 'gzip' } })
+    const pageDec = zlib.gunzipSync(pageGz.raw).toString('utf8')
+    check('大注入页按能力压（解回来仍含兜底脚本与原文）', pageGz.headers['content-encoding'] === 'gzip' && pageDec.includes('randomUUID') && pageDec.includes('<title>big</title>') && pageDec.includes('<p>fill</p>'.repeat(3)))
+    check('压缩后 content-length 与实体长度一致', Number(pageGz.headers['content-length']) === pageGz.raw.length)
+  }
 
   // ── WS 升级隧道 ──
   const wsOk = await wsProbe(gwPort, token, true)
