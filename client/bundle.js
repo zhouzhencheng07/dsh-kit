@@ -1,33 +1,30 @@
 // dsh-kit 浏览器半边 —— 手写 client bundle，与官方 lib/client.js 产物同形，
 // 无构建步骤：改完本文件刷新浏览器即生效（本地目录 junction 直装）。
 //
-// 结构（2026-09-11 迁移定稿：五类功能签住官方右栏 sidebar.right，舞台降为
-//   0.1.2 宿主回退）：
+// 结构：
 //   入口：conversation.input.left（composer 工具行，文件树/源代码管理/知识库/
 //     终端四个小图标钮，工作区级工具跟 session 走）。知识库钮是开合切换：开 =
 //     侧栏索引视图，再点 = 侧栏回会话列表；日程没有 composer 钮（日程只有一个
 //     家：右栏 dock 签，入口归右栏开始页条目与待办卡，2026-09-11 用户定稿，
-//     侧栏待办索引与专属快捷键一并退役）。右栏 dock 签本身没有按钮：文件/知识库
-//     是被动签（索引/对话链接点开即开），任务/日程/浏览器走右栏开始页清单与
-//     自动跟随。开合状态放模块级 store（kitUi + useSyncExternalStore），跨槽共享。
-//   右栏：sidebarRightTabs 注册五类 dock 签，pane 正文经 slots.inject
-//     （sidebar.right.pane.tab）按 id 提供，pane 内自管文档签条。开始页保留
-//     官方 ShippedGuide（罗盘 + 胶囊条目），我们只贡献 guide 条目：日程/浏览器/
+//     侧栏待办索引与专属快捷键一并退役）。
+//   右栏（唯一工作台形态，宿主 0.1.5+）：sidebarRightTabs 注册五类 dock 签，
+//     pane 正文经 slots.inject（sidebar.right.pane.tab）按 id 提供，pane 内自管
+//     文档签条。dock 签本身没有按钮：文件/知识库是被动签（索引/对话链接点开
+//     即开），任务/日程/浏览器走右栏开始页清单与自动跟随。开始页保留官方
+//     ShippedGuide（罗盘 + 胶囊条目），我们只贡献 guide 条目：日程/浏览器/
 //     后台任务三枚（文件/知识库是被动签，不给条目），官方「文件」条目垫底。
-//   舞台（仅回退）：左锚定（从侧栏右缘起，left 随侧栏宽度 RO 跟随）、顶部标签
-//     栏 + 「+」菜单，挂 shell.overlay（全帧浮层）——不放进 composer，规避其祖先
-//     stacking context 劫持 position:fixed。对话列 margin-left 让位、在剩余区域
-//     居中，舞台最大宽封顶保对话 400px。宽度模型：全局共享默认值，拖未钉标签=调
-//     默认（所有未钉标签联动），图钉按功能类型钉住当前宽度（localStorage）。
+//     自建舞台与宽度模型 2026-09-12 整体退役（宿主基线 0.1.5-rc.2 起不再需要
+//     回退路径）：缺 sidebarRight 服务时只剩 kitUi 侧的存在性补丁——入口按钮
+//     不报错，签由官方侧自己决定要不要出现。
 //   终端：底部停靠面板（快捷键亦可切换），数据走宿主半边 /dsh-kit/terminal WS。
-//   功能签（舞台与右栏 pane 共用同一套 kitUi 状态）：文件（可编辑，被动打开——
-//     文件树/源代码管理/对话链接点开即开；2026-09-10 用户定稿只占一个共用标签，
-//     点新的就换内容，不然标签太乱）、后台任务、日程（周网格+统计）、知识库
-//     （逐页一个标签，可多开）、浏览器；索引类视图（知识库目录树）住
-//     侧栏 sidebar.workspaces 单槽，点条目开对应签。
+//   功能存在性（kitUi）：files/activeFile 与 vaultPages/activeVaultPage+vaultHist
+//     是文档签与访问序；jobsOpen/schedOpen/browserOpen/vaultOpen 是功能签在场
+//     （入口按钮选中态与角标读它）；activeFeature 是当前激活的功能（Esc 关哪张
+//     文档签、浏览器自动跟随的判据）。索引类视图（知识库目录树）住侧栏
+//     sidebar.workspaces 单槽，点条目开对应右栏签。
 //   文件树：打开时临时注册进单槽 sidebar.workspaces——把侧边栏浏览区整体换成
 //     文件树，关闭时 dispose 注销、原生工作区列表自动回归。根目录 = 当前会话工作
-//     目录，数据走宿主半边 /dsh-kit/tree。点击文件 → 舞台文件标签展示/编辑内容，
+//     目录，数据走宿主半边 /dsh-kit/tree。点击文件 → 右栏文件签展示/编辑内容，
 //     数据走宿主半边 /dsh-kit/read；PDF 走 /dsh-kit/raw 原始字节端点（Range/206），
 //     pdf.js（vendor 懒加载）逐页 canvas 渲染——Edge 内置查看器对 http:// 源
 //     灰屏，不可依赖。
@@ -73,21 +70,17 @@ window.__ModuleLoader__.load({
     let slotsCtx = null;
 
     // ─────────── 跨槽开合状态 ───────────
-    // 入口按钮（composer 工具行）与右栏 pane/舞台宿主是多个
+    // 入口按钮（composer 工具行）与右栏 pane 宿主是多个
     // 独立槽位组件，状态必须跨槽共享：模块级不可变快照 + useSyncExternalStore 订阅
     // （getSnapshot 返回模块绑定值，恒定引用直到 set 替换）。
-    // 舞台标签（2026-09-10 工作台定稿）：files（文件标签）/jobsOpen/browserOpen/
-    // schedOpen/vaultOpen 是「标签存在性」，stageTab 是当前激活标签，activeFile 是
-    // 激活的文件；打开某功能 = 确保标签存在并激活，互斥清场废除（切走不丢状态）。
-    // 0 标签 = 舞台不存在，对话回全宽居中（DSH 原生样子）。
-    // 舞台不可收起（同日用户定稿，隐藏态与快捷键一并取消）：舞台是工作台的中段，
-    // 藏起来会让「中间那页开着吗」多出一个看不见的第三态。
-    // files 与 vaultPages 同构（浏览器式：顶部一条标签条 + 下面若干内容页）——
-    // 一页一标签、点击切换、✕ 单关；文件树/源代码管理/对话链接点开都往这条标签条里
-    // 加标签，同路径复用一个（重开刷新 diff/未跟踪状态）。文件非激活仍挂载
-    // （display:none）保住滚动与未落盘草稿，超「文件标签数上限」自动关最久没看的
-    // 那张；vaultHist 是知识库 ← → 的访问序（与标签存在性解耦）。
-    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 }, stageTab: null };
+    // 功能存在性（open 位）与激活位（activeFeature）分离：打开某功能 = 确保签
+    // 存在并激活，切走不丢状态（文件/知识库的文档签状态在 kitUi 里，官方 dock
+    // 签关掉再开即恢复）。files 与 vaultPages 同构（浏览器式：顶部一条标签条 +
+    // 下面若干内容页）——一页一标签、点击切换、✕ 单关；文件树/源代码管理/对话
+    // 链接点开都往这条标签条里加标签，同路径复用一个（重开刷新 diff/未跟踪状态）。
+    // 文件非激活仍挂载（display:none）保住滚动与未落盘草稿，超「文件标签数上限」
+    // 自动关最久没看的那张；vaultHist 是知识库 ← → 的访问序（与标签存在性解耦）。
+    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 }, activeFeature: null };
     const kitUiListeners = new Set();
     function setKitUi(patch) {
       kitUi = { ...kitUi, ...patch };
@@ -100,23 +93,20 @@ window.__ModuleLoader__.load({
     const useKitUi = () => react.useSyncExternalStore(subscribeKitUi, () => kitUi);
     const getKitUi = () => kitUi;
 
-    /** agent 动浏览器 → 舞台切到浏览器标签（壳层常驻事件源与面板共用此入口）。
+    /** agent 动浏览器 → 把右栏浏览器签拽到眼前（壳层常驻事件源与面板共用此入口）。
      *  无抑制标志（用户定稿 2026-09-10：agent 操作浏览器为安全起见必须可见——
-     *  人为关掉/隐藏的浏览器标签，agent 一下次导航照样弹回） */
+     *  人为关掉/隐藏的浏览器签，agent 下次导航照样弹回） */
     function maybeAutoOpenBrowser() {
-      if (kitUi.stageTab === "browser" && kitUi.browserOpen === true) return;
+      if (kitUi.activeFeature === "browser" && kitUi.browserOpen === true) return;
       setKitUi(openFeatureDock(kitUi, "browser"));
     }
-    /** 浏览器没了（优雅关闭/空闲自动关/整只崩溃/页崩光）→ 收掉浏览器面板标签：
-     *  正常浏览器语义「没了就没了」（右栏路径也收官方签——sidebarRight.close；
-     *  agent 下次开页面板照常弹回） */
+    /** 浏览器没了（优雅关闭/空闲自动关/整只崩溃/页崩光）→ 收掉官方浏览器签
+     *  （sidebarRight.close）：正常浏览器语义「没了就没了」，agent 下次开页面板
+     *  照常弹回 */
     function closeBrowserDockForGone() {
       if (!kitUi.browserOpen) return;
-      if (rightbarStore.active) {
-        closeRightbarTab("browser");
-        return;
-      }
-      setKitUi(closeStageTab(kitUi, "browser"));
+      closeRightbarTab("browser");
+      setKitUi(closeFeatureTab(kitUi, "browser"));
     }
 
     const PREVIEW_MAX_DEFAULT = 3;
@@ -126,9 +116,7 @@ window.__ModuleLoader__.load({
       const v = cfgFromSnapshot(getCfgSnapshot()).previewMaxTabs;
       return Math.max(1, Number.isInteger(v) ? v : PREVIEW_MAX_DEFAULT);
     }
-    /** 舞台标签共存的活性判定（渲染舞台与否）；0 标签 = 舞台不存在 */
-    const stageAlive = (ui) => (ui.files?.length ?? 0) > 0 || ui.jobsOpen === true || ui.browserOpen === true || ui.schedOpen === true || ui.vaultOpen === true;
-    /** 打开文件 = 舞台标签条上加一个文件标签（已开过则复用、只刷新状态并激活）。
+    /** 打开文件 = 文件签条上加一个文件标签（已开过则复用、只刷新状态并激活）。
      *  usedAt 是 LRU 判据（超上限时关掉最久没看的那张，绝不含本次）；
      *  deleted=已删除文件，只承载删除 diff。commit（可选）= 提交钉定模式
      *  （图谱提交详情进入，diff 视图与该提交的第一父对比）；重开同路径时
@@ -149,7 +137,7 @@ window.__ModuleLoader__.load({
         if (oldest === null) break;
         list = list.filter((x) => x.path !== oldest.path);
       }
-      return { files: list, activeFile: path, stageTab: "file" };
+      return { files: list, activeFile: path, activeFeature: "file" };
     }
     /** 只激活一个文件标签（标签条点击走这里）：刷新 usedAt（LRU 判据是「最久没看
      *  的那张」），不重设 diff/未跟踪状态——那是入口（openFileTab）的事 */
@@ -157,24 +145,24 @@ window.__ModuleLoader__.load({
       const items = ui.files ?? [];
       if (!items.some((x) => x.path === path)) return {};
       const now = Date.now();
-      return { files: items.map((x) => (x.path === path ? { ...x, usedAt: now } : x)), activeFile: path, stageTab: "file" };
+      return { files: items.map((x) => (x.path === path ? { ...x, usedAt: now } : x)), activeFile: path, activeFeature: "file" };
     }
-    /** 关一个文件标签：激活位顺延邻居；关光了整片文件舞台收摊（走 closeStageTab，
+    /** 关一个文件标签：激活位顺延邻居；关光了整片文件区收摊（走 closeFeatureTab，
      *  激活位顺延到余下的存在标签） */
     function closeFileTab(ui, path) {
       const items = ui.files ?? [];
       const idx = items.findIndex((x) => x.path === path);
       if (idx < 0) return {};
       const rest = items.filter((x) => x.path !== path);
-      if (rest.length === 0) return { ...closeStageTab(ui, "file"), files: [], activeFile: null };
+      if (rest.length === 0) return { ...closeFeatureTab(ui, "file"), files: [], activeFile: null };
       const patch = { files: rest };
       if (ui.activeFile === path) patch.activeFile = rest[Math.min(idx, rest.length - 1)].path;
       return patch;
     }
 
     // ── 知识库页标签（多开，2026-09-10 用户定稿：与文件标签同款交互）──
-    // 一页一标签、点击切换、✕ 单关；vaultOpen 是「知识库这一片舞台有没有」，
-    // 没有任何页标签时它承载一张「请选择页面」空签（入口点开即见舞台，用户
+    // 一页一标签、点击切换、✕ 单关；vaultOpen 是「知识库这一片有没有」，
+    // 没有任何页标签时它承载一张「请选择页面」空签（入口点开即见右栏签，用户
     // 定稿「打开时中间页面也要相应打开」）。vaultHist 是 ← → 的访问序，与标签
     // 存在性解耦：标签被关掉的历史项在关闭时剪掉。
     /** 路径尾名（标签名用）：文件保留后缀，知识库页去掉 .md（与索引树的页名一致） */
@@ -200,31 +188,31 @@ window.__ModuleLoader__.load({
         activeVaultPage: path,
         vaultOpen: true,
         vaultHist: hist ? vaultHistPush(ui.vaultHist ?? { stack: [], idx: -1 }, path) : (ui.vaultHist ?? { stack: [], idx: -1 }),
-        stageTab: "vault",
+        activeFeature: "vault",
       };
     }
     /** 只激活（标签条点击/← → 走这里，不动访问序） */
     function activateVaultPage(ui, path) {
       if (!(ui.vaultPages ?? []).includes(path)) return {};
-      return { vaultPages: ui.vaultPages, activeVaultPage: path, vaultOpen: true, stageTab: "vault" };
+      return { vaultPages: ui.vaultPages, activeVaultPage: path, vaultOpen: true, activeFeature: "vault" };
     }
-    /** 关一个知识库页标签：激活位顺延邻居；关光了则整片知识库舞台收摊
+    /** 关一个知识库页标签：激活位顺延邻居；关光了则整片知识库区收摊
      *  （索引视图不跟着关——那是侧栏的事，输入行入口管它） */
     function closeVaultPageTab(ui, path) {
       const pages = ui.vaultPages ?? [];
       const idx = pages.indexOf(path);
       if (idx < 0) return {};
       const rest = pages.filter((p) => p !== path);
-      // 关光了走 closeStageTab：清 vaultOpen 的同时把激活位顺延到别的标签
+      // 关光了走 closeFeatureTab：清 vaultOpen 的同时把激活位顺延到别的标签
       if (rest.length === 0) {
-        return { ...closeStageTab(ui, "vault"), vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 } };
+        return { ...closeFeatureTab(ui, "vault"), vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 } };
       }
       const patch = { vaultPages: rest, vaultHist: vaultHistPrune(ui.vaultHist ?? { stack: [], idx: -1 }, new Set([path])) };
       if (ui.activeVaultPage === path) patch.activeVaultPage = rest[Math.min(idx, rest.length - 1)];
       return patch;
     }
-    /** 关一个舞台标签：清存在性；关的是激活标签时激活位顺延剩余标签 */
-    function closeStageTab(ui, tab) {
+    /** 关一个功能签：清存在性；关的是激活签时激活位顺延剩余签 */
+    function closeFeatureTab(ui, tab) {
       const patch = {};
       if (tab === "file") {
         patch.files = [];
@@ -237,32 +225,31 @@ window.__ModuleLoader__.load({
         patch.activeVaultPage = null;
         patch.vaultHist = { stack: [], idx: -1 };
       } else patch.browserOpen = false;
-      if (ui.stageTab === tab) {
+      if (ui.activeFeature === tab) {
         const remaining = [];
         if (tab !== "file" && (ui.files?.length ?? 0) > 0) remaining.push("file");
         if (tab !== "jobs" && ui.jobsOpen) remaining.push("jobs");
         if (tab !== "schedule" && ui.schedOpen) remaining.push("schedule");
         if (tab !== "vault" && ui.vaultOpen) remaining.push("vault");
         if (tab !== "browser" && ui.browserOpen) remaining.push("browser");
-        patch.stageTab = remaining[0] ?? null;
+        patch.activeFeature = remaining[0] ?? null;
       }
       return patch;
     }
-    /** 打开/激活一个舞台标签（标签栏「+」菜单与输入行入口共用）：确保存在并
+    /** 打开/激活一个功能签（输入行入口与自动跟随共用）：确保存在并
      *  激活、不清别的标签。浏览器的抑制已废除（agent 干活必回眼前） */
-    function openStageTab(ui, tab) {
-      if (tab === "jobs") return { jobsOpen: true, stageTab: "jobs" };
-      if (tab === "schedule") return { schedOpen: true, stageTab: "schedule" };
-      if (tab === "vault") return { vaultOpen: true, stageTab: "vault" };
-      return { browserOpen: true, stageTab: "browser" };
+    function openFeatureTab(ui, tab) {
+      if (tab === "jobs") return { jobsOpen: true, activeFeature: "jobs" };
+      if (tab === "schedule") return { schedOpen: true, activeFeature: "schedule" };
+      if (tab === "vault") return { vaultOpen: true, activeFeature: "vault" };
+      return { browserOpen: true, activeFeature: "browser" };
     }
 
-    // ─────────── 官方右侧边栏（宿主 0.1.5+，舞台的接替者）───────────
-    // 工作台整体搬进官方右栏：每个功能一张 dock 签（页类型），pane 正文是我们
-    // 的组件。服务是宿主内部实现，**运行期探测取用、绝不写进 dsh.client.inject**
-    // ——0.1.2 宿主没有该服务，硬声明整个插件起不来（正式环境仍是 0.1.2-rc.1）。
-    // 探测成功 = rightbarActive 翻真，舞台不再渲染；不可用则整条回退舞台路径
-    // （今天的行为），见 KitSurfaces 的渲染门控。
+    // ─────────── 官方右侧边栏（宿主 0.1.5+，本插件唯一工作台形态）───────────
+    // 每个功能一张 dock 签（页类型），pane 正文是我们的组件。服务是宿主内部实现，
+    // **运行期探测取用、绝不写进 dsh.client.inject**——老宿主（0.1.2）没有该服务，
+    // 硬声明整个插件起不来。探测成功 = rightbarActive 翻真；不可用则只剩 kitUi
+    // 侧的存在性补丁（入口不报错，签不出现）。
     const rightbarStore = {
       active: false,
       subs: new Set(),
@@ -276,10 +263,9 @@ window.__ModuleLoader__.load({
         return () => this.subs.delete(s);
       },
     };
-    const useRightbarActive = () => react.useSyncExternalStore((s) => rightbarStore.subscribe(s), () => rightbarStore.active);
     /** 功能 → dock 签映射（页类型注册表；kind 即 openTab 用的类型名） */
     const RB_FEATURES = [
-      { id: "dsh-kit-file", kind: "dshk-file", feature: "file", titleKey: "stageFileBtn" },
+      { id: "dsh-kit-file", kind: "dshk-file", feature: "file", titleKey: "fileTabLabel" },
       { id: "dsh-kit-vault", kind: "dshk-vault", feature: "vault", titleKey: "vaultTitle" },
       { id: "dsh-kit-schedule", kind: "dshk-schedule", feature: "schedule", titleKey: "schedTab" },
       { id: "dsh-kit-jobs", kind: "dshk-jobs", feature: "jobs", titleKey: "dockJobs" },
@@ -319,34 +305,29 @@ window.__ModuleLoader__.load({
         /* 右栏异常不拖垮入口动作 */
       }
     }
-    /** 右栏路径的「开功能签」：dock 签交给官方 openTab；kitUi 只补存在性
-     *  （入口按钮选中态 / JobsBadge / Browser 自动跟随判定还要读它）。
-     *  舞台路径回退 = 原样 openStageTab。 */
+    /** 「开功能签」：dock 签交给官方 openTab；kitUi 只补存在性（入口按钮选中态 /
+     *  角标 / 浏览器自动跟随判定还要读它）。服务未就绪时只剩存在性补丁 */
     function openFeatureDock(ui, feature) {
-      if (rightbarStore.active) {
-        openRightbarTab(feature);
-        return openStageTab(ui, feature);
-      }
-      return openStageTab(ui, feature);
+      openRightbarTab(feature);
+      return openFeatureTab(ui, feature);
     }
-    /** 打开文件并确保「文件」dock 签在眼前（文件树/源代码管理/图谱/对话链接
-     *  统一入口；舞台路径下 openFileTab 已带 stageTab:"file"，等价） */
+    /** 打开文件并确保「文件」dock 签在眼前（文件树/源代码管理/图谱/对话链接统一入口） */
     function openFileAndDock(path, from, untracked, deleted, commit) {
       setKitUi(openFileTab(kitUi, path, from, untracked === true, deleted === true, typeof commit === "string" && commit !== "" ? commit : undefined));
-      if (rightbarStore.active) openRightbarTab("file");
+      openRightbarTab("file");
     }
     /** 打开知识库页并确保「知识库」dock 签在眼前（目录/搜索/反链/wikilink/
      *  对话路径统一走 VaultRootView 的 openPath） */
     function openVaultPageAndDock(path) {
       setKitUi(openVaultPageTab(kitUi, path));
-      if (rightbarStore.active) openRightbarTab("vault");
+      openRightbarTab("vault");
     }
 
     // ── 侧栏索引视图单槽与入口按钮（文件树/源代码管理/知识库，三个入口按钮
-    // + 快捷键 + 舞台「+」菜单共用；日程待办索引 2026-09-11 退役——日程只剩
+    // + 快捷键共用；日程待办索引 2026-09-11 退役——日程只剩
     // 右栏 dock 签一个家，入口归右栏开始页条目与待办卡，用户定稿）──
     // 侧栏只有一格（会话 ↔ 文件树 ↔ 源代码管理 ↔ 知识库目录），三个按钮的
-    // 选中态直接取各自的开合位（用户定稿：选中态与侧栏显示相关、与舞台标签
+    // 选中态直接取各自的开合位（用户定稿：选中态与侧栏显示相关、与右栏签
     // 无关）——所以三者必须互斥：否则同一个侧栏位上会有两个按钮一起亮，
     // 而视图按优先级只显示其中一个。
     /** 单槽互斥补丁：view = 'tree' | 'scm' | 'vault' | null */
@@ -357,96 +338,22 @@ window.__ModuleLoader__.load({
         vaultIdxOpen: view === "vault",
       };
     }
-    // 语义：关 → 开；开 → 只把侧栏索引收回会话列表（用户定稿 2026-09-10：舞台
-    // 标签不跟着关——标签的归宿是标签 ✕ 与配置清场，入口按钮只管侧栏那格）。
-    // 「开」= 侧栏索引视图 + 对应舞台标签，一次点击两边到位；收起态顺带展开
+    // 语义：关 → 开；开 → 只把侧栏索引收回会话列表（用户定稿 2026-09-10：功能签
+    // 不跟着关——签的归宿是官方签 ✕ 与配置清场，入口按钮只管侧栏那格）。知识库钮
+    // 只切左侧目录（用户定稿 2026-09-11），点具体页才开右栏签；收起态顺带展开
     // 侧栏（视图渲染进铁轨等于不可见）。
-    // 右栏路径（用户定稿 2026-09-11）：知识库钮**只切左侧目录**，点具体页才开
-    // 右栏 tab。
-    function openVaultEntry(ui) {
+    function openVaultEntry() {
       expandSidebarNow();
-      if (rightbarStore.active) return sidebarViewPatch("vault");
-      return { ...sidebarViewPatch("vault"), ...openStageTab(ui, "vault") };
+      return sidebarViewPatch("vault");
     }
     function toggleVaultEntry(ui) {
       if (ui.vaultIdxOpen === true) return sidebarViewPatch(null);
-      return openVaultEntry(ui);
+      return openVaultEntry();
     }
 
-    // ─────────── 舞台宽度模型（用户定稿 2026-09-10）───────────
-    // 默认宽是全局共享值：未被图钉「记住」的标签都跟随它；拖拽未钉标签 = 调默认
-    // （所有未钉标签联动），不另设「设置默认」UI。图钉按功能类型把当前宽度钉进
-    // localStorage，之后拖拽只影响该类型；再点取消回到跟随默认。出厂默认按类型
-    // 分档（任务窄、浏览器顶上限），在用户第一次拖拽默认值之前生效。
-    const STAGE_TYPES = ["file", "jobs", "schedule", "vault", "browser"];
-    const STAGE_FACTORY_W = { file: 560, jobs: 400, schedule: 800, vault: 760, browser: null }; // null = 上限
-    const STAGE_MIN_W = { file: 320, jobs: 320, schedule: 560, vault: 480, browser: 480 };
-    const STAGE_CHAT_MIN = 400; // 对话列保底宽度：舞台最大宽 = 视口 − 侧栏 − 400
-    const stageWidthState = {
-      default: Number(localStorage.getItem("dshk-stage-w")) || 560,
-      adjusted: localStorage.getItem("dshk-stage-adjusted") === "1",
-      pins: (() => {
-        try {
-          const parsed = JSON.parse(localStorage.getItem("dshk-stage-pins") ?? "{}");
-          return parsed && typeof parsed === "object" ? parsed : {};
-        } catch {
-          return {};
-        }
-      })(),
-    };
-    function stageWidthPersist() {
-      localStorage.setItem("dshk-stage-w", String(stageWidthState.default));
-      localStorage.setItem("dshk-stage-adjusted", stageWidthState.adjusted ? "1" : "0");
-      localStorage.setItem("dshk-stage-pins", JSON.stringify(stageWidthState.pins));
-    }
-    /** 某类型的舞台宽度界限；sidebarW = 当前侧栏列宽（几何 RO 实测） */
-    function stageBounds(type, sidebarW) {
-      const min = STAGE_MIN_W[type] ?? 320;
-      const max = Math.max(min, Math.max(0, window.innerWidth - (sidebarW || 0) - STAGE_CHAT_MIN));
-      return { min, max };
-    }
-    /** 生效宽度：图钉 > 用户调过的共享默认 > 出厂默认（browser 出厂=上限）。
-     *  出厂表全类型都有条目（browser 条目是 null=上限），不能用 ?? 回落——
-     *  null ?? default 会把「出厂即上限」吞成共享默认 */
-    function stageWidthFor(type, sidebarW) {
-      const b = stageBounds(type, sidebarW);
-      if (Number.isInteger(stageWidthState.pins[type])) return Math.min(b.max, Math.max(b.min, stageWidthState.pins[type]));
-      const base = stageWidthState.adjusted ? stageWidthState.default : STAGE_FACTORY_W[type];
-      const w = base === null || base === undefined ? b.max : base;
-      return Math.min(b.max, Math.max(b.min, w));
-    }
-    function stageIsPinned(type) {
-      return Number.isInteger(stageWidthState.pins[type]);
-    }
-    /** 拖拽落定：未钉 = 写共享默认（联动所有未钉类型）；已钉 = 只写该类型 */
-    function stageWidthCommit(type, w, sidebarW) {
-      const b = stageBounds(type, sidebarW);
-      const clamped = Math.min(b.max, Math.max(b.min, Math.round(w)));
-      if (stageIsPinned(type)) {
-        stageWidthState.pins = { ...stageWidthState.pins, [type]: clamped };
-      } else {
-        stageWidthState.default = clamped;
-        stageWidthState.adjusted = true;
-      }
-      stageWidthPersist();
-      return clamped;
-    }
-    /** 图钉切换：钉住=按当前生效宽记类型；取消=删类型回默认跟随。返回新 pins */
-    function stagePinToggle(type, currentW) {
-      if (stageIsPinned(type)) {
-        const pins = { ...stageWidthState.pins };
-        delete pins[type];
-        stageWidthState.pins = pins;
-      } else {
-        stageWidthState.pins = { ...stageWidthState.pins, [type]: currentW };
-      }
-      stageWidthPersist();
-      return stageWidthState.pins;
-    }
-
-    // ── portal 宿主登记（侧栏索引 ↔ 舞台内容）──
+    // ── portal 宿主登记（侧栏索引 ↔ 右栏内容）──
     // 知识库拆两半后 VaultRootView 单实例挂在 KitSurfaces，左树/工具条与页编辑器
-    // 经 createPortal 分投两侧：宿主 DOM 节点由侧栏占用组件与舞台标签容器登记。
+    // 经 createPortal 分投两侧：宿主 DOM 节点由侧栏占用组件与右栏 pane 登记。
     // 宿主出现/消失走最小 store（useSyncExternalStore）驱动 VaultRootView 重渲染。
     function makeHostSlot() {
       let el = null;
@@ -464,7 +371,7 @@ window.__ModuleLoader__.load({
       };
     }
     const vaultSideSlot = makeHostSlot();
-    const vaultStageSlot = makeHostSlot();
+    const vaultPaneSlot = makeHostSlot();
     const useHostSlot = (slot) => react.useSyncExternalStore(slot.subscribe, slot.get);
 
     // ── 多终端会话模型 ──
@@ -1067,18 +974,13 @@ window.__ModuleLoader__.load({
       dockPreview: "预览",
       dockJobs: "后台任务",
       dockBrowser: "浏览器",
-      dockClose: "关闭标签",
       pvCloseTab: "关闭此标签",
       pvDeletedNote: "文件已删除——此标签仅展示删除 diff；可在源代码管理里 ↩ 恢复文件",
-      stageLabel: "舞台",
       rbGuideSchedDesc: "周网格、待办与计时",
       rbGuideBrowserDesc: "agent 驱动的内置浏览器",
       rbGuideJobsDesc: "后台任务的输出与停止",
       rbFeatureDisabled: "该功能已在设置中停用",
-      stagePin: "钉住此宽度（按类型记住）",
-      stageUnpin: "取消钉住（回到跟随默认宽）",
-      stageAdd: "打开标签",
-      stageFileBtn: "文件",
+      fileTabLabel: "文件",
       vaultIdxTitle: "知识库目录",
       browserStarting: "正在拉起浏览器…",
       browserErr: "浏览器出错：{error}",
@@ -1516,18 +1418,13 @@ window.__ModuleLoader__.load({
       dockPreview: "Preview",
       dockJobs: "Background tasks",
       dockBrowser: "Browser",
-      dockClose: "Close tab",
       pvCloseTab: "Close this tab",
       pvDeletedNote: "File deleted — this tab shows the deletion diff only; restore it via ↩ in source control",
-      stageLabel: "Stage",
       rbGuideSchedDesc: "Weekly grid, todos, and a timer",
       rbGuideBrowserDesc: "Built-in browser driven by the agent",
       rbGuideJobsDesc: "Output and controls for background tasks",
       rbFeatureDisabled: "This feature is disabled in settings",
-      stagePin: "Pin this width (remembered per type)",
-      stageUnpin: "Unpin (follow the shared default width)",
-      stageAdd: "Open a tab",
-      stageFileBtn: "Files",
+      fileTabLabel: "Files",
       vaultIdxTitle: "Knowledge base",
       browserStarting: "Starting browser…",
       browserErr: "Browser error: {error}",
@@ -1908,10 +1805,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 /* 入口按钮选中态：底色用主题真实存在的 tool-bar-fill，图标转品牌色；
    :hover 一并声明避免 hover 规则在选中态下把底色洗掉 */
 .dshk-enbtn[aria-pressed="true"],.dshk-enbtn[aria-pressed="true"]:hover{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-brand-primary)}
-/* 舞台：左锚定（从侧栏右缘起，left 由几何 RO 实测写入 --dshk-stage-left），
-   顶部标签栏 + 内容区；宽度 --dshk-stage-w，max-width 封顶保对话 400px（拖不破） */
-.dshk-stage{position:fixed;top:0;bottom:0;left:var(--dshk-stage-left,0px);width:var(--dshk-stage-w,560px);max-width:calc(100vw - var(--dshk-stage-left,0px) - 400px);display:flex;flex-direction:column;min-width:0;background:var(--dsw-alias-bg-base);border-right:1px solid var(--dsw-alias-border-l2);box-shadow:6px 0 20px rgba(0,0,0,.10);z-index:790;pointer-events:auto;transition:width .18s var(--ds-ease-in-out),left var(--ds-transition-duration-slow) var(--ds-ease-in-out)}
-.dshk-stage[data-dragging]{transition:none}
 .dshk-pane-body{flex:1 1 auto;min-height:0;overflow:auto;padding:4px 10px 12px}
 .dshk-pane-pre{margin:0;padding:4px 0;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;tab-size:4;-webkit-overflow-scrolling:touch;user-select:text}
 /* PDF 预览：pdf.js 逐页 canvas，纵向滚动（面板身即滚动容器）。懒加载：
@@ -1944,28 +1837,13 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-doc table,.dshk-md table{border-collapse:collapse}
 .dshk-doc td,.dshk-doc th,.dshk-md td,.dshk-md th{border:1px solid var(--dsw-alias-border-l1);padding:3px 8px}
 .dshk-doc img{max-width:100%}
-/* 拖拽手柄：舞台右缘 6px 竖条，拖动更新宽度模型（未钉=共享默认，已钉=该类型） */
-.dshk-stage-handle{position:absolute;right:-3px;top:0;bottom:0;width:6px;cursor:col-resize;z-index:791;touch-action:none}
-.dshk-stage-handle:hover::after{content:"";position:absolute;right:2px;top:0;bottom:0;width:2px;background:var(--dsw-alias-interactive-bg-hover);border-radius:2px}
-/* 让位布局：舞台打开时中列（对话）左移舞台宽度，对话在剩余区域居中 */
-body.dshk-stage-open [class*="_centerCol"]{margin-left:var(--dshk-stage-w,560px)}
-@media (prefers-reduced-motion:reduce){body.dshk-stage-open [class*="_centerCol"]{transition:none}}
-/* 官方轮次导航横条（TurnNavigator，v0.1.2-alpha.5 起）：舞台压缩对话列后，
-   官方按容器宽度（@container width<=900px）把它隐藏——这里恢复显示；语义后缀
-   选择器同 _centerCol 先例，不命中 dshk-* 自身类 */
-body.dshk-stage-open [class*="_scroll"] > [class*="_slot"]{display:block!important}
-/* 舞台顶部标签栏：文件标签逐个 + 功能标签；「+」菜单与图钉随右 */
-.dshk-stage-tabbar{flex:none;display:flex;align-items:center;gap:2px;min-width:0;padding:0 8px;height:34px;border-bottom:1px solid var(--dsw-alias-border-l1)}
-.dshk-stage-pin{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:12px;line-height:1;width:22px;height:22px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:none}
-.dshk-stage-pin:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-stage-pin[aria-pressed="true"]{color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-button-tool-bar-fill)}
 /* 官方右栏 dock pane 正文（sidebar.right.pane.tab）：pane 内是普通文档流，
-   外壳占满 100%×100%、内容区自己滚——舞台的 fixed 外壳与 body 让位类在右栏
-   路径下全不参与 */
+   外壳占满 100%×100%、内容区自己滚——自建舞台的 fixed 外壳与 body 让位类已退役，
+   这里只剩普通文档流 */
 .dshk-rbpane{width:100%;height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base)}
 .dshk-rbpane-scroll{overflow:auto}
 .dshk-rbpane .dshk-pane-view{flex:1 1 auto;min-height:0}
-.dshk-rbpane .dshk-vault-stagehost{flex:1 1 auto;min-height:0}
+.dshk-rbpane .dshk-vault-panehost{flex:1 1 auto;min-height:0}
 /* 计时芯片（会话 header 工具区）：空闲=▶，运行=脉冲点+实时时长；起表浮层
    复用 .dshk-timer-pick、贴 header 右缘 */
 .dshk-htimer{position:relative;display:inline-flex}
@@ -2069,23 +1947,12 @@ body.dshk-stage-open [class*="_scroll"] > [class*="_slot"]{display:block!importa
 .dshk-phone-gatebtn[disabled]{opacity:.5;cursor:default}
 .dshk-phone-gatebtn-stop{border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
 /* 后台任务面板（任务按钮 + 居中浮层）。点击遮罩收起（kn应行为同 terminal 坞） */
-/* 后台任务面板：舞台任务标签内容 */
+/* 后台任务面板：右栏任务 pane 内容 */
 .dshk-jobs-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 8px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .dshk-jobs-headside{display:flex;align-items:center;gap:6px}
 .dshk-jobs-count{font-weight:400;color:var(--dsw-alias-label-tertiary);font-size:11px}
 .dshk-jobs-close{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:14px;line-height:1;width:22px;height:22px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
 .dshk-jobs-close:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-/* 舞台标签栏的「+」菜单：锚在 + 的定位包裹层下缘、右对齐（往左展开不出屏）。
-   文件标签是被动标签，不设菜单入口 */
-.dshk-jobs-headleft{display:flex;align-items:center;gap:2px;min-width:0;flex:1 1 auto}
-.dshk-dock-addwrap{position:relative;display:inline-flex;flex:none}
-.dshk-dock-add{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:14px;line-height:1;width:22px;height:22px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
-.dshk-dock-add:hover,.dshk-dock-add[aria-expanded]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-dock-backdrop{position:fixed;inset:0;z-index:5}
-.dshk-dock-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:6;min-width:170px;padding:4px;display:flex;flex-direction:column;gap:2px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
-.dshk-dock-menu-item{appearance:none;border:0;background:none;font:inherit;font-size:12px;color:var(--dsw-alias-label-primary);display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer}
-.dshk-dock-menu-item:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-dock-menu-label{flex:1;text-align:left}
 .dshk-jobs-list{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:1px;overflow:auto;padding:0 10px 10px}
 .dshk-jobs-row{display:flex;flex-direction:column;gap:4px;padding:7px 8px;border-radius:8px;background:var(--dsw-alias-fill-l2,transparent)}
 .dshk-jobs-row[data-live="true"]{background:var(--dsw-alias-interactive-bg-hover,transparent)}
@@ -2101,7 +1968,7 @@ body.dshk-stage-open [class*="_scroll"] > [class*="_slot"]{display:block!importa
 .dshk-jobs-btn-kill{border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);color:var(--dsw-alias-danger,#cd3131)}
 .dshk-jobs-output{margin-top:2px;padding:6px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-3);font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;word-break:break-all;max-height:180px;overflow:auto;user-select:text}
 .dshk-jobs-empty{padding:10px 8px;font-size:12px;color:var(--dsw-alias-label-tertiary);text-align:center}
-/* 知识库（vault）：工具条+目录树投侧栏索引宿主，页编辑器投舞台宿主（拆两半 portal）。 */
+/* 知识库（vault）：工具条+目录树投侧栏索引宿主，页编辑器投右栏 pane 宿主（拆两半 portal）。 */
    「选库进入阅读」——空间=顶层目录，树懒加载，[[wikilink]] 页内跳转带历史 */
 .dshk-vault{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
 .dshk-vault-hinttitle{font-size:16px;font-weight:600;color:var(--dsw-alias-label-primary);padding:24px 16px 0;text-align:center}
@@ -2118,13 +1985,13 @@ body.dshk-stage-open [class*="_scroll"] > [class*="_slot"]{display:block!importa
 .dshk-vault-hitsnippet{font-size:11px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshk-vault-main{flex:1 1 auto;min-height:0;display:flex}
 .dshk-vault-rail{flex:none;width:150px;border-right:1px solid var(--dsw-alias-border-l2);overflow:auto;padding:4px 3px;display:flex;flex-direction:column}
-/* 知识库拆两半：目录树投进侧栏索引宿主（占满宽，无右缘线），编辑器投进舞台；
+/* 知识库拆两半：目录树投进侧栏索引宿主（占满宽，无右缘线），编辑器投进右栏签；
    position:relative 是给 .dshk-vault-toast 当定位祖先的——漏了它绝对定位就锚到
    视口，提示飘在窗口底部正中，看着像没反应 */
 .dshk-vault-sidewrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;width:100%;position:relative}
 .dshk-vault-sidewrap .dshk-vault-rail{flex:1 1 auto;width:auto;border-right:none}
-.dshk-vault-stagehost{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
-.dshk-vault-stagehost .dshk-vault-reader{padding:0 2px}
+.dshk-vault-panehost{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.dshk-vault-panehost .dshk-vault-reader{padding:0 2px}
 /* 左轨细头部：当前空间名 + 根级新建（+ 按钮常驻淡显，悬停加深） */
 .dshk-vault-railhead{display:flex;align-items:center;gap:4px;padding:2px 4px 4px;flex:none}
 .dshk-vault-railtitle{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-tertiary)}
@@ -2285,7 +2152,7 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-event.is-tall .dshk-sched-evtitle{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;word-break:break-word;line-clamp:2}
 /* 上条下网（用户定稿 2026-09-06）：待办/统计横条在上，周网格在下吃满坞宽 */
 .dshk-sched-sidecol{flex:0 0 240px;min-width:0;display:flex;flex-direction:column;gap:10px;padding:10px;border-right:1px solid var(--dsw-alias-border-l2);overflow:auto}
-/* 日程拆两半：待办列表投进侧栏索引宿主（竖排占满），周网格+统计留舞台 */
+/* 日程：待办卡与周网格同住日程 pane（待办列表在左列） */
 .dshk-sched-sidewrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;width:100%;overflow:auto;padding:6px}
 .dshk-sched-sidewrap .dshk-sched-card.is-tasks{flex:1 1 auto}
 .dshk-sched-card.is-tasks{flex:1 1 auto;min-width:0}
@@ -2340,8 +2207,6 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-sched-timerdot{width:7px;height:7px;border-radius:999px;background:var(--dsw-alias-danger,#cd3131);animation:dshk-sched-pulse 1.2s ease-in-out infinite}
 @keyframes dshk-sched-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .dshk-timer-pill{position:fixed;right:12px;bottom:14px;z-index:700;display:inline-flex;align-items:center;gap:8px;padding:7px 9px 7px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-base);box-shadow:0 6px 20px color-mix(in srgb,#000 22%,transparent);cursor:pointer;user-select:none}
-/* 舞台打开时贴着舞台与对话列交界（舞台右缘外 12px）；零标签时落在视口右缘 */
-body.dshk-stage-open .dshk-timer-pill{left:calc(var(--dshk-stage-left,0px) + var(--dshk-stage-w,560px) + 12px);right:auto}
 .dshk-timer-pill:hover{border-color:var(--dsw-alias-brand-primary)}
 /* 会话监视条（composer 上方细条，仅有动作时出现） */
 .dshk-monitor-line{display:flex;align-items:center;gap:10px;padding:5px 12px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 35%,transparent);border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 8%,transparent);font-size:12px;color:var(--dsw-alias-label-secondary)}
@@ -2380,7 +2245,6 @@ body.dshk-stage-open .dshk-timer-pill{left:calc(var(--dshk-stage-left,0px) + var
 .dshk-pane-view{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
 /* 功能内容区（文件/知识库）：顶部文档签条 + 下面的内容页；签条超宽横向滚动
    （滚动条隐藏），标签多了滑过去点，不被裁掉 */
-.dshk-pane-area{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
 .dshk-subtabs{flex:none;display:flex;align-items:center;gap:2px;min-width:0;padding:6px 8px 4px;border-bottom:1px solid var(--dsw-alias-border-l1);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .dshk-subtabs::-webkit-scrollbar{display:none}
 .dshk-brw-tabrow,.dshk-pv-tabrow{flex:none;display:flex;align-items:center;gap:4px;padding:8px 10px 2px;min-width:0;overflow:hidden}
@@ -2436,7 +2300,7 @@ body.dshk-stage-open .dshk-timer-pill{left:calc(var(--dshk-stage-left,0px) + var
 .dshk-cm-host .cm-content{min-height:100%}
 /* CM6 baseTheme 自带 .cm-focused 的 1px dotted #212121 轮廓——写死的深灰虚线，点击进
    编辑器就冒出来（暗色主题下更是深底上的黑线），用户实测报「点击后多个虚线边框」。
-   直接清掉：文本编辑面不需要焦点环（光标本身就是提示，舞台激活签也标着当前文件），
+   直接清掉：文本编辑面不需要焦点环（光标本身就是提示，当前签也标着当前文件），
    容器边框保持常态不随点击变化 */
 .dshk-cm-host .cm-editor.cm-focused{outline:none}
 .dshk-cm-scope{--dshk-tok-keyword:#953800;--dshk-tok-string:#0a3069;--dshk-tok-comment:#697077;--dshk-tok-number:#0550ae;--dshk-tok-fn:#8250df;--dshk-tok-type:#0550ae;--dshk-tok-operator:#953800;--dshk-tok-meta:#6639ba;--dshk-tok-link:#0550ae;--dshk-tok-heading:#0550ae}
@@ -5351,8 +5215,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       });
     }
 
-    // ─────────── 文件舞台标签（可编辑，自绘）───────────
-    // 文件树/源代码管理/对话链接点文件 → 舞台文件标签（工作台定稿 2026-09-10：
+    // ─────────── 文件签（可编辑，自绘）───────────
+    // 文件树/源代码管理/对话链接点文件 → 文件签（工作台定稿 2026-09-10：
     // 预览标签退役，点开即可编辑）。md 走 RteEditor（与知识库同一套 TipTap
     // WYSIWYG + 自动保存）；其余文本走 CM6 直接编辑；两套都吃同一自动保存语义
     // （2s 防抖 + Ctrl+S + 卸载保底 + mtime CAS 冲突条），保存走 /dsh-kit/write。
@@ -6277,8 +6141,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 知识库入口（输入行，源代码管理与终端之间，2026-09-10 用户定稿）：
-     *  开 = 侧栏索引视图 + 舞台知识库标签一次到位（「打开时中间页面也相应打开」）；
-     *  再点 = 侧栏回会话列表，同时把中间那片页标签一并关掉（不只是收侧栏）。
+     *  开 = 只切侧栏索引视图（点具体页才开右栏知识库签）；
+     *  再点 = 侧栏回会话列表（右栏知识库签与页签不跟着关）。
      *  按钮与快捷键同语义（toggleVaultEntry） */
     function VaultEntry() {
       const ui = useKitUi();
@@ -6650,9 +6514,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     // ─────────── 后台任务面板 ───────────
-    // 入口在右栏开始页条目与舞台标签栏「+」菜单（回退路径；标签带运行中计数徽标）；
+    // 入口在右栏开始页条目（签带运行中计数徽标）；
     // 右栏路径由官方 dock 签承载 pane，回退路径由 KitSurfaces 在
-    // shell.overlay 渲染——舞台任务标签。任务数据源与官方
+    // shell.overlay 渲染——右栏任务签。任务数据源与官方
     // JobListAction 相同——useSessions 的 jobsBySession（session/jobs 推送）。
     // 「结束」走 dsh-kit 宿主端点（/dsh-kit/jobs/kill，权限按 session 隔离，
     // 与 job_kill 同一套 caller 语义）；输出常显，每个任务各走 /dsh-kit/jobs/
@@ -6931,7 +6795,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return result;
     };
 
-    // ── 日程数据钩子（拆两半共用，2026-09-10）：侧栏待办索引与舞台周网格各自
+    // ── 日程数据钩子（拆两半共用，2026-09-10）：日程 pane 内待办卡与周网格各自
     // 挂载、各自轮询，靠 dshk-sched-changed 事件即时互相同步（写操作一处发生
     // 两边即时跟进）；轮询只是兜底，30s 节奏轻端点可承受 ──
     function useScheduleData() {
@@ -6991,7 +6855,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         async (path, body) => {
           try {
             await schedFetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });
-            // 刷新走 dshk-sched-changed 事件：侧栏待办/舞台网格/计时件共用一条
+            // 刷新走 dshk-sched-changed 事件：日程 pane/悬浮计时件共用一条
             // 同步通道，一处写操作全部即时跟进（避免各轮询节奏的 10~30s 滞后）
             window.dispatchEvent(new Event("dshk-sched-changed"));
           } catch (error) {
@@ -7527,7 +7391,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       ] });
     }
 
-    // ─────────── 内置浏览器面板（舞台浏览器标签）───────────
+    // ─────────── 内置浏览器面板（右栏浏览器签）───────────
     // 数据走宿主半边 /dsh-kit/browser WS：state/event 广播 + frame 帧流（jpeg）+
     // watch 引用计数 + open/activate/closeTab/nav/newTab（人操作）+ input（人机共驾）。
     // 设计定位：面板是 agent 隔离浏览器的「现场直播 + 遥控」——canvas 绘观察页实时
@@ -7928,7 +7792,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       });
     }
 
-    // ─────────── 知识库（vault：侧栏目录索引 + 舞台页编辑器，portal 拆两半）───────────
+    // ─────────── 知识库（vault：侧栏目录索引 + 右栏页编辑器，portal 拆两半）───────────
     // vault = 设置卡配置的绝对目录，其内一切 md 即页面（数据契约见 src/vault.ts）。
     // 布局「选库进入阅读」（用户定稿 2026-09-06）：左窄条 = 空间（顶层目录）+
     // 懒加载目录树；右 = 真·所见即所得编辑区（TipTap 富文本，vendor/richeditor
@@ -9052,11 +8916,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     /** 知识库索引半边（单实例，portal 进侧栏索引宿主）：空间/目录树/搜索/建页 +
      *  页标签编排（打开、关闭、← → 访问序）。页编辑器不在本组件——每开一页一个
-     *  VaultPagePane 经 portal 投进舞台宿主，一页一标签（2026-09-10 多开定稿）。 */
+     *  VaultPagePane 经 portal 投进右栏 pane 宿主，一页一标签（2026-09-10 多开定稿）。 */
     function VaultRootView() {
       const ui = useKitUi();
       const sideHost = useHostSlot(vaultSideSlot);
-      const stageHost = useHostSlot(vaultStageSlot);
+      const paneHost = useHostSlot(vaultPaneSlot);
       const [index, setIndex] = react.useState(null);
       const [indexErr, setIndexErr] = react.useState("");
       const [space, setSpace] = react.useState(""); // '' = 全部库
@@ -9177,7 +9041,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         openVaultPageAndDock(path);
       }, []);
 
-      // M4 会话→笔记：消费拦截器转来的开页请求。两种时序都接——舞台未开时点
+      // M4 会话→笔记：消费拦截器转来的开页请求。两种时序都接——组件还没挂载时点
       // 聊天路径，本组件才挂载（vaultOpenRequest 落地等着）；已挂载时走
       // window 事件
       react.useEffect(() => {
@@ -9396,7 +9260,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       };
 
       // root 未就绪的整页态：加载中 / 未配置 / 索引失败（root 就绪后的瞬时错误
-      // 走主界面内的错误条，不早退）。portal 进任一在场的宿主（舞台优先）
+      // 走主界面内的错误条，不早退）。portal 进任一在场的宿主（右栏优先）
       if (root === null) {
         let earlyBody;
         if (indexErr === "") earlyBody = jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("contentLoading") });
@@ -9406,14 +9270,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultNotConfiguredHint") }),
           ] });
         } else earlyBody = jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: `${t("vaultIndexFail")} ${indexErr}` });
-        const target = ui.vaultOpen && stageHost ? stageHost : sideHost;
+        const target = ui.vaultOpen && paneHost ? paneHost : sideHost;
         return target
           ? reactDom.createPortal(jsxRuntime.jsx("div", { className: "dshk-vault", children: earlyBody }), target, "dshk-vault-early")
           : null;
       }
 
-      // 工具条 + 搜索结果 + 目录树 → 侧栏索引宿主；页编辑器 → 舞台宿主。
-      // 单实例双 portal：两侧各自在场才投递（侧栏关闭/舞台关签互不影响）。
+      // 工具条 + 搜索结果 + 目录树 → 侧栏索引宿主；页编辑器 → 右栏 pane 宿主。
+      // 单实例双 portal：两侧各自在场才投递（侧栏关闭/右栏关签互不影响）。
       // 工具条两行（用户定稿 2026-09-11）：上行导航/空间/刷新，下行搜索独占——
       // 挤在一行时搜索框只剩半截宽，占位提示都被截掉
       const sideContent = jsxRuntime.jsxs("div", { className: "dshk-vault-sidewrap", children: [
@@ -9474,7 +9338,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         toast !== "" ? jsxRuntime.jsx("div", { className: "dshk-vault-toast", role: "status", children: toast }) : null,
       ] });
 
-      // 舞台半边：每开一页一个 pane（非激活 display:none 保持挂载——切回不丢
+      // 页签半边：每开一页一个 pane（非激活 display:none 保持挂载——切回不丢
       // 滚动/草稿/撤销栈），一页都没开时是「去索引挑一页」的空态
       const vaultPages = ui.vaultPages ?? [];
       const stageContent =
@@ -9508,13 +9372,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         ui.vaultIdxOpen && sideHost
           ? reactDom.createPortal(sideContent, sideHost, "dshk-vault-side")
           : null,
-        ui.vaultOpen && stageHost
-          ? reactDom.createPortal(stageContent, stageHost, "dshk-vault-stage")
+        ui.vaultOpen && paneHost
+          ? reactDom.createPortal(stageContent, paneHost, "dshk-vault-pane")
           : null,
       ] });
     }
 
-    /** 知识库单页编辑器（一页一个实例，挂舞台宿主）：正文加载/自动保存/CAS 冲突/
+    /** 知识库单页编辑器（一页一个实例，挂右栏 pane 宿主）：正文加载/自动保存/CAS 冲突/
      *  外部修改跟随/删除/引用到对话/粘贴上传全在这一层，索引侧只管挑页与建页。
      *  active=false 的 pane 仍挂载（保住滚动与草稿），但停掉 stat 轮询并在失活
      *  那一刻 flush 未落盘的改动——「切走即存」，不靠卸载兜底。 */
@@ -9847,46 +9711,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       ] });
     }
 
-    // ─────────── 舞台（左索引 / 中舞台 / 右对话 的工作台中段）───────────
-    // 标签存在性（files/jobsOpen/schedOpen/vaultOpen/browserOpen）与激活位
-    // （stageTab）分离；打开某功能=确保标签存在并激活，互斥清场废除——切到
-    // 浏览器看 agent 干活，文件标签的滚动/草稿还在。非激活标签 display:none
-    // 保持挂载（切回不丢状态）。文件共用一个标签、知识库逐页一签（见上方
-    // openFileTab/openVaultPageTab 注释的由来）。几何：左锚定（left=侧栏右缘，
-    // 几何 RO 实测），对话列 margin-left 让位、在剩余区域居中；宽度模型见文件头。
-    const stageGeom = { sidebarW: 0, subs: new Set() };
-    function setStageSidebarW(w) {
-      const next = Math.max(0, Math.round(w));
-      if (stageGeom.sidebarW === next) return;
-      stageGeom.sidebarW = next;
-      // left 变量供舞台定位与计时弹窗贴边共用；RO 常驻（与舞台开合无关）
-      document.documentElement.style.setProperty("--dshk-stage-left", `${next}px`);
-      for (const s of stageGeom.subs) s();
-    }
-    function subscribeStageGeom(listener) {
-      stageGeom.subs.add(listener);
-      return () => stageGeom.subs.delete(listener);
-    }
-    const useSidebarW = () => react.useSyncExternalStore(subscribeStageGeom, () => stageGeom.sidebarW);
-
-    /** 舞台「+」菜单的可开标签清单（cfg 门控；文件标签是被动标签，无入口——
-     *  文件树/源代码管理/对话链接点开即开） */
-    function stageOpenable(cfg, liveJobs) {
-      const openable = [];
-      if (cfg.jobsEnabled !== false) openable.push({ id: "jobs", label: t("dockJobs"), icon: JobsIcon, badge: liveJobs });
-      openable.push({ id: "schedule", label: t("schedTab"), icon: SchedIcon });
-      if (cfg.vaultEnabled !== false) openable.push({ id: "vault", label: t("vaultTitle"), icon: VaultIcon });
-      if (cfg.browserEnabled !== false) openable.push({ id: "browser", label: t("dockBrowser"), icon: BrowserIcon });
-      return openable;
-    }
-    /** 当前会话在跑的后台任务数（ jobs/badge 用）；props 由槽位注入透传 */
-    function useLiveJobs(props) {
-      const useSessions = props && typeof props.useSessions === "function" ? props.useSessions : null;
-      const current = useSessions ? useSessions((s) => s.current) : undefined;
-      const jobs = useSessions ? useSessions((s) => (current ? s.jobsBySession[current] : undefined)) : undefined;
-      return Array.isArray(jobs) ? jobs.filter((j) => j.status === "running" || j.status === "stopping").length : 0;
-    }
-
     /** 「确定结束计时？」确认窗（悬浮小窗与侧栏计时钮共用）：完成=停止并勾掉
      *  待办（仅挂待办时出现）、是=停止、✕/Esc/点背景=关窗继续。停止入口统一
      *  走确认窗，误触不会丢计时 */
@@ -9937,8 +9761,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 内容区文档签条（浏览器式页签）：一文档一签、点击切换、✕ 单关；
-     *  label(path) 决定签名（文件带后缀、知识库页去掉 .md）。舞台与右栏 pane
-     *  两个外壳共用 */
+     *  label(path) 决定签名（文件带后缀、知识库页去掉 .md）。文件区与知识库区
+     *  的 pane 正文共用 */
     const docChips = (paths, activePath, activate, closeOne, label) =>
       paths.map((p) =>
         jsxRuntime.jsxs("span", {
@@ -9962,237 +9786,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }, p),
       );
 
-    /** 舞台容器：顶部标签栏（文件/知识库页/功能标签 + 「+」菜单 + 图钉）+ 内容区。
-     *  0 标签时不渲染（对话回全宽居中）；舞台不可收起（隐藏态与快捷键已取消） */
-    function StagePane({ props, cwd }) {
-      const ui = useKitUi();
-      const sidebarW = useSidebarW();
-      const cfg = cfgFromSnapshot(getCfgSnapshot());
-      const liveJobs = useLiveJobs(props);
-      // 激活位必须指向「仍存在」的标签：stageTab 失效（配置门控清场等）时落回
-      // 第一个存在的标签
-      const exists = { file: (ui.files?.length ?? 0) > 0, jobs: ui.jobsOpen === true, schedule: ui.schedOpen === true, vault: ui.vaultOpen === true, browser: ui.browserOpen === true };
-      const tab = ui.stageTab && exists[ui.stageTab] ? ui.stageTab : STAGE_TYPES.find((x) => exists[x]) ?? null;
-      const type = tab ?? "file";
-      const width = stageWidthFor(type, sidebarW);
-      const [, bumpPin] = react.useState(0);
-      // 让位类跟随舞台存在；宽度初始/切标签时对齐宽度模型的生效值
-      react.useLayoutEffect(() => {
-        document.body.classList.add("dshk-stage-open");
-        document.documentElement.style.setProperty("--dshk-stage-w", `${width}px`);
-        return () => {
-          document.body.classList.remove("dshk-stage-open");
-          document.documentElement.style.removeProperty("--dshk-stage-w");
-        };
-      }, [width, tab]);
-      // 右缘拖拽：拖动只写 CSS 变量（实时跟手），松手才落宽度模型
-      // （未钉=写共享默认联动所有未钉类型；已钉=只写该类型）
-      const dragRef = react.useRef(null);
-      const [dragging, setDragging] = react.useState(false);
-      react.useEffect(() => {
-        if (!dragging) return undefined;
-        const onMove = (e) => {
-          const d = dragRef.current;
-          if (!d) return;
-          const b = stageBounds(d.type, stageGeom.sidebarW);
-          const w = Math.min(b.max, Math.max(b.min, d.startW + (e.clientX - d.startX)));
-          d.w = w;
-          document.documentElement.style.setProperty("--dshk-stage-w", `${w}px`);
-        };
-        const onUp = () => {
-          const d = dragRef.current;
-          if (d && typeof d.w === "number") stageWidthCommit(d.type, d.w, stageGeom.sidebarW);
-          dragRef.current = null;
-          setDragging(false);
-        };
-        window.addEventListener("pointermove", onMove);
-        window.addEventListener("pointerup", onUp);
-        window.addEventListener("pointercancel", onUp);
-        return () => {
-          window.removeEventListener("pointermove", onMove);
-          window.removeEventListener("pointerup", onUp);
-          window.removeEventListener("pointercancel", onUp);
-        };
-      }, [dragging]);
-      const onHandleDown = (e) => {
-        e.preventDefault();
-        dragRef.current = { startX: e.clientX, startW: width, type, w: null };
-        setDragging(true);
-      };
-      // 「+」菜单：可开标签清单（cfg 门控）
-      const [menuOpen, setMenuOpen] = react.useState(false);
-      const openable = stageOpenable(cfg, liveJobs);
-      // 「+」菜单：知识库与输入行入口同语义（侧栏索引 + 舞台标签一起开），
-      // 其余标签（含日程，2026-09-11 起无侧栏半边）直开舞台/右栏 dock
-      const openTab = (id) => {
-        if (id === "vault") setKitUi(openVaultEntry(kitUi));
-        else setKitUi(openFeatureDock(kitUi, id));
-      };
-      const switchTab = (id) => setKitUi({ stageTab: id });
-      const closeTab = (id) => setKitUi(closeStageTab(kitUi, id));
-      const pinOn = stageIsPinned(type);
-      const onPin = () => {
-        stagePinToggle(type, width);
-        bumpPin((x) => x + 1);
-      };
-      // 标签分两层（用户定稿 2026-09-10：和内置浏览器一样）——
-      // 顶层是「功能签」：文件/知识库/后台任务/日程/浏览器各一张，✕ 关整片；
-      // 属于一个功能的「文档签」（每个文件、每个知识库页）显示在它自己的内容区
-      // 顶部的子标签条里。顶层因此恒为「每个功能一张」，开多少文件都不会把顶栏
-      // 撑乱。
-      const featureLabels = { jobs: t("dockJobs"), schedule: t("schedTab"), vault: t("vaultTitle"), browser: t("dockBrowser") };
-      const vaultPages = ui.vaultPages ?? [];
-      /** 顶层功能签：点击激活、✕ 关整片（文件=关掉所有文件签，知识库=关掉所有页签） */
-      const featureChip = (id, label, badge) =>
-        jsxRuntime.jsxs("span", {
-          className: `dshk-tab${tab === id ? " dshk-tab-on" : ""}`,
-          title: label,
-          onClick: () => switchTab(id),
-          children: [
-            jsxRuntime.jsx("span", { className: "dshk-tab-label", children: label }),
-            badge > 0 ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(badge) }) : null,
-            jsxRuntime.jsx("button", {
-              type: "button",
-              className: "dshk-tab-x",
-              "aria-label": t("dockClose"),
-              title: t("dockClose"),
-              onClick: (e) => {
-                e.stopPropagation();
-                closeTab(id);
-              },
-              children: "✕",
-            }),
-          ],
-        }, id);
-      const fileDocChips = docChips((ui.files ?? []).map((x) => x.path), ui.activeFile, (p) => activateFileTab(kitUi, p), (p) => closeFileTab(kitUi, p), (p) => baseName(p) || t("stageFileBtn"));
-      const vaultDocChips = docChips(vaultPages, ui.activeVaultPage, (p) => activateVaultPage(kitUi, p), (p) => closeVaultPageTab(kitUi, p), (p) => pageBasename(p) || t("vaultTitle"));
-      return jsxRuntime.jsxs("div", {
-        className: "dshk-stage",
-        "data-dragging": dragging || undefined,
-        role: "complementary",
-        "aria-label": `${t("stageLabel")} · ${tab === "file" ? baseName(ui.activeFile) || t("stageFileBtn") : tab === "vault" ? pageBasename(ui.activeVaultPage ?? "") || t("vaultTitle") : featureLabels[tab] ?? t("stageLabel")}`,
-        children: [
-          // 右缘拖拽手柄：拖动实时写 CSS 变量跟手，松手落宽度模型
-          jsxRuntime.jsx("div", { className: "dshk-stage-handle", onPointerDown: onHandleDown }),
-          jsxRuntime.jsxs("div", { className: "dshk-stage-tabbar", children: [
-            jsxRuntime.jsx("span", {
-              className: "dshk-tabs",
-              children: [
-                // 顶层功能签：文件与知识库各一张（它们的文档签在各自内容区里）
-                (ui.files ?? []).length > 0 ? featureChip("file", t("stageFileBtn"), 0) : null,
-                ui.vaultOpen === true ? featureChip("vault", t("vaultTitle"), 0) : null,
-                ...["jobs", "schedule", "browser"].filter((id) => exists[id]).map((id) => featureChip(id, featureLabels[id], id === "jobs" ? liveJobs : 0)),
-              ],
-            }),
-            openable.length > 0
-              ? jsxRuntime.jsxs("span", { className: "dshk-dock-addwrap", children: [
-                  jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-dock-add",
-                    "aria-label": t("stageAdd"),
-                    title: t("stageAdd"),
-                    "aria-expanded": menuOpen || undefined,
-                    onClick: () => setMenuOpen(!menuOpen),
-                    children: "+",
-                  }),
-                  menuOpen
-                    ? jsxRuntime.jsx("div", {
-                        className: "dshk-dock-menu",
-                        role: "menu",
-                        children: openable.map((m) =>
-                          jsxRuntime.jsxs(
-                            "button",
-                            {
-                              type: "button",
-                              className: "dshk-dock-menu-item",
-                              role: "menuitem",
-                              onClick: () => {
-                                setMenuOpen(false);
-                                openTab(m.id);
-                              },
-                              children: [
-                                jsxRuntime.jsx(m.icon, {}),
-                                jsxRuntime.jsx("span", { className: "dshk-dock-menu-label", children: m.label }),
-                                m.badge > 0
-                                  ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(m.badge) })
-                                  : null,
-                              ],
-                            },
-                            m.id,
-                          ),
-                        ),
-                      })
-                    : null,
-                ] })
-              : null,
-            jsxRuntime.jsx("span", { className: "dshk-spring" }),
-            jsxRuntime.jsx("button", {
-              type: "button",
-              className: "dshk-stage-pin",
-              "aria-pressed": pinOn,
-              title: pinOn ? t("stageUnpin") : t("stagePin"),
-              "aria-label": pinOn ? t("stageUnpin") : t("stagePin"),
-              onClick: onPin,
-              children: "📌",
-            }),
-            menuOpen ? jsxRuntime.jsx("div", { className: "dshk-dock-backdrop", onClick: () => setMenuOpen(false) }) : null,
-          ] }),
-          // 文件区：顶部它自己的文档签条（一文件一签）+ 多实例内容（非激活
-          // display:none 保挂载——切回滚动/草稿不丢）；整片随顶层「文件」签显隐
-          jsxRuntime.jsxs("div", {
-            className: "dshk-pane-area",
-            style: { display: tab === "file" ? "flex" : "none" },
-            children: [
-              (ui.files ?? []).length > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: fileDocChips }) : null,
-              (ui.files ?? []).map((pv) =>
-                jsxRuntime.jsx("div", {
-                  className: "dshk-pane-view",
-                  style: { display: tab === "file" && pv.path === ui.activeFile ? "flex" : "none" },
-                  children: jsxRuntime.jsx(FileEditorPane, {
-                    key: pv.path,
-                    path: pv.path,
-                    source: pv.from ?? "tree",
-                    untracked: pv.untracked === true,
-                    deleted: pv.deleted === true,
-                    commit: pv.commit,
-                    cwd,
-                    onOpenFile: (p, untracked) => setKitUi(openFileTab(kitUi, p, "md-link", untracked === true)),
-                  }),
-                }, pv.path),
-              ),
-            ],
-          }),
-          jsxRuntime.jsx("div", {
-            className: "dshk-pane-view",
-            style: { display: tab === "jobs" ? "flex" : "none" },
-            children: ui.jobsOpen ? jsxRuntime.jsx(JobsPanel, { ...props }) : null,
-          }),
-          jsxRuntime.jsx("div", {
-            className: "dshk-pane-view",
-            style: { display: tab === "browser" ? "flex" : "none" },
-            children: ui.browserOpen ? jsxRuntime.jsx(BrowserPanel, { active: tab === "browser" }) : null,
-          }),
-          jsxRuntime.jsx("div", {
-            className: "dshk-pane-view",
-            style: { display: tab === "schedule" ? "flex" : "none" },
-            children: ui.schedOpen ? jsxRuntime.jsx(ScheduleView, { active: tab === "schedule" }) : null,
-          }),
-          // 知识库区：顶部它自己的页签条（一页一签，一页都没开时不显示——那会儿
-          // 宿主里是「去索引挑一页」的空态）+ 宿主 div：VaultRootView（KitSurfaces
-          // 单实例挂载）经 portal 把每页的 VaultPagePane 投进来；宿主登记/注销走
-          // callback ref（宿主常驻渲染，避免开合时 portal 目标缺失的时序问题）
-          jsxRuntime.jsxs("div", {
-            className: "dshk-pane-area",
-            style: { display: tab === "vault" ? "flex" : "none" },
-            children: [
-              vaultPages.length > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: vaultDocChips }) : null,
-              jsxRuntime.jsx("div", { className: "dshk-vault-stagehost", ref: (el) => vaultStageSlot.set(el) }),
-            ],
-          }),
-        ],
-      });
-    }
-
     /** 侧栏索引宿主（知识库目录/日程待办占 sidebar.workspaces 单槽）：
      *  wide=false（侧栏收起）不渲染——视图挤进铁轨等于不可见；宿主 div 交给
      *  portal 投递方（VaultRootView）填内容 */
@@ -10204,7 +9797,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     // ─────────── 右栏 pane 正文（每个 dock 签一个，key = 页类型 id）───────────
     // 官方 pane 是普通文档流：外壳 .dshk-rbpane 占满 100%×100%，内容区自己滚，
-    // 不再有任何 position:fixed 舞台外壳与 body.dshk-stage-open 让位类。
+    // 自建舞台的 position:fixed 外壳与对话让位类已退役。
     // pane 挂载 = 官方签开着：把 kitUi 的功能存在性同步为真（入口按钮选中态、
     // 角标、自动跟随判定都读它）；pane 卸载（用户点官方签 ✕）同步回假——
     // 「签开着吗」以官方 pane 的挂载为准。文件/知识库的文档签状态（files/
@@ -10212,12 +9805,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     /** 功能存在性跟随 pane 挂载（jobs/schedule/browser 用） */
     function useFeaturePresence(feature) {
       react.useEffect(() => {
-        setKitUi(openStageTab(kitUi, feature));
-        return () => setKitUi(closeStageTab(kitUi, feature));
+        setKitUi(openFeatureTab(kitUi, feature));
+        return () => setKitUi(closeFeatureTab(kitUi, feature));
       }, [feature]);
     }
     /** 文件 pane：文档签条 + 多实例 FileEditorPane（非激活 display:none 保挂载
-     *  ——滚动/草稿/撤销栈不丢，与舞台时代同策略）。不做存在性同步：
+     *  ——滚动/草稿/撤销栈不丢）。不做存在性同步：
      *  files 状态本来就在 kitUi，官方签关了重开，文档签原样恢复。
      *  最后一页文档签关掉 → 官方「文件」dock 签一起关（用户定稿 2026-09-11，
      *  同浏览器「没了就没了」，没有空页状态；再点文件时 openFileAndDock 重开签） */
@@ -10227,10 +9820,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const files = ui.files ?? [];
       const fileCount = files.length;
       react.useEffect(() => {
-        if (rightbarStore.active && fileCount === 0) closeRightbarTab("file");
+        if (fileCount === 0) closeRightbarTab("file");
       }, [fileCount]);
       return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
-        fileCount > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(files.map((x) => x.path), ui.activeFile, (p) => activateFileTab(kitUi, p), (p) => closeFileTab(kitUi, p), (p) => baseName(p) || t("stageFileBtn")) }) : null,
+        fileCount > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(files.map((x) => x.path), ui.activeFile, (p) => activateFileTab(kitUi, p), (p) => closeFileTab(kitUi, p), (p) => baseName(p) || t("fileTabLabel")) }) : null,
         files.map((pv) =>
               jsxRuntime.jsx("div", {
                 className: "dshk-pane-view",
@@ -10264,12 +9857,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 「没了就没了」，没有空页状态）；页签状态留在 kitUi，重开即恢复
       const pageCount = vaultPages.length;
       react.useEffect(() => {
-        if (rightbarStore.active && pageCount === 0) closeRightbarTab("vault");
+        if (pageCount === 0) closeRightbarTab("vault");
       }, [pageCount]);
       return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
         vaultPages.length > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(vaultPages, ui.activeVaultPage, (p) => activateVaultPage(kitUi, p), (p) => closeVaultPageTab(kitUi, p), (p) => pageBasename(p) || t("vaultTitle")) }) : null,
         // 宿主常驻渲染（页签条之后），portal 目标缺失的时序问题不存在
-        jsxRuntime.jsx("div", { className: "dshk-vault-stagehost", ref: (el) => vaultStageSlot.set(el) }),
+        jsxRuntime.jsx("div", { className: "dshk-vault-panehost", ref: (el) => vaultPaneSlot.set(el) }),
       ] });
     }
     /** 日程 pane：ScheduleView（pane 内左待办 + 右周网格） */
@@ -10287,7 +9880,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           : jsxRuntime.jsx(JobsPanel, { ...props }),
       });
     }
-    /** 浏览器 pane（agent 驱动 + 人机共驾 + 自动跟随，与舞台时代同构不加功能） */
+    /** 浏览器 pane（agent 驱动 + 人机共驾 + 自动跟随；与独立面板同构，不加功能） */
     function BrowserPaneBody() {
       useFeaturePresence("browser");
       const cfg = cfgFromSnapshot(getCfgSnapshot());
@@ -10394,14 +9987,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // stacking context 影响）；文件树的 sidebar.workspaces 动态注册、让位 body 类、
     // 快捷键监听全部挂在这个常驻根组件里。
     // ─────────── 面板宿主（shell.overlay 全帧浮层）───────────
-    // 舞台容器与终端停靠在这里渲染（fixed 定位不受 composer 祖先
+    // 终端停靠在这里渲染（fixed 定位不受 composer 祖先
     // stacking context 影响）；知识库单实例挂载、文件树/索引的 sidebar.workspaces
     // 动态注册、几何 RO、快捷键监听全部挂在这个常驻根组件里。
     function KitSurfaces(props) {
       react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
       const cwd = useCurrentCwd(props);
       const ui = useKitUi();
-      const rbActive = useRightbarActive();
       const snap = react.useSyncExternalStore(subscribeCfg, getCfgSnapshot);
       const cfg = cfgFromSnapshot(snap);
       // useSessions 透传给右栏任务 pane/开始页（在跑任务徽标）：inject 闭包
@@ -10503,11 +10095,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
         if (!cfg.fileTreeEnabled && ui.treeOpen) setKitUi({ treeOpen: false, files: [], activeFile: null });
         if (!cfg.sourceControlEnabled && ui.gitOpen) setKitUi({ gitOpen: false, files: [], activeFile: null });
-        // 配置门控清场走 closeStageTab：清存在性的同时把激活位顺延到剩余标签
-        if (!cfg.jobsEnabled && ui.jobsOpen) setKitUi(closeStageTab(kitUi, "jobs"));
-        if (!cfg.browserEnabled && ui.browserOpen) setKitUi(closeStageTab(kitUi, "browser"));
+        // 配置门控清场走 closeFeatureTab：清存在性的同时把激活位顺延到剩余标签
+        if (!cfg.jobsEnabled && ui.jobsOpen) setKitUi(closeFeatureTab(kitUi, "jobs"));
+        if (!cfg.browserEnabled && ui.browserOpen) setKitUi(closeFeatureTab(kitUi, "browser"));
         if (!cfg.vaultEnabled && (ui.vaultOpen || ui.vaultIdxOpen)) {
-          setKitUi({ ...closeStageTab(kitUi, "vault"), vaultIdxOpen: false });
+          setKitUi({ ...closeFeatureTab(kitUi, "vault"), vaultIdxOpen: false });
         }
       }, [cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.sourceControlEnabled, cfg.jobsEnabled, cfg.browserEnabled, cfg.vaultEnabled]);
 
@@ -10546,40 +10138,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         };
       }, [ui.treeOpen, ui.gitOpen, ui.vaultIdxOpen, cwd]);
 
-      // 舞台几何：侧栏列宽实测（ResizeObserver 常驻）写 --dshk-stage-left，舞台
-      // left 锚定侧栏右缘、计时弹窗贴边共用。官方侧栏收起是 grid 轨道动画，RO
-      // 逐帧跟随。元素首帧可能未挂载，轻探测直到拿到为止
-      react.useEffect(() => {
-        let ro = null;
-        let el = null;
-        let tries = 0;
-        const attach = () => {
-          el = document.querySelector("[class*='_sidebarCol']");
-          if (!el) return false;
-          setStageSidebarW(el.getBoundingClientRect().width);
-          ro = new ResizeObserver(() => {
-            if (el) setStageSidebarW(el.getBoundingClientRect().width);
-          });
-          ro.observe(el);
-          return true;
-        };
-        if (!attach()) {
-          const probe = window.setInterval(() => {
-            tries += 1;
-            if (attach() || tries > 40) window.clearInterval(probe);
-          }, 250);
-          return () => window.clearInterval(probe);
-        }
-        const onResize = () => {
-          if (el) setStageSidebarW(el.getBoundingClientRect().width);
-        };
-        window.addEventListener("resize", onResize);
-        return () => {
-          if (ro) ro.disconnect();
-          window.removeEventListener("resize", onResize);
-        };
-      }, []);
-
       // 终端让位布局：坞可见时挂 body 类 + 设高度变量，样式规则顶起对话/详情列
       //（隐藏/无会话时不顶——后台会话继续跑但不占布局）
       react.useEffect(() => {
@@ -10594,9 +10152,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
       // 快捷键统一在此监听：组合键来自配置（默认 Ctrl+E / Ctrl+Alt+. 等，capture
       // 拦截避免页面其它快捷键抢先），对应功能关闭时不响应；设置卡录制新键时让路。
-      // Esc 分层：先关当前舞台标签（知识库关当前页那张、文件关当前文件那张），
-      // 再关侧栏视图（不拦截，避免挡掉其它 Esc 行为）。舞台收起的隐藏态与快捷键
-      // 已取消（用户定稿 2026-09-10）——舞台是工作台的中段，没有「开着但看不见」态。
+      // Esc 分层：先关当前激活那张文档签（知识库关当前页那张、文件关当前文件那张），
+      // 再关侧栏视图（不拦截，避免挡掉其它 Esc 行为）。功能签归官方 ✕，Esc 不碰。
+
       react.useEffect(() => {
         const termCombo = parseCombo(cfg.terminalShortcut);
         const treeCombo = parseCombo(cfg.fileTreeShortcut);
@@ -10633,7 +10191,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           if (vaultCombo && cfg.vaultEnabled !== false && comboMatches(e, vaultCombo)) {
             e.preventDefault();
             e.stopPropagation();
-            // 与输入行知识库钮同语义：开=索引+舞台标签，关=两边一起收
+            // 与输入行知识库钮同语义：开=侧栏索引，再点=收回会话列表
             setKitUi(toggleVaultEntry(kitUi));
             return;
           }
@@ -10663,19 +10221,22 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             // 日程弹窗开着时让路：Esc 归弹窗自己（只关弹窗，不收标签页）
             if (schedModalOpen) return;
             // Esc 关当前激活那张文档签（知识库关当前页那张、文件关当前文件
-            // 那张，各自与标签条的 ✕ 同语义）。右栏路径功能签归官方 ✕，
-            // Esc 不收功能签（kitUi 收了 pane 还在，状态会对不上）
-            if (stageAlive(kitUi)) {
-              if (kitUi.stageTab === "vault" && kitUi.activeVaultPage) {
-                setKitUi(closeVaultPageTab(kitUi, kitUi.activeVaultPage));
-              } else if (kitUi.stageTab === "file" && kitUi.activeFile) {
-                setKitUi(closeFileTab(kitUi, kitUi.activeFile));
-              } else if (!rightbarStore.active) {
-                const tab = kitUi.stageTab ?? ((kitUi.files?.length ?? 0) > 0 ? "file" : kitUi.jobsOpen ? "jobs" : kitUi.schedOpen ? "schedule" : kitUi.vaultOpen ? "vault" : "browser");
-                setKitUi(closeStageTab(kitUi, tab));
-              }
+            // 那张，各自与标签条的 ✕ 同语义）。功能签归官方 ✕，Esc 不收
+            // 功能签（kitUi 收了 pane 还在，状态会对不上）
+            const vaultPages = kitUi.vaultPages ?? [];
+            const files = kitUi.files ?? [];
+            const activeVault = kitUi.activeVaultPage ?? vaultPages[vaultPages.length - 1] ?? null;
+            const activeFile = kitUi.activeFile ?? files[files.length - 1]?.path ?? null;
+            if (kitUi.activeFeature === "vault" && activeVault) {
+              setKitUi(closeVaultPageTab(kitUi, activeVault));
+            } else if (kitUi.activeFeature === "file" && activeFile) {
+              setKitUi(closeFileTab(kitUi, activeFile));
+            } else if (vaultPages.length > 0) {
+              setKitUi(closeVaultPageTab(kitUi, activeVault));
+            } else if (files.length > 0) {
+              setKitUi(closeFileTab(kitUi, activeFile));
             } else if (kitUi.gitOpen || kitUi.treeOpen || kitUi.vaultIdxOpen) {
-              // 侧栏视图单槽：关一格即可（四者互斥）；舞台标签不连带关
+              // 侧栏视图单槽：关一格即可（四者互斥）；功能签不连带关
               setKitUi(sidebarViewPatch(null));
             } else if (kitUi.termDockOpen) setKitUi({ termDockOpen: false }); // 只隐藏，不杀会话
           }
@@ -10688,7 +10249,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
       // ShellBrowserEvents：壳层常驻浏览器事件源（与面板 WS 并存，不订阅帧流）。
       // 面板标签会被收掉（0 页自动收/人为关闭），「agent 开页切到浏览器」不能依赖
-      // 面板自己活着——壳层恒听宿主广播：navigated → 切舞台浏览器标签（无抑制，
+      // 面板自己活着——壳层恒听宿主广播：navigated → 拽出右栏浏览器签（无抑制，
       // 用户定稿 2026-09-10：agent 操作浏览器必须可见）；浏览器收摊 → 顺手收掉
       // 标签。两者兼得：正常浏览器的「没了就没了」+ agent 干活时画面自动回眼前
       react.useEffect(() => {
@@ -10755,12 +10316,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 onKillAll: () => setKitUi({ terminals: [], activeTermId: null, termDockOpen: false }),
               })
             : null,
-          // 舞台容器：仅右栏不可用的回退路径渲染（宿主 0.1.5+ 上舞台整体退役，
-          // 有标签就渲染、0 标签即不存在——没有「收起」态）
-          !rbActive && stageAlive(ui)
-            ? jsxRuntime.jsx(StagePane, { props, cwd })
-            : null,
-          // 知识库单实例：侧栏目录/舞台页签任一在场即挂载（两侧 portal 自取），
+          // 知识库单实例：侧栏目录/右栏页签任一在场即挂载（两侧 portal 自取），
           // 隐藏包装层不影响 portal 内容落点
           cfg.vaultEnabled !== false && (ui.vaultOpen || ui.vaultIdxOpen)
             ? jsxRuntime.jsx("div", { style: { display: "none" }, children: jsxRuntime.jsx(VaultView, {}) })
@@ -11590,7 +11146,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         id: "dsh-kit-timer",
         order: 10,
       }, HeaderTimer)), "dsh-kit: header timer chip");
-      // 探测落地：此后入口走右栏、舞台不再渲染（KitSurfaces 订阅本标志重渲染）
+      // 探测落地：入口走右栏（rightbarStore 的订阅者据此重渲染）
       rightbarStore.setActive(true);
     }
 
@@ -11629,7 +11185,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         );
       }
       // 官方右侧边栏：五个功能 dock 签 + 引导页清单 + header 计时。只在宿主
-      // 提供该服务时生效（0.1.2 没有，静默跳过=整条回退舞台路径）。用 inject
+      // 提供该服务时生效（缺服务 = 只剩 kitUi 存在性补丁，签不出现）。用 inject
       // 等它就绪而非直接读——官方右栏与本插件的客户端加载顺序不保证
       if (typeof ctx.inject === "function") {
         ctx.inject(["sidebarRightTabs"], registerRightbar);
