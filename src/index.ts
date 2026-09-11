@@ -408,7 +408,6 @@ const VENDOR_FILES = new Map([
   ['/dsh-kit/vendor/addon-fit.js', 'addon-fit.js'],
   ['/dsh-kit/vendor/xterm.css', 'xterm.css'],
   ['/dsh-kit/vendor/qrcode.js', 'qrcode.js'],
-  ['/dsh-kit/vendor/marked.min.js', 'marked.min.js'],
   ['/dsh-kit/vendor/purify.min.js', 'purify.min.js'],
   ['/dsh-kit/vendor/codemirror.bundle.js', 'codemirror.bundle.js'],
   // vault 页面富文本编辑器（TipTap 引擎，md↔富文本往返；懒加载）
