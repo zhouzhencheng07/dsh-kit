@@ -2046,7 +2046,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-vault-slashback:hover{color:var(--dsw-alias-label-primary)}
 .dshk-vault-slashmore{font-size:10px;color:var(--dsw-alias-label-tertiary)}
 /* 日程模块：中心区第三 tab——周时间网格 + 待办/统计侧栏；计时芯片挂输入区 dock */
-.dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px}
+.dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px;container-type:inline-size}
 .dshk-sched-head{flex:none;display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dshk-sched-title{font-weight:600;font-size:15px}
 .dshk-sched-weeknav{display:flex;align-items:center;gap:6px}
@@ -2086,11 +2086,24 @@ ellipsis，窄列只截字不破版 */
 /* 够高的块（≥48px）标题放开两行，行数由 line-clamp 限死——
    短块维持单行省略，避免半截字被容器裁掉 */
 .dshk-sched-event.is-tall .dshk-sched-evtitle{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;word-break:break-word;line-clamp:2}
-/* 上条下网（用户定稿 2026-09-06）：待办/统计横条在上，周网格在下吃满坞宽 */
-.dshk-sched-sidecol{flex:0 0 240px;min-width:0;display:flex;flex-direction:column;gap:10px;padding:10px;border-right:1px solid var(--dsw-alias-border-l2);overflow:auto}
+/* 左列宽度跟着 pane 宽走：flex-basis 用 clamp(200px,30%,240px)（用户 2026-09-12：
+   固定 240 的问题是待办不随实际宽度变、只有网格在变）。240 是宽坞上限，30% 让网格在
+   中等坞宽多分到几十像素，200 是待办行（勾选+标题+截止徽章+计时钮）还能看的底线——
+   再窄就交给下面的窄坞断点，不在这里继续压 */
+.dshk-sched-sidecol{flex:0 1 clamp(200px,30%,240px);min-width:0;display:flex;flex-direction:column;gap:10px;padding:10px;border-right:1px solid var(--dsw-alias-border-l2);overflow:auto}
 /* 日程：待办卡与周网格同住日程 pane（待办列表在左列） */
 .dshk-sched-card.is-tasks{flex:1 1 auto;min-width:0}
-.dshk-sched-card.is-stats{flex:none;width:230px}
+/* 统计卡跟着左列宽（原来钉 230px，左列一收窄就顶出去） */
+.dshk-sched-card.is-stats{flex:none;width:auto}
+/* 窄坞（手机竖屏）回落到「上条下网」：240px 固定左列会把网格挤成每天十几像素
+   （用户 2026-09-12 手机实测：待办很宽、日程很窄），故窄坞里待办/统计堆在顶部、
+   网格吃满宽度。判据用**容器宽**不是视口宽——日程住在可缩放/可全屏的右栏 pane 里，
+   同一视口下 pane 宽可差数倍；横屏与电脑模式 pane 变宽即自动回到左右分栏。 */
+@container (max-width:560px){
+  .dshk-sched-body{flex-direction:column}
+  .dshk-sched-sidecol{flex:none;width:auto;max-height:44%;border-right:0;border-bottom:1px solid var(--dsw-alias-border-l2)}
+  .dshk-sched-card.is-tasks{min-height:0;overflow:auto}
+}
 .dshk-sched-card{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-3)}
 .dshk-sched-cardtitle{font-weight:600;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-sched-cardhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}
