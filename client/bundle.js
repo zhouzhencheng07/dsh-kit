@@ -818,9 +818,10 @@ window.__ModuleLoader__.load({
       return base + joiner + quote;
     }
 
-    /** 一页 @ 进对话输入框（左侧树行按钮与页条按钮同一实现）：以官方 @ 引用芯片直插
-     *  （与文件树「@到对话」同款方法），selText 非空时先落引用块。失败原因经 notify
-     *  回报（组件各自有自己的 toast 通道）。 */
+    /** 一页 @ 进对话输入框（左侧树行按钮的唯一实现）：以官方 @ 引用芯片直插
+     *  （与文件树「@到对话」同款方法），selText 非空时先落引用块。**成功不提示**——
+     *  插进去的引用就摆在输入框里，再弹一条是噪音；只有失败原因经 notify 回报
+     *  （组件各自有自己的 toast 通道）。 */
     function citeVaultPageToChat(pagePath, selText, notify) {
       const shell = currentComposerShell();
       if (!shell || typeof shell.actions?.setDraft !== "function") {
@@ -855,17 +856,13 @@ window.__ModuleLoader__.load({
           } catch {
             applied = false;
           }
-          if (applied) {
-            notify("vaultCited");
-            return;
-          }
+          if (applied) return;
         }
       }
       // 兜底：@ 语法文本追加草稿末尾（与手打 @ 一致，此时面板可见属官方行为）
       const state = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
       const draft = state && typeof state.draft === "string" ? state.draft : "";
       shell.actions.setDraft(draft === "" ? mention : `${draft} ${mention}`);
-      notify("vaultCited");
     }
 
     // ─────────── 文案 ───────────
@@ -1187,7 +1184,6 @@ window.__ModuleLoader__.load({
       vaultBacklinks: "反链",
       vaultPickPage: "从左侧选择一页开始",
       vaultPageGone: "页面不存在（可能已被移动或删除）",
-      vaultCited: "已插入对话输入框",
       vaultCiteUnavailable: "对话输入框未就绪（无会话或不可用）",
       vaultFolderSearch: "搜索文件夹…",
       vaultFolderEmpty: "没有匹配的文件夹",
@@ -1630,7 +1626,6 @@ window.__ModuleLoader__.load({
       vaultBacklinks: "Backlinks",
       vaultPickPage: "Pick a page on the left to start",
       vaultPageGone: "Page not found (it may have been moved or deleted)",
-      vaultCited: "Inserted into composer",
       vaultCiteUnavailable: "Composer is not ready (no active session)",
       vaultFolderSearch: "Search folders…",
       vaultFolderEmpty: "No matching folder",
