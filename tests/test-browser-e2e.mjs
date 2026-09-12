@@ -49,9 +49,12 @@ function add(){const inp=document.getElementById('inp');const v=inp.value.trim()
   document.getElementById('err').style.display='none';todos.push({text:v,done:false});inp.value='';render()}
 </script></body></html>`
 
-const server = http.createServer((_q, r) => {
+const HOST_HTML = `<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>宿主页</title></head><body>
+<h1>宿主页</h1><iframe id="fr" src="/frame" title="内嵌页" style="width:520px;height:420px"></iframe></body></html>`
+
+const server = http.createServer((q, r) => {
   r.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-  r.end(HTML)
+  r.end(q.url && q.url.startsWith('/host') ? HOST_HTML : HTML)
 })
 await new Promise((res) => server.listen(0, '127.0.0.1', res))
 const base = `http://127.0.0.1:${server.address().port}/`
@@ -263,6 +266,19 @@ try {
   assert.equal(vpBad.ok, false)
   assert.match(vpBad.error, /320/)
   ok('viewport 设置生效 + 越界拒绝')
+
+  // ── 帧内元素 ref：playwright 只给主帧元素印裸 eN，iframe 里的印 f<帧序>e<m>，由
+  // aria-ref 引擎按帧序跳帧解析。校验层只放行裸 eN 时，这类页面的快照看得见却点不动
+  // （DSH 自己的 GUI 整页都是 f 形态）──
+  const framed = await service.navigate(`${base}host`, { snapshot: true, newTab: true })
+  assert.equal(framed.ok, true, `iframe 页 navigate 失败：${framed.error}`)
+  const frameLine = framed.snapshot.split('\n').find((l) => l.includes('添加'))
+  const frameRef = frameLine && frameLine.match(/\[ref=(f\d+e\d+)\]/)
+  assert.ok(frameRef, `iframe 内元素应带帧序 ref（f<n>e<m>）：${frameLine}`)
+  const frameClick = await service.act({ action: 'click', ref: frameRef[1] })
+  assert.equal(frameClick.ok, true, `帧内 ref 点击失败：${frameClick.error}`)
+  assert.match(frameClick.snapshot, /内容不能为空/)
+  ok(`act 帧内 ref（${frameRef[1]}）点击一次到位`)
 
   // ── 关掉最后一页 = 整个浏览器优雅关闭；下次导航必须能重新拉起。回归：
   // _launching 落定后若不清，context 事后关闭会让 ensure 误报 ok，
