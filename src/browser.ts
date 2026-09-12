@@ -157,6 +157,9 @@ const GOTO_TIMEOUT = 15000
 const ACT_TIMEOUT_DEFAULT = 5000
 const ACT_TIMEOUT_MAX = 15000
 const SNAPSHOT_CAP = 8 * 1024
+/** 调用方自定义快照上限时的取值区间：下限保证还有可读内容，上限防一次调用把上下文灌爆 */
+const SNAPSHOT_MIN = 200
+const SNAPSHOT_MAX = 32 * 1024
 const EVAL_CAP = 64 * 1024
 const LAUNCH_TIMEOUT = 30000
 
@@ -204,7 +207,7 @@ function browserExecutableCandidates(): string[] {
 export function capText(text: string, cap: number = SNAPSHOT_CAP): string {
   if (typeof text !== 'string') return ''
   if (text.length <= cap) return text
-  return text.slice(0, cap) + `\n…（快照超过 ${cap} 字符已截断，可用 locator('body').ariaSnapshot 的区域化观察替代——当前版本请缩小断言范围）`
+  return text.slice(0, cap) + `\n…（快照超过 ${cap} 字符已截断：改用 browser_snapshot 的 selector 只看一个区域，或用 maxChars 调小上限）`
 }
 
 /** 从 PNG 字节取宽高（IHDR 定长偏移，纯函数供单测） */
@@ -673,23 +676,34 @@ export class BrowserService {
     return result
   }
 
-  private async _snapshotOf(page: PwPage): Promise<string> {
+  private async _snapshotOf(page: PwPage, scope?: string): Promise<string> {
     try {
-      return await page.locator('body').ariaSnapshot({ mode: 'ai' })
+      return await (scope ? page.locator(scope) : page.locator('body')).ariaSnapshot({ mode: 'ai' })
     } catch (error) {
       return `（快照失败：${error instanceof Error ? error.message : error}）`
     }
   }
 
-  /** 紧凑树观察 */
-  async snapshot(tabId?: number | null): Promise<{ ok: true; tabId: number; url: string; title: string; snapshot: string } | { ok: false; error: string }> {
+  /** 紧凑树观察。scope = 只看该选择器命中的子树（大页面按块看，省 token）；
+   *  maxChars = 覆盖默认 8KB 上限（越界夹到 SNAPSHOT_MIN..SNAPSHOT_MAX） */
+  async snapshot(tabId?: number | null, opts: { scope?: string; maxChars?: number } = {}): Promise<{ ok: true; tabId: number; url: string; title: string; snapshot: string } | { ok: false; error: string }> {
     const ensured = await this.ensure()
     if (!ensured.ok) return { ok: false, error: ensured.error }
     const page = this._page(tabId)
     if (!page) return { ok: false, error: `页不存在：${tabId ?? '(缺省)'}（用 browser_navigate 或先开一页）` }
+    const scope = typeof opts.scope === 'string' ? opts.scope.trim() : ''
+    if (scope !== '') {
+      // 先数匹配数：ariaSnapshot 的定位等待是 30s 级，无匹配时不该让调用方干等
+      const hit = await page.locator(scope).count().catch(() => 0)
+      if (hit === 0) return { ok: false, error: `范围无匹配：selector=${scope}（先整页快照或 browser_eval 核对选择器，不要原样重试）` }
+    }
+    const cap =
+      typeof opts.maxChars === 'number' && Number.isFinite(opts.maxChars)
+        ? Math.min(Math.max(Math.trunc(opts.maxChars), SNAPSHOT_MIN), SNAPSHOT_MAX)
+        : SNAPSHOT_CAP
     this._touch()
     const id = page.__dshTabId!
-    return { ok: true, tabId: id, url: page.url(), title: this._titles.get(id) ?? '', snapshot: capText(await this._snapshotOf(page)) }
+    return { ok: true, tabId: id, url: page.url(), title: this._titles.get(id) ?? '', snapshot: capText(await this._snapshotOf(page, scope || undefined), cap) }
   }
 
   /** 统一动作：click/type/press/check/uncheck/select/hover/scroll/upload；默认返回
