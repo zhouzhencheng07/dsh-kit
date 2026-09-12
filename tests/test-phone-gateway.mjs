@@ -10,7 +10,7 @@ import path from 'node:path'
 
 import zlib from 'node:zlib'
 
-import { startPhoneGateway, PHONE_COOKIE, PHONE_VIEW_COOKIE, lanAddresses, pickEncoding, isCompressibleType } from '../src/phone-gateway.ts'
+import { startPhoneGateway, PHONE_COOKIE, PHONE_VIEW_COOKIE, lanAddresses, pickEncoding, isCompressibleType, BROTLI_QUALITY, brotliOptions } from '../src/phone-gateway.ts'
 
 let failed = 0
 const check = (label, ok) => {
@@ -264,6 +264,7 @@ try {
     check('压缩响应带 vary: accept-encoding', String(pref.headers['vary'] ?? '').includes('accept-encoding'))
     const prefDec = zlib.brotliDecompressSync(pref.raw).toString('utf8')
     check('br 解回原文且体积明显变小（<40%）', prefDec === plain.body && pref.raw.length < plain.raw.length * 0.4)
+    check('br 质量档显式给 5（默认 11 档在 11MB 合并包上要十几秒 CPU，远程首连被它拖住）', BROTLI_QUALITY === 5 && brotliOptions().params?.[zlib.constants.BROTLI_PARAM_QUALITY] === 5)
     const gz = await request(gwPort, { path: '/big.js', headers: { cookie: cookieHeader, 'accept-encoding': 'gzip' } })
     check('只声明 gzip：用 gzip 且可解回原文', gz.headers['content-encoding'] === 'gzip' && zlib.gunzipSync(gz.raw).toString('utf8') === plain.body)
     const tiny = await request(gwPort, { path: '/small.js', headers: { cookie: cookieHeader, 'accept-encoding': 'gzip' } })

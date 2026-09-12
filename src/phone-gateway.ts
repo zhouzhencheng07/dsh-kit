@@ -74,14 +74,23 @@ export function pickEncoding(acceptEncoding: unknown): 'br' | 'gzip' | 'deflate'
   return null
 }
 
+/** br 质量档：Node 默认走最高档 11，而网关最重的那个包（插件客户端合并包，
+ *  实测 11.19MB）在 11 档要 ~14s CPU、5 档 0.32s 而体积只大 7%——压缩跑在
+ *  libuv 线程池里，十几秒的档位会把远程首连那阵子的宿主 fs/网络一起拖住。
+ *  两个 br 入口（流式 / 一次性）共用这一份，避免只改一处。 */
+export const BROTLI_QUALITY = 5
+export function brotliOptions(): zlib.BrotliOptions {
+  return { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: BROTLI_QUALITY } }
+}
+
 /** 按编码名取压缩流/一次性压缩器 */
 function compressor(enc: 'br' | 'gzip' | 'deflate') {
-  return enc === 'br' ? zlib.createBrotliCompress() : enc === 'gzip' ? zlib.createGzip() : zlib.createDeflate()
+  return enc === 'br' ? zlib.createBrotliCompress(brotliOptions()) : enc === 'gzip' ? zlib.createGzip() : zlib.createDeflate()
 }
 function compressBuffer(enc: 'br' | 'gzip' | 'deflate', buf: Buffer): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const cb = (err: Error | null, out: Buffer) => (err ? reject(err) : resolve(out))
-    if (enc === 'br') zlib.brotliCompress(buf, cb)
+    if (enc === 'br') zlib.brotliCompress(buf, brotliOptions(), cb)
     else if (enc === 'gzip') zlib.gzip(buf, cb)
     else zlib.deflate(buf, cb)
   })
