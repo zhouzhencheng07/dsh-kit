@@ -157,15 +157,19 @@ export function buildBrowserTools({ defineTool, service, ctx, isDisabled }: { de
 
   const snapshot = defineTool({
     name: 'browser_snapshot',
-    description: '获取当前页面的紧凑 ARIA 快照（含 [ref=…]）——动作失败/页面疑似变化后的恢复观察原语。',
+    description:
+      '获取当前页面的紧凑 ARIA 快照（含 [ref=…]）——动作失败/页面疑似变化后的恢复观察原语。' +
+      '页面大时用 selector 只看一块（比整页省 token 得多），必要时用 maxChars 调小上限。',
     parameters: {
       tabId: { type: 'number', description: '页签 id（默认当前页）' },
+      selector: { type: 'string', description: '只看该 CSS 选择器命中的子树（缺省整页 body）——大页面/只看一块时用它省 token' },
+      maxChars: { type: 'number', description: '快照字符上限（200-32768，默认 8192；超出即截断并带提示）' },
     },
     output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => renderPageState(value) },
     timeoutMs: 15000,
     async execute(args) {
       guard()
-      const r = await service.snapshot(args.tabId)
+      const r = await service.snapshot(args.tabId, { scope: args.selector, maxChars: args.maxChars })
       if (!r.ok) throw new Error(r.error)
       return r
     },

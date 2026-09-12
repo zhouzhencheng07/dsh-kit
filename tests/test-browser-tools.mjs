@@ -90,7 +90,10 @@ const ok = (name) => {
       calls.push(['navigate', url, opts])
       return { ok: true, tabId: 1, url, title: 'T', snapshot: '- heading "T"' }
     },
-    snapshot: async () => ({ ok: true, tabId: 1, url: 'u', title: 'T', snapshot: '- s' }),
+    snapshot: async (tabId, opts) => {
+      calls.push(['snapshot', tabId, opts])
+      return { ok: true, tabId: 1, url: 'u', title: 'T', snapshot: '- s' }
+    },
     act: async (args) => {
       calls.push(['act', args])
       return { ok: true, tabId: 1, url: 'u', title: 'T', matched: 1, snapshot: '- after' }
@@ -136,6 +139,11 @@ const ok = (name) => {
   const pressValue = await defs[2].execute({ action: 'press', key: 'Enter' })
   assert.equal(pressValue.ok, true)
   ok('act ref/scroll 无定位放行与定位校验')
+
+  // snapshot：scope/maxChars 透传给 service
+  await defs[1].execute({ tabId: 2, selector: '#x', maxChars: 500 })
+  assert.deepEqual(calls.at(-1), ['snapshot', 2, { scope: '#x', maxChars: 500 }])
+  ok('snapshot selector/maxChars 透传')
 
   // viewport：execute → 返回值 + render 文本投影
   const vpValue = await defs[5].execute({ width: 375, height: 812 })

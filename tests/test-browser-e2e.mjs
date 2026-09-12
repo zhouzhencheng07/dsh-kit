@@ -217,6 +217,18 @@ try {
   assert.match(refClick.snapshot, /内容不能为空/)
   ok(`act ref 回填点击（${refMatch[1]}）一次到位`)
 
+  // ── 快照范围与上限：大页面只看一块（此前只能整页顶格截断）──
+  const scoped = await service.snapshot(null, { scope: '#hov' })
+  assert.equal(scoped.ok, true, `范围快照失败：${scoped.error}`)
+  assert.match(scoped.snapshot, /悬停区/)
+  assert.ok(!scoped.snapshot.includes('待办清单'), `范围外内容不该出现：${scoped.snapshot}`)
+  const smallCap = await service.snapshot(null, { maxChars: 60 })
+  assert.ok(smallCap.snapshot.length < 400 && smallCap.snapshot.includes('已截断'), `小上限应截断：${smallCap.snapshot.length}`)
+  const badScope = await service.snapshot(null, { scope: '#nope-not-here' })
+  assert.equal(badScope.ok, false)
+  assert.match(badScope.error, /范围无匹配/)
+  ok('快照 scope/maxChars 生效、坏选择器给可恢复错误')
+
   const hov = await service.act({ action: 'hover', text: '悬停区' })
   assert.equal(hov.ok, true, `hover 失败：${hov.error}`)
   const hovStatus = await service.evaluate(`document.getElementById('status').textContent`)
