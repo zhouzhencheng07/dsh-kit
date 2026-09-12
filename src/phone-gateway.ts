@@ -280,8 +280,13 @@ export function phoneAssistScript({ remoteView, pickerLocked, presentedLocked }:
     'try{if(document.querySelector(\'[role="menu"],[role="listbox"],[role="dialog"]\'))return true;}catch(e){}' +
     'var a=document.activeElement;return !!(a&&a.getAttribute&&a.getAttribute("aria-expanded")==="true");}' +
     'function clearTouchState(el,x,y){' +
+    // 落点要发**不止一处**：点按后浮上来的提示气泡可能正好压在按钮上，这时按坐标取到的是气泡，
+    // 事件发给它不会经过按钮 —— 按钮的悬停态就留着，下一次点按又点在气泡上（实测到的"点了没反应"
+    // 就是这个链）。所以原目标、坐标命中元素、以及后者的可交互祖先各发一次（各自还在文档里才发）。
     'var at=null;try{if(x!==undefined&&x!==null)at=document.elementFromPoint(x,y);}catch(e){}' +
-    'leave(at||el);' +
+    'leave(el);' +
+    'if(at&&at!==el)leave(at);' +
+    'try{var anc=at&&at.closest?at.closest(\'button,[role="button"],[role="menuitem"]\'):null;if(anc&&anc!==at&&anc!==el)leave(anc);}catch(e){}' +
     'if(popupOpen())return;' +
     'var a=document.activeElement;' +
     'if(a&&a!==document.body){' +
@@ -309,7 +314,10 @@ export function phoneAssistScript({ remoteView, pickerLocked, presentedLocked }:
     // 底下被换掉）还是"点到了但没人管"（locked / 组件没接线）。批量 POST 回宿主，电脑端读。
     'function tapDesc(el){if(!el)return "?";var s="";' +
     'try{s=(el.getAttribute&&(el.getAttribute("aria-label")||el.getAttribute("title")))||el.textContent||"";}catch(e){}' +
-    'return String(el.tagName||"?")+"|"+String(s).replace(/\\s+/g," ").trim().slice(0,28);}' +
+    'var cls="";try{var c=el.className;cls=String(c&&c.baseVal!==undefined?c.baseVal:c||"").split(" ")[0].slice(0,16);}catch(e){}' +
+    'var btn="";try{var b=el.closest&&el.closest(\'button,[role="button"],[role="menuitem"]\');btn=b?String(b.getAttribute("aria-label")||(b.textContent||"").trim()).slice(0,14):"";}catch(e){}' +
+    'var tip="";try{tip=el.closest&&el.closest(\'[role="tooltip"]\')?"TIP":"";}catch(e){}' +
+    'return String(el.tagName||"?")+"|"+cls+"|"+tip+(btn?"|in:"+btn:"")+"|"+String(s).replace(/\\s+/g," ").trim().slice(0,18);}' +
     'function tapSend(list){try{fetch(D.diag,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(list),keepalive:true}).catch(function(){});}catch(e){}}' +
     'function armTapDiag(){' +
     'var t0=Date.now(),buf=[],pend=null;' +
