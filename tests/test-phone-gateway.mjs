@@ -210,6 +210,11 @@ try {
   check('HTML 页注入了远程视图辅助脚本', page.body.includes('dismissNotice') && page.body.includes('选择打开方式') && page.body.includes('中打开工作目录') && page.body.includes('添加工作区') && page.body.includes('打开配置文件'))
   // 官方右侧边栏开始页的「工作区文件」胶囊（kit 自己那份文件树才是手机端用的）
   check('官方「工作区文件」入口入列置灰', page.body.includes('data-sidebar-right-guide-entry=\\"files\\"'))
+  // 对话尾部交付卡片（PresentedFileCard）：整卡置灰——官方侧边栏预览手机上看不了，
+  // 下拉里的「用默认应用打开 / 打开所在文件夹」本就在电脑上执行；「本轮文件改动」chip 行
+  // 的行容器叫 data-presented-files-row（复数，与卡片同源属性只差单复数），不能误锁
+  check('交付卡片整卡入列、不误伤 chip 行', page.body.includes('[data-presented-file]') && !page.body.includes('data-presented-files-row'))
+  check('交付卡片下拉的宿主动作有文本兜底（菜单走 portal，卡片选择器够不到）', page.body.includes('用默认应用打开') && page.body.includes('打开所在文件夹'))
   // 「选择工作区」是工作区切换 chip（aria-label 恒定，选中的工作区名只在文本里），锁了就没法切工作区
   check('不锁「选择工作区」chip（只能切不能新增）', !page.body.includes('选择工作区') && !page.body.includes('Select workspace'))
   check('锁的方式是置灰 + 点击提示（不是 display:none）', page.body.includes('opacity:.45!important') && !page.body.includes('display:none!important'))
