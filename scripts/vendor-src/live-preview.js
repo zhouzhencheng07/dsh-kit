@@ -14,17 +14,6 @@ const EMPH_CLASS = {
   StrongEmphasis: "dshk-lp-strong",
   Strikethrough: "dshk-lp-strike",
 };
-// callout 类型 → 调色键（亮色兜底；暗色由宿主 CSS 变量接管）
-const CALLOUT_TYPES = {
-  note: "blue", info: "blue", todo: "blue", abstract: "blue", summary: "blue", tldr: "blue",
-  tip: "teal", hint: "teal", important: "teal",
-  success: "green", check: "green", done: "green",
-  question: "orange", help: "orange", faq: "orange", warning: "orange",
-  caution: "orange", attention: "orange",
-  danger: "red", error: "red", failure: "red", fail: "red", missing: "red", bug: "red",
-  example: "purple", quote: "gray", cite: "gray", fold: "gray",
-};
-
 const replace = (spec) => Decoration.replace(spec);
 const mark = (cls, attrs) => Decoration.mark(attrs ? { class: cls, ...attrs } : { class: cls });
 
@@ -71,21 +60,6 @@ class HrWidget extends WidgetType {
   }
 }
 const HR = new HrWidget();
-
-class BadgeWidget extends WidgetType {
-  constructor(colorKey, label) {
-    super();
-    this.colorKey = colorKey;
-    this.label = label;
-  }
-  eq(other) { return other.label === this.label; }
-  toDOM() {
-    const b = document.createElement("span");
-    b.className = `dshk-lp-badge dshk-lp-bc-${this.colorKey}`;
-    b.textContent = this.label;
-    return b;
-  }
-}
 
 class ImgWidget extends WidgetType {
   constructor(src, title) {
@@ -375,28 +349,10 @@ function buildDeco(state, handlers) {
         return;
       }
       if (name === "Blockquote") {
-        // callout 探测：首行 `[!类型] 标题`（折叠 +/- 标记认但不做折叠语义）
-        const firstLine = doc.lineAt(node.from);
-        const probe = doc.sliceString(firstLine.from, Math.min(firstLine.to, firstLine.from + 120));
-        const cm = /^\s*>\s*\[!([A-Za-z][\w-]*)\][+-]?\s?/.exec(probe);
-        const typeName = cm ? cm[1].toLowerCase() : null;
-        const colorKey = typeName ? CALLOUT_TYPES[typeName] ?? "blue" : null;
+        // 引用整块逐行铺左条灰样式
         const first = doc.lineAt(node.from).number;
         const last = doc.lineAt(node.to).number;
-        // 阅读态 callout 是整卡底色——每行都铺类型色（首行带 badge，其余同底色），
-        // 纯引用维持左条灰样式
-        for (let n = first; n <= last; n++) {
-          addLine(doc.line(n).from, colorKey ? "dshk-lp-callout" : "dshk-lp-quote");
-          if (colorKey) addLine(doc.line(n).from, `dshk-lp-co-${colorKey}`);
-        }
-        if (cm && !selHit(sel, firstLine.from, firstLine.to)) {
-          const markStart = firstLine.from + cm.index + cm[0].indexOf("[!");
-          const markEnd = markStart + cm[1].length + 2;
-          repl.push({ from: markStart, to: markEnd, deco: replace({ widget: new BadgeWidget(colorKey, typeName) }) });
-          if (markEnd < firstLine.to) {
-            marks.push({ from: markEnd, to: firstLine.to, deco: mark("dshk-lp-co-title") });
-          }
-        }
+        for (let n = first; n <= last; n++) addLine(doc.line(n).from, "dshk-lp-quote");
         stack.push({ name });
         return;
       }
@@ -589,7 +545,7 @@ function buildDeco(state, handlers) {
 
   // ── 表格扫描：顶层级管道表（表头+分隔行+行体）整块换成真表格 widget（阅读态
   // 同款），点击单元格光标落入对应源码位置（表格现形管道行可编辑）；光标在表
-  // 内时显示源码。引号前缀行（callout 内表格）不匹配，保持源码 ──
+  // 内时显示源码。引号前缀行（引用内表格）不匹配，保持源码 ──
   {
     let n = 1;
     while (n <= doc.lines) {
@@ -662,8 +618,7 @@ function buildDeco(state, handlers) {
   }
 
   // ── 出集：replace 贪心去重叠（RangeSet 只禁 replace 相互重叠，mark/line 随意）。
-  // 同起点长者优先：callout 徽章等整体替换要压过语法树里 `[!x]` 被当成引用
-  // 链接解析出的 1 字符 LinkMark 隐藏 ──
+  // 同起点长者优先：整块替换要压过同位置更短的隐藏装饰 ──
   repl.sort((a, b) => a.from - b.from || b.to - a.to);
   const acc = [];
   let lastEnd = -1;
@@ -692,26 +647,6 @@ function buildDeco(state, handlers) {
 // 颜色一律 var(--dshk-lp-*, 亮色兜底)：暗色由宿主在 body[data-ds-dark-theme]
 // 下覆盖同名变量，vendor 侧不用关心主题切换。
 const mono = "var(--dshk-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace)";
-const CALLOUT_RGB = {
-  blue: ["#0969da", "rgba(9,105,218,0.10)"],
-  teal: ["#0e8a8a", "rgba(14,138,138,0.10)"],
-  green: ["#1a7f37", "rgba(26,127,55,0.10)"],
-  orange: ["#bc4c00", "rgba(188,76,0,0.10)"],
-  red: ["#cf222e", "rgba(207,34,46,0.10)"],
-  purple: ["#8250df", "rgba(130,80,223,0.10)"],
-  gray: ["#6e7781", "rgba(110,119,129,0.12)"],
-};
-const calloutTheme = {};
-for (const key of Object.keys(CALLOUT_RGB)) {
-  const [fg, bg] = CALLOUT_RGB[key];
-  calloutTheme[`.dshk-lp-co-${key}`] = {
-    borderLeftColor: `var(--dshk-lp-co-${key}, ${fg})`,
-    backgroundColor: `var(--dshk-lp-co-${key}-bg, ${bg})`,
-  };
-  calloutTheme[`.dshk-lp-bc-${key}`] = {
-    backgroundColor: `var(--dshk-lp-co-${key}, ${fg})`,
-  };
-}
 const lpTheme = EditorView.theme({
   ".dshk-lp-h1": { fontSize: "1.55em", fontWeight: "700", lineHeight: "1.45", paddingTop: "7px" },
   ".dshk-lp-h2": { fontSize: "1.32em", fontWeight: "700", lineHeight: "1.45", paddingTop: "6px" },
@@ -734,20 +669,6 @@ const lpTheme = EditorView.theme({
   ".dshk-lp-quote": {
     borderLeft: "3px solid var(--dshk-lp-bar, #d0d7de)",
     paddingLeft: "8px",
-  },
-  ".dshk-lp-callout": {
-    borderLeft: "3px solid var(--dshk-lp-bar, #d0d7de)",
-    paddingLeft: "8px",
-  },
-  ...calloutTheme,
-  ".dshk-lp-co-title": { fontWeight: "700" },
-  ".dshk-lp-badge": {
-    fontSize: "0.78em",
-    fontWeight: "700",
-    padding: "1px 8px",
-    borderRadius: "999px",
-    color: "#fff",
-    marginRight: "6px",
   },
   ".dshk-lp-link": {
     color: "var(--dshk-tok-link, #0969da)",
