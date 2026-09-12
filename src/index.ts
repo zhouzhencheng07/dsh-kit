@@ -2542,45 +2542,6 @@ export async function apply(ctx: KitCtx): Promise<void> {
           phoneJson(res, 200, { links: phoneLinks(), fingerprint: phoneGw.fingerprint() })
         },
       })
-      // 远程视图点按诊断（临时排障用，定位完删）：手机侧注入脚本 POST 上报点按序列，电脑端 GET 读回。
-      // 内存环形缓冲、不落盘；走网关链路时 Origin 已被剥掉，故同源校验按"缺省放行"语义生效。
-      const tapDiag: Array<Record<string, unknown>> = []
-      const disposeTapDiag = webCtx.webServer.register({
-        kind: 'exact',
-        path: '/dsh-kit/phone/tapdiag',
-        handler: (req, res) => {
-          const origin = req.headers.origin
-          if (typeof origin === 'string' && origin !== '' && !sameOrigin(req)) {
-            phoneJson(res, 403, { error: 'cross-origin denied' })
-            return
-          }
-          if (req.method === 'GET') {
-            phoneJson(res, 200, { entries: tapDiag })
-            return
-          }
-          if (req.method !== 'POST') {
-            phoneJson(res, 405, { error: 'method not allowed' })
-            return
-          }
-          let raw = ''
-          req.on('data', (c) => { raw += c.toString('utf8') })
-          req.on('end', () => {
-            try {
-              const list = JSON.parse(raw || '[]')
-              if (Array.isArray(list)) {
-                for (const one of list.slice(0, 40)) {
-                  tapDiag.push(one as Record<string, unknown>)
-                  if (tapDiag.length > 240) tapDiag.shift()
-                }
-              }
-            } catch {
-              // 诊断数据坏了不报错：它只是排障用的旁路
-            }
-            phoneJson(res, 200, { ok: true, total: tapDiag.length })
-          })
-        },
-      })
-      void disposeTapDiag
       // 手动轮换端点：页内「刷新链接」按钮（+ 脚本/异常场景）作废旧链接用。
       // 启停不再自动轮换——见 setGatewayEnabled。
       const disposePhoneRotate = webCtx.webServer.register({
