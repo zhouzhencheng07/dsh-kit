@@ -1,6 +1,6 @@
 // dsh-kit 浏览器纯逻辑单测（不启浏览器）：
 //   1) browser.js 纯函数：capText / pngSize / normalizeLocatorArgs / normalizeActArgs
-//   2) browser-tools.js：defineTool mock 下 6 个工具的 schema/render/execute 投影
+//   2) browser-tools.js：defineTool mock 下 7 个工具的 schema/render/execute 投影
 // 运行：node tests/test-browser-tools.mjs
 import assert from 'node:assert/strict'
 import { pathToFileURL, fileURLToPath } from 'node:url'
@@ -46,6 +46,11 @@ const ok = (name) => {
   assert.deepEqual(normalizeLocatorArgs({ ref: 'e12' }), { kind: 'ref', ref: 'e12' })
   assert.deepEqual(normalizeLocatorArgs({ ref: '[ref=e7]' }), { kind: 'ref', ref: 'e7' })
   assert.deepEqual(normalizeLocatorArgs({ ref: 'ref=e3' }), { kind: 'ref', ref: 'e3' })
+  // 帧内元素：playwright 印 f<帧序>e<n>，必须原样放行（只收裸 eN 会让 iframe 里的元素全点不动）
+  assert.deepEqual(normalizeLocatorArgs({ ref: 'f7e12' }), { kind: 'ref', ref: 'f7e12' })
+  assert.deepEqual(normalizeLocatorArgs({ ref: '[ref=f7e12]' }), { kind: 'ref', ref: 'f7e12' })
+  assert.deepEqual(normalizeLocatorArgs({ ref: 'ref=f7e12' }), { kind: 'ref', ref: 'f7e12' })
+  assert.ok(normalizeLocatorArgs({ ref: 'f7x12' }).error) // 帧序后必须跟 eN
   assert.ok(normalizeLocatorArgs({ ref: 'button' }).error) // 非 eN 形态
   assert.deepEqual(normalizeLocatorArgs({ ref: 'e1', role: 'button' }), { kind: 'ref', ref: 'e1' }) // ref 优先
   assert.deepEqual(normalizeLocatorArgs({ role: 'button', name: '添加' }), { kind: 'role', role: 'button', name: '添加' })
@@ -99,14 +104,28 @@ const ok = (name) => {
       calls.push(['setViewport', p])
       return { ok: true, tabId: 1, url: 'u', viewport: { width: p.width, height: p.height } }
     },
+    listPages: async () => ({
+      ok: true,
+      pages: [{ tabId: 1, url: 'u', title: 'T', active: true, viewed: true }],
+      activeId: 1,
+      viewId: 1,
+    }),
+    activatePage: async (tabId) => {
+      calls.push(['activatePage', tabId])
+      return { ok: true }
+    },
+    closePage: async (tabId) => {
+      calls.push(['closePage', tabId])
+      return { ok: true }
+    },
   }
   const defs = buildBrowserTools({ defineTool, service, ctx: { get: () => undefined }, isDisabled: () => false })
-  assert.equal(defs.length, 6)
+  assert.equal(defs.length, 7)
   assert.deepEqual(
     defs.map((d) => d.name),
-    ['browser_navigate', 'browser_snapshot', 'browser_act', 'browser_eval', 'browser_screenshot', 'browser_viewport'],
+    ['browser_navigate', 'browser_snapshot', 'browser_act', 'browser_eval', 'browser_screenshot', 'browser_viewport', 'browser_tabs'],
   )
-  ok('6 个工具按序注册')
+  ok('7 个工具按序注册')
 
   // act：ref 定位透传 service；无定位且非 press/scroll → 报错；scroll 无定位放行
   await defs[2].execute({ action: 'click', ref: 'e12' })
@@ -123,6 +142,21 @@ const ok = (name) => {
   assert.deepEqual(vpValue.viewport, { width: 375, height: 812 })
   assert.match(defs[5].output.render({}, vpValue)[0].text, /375×812/)
   ok('viewport execute+render')
+
+  // tabs：list（含活动/观察标记）→ activate → close → 缺参报错
+  const tabsList = await defs[6].execute({})
+  assert.equal(tabsList.action, 'list')
+  assert.equal(tabsList.pages.length, 1)
+  assert.match(defs[6].output.render({}, tabsList)[0].text, /tab=1 \[活动\] \[观察\] 「T」 u/)
+  const tabsAct = await defs[6].execute({ action: 'activate', tabId: 1 })
+  assert.equal(tabsAct.url, 'u')
+  assert.match(defs[6].output.render({}, tabsAct)[0].text, /已切到 tab=1 「T」/)
+  const tabsClose = await defs[6].execute({ action: 'close', tabId: 1 })
+  assert.match(defs[6].output.render({}, tabsClose)[0].text, /已关闭 tab=1/)
+  await assert.rejects(() => defs[6].execute({ action: 'close' }), /需要 tabId/)
+  assert.equal(calls.filter((c) => c[0] === 'activatePage').length, 1)
+  assert.equal(calls.filter((c) => c[0] === 'closePage').length, 1)
+  ok('tabs list/activate/close 与缺参报错')
 
   // navigate：execute → 返回值 + render 文本投影
   const navValue = await defs[0].execute({ url: 'http://x/' })

@@ -91,11 +91,15 @@ export function pngSize(buffer) {
 export function normalizeLocatorArgs(args) {
     const { role, name, text, selector, ref } = args ?? {};
     if (ref !== undefined && ref !== null && String(ref).trim() !== '') {
-        // 宽容收各写法：e12 / ref=e12 / [ref=e12]；核心形态 eN（playwright aria-ref 引擎的键）
+        // 宽容收各写法：e12 / f7e12 / ref=e12 / [ref=e12]。**帧内元素必须带 f<帧序>**：
+        // playwright 的 ariaSnapshot 只给主帧元素印裸 e12，iframe 里的元素印 f7e12，而它的
+        // aria-ref 引擎按 /^f(\d+)e\d+$/ 跳帧解析（coreBundle.js `_jumpToAriaRefFrameIfNeeded`）。
+        // 只放行裸 eN 会把「快照能看见、却一个都点不动」变成常态——DSH 自己的 GUI 就跑在
+        // iframe 里，整页 ref 全是 f 形态。
         const cleaned = String(ref).trim().replace(/^\[/, '').replace(/\]$/, '').replace(/^ref=/, '').trim();
-        if (/^e\d+$/.test(cleaned))
+        if (/^(?:f\d+)?e\d+$/.test(cleaned))
             return { kind: 'ref', ref: cleaned };
-        return { error: `ref 形如 e12（来自快照 [ref=eN]），收到：${String(ref).slice(0, 40)}` };
+        return { error: `ref 形如 e12 或 f7e12（照抄快照里的 [ref=…]），收到：${String(ref).slice(0, 40)}` };
     }
     if (selector !== undefined && selector !== null && String(selector).trim() !== '') {
         return { kind: 'selector', selector: String(selector).trim() };
