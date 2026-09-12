@@ -226,15 +226,15 @@ try {
   check('远程视图注入 ownsHost（设置通道走 host 持久化）', page.body.includes('ownsHost:true'))
   // 触屏 sticky hover/focus：点过的按钮会一直算"悬停 + 聚焦"，宿主 Tooltip 气泡就挂在屏幕上
   check(
-    '远程视图挂触屏清理（touchstart 记账 → click/touchcancel 后补两族离开事件；焦点那半弹出层在场时跳过；按坐标取活节点）',
+    '远程视图挂触屏清理（touchstart 记账 → click/touchcancel 后补两族离开事件；原目标+坐标命中+可交互祖先各发一次；焦点那半弹出层在场时跳过）',
     page.body.includes('applyLock();armTouchCleanup();armTapDiag();') &&
       page.body.includes('"touchstart",function(ev){') &&
       page.body.includes('"click",flush,true') &&
       page.body.includes('"touchcancel",flush,true') &&
-      page.body.includes('700') &&
+      page.body.includes('leave(el);if(at&&at!==el)leave(at);') &&
       page.body.includes('pointerout') &&
       page.body.includes('elementFromPoint') &&
-      page.body.includes('leave(at||el);if(popupOpen())return;') &&
+      page.body.includes('if(popupOpen())return;') &&
       page.body.includes('focusout'),
   )
   // 宿主 picker 是 browse（远程客户端在页面里就能列目录/建文件夹）→ 挑选入口不锁，「在应用中打开」照旧锁
