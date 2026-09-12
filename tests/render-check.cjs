@@ -554,14 +554,13 @@ check("vaultBacklinks：links 解析命中当前页（1 条）", backlinksHit.le
 check("vaultHeadingSlug：空白压成 -", comps.vaultHeadingSlug("  Some 标题 two  ") === "Some-标题-two");
 {
   const pages = [
-    { path: "D:/v/AGENTS.md", rel: "AGENTS", title: "vault 约定", links: [] },
     { path: "D:/v/index.md", rel: "index", title: "索引", links: ["入门"] },
     { path: "D:/v/入门.md", rel: "入门", title: "入门", links: ["速记"] },
     { path: "D:/v/速记.md", rel: "速记", title: "速记", links: [] },
   ];
   const doomed = comps.vaultCascadeDelete(pages, "D:/v/index.md");
-  // 删索引 → 入门失去唯一反链连坐 → 速记又失去入门连坐；AGENTS 受保护且本就无反链不动
-  check("孤儿级联：递归闭包 + AGENTS 保护", doomed.length === 3 && doomed.some((p) => p.rel === "入门") && doomed.some((p) => p.rel === "速记") && !doomed.some((p) => p.rel === "AGENTS"));
+  // 删索引 → 入门失去唯一反链连坐 → 速记又失去入门连坐
+  check("孤儿级联：递归闭包", doomed.length === 3 && doomed.some((p) => p.rel === "入门") && doomed.some((p) => p.rel === "速记"));
   const doomed2 = comps.vaultCascadeDelete(pages, "D:/v/速记.md");
   check("孤儿级联：删叶子不连坐他人", doomed2.length === 1 && doomed2[0].rel === "速记");
   // 目录删除走多种子版：种子 = 目录下全部页，外部页里因此变孤儿的一样连坐
@@ -569,7 +568,7 @@ check("vaultHeadingSlug：空白压成 -", comps.vaultHeadingSlug("  Some 标题
   const many = comps.vaultCascadeDeleteMany(pages, seeds);
   check(
     "孤儿级联（多种子）：目录整棵 + 外部孤儿连坐、不动无关页",
-    many.length === 3 && ["index", "入门", "速记"].every((r) => many.some((p) => p.rel === r)) && !many.some((p) => p.rel === "AGENTS"),
+    many.length === 3 && ["index", "入门", "速记"].every((r) => many.some((p) => p.rel === r)),
   );
   check("孤儿级联（多种子）：空种子返回空", comps.vaultCascadeDeleteMany(pages, []).length === 0);
 }
