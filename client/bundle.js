@@ -2380,7 +2380,7 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-cm-scope{--dshk-tok-keyword:#953800;--dshk-tok-string:#0a3069;--dshk-tok-comment:#697077;--dshk-tok-number:#0550ae;--dshk-tok-fn:#8250df;--dshk-tok-type:#0550ae;--dshk-tok-operator:#953800;--dshk-tok-meta:#6639ba;--dshk-tok-link:#0550ae;--dshk-tok-heading:#0550ae}
 body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-string:#a5d6ff;--dshk-tok-comment:#8b949e;--dshk-tok-number:#79c0ff;--dshk-tok-fn:#d2a8ff;--dshk-tok-type:#ffa657;--dshk-tok-operator:#ff7b72;--dshk-tok-meta:#79c0ff;--dshk-tok-link:#a5d6ff;--dshk-tok-heading:#f0883e}
 /* Live Preview 调色板（亮色兜底在 vendor 主题里，这里只补暗色） */
-body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:#30363d;--dshk-lp-co-blue:#58a6ff;--dshk-lp-co-blue-bg:rgba(88,166,255,.13);--dshk-lp-co-teal:#39c5cf;--dshk-lp-co-teal-bg:rgba(57,197,207,.12);--dshk-lp-co-green:#3fb950;--dshk-lp-co-green-bg:rgba(63,185,80,.13);--dshk-lp-co-orange:#e0823d;--dshk-lp-co-orange-bg:rgba(224,130,61,.13);--dshk-lp-co-red:#f85149;--dshk-lp-co-red-bg:rgba(248,81,73,.13);--dshk-lp-co-purple:#d2a8ff;--dshk-lp-co-purple-bg:rgba(210,168,255,.13);--dshk-lp-co-gray:#8b949e;--dshk-lp-co-gray-bg:rgba(139,148,158,.15)}
+body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:#30363d}
 .dshk-editarea.dshk-cm-host{min-height:280px}
 /* git 状态徽标与 diff 着色 */
 .dshk-gitbadge{flex:none;margin-left:auto;font-size:10px;line-height:14px;padding:0 5px;border-radius:6px;font-family:ui-monospace,Consolas,monospace;border:1px solid currentColor}
@@ -7863,7 +7863,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 布局「选库进入阅读」（用户定稿 2026-09-06）：左窄条 = 空间（顶层目录）+
     // 懒加载目录树；右 = 真·所见即所得编辑区（TipTap 富文本，vendor/richeditor
     // .bundle.js 的 window.DshRTE 工厂：md ↔ 富文本往返、[[wikilink]]/公式/
-    // 未知块 HTML 原样保留；提示卡节点已退役，只有历史的 [!fold] 打开时迁移）。
+    // 未知块 HTML 原样保留）。
     // 保存 = wangshu 同款自动保存（2s 防抖 + 切页 flush + Ctrl+S）走 vault 写
     // 端点 mtime CAS；盘上被外部修改时带 stash 覆盖（宿主先提交存档再写，本地
     // 赢，不弹冲突条），第二次再被抢写才退回冲突条。frontmatter 在编辑器外剥离

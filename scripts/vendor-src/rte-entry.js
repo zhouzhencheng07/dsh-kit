@@ -5,7 +5,7 @@
 //
 // 往返选型：@tiptap/markdown（官方，内建 marked lexer + 各扩展 parseMarkdown/
 // renderMarkdown 规格）。标准 md（标题/列表/表格/代码块/引用/行内样式）全部用
-// 官方规格；本文件只补 vault 约定的自定义语法（wikilink / 数学 / 折叠块，> [!] 仅剩旧语法迁移）
+// 官方规格；本文件只补 vault 约定的自定义语法（wikilink / 数学 / 折叠块）
 // 的 tokenizer + 双向规格，以及旧约定行内 HTML（<u>/<sup>/<sub>/<mark>/
 // <span style>) 的序列化覆写。未知块级 HTML 整块原样保留（rawBlock），绝不丢弃。
 //
@@ -353,84 +353,6 @@ const MathBlock = Node.create({
   },
   addNodeView() {
     return (props) => mathNodeView(props, true);
-  },
-});
-
-// ─── Callout 遗留迁移（> [!类型] 行；[!fold] = 折叠块，`-` 旗标 = 收起） ──
-// 提示框卡片能力已移除（/ 菜单不再提供）。本扩展只剩解析职责：历史折叠页的
-// [!fold] 语法解析即迁移 dshkDetails 双槽（存盘落 <details> 新格式）；其余类型
-// 降级为普通引用块，标记行原样保留为文字（无内容损失，二次解析稳定）
-const CalloutLegacy = Node.create({
-  name: "dshkCalloutLegacy",
-  group: "block",
-  markdownTokenName: "dshkCallout",
-  addOptions() {
-    return { ctx: null };
-  },
-  markdownTokenizer: {
-    name: "dshkCallout",
-    level: "block",
-    start(src) {
-      const m = /^[ \t]*>[ \t]*\[!/m.exec(src);
-      return m ? m.index : -1;
-    },
-    tokenize(src, _tokens, helper) {
-      const lines = src.split("\n");
-      const consumed = [];
-      const stripped = [];
-      for (const line of lines) {
-        const bm = /^[ \t]*>[ ]?(.*)$/.exec(line);
-        if (!bm) break;
-        consumed.push(line);
-        stripped.push(bm[1] ?? "");
-      }
-      if (consumed.length === 0) return undefined;
-      const first = stripped[0] ?? "";
-      const mm = /^\[!([\w-]+)\]([+-])?[ \t]?(.*)$/.exec(first);
-      if (!mm) return undefined;
-      const body = stripped
-        .slice(1)
-        .join("\n")
-        .replace(/^\n+/, "")
-        .replace(/[ \t]+$/, "");
-      const tokens = body === "" ? [] : helper.blockTokens(`${body}\n`);
-      return {
-        type: "dshkCallout",
-        raw: consumed.join("\n"),
-        cotype: String(mm[1] ?? "info").toLowerCase(),
-        flag: mm[2] ?? "",
-        title: String(mm[3] ?? "").trim(),
-        tokens,
-      };
-    },
-  },
-  parseMarkdown(token, helpers) {
-    // [!fold] → dshkDetails 双槽（标题/正文都是任意块内容）。标记行标题只有一行
-    // 纯文本 → 标题槽首段，下次保存落新格式
-    if (String(token.cotype ?? "") === "fold") {
-      const kids = (token.tokens ?? []).length > 0 ? helpers.parseBlockChildren(token.tokens) : [{ type: "paragraph", content: [] }];
-      const titleText = String(token.title ?? "").trim();
-      return {
-        type: "dshkDetails",
-        attrs: { open: token.flag !== "-" },
-        content: [
-          {
-            type: "dshkDetailsTitle",
-            content: [titleText === ""
-              ? { type: "paragraph", content: [] }
-              : { type: "paragraph", content: [{ type: "text", text: titleText }] }],
-          },
-          { type: "dshkDetailsBody", content: kids },
-        ],
-      };
-    }
-    // 其余类型：普通引用块，标记行保留为文字段（内容无损，往返稳定）
-    const marker = `[!${token.cotype ?? "info"}]${token.flag === "-" ? "-" : ""}${token.title !== "" ? ` ${token.title}` : ""}`;
-    const kids = (token.tokens ?? []).length > 0 ? helpers.parseBlockChildren(token.tokens) : [];
-    return {
-      type: "blockquote",
-      content: [{ type: "paragraph", content: [{ type: "text", text: marker }] }, ...kids],
-    };
   },
 });
 
@@ -951,7 +873,6 @@ function buildExtensions(ctx = {}) {
     Gapcursor, Dropcursor,
     WikiLink.configure({ ctx }),
     MathInline, MathBlock,
-    CalloutLegacy,
     Details, DetailsTitle, DetailsBody,
     RawBlock,
   ];
