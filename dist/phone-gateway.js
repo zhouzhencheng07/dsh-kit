@@ -178,11 +178,13 @@ const LOCK_HINT = '请在电脑端操作';
  *    报 'settings are unavailable in this browser'。网关口本就是令牌授权的全权入口
  *    （持链接者已能借 agent 在宿主上执行任意命令），补这个标记让远程端的设置读写与
  *    宿主一致；随之出现的还有「打开配置文件」这类本地面板（已在 ② 里锁掉）。
- * ④ **不做触屏 hover/focus 清理**：手机点一下之后，浏览器把那处当作"鼠标停在那"、焦点也
- *    留在按钮上，宿主的悬停提示/预览会粘到下次点按为止。曾用"touchend 后补发合成的
- *    pointerout/mouseout + 有条件的 focusout"清它，但那是在替浏览器撒谎：合成 focusout
- *    会关掉宿主"失焦即收"的弹出层（模型选择器一点开就被收），而它又覆盖不了全部悬停模式
- *    （宿主多数悬停面走 onPointerEnter/Leave）。宁可让气泡多留一会儿，也不再伪造事件。
+ * ④ 触屏 hover/focus 清理（见 clearTouchState）：手机点一下之后，浏览器把那处当作"鼠标
+ *    停在那"、焦点也留在按钮上，宿主的悬停提示/预览会粘到下次点按为止。补发的是**真实的
+ *    反向事实**（"指针离开了"），只是在替手机补齐浏览器不会自己发的那条；焦点那一半是
+ *    合成事件，会关掉宿主"失焦即收"的弹出层，所以弹出层在场时跳过。
+ *    两处"漏触发"要盯：点按会让被点节点重渲染（侧栏收起就换节点），事件发给脱离文档的
+ *    节点不会冒泡到 React 根——所以清理时按坐标重新取命中元素；手势被判成滚动时浏览器
+ *    只发 touchcancel 不发 touchend，所以两个都挂。
  */
 export function phoneAssistScript({ remoteView, pickerLocked, presentedLocked }) {
     const sels = [...HOST_ONLY_LOCKED, ...(pickerLocked ? PICKER_LOCKED : []), ...(presentedLocked ? PRESENTED_LOCKED : [])];
@@ -228,16 +230,41 @@ export function phoneAssistScript({ remoteView, pickerLocked, presentedLocked })
         'function locked(target){' +
         'for(var i=0;i<D.sels.length;i++)if(target.closest&&target.closest(D.sels[i]))return true;' +
         'return textLocked(target);}' +
-        // 不做触屏 hover/focus 清理：手机点一下，浏览器会把触点当"鼠标停在那"、焦点也留在按钮上，
-        // 宿主的悬停提示/预览会粘到下次点按为止。曾用"touchend 后补发 pointerout+mouseout（弹出层
-        // 不在场时再补一发 focusout）"清它，但那是在替浏览器撒谎——合成 focusout 会关掉宿主
-        // "失焦即收"的弹出层（模型选择器一点开就被收），而它又覆盖不了全部悬停面（宿主多数走
-        // onPointerEnter/Leave）。宁可让气泡多留一会儿，也不再伪造事件。
+        // 触屏 hover/focus 清理。三件事都得做对，少一件就是"偶尔漏了触发"：
+        // ① 两族都补：宿主粘滞面多为 onPointerEnter/Leave（轮次导航预览、轨迹悬停卡、侧边栏
+        //    滚动条…），React 不会用 mouse 事件合成 onPointerLeave，只补 mouseout 等于没做。
+        // ② 落点要活：点按会让被点节点重渲染（侧栏收起就换节点），事件发给脱离文档的节点不会
+        //    冒泡到 React 根——按坐标重新取一次命中元素，保证事件落在还在文档里的节点上。
+        // ③ 焦点只在没有弹出层时补：宿主的模型选择器把 onBlur 当关闭信号且只放过 relatedTarget
+        //    在根/菜单内的情形，合成事件没有 relatedTarget，点开就被收。"指针离开"与弹出层无关，
+        //    照发（它不会关掉任何菜单）。
+        'function leave(el){' +
+        'if(!el||el.isConnected===false)return;' +
+        'try{el.dispatchEvent(new PointerEvent("pointerout",{bubbles:true,relatedTarget:document.body}));}catch(e){}' +
+        'try{el.dispatchEvent(new MouseEvent("mouseout",{bubbles:true,relatedTarget:document.body}));}catch(e){}}' +
+        'function popupOpen(){' +
+        'try{if(document.querySelector(\'[role="menu"],[role="listbox"],[role="dialog"]\'))return true;}catch(e){}' +
+        'var a=document.activeElement;return !!(a&&a.getAttribute&&a.getAttribute("aria-expanded")==="true");}' +
+        'function clearTouchState(el,x,y){' +
+        'var at=null;try{if(x!==undefined&&x!==null)at=document.elementFromPoint(x,y);}catch(e){}' +
+        'leave(at||el);' +
+        'if(popupOpen())return;' +
+        'var a=document.activeElement;' +
+        'if(a&&a!==document.body){' +
+        'var t=a.tagName,ed=a.isContentEditable||t==="INPUT"||t==="TEXTAREA"||t==="SELECT";' +
+        'if(!ed)try{a.dispatchEvent(new FocusEvent("focusout",{bubbles:true}));}catch(e){}}}' +
+        'function armTouchCleanup(){' +
+        'if(!((navigator.maxTouchPoints||0)>0||"ontouchstart" in window))return;' +
+        'function onEnd(ev){var el=ev.target,t=ev.changedTouches&&ev.changedTouches[0];' +
+        'var x=t?t.clientX:null,y=t?t.clientY:null;' +
+        'setTimeout(function(){clearTouchState(el,x,y);},0);}' +
+        'document.addEventListener("touchend",onEnd,true);' +
+        'document.addEventListener("touchcancel",onEnd,true);}' +
         'function dismissNotice(){var d=document.querySelector(\'[role="dialog"]\');if(!d)return false;' +
         'var b=d.querySelectorAll("button");' +
         'for(var i=0;i<b.length;i++){if((b[i].textContent||"").indexOf("继续")!==-1){b[i].click();return true;}}' +
         'return false;}' +
-        'function boot(){applyLock();' +
+        'function boot(){applyLock();' + (remoteView ? 'armTouchCleanup();' : '') +
         'if(D.sels.length||res.length){' +
         'document.addEventListener("click",function(ev){' +
         // 每次点击后补两次置灰：弹出菜单/对话框是刚挂上来的，2s 轮询之外再抢一拍
