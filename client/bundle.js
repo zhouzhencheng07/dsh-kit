@@ -7844,7 +7844,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     /** 孤儿级联（用户定稿：删除时同步删掉因此变孤儿的页，git 单提交可整体撤回）。
      *  返回应删页面清单：种子页 + 「全部反链都在删除集内」的递归闭包；删除前
-     *  就已零入链的页不动（那是既有状态，不连坐）；根 AGENTS.md 约定文件受保护。
+     *  就已零入链的页不动（那是既有状态，不连坐）。
      *  目录删除用多种子版：目录在索引里没有对应页，种子是它下面的全部页 */
     function vaultCascadeDeleteMany(pages, seedPaths) {
       const linkers = new Map(); // 页面 path → 引用它的页面 path 集合
@@ -7877,7 +7877,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           }
         }
       }
-      return pages.filter((p) => doomed.has(p.path) && p.rel.toUpperCase() !== "AGENTS");
+      return pages.filter((p) => doomed.has(p.path));
     }
 
     /** 单页级联（多种子版的特例）：目标页不存在时返回空清单 */
