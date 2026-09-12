@@ -640,33 +640,44 @@ window.__ModuleLoader__.load({
     }
 
     /** document capture：开启配置后接管官方对话区文件打开按钮的点击。
-     *  两种形态：① markdown 内联代码与「产物文件」chips → button[title=路径]；
+     *  三种形态：① markdown 内联代码与「本轮文件改动」chips → button[title=路径]；
      *  ② read/write/edit 工具行（ui-tool ToolRow）→ button[class*="_fileLink"]，
      *     无 title，按钮文本即工具 path/file_path 参数按 cwd 相对化的路径
-     *     （relativizeToCwd 剥掉的前缀由 resolveChatOpenPath 拼回，语义还原）。
+     *     （relativizeToCwd 剥掉的前缀由 resolveChatOpenPath 拼回，语义还原）；
+     *  ③ 交付卡（dsh-client-ui-deliverables 的 PresentedFileCard）→ 路径在覆盖
+     *     整卡的 .cardPreview 的 title 上。
      *  vault 内路径优先路由到知识库标签（M4 会话→笔记），见尾部分支。 */
     function onChatOpenFileClick(ev) {
       if (!ev.isTrusted) return;
       const hook = chatPreviewHook;
       if (!hook || !(hook.ready || hook.vaultOn)) return;
       if (!(ev.target instanceof Element)) return;
-      const btn =
-        ev.target.closest("button[title]") || ev.target.closest('button[class*="_fileLink"]');
-      if (!btn) return;
       // 弹层控件（aria-haspopup）不是文件链接，放行官方：模型选择器触发钮的
       // title=模型名（如 opencode-go/omen-alpha，含分隔符无空格）会被路径判定
-      // 误吞，而 composer 就在对话 scrollBody 内部，位置判定挡不住它
-      if (btn.hasAttribute("aria-haspopup")) return;
+      // 误吞，而 composer 就在对话 scrollBody 内部，位置判定挡不住它；交付卡的
+      // 下拉键同理——那是宿主菜单，菜单项由网关注入脚本按项文本锁
+      if (ev.target.closest("[aria-haspopup]")) return;
+      // 三种路径载体：① markdown 内联代码与「本轮文件改动」chips → button[title]；
+      // ② read/write/edit 工具行（ui-tool ToolRow）→ button[class*="_fileLink"]，
+      //    无 title，按钮文本即工具 path/file_path 参数按 cwd 相对化的路径；
+      // ③ 交付卡 PresentedFileCard → 卡上「打开」按钮同样没有 title，路径挂在
+      //    覆盖整卡的 .cardPreview 上（官方已按 cwd 解析，是绝对路径）
+      const btn =
+        ev.target.closest("button[title]") || ev.target.closest('button[class*="_fileLink"]');
+      const card = ev.target.closest("[data-presented-file]");
+      const anchor = btn !== null ? btn : card !== null ? card.querySelector("button[title]") : null;
+      if (anchor === null) return;
       // 插件自身面板/入口的元素不拦（title 可能是路径的只有文件树行等）。
       // 但命中元素必须是真插件容器：面板打开时 body 挂的让位标记类
       // （dshk-pane-open/dshk-open）是全体对话的祖先，若不剔除，预览/终端
       // 一开拦截就整体失效（点击放行官方 → 系统默认程序打开）
-      const kitAnc = btn.closest('[class*="dshk-"]');
+      const kitAnc = anchor.closest('[class*="dshk-"]');
       if (kitAnc && kitAnc !== document.body && kitAnc !== document.documentElement) return;
-      // 仅官方对话滚动区内的文件按钮（markdown 提及、产物 chips、工具行都在其中）
-      if (!btn.closest('[class*="_scroll"]')) return;
-      let path = (btn.getAttribute("title") || "").trim();
-      if (path === "") {
+      // 仅官方对话滚动区内的文件按钮（markdown 提及、产物 chips、工具行、交付卡
+      // 都在其中）
+      if (!anchor.closest('[class*="_scroll"]')) return;
+      let path = (anchor.getAttribute("title") || "").trim();
+      if (path === "" && btn !== null) {
         // ② 工具行 fileLink：文本必为路径（参数解析不出路径时官方渲染 span）；
         // 家目录缩写形态（~/…）客户端还原不了宿主 home，放行官方
         path = (btn.textContent || "").trim();
@@ -966,6 +977,7 @@ window.__ModuleLoader__.load({
       gitTip: "git 变更",
       contentLoading: "加载中…",
       contentBinary: "二进制文件，无法预览",
+      fileDownload: "下载到本机",
       pdfNewTab: "在新标签页打开",
       pdfJump: "跳转到指定页",
       sheetRowCap: "表格较大，仅加载部分行列；悬停单元格可看完整内容",
@@ -1388,6 +1400,7 @@ window.__ModuleLoader__.load({
       editFail: "Save failed",
       contentLoading: "Loading…",
       contentBinary: "Binary file, preview unavailable",
+      fileDownload: "Download file",
       pdfNewTab: "Open in new tab",
       pdfJump: "Jump to page",
       sheetRowCap: "Large sheet: partially loaded; hover a cell for full content",
@@ -1798,8 +1811,8 @@ window.__ModuleLoader__.load({
     // ─────────── 样式 ───────────
     const UI_CSS = `
 .dshk-dock{position:fixed;left:0;width:100%;bottom:0;height:var(--dshk-dock-h,${DOCK_H});display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:1px solid var(--dsw-alias-border-l1);box-shadow:0 -6px 20px rgba(0,0,0,.14);z-index:800;pointer-events:auto}
-.dshk-head{flex:none;height:34px;display:flex;align-items:center;gap:8px;padding:0 6px 0 12px;color:var(--dsw-alias-label-secondary);font-size:12px;border-bottom:1px solid var(--dsw-alias-border-l1)}
-.dshk-title{font-weight:600;color:var(--dsw-alias-label-primary)}
+.dshk-head{flex:none;min-height:34px;display:flex;align-items:center;gap:8px;padding:0 6px 0 12px;color:var(--dsw-alias-label-secondary);font-size:12px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.dshk-title{font-weight:600;color:var(--dsw-alias-label-primary);flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
 .dshk-sub{color:var(--dsw-alias-label-tertiary);font-family:ui-monospace,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46%}
 .dshk-status{color:var(--dsw-alias-label-tertiary)}
 .dshk-spring{flex:1}
@@ -6052,6 +6065,27 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 ? jsxRuntime.jsx("span", { className: "dshk-vault-dirtydot", title: t("vaultUnsaved"), children: "●" })
                 : null,
               jsxRuntime.jsx("span", { className: "dshk-spring" }),
+              // 下载到本机：与预览/编辑无关（二进制文件签没有预览也照样能下），
+              // 故只有「文件已被删除」这一种情况不给。走 raw 的 dl 模式（服务端发
+              // attachment）——iOS 不认 <a download>，只有它能触发落盘
+              deleted !== true
+                ? jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-btn",
+                    title: t("fileDownload"),
+                    onClick: () => {
+                      // 临时锚点而不是 location 跳转：后者会把整个工作台换成下载
+                      // 响应，回不去（附件响应没有可渲染内容）
+                      const a = document.createElement("a");
+                      a.href = `/dsh-kit/raw?path=${encodeURIComponent(path)}&dl=1`;
+                      a.download = "";
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                    },
+                    children: "↓",
+                  })
+                : null,
               // PDF 页码指示器：挂标题栏固定区不遮内容；文档加载失败时不给槽位
               isPdf && state.phase === "ready" && !pdfError
                 ? jsxRuntime.jsx("span", { ref: pdfIndicatorRef })
@@ -10490,7 +10524,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 从这里取最新值（槽位注册发生在 effect，渲染期的 props 用模块变量桥接）
       shellShare.current = props;
       // 对话文件点击接管状态：面板门控（文件标签可用）与当前会话 cwd 每次渲染同步，
-      // 供模块级 capture 拦截器读取。ready=false（默认）时拦截器完全不介入。
+      // 供模块级 capture 拦截器读取。ready=false 时拦截器完全不介入（三项门控
+      // chatOpenFilePreview / fileTreeEnabled / sourceControlEnabled 默认都是开）
       chatPreviewHook = {
         ready: cfg.chatOpenFilePreview === true && (cfg.fileTreeEnabled || cfg.sourceControlEnabled),
         cwd,
@@ -11683,7 +11718,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // /dsh-kit/schedule/* 数据，与 session 无关。
       // 导航图标替换是点击驱动的轻量方案：打开设置/面板内切换都源于一次 click
       document.addEventListener("click", scheduleSkillIconSwap, true);
-      // 对话文件点击接管（默认关闭：设置卡 chatOpenFilePreview 开启才生效）
+      // 对话文件点击接管（设置卡 chatOpenFilePreview；默认开，且需文件树或源代码
+      // 管理至少开一个——门控见下方 chatPreviewHook.ready）
       document.addEventListener("click", onChatOpenFileClick, true);
       // 对话链接改投内置浏览器（默认开：设置卡 chatOpenLinkInBrowser）
       document.addEventListener("click", onChatLinkClick, true);

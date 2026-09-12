@@ -68,7 +68,7 @@ import { parseStatusBranch, parseLogRecords, parseBranchList, parseTrack } from 
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from "./phone-gateway.js";
 import { teeRegistryJobs, panelReadJobOutput } from "./job-tee.js";
 import { decodePreviewText } from "./text-decode.js";
-import { rawContentType, parseRangeHeader } from "./raw-file.js";
+import { rawContentType, rawDownloadContentType, rawDisposition, parseRangeHeader } from "./raw-file.js";
 import { multipartBoundary, parseMultipart, safeUploadName, dedupeName } from "./upload.js";
 import { BrowserService } from "./browser.js";
 import { loadToolsModule, buildBrowserTools } from "./browser-tools.js";
@@ -897,10 +897,11 @@ export async function apply(ctx) {
                     json(200, { path: file.path, mtimeMs: file.mtimeMs, size: file.size });
                 },
             });
-            // ── 原始字节端点：GET /dsh-kit/raw?path=<绝对文件> ──
+            // ── 原始字节端点：GET /dsh-kit/raw?path=<绝对文件>[&dl=1] ──
             // 二进制透传（PDF 预览用）：扩展名白名单给 content-type，完整流式返回
             // 不截断，支持 Range/206（pdf.js 渐进加载需要）。安全链与 /read 相同；
             // 手机网关是全路径反代，新路径无需单独登记。
+            // &dl=1 = 下载模式（文件签的「下载」按钮）：任意类型 + attachment，见下。
             const disposeRaw = webCtx.webServer.register({
                 kind: 'exact',
                 path: '/dsh-kit/raw',
@@ -924,21 +925,25 @@ export async function apply(ctx) {
                         fail(400, file.message);
                         return;
                     }
-                    const type = rawContentType(file.path);
+                    // 白名单是给「能不能在浏览器里渲染」收的口，下载不适用：dl 模式下任意
+                    // 类型都以 octet-stream 发 attachment 由浏览器落盘（iOS 不认 <a download>，
+                    // 只有 Content-Disposition 可靠）
+                    const download = url.searchParams.has('dl');
+                    const type = download ? rawDownloadContentType(file.path) : rawContentType(file.path);
                     if (type === null) {
                         fail(415, `不支持的类型：${path.extname(file.path) || '(无扩展名)'}`);
                         return;
                     }
                     const headers = {
                         'content-type': type,
-                        'cache-control': 'no-cache',
+                        'cache-control': download ? 'no-store' : 'no-cache',
                         'accept-ranges': 'bytes',
                         'x-content-type-options': 'nosniff',
                         // CSP sandbox：raw 内容以文档形态打开（新标签/iframe）时进不透明源、
                         // 脚本不执行——svg 内嵌脚本是存储型 XSS 面（img/fetch 取字节不受影响）
                         'content-security-policy': 'sandbox',
-                        // inline + 编码文件名：浏览器标题/另存名取这里，中文不乱码
-                        'content-disposition': `inline; filename*=UTF-8''${encodeURIComponent(path.basename(file.path))}`,
+                        // 编码文件名：浏览器标题 / 另存名取这里，中文不乱码
+                        'content-disposition': rawDisposition(download, path.basename(file.path)),
                     };
                     const range = parseRangeHeader(req.headers.range, file.size);
                     if (range === null) {
@@ -2369,6 +2374,15 @@ export async function apply(ctx) {
                     return true;
                 }
             };
+            // 交付卡要不要置灰：登录端能自己接管卡片点击时**不锁**——kit 客户端的 capture
+            // 拦截器会把卡点击改投自己的文件签（先看后下，下载按钮长在文件签上）；接管关着
+            // 时点击会落到「手机上看不了」的官方侧边栏预览，那才锁。判据与客户端
+            // chatPreviewHook.ready 同源：chatOpenFilePreview 开，且文件树或源代码管理至少
+            // 开一个（两处任一处改了必须同改，否则手机端会出现"锁着但没人接管"或反之）。
+            const lockPresentedCard = () => {
+                const s = readSettings();
+                return !(s.chatOpenFilePreview === true && (s.fileTreeEnabled !== false || s.sourceControlEnabled !== false));
+            };
             // dsh web ≥ v0.1.2-alpha.5 的浏览器鉴权：网关反代须自带签名会话 cookie，
             // 否则手机端访问 index 一律 401。密钥即 credentials 服务的
             // client-connection/browser-session 记录（与 dsh web 共享），b64url 解码回
@@ -2449,7 +2463,7 @@ export async function apply(ctx) {
                     }
                     try {
                         gwPort = phonePort();
-                        phoneGw = startPhoneGateway({ port: gwPort, upstreamPort: webCtx.webServer.port, log: warnLog, sessionSecret: () => dshSessionSecret, lockPickerEntries });
+                        phoneGw = startPhoneGateway({ port: gwPort, upstreamPort: webCtx.webServer.port, log: warnLog, sessionSecret: () => dshSessionSecret, lockPickerEntries, lockPresentedCard });
                         phoneGwError = null;
                     }
                     catch (error) {
