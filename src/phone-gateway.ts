@@ -260,7 +260,16 @@ export function phoneAssistScript({ remoteView, pickerLocked, presentedLocked }:
     // 让前端状态归位（React 的 onBlur/onMouseLeave 走 focusout/mouseout 委托），不动真实焦点；
     // 输入类控件（INPUT/TEXTAREA/contenteditable）跳过——提示气泡不长在它们身上，而合成的
     // focusout 会惊动正在编辑的输入面（草稿、@ 菜单都挂在这条链上）
+    //
+    // 但"不动真实焦点"还不够：宿主的模型选择器把 onBlur 当关闭信号，且判据是
+    // `relatedTarget 在根/菜单内才放过`——合成事件没有 relatedTarget（null），于是点开就被
+    // 这条清理立刻关掉（实测：点开 aria-expanded=true+menu 在场，派发一次 focusout 即回落 false）。
+    // 所以弹出层在场时整段跳过：清理的目的是清 sticky 提示气泡，而弹出层开着时那点气泡无关紧要。
+    'function popupOpen(){' +
+    'try{if(document.querySelector(\'[role="menu"],[role="listbox"],[role="dialog"]\'))return true;}catch(e){}' +
+    'var a=document.activeElement;return !!(a&&a.getAttribute&&a.getAttribute("aria-expanded")==="true");}' +
     'function clearTouchState(el){' +
+    'if(popupOpen())return;' +
     'var a=document.activeElement;' +
     'if(a&&a!==document.body){' +
     'var t=a.tagName,ed=a.isContentEditable||t==="INPUT"||t==="TEXTAREA"||t==="SELECT";' +
