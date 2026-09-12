@@ -94,8 +94,7 @@ is carried by the official right sidebar (five dock tabs), and the agent's
 
 **Host requirement**: dsh ≥ 0.1.5 (the official right-sidebar service
 `sidebar.right`). On older hosts the plugin still loads, but no workbench tabs
-appear and the toggles have nothing to open — upgrade dsh first. The plugin's
-former **self-drawn stage fallback was retired** (2026-09-11).
+appear and the toggles have nothing to open — upgrade dsh first.
 
 ## How it works
 
