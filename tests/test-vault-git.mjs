@@ -55,7 +55,7 @@ test('不接管已有仓库：已有 .git 则跳过 init 且不动用户自己�
 
 test('存量库升级：本模块写的 .gitignore 补 library/，误入索引的 library 摘出（文件不动）', async () => {
   const root = tmp()
-  // 复刻旧版形态：旧 .gitignore（无 library）+ library 已被提交进索引
+  // 复刻存量库形态：.gitignore（无 library）+ library 已在索引里
   fs.writeFileSync(path.join(root, '.gitignore'), 'attachments/\n*.tmp\n', 'utf8')
   fs.mkdirSync(path.join(root, 'library'))
   fs.writeFileSync(path.join(root, 'library', 'raw.md'), '原文\n', 'utf8')

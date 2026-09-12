@@ -1,4 +1,4 @@
-// Live Preview 装饰引擎（Obsidian 式：光标不在的构造隐语法现排版，光标进线
+// Live Preview 装饰引擎（光标不在的构造隐语法现排版，光标进线
 // 语法现形可编辑）。lezer-markdown 语法树驱动 + wikilink 正则补充扫描。
 // 关键约束：replace 装饰跨行时必须经 StateField 提供（ViewPlugin 路径会抛
 // 「replace line breaks may not be specified via plugins」）——所以全文档重算，

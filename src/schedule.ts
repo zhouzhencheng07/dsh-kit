@@ -5,13 +5,11 @@
 // 区间重复展开、统计、文本汇总。UI 组件在
 // client/bundle.js，agent 工具定义与端点注册在 index.ts——本文件不感知两者形状。
 //
-// 设计要点（schedule-design.md）：
+// 设计要点：
 // - 日程是强结构数据（起止/重复/位置），不是笔记——不做 md 不进 vault；
-//   记录形状照抄 wangshu schedule_events + timeEntries 内联，迁移可 1:1。
 // - kind 派生：有 start=事件（上网格），无 start=待办（due 可选）——不存显式
 //   kind 字段，避免两处真源。
-// - 时间全部存本地朴素串（无时区后缀），同格式字符串比较即时间序；跨时区
-//   迁移不在 v1 范围（个人单机使用）。
+// - 时间全部存本地朴素串（无时区后缀），同格式字符串比较即时间序。
 // - 重复展开只在宿主查询层做（expandOccurrences），客户端拿现成 occurrence
 //   渲染；v1 支持 daily/weekly/monthly × interval × days(weekly) × end。
 // - 计时全局单实例：timer/start 遇 running 先自动 stop（闭合已有条目再开新）。
@@ -145,7 +143,7 @@ export function addDays(dateStr: string, n: number): string {
   return dateStrOf(d)
 }
 
-/** ISO 周一（wangshu 周视图同款 isoWeek） */
+/** ISO 周一 */
 export function mondayOf(dateStr: string): string {
   const d = parseDate(dateStr)
   if (!d) return dateStr
@@ -396,7 +394,7 @@ export class ScheduleStore {
     // 已有进行中先闭合（礼貌性互斥：一边计时是人对自己时间的诚实）
     if (this.data.runningTimer) this.timerStop()
     const target = id ? this.data.events.find((e) => e.id === id) : undefined
-    // 独立计时必须有名目（用户定稿 2026-09-08：网格=时间分配视图，无名目的
+    // 独立计时必须有名目（网格=时间分配视图，无名目的
     // 时段无从识别）；标题与日程/待办同口径限 16 字。挂条目时标题永远跟条目走
     const label = target ? undefined : title?.trim().slice(0, SCHED_TITLE_MAX) || undefined
     if (!target && label === undefined) throw new Error('独立计时需要标题（也允许挂待办）')
@@ -518,7 +516,7 @@ export class ScheduleStore {
     const [from, to] = rangeOf(scope, date)
     const timedMs = timedMsInRange(this.data.events, from, to, this.data.orphans)
     const eventCount = expandOccurrences(this.data.events, from, to).length
-    // 总时长（时间分配口径，2026-09-08 定稿）：日程块就是时间分配，结束时刻一过
+    // 总时长（时间分配口径）：日程块就是时间分配，结束时刻一过
     // 即计入合计，不用再补计时段；未到来的不记。挂了计时段的事件不按占位时长
     // 重复计——真实用时已由段承载（timedMsInRange 按 start 日归属）。全天事件
     // 无固定时长，不参与。now 供测试注入。

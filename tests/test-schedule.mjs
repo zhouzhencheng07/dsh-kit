@@ -197,11 +197,11 @@ test('timer：全局单计时互斥、stop 闭合、runningTimer 带标题', () 
   assert.equal(store.runningTimer(), null)
   const bEntry = store.list().find((e) => e.id === b.id).timeEntries
   assert.ok(bEntry[0].end !== undefined)
-  // 独立计时强制标题（2026-09-08 定稿）：无名目直接拒绝、不产生 orphan
+  // 独立计时强制标题：无名目直接拒绝、不产生 orphan
   assert.throws(() => store.timerStart(undefined), /独立计时需要标题/)
   assert.equal(store.runningTimer(), null)
   assert.equal(store.listOrphans().length, 0)
-  // 带标题的独立计时（wangshu 对齐）：标题随 runningTimer 走，停表落 orphan.note
+  // 带标题的独立计时：标题随 runningTimer 走，停表落 orphan.note
   store.timerStart(undefined, '  整理周报  ')
   assert.equal(store.runningTimer().title, '整理周报')
   store.timerStop()
@@ -448,7 +448,7 @@ test('entryUpdate/entryDelete：独立段与挂条目段改删，非法输入拒
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('存储位置：固定 $DSH_HOME/dsh-kit/schedule.json，与知识库无关，不做迁移', () => {
+test('存储位置：固定 $DSH_HOME/dsh-kit/schedule.json，与知识库无关', () => {
   const dir = tmp()
   const home = path.join(dir, 'home')
   const prevHome = process.env.DSH_HOME
@@ -456,7 +456,6 @@ test('存储位置：固定 $DSH_HOME/dsh-kit/schedule.json，与知识库无关
   try {
     const fixedFile = path.join(home, 'dsh-kit', 'schedule.json')
     assert.equal(resolveScheduleFile(), fixedFile)
-    // 不做迁移：固定位置已有数据原样保留，不存在"换个目录"的入口
     fs.mkdirSync(path.dirname(fixedFile), { recursive: true })
     fs.writeFileSync(fixedFile, 'x', 'utf8')
     assert.equal(resolveScheduleFile(), fixedFile)

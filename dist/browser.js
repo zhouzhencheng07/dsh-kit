@@ -1,4 +1,4 @@
-// dsh-kit 内置浏览器——BrowserService（宿主半边核心，2026-09-04）
+// dsh-kit 内置浏览器——BrowserService（宿主半边核心）
 //
 // 职责：vendored playwright-core（host-vendor/，钉 1.62.1）驱动系统 Edge（channel
 // 方式，失败退 executablePath 探测链），管理持久化上下文（专用 profile，登录态跨
@@ -159,7 +159,7 @@ export class BrowserService {
     _activeId;
     /** 面板观察页：帧流、人机共驾输入、面板 URL 栏都作用于它；agent 的默认目标页是
      *  _activeId。两者分离（人看 A 页、agent 干 B 页互不干扰）。观察页跟随 agent 是
-     *  恒定语义（用户定稿：浏览器就该与 agent 同步），保守跟随：只有"状态改变"类
+     *  恒定语义（浏览器就该与 agent 同步），保守跟随：只有"状态改变"类
      *  agent 操作（navigate/act/新页）才拽画面，snapshot/截图/eval 等观察类不打扰。 */
     _viewId;
     _listeners;
@@ -415,7 +415,7 @@ export class BrowserService {
                 list.shift();
             this._dialogs.set(id, list);
             // 挂了监听器后 playwright 不再自动关对话框，必须显式 dismiss（否则页面冻结
-            // 等输入、后续动作全部超时）。dismiss=取消，与旧默认（无监听自动关闭）一致，
+            // 等输入、后续动作全部超时）。dismiss=取消，与 playwright 无监听时的默认（自动关闭）一致，
             // 差别只在弹出事实被记录并回传
             void dialog.dismiss().catch(() => { });
         });

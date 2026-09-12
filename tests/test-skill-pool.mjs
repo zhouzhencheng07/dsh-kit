@@ -20,7 +20,7 @@ const check = (label, ok, detail) => {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dshkit-skill-"));
 fs.mkdirSync(path.join(tmp, ".git"), { recursive: true });
 
-// 幂等清理：上次运行遗留在池里的同名技能（现在删除是真删，必须先清场）
+// 幂等清理：上次运行残留在池里的同名技能，必须先清场
 for (const name of ["hello-kit", "flat-kit"]) {
   fs.rmSync(path.join(POOL, name), { recursive: true, force: true });
 }

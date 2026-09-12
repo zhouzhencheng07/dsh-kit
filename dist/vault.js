@@ -18,15 +18,14 @@ function dshKitDataDir() {
     const home = env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh');
     return path.join(home, 'dsh-kit');
 }
-/** vault 默认根（vaultRoot 留空时即开即用）：数据目录下的 vault 子树（2026-09-09
- *  起与模块同名；原 knowledge 名不做迁移逻辑，存量库用户自理），与
+/** vault 默认根（vaultRoot 留空时即开即用）：数据目录下的 vault 子树（与模块同名），与
  *  browser-profile/screenshots 等运行产物不混居 */
 export function defaultVaultRoot() {
     return path.join(dshKitDataDir(), 'vault');
 }
 /**
  * vault 骨架目录补种（配置保存 vaultRoot 时调用）：root 本体随 recursive mkdir
- * 一并创建，约定目录按 vault-design.md 布局放 wiki/（策展层）、library/（参考
+ * 一并创建，约定目录布局放 wiki/（策展层）、library/（参考
  * 层）、attachments/（二进制，SKIP_DIRS 已豁免索引）。幂等——已存在原样保留；
  * 失败静默（只读盘等场景不该挡住配置保存，骨架是便利设施不是前置条件）。
  */
@@ -220,9 +219,8 @@ export class VaultScanner {
             truncated,
         };
     }
-    /** 全文搜索，仅 wiki/ 区（用户定稿 2026-09-09）：library 是原始资料、根级散页
-     *  不属策展层，都不进检索池——检索面收窄后 archived 出池概念不再需要（原 M5
-     *  园艺的出池设计随之退役）。文件名/标题命中权重高于正文次数；小库逐文件读
+    /** 全文搜索，仅 wiki/ 区：library 是原始资料、根级散页
+     *  不属策展层，都不进检索池。文件名/标题命中权重高于正文次数；小库逐文件读
      *  可接受，大库换索引是后续阶段。返回带 snippet 的前 limit 条。 */
     async search(query, limit) {
         const index = await this.scan();
@@ -278,7 +276,7 @@ export class VaultScanner {
     }
 }
 // ── agent 工具（vault_search）───────────────────────────────────────────────
-// 决策（用户 2026-09-09）：不做会话启动注入 wiki 地图，agent 按需检索——
+// 决策：不做会话启动注入 wiki 地图，agent 按需检索——
 // 一个只读搜索工具，页面本体仍走「文件即接口」（拿绝对路径用文件工具读）。
 // 恒开（同日程工具）；vaultRoot 未配置由 execute 优雅降级为提示。
 /** vault_search 返回值的对话摘要：每行「路径 — 标题」+ snippet 缩进行 */
