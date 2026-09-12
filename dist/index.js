@@ -470,8 +470,8 @@ export async function apply(ctx) {
         // ② 死循环打断（仅当前打开的会话）：流式输出尾部自重叠达 monitorRepeatThreshold
         //    次时停止当前回合并发循环打断话术。
         monitorEnabled: z.boolean().default(true),
-        monitorWaitMs: z.number().step(1).min(5000).max(600000).default(60000),
-        monitorMaxAuto: z.number().step(1).min(1).max(10).default(10),
+        monitorWaitMs: z.number().step(1).min(5000).max(600000).default(15000),
+        monitorMaxAuto: z.number().step(1).min(1).max(10).default(5),
         monitorRepeatThreshold: z.number().step(1).min(2).max(10).default(3),
         sidebarShortcut: z.string().default('Ctrl+B'),
         rightbarShortcut: z.string().default('Ctrl+Alt+B'),
