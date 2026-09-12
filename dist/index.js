@@ -73,7 +73,7 @@ import { multipartBoundary, parseMultipart, safeUploadName, dedupeName } from ".
 import { BrowserService } from "./browser.js";
 import { loadToolsModule, buildBrowserTools } from "./browser-tools.js";
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from "./schedule.js";
-import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton, defaultVaultRoot, buildVaultTools, rewriteWikiLinks } from "./vault.js";
+import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton, defaultVaultRoot, rewriteWikiLinks } from "./vault.js";
 import { commitVault, ensureVaultGit } from "./vault-git.js";
 import { sameOrigin } from "./web-guard.js";
 import { recycleDelete, recycleDeleteBatch } from "./recycle.js";
@@ -447,9 +447,10 @@ export async function apply(ctx) {
         phonePort: z.number().step(1).min(1).max(65535).default(3090),
         phoneKeepGatewayOn: z.boolean().default(false),
         jobsEnabled: z.boolean().default(true),
-        // 知识库（vault）：总开关，默认关——关 = 不注册 vault_search、不开
-        // vault 端点、不种骨架（默认根是 $DSH_HOME 下的固定位置，没开功能就不该在盘上
-        // 凭空出现目录）；开 = 右坞「知识库」标签入口 + 检索工具 + 端点（改开关重启生效）。
+        // 知识库（vault）：总开关，默认关——关 = 不开 vault 端点、不种骨架（默认根是
+        // $DSH_HOME 下的固定位置，没开功能就不该在盘上凭空出现目录）；开 = 右栏「知识库」
+        // 标签入口 + 索引/搜索/写回端点（改开关重启生效）。agent 侧检索走知识库技能自带的
+        // vault-search.mjs 脚本，插件不注册检索工具。
         // vaultRoot = 知识库根目录（绝对路径；schema 默认值 = defaultVaultRoot()，字段恒有值）。
         // 宿主据此提供索引/搜索/建页/写回端点，数据契约见 src/vault.ts 头注释。
         vaultEnabled: z.boolean().default(false),
@@ -655,30 +656,9 @@ export async function apply(ctx) {
             return '';
         }
     });
-    // ── 知识库 agent 工具（vault_search）：wiki 区检索 ──
-    //   与总开关同命（默认关，重启生效，同浏览器工具先例）：关着就不注册，避免工具面
-    //   挂着一个必失败的工具。vaultRoot 未配置由 execute 降级为提示；不做会话启动注入
-    //   wiki 地图，agent 按需检索
-    const vaultDefs = scheduleToolsMod && typeof scheduleToolsMod.defineTool === 'function'
-        ? buildVaultTools({ defineTool: scheduleToolsMod.defineTool, scanner: vaultScanner })
-        : null;
-    if (!vaultDefs) {
-        console.warn('dsh-kit: dsh-tools 不可达，知识库检索工具未注册（面板不受影响）');
-    }
-    ctx.inject(['settings', 'tools'], (caps) => {
-        if (!vaultDefs)
-            return;
-        if (readSettings().vaultEnabled !== true)
-            return;
-        for (const def of vaultDefs) {
-            try {
-                caps.tools.register(def);
-            }
-            catch (error) {
-                console.warn(`dsh-kit: 知识库工具注册失败：${error instanceof Error ? error.message : error}`);
-            }
-        }
-    });
+    // ── 知识库 agent 检索 ──
+    //   不由插件提供：检索脚本随知识库技能分发（scripts/vault-search.mjs），与面板搜索
+    //   同一套打分规则，任何 agent 都能跑，不依赖宿主工具注册
     // ── 知识库 git 存档（src/vault-git.ts）：三时机全不拦 agent ──
     //   初始存档（建库时）+ 人工保存后（vault/write）+ 删除后（delete 端点）。
     //   agent 的版本管理由知识库技能教会的 git -C add/commit 承担（技能是用户自己的

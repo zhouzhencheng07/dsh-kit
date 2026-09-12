@@ -12,8 +12,6 @@ import {
   rewriteWikiLinks,
   VaultScanner,
   ensureVaultSkeleton,
-  vaultSearchSummary,
-  buildVaultTools,
 } from '../dist/vault.js'
 
 const test = (name, fn) =>
@@ -122,28 +120,6 @@ await test('search：仅 wiki 区——library 与根级散页不进检索池', 
   assert.equal(lib.results.length, 0)
   const loose = await scanner.search('根级散页', 10)
   assert.equal(loose.results.length, 0)
-})
-
-await test('vault_search 工具：命中摘要带绝对路径，未配置优雅降级', async () => {
-  const defs = buildVaultTools({ defineTool: (d) => d, scanner })
-  assert.equal(defs.length, 1)
-  assert.equal(defs[0].name, 'vault_search')
-  const value = await defs[0].execute({ query: 'uv ruff' })
-  assert.equal(value.results.length, 1)
-  assert.ok(value.summary.includes(path.join('wiki', 'Python', '工具链.md')))
-  assert.equal(value.summary, vaultSearchSummary('uv ruff', value.results))
-  const miss = await defs[0].execute({ query: '原始资料' })
-  assert.ok(miss.summary.includes('未找到匹配'))
-  const unconfigured = await buildVaultTools({
-    defineTool: (d) => d,
-    scanner: new VaultScanner(() => ''),
-  })[0].execute({ query: 'x' })
-  assert.ok(unconfigured.summary.includes('未配置'))
-  assert.deepEqual(unconfigured.results, [])
-})
-
-await test('vaultSearchSummary：空结果提示', () => {
-  assert.ok(vaultSearchSummary('xx', []).includes('未找到'))
 })
 
 await test('root：未配置/不存在回 null', async () => {
