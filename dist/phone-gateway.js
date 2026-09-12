@@ -197,6 +197,7 @@ export function phoneAssistScript({ remoteView, pickerLocked, presentedLocked })
         sels: remoteView ? sels : [],
         texts: remoteView ? texts : [],
         hint: LOCK_HINT,
+        diag: '/dsh-kit/phone/tapdiag',
     });
     return '<script>(function(){' +
         // 必须赶在宿主脚本之前（注入点在 <head> 开标签后），宿主前端启动时就把它读走了
@@ -273,11 +274,34 @@ export function phoneAssistScript({ remoteView, pickerLocked, presentedLocked })
         'pend=rec;},true);' +
         'document.addEventListener("click",flush,true);' +
         'document.addEventListener("touchcancel",flush,true);}' +
+        // 点按诊断（**临时排障用，定位完连宿主端点一起删**）：记每条点按的 touchstart→click 生命周期。
+        // click 没来就记 lost，并在 700ms 时记下"该坐标现在是谁"——用来分辨是"点击被吞"（DOM 在手指
+        // 底下被换掉）还是"点到了但没人管"（locked / 组件没接线）。批量 POST 回宿主，电脑端读。
+        'function tapDesc(el){if(!el)return "?";var s="";' +
+        'try{s=(el.getAttribute&&(el.getAttribute("aria-label")||el.getAttribute("title")))||el.textContent||"";}catch(e){}' +
+        'return String(el.tagName||"?")+"|"+String(s).replace(/\\s+/g," ").trim().slice(0,28);}' +
+        'function tapSend(list){try{fetch(D.diag,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(list),keepalive:true}).catch(function(){});}catch(e){}}' +
+        'function armTapDiag(){' +
+        'var t0=Date.now(),buf=[],pend=null;' +
+        'function ms(){return Date.now()-t0;}' +
+        'function push(rec){buf.push(rec);if(buf.length>=8)tapSend(buf.splice(0,buf.length));}' +
+        'function atPoint(x,y){try{var el=document.elementFromPoint(x,y);return el?tapDesc(el):null;}catch(e){return null;}}' +
+        'document.addEventListener("touchstart",function(ev){var t=ev.touches&&ev.touches[0];' +
+        'pend={t:ms(),target:tapDesc(ev.target),locked:locked(ev.target),popup:popupOpen(),' +
+        'x:t?Math.round(t.clientX):null,y:t?Math.round(t.clientY):null,el:ev.target};},true);' +
+        'document.addEventListener("click",function(ev){' +
+        'if(pend){pend.clicked=ms();pend.clickTarget=tapDesc(ev.target);pend.same=pend.target===pend.clickTarget;' +
+        'pend.popupAfter=popupOpen();delete pend.el;push(pend);pend=null;}' +
+        'else push({t:ms(),clickNoTouch:tapDesc(ev.target),locked:locked(ev.target),popup:popupOpen()});},true);' +
+        'setInterval(function(){if(pend&&ms()-pend.t>700){pend.lost=ms();' +
+        'try{pend.elConnected=pend.el.isConnected;}catch(e){}delete pend.el;' +
+        'pend.atPoint=atPoint(pend.x,pend.y);pend.popupLater=popupOpen();push(pend);pend=null;}' +
+        'if(buf.length)tapSend(buf.splice(0,buf.length));},400);}' +
         'function dismissNotice(){var d=document.querySelector(\'[role="dialog"]\');if(!d)return false;' +
         'var b=d.querySelectorAll("button");' +
         'for(var i=0;i<b.length;i++){if((b[i].textContent||"").indexOf("继续")!==-1){b[i].click();return true;}}' +
         'return false;}' +
-        'function boot(){applyLock();' + (remoteView ? 'armTouchCleanup();' : '') +
+        'function boot(){applyLock();' + (remoteView ? 'armTouchCleanup();armTapDiag();' : '') +
         'if(D.sels.length||res.length){' +
         'document.addEventListener("click",function(ev){' +
         // 每次点击后补两次置灰：弹出菜单/对话框是刚挂上来的，2s 轮询之外再抢一拍

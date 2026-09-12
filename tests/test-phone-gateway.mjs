@@ -227,7 +227,7 @@ try {
   // 触屏 sticky hover/focus：点过的按钮会一直算"悬停 + 聚焦"，宿主 Tooltip 气泡就挂在屏幕上
   check(
     '远程视图挂触屏清理（touchstart 记账 → click/touchcancel 后补两族离开事件；焦点那半弹出层在场时跳过；按坐标取活节点）',
-    page.body.includes('applyLock();armTouchCleanup();') &&
+    page.body.includes('applyLock();armTouchCleanup();armTapDiag();') &&
       page.body.includes('"touchstart",function(ev){') &&
       page.body.includes('"click",flush,true') &&
       page.body.includes('"touchcancel",flush,true') &&
@@ -280,7 +280,7 @@ try {
     const viewSetCookie = Array.isArray(rr.headers['set-cookie']) ? rr.headers['set-cookie'][0] : rr.headers['set-cookie']
     check('?dshk_view=desktop → 302 + 落 Cookie', rr.status === 302 && String(viewSetCookie).includes(`${PHONE_VIEW_COOKIE}=desktop`))
     const desktopView = await request(gwPort, { path: '/page', headers: { cookie: `${cookieHeader}; ${PHONE_VIEW_COOKIE}=desktop` } })
-    check('desktop 视图：不锁任何入口、也不宣告 ownsHost（内测弹窗那段仍在，且不武装触屏清理）', desktopView.body.includes('dismissNotice') && !desktopView.body.includes('选择打开方式') && !desktopView.body.includes('ownsHost') && !desktopView.body.includes('applyLock();armTouchCleanup();'))
+    check('desktop 视图：不锁任何入口、也不宣告 ownsHost（内测弹窗那段仍在，且不武装触屏清理/点按诊断）', desktopView.body.includes('dismissNotice') && !desktopView.body.includes('选择打开方式') && !desktopView.body.includes('ownsHost') && !desktopView.body.includes('armTouchCleanup();armTapDiag();'))
     const back = await request(gwPort, { path: '/page', headers: { cookie: cookieHeader } })
     check('未带视图 Cookie：回到远程视图（入口又锁上）', back.body.includes('选择打开方式'))
   }
