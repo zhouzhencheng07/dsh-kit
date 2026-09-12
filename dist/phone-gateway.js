@@ -231,20 +231,28 @@ export function phoneAssistScript({ remoteView, pickerLocked, presentedLocked })
         // 输入类控件（INPUT/TEXTAREA/contenteditable）跳过——提示气泡不长在它们身上，而合成的
         // focusout 会惊动正在编辑的输入面（草稿、@ 菜单都挂在这条链上）
         //
-        // 但"不动真实焦点"还不够：宿主的模型选择器把 onBlur 当关闭信号，且判据是
-        // `relatedTarget 在根/菜单内才放过`——合成事件没有 relatedTarget（null），于是点开就被
-        // 这条清理立刻关掉（实测：点开 aria-expanded=true+menu 在场，派发一次 focusout 即回落 false）。
-        // 所以弹出层在场时整段跳过：清理的目的是清 sticky 提示气泡，而弹出层开着时那点气泡无关紧要。
+        // 两处踩过的坑，都写在这儿免得再踩：
+        // ① **必须补 pointer 家族**：宿主里多数"粘住"的面是 onPointerEnter/Leave（对话的轮次
+        //    导航预览、轨迹页悬停卡、反馈芯片；侧边栏的滚动条显现也走它），只补 mouseout 时
+        //    React 根本不会合成 onPointerLeave——这正是"清理了却还是粘着"的原因。
+        // ② **唯一会误伤的是那条假 focusout**：宿主的模型选择器把 onBlur 当关闭信号，且判据是
+        //    "relatedTarget 在根/菜单内才放过"，合成事件没有 relatedTarget → 点开即被关掉。
+        //    所以焦点那段在弹出层在场时整段跳过；而"指针离开"是触屏上的事实，与弹出层无关，
+        //    照发（它不会关掉任何菜单）。
+        'function leave(el){' +
+        'if(!el)return;' +
+        'try{el.dispatchEvent(new PointerEvent("pointerout",{bubbles:true,relatedTarget:document.body}));}catch(e){}' +
+        'try{el.dispatchEvent(new MouseEvent("mouseout",{bubbles:true,relatedTarget:document.body}));}catch(e){}}' +
         'function popupOpen(){' +
         'try{if(document.querySelector(\'[role="menu"],[role="listbox"],[role="dialog"]\'))return true;}catch(e){}' +
         'var a=document.activeElement;return !!(a&&a.getAttribute&&a.getAttribute("aria-expanded")==="true");}' +
         'function clearTouchState(el){' +
+        'leave(el);' +
         'if(popupOpen())return;' +
         'var a=document.activeElement;' +
         'if(a&&a!==document.body){' +
         'var t=a.tagName,ed=a.isContentEditable||t==="INPUT"||t==="TEXTAREA"||t==="SELECT";' +
-        'if(!ed)try{a.dispatchEvent(new FocusEvent("focusout",{bubbles:true}));}catch(e){}}' +
-        'if(el)try{el.dispatchEvent(new MouseEvent("mouseout",{bubbles:true,relatedTarget:document.body}));}catch(e){}}' +
+        'if(!ed)try{a.dispatchEvent(new FocusEvent("focusout",{bubbles:true}));}catch(e){}}}' +
         'function armTouchCleanup(){' +
         'if(!((navigator.maxTouchPoints||0)>0||"ontouchstart" in window))return;' +
         'document.addEventListener("touchend",function(ev){' +
