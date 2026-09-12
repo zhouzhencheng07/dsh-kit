@@ -60,3 +60,21 @@ export function parseRangeHeader(header: unknown, size: number): { start: number
   }
   return { start, end: size - 1 }
 }
+
+/**
+ * 下载模式（`?dl=1`）的 content-type：白名单是给「浏览器能不能渲染」收的口，
+ * 下载不适用——未知类型按 octet-stream 发出去由浏览器落盘即可（文件签的
+ * 「下载」按钮对任意类型都要能用）。
+ */
+export function rawDownloadContentType(name: unknown): string {
+  return rawContentType(name) ?? 'application/octet-stream'
+}
+
+/**
+ * content-disposition：预览 inline、下载 attachment。文件名走 RFC 5987 编码
+ * （中文名不乱码）；浏览器「另存为」的名字取这里——iOS 不认 `<a download>`，
+ * attachment 是唯一可靠的落盘触发方式。
+ */
+export function rawDisposition(download: boolean, fileName: string): string {
+  return `${download ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(fileName)}`
+}
