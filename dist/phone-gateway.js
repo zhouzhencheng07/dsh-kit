@@ -182,9 +182,12 @@ const LOCK_HINT = '请在电脑端操作';
  *    停在那"、焦点也留在按钮上，宿主的悬停提示/预览会粘到下次点按为止。补发的是**真实的
  *    反向事实**（"指针离开了"），只是在替手机补齐浏览器不会自己发的那条；焦点那一半是
  *    合成事件，会关掉宿主"失焦即收"的弹出层，所以弹出层在场时跳过。
- *    两处"漏触发"要盯：点按会让被点节点重渲染（侧栏收起就换节点），事件发给脱离文档的
- *    节点不会冒泡到 React 根——所以清理时按坐标重新取命中元素；手势被判成滚动时浏览器
- *    只发 touchcancel 不发 touchend，所以两个都挂。
+ *    时序与漏触发：清理必须**晚于这次点按的 click**——首连那阵子主线程卡，挂在 touchend 上的
+ *    0ms 定时器会抢在 click 前面跑，清理引发的重渲染换掉手指底下那个节点，随后到来的 click
+ *    就落到脱离文档的节点上被吞（表现是"刚连上那一会点了没反应，再点一下才好"，不只某一处）。
+ *    所以按 touchstart 记账、click/touchcancel 到了再清、700ms 兜底；落点按坐标 `elementFromPoint`
+ *    重取（事件发给脱离文档的节点不会冒泡到 React 根）；手势被判成滚动时浏览器只发 touchcancel，
+ *    故两个都挂。
  */
 export function phoneAssistScript({ remoteView, pickerLocked, presentedLocked }) {
     const sels = [...HOST_ONLY_LOCKED, ...(pickerLocked ? PICKER_LOCKED : []), ...(presentedLocked ? PRESENTED_LOCKED : [])];
@@ -255,11 +258,21 @@ export function phoneAssistScript({ remoteView, pickerLocked, presentedLocked })
         'if(!ed)try{a.dispatchEvent(new FocusEvent("focusout",{bubbles:true}));}catch(e){}}}' +
         'function armTouchCleanup(){' +
         'if(!((navigator.maxTouchPoints||0)>0||"ontouchstart" in window))return;' +
-        'function onEnd(ev){var el=ev.target,t=ev.changedTouches&&ev.changedTouches[0];' +
-        'var x=t?t.clientX:null,y=t?t.clientY:null;' +
-        'setTimeout(function(){clearTouchState(el,x,y);},0);}' +
-        'document.addEventListener("touchend",onEnd,true);' +
-        'document.addEventListener("touchcancel",onEnd,true);}' +
+        // 顺序是硬的：清理必须落在这次点按的 click **之后**。首连那阵子主线程卡，touchend 后挂的
+        // 0ms 定时器可能抢在 click 前面跑——清理引发的重渲染会把手指底下那个节点换掉，随后到来的
+        // click 落到脱离文档的节点上被吞，表现正是"刚连上那一会点了没反应，再点一下才好"（不只侧栏）。
+        // 所以改成：touchstart 记账 → click/touchcancel 到了再排清理（0ms，排在 React 处理完 click
+        // 之后）；700ms 没等到 click（点在非交互区、手势变滚动）也要清，不能让悬停留着。
+        'var pend=null;' +
+        'function flush(){if(!pend)return;clearTimeout(pend.timer);var p=pend;pend=null;' +
+        'setTimeout(function(){clearTouchState(p.el,p.x,p.y);},0);}' +
+        'document.addEventListener("touchstart",function(ev){var t=ev.touches&&ev.touches[0];' +
+        'if(pend)clearTimeout(pend.timer);' +
+        'var rec={el:ev.target,x:t?t.clientX:null,y:t?t.clientY:null,timer:null};' +
+        'rec.timer=setTimeout(function(){if(pend===rec){pend=null;clearTouchState(rec.el,rec.x,rec.y);}},700);' +
+        'pend=rec;},true);' +
+        'document.addEventListener("click",flush,true);' +
+        'document.addEventListener("touchcancel",flush,true);}' +
         'function dismissNotice(){var d=document.querySelector(\'[role="dialog"]\');if(!d)return false;' +
         'var b=d.querySelectorAll("button");' +
         'for(var i=0;i<b.length;i++){if((b[i].textContent||"").indexOf("继续")!==-1){b[i].click();return true;}}' +

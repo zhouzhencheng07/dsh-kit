@@ -226,10 +226,12 @@ try {
   check('远程视图注入 ownsHost（设置通道走 host 持久化）', page.body.includes('ownsHost:true'))
   // 触屏 sticky hover/focus：点过的按钮会一直算"悬停 + 聚焦"，宿主 Tooltip 气泡就挂在屏幕上
   check(
-    '远程视图挂触屏清理（touchend/touchcancel → 两族离开事件；焦点那半弹出层在场时跳过；按坐标取活节点）',
+    '远程视图挂触屏清理（touchstart 记账 → click/touchcancel 后补两族离开事件；焦点那半弹出层在场时跳过；按坐标取活节点）',
     page.body.includes('applyLock();armTouchCleanup();') &&
-      page.body.includes('"touchend",onEnd,true') &&
-      page.body.includes('"touchcancel",onEnd,true') &&
+      page.body.includes('"touchstart",function(ev){') &&
+      page.body.includes('"click",flush,true') &&
+      page.body.includes('"touchcancel",flush,true') &&
+      page.body.includes('700') &&
       page.body.includes('pointerout') &&
       page.body.includes('elementFromPoint') &&
       page.body.includes('leave(at||el);if(popupOpen())return;') &&
