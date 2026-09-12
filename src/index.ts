@@ -2220,9 +2220,10 @@ export async function apply(ctx: KitCtx): Promise<void> {
               return
             }
             if (msg.t === 'open' && typeof msg.url === 'string') {
-              void browserService.humanOpen(msg.url).then((r) => {
-                if (!r.ok) sendTo(ws, { t: 'event', kind: 'error', message: r.error })
-              })
+              // 失败不发 error 事件：面板已经切到浏览器签，网址打不开时浏览器自己的错误页
+              // 就是反馈（普通浏览器也这样），起不来时面板按 state.error 显示原因。
+              // 别的操作（切页/关页/新页）失败仍要报——那些没有"页面上看得见"的等价物
+              void browserService.humanOpen(msg.url)
               return
             }
             if (msg.t === 'activate' && msg.tabId !== undefined) {

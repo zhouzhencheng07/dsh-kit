@@ -742,11 +742,14 @@ window.__ModuleLoader__.load({
       ev.preventDefault();
       ev.stopPropagation();
       setKitUi(openFeatureDock(kitUi, "browser"));
+      // 失败不提示（吞掉 rejection 免成 unhandled）：面板上一步已切到浏览器签——
+      // 网址打不开时浏览器自己的错误页就是反馈（同普通浏览器），浏览器起不来时
+      // 面板的未启动提示会带上宿主报的原因。再弹 toast 只是重复的噪音。
       kitJson("/dsh-kit/browser/open", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ url: href }),
-      }).catch((error) => flashToast(tf("browserOpenFail", { error: String(error?.message ?? error) })));
+      }).catch(() => {});
     }
 
     // ─────────── 对话 @ 引用（文件树 → 输入框）───────────
@@ -1070,7 +1073,6 @@ window.__ModuleLoader__.load({
       browserReconnect: "连接断开，重连中…",
       browserNotRunning: "浏览器未启动——在上方输入网址回车，或等 agent 首次使用时自动拉起",
       browserNoPages: "没有打开的页面——在上方输入网址回车，或等 agent 下次导航自动出现在这里",
-      browserOpenFail: "内置浏览器打开失败：{error}",
       dockJobs: "后台任务",
       dockBrowser: "浏览器",
       pvCloseTab: "关闭此标签",
@@ -1493,7 +1495,6 @@ window.__ModuleLoader__.load({
       browserReconnect: "Reconnecting…",
       browserNotRunning: "Browser not started — type a URL above or wait for the agent's first use",
       browserNoPages: "No open pages — type a URL above, or the agent's next navigation will appear here",
-      browserOpenFail: "Failed to open in the built-in browser: {error}",
       dockJobs: "Background tasks",
       dockBrowser: "Browser",
       pvCloseTab: "Close this tab",
@@ -7848,7 +7849,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             : state.running === false && state.launching === true
               ? jsxRuntime.jsx("div", { className: "dshk-brw-note", children: t("browserStarting") })
               : state.running === false && viewUrl === ""
-                ? jsxRuntime.jsx("div", { className: "dshk-brw-note", children: t("browserNotRunning") })
+                // 宿主报的启动失败原因优先（vendor 缺失 / Edge 拉不起来），没有才用泛泛那句
+                ? jsxRuntime.jsx("div", { className: "dshk-brw-note", children: state.error || t("browserNotRunning") })
                 : (state.pages ?? []).length === 0
                   ? jsxRuntime.jsx("div", { className: "dshk-brw-note", children: t("browserNoPages") })
                   : null,
