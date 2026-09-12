@@ -490,8 +490,8 @@ export async function apply(ctx: KitCtx): Promise<void> {
     jobsEnabled: z.boolean().default(true),
     // 知识库（vault）：总开关，默认关——关 = 不开 vault 端点、不种骨架（默认根是
     // $DSH_HOME 下的固定位置，没开功能就不该在盘上凭空出现目录）；开 = 右栏「知识库」
-    // 标签入口 + 索引/搜索/写回端点（改开关重启生效）。agent 侧检索走知识库技能自带的
-    // vault-search.mjs 脚本，插件不注册检索工具。
+    // 标签入口 + 索引/搜索/写回端点（改开关重启生效）。库是普通 md 目录，插件不为
+    // agent 注册检索工具。
     // vaultRoot = 知识库根目录（绝对路径；schema 默认值 = defaultVaultRoot()，字段恒有值）。
     // 宿主据此提供索引/搜索/建页/写回端点，数据契约见 src/vault.ts 头注释。
     vaultEnabled: z.boolean().default(false),
@@ -693,14 +693,8 @@ export async function apply(ctx: KitCtx): Promise<void> {
     }
   })
 
-  // ── 知识库 agent 检索 ──
-  //   不由插件提供：检索脚本随知识库技能分发（scripts/vault-search.mjs），与面板搜索
-  //   同一套打分规则，任何 agent 都能跑，不依赖宿主工具注册
-
   // ── 知识库 git 存档（src/vault-git.ts）：三时机全不拦 agent ──
   //   初始存档（建库时）+ 人工保存后（vault/write）+ 删除后（delete 端点）。
-  //   agent 的版本管理由知识库技能教会的 git -C add/commit 承担（技能是用户自己的
-  //   资产，插件不随包分发）。
 
   // webServer 可能在本插件 apply 之后才挂载，用动态注入等它就绪
   ctx.inject(['webServer', 'credentials'], (webCtx: KitWebCtx) => {
