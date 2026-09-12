@@ -7863,10 +7863,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 布局「选库进入阅读」（用户定稿 2026-09-06）：左窄条 = 空间（顶层目录）+
     // 懒加载目录树；右 = 真·所见即所得编辑区（TipTap 富文本，vendor/richeditor
     // .bundle.js 的 window.DshRTE 工厂：md ↔ 富文本往返、[[wikilink]]/公式/
-    // callout/未知块 HTML 原样保留）。保存 = wangshu 同款自动保存（2s 防抖 +
-    // 切页 flush + Ctrl+S）走 vault 写端点 mtime CAS；盘上被外部修改时暂停自
-    // 动保存出冲突条（覆盖盘上 / 读取盘上），绝不静默覆盖。frontmatter 在编辑
-    // 器外剥离成属性条展示，保存时字节级原样写回。搜索走宿主全文端点。
+    // 未知块 HTML 原样保留；提示卡节点已退役，只有历史的 [!fold] 打开时迁移）。
+    // 保存 = wangshu 同款自动保存（2s 防抖 + 切页 flush + Ctrl+S）走 vault 写
+    // 端点 mtime CAS；盘上被外部修改时带 stash 覆盖（宿主先提交存档再写，本地
+    // 赢，不弹冲突条），第二次再被抢写才退回冲突条。frontmatter 在编辑器外剥离
+    // 成属性条展示，保存时字节级原样写回。搜索走宿主全文端点。
 
     /** 拆 frontmatter：返回 { fmText, rest }。fmText = "---…---" 块（含随后的
      *  首个换行）的字节级原文，无 frontmatter 时 fmText=""；rest = 其余全部。
