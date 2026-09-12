@@ -42,7 +42,7 @@ slot; the conversation column stays put.
   session's running background jobs, with output viewing and job termination
   (official `job_output`/`job_kill` semantics)
 - **Built-in browser** (right-dock Browser tab, on by default): the agent drives the
-  system Edge via **6** `browser_*` tools (vendored playwright-core, dedicated
+  system Edge via **7** `browser_*` tools (vendored playwright-core, dedicated
   persistent profile) — snapshot → act → assert GUI-testing loops, screenshots
   (attached directly for multimodal models, saved to disk otherwise); the panel shows
   the agent's browser live — your clicks/wheel/keys act on the very page the agent is
