@@ -130,25 +130,13 @@ console.log("== vault 自定义语法 ==");
 }
 {
   const [out, err] = rt("围栏里 $x$ 不是公式：\n\n```js\nconst s = `$x$`;\n```\n\n行内码 `$y$` 也一样");
-  // 文本段 "$x$" 本身满足公式定界（与旧阅读变换同语义），保持为公式即可；
+  // 文本段 "$x$" 本身满足公式定界，保持为公式即可；
   // 不变量是：围栏与行内码内的 $ 原样保留、整段往返稳定
   check(
     "围栏/行内码内 $ 原样保留",
     err === null && out.includes("```js\nconst s = `$x$`;") && out.includes("`$y$` 也一样") && stable(out),
     `err=${err} out=${JSON.stringify(out)}`,
   );
-}
-{
-  // 自造的「提示框/提示卡」语法已整体退役（RTE 与 CM 两侧的节点、视图、迁移解析、
-  // 调色样式全部删除）：`> [!类型]` 现在就是普通引用里的一行字面文本，只有通用的
-  // 字面 `[` 转义碰它——内容无损，二次稳定
-  const [out, err] = rt("> [!info] 注意\n> 这里是内容");
-  check("提示卡语法降为普通引用", err === null && out === "> \\[!info\\] 注意  \n> 这里是内容" && stable(out), `err=${err} out=${JSON.stringify(out)}`);
-}
-{
-  // 旧的 [!fold] 折叠语法也不再迁移：折叠块只认 <details>（见下）
-  const [out, err] = rt("> [!fold] 折叠块\n> - a\n> - b");
-  check("旧 fold 语法不迁移", err === null && out === "> \\[!fold\\] 折叠块\n>\n> - a\n> - b" && stable(out), `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("> 普通引用保持");

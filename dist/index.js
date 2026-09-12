@@ -6,7 +6,7 @@
 //     目录+文件的 JSON 列表（官方 browse RPC 只列目录不列文件，故自建）；
 //   文件预览（file preview）——GET /dsh-kit/read?path=<绝对文件> 读取文本
 //     内容（限长 + 二进制探测），浏览器端在右侧 details 列展示；
-//   网页搜索（web search）——自 dsh-free-search v0.2.0 并入：向 web seam 注册
+//   网页搜索（web search）：向 web seam 注册
 //     'free-search' provider（免费引擎链），实现见 src/web-search.ts +
 //     src/engine-chain.ts + src/engines/*。
 //
@@ -44,7 +44,7 @@
 //     {t:'exit', exitCode}          进程退出（随后服务端关闭连接）
 //     {t:'error', message}          致命错误（随后关闭连接）
 //
-// 工作区语义（2026-08-23 用户定稿）：浏览器端在「打开终端」那一刻把当时的
+// 工作区语义：浏览器端在「打开终端」那一刻把当时的
 // 工作目录固定下来传给本端点；面板存续期间无论怎么切换会话/工作区都不会
 // 重连或换 shell，直到用户关闭面板（连接关闭即杀进程）。
 var __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExtension) || function (path, preserveJsx) {
@@ -416,12 +416,11 @@ export async function apply(ctx) {
     // 启停/端口，改开关立即生效无需重启。其余开关全在浏览器端门控入口按钮，
     // 宿主不读。先注册设置层再挂搜索，确保注入回调读到的是已落定值。
     // readSettings 提升到 apply 作用域：webServer 注入回调（块外）的手机访问段
-    // 也要读开关（远程域名、端口、页面可见性）。网关启用位已改状态文件直管，
-    // 不再走 settings。设置层不可用时保持空实现 → phone 关、search 直挂（可用性优先）。
+    // 也要读开关（远程域名、端口、页面可见性）。网关启用位由状态文件直管，
+    // 不走 settings。设置层不可用时保持空实现 → phone 关、search 直挂（可用性优先）。
     // 设置注册 API（适配 DSH v0.1.2-alpha.5+）：命名空间注册是 ctx.settings 服务
     // （dsh-settings-file 提供）上的 installSection(owner, ns, schema, entry, hooks)，
-    // ns 为裸字符串，注册是插件 fiber 上的 effect（dispose 自动注销）。旧版独立导出
-    // installSettingsSection 已随该版本消亡，不再兼容。
+    // ns 为裸字符串，注册是插件 fiber 上的 effect（dispose 自动注销）。
     // schemastery 自带 cjs 导出，import() 同样适用（Node 支持 import CJS）；
     // 多锚点解析见 loadSettingsDep：裸 import 失败后先落运行中 dsh 本体锚点
     //（junction/真实拷贝安装都有），最后才落 monorepo 源码开发形态的 workspace 入口。
@@ -448,7 +447,7 @@ export async function apply(ctx) {
         phonePort: z.number().step(1).min(1).max(65535).default(3090),
         phoneKeepGatewayOn: z.boolean().default(false),
         jobsEnabled: z.boolean().default(true),
-        // 知识库（vault）：总开关，默认关（用户定）——关 = 不注册 vault_search、不开
+        // 知识库（vault）：总开关，默认关——关 = 不注册 vault_search、不开
         // vault 端点、不种骨架（默认根是 $DSH_HOME 下的固定位置，没开功能就不该在盘上
         // 凭空出现目录）；开 = 右坞「知识库」标签入口 + 检索工具 + 端点（改开关重启生效）。
         // vaultRoot = 知识库根目录（绝对路径；schema 默认值 = defaultVaultRoot()，字段恒有值）。
@@ -459,7 +458,7 @@ export async function apply(ctx) {
         vaultRoot: z.string().default(defaultVaultRoot()),
         // 内置浏览器总开关（默认开）：关=不注册 browser_* 工具（重启生效）；浏览器
         // 半边入口按钮与面板同步隐藏。execute 内另有守卫兜底（注册期竞态时挡调用）。
-        // 自动切面板与画面跟随 agent 是恒定行为（用户定稿，无开关）——人为切走浏览器
+        // 自动切面板与画面跟随 agent 是恒定行为（无开关）——人为切走浏览器
         // 标签后的"不再拽回"抑制在客户端侧实现。
         browserEnabled: z.boolean().default(true),
         // 会话监视器（纯浏览器端消费，宿主不读）：
@@ -478,9 +477,9 @@ export async function apply(ctx) {
         terminalShortcut: z.string().default('Ctrl+/'),
         fileTreeShortcut: z.string().default('Ctrl+,'),
         scShortcut: z.string().default('Ctrl+Alt+.'),
-        // 知识库入口（2026-09-10 定稿：从侧栏底部钮移到输入行）；语义是开合切换——
-        // 开=侧栏索引视图 + 舞台标签，关=两者一起收。日程快捷键 2026-09-11 撤
-        // （日程无侧栏半边），右栏开合快捷键顶位（客户端消费 sidebarRight.toggleExpanded）
+        // 知识库入口（输入行）：语义是开合切换——
+        // 开=侧栏索引视图 + 舞台标签，关=两者一起收。日程无侧栏半边、故无快捷键；
+        // 右栏开合快捷键同卡（客户端消费 sidebarRight.toggleExpanded）
         vaultShortcut: z.string().default('Ctrl+Alt+K'),
     }) : null;
     let readSettings = () => ({});
@@ -659,7 +658,7 @@ export async function apply(ctx) {
     // ── 知识库 agent 工具（vault_search）：wiki 区检索 ──
     //   与总开关同命（默认关，重启生效，同浏览器工具先例）：关着就不注册，避免工具面
     //   挂着一个必失败的工具。vaultRoot 未配置由 execute 降级为提示；不做会话启动注入
-    //   wiki 地图（用户定稿 2026-09-09），agent 按需检索
+    //   wiki 地图，agent 按需检索
     const vaultDefs = scheduleToolsMod && typeof scheduleToolsMod.defineTool === 'function'
         ? buildVaultTools({ defineTool: scheduleToolsMod.defineTool, scanner: vaultScanner })
         : null;
@@ -682,11 +681,8 @@ export async function apply(ctx) {
     });
     // ── 知识库 git 存档（src/vault-git.ts）：三时机全不拦 agent ──
     //   初始存档（建库时）+ 人工保存后（vault/write）+ 删除后（delete 端点）。
-    //   原第四时机「agent 编辑工具落盘前拦 fs/write-intent、fs/edit-intent 瀑布」
-    //   已退役（用户定稿 2026-09-09）：实测本宿主该瀑布对 profile 插件不可达
-    //   （fs/observed 的 emit 能到、write-intent 的 waterfall 到不了，global 监听
-    //   同样收不到），且拦截语义复杂、随宿主升级难维护——agent 的版本管理改由知识库
-    //   技能教会的 git -C add/commit 承担（技能是用户自己的资产，插件不随包分发）。
+    //   agent 的版本管理由知识库技能教会的 git -C add/commit 承担（技能是用户自己的
+    //   资产，插件不随包分发）。
     // webServer 可能在本插件 apply 之后才挂载，用动态注入等它就绪
     ctx.inject(['webServer', 'credentials'], (webCtx) => {
         webCtx.effect(() => {
@@ -868,7 +864,7 @@ export async function apply(ctx) {
                 },
             });
             // ── 轻量 stat 端点：GET /dsh-kit/stat?path=<绝对文件> ──
-            // 工作区文件标签的外部修改可见性（8aa58d6 vault 语义同款）：只回 mtime
+            // 工作区文件标签的外部修改可见性：只回 mtime
             // 不读正文，前端轮询发现变化且本地无脏改才重读整页。安全链与 /read 相同
             // （validateFile：sameOrigin + cwd 子树 + 存在性）
             const disposeStat = webCtx.webServer.register({
@@ -2888,7 +2884,7 @@ export async function apply(ctx) {
                 }));
             };
             const vaultGuard = (res) => {
-                // 总开关关着就整片端点一起拒：知识库默认关（用户定），前端入口同步隐藏，
+                // 总开关关着就整片端点一起拒：知识库默认关，前端入口同步隐藏，
                 // 这里挡的是直接打端点的路径
                 if (readSettings().vaultEnabled !== true) {
                     res.writeHead(403, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
@@ -2918,7 +2914,7 @@ export async function apply(ctx) {
                     .then((index) => vaultJson(res, 200, index ?? { root: null, spaces: [], pages: [] }))
                     .catch((error) => vaultJson(res, 500, { error: error instanceof Error ? error.message : String(error) }));
             });
-            // 外部修改实时刷新（VS Code 同款）：只回打开页的 mtime，不读正文——前端
+            // 外部修改实时刷新：只回打开页的 mtime，不读正文——前端
             // 轮询发现 mtime 变化且本地无脏改即自动重读整页（AI/编辑器改文件零手动刷新）
             vaultRoute('/dsh-kit/vault/stat', (req, res, url) => {
                 if (req.method !== 'GET')
@@ -2981,7 +2977,7 @@ export async function apply(ctx) {
                 const file = path.join(dir, `${segs[segs.length - 1] ?? ''}.md`);
                 if (fs.existsSync(file))
                     return { exists: true, path: file, mtimeMs: fs.statSync(file).mtimeMs };
-                // 建页不种 frontmatter（用户定稿）：创建/修改时间文件系统本身就有属性，
+                // 建页不种 frontmatter：创建/修改时间文件系统本身就有属性，
                 // 外部导入的 md 也没有该字段——frontmatter 留给真正需要语义的页
                 const template = `# ${segs[segs.length - 1] ?? ''}\n\n`;
                 fs.writeFileSync(file, template, 'utf8');
@@ -3021,7 +3017,7 @@ export async function apply(ctx) {
                 catch (error) {
                     throw new Error(`读取文件失败：${error instanceof Error ? error.message : error}`);
                 }
-                // 自动保存的「最后写者赢」（VSCode 自动保存语义，用户定）：调用方带 stash 就是
+                // 自动保存按「最后写者赢」：调用方带 stash 就是
                 // 明确要求覆盖（客户端已经知道盘上被改过），**无条件**先把盘上那份提交存档再写——
                 // 不能挂在 mtime 比较里：客户端重试时传的就是盘上新 mtime，那样永远比不出差异、
                 // stash 一次都不会发生（实测踩到）。不带 stash 仍按 CAS 回冲突信息。
@@ -3043,7 +3039,7 @@ export async function apply(ctx) {
             // 删除（含孤儿级联，客户端算清单）：Windows 批量移入回收站（单 PS 进程逐项
             // 对账），失败项不再退回永久删除而是原样保留并回传 failed 清单；其它平台直接
             // 删，失败同样计 failed。deleted 只按「确实消失」的计数；若 vault 是 git 仓库
-            // 且确有删除，完成后 add+commit 单提交（用户定稿：一个提交即可整体撤回）。
+            // 且确有删除，完成后 add+commit 单提交（一个提交即可整体撤回）。
             // git 不可用（未装/未配置 user）不阻断删除本身。
             vaultPost('/dsh-kit/vault/delete', async (body, root) => {
                 const paths = Array.isArray(body.paths) ? body.paths.map((p) => String(p)) : [];
@@ -3104,7 +3100,7 @@ export async function apply(ctx) {
                 let committed = false;
                 if (deleted === 0)
                     return { deleted, committed, ...(failed.length > 0 ? { failed } : {}) };
-                // 有删除即整体提交一次（用户定稿：一个提交即可整体撤回）；git 不可用
+                // 有删除即整体提交一次（一个提交即可整体撤回）；git 不可用
                 // 不阻断删除本身，提交失败静默
                 const pagesDeleted = deleted - dirsDeleted;
                 committed = await commitVault(root, dirsDeleted > 0
@@ -3182,9 +3178,6 @@ export async function apply(ctx) {
                 const committed = await commitVault(root, `dsh-kit: 重命名 ${oldName} → ${name}${links > 0 ? `（改写 ${String(links)} 页双链）` : ''}`);
                 return { ok: true, path: target, links, committed };
             });
-            // 已存档会话视图与 /dsh-kit/workspace/archived|unarchive 两端点 2026-09-11
-            // 整个退役（用户定稿：会话量大了加载慢、实际无恢复需求；官方侧栏菜单的
-            // 归档动作本身不受影响，只是不再提供插件侧恢复入口）
             return () => {
                 disposeVendor();
                 disposeTree();

@@ -1,4 +1,4 @@
-// dsh-kit 网页搜索能力（自 dsh-free-search v0.2.0 并入，2026-08-24）
+// dsh-kit 网页搜索能力
 //
 // 向 web seam 注册 id 为 'free-search' 的搜索 provider，替换 base 层钉死的
 // `searchProvider: deepseek-official`（付费 DeepSeek 模型调用）——引擎链见

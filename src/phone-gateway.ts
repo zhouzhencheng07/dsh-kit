@@ -124,7 +124,7 @@ const HOST_ONLY_LOCKED = [
   'button[aria-label^="在 "][aria-label$=" 中打开工作目录"]',
   'button[aria-label^="Open workspace in "]',
   // 官方右侧边栏开始页的「工作区文件」胶囊（`dsh-client-ui-sidebar-files` 的 guide 条目，
-  // id 固定为 files）。用户定（2026-09-12）：远程视图里一并置灰——kit 自己的文件树才是
+  // id 固定为 files）。远程视图里一并置灰——kit 自己的文件树才是
   // 手机端要用的那个，官方这份只读列表留着就是两个文件入口打架
   'button[data-sidebar-right-guide-entry="files"]',
 ]
@@ -136,7 +136,7 @@ const HOST_ONLY_LOCKED = [
  * 接管关着时（chatOpenFilePreview 关，或文件树与源代码管理都关）才锁——否则点击
  * 落到"手机上看不了"的官方侧边栏预览。判据见 index.ts 的 lockPresentedCard。
  * 卡下拉里的宿主动作始终由 PRESENTED_HOST_ACTION_RE 按项文本拦（菜单走 portal）。
- * 历史更正：「本轮文件改动」chip 行的属性是 data-produced-files-row，与交付卡的
+ * 「本轮文件改动」chip 行的属性是 data-produced-files-row，与交付卡的
  * data-presented-file 不是同一属性的单复数形态，别按名字推关系。
  */
 const PRESENTED_LOCKED = ['[data-presented-file]']
@@ -147,7 +147,7 @@ const PRESENTED_LOCKED = ['[data-presented-file]']
  * 弹 OS 对话框（点击者与那块屏幕不在一处），且它没有 browse 的 list 能力（RPC 直接
  * directory-picker/unavailable），远程端拿不到等价交互。
  *
- * **「选择工作区」不能锁**（用户定稿 2026-09-12）：它是工作区切换 chip，`ui-conversation`
+ * **「选择工作区」不能锁**：它是工作区切换 chip，`ui-conversation`
  * 的 hero chip 无论当前选没选工作区，aria-label 恒为「选择工作区」（选中的工作区名只在
  * 可见文本里），锁了就切不了工作区——而真正开 picker 的是它菜单里的「添加工作区…」。
  */

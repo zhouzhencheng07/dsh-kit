@@ -3,8 +3,8 @@
 // KitConfigCard/GitChangesPanel/SkillsManager/TerminalDock/TerminalPane），跑完整渲染体。
 // TerminalDock/TerminalPane 通过 setKitUi 预置会话后渲染（防"有状态后才走到的分支"逃逸）。
 // ⚠️ 盲区：桩不会重渲染（effect 不执行、state 不更新），依赖 effect 产出后才走到的
-// 渲染分支（如 FileTreePanel 的 entries.map 行）覆盖不到——2026-08-23 曾有残留变量
-// gitMap 藏在该行逃过本检查，靠用户实测暴露。可疑残留请配合全文扫描排查。
+// 渲染分支（如 FileTreePanel 的 entries.map 行）覆盖不到——残留变量藏在那种行里会
+// 逃过本检查。可疑残留请配合全文扫描排查。
 // 用法：从 dsh-kit 根运行：node tests\render-check.cjs client\bundle.js
 const fs = require("node:fs");
 // 归一化行尾：git autocrlf 检出后文件可能是 CRLF，切片标记按 LF 匹配才稳定
@@ -256,9 +256,8 @@ check("FileTreeEntry 渲染无异常", !!out && typeof out === "object");
 callLog = [];
 out = comps.ScmEntry({});
 check("ScmEntry 渲染无异常", !!out && typeof out === "object");
-// 7.0) 侧栏索引单槽互斥（工具行三钮的选中态 = 侧栏正在显示谁，用户定稿
-// 2026-09-10；日程待办索引 2026-09-11 退役）：点源代码管理必须让出知识库目录
-// 那一格，否则两个钮同时亮而侧栏只按优先级显示一个
+// 7.0) 侧栏索引单槽互斥（工具行三钮的选中态 = 侧栏正在显示谁）：点源代码管理必须
+// 让出知识库目录那一格，否则两个钮同时亮而侧栏只按优先级显示一个
 const sidebarResetPatch = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null };
 const svp = comps.sidebarViewPatch("vault");
 check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultIdxOpen === true && svp.treeOpen === false && svp.gitOpen === false);
@@ -277,9 +276,9 @@ const ots = comps.openFeatureTab({ files: [], jobsOpen: false, browserOpen: fals
 check("openFeatureTab 日程：置存在+激活（纯补丁不触碰任务签）", ots.schedOpen === true && ots.activeFeature === "schedule" && ots.jobsOpen === undefined);
 const otb = comps.openFeatureTab({ files: [], jobsOpen: true, browserOpen: false, activeFeature: "jobs" }, "browser");
 check("openFeatureTab 浏览器：纯补丁不触碰任务签（合并保留）", otb.browserOpen === true && otb.activeFeature === "browser" && otb.jobsOpen === undefined);
-// 7.1b) 知识库入口（输入行钮 + 快捷键同语义）：只切左侧目录（2026-09-11 用户定稿，
-// 点具体页才开右栏知识库签）；再点 = 收回会话列表。补丁只含侧栏三键，功能签与
-// 页签状态一律不动（setKitUi 合并语义）
+// 7.1b) 知识库入口（输入行钮 + 快捷键同语义）：只切左侧目录，点具体页才开右栏知识库
+// 签；再点 = 收回会话列表。补丁只含侧栏三键，功能签与页签状态一律不动（setKitUi
+// 合并语义）
 const tvOpen = comps.toggleVaultEntry({ treeOpen: true, vaultIdxOpen: false, vaultOpen: false, vaultPages: [], activeFeature: null });
 check("知识库入口开：只切侧栏索引且让出文件树", tvOpen.vaultIdxOpen === true && tvOpen.treeOpen === false && tvOpen.vaultOpen === undefined && tvOpen.activeFeature === undefined);
 const tvClose = comps.toggleVaultEntry({ vaultIdxOpen: true, vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", vaultHist: { stack: ["D:/v/a.md"], idx: 0 }, activeFeature: "vault" });
@@ -319,12 +318,12 @@ const jobsHooks = {
 callLog = [];
 out = comps.JobsPanel(jobsHooks);
 check("JobsPanel 带运行中任务渲染无异常", !!out && typeof out === "object");
-// 输出常显（用户定稿 2026-09-05）：每个任务行自带输出块，不再有「输出」按钮
+// 输出常显：每个任务行自带输出块，不再有「输出」按钮
 const jobRows = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-jobs-row");
 const jobOutBlocks = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-jobs-output");
 check("JobsPanel 输出块每任务常显（2 行 2 输出块）", jobRows.length === 2 && jobOutBlocks.length === 2);
 check("JobsPanel 不再渲染「输出」按钮", !callLog.some((c) => (c[0] === "jsx") && c[2] && (c[2].children === "Output" || c[2].children === "输出")));
-// 终态保留在列（用户定稿 2026-09-05）：终态行仍在（data-done 淡化），动作变「关闭」，
+// 终态保留在列：终态行仍在（data-done 淡化），动作变「关闭」，
 // 运行中行保持「结束」；输出块每行都在
 const doneHooks = {
   useSessions: (sel) =>
@@ -392,8 +391,7 @@ check("BrowserPanel 未运行态渲染无异常", !!out && typeof out === "objec
 check("BrowserPanel 渲染出带共驾输入处理器的 canvas", !!canvasHost && !!hasInputHandlers);
 comps.setKitUi({ browserOpen: false });
 
-// 7.2.5) 关页签直关（用户定稿 2026-09-10：宿主 active 识别常不准，「agent 在用」
-// 确认与 ● 标识整体退役）——✕ 点击不弹确认
+// 7.2.5) 关页签直关（宿主 active 识别常不准）——✕ 点击不弹确认
 stateStore.clear();
 stateSeq = 0;
 stateStore.set(0, { running: true, launching: false, pages: [
@@ -455,10 +453,7 @@ check("closeFileTab 关最后一个：整片文件舞台收摊且激活位顺延
 
 
 
-// 7.2.4c) 侧栏底部按钮区 2026-09-11 撤（用户定稿：后台任务/浏览器入口归右栏
-// 开始页清单与自动跟随）——原 footer 断言整节删除
-
-// 7.2.4e) 右栏 pane 正文组件（迁移 2026-09-11）：自建舞台退役后这是唯一外壳，
+// 7.2.4e) 右栏 pane 正文组件：各 pane 正文的唯一外壳，
 // 这里直接渲染各 pane 正文验证渲染体；存在性同步走 effect（桩不执行）
 comps.setKitUi({
   files: [
@@ -481,7 +476,7 @@ comps.setKitUi({ files: [], activeFile: null });
 callLog = [];
 out = comps.FilePaneBody({});
 const fpEmpty = callLog.find((c) => (c[0] === "jsx") && c[2] && (c[2].className === "dshk-rbpane-hint" || c[2].className === "dshk-rbguide"));
-check("FilePaneBody 0 文件无空态（最后一页关掉连官方签一起收，用户定稿 2026-09-11）", !!out && !fpEmpty);
+check("FilePaneBody 0 文件无空态（最后一页关掉连官方签一起收）", !!out && !fpEmpty);
 callLog = [];
 comps.setKitUi({ vaultOpen: true, vaultPages: ["D:/v/a.md", "D:/v/b.md"], activeVaultPage: "D:/v/b.md" });
 callLog = [];
@@ -523,11 +518,8 @@ comps.openVaultPageAndDock("D:/v/p.md");
 check("openVaultPageAndDock 落 kitUi 知识库页签", comps.getKitUi().activeVaultPage === "D:/v/p.md" && comps.getKitUi().vaultOpen === true);
 comps.setKitUi({ files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 }, activeFeature: null });
 
-// 侧栏待办索引 2026-09-11 退役（日程只剩右栏 dock 签）：ScheduleIndexView 与
-// toggleSchedEntry 已随之删除，这里不再有渲染用例
-
 // 6.6) 知识库纯函数：frontmatter 拆分 / 解析优先级 / 反链
-//（wikilink/数学变换已并入 RTE vendor，往返断言在 tests/test-vault-rte.mjs）
+//（wikilink/数学变换的往返断言在 tests/test-vault-rte.mjs）
 {
   const raw = "---\ncreated: 2026-09-06\n---\n\n# 标题\n\n正文";
   const { fmText, rest } = comps.vaultSplitFrontmatter(raw);
@@ -618,9 +610,9 @@ check("resolveMdLink：空 href / 无根时站内链接返回 null", comps.resol
   comps.vaultPaneSlot.set(null);
   comps.setKitUi({ vaultOpen: false, activeFeature: null });
 }
-// 6.9c) VaultRootView 索引就绪态的工具条：搜索框独占第二行（2026-09-11 用户定稿：
-// 挤成一行时搜索框只剩半截宽）+ ↻ 刷新必须连带重拉目录树——树是懒加载缓存，
-// 只刷索引 ⇒ 外部增删的文件在侧栏看不见，用户报的「刷新功能不可用」就是这个
+// 6.9c) VaultRootView 索引就绪态的工具条：搜索框独占第二行（挤成一行时搜索框只剩半
+// 截宽）+ ↻ 刷新必须连带重拉目录树——树是懒加载缓存，
+// 只刷索引 ⇒ 外部增删的文件在侧栏看不见，「刷新功能不可用」就是这个
 let vaultRefreshFetched = [];
 let vaultFetchPrev = null;
 {
@@ -632,7 +624,7 @@ let vaultFetchPrev = null;
   stateStore.set(3, { "D:/v": [{ name: "wiki", path: "D:/v/wiki", dir: true }], "D:/v/wiki": [{ name: "a.md", path: "D:/v/wiki/a.md", dir: false }] }); // treeDirs
   stateStore.set(4, { "D:/v": true, "D:/v/wiki": true }); // expanded
   // 行 ⋯ 菜单（state#8，见 VaultRootView 的 useState 次序）：预置成「某页的行菜单已打开」，
-  // 校验树上那套 actions 接线（重命名 + 删除；删除是 2026-09-11 从页条挪过来的）
+  // 校验树上那套 actions 接线（重命名 + 删除）
   stateStore.set(8, { entry: { dir: false, name: "a", path: "D:/v/wiki/a.md" }, rect: { left: 10, top: 100, bottom: 120, right: 30, width: 20, height: 20 } });
   const fetched = vaultRefreshFetched;
   const prevFetch = global.fetch;
@@ -661,7 +653,7 @@ let vaultFetchPrev = null;
   // 文件夹选择器换成自绘搜索式（可选任意层级）：那一格现在是组件，不再是原生 select
   const pickerEl = barRow1[2];
   check("上行第三格是搜索式文件夹选择器", barRow1.length === 4 && !!(pickerEl && pickerEl.props && Array.isArray(pickerEl.props.folders)));
-  // 树上行操作（用户定稿）：页行与目录行同形状 = `@` + `⋯`（目录行的 + 收进菜单，
+  // 树上行操作：页行与目录行同形状 = `@` + `⋯`（目录行的 + 收进菜单，
   // 行上不挂常驻钮——那枚 + 只留给左轨头部/根级；也顺带没了 hover 挤位）
   const actSpans = callLog.filter((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[2] && c[2].className === "dshk-rowact");
   const actsOf = (sp) => (Array.isArray(sp[2].children) ? sp[2].children : [sp[2].children]);
@@ -680,7 +672,7 @@ let vaultFetchPrev = null;
       (src.match(/className: "dshk-vault-treeplus"/g) ?? []).length === 1 &&
       !src.includes(".dshk-vault-treerow:hover .dshk-vault-treeplus"),
   );
-  // 图标改走文件树那套（用户定稿）：自绘的页面/目录图标整链不存在，行图标来自共用组件
+  // 图标走文件树那套：自绘的页面/目录图标都不存在，行图标来自共用组件
   check(
     "知识库树图标不再自绘（无 VaultPageIcon/VaultFolderIcon，走 FileTypeIcon16/TreeFolderIcon）",
     !src.includes("VaultPageIcon") &&
@@ -836,13 +828,13 @@ let vaultFetchPrev = null;
     paneErr = e;
   }
   const editbar = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-vault-editbar");
-  // @ 已按用户定稿挪到左侧树的文件行上，页条里不该再有它（这是「删掉右侧 @」的回归哨兵）
+  // @ 挂在左侧树的文件行上，页条里不该再有它（「页条不得有 @」的回归哨兵）
   const citeBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["引用到对话", "Cite to chat"].includes(c[2].title));
-  // 删除同理挪到树上行的 ⋯ 菜单（用户定稿）：页条里不得再有「删除」按钮/文案
+  // 删除同理在树上行的 ⋯ 菜单：页条里不得再有「删除」按钮/文案
   const delBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["删除", "Delete"].includes(c[2].children));
   const rte = callLog.find((c) => c[1] === comps.RteEditor);
   check("VaultPagePane 渲染无异常（页条 + RTE 就位，页条不再带 @）", paneErr === null && !!editbar && !citeBtn && !!rte);
-  check("页条不再带删除按钮（删除已挪到左侧树的行 ⋯）", !delBtn);
+  check("页条不再带删除按钮（删除在左侧树的行 ⋯ 菜单）", !delBtn);
   if (paneErr) console.log("  VaultPagePane error:", paneErr.message);
   stateSeq = 0;
   stateStore.clear();
@@ -857,7 +849,7 @@ let vaultFetchPrev = null;
   stateSeq = 0;
   stateStore.clear();
 }
-// 6.9b2) 反链小节：来源页 chip 横排（2026-09-11 用户定稿：一行一个太占高度）——
+// 6.9b2) 反链小节：来源页 chip 横排（一行一个太占高度）——
 // 渲染出容器 + 每个来源页一个可点 chip，chip 带全名 tooltip（超长省略后仍看得到全称）
 {
   stateSeq = 0;
@@ -1053,8 +1045,6 @@ out = comps.GitBranchMenu({ rect: { left: 20, top: 40 }, branches: { branches: [
   { name: "dev", isHead: false, upstream: "origin/dev", track: "[ahead 1]", trackParsed: { ahead: 1, behind: 0, gone: false } },
 ] }, busy: false, name: "x", created: "dev", onName: () => {}, onCreate: () => {}, onSwitch: () => {}, onDelete: () => {}, onClose: () => {} });
 check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
-// GitActionsMenu 2026-09-11 随 ⋯ 菜单撤除（拉取推送收敛进 ↑↓ 同步钮）——原渲染断言删除
-
 // 8) SkillsManager（技能管理页）：无 hooks（cwd=null）与有 cwd 两种
 callLog = [];
 const fakeHooks = {
@@ -1132,8 +1122,8 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
 
 // 10c) 全局 429 续跑器核心（monitorTickCore 依赖注入直测）：沿检测（running
 //      true→false）+ lastAgentError 措辞判定 + 到点发射 + 恢复清零 + capped。
-//      旧 F1（历史 turn-error 误接管）在新机制下结构性消失：lastAgentError 是活
-//      镜像（prompt 即清、页面刷新即无），不是持久历史——历史错误没有可触发的沿。
+//      lastAgentError 是活镜像（prompt 即清、页面刷新即无），不是持久历史——
+//      历史错误没有可触发的沿。
 {
   const mkSessions = (rows) => ({
     list: {
@@ -1304,15 +1294,14 @@ const fakeScope = {
 };
 out = comps.KitConfigCard({ scope: fakeScope });
 check("KitConfigCard 渲染无异常", !!out && typeof out === "object");
-// 设置卡布局整理（2026-09-11 用户定稿）：两个侧边栏快捷键并入「侧边栏」组（组头
-// + 左/右两键，启用开关 2026-09-11 撤——Ctrl+B 恒生效），字段行走官方通用设置
-// 模型（标题+说明左列、控件右置）
+// 设置卡布局：两个侧边栏快捷键在「侧边栏」组（组头 + 左/右两键，无启用开关——
+// Ctrl+B 恒生效），字段行走官方通用设置模型（标题+说明左列、控件右置）
 check(
   "侧边栏组只含左右两键且带组头、无启用位",
   src.includes('{ title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut"] }') && src.includes('cfgGroupSidebar: "侧边栏"') && !src.includes("sidebarShortcutEnabled"),
 );
 // 默认值与宿主 Config schema（src/index.ts）逐项同值：恢复默认拿的是宿主组合基座
-// （base 只带 vaultRoot 一项，2026-09-11 dev 环境实测），其余键由 cfgFormat 回落
+// （base 只带 vaultRoot 一项），其余键由 cfgFormat 回落
 // 客户端内置默认——两处漂移就会出现「恢复默认后跳到别的值」
 {
   const hostSrc = fs.readFileSync(__dirname + "/../src/index.ts", "utf8");
@@ -1332,8 +1321,8 @@ check(
   check("设置卡内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 20);
 }
 // 开关类字段的「恢复默认」显示：基座缺该项时按内置默认渲染。默认关的
-// phoneKeepGatewayOn 曾被 cfgFormat 的 undefined → "true" 兜底成勾选态——
-// 界面显示已恢复默认、实际保存后是关，两边对不上（2026-09-11 用户实测）
+// phoneKeepGatewayOn 不能被 cfgFormat 的 undefined → "true" 兜底成勾选态——
+// 界面显示已恢复默认、实际保存后是关，两边对不上
 check(
   "恢复默认：bool 字段缺基座项回落内置默认（phoneKeepGatewayOn 默认 false）",
   comps.cfgFormat("phoneKeepGatewayOn", undefined) === "false" &&
@@ -1341,23 +1330,21 @@ check(
     comps.cfgFormat("phoneKeepGatewayOn", true) === "true" &&
     comps.cfgFormat("phoneKeepGatewayOn", false) === "false",
 );
-// 过时文案清理：现行说明不得再提「侧栏底部『任务』钮」（该入口 2026-09-11 撤）、
-// 搜索默认改 2、日程索引标题键已废（历史迁移记录型注释不算）
+// 过时文案清理：现行说明不得出现「侧栏底部『任务』钮」、日程索引标题键、搜索默认 5
 check(
   "设置卡过时文案已更新（无侧栏底部钮现行说法/默认 5/schedIdxTitle）",
   !src.includes("侧栏底部「") && !src.includes("默认 5") && !src.includes("schedIdxTitle"),
 );
-// OpenCode Go 会话头已非配置项（内置行为，2026-09-08 用户定）：i18n 键与旧
-// 写入端点都必须不存在；注入机制本身由 test-opencode-session.mjs 覆盖
+// OpenCode Go 会话头是内置行为、不是配置项：i18n 键与写入端点都必须不存在；
+// 注入机制本身由 test-opencode-session.mjs 覆盖
 check(
-  "OpenCode Go 会话头已不出现在设置卡（i18n 键与旧端点均移除）",
+  "OpenCode Go 会话头不在设置卡里（i18n 键与端点均移除）",
   !src.includes("cfgOpenCodeSession") && !src.includes('"/dsh-kit/opencode-session"'),
 );
 
-// 文件编辑面（2026-09-10 用户实测两条）：① 自动保存提示条去掉（提示条容器与两枚
-// i18n 键都不得再出现）；② CM 宿主走状态化回调 ref——宿主会被 React 换新节点，
-// 元素不进依赖就等于「切 diff 再切回原文一片空白」，另外那个从没挂到 DOM 上的
-// 只读 ref 也一并删掉了；③ 空文件不再落「文件为空」分支（新建的空文件要能写）
+// 文件编辑面：① 自动保存提示条不得存在（提示条容器与两枚 i18n 键都不许出现）；
+// ② CM 宿主走状态化回调 ref——宿主会被 React 换新节点，元素不进依赖就等于「切 diff
+// 再切回原文一片空白」；③ 空文件不落「文件为空」分支（新建的空文件要能写）
 check(
   "文件编辑面不再有自动保存提示条（.dshk-editbar 与两枚 i18n 键均移除）",
   !src.includes("dshk-editbar") && !src.includes("editRteHint") && !src.includes("editAutosaveHint"),
@@ -1379,22 +1366,21 @@ check(
 // 明写清掉，防日后「顺手」把它删了又冒出来
 check("CM 焦点虚线框已清掉（.cm-focused outline:none）", src.includes(".dshk-cm-host .cm-editor.cm-focused{outline:none}"));
 
-// 日程左侧半边退役（2026-09-11 用户定稿：日程只剩右栏 dock 签，入口归右栏开始页
-// 与待办卡）——侧栏待办索引、日程快捷键及其设置项都不得再出现；右栏开合快捷键
-// （Ctrl+Alt+B，可配置）取而代之
+// 日程只有右栏 dock 签（入口归右栏开始页与待办卡）：侧栏待办索引、日程快捷键及其
+// 设置项都不得出现；开合走右栏快捷键（Ctrl+Alt+B，可配置）
 check(
-  "日程侧栏索引与专属快捷键已退役（schedIdxOpen/schedShortcut 全链移除）",
+  "日程侧栏索引与专属快捷键不存在（schedIdxOpen/schedShortcut 全链移除）",
   !src.includes("schedIdxOpen") && !src.includes("schedShortcut") && !src.includes("cfgSchedShortcut") && !src.includes("ScheduleIndexView"),
 );
 check("右栏收起/展开快捷键已接入（默认 Ctrl+Alt+B，走 sidebarRight.toggleExpanded）", src.includes('rightbarShortcut: "Ctrl+Alt+B"') && src.includes("sr.toggleExpanded()"));
-// 文件树「上传文件到当前目录」退役（2026-09-11 用户定稿）：按钮/隐藏 input/上传
-// 逻辑/i18n 键整链移除；vault 附件上传仍走 /dsh-kit/upload（端点保留）
+// 文件树没有「上传文件到当前目录」：按钮/隐藏 input/上传逻辑/i18n 键都不得存在；
+// vault 附件上传仍走 /dsh-kit/upload（端点保留）
 check(
-  "文件树上传按钮与逻辑已整链移除（vault 附件上传不受影响）",
+  "文件树上没有上传按钮与逻辑（vault 附件上传不受影响）",
   !src.includes("UploadIcon") && !src.includes("treeUpload") && !src.includes("uploadDone") && !src.includes("uploadFail"),
 );
-// SCM 面板分支按钮曾被 .dshk-btn 的 26px 方钮定宽压扁（svg/分支名 0 宽只剩 ▾，
-// 用户截图「源代码管理图标没了」）——分支按钮必须显式 width:auto 反制
+// SCM 面板分支按钮会被 .dshk-btn 的 26px 方钮定宽压扁（svg/分支名 0 宽只剩 ▾）——
+// 分支按钮必须显式 width:auto 反制
 check("分支按钮不被 .dshk-btn 定宽压扁（width:auto 修正恒在）", src.includes(".dshk-branchbtn{display:inline-flex;flex:none;width:auto"));
 
 // React 桩记录到的组件类型必须包含本插件自定义组件名（防 ReferenceError 被忽略后整段缺失）

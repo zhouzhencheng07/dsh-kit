@@ -62,7 +62,7 @@ function parseWikiInner(inner) {
   return { target, anchor, alias: alias === "" ? null : alias };
 }
 
-/** 行内数学/围栏共享的 $ 定界识别（与旧 vaultTransformMath 同语义）：
+/** 行内数学/围栏共享的 $ 定界识别：
  *  开 $ 后非空白、闭 $ 前非空白、闭 $ 后非 $ 非词字符（排 "$5 和 $6" 误配） */
 const INLINE_MATH_RE = /^\$(?!\s)((?:\\.|[^$\n])+?)(?<!\s)\$(?!\$|\w)/;
 
@@ -356,12 +356,12 @@ const MathBlock = Node.create({
   },
 });
 
-// ─── 折叠块（wangshu 同款：标题/正文两个 block* 富内容槽，存盘 <details>） ──
+// ─── 折叠块（标题/正文两个 block* 富内容槽，存盘 <details>） ──
 // 标题区可多行、可任意块级/行内格式，与正文同级编辑。md 载体用原生
-// <details><summary> HTML（wangshu 导出同款），tokenizer 先于内建 html 规则整块
+// <details><summary> HTML，tokenizer 先于内建 html 规则整块
 // 认领；闭合不全时放行给内建链路 → RawBlock 原样保留（解析容错公理）。
 // 已知边界：summary/正文内的代码围栏若含有 </summary>/</details> 字面行会被
-// 误切开（wangshu 导出同款限制）
+// 误切开）
 const Details = Node.create({
   name: "dshkDetails",
   group: "block",
@@ -475,7 +475,7 @@ const Details = Node.create({
             .run(),
     };
   },
-  // wangshu 同款快捷键：Ctrl+Enter 跳出折叠块在块后起段；标题槽首空段退格=删整块；
+  // 快捷键：Ctrl+Enter 跳出折叠块在块后起段；标题槽首空段退格=删整块；
   // 正文槽首空段退格=光标退到标题槽末尾
   addKeyboardShortcuts() {
     return {

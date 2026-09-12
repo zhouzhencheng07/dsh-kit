@@ -4,10 +4,7 @@
 //   1) 骨架建立时（vaultRoot 配置/变更）——已 init 的仓库跳过，新建仓库初始存档一次；
 //   2) 人工保存后（vault/write 端点，Ctrl+S 与面板保存同路）——存下人工改动；
 //   3) 删除后（delete 端点）——整体可撤回。
-// 原第四时机「agent 编辑工具落盘前拦 fs/write-intent、fs/edit-intent 瀑布」已退役
-// （2026-09-09 用户定稿 + 实测：该瀑布对 profile 插件不可达——fs/observed 的 emit
-// 能到插件 ctx、intent waterfall 收不到；且拦截语义复杂、宿主升级难维护）。agent
-// 的版本管理改由知识库使用技能教会的 git -C add/commit 承担（技能由用户自备，
+// agent 的版本管理由知识库使用技能教会的 git -C add/commit 承担（技能由用户自备，
 // 插件不随包分发）。
 //
 // 降级语义：git 未安装/命令失败/超时一律静默跳过——存档是便利设施，绝不阻断
@@ -182,7 +179,7 @@ export async function ensureVaultGit(root) {
             return;
         }
         // 已有仓库：.gitignore 补齐 + library 出索引。`.gitignore` 只对未跟踪文件
-        // 生效，早先版本已把 library/ 提交进索引的库，得显式 --cached 摘掉——
+        // 生效，已把 library/ 提交进索引的库，得显式 --cached 摘掉——
         // 只动索引，磁盘上的原始资料一个字节都不碰。
         const wrote = ensureOwnGitignore(root);
         const tracked = await runGit(root, ['ls-files', '--', 'library']);

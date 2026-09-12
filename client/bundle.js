@@ -5,16 +5,14 @@
 //   入口：conversation.input.left（composer 工具行，文件树/源代码管理/知识库/
 //     终端四个小图标钮，工作区级工具跟 session 走）。知识库钮是开合切换：开 =
 //     侧栏索引视图，再点 = 侧栏回会话列表；日程没有 composer 钮（日程只有一个
-//     家：右栏 dock 签，入口归右栏开始页条目与待办卡，2026-09-11 用户定稿，
-//     侧栏待办索引与专属快捷键一并退役）。
+//     家：右栏 dock 签，入口归右栏开始页条目与待办卡）。
 //   右栏（唯一工作台形态，宿主 0.1.5+）：sidebarRightTabs 注册五类 dock 签，
 //     pane 正文经 slots.inject（sidebar.right.pane.tab）按 id 提供，pane 内自管
 //     文档签条。dock 签本身没有按钮：文件/知识库是被动签（索引/对话链接点开
 //     即开），任务/日程/浏览器走右栏开始页清单与自动跟随。开始页保留官方
 //     ShippedGuide（罗盘 + 胶囊条目），我们只贡献 guide 条目：日程/浏览器/
 //     后台任务三枚（文件/知识库是被动签，不给条目），官方「文件」条目垫底。
-//     自建舞台与宽度模型 2026-09-12 整体退役（宿主基线 0.1.5-rc.2 起不再需要
-//     回退路径）：缺 sidebarRight 服务时只剩 kitUi 侧的存在性补丁——入口按钮
+//     缺 sidebarRight 服务时只剩 kitUi 侧的存在性补丁——入口按钮
 //     不报错，签由官方侧自己决定要不要出现。
 //   终端：底部停靠面板（快捷键亦可切换），数据走宿主半边 /dsh-kit/terminal WS。
 //   功能存在性（kitUi）：files/activeFile 与 vaultPages/activeVaultPage+vaultHist
@@ -50,7 +48,7 @@ window.__ModuleLoader__.load({
     let jsxRuntime = require("react/jsx-runtime");
     let reactDom = require("react-dom");
 
-    // ─────────── 官方 primitives 图标复用（用户定稿 2026-09-11：能复用就不自绘）───
+    // ─────────── 官方 primitives 图标复用（能复用就不自绘）───
     // primitives 随宿主前端注册进 ModuleLoader（官方各 client lib 同款 require）；
     // 取不到（0.1.2 老宿主/异常环境）时各图标回退自绘版本，不挡启动。
     let dswPrimIcons = null;
@@ -94,7 +92,7 @@ window.__ModuleLoader__.load({
     const getKitUi = () => kitUi;
 
     /** agent 动浏览器 → 把右栏浏览器签拽到眼前（壳层常驻事件源与面板共用此入口）。
-     *  无抑制标志（用户定稿 2026-09-10：agent 操作浏览器为安全起见必须可见——
+     *  无抑制标志（agent 操作浏览器为安全起见必须可见——
      *  人为关掉/隐藏的浏览器签，agent 下次导航照样弹回） */
     function maybeAutoOpenBrowser() {
       if (kitUi.activeFeature === "browser" && kitUi.browserOpen === true) return;
@@ -160,10 +158,10 @@ window.__ModuleLoader__.load({
       return patch;
     }
 
-    // ── 知识库页标签（多开，2026-09-10 用户定稿：与文件标签同款交互）──
+    // ── 知识库页标签（多开：与文件标签同款交互）──
     // 一页一标签、点击切换、✕ 单关；vaultOpen 是「知识库这一片有没有」，
-    // 没有任何页标签时它承载一张「请选择页面」空签（入口点开即见右栏签，用户
-    // 定稿「打开时中间页面也要相应打开」）。vaultHist 是 ← → 的访问序，与标签
+    // 没有任何页标签时它承载一张「请选择页面」空签（入口点开即见右栏签，打开时
+    // 中间页面也要相应打开）。vaultHist 是 ← → 的访问序，与标签
     // 存在性解耦：标签被关掉的历史项在关闭时剪掉。
     /** 路径尾名（标签名用）：文件保留后缀，知识库页去掉 .md（与索引树的页名一致） */
     const baseName = (p) => String(p ?? "").split(/[\\/]/).pop() ?? "";
@@ -248,7 +246,7 @@ window.__ModuleLoader__.load({
       return patch;
     }
     /** 打开/激活一个功能签（输入行入口与自动跟随共用）：确保存在并
-     *  激活、不清别的标签。浏览器的抑制已废除（agent 干活必回眼前） */
+     *  激活、不清别的标签。浏览器不做抑制（agent 干活必回眼前） */
     function openFeatureTab(ui, tab) {
       if (tab === "jobs") return { jobsOpen: true, activeFeature: "jobs" };
       if (tab === "schedule") return { schedOpen: true, activeFeature: "schedule" };
@@ -335,10 +333,9 @@ window.__ModuleLoader__.load({
     }
 
     // ── 侧栏索引视图单槽与入口按钮（文件树/源代码管理/知识库，三个入口按钮
-    // + 快捷键共用；日程待办索引 2026-09-11 退役——日程只剩
-    // 右栏 dock 签一个家，入口归右栏开始页条目与待办卡，用户定稿）──
+    // + 快捷键共用）──
     // 侧栏只有一格（会话 ↔ 文件树 ↔ 源代码管理 ↔ 知识库目录），三个按钮的
-    // 选中态直接取各自的开合位（用户定稿：选中态与侧栏显示相关、与右栏签
+    // 选中态直接取各自的开合位（选中态与侧栏显示相关、与右栏签
     // 无关）——所以三者必须互斥：否则同一个侧栏位上会有两个按钮一起亮，
     // 而视图按优先级只显示其中一个。
     /** 单槽互斥补丁：view = 'tree' | 'scm' | 'vault' | null */
@@ -349,9 +346,9 @@ window.__ModuleLoader__.load({
         vaultIdxOpen: view === "vault",
       };
     }
-    // 语义：关 → 开；开 → 只把侧栏索引收回会话列表（用户定稿 2026-09-10：功能签
+    // 语义：关 → 开；开 → 只把侧栏索引收回会话列表（功能签
     // 不跟着关——签的归宿是官方签 ✕ 与配置清场，入口按钮只管侧栏那格）。知识库钮
-    // 只切左侧目录（用户定稿 2026-09-11），点具体页才开右栏签；收起态顺带展开
+    // 只切左侧目录，点具体页才开右栏签；收起态顺带展开
     // 侧栏（视图渲染进铁轨等于不可见）。
     function openVaultEntry() {
       expandSidebarNow();
@@ -577,7 +574,7 @@ window.__ModuleLoader__.load({
     // 拿不到渲染期 props，用模块变量中转）
     const shellShare = { current: null };
 
-    // ── M4 会话→笔记（用户定稿 2026-09-09）：vault 路径点击直达知识库标签 ──
+    // ── M4 会话→笔记：vault 路径点击直达知识库标签 ──
     // vault root 的客户端缓存：拦截器路由判定用（vault 内路径开知识库标签而非
     // 文件预览，且不受 chatOpenFilePreview 门控——互通是知识库本体能力）。
     // VaultRootView 每次拉索引同步刷新；从未开过知识库时点击现取一次（索引端
@@ -820,7 +817,7 @@ window.__ModuleLoader__.load({
     let vaultSelMirror = "";
 
     /** M4 笔记→会话：「引用到对话」的选区文本转引用块续在草稿后（首尾空行剥
-     *  掉）。页面路径本体由 @ 引用芯片承载（2026-09-10 用户定稿：与文件树
+     *  掉）。页面路径本体由 @ 引用芯片承载（与文件树
      *  「@到对话」同款方法，此函数只管引用块文本）。render-check 直调。 */
     function vaultCiteText(draft, selText) {
       const base = typeof draft === "string" ? draft : "";
@@ -1906,8 +1903,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-doc td,.dshk-doc th,.dshk-md td,.dshk-md th{border:1px solid var(--dsw-alias-border-l1);padding:3px 8px}
 .dshk-doc img{max-width:100%}
 /* 官方右栏 dock pane 正文（sidebar.right.pane.tab）：pane 内是普通文档流，
-   外壳占满 100%×100%、内容区自己滚——自建舞台的 fixed 外壳与 body 让位类已退役，
-   这里只剩普通文档流 */
+   外壳占满 100%×100%、内容区自己滚；这里只有普通文档流 */
 .dshk-rbpane{width:100%;height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base)}
 .dshk-rbpane-scroll{overflow:auto}
 .dshk-rbpane .dshk-pane-view{flex:1 1 auto;min-height:0}
@@ -2149,7 +2145,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-vault-blrow:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-vault-wl{color:var(--dsw-alias-brand-primary);text-decoration:underline dotted}
 .dshk-vault-wl-broken{color:var(--dsw-alias-label-tertiary);text-decoration:underline wavy}
-/* 代码盒：语言条 + 复制钮（wangshu 同款）；pre 自身边距归零由盒子接管 */
+/* 代码盒：语言条 + 复制钮；pre 自身边距归零由盒子接管 */
 .dshk-codebox{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;overflow:hidden;margin:10px 0}
 .dshk-codebox pre{margin:0;border:0;border-radius:0}
 .dshk-codebar{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:rgba(135,131,120,.12);font-size:11px}
@@ -2159,7 +2155,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-md .dshk-math{color:inherit}
 .dshk-md .dshk-math .katex-display{margin:.5em 0}
 .dshk-vault-toast{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:var(--dsw-alias-bg-layer-3);border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary);font-size:12px;padding:6px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
-/* 编辑增强（wangshu 三件套分工，互不重复）：编辑条=文档级命令（保存/撤销/
+/* 编辑增强（三件套分工，互不重复）：编辑条=文档级命令（保存/撤销/
    重做）、泡泡菜单=选区行内格式、斜杠菜单=块插入（分类→条目，图标+标题+描述） */
 .dshk-vault-tbsep{flex:none;width:1px;height:16px;background:var(--dsw-alias-border-l2);margin:0 2px}
 .dshk-vault-tbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;min-width:24px;height:22px;padding:0 5px;border-radius:6px;cursor:pointer}
@@ -2173,7 +2169,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-vault-slashtitle{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshk-vault-slashdesc{font-size:10px;color:var(--dsw-alias-label-tertiary)}
 .dshk-vault-slashmore{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)}
-/* 泡泡菜单（wangshu 同款）：选区上方浮出行内格式条；颜色/高亮点开在条下挂第二行色板 */
+/* 泡泡菜单：选区上方浮出行内格式条；颜色/高亮点开在条下挂第二行色板 */
 .dshk-vault-bubble{position:fixed;z-index:60;display:flex;flex-direction:column;gap:4px;padding:4px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.12);transform:translateX(-50%)}
 .dshk-vault-bubblebar{display:flex;align-items:center;gap:2px}
 .dshk-vault-bsep{flex:none;width:1px;height:16px;background:var(--dsw-alias-border-l2);margin:0 2px}
@@ -2190,7 +2186,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 /* 日程模块：中心区第三 tab——周时间网格 + 待办/统计侧栏；计时芯片挂输入区 dock。
    --dshk-sched-toprow = 顶部一条里统计卡的自然高度（单列四格：标题 17 + 四格各
    「值 21 + 标签 15 + 格内缝 2」+ 格间距 8×3 + 标题与格 8 + 内边距 20 ≈ 218）；
-   待办卡的限高取同一个值（用户定稿：待办最高只到统计卡那么高，再多卡内滚）——
+   待办卡的限高取同一个值（待办最高只到统计卡那么高，再多卡内滚）——
    改统计的行数/字号时这个常量要跟着改 */
 .dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px;--dshk-sched-toprow:218px}
 .dshk-sched-head{flex:none;display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--dsw-alias-border-l2)}
@@ -2199,13 +2195,13 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-sched-weeklabel{min-width:104px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:12px}
 .dshk-sched-navbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
 .dshk-sched-navbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-/* 顶部一条（左待办 + 右统计）→ 下网格（用户 2026-09-12 定稿，所有坞宽一致）。
-   整体左右分栏（待办+统计整列在左、网格在右）已废弃——待办行的固定件（勾选/截止
+/* 顶部一条（左待办 + 右统计）→ 下网格（所有坞宽一致）。
+   不做整体左右分栏（待办+统计整列在左、网格在右）——待办行的固定件（勾选/截止
    徽章/计时钮）占 ~150px，坞宽一紧就只剩把网格挤成每天十几像素这一条路
    （默认 300px 右栏、手机竖屏都实测过） */
 .dshk-sched-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;min-width:0}
 /* y 轴 mandatory 吸附到整点行：静止位置恒为「某小时标签贴在表头带下方」，
-标签既不会被 sticky 角格盖掉半截，也不会漂进表头区（2026-09-06 两轮反馈的根治）；
+标签既不会被 sticky 角格盖掉半截，也不会漂进表头区；
 scroll-padding 与 --dshk-sched-band 绑定，改带高只需改一处 */
 .dshk-sched-gridwrap{flex:1 1 auto;min-width:0;overflow:auto;scroll-snap-type:y mandatory;scroll-padding-top:calc(var(--dshk-sched-band) + 4px)}
 /* 顶部 8px 是 00:00 行与表头带的呼吸空间（s=0 时) */
@@ -2219,7 +2215,7 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-wd{display:block;font-size:11px;color:var(--dshk-sched-wdcolor,var(--dsw-alias-label-tertiary))}
 .dshk-sched-dnum{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;border-radius:999px;font-size:12px;margin-top:2px}
 /* 主色底上的文字用 bg-base 而不是写死 #fff：品牌主色是单色令牌（浅色近黑 / 深色近白），
-   写死白在深色主题就是白底白字（用户 2026-09-12：日程字体颜色不随深暗色变） */
+   写死白在深色主题就是白底白字——日程字体颜色不随深暗色变 */
 .dshk-sched-dayhead.is-today .dshk-sched-dnum{background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
 .dshk-sched-allday{grid-row:2;border-left:1px solid var(--dsw-alias-border-l2);border-bottom:1px solid var(--dsw-alias-border-l2);padding:2px 4px;font-size:11px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-fill-l2);border-radius:4px;margin:2px 2px;min-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dshk-sched-timeline{border-right:1px solid var(--dsw-alias-border-l2)}
@@ -2244,7 +2240,7 @@ ellipsis，窄列只截字不破版 */
    --dshk-sched-toprow 会占掉大半屏，得让网格先活）。整条高度由待办卡（限高
    --dshk-sched-toprow）与统计卡里较高的那个决定，与待办条数无关 */
 .dshk-sched-sidecol{flex:none;width:auto;min-width:0;max-height:min(36%,calc(var(--dshk-sched-toprow) + 20px));box-sizing:border-box;display:flex;flex-direction:row;align-items:stretch;gap:10px;padding:10px;border-bottom:1px solid var(--dsw-alias-border-l2)}
-/* 待办卡限高 = 统计卡自然高度（用户定稿）：条数再多也只占这么高、超出卡内滚，
+/* 待办卡限高 = 统计卡自然高度：条数再多也只占这么高、超出卡内滚，
    网格高度不该被待办条数拽着走；常见高度下正好 4 整行（内边距 10 + 表头 28 +
    行间距 8 + 每行 36），不会出现半截行 */
 .dshk-sched-card.is-tasks{flex:1 1 auto;min-width:0;min-height:0;max-height:var(--dshk-sched-toprow);box-sizing:border-box;overflow:auto}
@@ -2271,7 +2267,7 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-stat span{font-size:11px;color:var(--dsw-alias-label-tertiary)}
 .dshk-sched-overlay{position:fixed;inset:0;background:color-mix(in srgb,#000 45%,transparent);z-index:1000;display:flex;align-items:center;justify-content:center}
 .dshk-sched-modal{width:420px;max-width:92vw;max-height:86vh;overflow:auto;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 40px color-mix(in srgb,#000 30%,transparent)}
-/* 标题字数上限（用户定稿 2026-09-07：标题只放重要信息，细节写备注）——
+/* 标题字数上限（标题只放重要信息，细节写备注）——
    计数器悬浮输入框右缘，与 maxLength 同一常量 */
 .dshk-sched-countwrap{position:relative}
 .dshk-sched-countwrap .dshk-sched-input,.dshk-sched-countwrap .dshk-sched-taskinput{padding-right:44px}
@@ -2298,7 +2294,7 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-sched-primary:disabled{opacity:.5;cursor:default}
 .dshk-sched-danger{appearance:none;border:1px solid color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);background:none;color:var(--dsw-alias-danger,#cd3131);font:inherit;font-size:12px;line-height:1;padding:7px 12px;border-radius:8px;cursor:pointer}
 /* 计时：悬浮小窗（运行中且不在计时页时漂浮内容区右下，坞展开自动让位）+
-   计时标签页视图 + 周网格橙色计时段（wangshu 同款 #fd7e14） */
+   计时标签页视图 + 周网格橙色计时段（#fd7e14） */
 .dshk-sched-timerdot{width:7px;height:7px;border-radius:999px;background:var(--dsw-alias-danger,#cd3131);animation:dshk-sched-pulse 1.2s ease-in-out infinite}
 @keyframes dshk-sched-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .dshk-timer-pill{position:fixed;right:12px;bottom:14px;z-index:700;display:inline-flex;align-items:center;gap:8px;padding:7px 9px 7px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-base);box-shadow:0 6px 20px color-mix(in srgb,#000 22%,transparent);cursor:pointer;user-select:none}
@@ -2453,7 +2449,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 .dshk-branch-del{appearance:none;flex:none;width:18px;height:18px;font-size:10px;line-height:1;border:0;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer;border-radius:4px;padding:0}
 .dshk-branch-newtag{flex:none;font-size:10px;color:var(--dsw-alias-brand-primary)}
 .dshk-branch-del:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-/* 分支按钮的领先/落后计数（vs 式 main ↑1↓2） */
+/* 分支按钮的领先/落后计数（main ↑1↓2） */
 /* 分支浮层（fixed 悬浮面板）：自带内部滚动，不参与 .dshk-tree 的 flex 挤压 */
 .dshk-branch-menu{width:236px;max-height:min(70vh,420px);display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
 .dshk-branch-menu .dshk-branch-title{flex:none;padding:6px 10px 4px;background:none;border-bottom:1px solid var(--dsw-alias-border-l1)}
@@ -3577,7 +3573,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     /** 分支图标（进入更改视图的入口钮）：git branch 风格两节点一弧线——官方
-     *  IconBranchOutline16 用户过目后觉得不像分支，2026-09-11 还原自绘 */
+     *  IconBranchOutline16 不像分支，故自绘 */
     function BranchIcon(props) {
       return jsxRuntime.jsxs(
         "svg",
@@ -3603,7 +3599,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     /** 终端图标：与 FolderIcon 同为描边风格（16 网格），保证两个 footer 按钮观感一致 */
     /** 终端图标：与 FolderIcon 同为描边风格（16 网格），保证两个 footer 按钮观感一致
-     *  （官方 IconCodeOutline16 是「代码」不是「终端」，2026-09-11 用户定稿还原自绘） */
+     *  （官方 IconCodeOutline16 是「代码」不是「终端」，故自绘） */
     function TerminalIcon(props) {
       return jsxRuntime.jsxs(
         "svg",
@@ -3626,11 +3622,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       );
     }
 
-    /** 后台任务图标：正方形框（用户定稿：任务标记用方框，不要待办清单样式）。
+    /** 后台任务图标：正方形框（任务标记用方框，不要待办清单样式）。
     外框圆角方 + 顶部短横线（窗口/任务语义），与终端描边体系一致 */
     // 三个图标吃 size/className——官方开始页胶囊条目按条目状态传 22/26 号
     function JobsIcon(props) {
-      // 官方 IconQueueOutline14 用户过目后觉得不合理，2026-09-11 还原自绘
+      // 官方 IconQueueOutline14 不合理，故自绘
       return jsxRuntime.jsxs(
         "svg",
         {
@@ -3654,7 +3650,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     /** 浏览器图标：地球（圆 + 经纬弧线），与终端/任务描边体系一致 */
     function BrowserIcon(props) {
-      // 官方 IconBrowseOutline16 用户过目后觉得不合理，2026-09-11 还原自绘
+      // 官方 IconBrowseOutline16 不合理，故自绘
       return jsxRuntime.jsxs(
         "svg",
         {
@@ -3780,7 +3776,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       );
     }
     /** 官方文件类型图标（primitives FileTypeIcon + classifyFileType，官方 files
-     *  树同款，2026-09-11 用户定稿「文件图标用官方的」）：按扩展名出图形；
+     *  树同款）：按扩展名出图形；
      *  primitives 不可用时回退空位（行内不留自绘图形） */
     function FileTypeIcon16({ name }) {
       const C = dswPrimIcons ? dswPrimIcons.FileTypeIcon : null;
@@ -3853,7 +3849,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const acts = actions ?? {};
       const renaming = !!acts.onRenameSubmit && acts.renamingPath === entry.path;
       // 行按钮「常用 + 更多」：常驻 hover 只留 @到对话、复制绝对路径与 ⋯ 菜单；
-      // 新建/复制相对/重命名/删除收敛进 ⋯（用户定稿：留 @ 和绝对路径）
+      // 新建/复制相对/重命名/删除收敛进 ⋯（留 @ 和绝对路径）
       const rowActions = [];
       if (acts.onMention) {
         rowActions.push(jsxRuntime.jsx(RowActionBtn, { title: t("treeAt"), onClick: () => acts.onMention(entry), children: "@" }, "at"));
@@ -3897,8 +3893,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         : jsxRuntime.jsx("span", { className: "dshk-name", children: entry.name }, "name");
       const rowChildren = [
         // 空目录（宿主 /tree 附 empty 标记）没有可展开内容：去掉箭头、点击不折叠，
-        // 行本身保留——空目录有"看得见"的必要（用户定稿 2026-09-07）；目录/文件
-        // 图标常驻（箭头消失后空目录靠它和文件区分，2026-09-08）
+        // 行本身保留——空目录有"看得见"的必要；目录/文件
+        // 图标常驻（箭头消失后空目录靠它和文件区分）
         jsxRuntime.jsx("span", { className: "dshk-chev", children: entry.dir && entry.empty !== true ? jsxRuntime.jsx(ChevronIcon, { open: !!info }) : null }, "chev"),
         jsxRuntime.jsx("span", { className: "dshk-ticonwrap", children: entry.dir ? jsxRuntime.jsx(TreeFolderIcon, {}) : jsxRuntime.jsx(FileTypeIcon16, { name: entry.name }) }, "dicon"),
         nameEl,
@@ -4124,7 +4120,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           return false;
         }
       };
-      // 新建文件/目录单入口（用户定稿 2026-09-08，vault 同款）：内联输入，
+      // 新建文件/目录单入口（vault 同款）：内联输入，
       // `\` 开头 = 新建文件夹（剥前缀），否则建文件；可带 / 多级。头部按钮与
       // 目录行 ⋯ 菜单都汇到这里（createAt = 目标目录）
       const [createAt, setCreateAt] = react.useState(null);
@@ -4237,8 +4233,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             ],
           }),
           // 新建内联输入（vault 同款）：挂在头部下、目标目录由触发入口决定；
-          // Enter 创建、Esc/空内容退格/区域外点击取消（✓ 按钮取消，用户定稿
-          // 2026-09-08：回车即建，不需要第二确认点）
+          // Enter 创建、Esc/空内容退格/区域外点击取消（✓ 按钮取消：回车即建，不需要
+          // 第二确认点）
           createAt !== null
             ? jsxRuntime.jsxs("div", { className: "dshk-createrow", title: createAt, children: [
                 jsxRuntime.jsx("input", {
@@ -4353,7 +4349,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       });
     }
 
-    // ─────────── 分支浮层（fixed 悬浮面板，vs 式 quick-pick）───────────
+    // ─────────── 分支浮层（fixed 悬浮面板，quick-pick）───────────
     // 不参与 .dshk-tree 的 flex 布局——更改条目再多也不会挤压分支列表；面板自带
     // 纵向滚动，超出视口高度时 clamp 至视口内。Esc / 点击面板外关闭；点回触发
     // 按钮不关（按钮自身 onClick 负责切换），用 data-popkey 识别。
@@ -4512,8 +4508,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [branchBusy, setBranchBusy] = react.useState(false);
       const [pushing, setPushing] = react.useState(false);
       const [pulling, setPulling] = react.useState(false);
-      // 分支浮层（fixed 悬浮）：anchor 为按钮矩形锚点 {left, top}（⋯ 菜单
-      // 2026-09-11 用户定稿撤除，拉取推送收敛进 ↑↓ 同步钮）
+      // 分支浮层（fixed 悬浮）：anchor 为按钮矩形锚点 {left, top}
       const [branchAnchor, setBranchAnchor] = react.useState(null);
       const branchBtnRef = react.useRef(null);
       /** 按钮锚点：按钮左下 + 6px，视口内 clamp（浮层自带内部滚动，上限留高） */
@@ -4741,9 +4736,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           jsxRuntime.jsxs("div", {
             className: "dshk-head",
             children: [
-              // 分支按钮（vs 式：官方分支图形 + 名称，2026-09-11 用户定稿「分支
-              // 按钮换成分支」；推送计数不在这里——2026-09-07 用户定稿迁同步钮）
-              // 迁到独立推送按钮，分支显示不与推送语义重叠）：点击开固定悬浮分支浮层
+              // 分支按钮（官方分支图形 + 名称；推送计数不在这里——它有自己的
+              // 推送按钮，分支显示不与推送语义重叠）：点击开固定悬浮分支浮层
               available && data
                 ? jsxRuntime.jsx("button", {
                     type: "button",
@@ -4767,7 +4761,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 ? jsxRuntime.jsx("span", { className: "dshk-status", children: String(entries.length) })
                 : null,
               jsxRuntime.jsx("span", { className: "dshk-spring" }),
-              // 同步钮（vs 式 ↑↓，2026-09-11 用户定稿接管原 ⋯ 菜单职责）：有上游=
+              // 同步钮（↑↓）：有上游=
               // 先拉后推，无上游=发布（首次推送）；错误原文 toast
               available && data && data.detached !== true
                 ? jsxRuntime.jsx("button", {
@@ -4799,7 +4793,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                 onClick: () => setView((v) => (v === "graph" ? "changes" : "graph")),
                 children: "⧉",
               }),
-              // ⋯ 操作菜单 2026-09-11 用户定稿撤除（拉取推送收敛进 ↑↓ 同步钮）
               jsxRuntime.jsx("button", {
                 type: "button",
                 className: "dshk-btn",
@@ -4934,10 +4927,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     // ─────────── 提交图谱（源代码管理面板的 graph 视图）───────────
     // 数据走 GET /dsh-kit/git/log（结构化提交记录：完整/短哈希、父哈希、作者、
-    // 时间戳、说明、引用装饰），lane 几何由前端从父哈希计算后 SVG 绘制——同一
-    // 分支线全程一色、分叉合并处曲线平滑（旧 ASCII 方案按字符列着色，分叉后同线
-    // 中途变色、拐角碎裂）。行布局：图谱列 → 引用装饰 chip → 短哈希 → 说明 →
-    // 作者 → 相对时间。点提交行进详情（/dsh-kit/git/show）：作者/时间/说明/文件
+    // 时间戳、说明、引用装饰），lane 几何由前端从父哈希计算后 SVG 绘制。
+    // 行布局：图谱列 → 引用装饰 chip → 短哈希 → 说明 → 作者 → 相对时间。点提交行进详情（/dsh-kit/git/show）：作者/时间/说明/文件
     // 清单，清单行可点开进右侧预览面板（A 类按未跟踪语义进原文视图）。
     // refreshRef：头部 ⟳ 一并刷新的句柄（由 GitChangesPanel 传入并回填）。
     /** 图谱 lane 配色（按 lane 生命周期循环取用，同一条线颜色恒定） */
@@ -5276,8 +5267,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     // ─────────── 文件签（可编辑，自绘）───────────
-    // 文件树/源代码管理/对话链接点文件 → 文件签（工作台定稿 2026-09-10：
-    // 预览标签退役，点开即可编辑）。md 走 RteEditor（与知识库同一套 TipTap
+    // 文件树/源代码管理/对话链接点文件 → 文件签（点开即可编辑）：md 走 RteEditor
+    // （与知识库同一套 TipTap
     // WYSIWYG + 自动保存）；其余文本走 CM6 直接编辑；两套都吃同一自动保存语义
     // （2s 防抖 + Ctrl+S + 卸载保底 + mtime CAS 冲突条），保存走 /dsh-kit/write。
     // 外部修改可见性（vault 同款）：/dsh-kit/stat 轮询 mtime，无脏改时静默重读
@@ -5431,7 +5422,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [saving, setSaving] = react.useState(false);
       // CM 宿主元素进 state（回调 ref，不是 ref.current）：宿主随视图切换（原文 ⇄
       // diff）会被 React 换成新节点，元素本身必须是 effect 依赖，编辑器才会重建到
-      // 新宿主上——否则旧实例留在已摘除的节点上，切回来是一片空白（2026-09-10 GUI
+      // 新宿主上——否则旧实例留在已摘除的节点上，切回来是一片空白（GUI
       // 实测抓出）
       const [cmHost, setCmHost] = react.useState(null);
       const conflictRef = react.useRef(conflict);
@@ -5597,7 +5588,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [cmReady, isMd, ready, path, reloadNonce, state.body?.content]);
       // CM 编辑面：文档变更 2s 防抖落盘；Ctrl+S 立即；卸载保底 flush。
       // 截断文件（>512KB）只读——保存会丢 512KB 之后的内容，同一个宿主分两种模式
-      // （此前只读那份用另一个 ref 且从没挂到 DOM 上，截断文件等于空白编辑器）
+      // （只读那份若用另一个没挂到 DOM 上的 ref，截断文件等于空白编辑器）
       react.useEffect(() => {
         if (!cmReady || isMd || !cmHost || !ready) return undefined;
         const readOnly = state.body?.truncated === true;
@@ -5809,7 +5800,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           alive = false;
         };
       }, [isDoc, state.phase, path, reloadNonce]);
-      // 只读 CM 那份已并入上面（同一个宿主按 truncated 决定 readOnly）
 
       /** diff 视图：优先全文件着色（hunk 套回完整新像，删除红/新增绿）；
        *  截断大文件或 hunk 对不上时回退原始 patch 渲染。新像来源两分支——
@@ -6058,10 +6048,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             className: "dshk-head",
             children: [
               // 标题行显示绝对路径（文件名已由页签 chip 承担，重复信息去掉；
-              // 用户定稿 2026-09-05：同仓多目录/同名校验场景下绝对路径更有用）
+              // 同仓多目录/同名校验场景下绝对路径更有用）
               jsxRuntime.jsx("span", { className: "dshk-title", children: path }),
-              // 未落盘脏点：跟在标题后（此前在编辑面提示条里，2026-09-10 用户要求
-              // 去掉自动保存提示——提示没了，脏点挪过来还不丢这个信息）
+              // 未落盘脏点：跟在标题后（编辑面没有自动保存提示条，脏点放这里才不丢这个信息）
               dirtyDot || textDraft !== textSaved
                 ? jsxRuntime.jsx("span", { className: "dshk-vault-dirtydot", title: t("vaultUnsaved"), children: "●" })
                 : null,
@@ -6131,8 +6120,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // ─────────── 入口按钮（conversation.input.left）───────────
     // 只负责开合与按压态；面板本体在 KitSurfaces（shell.overlay）渲染。
     // 选中态标记：aria-pressed 属性选择器命中 .dshk-enbtn[aria-pressed="true"]
-    // 规则（底色 + 品牌色图标）。此前用的 --dsw-alias-fill-l2 在主题里并不存在，
-    // 背景解析为透明，选中态等于没有——已换成真实存在的 tool-bar-fill 令牌。
+    // 规则（底色 + 品牌色图标）。选中态底色必须用真实存在的 tool-bar-fill 令牌——
+    // 不存在的变量（如 --dsw-alias-fill-l2）会解析成透明，选中态等于没有。
     function TerminalEntry(props) {
       const ui = useKitUi();
       const cwd = useCurrentCwd(props);
@@ -6161,9 +6150,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 文件树/源代码管理视图承载在 sidebar.workspaces 里，侧边栏收起时只剩图标栏，
     // 视图会挤进铁轨里很难看——所以打开动作做自动展开：状态探测官方切换按钮
     // （aria-label 随状态变化，收起态是「打开侧边栏」/"Open sidebar"，注意关键字
-    // 是「打开」不是「展开」），只在收起态点击——幂等且方向安全。此前优先走官方
-    // 注入的 expandSidebar 回调，但该闭包捕获渲染时的 folded 状态且槽位注销后不再
-    // 刷新，残留宽态实例调用是空操作（收起后首次打开不展开的根因），已整体移除。
+    // 是「打开」不是「展开」），只在收起态点击——幂等且方向安全。官方的
+    // expandSidebar 回调不可用：该闭包捕获渲染时的 folded 状态，且槽位注销后不再
+    // 刷新，残留宽态实例调用是空操作（收起后首次打开不展开的根因）。
     function sidebarBtn() {
       try {
         const labelled = document.querySelectorAll("[aria-label]");
@@ -6223,7 +6212,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       });
     }
 
-    /** 知识库入口（输入行，源代码管理与终端之间，2026-09-10 用户定稿）：
+    /** 知识库入口（输入行，源代码管理与终端之间）：
      *  开 = 只切侧栏索引视图（点具体页才开右栏知识库签）；
      *  再点 = 侧栏回会话列表（右栏知识库签与页签不跟着关）。
      *  按钮与快捷键同语义（toggleVaultEntry） */
@@ -6583,8 +6572,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // JobListAction 相同——useSessions 的 jobsBySession（session/jobs 推送）。
     // 「结束」走 dsh-kit 宿主端点（/dsh-kit/jobs/kill，权限按 session 隔离，
     // 与 job_kill 同一套 caller 语义）；输出常显，每个任务各走 /dsh-kit/jobs/
-    // output 增量轮询。终态任务保留在列（session/jobs 推送本就含终态，此前是
-    // 面板自己滤掉的），行动作变「关闭」=仅从显示移除，不持久化。
+    // output 增量轮询。终态任务保留在列（session/jobs 推送本就含终态），
+    // 行动作变「关闭」=仅从显示移除，不持久化。
 
     /** 任务时长：中文「x分y秒」/ 英文 "x m y s"，秒级取整 */
     function fmtJobDuration(ms) {
@@ -6606,7 +6595,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [outputs, setOutputs] = react.useState({});
       const [killing, setKilling] = react.useState(null);
       const [now, setNow] = react.useState(() => Date.now());
-      // 用户定稿 2026-09-05：终态任务保留在列（运行中在前、终态在后淡化显示），
+      // 终态任务保留在列（运行中在前、终态在后淡化显示），
       // 行动作从「结束」变「关闭」=仅从显示移除；关闭记录与终态清单都是页面
       // 会话内存态——刷新/重启不保留（终态任务本来就只活在宿主进程内存里）。
       const [dismissed, setDismissed] = react.useState(() => new Set());
@@ -6624,7 +6613,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return () => clearInterval(timer);
       }, [live.length]);
 
-      // 输出增量轮询：显示中且未拉到终态的任务各每秒拉一次（用户定稿：输出
+      // 输出增量轮询：显示中且未拉到终态的任务各每秒拉一次（输出
       // 常显不再要「输出」按钮）。拉到终态即标记 doneFetched 停拉——终态没有
       // 新量，且无 readOutput 的终态任务每次都返回全量 output，重复拉会重复
       // 追加。终态行保留在列（见上），输出冻结在最后一拉。面板读取走宿主
@@ -6849,12 +6838,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return result;
     };
 
-    // ── 日程数据钩子（拆两半共用，2026-09-10）：日程 pane 内待办卡与周网格各自
+    // ── 日程数据钩子（拆两半共用）：日程 pane 内待办卡与周网格各自
     // 挂载、各自轮询，靠 dshk-sched-changed 事件即时互相同步（写操作一处发生
     // 两边即时跟进）；轮询只是兜底，30s 节奏轻端点可承受 ──
     function useScheduleData() {
       const [data, setData] = react.useState(() => ({ events: [], occurrences: [], runningTimer: null, orphans: [] }));
-      // 统计口径固定周（用户定稿 2026-09-06：日/月视图先不做）
+      // 统计口径固定周（日/月视图先不做）
       const [stats, setStats] = react.useState(null);
       const [nowTick, setNowTick] = react.useState(() => Date.now());
       const fetchData = react.useCallback(async () => {
@@ -6921,7 +6910,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return { data, stats, nowTick, fetchData, fetchStats, mutate };
     }
 
-    /** 待办卡（日程 pane 顶部横条；侧栏待办索引半边 2026-09-11 随索引视图退役）：
+    /** 待办卡（日程 pane 顶部横条）：
      *  勾选完成、标题点击编辑（顺带把日程签带到眼前）、▶ 起表。数据由调用方给
      *  （useScheduleData 的 data/mutate），编辑弹窗卡内自理 */
     function ScheduleTasksCard({ data, mutate }) {
@@ -6929,7 +6918,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const tasks = react.useMemo(
         () =>
           data.events
-            // 完成的待办不再显示（用户定稿 2026-09-09：记录保留——计时段/统计/
+            // 完成的待办不再显示（记录保留——计时段/统计/
             // 网格橙块都还在，只是列表不堆积）
             .filter((e) => e.start === undefined && !e.completedAt)
             .sort((a, b) => (a.due ?? "9999") < (b.due ?? "9999") ? -1 : 1),
@@ -6994,7 +6983,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [weekStart]);
 
       // 日程视图每次变为可见（挂载即激活 / 从别的标签切回）都把视口滚到当前
-      // 时刻上方 1/3 处。旧版"只滚一次"有坑：挂载时若视图还 display:none
+      // 时刻上方 1/3 处。"只滚一次"有坑：挂载时若视图还 display:none
       // （日程开着但激活位在别的标签），唯一一次机会被浪费，切回永远停在顶部。
       // rAF 再兜一帧：可见性翻转首帧 clientHeight 偶发未就绪，按真实视口重算
       react.useLayoutEffect(() => {
@@ -7011,7 +7000,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return () => cancelAnimationFrame(raf);
       }, [active]);
 
-      // 计时段上网格（wangshu 对齐）：事件 timeEntries 与独立计时段（orphans，
+      // 计时段上网格：事件 timeEntries 与独立计时段（orphans，
       // note=自由标题）合成显示块——停了的才显示（进行中的没形状），按 start 日
       // 归属（与 timedMsInRange 统计口径一致）。独立段不可编辑（无 base 条目）
       const timedOcc = react.useMemo(() => {
@@ -7041,7 +7030,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const laid = [];
         for (const arr of byDate.values()) laid.push(...schedAssignLanes(arr));
         return laid.map((o) => {
-          // 高度贴合真实时长比例（用户定稿 2026-09-08）：短段不再一律抬到 18px，
+          // 高度贴合真实时长比例：短段不再一律抬到 18px，
           // 但下限 14px + is-thin 紧凑排版保证单行标题仍可读
           const raw = (((o.endMins ?? o.startMins + 60) - Math.max(o.startMins, SCHED_DAY_START)) / 60) * SCHED_HOUR_PX;
           return {
@@ -7146,12 +7135,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   style: {
                     top: o.top,
                     height: o.height,
-                    // 泳道均分且零内缩：块边缘与列网格线严丝合缝（用户定稿 2026-09-08）
+                    // 泳道均分且零内缩：块边缘与列网格线严丝合缝
                     left: `${(o.lane * 100) / o.lanes}%`,
                     width: `${100 / o.lanes}%`,
                     // 没选颜色的块不能落回 CSS 的 brand-primary——它是单色（浅色主题近黑、
-                    // 深色主题近白），块内文字固定白，深色下就是白底白字（用户 2026-09-12：
-                    // 字体颜色不随深暗色变、agent 建的黑块）。所以无 color 时按标题派一个
+                    // 深色主题近白），块内文字固定白，深色下就是白底白字——字体颜色不随深暗色变。
+                    // 所以无 color 时按标题派一个
                     // 六色盘里的稳定色：同一门课每周同色，两个主题都压得住白字
                     ...(!o.isTimed ? { background: o.color ?? schedFallbackColor(o.title || o.baseId) } : {}),
                   },
@@ -7172,7 +7161,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       });
 
       // 顶部一条：待办卡（左，吃满余宽）+ 统计卡（右，固定窄列），周网格在下方吃满
-      // 余高（用户 2026-09-12 定稿，所有坞宽一致）；待办卡与侧栏待办索引共用组件
+      // 余高（所有坞宽一致）
       const sideCol = jsxRuntime.jsxs("div", { className: "dshk-sched-sidecol", children: [
         jsxRuntime.jsx(ScheduleTasksCard, { data, mutate }),
         stats
@@ -7220,7 +7209,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const entryOrphan = isEntry && modal.owner === null;
       const [values, setValues] = react.useState(() => ({ ...modal.values }));
       const [confirming, setConfirming] = react.useState(false);
-      // 可关闭窗口语义（与 dsh 自身弹窗一致，2026-09-08 用户定稿：无取消键）——
+      // 可关闭窗口语义（与 dsh 自身弹窗一致：无取消键）——
       // Esc / 点背景 / 右上 ✕ 都直接关窗，未保存的编辑即放弃。挂 schedModalOpen
       // 让 KitSurfaces 的全局 Esc（收标签页那个）让路；本监听 stopPropagation
       // 兜底，Esc 只关本弹窗
@@ -7425,7 +7414,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     /** 悬浮计时小窗：计时运行时常驻内容区右下（坞展开/收起都自动让位）。显示
      *  名目（挂待办取待办标题，store.runningTimer 已解析；独立计时取名目）。
      *  点整颗球弹「确定结束计时？」确认窗：是=停止，完成=停止并勾掉待办（仅挂
-     *  待办时出现），✕/Esc/点背景=关窗继续计时（用户定稿 2026-09-09：停止入口
+     *  待办时出现），✕/Esc/点背景=关窗继续计时（停止入口
      *  只此一处，误触不会丢计时） */
     function FloatingTimerPill() {
       const { running, nowTick, stop } = useRunningTimer();
@@ -7460,7 +7449,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 生命周期：关标签仅停流不关浏览器（空闲 10 分钟自动优雅关，登录态保留在
     // 专用 profile，重开无损）。
 
-    // 关页签即关（无确认，用户定稿）：「agent 活动页」的宿主识别与实际操作页常对
+    // 关页签即关（无确认）：「agent 活动页」的宿主识别与实际操作页常对
     // 不上，据此弹「agent 在用」确认只会误拦；agent 被关页后按 URL 重走即可
 
     function BrowserPanel({ active }) {
@@ -7860,11 +7849,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     // ─────────── 知识库（vault：侧栏目录索引 + 右栏页编辑器，portal 拆两半）───────────
     // vault = 设置卡配置的绝对目录，其内一切 md 即页面（数据契约见 src/vault.ts）。
-    // 布局「选库进入阅读」（用户定稿 2026-09-06）：左窄条 = 空间（顶层目录）+
+    // 布局「选库进入阅读」：左窄条 = 空间（顶层目录）+
     // 懒加载目录树；右 = 真·所见即所得编辑区（TipTap 富文本，vendor/richeditor
     // .bundle.js 的 window.DshRTE 工厂：md ↔ 富文本往返、[[wikilink]]/公式/
     // 未知块 HTML 原样保留）。
-    // 保存 = wangshu 同款自动保存（2s 防抖 + 切页 flush + Ctrl+S）走 vault 写
+    // 保存 = 自动保存（2s 防抖 + 切页 flush + Ctrl+S）走 vault 写
     // 端点 mtime CAS；盘上被外部修改时带 stash 覆盖（宿主先提交存档再写，本地
     // 赢，不弹冲突条），第二次再被抢写才退回冲突条。frontmatter 在编辑器外剥离
     // 成属性条展示，保存时字节级原样写回。搜索走宿主全文端点。
@@ -7879,7 +7868,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return { fmText: m[0], rest: src.slice(m[0].length) };
     }
 
-    /** 孤儿级联（用户定稿：删除时同步删掉因此变孤儿的页，git 单提交可整体撤回）。
+    /** 孤儿级联（删除时同步删掉因此变孤儿的页，git 单提交可整体撤回）。
      *  返回应删页面清单：种子页 + 「全部反链都在删除集内」的递归闭包；删除前
      *  就已零入链的页不动（那是既有状态，不连坐）。
      *  目录删除用多种子版：目录在索引里没有对应页，种子是它下面的全部页 */
@@ -7977,16 +7966,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       });
     }
 
-    // 左树行图标（2026-09-11 用户定稿：与文件树同一套官方 primitives）——
+    // 左树行图标（与文件树同一套官方 primitives）——
     // 目录 = TreeFolderIcon、页面 = FileTypeIcon16、展开箭头 = ChevronIcon，
     // 三个都在文件树那边定义，这里不再自绘
 
-    /** 斜杠菜单：两级（wangshu 同款）——根级为分组（标题/列表含子级，多级标题
+    /** 斜杠菜单：两级——根级为分组（标题/列表含子级，多级标题
      *  快速插），叶级为插入模板。label 走 i18n，match 是中英过滤词 */
-    // 斜杠菜单（wangshu 同款两级结构：分类 → 条目；条目行 = 图标徽章+标题+描述）。
-    // 三件套分工不重复（wangshu 同款）：块插入只在这里，行内格式在泡泡菜单，
+    // 斜杠菜单（两级结构：分类 → 条目；条目行 = 图标徽章+标题+描述）。
+    // 三件套分工不重复：块插入只在这里，行内格式在泡泡菜单，
     // 文档级命令（撤销/重做/保存）在编辑条。条目语义：prefix = 当前行换前缀
-    // （原前缀剥掉，同 wangshu 的 toggle*）；insert = 删掉 "/查询" 后插模板，
+    // （原前缀剥掉）；insert = 删掉 "/查询" 后插模板，
     // cursor = 光标落点偏移；rows/cols = 表格尺寸，模板按下表现生成
     const VAULT_MENU = [
       {
@@ -8072,7 +8061,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // quota_exceeded_error 都见过，前者会被宿主误分类成 QUOTA 而不内部重试），
     // 稳定的只有 "429: " 前缀（宿主 formatProviderError 拼的 HTTP 状态）和限流
     // 措辞本身。不匹配的失败（AUTH/上下文超限等终态类）不自动续。
-    // 计数（用户定稿）：每会话独立，继续后一轮正常收尾（lastAgentError 为 null）
+    // 计数：每会话独立，继续后一轮正常收尾（lastAgentError 为 null）
     // 即清零；连续续跑达 monitorMaxAuto 暂停（capped）。等待期到点时回合又跑起来
     // （用户手动介入）即放弃本次。
     // 约束：浏览器页必须开着（浏览器端方案的天性）；页面关着的兜底是宿主
@@ -8201,8 +8190,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             st.capped = true;
           }
         } else if (!lastErr) {
-          // 空闲且无错误标记：一次正常收尾 → 连续计数清零、capped 解除（用户定
-          // 稿：继续成功即清零）。幂等，重复 tick 无害。
+          // 空闲且无错误标记：一次正常收尾 → 连续计数清零、capped 解除（继续成功
+          // 即清零）。幂等，重复 tick 无害。
           if (st.continues !== 0 || st.capped || st.handledErr !== null) {
             st.continues = 0;
             st.capped = false;
@@ -8440,7 +8429,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           setPlan(null);
           return;
         }
-        // 死循环话术（用户定稿）：让 agent 知道自己卡在循环里，停止重复并换方式推进
+        // 死循环话术：让 agent 知道自己卡在循环里，停止重复并换方式推进
         inputActions.setDraft(tf("monitorLoopBreakText"));
         inputActions.submit();
         stoppingRef.current = false; // 话术已发：本会话下一回合的死循环仍要接管
@@ -8495,7 +8484,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return jsxRuntime.jsx(VaultRootView, {});
     }
 
-    // ─────────── RTE 编辑面（知识库页与工作区 md 共用，2026-09-10 合流）───────────
+    // ─────────── RTE 编辑面（知识库页与工作区 md 共用）───────────
     // TipTap 富文本编辑器挂载 + 斜杠菜单 + 泡泡菜单 + 自动保存（2s 防抖 +
     // Ctrl+S + 卸载保底 + 冲突暂停）全部收拢在这里；端点差异（vault 带_fm
     // / 工作区文件走 /dsh-kit/write）由 onSave(md, mode) 回调承担，mode ∈
@@ -8537,10 +8526,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const confRef = react.useRef({ onWikiLink, resolveWiki, resolveSrc, onRelLink, labels, placeholder });
       confRef.current = { onWikiLink, resolveWiki, resolveSrc, onRelLink, labels, placeholder };
 
-      // 光标所属标题链（VS Code 面包屑同款）：heading 是顶层块互不嵌套，层级
+      // 光标所属标题链（面包屑）：heading 是顶层块互不嵌套，层级
       // 归属按「文档顺序」解释——从光标顶层块向前扫，遇到比链尾更高级（level
       // 更小）的标题就接上，得到 「# 一级 > ## 二级 > ### 三级」；二级标题归属
-      // 它上面最近的同级/上级标题语境（用户定稿：二级属于最近的一级）。
+      // 它上面最近的同级/上级标题语境（二级属于最近的一级）。
       // 无任何标题覆盖返回空串隐藏
       const crumbOf = () => {
         const ed = rteRef.current?.editor;
@@ -8664,7 +8653,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       };
       /** 泡泡按钮点亮态：TipTap isActive */
       const bubActive = (name) => rteRef.current?.isActive(name) ?? false;
-      /** 链接（wangshu 同款 prompt 交互）：已有链接改地址（空=删除），否则包新链接 */
+      /** 链接（prompt 交互）：已有链接改地址（空=删除），否则包新链接 */
       const bubLink = () =>
         rteCmd((h) => {
           const ed = h.editor;
@@ -8730,7 +8719,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             /* 选区失效按纯滚动恢复 */
           }
         });
-        // 自动保存（wangshu 同款 2s 防抖）：变更后 350ms 算 md（脏点基准），
+        // 自动保存（2s 防抖）：变更后 350ms 算 md（脏点基准），
         // 2s 后落盘；冲突时暂停（pausedRef）
         let mdTimer = null;
         let saveTimer = null;
@@ -8862,7 +8851,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               setMenuIdx(0);
               return;
             }
-            // 数字键 1-9 直达（wangshu 同款）：分类层跳进第 n 组，条目层直接应用
+            // 数字键 1-9 直达：分类层跳进第 n 组，条目层直接应用
             if (/^[1-9]$/.test(e.key)) {
               const target = rows[Number(e.key) - 1];
               if (!target) return;
@@ -8919,7 +8908,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           if (posTimer !== null) clearTimeout(posTimer);
           host.removeEventListener("scroll", onPosScroll);
           recordReadPos(mountedKey, host, posAnchor());
-          // 有防抖未触发的改动 → 卸载前尽力落盘（wangshu 同款保底；钉住挂载页
+          // 有防抖未触发的改动 → 卸载前尽力落盘（保底；钉住挂载页
           // 路径，冲突时放弃）
           if (
             !pausedRef.current
@@ -9045,13 +9034,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                             },
                             children: isGroup
                               ? [
-                                  // 分类行（wangshu 同款）：序号徽章 + 组名 + ›
+                                  // 分类行：序号徽章 + 组名 + ›
                                   jsxRuntime.jsx("span", { className: "dshk-vault-slashnum", children: i + 1 }, "num"),
                                   jsxRuntime.jsx("span", { className: "dshk-vault-slashtitle", children: t(row.labelKey) }, "title"),
                                   jsxRuntime.jsx("span", { className: "dshk-vault-slashmore", children: "›" }, "more"),
                                 ]
                               : [
-                                  // 条目行（wangshu 同款）：图标徽章 + 标题/描述两行
+                                  // 条目行：图标徽章 + 标题/描述两行
                                   jsxRuntime.jsx("span", { className: "dshk-vault-slashicon", children: row.icon }, "icon"),
                                   jsxRuntime.jsxs("span", { className: "dshk-vault-slashtext", children: [
                                     jsxRuntime.jsx("span", { className: "dshk-vault-slashtitle", children: t(row.labelKey) }, "title"),
@@ -9125,7 +9114,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     /** 知识库索引半边（单实例，portal 进侧栏索引宿主）：空间/目录树/搜索/建页 +
      *  页标签编排（打开、关闭、← → 访问序）。页编辑器不在本组件——每开一页一个
-     *  VaultPagePane 经 portal 投进右栏 pane 宿主，一页一标签（2026-09-10 多开定稿）。 */
+     *  VaultPagePane 经 portal 投进右栏 pane 宿主，一页一标签（多开）。 */
     /** 知识库文件夹选择器：搜索式自绘下拉，可挑根目录下**任意层级**的文件夹
      *  （原来那格是原生 `<select>`，只能选顶层 space，几十个目录就翻不动了）。
      *  选项 = 全部 + index.folders（宿主扫描时收集的全部目录）；输入即过滤（按相对
@@ -9245,7 +9234,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 目录树：path → entries|null(加载中)；expanded: path → bool
       const [treeDirs, setTreeDirs] = react.useState({});
       const [expanded, setExpanded] = react.useState({});
-      // 建页/建目录合并入口（用户定稿 2026-09-07）：createDir = 内联输入框所在
+      // 建页/建目录合并入口：createDir = 内联输入框所在
       // 目录（null 关闭）；输入 `\` 开头 = 新建目录（剥掉前缀），否则建页面；
       // 两者都还可带 / 多级。区域外点击 = 取消（直接丢弃，理由同文件树）
       const [createDir, setCreateDir] = react.useState(null);
@@ -9306,7 +9295,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
       // 索引 + 已展开目录一起重拉的唯一实现（工具条 ↻ 与背景自动刷新共用）。
       // 目录树是懒加载缓存（treeDirs），只调 loadIndex 换不到树上的条目——外部
-      // 增删的文件在侧栏看不见，刷新就等于没刷（2026-09-11 用户报「刷新不可用」）。
+      // 增删的文件在侧栏看不见，刷新就等于没刷。
       // 展开态走 ref 读：免得这个回调跟着每次展开动作重建、把背景定时器重置
       const expandedRef = react.useRef(expanded);
       expandedRef.current = expanded;
@@ -9316,7 +9305,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         await Promise.all(dirs.map((d) => fetchDir(d, true)));
       }, [loadIndex, fetchDir]);
 
-      // 外部增删文件及时可见（vscode 式，用户定稿 2026-09-09）：打开页的正文
+      // 外部增删文件及时可见：打开页的正文
       // 刷新由 stat 轮询管，树/索引靠这里——窗口聚焦 + 30s 周期重拉；全程静默
       // （mtime 缓存让无变化的重拉接近零成本，不闪「加载中」也不弹提示）
       react.useEffect(() => {
@@ -9437,7 +9426,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         [root, fetchDir],
       );
 
-      /** 树上 `@`：把这一页 @ 进对话输入框（页条上那个 @ 已按用户定稿挪到树上）。
+      /** 树上 `@`：把这一页 @ 进对话输入框（页条上不再有 @）。
        *  只有点的就是当前激活页时才带选区镜像——拿别的页的选区去引用本页会张冠李戴。 */
       const citeFromTree = (pagePath) => {
         citeVaultPageToChat(pagePath, pagePath === current ? vaultSelMirror : "", (key) => flashToast(t(key)));
@@ -9563,7 +9552,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         for (const dir of dirs) void fetchDir(dir);
         void loadIndex();
       };
-      /** 行 ⋯ 删除单页（用户定稿：删除从页条挪到树行上）：孤儿级联（反链全落在删除
+      /** 行 ⋯ 删除单页（删除入口在树行上）：孤儿级联（反链全落在删除
        *  集内的页一起删，git 单提交可整体撤回）+ 二次确认 */
       const deleteVaultEntry = async (entry) => {
         const doomed = vaultCascadeDelete(indexPages, entry.path);
@@ -9584,7 +9573,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           setToast(`${t("vaultSaveFail")} ${String(error?.message ?? error)}`);
         }
       };
-      /** 行 ⋯ 删除目录（用户定稿：非根目录的文件夹也能改名/删除）：整棵子树交宿主
+      /** 行 ⋯ 删除目录（非根目录的文件夹也能改名/删除）：整棵子树交宿主
        *  递归进回收站，种子 = 目录下全部页（目录在索引里没有对应页），因此外部页里
        *  的孤儿照旧级联。确认清单只列页面，目录名单独放标题 */
       const deleteVaultDir = async (entry) => {
@@ -9709,13 +9698,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (!entries) return jsxRuntime.jsx("div", { className: "dshk-vault-treeload", style: { paddingLeft: 10 + depth * 14 }, children: "…" }, `${dirPath}#load`);
         return entries.map((e) => {
           if (e.dir) {
-            // 空目录判定（用户定稿 2026-09-07）：vault 语义下没有后代的目录
+            // 空目录判定：vault 语义下没有后代的目录
             // 就是空的——索引页（root 相对 rel）无一落在该目录前缀下即空，
             // 去掉展开钮（没东西可展开），行保留（有看到空目录的必要）
             const rel = e.path.slice(treeRoot.length).split(/[\\/]+/).filter(Boolean).join("/");
             const prefix = space === "" ? `${rel}/` : `${space}/${rel}/`;
             const hasPage = indexPages.some((p) => p.rel.startsWith(prefix));
-            // 目录行与页行同形状（用户定稿 2026-09-11）：`@` + `⋯`——新建/重命名/
+            // 目录行与页行同形状：`@` + `⋯`——新建/重命名/
             // 删除都收进 ⋯ 菜单，行上不再挂常驻 `+`（那枚 + 只留给左轨头部 = 根级新建，
             // 顺带没了「hover 出 ⋯ 时把 + 挤走」的位移）
             const renamingDir = renamingPath === e.path;
@@ -9756,7 +9745,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             );
           }
           // 文件行：hover 出 `@`（引用到对话）与 `⋯`（重命名）——与文件树同形状
-          // （用户定稿：页条上那个 @ 挪到树上来，一个文件一个入口）
+          // （一个文件一个入口）
           const renaming = renamingPath === e.path;
           const label = e.name.replace(/\.(md|markdown)$/i, "");
           return jsxRuntime.jsxs(
@@ -9764,7 +9753,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             {
               className: `dshk-vault-treerow${e.path === current ? " is-active" : ""}`,
               style: { paddingLeft: 10 + (depth + 1) * 14 },
-              // 点目录条目 = 开右栏知识库签看页（索引即入口，工作台定稿）；改名中点击不跳
+              // 点目录条目 = 开右栏知识库签看页（索引即入口）；改名中点击不跳
               onClick: () => {
                 if (!renaming) openPath(e.path);
               },
@@ -9818,7 +9807,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
       // 工具条 + 搜索结果 + 目录树 → 侧栏索引宿主；页编辑器 → 右栏 pane 宿主。
       // 单实例双 portal：两侧各自在场才投递（侧栏关闭/右栏关签互不影响）。
-      // 工具条两行（用户定稿 2026-09-11）：上行导航/空间/刷新，下行搜索独占——
+      // 工具条两行：上行导航/空间/刷新，下行搜索独占——
       // 挤在一行时搜索框只剩半截宽，占位提示都被截掉
       const sideContent = jsxRuntime.jsxs("div", { className: "dshk-vault-sidewrap", children: [
         jsxRuntime.jsxs("div", { className: "dshk-vault-toolbar", children: [
@@ -9924,7 +9913,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 
     /** 知识库单页编辑器（一页一个实例，挂右栏 pane 宿主）：正文加载/自动保存/CAS 冲突/
      *  外部修改跟随/引用到对话/粘贴上传全在这一层，索引侧只管挑页与建页。
-     *  删除不在这里——页条上的删除已按用户定稿挪到左侧树的行 ⋯ 菜单（见 VaultRootView）。
+     *  删除不在这里——删除在左侧树的行 ⋯ 菜单（见 VaultRootView）。
      *  active=false 的 pane 仍挂载（保住滚动与草稿），但停掉 stat 轮询并在失活
      *  那一刻 flush 未落盘的改动——「切走即存」，不靠卸载兜底。 */
     function VaultPagePane({ path, active, root, indexPages, onOpenPage, onMissingLink, onSaved, toast }) {
@@ -9938,7 +9927,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 表格上下文按钮随选区显隐（选区落在表格内即亮）+ 脏点（RteEditor 上报）
       const [inTable, setInTable] = react.useState(false);
       const [dirtyDot, setDirtyDot] = react.useState(false);
-      // 页条面包屑：光标所属标题链（VS Code 同款位置指示，RteEditor 上报）
+      // 页条面包屑：光标所属标题链（RteEditor 上报）
       const [crumb, setCrumb] = react.useState("");
       const rteRef = react.useRef(null);
       const rteCtlRef = react.useRef(null);
@@ -9948,7 +9937,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       conflictRef.current = conflict;
       const pagesRef = react.useRef(indexPages);
       pagesRef.current = indexPages;
-      // 引用到对话：页条上的 @ 已按用户定稿挪到左侧树的行上（见 VaultRootView），
+      // 引用到对话：@ 在左侧树的行上（见 VaultRootView），
       // 这里只负责把**激活页**的选区写进模块级镜像供那边读——非激活页不写，免得
       // 后台页签把镜像清掉。paneRef 仍用于判定选区是否落在本页内
       const paneRef = react.useRef(null);
@@ -9994,7 +9983,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 保存入口（RteEditor 自动保存/Ctrl+S/冲突覆盖都经 onSave 回调到这里）。
       // content = fmRef（frontmatter 字节级原文）+ 编辑器 md。outcome: ok|conflict|fail
       // 盘上被改过时**不弹冲突条**：让宿主先把盘上那份提交存档（stash）再以本地内容
-      // 覆盖——VSCode 自动保存的「最后写者赢」语义（用户定稿），差别是覆盖不丢东西
+      // 覆盖——自动保存的「最后写者赢」语义，差别是覆盖不丢东西
       // （旧版 git show 可找回）。第二次再被抢写（agent 恰在同一秒落盘）才退回冲突条。
       const saveVaultPage = react.useCallback(
         async (bodyMd, mode = "auto") => {
@@ -10048,7 +10037,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (conflictRef.current !== null) return;
         if (rteCtlRef.current && rteCtlRef.current.dirty()) void rteCtlRef.current.flush();
       }, [active]);
-      // 外部修改实时刷新（VS Code 同款）：只轮询激活页（后台标签别白烧请求）。
+      // 外部修改实时刷新：只轮询激活页（后台标签别白烧请求）。
       // 盘上变了且本地无脏改、无冲突 → 静默重读整页 + 刷索引（AI/编辑器改文件
       // 零手动刷新）；有脏改时不动——未保存内容由保存时 CAS 冲突条保护。文件
       // 被外部删除也重读 → 页面显示已消失。fetch 失败静默（尽力而为）
@@ -10115,7 +10104,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultBinaryHint") })
               : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
                   jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
-                    // 真·所见即所得（用户定稿）：页面恒为 TipTap 富文本编辑器。
+                    // 真·所见即所得：页面恒为 TipTap 富文本编辑器。
                     // 页条=文档级命令（撤销/重做）+ 光标小节面包屑 + 脏标记 + 冲突
                     // 处理；保存全自动（2s 防抖/失活 flush/Ctrl+S）。行内格式在泡泡
                     // 菜单、块插入在斜杠菜单、表格按钮随选区显隐
@@ -10123,7 +10112,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                     // 选区（镜像随之清空），拦下后选区保留、click 时才取得到
                     jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbUndo"), onClick: () => rteRef.current?.undo(), children: "↶" }),
                     jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vtbRedo"), onClick: () => rteRef.current?.redo(), children: "↷" }),
-                    // 光标所属标题链（VS Code 面包屑同款，二级归属最近一级）：
+                    // 光标所属标题链（面包屑，二级归属最近一级）：
                     // 占满余宽、超长省略，title 给全文；无标题覆盖时隐藏
                     crumb === "" ? null : jsxRuntime.jsx("span", { className: "dshk-vault-crumb", title: crumb, children: crumb }),
                     inTable
@@ -10283,8 +10272,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     // ─────────── 右栏 pane 正文（每个 dock 签一个，key = 页类型 id）───────────
-    // 官方 pane 是普通文档流：外壳 .dshk-rbpane 占满 100%×100%，内容区自己滚，
-    // 自建舞台的 position:fixed 外壳与对话让位类已退役。
+    // 官方 pane 是普通文档流：外壳 .dshk-rbpane 占满 100%×100%，内容区自己滚。
     // pane 挂载 = 官方签开着：把 kitUi 的功能存在性同步为真（入口按钮选中态、
     // 角标、自动跟随判定都读它）；pane 卸载（用户点官方签 ✕）同步回假——
     // 「签开着吗」以官方 pane 的挂载为准。文件/知识库的文档签状态（files/
@@ -10299,8 +10287,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     /** 文件 pane：文档签条 + 多实例 FileEditorPane（非激活 display:none 保挂载
      *  ——滚动/草稿/撤销栈不丢）。不做存在性同步：
      *  files 状态本来就在 kitUi，官方签关了重开，文档签原样恢复。
-     *  最后一页文档签关掉 → 官方「文件」dock 签一起关（用户定稿 2026-09-11，
-     *  同浏览器「没了就没了」，没有空页状态；再点文件时 openFileAndDock 重开签） */
+     *  最后一页文档签关掉 → 官方「文件」dock 签一起关（同浏览器「没了就没了」，
+     *  没有空页状态；再点文件时 openFileAndDock 重开签） */
     function FilePaneBody(props) {
       const ui = useKitUi();
       const cwd = useCurrentCwd(props);
@@ -10340,7 +10328,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [ui.vaultOpen]);
       react.useEffect(() => () => setKitUi({ vaultOpen: false }), []);
       const vaultPages = ui.vaultPages ?? [];
-      // 最后一页关掉 → 官方「知识库」dock 签一起关（2026-09-11 用户定稿，同文件
+      // 最后一页关掉 → 官方「知识库」dock 签一起关（同文件
       // 「没了就没了」，没有空页状态）；页签状态留在 kitUi，重开即恢复
       const pageCount = vaultPages.length;
       react.useEffect(() => {
@@ -10562,8 +10550,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (!slotsCtx) return undefined;
         const handles = [];
         const want = [
-          // 归档会话视图 2026-09-11 整个退役（用户定稿：会话量大了加载慢、实际
-          // 无恢复需求；官方侧栏菜单的归档动作本身不受影响）
           // 会话监视条：composer 上方环境条（官方 StatsLine order 0，排其后）
           ["monitor", cfg.monitorEnabled, () =>
             slotsCtx.slots.register(
@@ -10571,9 +10557,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               MonitorLine,
             )],
           // 输入框入口排序（左→右）：文件树、源代码管理、知识库、终端
-          // （日程钮 2026-09-11 撤——日程只剩右栏 dock 签，入口归右栏开始页
-          // 条目与待办卡，侧栏待办索引同日退役；知识库 2026-09-10 从侧栏底部钮
-          // 移到这里，用户定稿；
           // 手机访问与技能页同类，走 settings.section 页面入口（order：技能 40 → 手机 45）
           ["filetree", cfg.fileTreeEnabled, () =>
             slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-filetree", order: 10 }, FileTreeEntry)],
@@ -10583,8 +10566,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-vault", order: 12 }, VaultEntry)],
           ["terminal", cfg.terminalEnabled, () =>
             slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-terminal", order: 14 }, TerminalEntry)],
-          // 侧栏底部按钮区 2026-09-11 撤（用户定稿：后台任务/浏览器入口归右栏
-          // 开始页清单与自动跟随，侧栏底部不再驻钮）
           ["skills", cfg.skillsPageEnabled, () =>
             slotsCtx.slots.register(
               { name: "settings.section", id: "kit-skills", order: 40, label: () => t("skillsLabel") },
@@ -10631,9 +10612,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
       }, [cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.sourceControlEnabled, cfg.jobsEnabled, cfg.browserEnabled, cfg.vaultEnabled]);
 
-      // 侧边栏浏览区占用：单槽轮换（工作台定稿）——源代码管理 ↔ 文件树 ↔ 知识库
-      // 目录，全关回官方会话列表（日程待办索引 2026-09-11 退役，见入口按钮注释）。
-      // 动态注册若在运行时抛错，捕获并回滚开合状态，避免入口被错误边界退役。
+      // 侧边栏浏览区占用：单槽轮换——源代码管理 ↔ 文件树 ↔ 知识库
+      // 目录，全关回官方会话列表。
+      // 动态注册若在运行时抛错，捕获并回滚开合状态，避免入口被错误边界摘掉。
       react.useEffect(() => {
         if (!slotsCtx || (!ui.treeOpen && !ui.gitOpen && !ui.vaultIdxOpen)) return undefined;
         let dispose;
@@ -10727,8 +10708,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             e.preventDefault();
             e.stopPropagation();
             // 右栏收起/展开走官方 sidebarRight 服务（无参 toggle）；服务未就绪
-            // 或宿主无此能力（0.1.2）时静默。日程快捷键 2026-09-11 撤（用户定稿：
-            // 日程无左侧栏半边，不需要全局键），这个位让给右栏开合
+            // 或宿主无此能力（0.1.2）时静默。这个位给右栏开合（日程无左侧栏半边，
+            // 不需要全局键）
             const sr = rightbarSr;
             if (sr && typeof sr.toggleExpanded === "function") {
               try {
@@ -10778,7 +10759,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // ShellBrowserEvents：壳层常驻浏览器事件源（与面板 WS 并存，不订阅帧流）。
       // 面板标签会被收掉（0 页自动收/人为关闭），「agent 开页切到浏览器」不能依赖
       // 面板自己活着——壳层恒听宿主广播：navigated → 拽出右栏浏览器签（无抑制，
-      // 用户定稿 2026-09-10：agent 操作浏览器必须可见）；浏览器收摊 → 顺手收掉
+      // agent 操作浏览器必须可见）；浏览器收摊 → 顺手收掉
       // 标签。两者兼得：正常浏览器的「没了就没了」+ agent 干活时画面自动回眼前
       react.useEffect(() => {
         if (cfg.browserEnabled === false) return undefined;
@@ -11234,9 +11215,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 分组渲染：开关行 + 该功能启用时才显示的子配置（所见即所得，保存才落盘生效）；
     // switchKey 为 null 的组没有开关行，只列字段（侧边栏组：左右两键，无启用开关）。
     // title 组头（侧边栏这类无单一开关的组）——其余组的功能开关行本身就是组头。
-    // 组顺序（2026-09-11 用户定稿整理）：侧边栏（左右放一起）→ 文件树 → 源代码管理
+    // 组顺序：侧边栏（左右放一起）→ 文件树 → 源代码管理
     // → 终端 → 知识库 → 后台任务 → 浏览器 → 会话监视 → 对话文件预览 → 技能页
-    // → 网页搜索 → 手机访问（用户定稿放最下）。远程域名不在此卡——编辑入口在
+    // → 网页搜索 → 手机访问（放最下）。远程域名不在此卡——编辑入口在
     // 「手机访问」页内。
     const CFG_GROUPS = [
       { title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut"] },
@@ -11614,12 +11595,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }
     }
 
-    // ─────────── 官方右侧边栏注册（宿主 0.1.5+，替换已退役的探针）───────────
+    // ─────────── 官方右侧边栏注册（宿主 0.1.5+）───────────
     // 五个功能各注册一张 dock 页类型（id=正文槽 key，kind=openTab 类型名）+
     // pane 正文。开始页归官方 ShippedGuide（罗盘 + 胶囊条目，条目按 order 升序）：
     // 我们只贡献 guide 条目（RB_GUIDE：日程→浏览器→后台任务，官方「文件」条目
-    // order 10 垫底）；文件/知识库是被动签，不给条目——入口在左侧边栏
-    // （用户定稿 2026-09-11）。服务运行期探测（见 RB_FEATURES 处注释）。
+    // order 10 垫底）；文件/知识库是被动签，不给条目——入口在左侧边栏。
+    // 服务运行期探测（见 RB_FEATURES 处注释）。
     const RB_BODY = {
       file: FilePaneBody,
       vault: VaultPaneBody,
@@ -11699,7 +11680,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               // 卡片顺序只认 priority：keyed 槽的注册排序不排 order（见
               // dsh-client-ui-renderer 的 slots 核心），priority 全默认 0 时顺序 =
               // 各客户端半边谁先 apply，本卡因此在首位/末位之间跳。给个大值把
-              // dsh-kit 钉在最后一张（用户定稿）
+              // dsh-kit 钉在最后一张
               priority: 1000,
               inject: () => ({ scope: cfgScope }),
             },
@@ -11716,8 +11697,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       } else {
         registerRightbar(ctx);
       }
-      // 计时入口现居会话 header 工具区（右坞时代曾挂 composer/坞收起栏/侧栏底部
-      // 按钮，均随迁移退役）；运行态另有悬浮小窗与日程 pane 内芯片。组件内部拉
+      // 计时入口现居会话 header 工具区；运行态另有悬浮小窗与日程 pane 内芯片。
+      // 组件内部拉
       // /dsh-kit/schedule/* 数据，与 session 无关。
       // 导航图标替换是点击驱动的轻量方案：打开设置/面板内切换都源于一次 click
       document.addEventListener("click", scheduleSkillIconSwap, true);
