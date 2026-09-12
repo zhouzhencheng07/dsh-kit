@@ -208,9 +208,11 @@ export interface PhoneAssistOptions {
  *    报 'settings are unavailable in this browser'。网关口本就是令牌授权的全权入口
  *    （持链接者已能借 agent 在宿主上执行任意命令），补这个标记让远程端的设置读写与
  *    宿主一致；随之出现的还有「打开配置文件」这类本地面板（已在 ② 里锁掉）。
- * ④ 触屏的 sticky hover/focus 清理（见 clearTouchState）：手机点一下之后，浏览器把那处
- *    当作"鼠标停在那"，焦点也留在按钮上；宿主 Tooltip 按 `hover || focus` 显示气泡
- *    （`dsh-web-frontend` 的 primitives），于是图标钮的提示词会一直挂着。
+ * ④ **不做触屏 hover/focus 清理**：手机点一下之后，浏览器把那处当作"鼠标停在那"、焦点也
+ *    留在按钮上，宿主的悬停提示/预览会粘到下次点按为止。曾用"touchend 后补发合成的
+ *    pointerout/mouseout + 有条件的 focusout"清它，但那是在替浏览器撒谎：合成 focusout
+ *    会关掉宿主"失焦即收"的弹出层（模型选择器一点开就被收），而它又覆盖不了全部悬停模式
+ *    （宿主多数悬停面走 onPointerEnter/Leave）。宁可让气泡多留一会儿，也不再伪造事件。
  */
 export function phoneAssistScript({ remoteView, pickerLocked, presentedLocked }: PhoneAssistOptions): string {
   const sels = [...HOST_ONLY_LOCKED, ...(pickerLocked ? PICKER_LOCKED : []), ...(presentedLocked ? PRESENTED_LOCKED : [])]
@@ -256,42 +258,16 @@ export function phoneAssistScript({ remoteView, pickerLocked, presentedLocked }:
     'function locked(target){' +
     'for(var i=0;i<D.sels.length;i++)if(target.closest&&target.closest(D.sels[i]))return true;' +
     'return textLocked(target);}' +
-    // 触屏清理：真 blur 会连带关掉宿主里"失焦即收"的菜单，所以只派发合成的 focusout/mouseout
-    // 让前端状态归位（React 的 onBlur/onMouseLeave 走 focusout/mouseout 委托），不动真实焦点；
-    // 输入类控件（INPUT/TEXTAREA/contenteditable）跳过——提示气泡不长在它们身上，而合成的
-    // focusout 会惊动正在编辑的输入面（草稿、@ 菜单都挂在这条链上）
-    //
-    // 两处踩过的坑，都写在这儿免得再踩：
-    // ① **必须补 pointer 家族**：宿主里多数"粘住"的面是 onPointerEnter/Leave（对话的轮次
-    //    导航预览、轨迹页悬停卡、反馈芯片；侧边栏的滚动条显现也走它），只补 mouseout 时
-    //    React 根本不会合成 onPointerLeave——这正是"清理了却还是粘着"的原因。
-    // ② **唯一会误伤的是那条假 focusout**：宿主的模型选择器把 onBlur 当关闭信号，且判据是
-    //    "relatedTarget 在根/菜单内才放过"，合成事件没有 relatedTarget → 点开即被关掉。
-    //    所以焦点那段在弹出层在场时整段跳过；而"指针离开"是触屏上的事实，与弹出层无关，
-    //    照发（它不会关掉任何菜单）。
-    'function leave(el){' +
-    'if(!el)return;' +
-    'try{el.dispatchEvent(new PointerEvent("pointerout",{bubbles:true,relatedTarget:document.body}));}catch(e){}' +
-    'try{el.dispatchEvent(new MouseEvent("mouseout",{bubbles:true,relatedTarget:document.body}));}catch(e){}}' +
-    'function popupOpen(){' +
-    'try{if(document.querySelector(\'[role="menu"],[role="listbox"],[role="dialog"]\'))return true;}catch(e){}' +
-    'var a=document.activeElement;return !!(a&&a.getAttribute&&a.getAttribute("aria-expanded")==="true");}' +
-    'function clearTouchState(el){' +
-    'leave(el);' +
-    'if(popupOpen())return;' +
-    'var a=document.activeElement;' +
-    'if(a&&a!==document.body){' +
-    'var t=a.tagName,ed=a.isContentEditable||t==="INPUT"||t==="TEXTAREA"||t==="SELECT";' +
-    'if(!ed)try{a.dispatchEvent(new FocusEvent("focusout",{bubbles:true}));}catch(e){}}}' +
-    'function armTouchCleanup(){' +
-    'if(!((navigator.maxTouchPoints||0)>0||"ontouchstart" in window))return;' +
-    'document.addEventListener("touchend",function(ev){' +
-    'var el=ev.target;setTimeout(function(){clearTouchState(el);},0);},true);}' +
+    // 不做触屏 hover/focus 清理：手机点一下，浏览器会把触点当"鼠标停在那"、焦点也留在按钮上，
+    // 宿主的悬停提示/预览会粘到下次点按为止。曾用"touchend 后补发 pointerout+mouseout（弹出层
+    // 不在场时再补一发 focusout）"清它，但那是在替浏览器撒谎——合成 focusout 会关掉宿主
+    // "失焦即收"的弹出层（模型选择器一点开就被收），而它又覆盖不了全部悬停面（宿主多数走
+    // onPointerEnter/Leave）。宁可让气泡多留一会儿，也不再伪造事件。
     'function dismissNotice(){var d=document.querySelector(\'[role="dialog"]\');if(!d)return false;' +
     'var b=d.querySelectorAll("button");' +
     'for(var i=0;i<b.length;i++){if((b[i].textContent||"").indexOf("继续")!==-1){b[i].click();return true;}}' +
     'return false;}' +
-    'function boot(){applyLock();' + (remoteView ? 'armTouchCleanup();' : '') +
+    'function boot(){applyLock();' +
     'if(D.sels.length||res.length){' +
     'document.addEventListener("click",function(ev){' +
     // 每次点击后补两次置灰：弹出菜单/对话框是刚挂上来的，2s 轮询之外再抢一拍

@@ -226,12 +226,12 @@ try {
   check('远程视图注入 ownsHost（设置通道走 host 持久化）', page.body.includes('ownsHost:true'))
   // 触屏 sticky hover/focus：点过的按钮会一直算"悬停 + 聚焦"，宿主 Tooltip 气泡就挂在屏幕上
   check(
-    '远程视图挂触屏清理（touchend → pointerout+mouseout；焦点那半弹出层在场时跳过）',
-    page.body.includes('applyLock();armTouchCleanup();') &&
-      page.body.includes('touchend') &&
-      page.body.includes('pointerout') &&
-      page.body.includes('focusout') &&
-      page.body.includes('leave(el);if(popupOpen())return;'),
+    '远程视图不挂触屏清理（不伪造 pointerout/mouseout/focusout，只留置灰那段）',
+    page.body.includes('applyLock();') &&
+      !page.body.includes('armTouchCleanup') &&
+      !page.body.includes('touchend') &&
+      !page.body.includes('pointerout') &&
+      !page.body.includes('focusout'),
   )
   // 宿主 picker 是 browse（远程客户端在页面里就能列目录/建文件夹）→ 挑选入口不锁，「在应用中打开」照旧锁
   {
@@ -276,7 +276,7 @@ try {
     const viewSetCookie = Array.isArray(rr.headers['set-cookie']) ? rr.headers['set-cookie'][0] : rr.headers['set-cookie']
     check('?dshk_view=desktop → 302 + 落 Cookie', rr.status === 302 && String(viewSetCookie).includes(`${PHONE_VIEW_COOKIE}=desktop`))
     const desktopView = await request(gwPort, { path: '/page', headers: { cookie: `${cookieHeader}; ${PHONE_VIEW_COOKIE}=desktop` } })
-    check('desktop 视图：不锁任何入口、也不宣告 ownsHost（内测弹窗那段仍在）', desktopView.body.includes('dismissNotice') && !desktopView.body.includes('选择打开方式') && !desktopView.body.includes('ownsHost') && !desktopView.body.includes('applyLock();armTouchCleanup();'))
+    check('desktop 视图：不锁任何入口、也不宣告 ownsHost（内测弹窗那段仍在，且不挂触屏清理）', desktopView.body.includes('dismissNotice') && !desktopView.body.includes('选择打开方式') && !desktopView.body.includes('ownsHost') && !desktopView.body.includes('armTouchCleanup') && !desktopView.body.includes('touchend'))
     const back = await request(gwPort, { path: '/page', headers: { cookie: cookieHeader } })
     check('未带视图 Cookie：回到远程视图（入口又锁上）', back.body.includes('选择打开方式'))
   }
