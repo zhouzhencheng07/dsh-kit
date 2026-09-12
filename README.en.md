@@ -35,9 +35,9 @@ slot; the conversation column stays put.
   (multiple tabs, ✕ per tab); `[[wikilinks]]` with back/forward, backlinks, broken-link
   page creation, full-text search over `wiki/`; TipTap WYSIWYG with 2s autosave +
   mtime CAS; chat integration (vault paths in chat open the page, "cite to chat" inserts
-  page/selection); usage rules ship as the `dsh-kit-vault` skill, and the agent runs
-  `vault_search` plus direct file edits, committing to git itself; git archive on
-  init / human save / delete
+  page/selection); usage rules and the search script ship as the `dsh-kit-vault`
+  skill, and the agent runs it plus direct file edits, committing to git itself;
+  git archive on init / human save / delete
 - **Background tasks** (entry from the right-dock start page and auto-follow): lists the
   session's running background jobs, with output viewing and job termination
   (official `job_output`/`job_kill` semantics)
