@@ -120,6 +120,12 @@ const HOST_ONLY_LOCKED = [
     // id 固定为 files）。用户定（2026-09-12）：远程视图里一并置灰——kit 自己的文件树才是
     // 手机端要用的那个，官方这份只读列表留着就是两个文件入口打架
     'button[data-sidebar-right-guide-entry="files"]',
+    // 对话尾部的交付文件卡（`dsh-client-ui-deliverables` 的 PresentedFileCard，容器带
+    // data-presented-file）：卡上的「打开」= 官方侧边栏预览（手机上看不了），下拉里的
+    // 「用默认应用打开 / 打开所在文件夹」本就在电脑上执行，故整卡一起锁。用户定（2026-09-12）：
+    // 「本轮文件改动」那条 chip 行不锁——点它走 kit 自己的文件面。两个属性只差单复数，
+    // 这里必须认单数的 data-presented-file（presented 网格与 chip 行都叫 data-presented-files-row）
+    '[data-presented-file]',
 ];
 /**
  * 「添加工作区」入口：只在宿主 picker 服务不了远程客户端时并入。browse 后端让远程
@@ -142,6 +148,11 @@ const ADD_MENU_ITEM_RE = '^(?:添加工作区|Add workspace)';
  * 无 aria-label 的 Button）：它直接编辑宿主的 settings.yaml，远程端一并锁住。
  */
 const OPEN_DOCUMENT_RE = '^(?:打开配置文件|Open configuration file)$';
+/**
+ * 交付卡片下拉里的宿主动作。卡上的下拉本身已被 `[data-presented-file]` 覆盖，
+ * 但菜单走 portal 渲染在卡片之外——真被打开（键盘等路径）时按项文本兜底。
+ */
+const PRESENTED_HOST_ACTION_RE = '^(?:用默认应用打开|打开所在文件夹|在文件资源管理器中显示|在 Finder 中显示|Open in default app|Open containing folder|Show in File Explorer|Show in Finder)$';
 /** 锁住的提示只有一句：这些入口的性质一样（都在电脑那台机器上执行），不必一钮一文案 */
 const LOCK_HINT = '请在电脑端操作';
 /**
@@ -167,7 +178,7 @@ const LOCK_HINT = '请在电脑端操作';
  */
 export function phoneAssistScript({ remoteView, pickerLocked }) {
     const sels = [...HOST_ONLY_LOCKED, ...(pickerLocked ? PICKER_LOCKED : [])];
-    const texts = [...(pickerLocked ? [ADD_MENU_ITEM_RE] : []), OPEN_DOCUMENT_RE];
+    const texts = [...(pickerLocked ? [ADD_MENU_ITEM_RE] : []), OPEN_DOCUMENT_RE, PRESENTED_HOST_ACTION_RE];
     const data = JSON.stringify({
         // 非远程视图时数据为空：脚本只剩内测弹窗那段
         sels: remoteView ? sels : [],
