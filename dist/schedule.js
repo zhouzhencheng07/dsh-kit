@@ -1,7 +1,7 @@
 // dsh-kit 日程模块——结构化存储与查询派生（schedule.ts）
 //
-// 职责：日程/待办/计时的唯一数据持有者（JSON 原子落盘，固定
-// $DSH_HOME/dsh-kit/schedule.json，与知识库 vaultRoot 互不相干），以及派生层：
+// 职责：日程/待办/计时的唯一数据持有者（一条一文件、单文件原子落盘，固定
+// $DSH_HOME/dsh-kit/schedule/，与知识库 vaultRoot 互不相干），以及派生层：
 // 区间重复展开、统计、文本汇总。UI 组件在
 // client/bundle.js，agent 工具定义与端点注册在 index.ts——本文件不感知两者形状。
 //
@@ -180,61 +180,165 @@ export function dshKitDataDir() {
     const home = env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh');
     return path.join(home, 'dsh-kit');
 }
-/** 日程数据文件：固定 $DSH_HOME/dsh-kit/schedule.json，与知识库（vaultRoot）无关
- * ——日程是独立能力，知识库未配置也照常可用 */
-export function resolveScheduleFile() {
-    return path.join(dshKitDataDir(), 'schedule.json');
+/** 日程数据目录：固定 $DSH_HOME/dsh-kit/schedule/（一条一文件），与知识库（vaultRoot）
+ *  无关——日程是独立能力，知识库未配置也照常可用 */
+export function resolveScheduleDir() {
+    return path.join(dshKitDataDir(), 'schedule');
 }
+// 一条一文件（与桌面端、鸿蒙端同一份契约）：
+//   events/<id>.json    一条事件或待办（含 recurrence / timeEntries / rev）
+//   entries/<id>.json   一条独立计时段（原 orphans，自带 id）
+//   timer.json          进行中的计时（null = 无）
+// 为什么：同步（git 底座）按文件合并——整库单文件时两端各改一次必冲突，拆开后冲突面
+// 只剩"同一条"；文件名 = id，改期只改内容不移动文件、删除 = 删文件（不需要墓碑）。
 export class ScheduleStore {
-    /** 当前数据文件（构造可注入别的路径供测试；默认 resolveScheduleFile()） */
-    file;
+    /** 当前数据目录（构造可注入别的路径供测试；默认 resolveScheduleDir()） */
+    dir;
     data = { events: [], runningTimer: null };
-    constructor(file) {
-        this.file = file ?? resolveScheduleFile();
+    constructor(dir) {
+        this.dir = dir ?? resolveScheduleDir();
         this.load();
     }
-    load() {
-        let raw;
-        try {
-            raw = fs.readFileSync(this.file, 'utf8');
-        }
-        catch {
-            // 缺失 = 空库
-            this.data = { events: [], runningTimer: null, orphans: [] };
-            return;
-        }
-        try {
-            const parsed = JSON.parse(raw);
-            if (!Array.isArray(parsed.events))
-                throw new Error('events 不是数组');
-            this.data = {
-                events: parsed.events,
-                runningTimer: parsed.runningTimer ?? null,
-                orphans: Array.isArray(parsed.orphans) ? parsed.orphans : [],
-            };
-        }
-        catch {
-            // 损坏（含 events 非数组这类半损坏）：坏文件挪 .bak，服务降级空库继续活
-            try {
-                fs.renameSync(this.file, `${this.file}.bak`);
-            }
-            catch {
-                /* 改名失败就让它留在原地 */
-            }
-            this.data = { events: [], runningTimer: null, orphans: [] };
-        }
+    eventsDir() {
+        return path.join(this.dir, 'events');
     }
-    persist() {
+    entriesDir() {
+        return path.join(this.dir, 'entries');
+    }
+    timerFile() {
+        return path.join(this.dir, 'timer.json');
+    }
+    /** 原子写单个 JSON（tmp + rename）；失败只告警（内存态仍可用，下次变更会再试） */
+    writeJson(file, value) {
         try {
-            fs.mkdirSync(path.dirname(this.file), { recursive: true });
-            const tmp = `${this.file}.tmp`;
-            fs.writeFileSync(tmp, JSON.stringify(this.data), 'utf8');
-            fs.renameSync(tmp, this.file);
+            fs.mkdirSync(path.dirname(file), { recursive: true });
+            const tmp = `${file}.tmp`;
+            fs.writeFileSync(tmp, JSON.stringify(value), 'utf8');
+            fs.renameSync(tmp, file);
         }
         catch (error) {
-            // 落盘失败不抛给调用方（内存态仍可用），下次变更会再试
-            console.warn(`dsh-kit: schedule.json 写入失败：${error instanceof Error ? error.message : error}`);
+            console.warn(`dsh-kit: 日程写入失败（${file}）：${error instanceof Error ? error.message : error}`);
         }
+    }
+    /** 读目录里的 `*.json`；坏单条挪 `.bak` 后跳过，不拖垮整库 */
+    readJsonDir(dir) {
+        const out = [];
+        let names;
+        try {
+            names = fs.readdirSync(dir);
+        }
+        catch {
+            return out; // 目录不存在 = 空库
+        }
+        for (const name of names) {
+            if (!name.endsWith('.json'))
+                continue;
+            const file = path.join(dir, name);
+            try {
+                out.push({ file, value: JSON.parse(fs.readFileSync(file, 'utf8')) });
+            }
+            catch {
+                try {
+                    fs.renameSync(file, `${file}.bak`);
+                }
+                catch {
+                    /* 改名失败就让它留在原地 */
+                }
+            }
+        }
+        return out;
+    }
+    load() {
+        const events = [];
+        for (const { file, value } of this.readJsonDir(this.eventsDir())) {
+            if (!value || typeof value !== 'object' || typeof value.id !== 'string' || value.id === '')
+                continue;
+            // 文件名即身份：不符就迁到 <id>.json 并删旧文件，否则同一份内容会被读成两条
+            const want = path.join(this.eventsDir(), `${value.id}.json`);
+            if (path.resolve(file) !== path.resolve(want)) {
+                this.writeJson(want, value);
+                try {
+                    fs.unlinkSync(file);
+                }
+                catch {
+                    /* 忽略 */
+                }
+            }
+            events.push(value);
+        }
+        events.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        const orphans = [];
+        for (const { file, value } of this.readJsonDir(this.entriesDir())) {
+            if (!value || typeof value !== 'object')
+                continue;
+            // 缺 id 的独立段补一个身份（文件名就是它）
+            const id = typeof value.id === 'string' && value.id !== ''
+                ? value.id
+                : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+            value.id = id;
+            const want = path.join(this.entriesDir(), `${id}.json`);
+            if (path.resolve(file) !== path.resolve(want)) {
+                this.writeJson(want, value);
+                try {
+                    fs.unlinkSync(file);
+                }
+                catch {
+                    /* 忽略 */
+                }
+            }
+            orphans.push(value);
+        }
+        orphans.sort((a, b) => ((a.id ?? '') < (b.id ?? '') ? -1 : (a.id ?? '') > (b.id ?? '') ? 1 : 0));
+        let runningTimer = null;
+        try {
+            const parsed = JSON.parse(fs.readFileSync(this.timerFile(), 'utf8'));
+            runningTimer = parsed && typeof parsed === 'object' ? parsed : null;
+        }
+        catch {
+            // 缺失 = 无进行中计时；坏文件挪 .bak（不静默覆盖）
+            try {
+                if (fs.existsSync(this.timerFile()))
+                    fs.renameSync(this.timerFile(), `${this.timerFile()}.bak`);
+            }
+            catch {
+                /* 忽略 */
+            }
+        }
+        this.data = { events, runningTimer, orphans };
+    }
+    writeEvent(id) {
+        const ev = this.data.events.find((e) => e.id === id);
+        if (ev)
+            this.writeJson(path.join(this.eventsDir(), `${id}.json`), ev);
+    }
+    removeEventFile(id) {
+        try {
+            fs.unlinkSync(path.join(this.eventsDir(), `${id}.json`));
+        }
+        catch {
+            /* 不存在也算成功 */
+        }
+    }
+    writeEntry(id) {
+        const entry = (this.data.orphans ?? []).find((e) => e.id === id);
+        if (entry)
+            this.writeJson(path.join(this.entriesDir(), `${id}.json`), entry);
+    }
+    removeEntryFile(id) {
+        try {
+            fs.unlinkSync(path.join(this.entriesDir(), `${id}.json`));
+        }
+        catch {
+            /* 忽略 */
+        }
+    }
+    writeTimer() {
+        this.writeJson(this.timerFile(), this.data.runningTimer ?? null);
+    }
+    /** 内容变了就推进版本号（同步用它判断"这条被改过几次"，不依赖时钟） */
+    touch(ev) {
+        ev.rev = (ev.rev ?? 0) + 1;
+        ev.updatedAt = dtStrOf(new Date());
     }
     list() {
         return this.data.events;
@@ -276,8 +380,9 @@ export class ScheduleStore {
             // 无时刻无截止的条目也允许（纯待办），due 缺省今天方便待办列表排序
             event.due = todayStr();
         }
+        event.rev = 1;
         this.data.events.push(event);
-        this.persist();
+        this.writeEvent(event.id);
         return event;
     }
     update(id, patch) {
@@ -305,8 +410,8 @@ export class ScheduleStore {
             ev.due = fields.due;
         if (fields.parentId !== undefined)
             ev.parentId = fields.parentId;
-        ev.updatedAt = dtStrOf(new Date());
-        this.persist();
+        this.touch(ev);
+        this.writeEvent(id);
         return ev;
     }
     remove(id) {
@@ -314,9 +419,11 @@ export class ScheduleStore {
         this.data.events = this.data.events.filter((e) => e.id !== id);
         if (this.data.events.length === before)
             return false;
-        if (this.data.runningTimer?.id === id)
+        this.removeEventFile(id);
+        if (this.data.runningTimer?.id === id) {
             this.data.runningTimer = null;
-        this.persist();
+            this.writeTimer();
+        }
         return true;
     }
     setDone(id, done) {
@@ -324,8 +431,8 @@ export class ScheduleStore {
         if (!ev)
             return null;
         ev.completedAt = done ? dtStrOf(new Date()) : null;
-        ev.updatedAt = dtStrOf(new Date());
-        this.persist();
+        this.touch(ev);
+        this.writeEvent(id);
         return ev;
     }
     // ── 计时（全局单实例）────────────────────────────────────────────────────
@@ -344,10 +451,12 @@ export class ScheduleStore {
             if (!Array.isArray(target.timeEntries))
                 target.timeEntries = [];
             target.timeEntries.push({ start });
-            target.updatedAt = start;
+            this.touch(target);
         }
         this.data.runningTimer = { id: target ? target.id : '', start, title: label };
-        this.persist();
+        if (target)
+            this.writeEvent(target.id);
+        this.writeTimer();
         return { runningTimer: { id: this.data.runningTimer.id, start, title: label } };
     }
     timerStop() {
@@ -360,18 +469,29 @@ export class ScheduleStore {
                 const open = target.timeEntries.find((t) => t.end === undefined);
                 if (open)
                     open.end = dtStrOf(new Date(), true);
-                target.updatedAt = dtStrOf(new Date(), true);
+                this.touch(target);
             }
+            this.data.runningTimer = null;
+            this.writeEvent(running.id);
+            this.writeTimer();
         }
         else {
             // 独立计时（未挂条目）的时段落到 orphans：不挂列表但统计照计，
             // 否则停表即丢数据（timerStart 已强制独立计时必带标题，note 不会空）
             if (!Array.isArray(this.data.orphans))
                 this.data.orphans = [];
-            this.data.orphans.push({ start: running.start, end: dtStrOf(new Date(), true), note: running.title });
+            const entryId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+            const entry = {
+                id: entryId,
+                start: running.start,
+                end: dtStrOf(new Date(), true),
+                note: running.title,
+            };
+            this.data.orphans.push(entry);
+            this.data.runningTimer = null;
+            this.writeEntry(entryId);
+            this.writeTimer();
         }
-        this.data.runningTimer = null;
-        this.persist();
         return { stopped: true };
     }
     runningTimer() {
@@ -432,10 +552,14 @@ export class ScheduleStore {
         }
         if (owner !== null) {
             const ev = this.data.events.find((e2) => e2.id === owner);
-            if (ev)
-                ev.updatedAt = dtStrOf(new Date());
+            if (ev) {
+                this.touch(ev);
+                this.writeEvent(owner);
+            }
         }
-        this.persist();
+        else if (entry.id) {
+            this.writeEntry(entry.id);
+        }
         return entry;
     }
     /** 删除计时段（仅已闭合段；进行中的段先停表）。返回是否真的删了 */
@@ -449,10 +573,14 @@ export class ScheduleStore {
         list.splice(index, 1);
         if (owner !== null) {
             const ev = this.data.events.find((e) => e.id === owner);
-            if (ev)
-                ev.updatedAt = dtStrOf(new Date());
+            if (ev) {
+                this.touch(ev);
+                this.writeEvent(owner);
+            }
         }
-        this.persist();
+        else if (entry.id) {
+            this.removeEntryFile(entry.id);
+        }
         return true;
     }
     // ── 派生：展开 / 统计 / 汇总 ─────────────────────────────────────────────
