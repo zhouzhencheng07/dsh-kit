@@ -17,7 +17,7 @@ import {
   timedMsInRange,
   buildScheduleTools,
   toolArgsToCreateInput,
-  resolveScheduleFile,
+  resolveScheduleDir,
 } from '../dist/schedule.js'
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'dshkit-sched-'))
@@ -45,7 +45,7 @@ test('rangeOf：day/week/month', () => {
 
 test('create：title 必填、无时刻待办缺省 due=今天', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   assert.throws(() => store.create({ description: 'no title' }), /title/)
   const task = store.create({ title: '写周报' })
   assert.equal(task.start, undefined)
@@ -56,7 +56,7 @@ test('create：title 必填、无时刻待办缺省 due=今天', () => {
 
 test('字段清洗：非法 recurrence 丢弃、days 过滤越界并去重', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   const ev = store.create({
     title: '例会',
     start: '2026-09-07T09:00',
@@ -126,7 +126,7 @@ test('expandOccurrences：daily/monthly 与区间外排除', () => {
 
 test('stats：事件数/完成数/到期待办/计时口径', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   const ev = store.create({ title: '开会', start: '2026-09-08T09:00', end: '2026-09-08T10:00' })
   const t1 = store.create({ title: '甲', due: '2026-09-08' })
   store.create({ title: '乙', due: '2026-09-08' })
@@ -150,7 +150,7 @@ test('stats：事件数/完成数/到期待办/计时口径', () => {
 
 test('stats：总时长=已结束日程占位+计时段，未来不记、挂段不重复计、全天不参与', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   store.create({ title: '已过', start: '2026-09-08T09:00', end: '2026-09-08T10:00' }) // +60min
   store.create({ title: '未到', start: '2026-09-08T22:00', end: '2026-09-08T23:00' }) // now 12:00 不记
   // 挂段事件：占位 60min 不计，真实段 30min 计入
@@ -169,7 +169,7 @@ test('stats：总时长=已结束日程占位+计时段，未来不记、挂段�
 
 test('summary：日汇总含事件行与待办行，空时段有兜底句', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   store.create({ title: '站会', start: '2026-09-08T09:00', end: '2026-09-08T09:30', location: '线上' })
   store.create({ title: '交周报', due: '2026-09-08' })
   const day = store.summary('day', '2026-09-08')
@@ -183,7 +183,7 @@ test('summary：日汇总含事件行与待办行，空时段有兜底句', () =
 
 test('timer：全局单计时互斥、stop 闭合、runningTimer 带标题', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   const a = store.create({ title: '任务A', due: '2026-09-08' })
   const b = store.create({ title: '任务B', due: '2026-09-08' })
   store.timerStart(a.id)
@@ -220,47 +220,49 @@ test('timer：全局单计时互斥、stop 闭合、runningTimer 带标题', () 
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('持久化往返与损坏降级', () => {
+test('持久化往返、update 推进 rev、坏单条挪 .bak 不拖垮整库', () => {
   const dir = tmp()
-  const file = path.join(dir, 'schedule.json')
-  const s1 = new ScheduleStore(file)
-  s1.create({ title: '跨实例', start: '2026-09-08T09:00' })
-  const s2 = new ScheduleStore(file)
+  const s1 = new ScheduleStore(path.join(dir, 'sched'))
+  const ev = s1.create({ title: '跨实例', start: '2026-09-08T09:00' })
+  assert.equal(ev.rev, 1)
+  const s2 = new ScheduleStore(path.join(dir, 'sched'))
   assert.equal(s2.list().length, 1)
   assert.equal(s2.list()[0].title, '跨实例')
-  // 损坏 → .bak + 空库
+  s2.update(ev.id, { title: '改名' })
+  assert.equal(s2.list()[0].rev, 2)
+  // 单条文件损坏 → 挪 .bak 后跳过，其余条目不受影响
+  const file = path.join(dir, 'sched', 'events', `${ev.id}.json`)
   fs.writeFileSync(file, '{broken json', 'utf8')
-  const s3 = new ScheduleStore(file)
+  const s3 = new ScheduleStore(path.join(dir, 'sched'))
   assert.equal(s3.list().length, 0)
   assert.ok(fs.existsSync(`${file}.bak`))
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('独立计时 orphans 持久化往返 + events 非数组也走 .bak', () => {
+test('独立计时段持久化往返（entries/<id>.json，文件名即身份）+ 坏单条挪 .bak', () => {
   const dir = tmp()
-  const file = path.join(dir, 'schedule.json')
-  const s1 = new ScheduleStore(file)
+  const s1 = new ScheduleStore(path.join(dir, 'sched'))
   s1.timerStart(undefined, '独立计时')
   s1.timerStop()
-  // 拉成确定时段（同秒起止时长 0 是边界行为），重开实例验证落盘往返
+  // 拉成确定时段（同秒起止时长 0 是边界行为），经 entryUpdate 改写并落盘
   const orphan = s1.listOrphans()[0]
-  orphan.start = '2026-09-08T08:00:00'
-  orphan.end = '2026-09-08T08:20:00'
-  s1.create({ title: '触发落盘', due: '2026-09-08' }) // mutate 才 persist（直改 orphan 字段不落盘）
-  const s2 = new ScheduleStore(file)
-  const stats = s2.stats('day', '2026-09-08')
-  assert.equal(stats.timedMs, 20 * 60000)
-  // events 键存在但不是数组：同样按损坏处理（挪 .bak），不能静默覆盖原文件
-  fs.writeFileSync(file, '{"events":"nope"}', 'utf8')
-  const s3 = new ScheduleStore(file)
-  assert.equal(s3.list().length, 0)
-  assert.ok(fs.existsSync(`${file}.bak`))
+  assert.ok(typeof orphan.id === 'string' && orphan.id !== '')
+  s1.entryUpdate(null, 0, { start: '2026-09-08T08:00:00', end: '2026-09-08T08:20:00' })
+  const entryFile = path.join(dir, 'sched', 'entries', `${orphan.id}.json`)
+  assert.ok(fs.existsSync(entryFile))
+  const s2 = new ScheduleStore(path.join(dir, 'sched'))
+  assert.equal(s2.stats('day', '2026-09-08').timedMs, 20 * 60000)
+  // 单条文件损坏 → 挪 .bak（不静默覆盖），库照常打开
+  fs.writeFileSync(entryFile, 'not json', 'utf8')
+  const s3 = new ScheduleStore(path.join(dir, 'sched'))
+  assert.equal(s3.listOrphans().length, 0)
+  assert.ok(fs.existsSync(`${entryFile}.bak`))
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
 test('update/delete：patch 白名单不产生脏字段', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   const ev = store.create({ title: 'A', due: '2026-09-08' })
   store.update(ev.id, { title: 'B', hack: 'x', start: 'not-a-date' })
   const after = store.list()[0]
@@ -319,7 +321,7 @@ test('toolArgsToCreateInput：repeat 系参数组装 recurrence、待办带 repe
 
 test('schedule_create 工具：date+time 建日程、date 建待办、重复透传与摘要', async () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   const defineTool = (opts) => opts
   const tools = buildScheduleTools({ defineTool, store })
   const create = tools.find((t) => t.name === 'schedule_create')
@@ -341,7 +343,7 @@ test('schedule_create 工具：date+time 建日程、date 建待办、重复透�
 
 test('items：时段内条目结构化（id/kind/when），重复事件去重带 recurring', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   store.create({ title: '例会', start: '2026-09-07T09:00', recurrence: { type: 'weekly', days: [1] } })
   store.create({ title: '交报告', due: '2026-09-08' })
   const done = store.create({ title: '已办', due: '2026-09-08' })
@@ -360,7 +362,7 @@ test('items：时段内条目结构化（id/kind/when），重复事件去重带
 
 test('schedule_delete 工具：按 id 删除、重复系列整体移除、未找到回 ok:false', async () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   const defineTool = (opts) => opts
   const tools = buildScheduleTools({ defineTool, store })
   const del = tools.find((t) => t.name === 'schedule_delete')
@@ -377,7 +379,7 @@ test('schedule_delete 工具：按 id 删除、重复系列整体移除、未找
 
 test('schedule_query 工具：返回 items 供删除定位', async () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   const defineTool = (opts) => opts
   const tools = buildScheduleTools({ defineTool, store })
   const query = tools.find((t) => t.name === 'schedule_query')
@@ -392,7 +394,7 @@ test('schedule_query 工具：返回 items 供删除定位', async () => {
 
 test('标题统一上限 16 字（面板/agent 工具同一口径，细节让位备注）', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   const long = '一'.repeat(30)
   const ev = store.create({ title: long })
   assert.equal(ev.title.length, 16)
@@ -404,7 +406,7 @@ test('标题统一上限 16 字（面板/agent 工具同一口径，细节让位
 
 test('timerStart：独立计时强制标题且限 16 字', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   assert.throws(() => store.timerStart(undefined), /独立计时需要标题/)
   assert.throws(() => store.timerStart(undefined, '   '), /独立计时需要标题/)
   const running = store.timerStart(undefined, '一'.repeat(20)).runningTimer
@@ -418,7 +420,7 @@ test('timerStart：独立计时强制标题且限 16 字', () => {
 
 test('entryUpdate/entryDelete：独立段与挂条目段改删，非法输入拒绝', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'schedule.json'))
+  const store = new ScheduleStore(path.join(dir, 'sched'))
   const ev = store.create({ title: '挂段事件', start: '2026-09-08T09:00' })
   store.timerStart(ev.id)
   store.timerStop()
@@ -448,18 +450,13 @@ test('entryUpdate/entryDelete：独立段与挂条目段改删，非法输入拒
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('存储位置：固定 $DSH_HOME/dsh-kit/schedule.json，与知识库无关', () => {
+test('存储位置：固定 $DSH_HOME/dsh-kit/schedule/（一条一文件目录），与知识库无关', () => {
   const dir = tmp()
   const home = path.join(dir, 'home')
   const prevHome = process.env.DSH_HOME
   process.env.DSH_HOME = home
   try {
-    const fixedFile = path.join(home, 'dsh-kit', 'schedule.json')
-    assert.equal(resolveScheduleFile(), fixedFile)
-    fs.mkdirSync(path.dirname(fixedFile), { recursive: true })
-    fs.writeFileSync(fixedFile, 'x', 'utf8')
-    assert.equal(resolveScheduleFile(), fixedFile)
-    assert.ok(fs.existsSync(fixedFile))
+    assert.equal(resolveScheduleDir(), path.join(home, 'dsh-kit', 'schedule'))
   } finally {
     if (prevHome === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = prevHome
