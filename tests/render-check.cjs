@@ -72,7 +72,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, VaultFolderPicker, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, renameVaultPageTab, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultCascadeDeleteMany, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
+  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, VaultFolderPicker, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, renameVaultPageTab, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultCascadeDeleteMany, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, notifyDiffCore, notifyState, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -86,7 +86,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "VaultFolderPicker", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "renameVaultPageTab", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultCascadeDeleteMany", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTickCore", "monitorCancelPlan", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "VaultFolderPicker", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "renameVaultPageTab", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultCascadeDeleteMany", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTickCore", "monitorCancelPlan", "notifyDiffCore", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -1263,7 +1263,109 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
   comps.monitorSessions.delete("session-g6");
 }
 
-// 10d) 阅读位置记忆（F2）：按路径存取 + 隐藏容器不记（display:none 时 scrollTop
+// 10d) 会话通知判定核心（notifyDiffCore 依赖注入直测）：running true→false 的沿
+//      → 完成通知；待回应 key 变化 → 提问/批准通知。抑制：总开关与分类开关、
+//      页面在前台且事件就是当前会话、子会话、首帧播种；消失会话的状态回收。
+{
+  const freshState = () => ({ running: new Map(), pendingKey: new Map(), primed: false });
+  const listOf = (rows, current) => ({
+    ids: rows.map((r) => r.id),
+    byId: Object.fromEntries(
+      rows.map((r) => [r.id, { running: r.running === true, displayTitle: r.title ?? r.id, origin: r.origin }]),
+    ),
+    current,
+  });
+  const cfgAll = { notifyEnabled: true, notifyOnComplete: true, notifyOnQuestion: true };
+  const pendingOf = (id, item) => new Map([[id, item]]);
+
+  // —— 沿检测：首帧播种，收尾才发；同一快照重复读不重发 ——
+  const st1 = freshState();
+  const rows1 = [{ id: "n1", running: true }];
+  check("N 首帧播种不发通知（页面刚打开不算完成）", comps.notifyDiffCore(st1, listOf(rows1, "n1"), cfgAll).length === 0);
+  rows1[0].running = false;
+  const ev1 = comps.notifyDiffCore(st1, listOf(rows1, "n1"), cfgAll);
+  check("N 回合收尾发完成通知（带会话标题）", ev1.length === 1 && ev1[0].kind === "complete" && ev1[0].sessionId === "n1" && ev1[0].title === "n1");
+  check("N 快照重读不重发（沿只认一次）", comps.notifyDiffCore(st1, listOf(rows1, "n1"), cfgAll).length === 0);
+  rows1[0].running = true;
+  comps.notifyDiffCore(st1, listOf(rows1, "n1"), cfgAll);
+  rows1[0].running = false;
+  check("N 第二轮收尾再发一次", comps.notifyDiffCore(st1, listOf(rows1, "n1"), cfgAll).length === 1);
+
+  // —— 抑制：页面可见且聚焦、事件又正是当前看的会话（人就在跟前）——
+  const st2 = freshState();
+  const rows2 = [{ id: "n2", running: true }];
+  comps.notifyDiffCore(st2, { ...listOf(rows2, "n2"), foreground: true }, cfgAll);
+  rows2[0].running = false;
+  check("N 前台且是当前会话：不打扰", comps.notifyDiffCore(st2, { ...listOf(rows2, "n2"), foreground: true }, cfgAll).length === 0);
+  const st3 = freshState();
+  const rows3 = [{ id: "n3", running: true }, { id: "n4", running: true }];
+  comps.notifyDiffCore(st3, { ...listOf(rows3, "n3"), foreground: true }, cfgAll);
+  rows3[1].running = false;
+  const ev3 = comps.notifyDiffCore(st3, { ...listOf(rows3, "n3"), foreground: true }, cfgAll);
+  check("N 前台但收尾的是另一个会话：照发", ev3.length === 1 && ev3[0].sessionId === "n4");
+
+  // —— 开关（关闭期间照常记沿，打开后不补发）与子会话 ——
+  const st4 = freshState();
+  const rows4 = [{ id: "n5", running: true }];
+  comps.notifyDiffCore(st4, listOf(rows4, null), cfgAll);
+  rows4[0].running = false;
+  check("N 完成提醒关掉即不发", comps.notifyDiffCore(st4, listOf(rows4, null), { ...cfgAll, notifyOnComplete: false }).length === 0);
+  check("N 关掉期间记下的沿不补发（重开也静默）", comps.notifyDiffCore(st4, listOf(rows4, null), cfgAll).length === 0);
+  const st5 = freshState();
+  const rows5 = [{ id: "n6", running: true }];
+  comps.notifyDiffCore(st5, listOf(rows5, null), { ...cfgAll, notifyEnabled: false });
+  rows5[0].running = false;
+  check("N 总开关关闭：不发且沿不补发", comps.notifyDiffCore(st5, listOf(rows5, null), { ...cfgAll, notifyEnabled: false }).length === 0 && comps.notifyDiffCore(st5, listOf(rows5, null), cfgAll).length === 0);
+  const st6 = freshState();
+  const rows6 = [{ id: "n7", running: true, origin: "subagent" }];
+  comps.notifyDiffCore(st6, listOf(rows6, null), cfgAll);
+  rows6[0].running = false;
+  check("N 子会话收尾不发（导航细节属噪音）", comps.notifyDiffCore(st6, listOf(rows6, null), cfgAll).length === 0);
+
+  // —— 待回应：key 变化即新请求，正文取首问；同一请求只提醒一次 ——
+  const st7 = freshState();
+  const rows7 = [{ id: "n8", running: true, title: "项目 A" }];
+  check(
+    "N 首帧播种不发待回应通知（打开页面时已存在的提问不算新的）",
+    comps.notifyDiffCore(st7, { ...listOf(rows7, null), pending: pendingOf("n8", { key: "question:1", kind: "question", questions: [{ question: "旧问题" }] }) }, cfgAll).length === 0,
+  );
+  const ev7 = comps.notifyDiffCore(
+    st7,
+    { ...listOf(rows7, null), pending: pendingOf("n8", { key: "question:2", kind: "question", questions: [{ question: "选哪个方案？" }] }) },
+    cfgAll,
+  );
+  check("N 新提问发通知（标题=会话名，正文=问题原文）", ev7.length === 1 && ev7[0].kind === "question" && ev7[0].title === "项目 A" && ev7[0].body === "选哪个方案？");
+  check(
+    "N 同一请求不重复提醒",
+    comps.notifyDiffCore(st7, { ...listOf(rows7, null), pending: pendingOf("n8", { key: "question:2", kind: "question", questions: [{ question: "选哪个方案？" }] }) }, cfgAll).length === 0,
+  );
+  check("N 提问提醒关掉即不发", comps.notifyDiffCore(st7, { ...listOf(rows7, null), pending: pendingOf("n8", { key: "question:3", kind: "question", questions: [{ question: "又问？" }] }) }, { ...cfgAll, notifyOnQuestion: false }).length === 0);
+  const ev8 = comps.notifyDiffCore(
+    st7,
+    { ...listOf(rows7, null), pending: pendingOf("n8", { key: "approval:1", kind: "approval", toolName: "pwsh", reason: "" }) },
+    cfgAll,
+  );
+  check("N 批准请求发通知（无理由时用工具名兜底）", ev8.length === 1 && ev8[0].kind === "approval" && /pwsh/.test(ev8[0].body));
+  const ev9 = comps.notifyDiffCore(
+    st7,
+    { ...listOf(rows7, null), foreground: true, pending: pendingOf("n8", { key: "question:9", kind: "question", questions: [{ question: "已在跑的另一问" }] }) },
+    cfgAll,
+  );
+  check("N 前台但提问的是当前没打开的会话：照发", ev9.length === 1 && ev9[0].kind === "question");
+  // 前台 + 当前会话的待回应 → 不打扰（composer 里已经摆着）
+  check(
+    "N 前台且待回应就在当前会话：不打扰",
+    comps.notifyDiffCore(freshState(), { ...listOf([{ id: "n10", running: true }], "n10"), foreground: true, pending: pendingOf("n10", { key: "question:8", kind: "question", questions: [{ question: "x" }] }) }, cfgAll).length === 0,
+  );
+  // 会话消失 → 状态回收（同 id 再来按新会话处理）
+  const st8 = freshState();
+  const rows8 = [{ id: "n11", running: true }];
+  comps.notifyDiffCore(st8, listOf(rows8, null), cfgAll);
+  comps.notifyDiffCore(st8, { ids: [], byId: {}, current: undefined }, cfgAll);
+  check("N 会话消失后状态回收", !st8.running.has("n11") && !st8.pendingKey.has("n11"));
+}
+
+// 10e) 阅读位置记忆（F2）：按路径存取 + 隐藏容器不记（display:none 时 scrollTop
 //      恒 0，记了会把真位置冲掉——非激活标签仍挂载，切走后的兜底路径会摸到这里）
 {
   const visibleEl = { scrollTop: 1234, getClientRects: () => [{}] };
@@ -1294,6 +1396,21 @@ const fakeScope = {
 };
 out = comps.KitConfigCard({ scope: fakeScope });
 check("KitConfigCard 渲染无异常", !!out && typeof out === "object");
+// 展开态（预置第 5 个 useState = open）跑一遍组渲染体：通知组的权限行在这里。
+// 权限只读浏览器侧事实，Node 无 Notification → 走「不支持」分支且按钮禁用
+stateSeq = 0;
+stateStore.clear();
+stateStore.set(4, true);
+callLog = [];
+out = comps.KitConfigCard({ scope: fakeScope });
+const permHit = callLog.find(([, , p]) => p && typeof p === "object" && p.className === "dshk-cfg-combo" && p.disabled === true);
+const permBtn = permHit ? permHit[2] : null;
+check(
+  "设置卡展开：通知组渲染出权限行（无 Notification 时按钮禁用）",
+  !!out && !!permBtn && permBtn.children === "Unsupported" && callLog.some(([, , p]) => p && p.className === "dshk-cfg-field dshk-cfg-sub" && p.children),
+);
+stateSeq = 0;
+stateStore.clear();
 // 设置卡布局：两个侧边栏快捷键在「侧边栏」组（组头 + 左/右两键，无启用开关——
 // Ctrl+B 恒生效），字段行走官方通用设置模型（标题+说明左列、控件右置）
 check(
