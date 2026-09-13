@@ -557,6 +557,7 @@ window.__ModuleLoader__.load({
     let cfgScope = null;
     let shortcutCapture = null; // 正在录制快捷键的字段名；非 null 时面板快捷键监听让路
     let schedModalOpen = false; // 日程弹窗开着：KitSurfaces 的 Esc 不收标签页（Esc 归弹窗自关）
+    let vaultSearchOpen = false; // 知识库搜索浮层开着：同上让路——Esc 归浮层自关，不收页签/不收侧栏
     let inlineEditCapture = false; // 树行内改名输入激活：面板快捷键（含 Esc 分层关闭）让路
     const subscribeCfg = (listener) => (cfgScope ? cfgScope.subscribe(listener) : () => {});
     const getCfgSnapshot = () => (cfgScope ? cfgScope.getSnapshot() : null);
@@ -2061,9 +2062,10 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-vault-fpickrow.is-on{font-weight:600;color:var(--dsw-alias-brand-primary)}
 .dshk-vault-fpickempty{padding:8px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
 .dshk-vault-search{flex:1 1 auto;min-width:0;width:100%;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 8px;border-radius:6px}
-.dshk-vault-searchres{flex:none;max-height:200px;overflow:auto;border-bottom:1px solid var(--dsw-alias-border-l2);padding:4px 6px;display:flex;flex-direction:column;gap:2px}
+.dshk-vault-vsearch{position:fixed;z-index:1200;max-height:min(50vh,300px);overflow:auto;padding:4px 6px;display:flex;flex-direction:column;gap:2px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18))}
 .dshk-vault-hitrow{display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:6px;cursor:pointer}
 .dshk-vault-hitrow:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-vault-hitrow.is-cur{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-vault-hittitle{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .dshk-vault-hitsnippet{font-size:11px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshk-vault-rail{flex:none;width:150px;border-right:1px solid var(--dsw-alias-border-l2);overflow:auto;padding:4px 3px;display:flex;flex-direction:column}
@@ -9291,6 +9293,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }, [createDir]);
       const [searchQ, setSearchQ] = react.useState("");
       const [searchRes, setSearchRes] = react.useState(null);
+      const [searchIdx, setSearchIdx] = react.useState(0);
+      const [searchRect, setSearchRect] = react.useState(null);
+      const searchRef = react.useRef(null);
       const [searching, setSearching] = react.useState(false);
       const [toast, setToast] = react.useState("");
 
@@ -9492,6 +9497,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
       };
 
+      // 搜索结果是锚在搜索框下的临时浮层（不挤目录树）：Enter 出结果，改查询/点外/Esc/选中即关
       const runSearch = async () => {
         const q = searchQ.trim();
         if (q === "") {
@@ -9499,6 +9505,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           return;
         }
         setSearching(true);
+        setSearchIdx(0);
+        setSearchRect(searchRef.current ? searchRef.current.getBoundingClientRect() : null);
         try {
           const body = await kitJson(`/dsh-kit/vault/search?q=${encodeURIComponent(q)}`);
           setSearchRes(body.results ?? []);
@@ -9507,6 +9515,21 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
         setSearching(false);
       };
+
+      // 关闭手势长在浮层自己身上（同文件夹选择器/TreeRowMenu 契约）：点浮层与搜索框之外才关；
+      // 开着期间挂 vaultSearchOpen，KitSurfaces 的全局 Esc 让路——Esc 只关浮层，不收页签/侧栏
+      react.useEffect(() => {
+        if (searchRes === null) return undefined;
+        vaultSearchOpen = true;
+        const onDown = (e) => {
+          if (e.target instanceof Element && !e.target.closest(".dshk-vault-vsearch") && !e.target.closest(".dshk-vault-search")) setSearchRes(null);
+        };
+        document.addEventListener("pointerdown", onDown, true);
+        return () => {
+          vaultSearchOpen = false;
+          document.removeEventListener("pointerdown", onDown, true);
+        };
+      }, [searchRes]);
 
       // toast 自动消隐
       react.useEffect(() => {
@@ -9865,26 +9888,69 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           ] }),
           jsxRuntime.jsxs("div", { className: "dshk-vault-tbarrow", children: [
             jsxRuntime.jsx("input", {
+              ref: searchRef,
               className: "dshk-vault-search",
               value: searchQ,
               placeholder: t("vaultSearchPh"),
-              onChange: (e) => setSearchQ(e.target.value),
+              spellCheck: false,
+              onChange: (e) => {
+                // 查询一变结果就是旧的：随改随关，回车再出新浮层
+                setSearchQ(e.target.value);
+                setSearchRes(null);
+              },
               onKeyDown: (e) => {
-                if (e.key === "Enter") void runSearch();
+                // 浮层开着时回车=打开当前条目、↑↓ 移动、Esc 关；否则回车执行新搜索
+                if (e.key === "Enter") {
+                  if (searchRes !== null) {
+                    e.preventDefault();
+                    const hit = searchRes[Math.min(searchIdx, Math.max(0, searchRes.length - 1))];
+                    if (hit) {
+                      setSearchRes(null);
+                      openPath(hit.path);
+                    }
+                  } else {
+                    void runSearch();
+                  }
+                } else if (e.key === "ArrowDown" && searchRes !== null) {
+                  e.preventDefault();
+                  setSearchIdx((i) => Math.min(i + 1, Math.max(0, searchRes.length - 1)));
+                } else if (e.key === "ArrowUp" && searchRes !== null) {
+                  e.preventDefault();
+                  setSearchIdx((i) => Math.max(i - 1, 0));
+                } else if (e.key === "Escape" && searchRes !== null) {
+                  // 全局 Esc 已挂 vaultSearchOpen 让路：这里只关浮层
+                  e.preventDefault();
+                  setSearchRes(null);
+                }
               },
             }),
           ] }),
         ] }),
-        searchRes !== null
-          ? jsxRuntime.jsxs("div", { className: "dshk-vault-searchres", children: [
-              searchRes.length === 0 ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultSearchEmpty") }) : null,
-              searchRes.map((r) =>
-                jsxRuntime.jsxs("div", { className: "dshk-vault-hitrow", onClick: () => { setSearchRes(null); openPath(r.path); }, children: [
-                  jsxRuntime.jsx("span", { className: "dshk-vault-hittitle", children: r.title }),
-                  jsxRuntime.jsx("span", { className: "dshk-vault-hitsnippet", children: r.snippet }),
-                ] }, r.path),
-              ),
-            ] })
+        searchRes !== null && searchRect
+          ? jsxRuntime.jsxs("div", {
+              className: "dshk-vault-vsearch",
+              style: {
+                left: Math.max(8, Math.min(searchRect.left, (window.innerWidth || 1200) - 248)),
+                top: searchRect.bottom + 4,
+                width: Math.max(searchRect.width, 230),
+              },
+              children: [
+                searchRes.length === 0 ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultSearchEmpty") }) : null,
+                searchRes.map((r, i) =>
+                  jsxRuntime.jsxs("div", {
+                    className: `dshk-vault-hitrow${i === Math.min(searchIdx, Math.max(0, searchRes.length - 1)) ? " is-cur" : ""}`,
+                    onMouseEnter: () => setSearchIdx(i),
+                    // mousedown 别抢搜索框焦点（与文件夹选择器同因）
+                    onMouseDown: (e) => e.preventDefault(),
+                    onClick: () => { setSearchRes(null); openPath(r.path); },
+                    children: [
+                      jsxRuntime.jsx("span", { className: "dshk-vault-hittitle", children: r.title }),
+                      jsxRuntime.jsx("span", { className: "dshk-vault-hitsnippet", children: r.snippet }),
+                    ],
+                  }, r.path),
+                ),
+              ],
+            })
           : null,
         indexErr !== ""
           ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: indexErr === "vault-not-configured" ? t("vaultNotConfiguredHint") : `${t("vaultIndexFail")} ${indexErr}` })
@@ -10766,8 +10832,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             return;
           }
           if (e.key === "Escape") {
-            // 日程弹窗开着时让路：Esc 归弹窗自己（只关弹窗，不收标签页）
-            if (schedModalOpen) return;
+            // 日程弹窗/知识库搜索浮层开着时让路：Esc 归它们自己（只关自己，不收标签页）
+            if (schedModalOpen || vaultSearchOpen) return;
             // Esc 关当前激活那张文档签（知识库关当前页那张、文件关当前文件
             // 那张，各自与标签条的 ✕ 同语义）。功能签归官方 ✕，Esc 不收
             // 功能签（kitUi 收了 pane 还在，状态会对不上）
