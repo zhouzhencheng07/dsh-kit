@@ -442,6 +442,9 @@ window.__ModuleLoader__.load({
       monitorWaitMs: 15000,
       monitorMaxAuto: 5,
       monitorRepeatThreshold: 3,
+      notifyEnabled: true,
+      notifyOnComplete: true,
+      notifyOnQuestion: true,
       vaultEnabled: false,
       vaultRoot: "",
       terminalShortcut: "Ctrl+/",
@@ -525,6 +528,9 @@ window.__ModuleLoader__.load({
           Number.isInteger(v.monitorRepeatThreshold) && v.monitorRepeatThreshold >= 2 && v.monitorRepeatThreshold <= 10
             ? v.monitorRepeatThreshold
             : CFG_DEFAULTS.monitorRepeatThreshold,
+        notifyEnabled: v.notifyEnabled !== false,
+        notifyOnComplete: v.notifyOnComplete !== false,
+        notifyOnQuestion: v.notifyOnQuestion !== false,
         vaultEnabled: v.vaultEnabled === true,
         vaultRoot: typeof v.vaultRoot === "string" ? v.vaultRoot : "",
         terminalShortcut:
@@ -1059,6 +1065,28 @@ window.__ModuleLoader__.load({
       monitorBgTitle: "429 自动续跑",
       monitorBgItem: "{title}：{sec} 秒后自动继续（第 {n}/{max} 次）",
       monitorBgCapped: "{title}：已连续自动继续 {max} 次，暂停（正常完成一轮后恢复）",
+      cfgNotifyEnabled: "会话通知",
+      cfgNotifyEnabledHint: "页面不在前台（或完成的不是当前会话）时弹桌面通知",
+      cfgNotifyOnComplete: "回合完成提醒",
+      cfgNotifyOnCompleteHint: "一轮回复收尾时提醒",
+      cfgNotifyOnQuestion: "提问/批准提醒",
+      cfgNotifyOnQuestionHint: "agent 提问或等你批准工具调用时提醒",
+      cfgNotifyPerm: "通知权限",
+      cfgNotifyPermHintDefault: "浏览器还没授权：点右侧按钮并选「允许」（手机走局域网 http 时无桌面通知）",
+      cfgNotifyPermHintGranted: "已授权：页面不在前台时弹系统通知，点击回到对应会话",
+      cfgNotifyPermHintDenied: "已被浏览器拒绝：在地址栏站点设置里改回「允许」后刷新页面",
+      cfgNotifyPermHintUnsupported: "此环境不支持桌面通知（非安全上下文或无 Notification API），退化为标签标题上的未读计数",
+      cfgNotifyPermAsk: "请求授权",
+      cfgNotifyPermGranted: "已授权",
+      cfgNotifyPermDenied: "已拒绝",
+      cfgNotifyPermUnsupported: "不支持",
+      notifyCompleteTitle: "{title} · 回合完成",
+      notifyCompleteBody: "点击回到该会话",
+      notifyQuestionTitle: "{title} · 等你回答",
+      notifyQuestionBody: "agent 提了一个问题",
+      notifyApprovalTitle: "{title} · 等你批准",
+      notifyApprovalBody: "{tool} 等待批准",
+      notifyToolFallback: "工具调用",
       cfgPreviewMaxTabs: "文件标签数上限",
       cfgPreviewMaxTabsHint: "超限自动关最久没看的（1-20）",
       browserUrlPh: "输入网址，回车打开",
@@ -1481,6 +1509,28 @@ window.__ModuleLoader__.load({
       monitorBgTitle: "429 auto-continue",
       monitorBgItem: "{title}: auto-continue in {sec}s (attempt {n}/{max})",
       monitorBgCapped: "{title}: paused after {max} consecutive continues (resumes after one clean round)",
+      cfgNotifyEnabled: "Session notifications",
+      cfgNotifyEnabledHint: "Desktop notification when a turn finishes or the agent asks, while the page is in the background",
+      cfgNotifyOnComplete: "Turn finished alert",
+      cfgNotifyOnCompleteHint: "Notify when a reply finishes",
+      cfgNotifyOnQuestion: "Question / approval alert",
+      cfgNotifyOnQuestionHint: "Notify when the agent asks a question or awaits tool approval",
+      cfgNotifyPerm: "Notification permission",
+      cfgNotifyPermHintDefault: "Not granted yet: click the button and choose Allow (no desktop notifications over plain http on phones)",
+      cfgNotifyPermHintGranted: "Granted: a system notification pops up while the page is in the background; click it to return to that session",
+      cfgNotifyPermHintDenied: "Denied by the browser: switch the site setting back to Allow, then reload",
+      cfgNotifyPermHintUnsupported: "Desktop notifications unavailable here (insecure context or no Notification API); falls back to an unread count in the tab title",
+      cfgNotifyPermAsk: "Request",
+      cfgNotifyPermGranted: "Granted",
+      cfgNotifyPermDenied: "Denied",
+      cfgNotifyPermUnsupported: "Unsupported",
+      notifyCompleteTitle: "{title} · turn finished",
+      notifyCompleteBody: "Click to return to this session",
+      notifyQuestionTitle: "{title} · waiting for your answer",
+      notifyQuestionBody: "The agent asked a question",
+      notifyApprovalTitle: "{title} · waiting for approval",
+      notifyApprovalBody: "{tool} awaits approval",
+      notifyToolFallback: "A tool call",
       cfgPreviewMaxTabs: "Max file tabs",
       cfgPreviewMaxTabsHint: "Closes the least-recently-viewed tab over the limit (1-20)",
       browserUrlPh: "Type a URL and press Enter",
@@ -8511,6 +8561,217 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       });
     }
 
+    // ─────────── 会话通知（回合收尾 / agent 提问）───────────
+    // 页面不在前台、或事件不属于当前打开的会话时弹一条桌面通知（浏览器
+    // Notification API）；未授权 / 非安全上下文（手机走局域网 http）退标题闪烁。
+    // 纯浏览器端，宿主只提供 settings 字段。两个数据源都是官方面：
+    //   列表沿 ← sessions.list 快照的 running（订阅式而非轮询：后台标签的定时器
+    //     被浏览器节流到分钟级，而 WS 推送不受影响）；
+    //   待回应 ← uiSession.pendingInteractions 快照（官方 question / plan-review /
+    //     approval 各域 publish 的 Session 级待回应，含未打开的会话）。
+    // 抑制规则见 notifyDiffCore；页面完全关掉时浏览器端无从运行，无通知可言。
+    const notifyState = {
+      /** sessionId -> 上次已知 running（沿检测基线；首帧只播种不发通知） */
+      running: new Map(),
+      /** sessionId -> 已提醒过的待回应 key（同一请求只提醒一次） */
+      pendingKey: new Map(),
+      /** 首帧标志：页面刚打开时列表里已在跑的会话不补发通知 */
+      primed: false,
+      /** 标题闪烁：未读计数（0 = 未闪烁）与 <title> 观察器 */
+      flashCount: 0,
+      flashWatch: null,
+    };
+    const NOTIFY_BODY_MAX = 140; // 提问正文截断长度：桌面通知两行即满，长了被裁
+    const NOTIFY_FLASH_RE = /^\(\d+\) /; // 闪烁前缀：复原时按它剥掉，不存旧标题
+
+    /** 折叠空白并按上限截断（通知正文只取一行；超长补省略号） */
+    function notifyClip(text, max) {
+      const flat = String(text ?? "").replace(/\s+/g, " ").trim();
+      return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+    }
+
+    /** 待回应的正文：提问取首问全文，批准取理由（无理由用工具名兜底） */
+    function notifyBodyOf(interaction, kind) {
+      if (kind === "approval") {
+        const reason = typeof interaction.reason === "string" ? interaction.reason.trim() : "";
+        if (reason !== "") return notifyClip(reason, NOTIFY_BODY_MAX);
+        const tool = typeof interaction.toolName === "string" ? interaction.toolName.trim() : "";
+        return tf("notifyApprovalBody", { tool: tool === "" ? t("notifyToolFallback") : tool });
+      }
+      const first = Array.isArray(interaction.questions) ? interaction.questions[0] : null;
+      const text = first && typeof first.question === "string" ? first.question.trim() : "";
+      return notifyClip(text !== "" ? text : t("notifyQuestionBody"), NOTIFY_BODY_MAX);
+    }
+
+    /**
+     * 通知判定核心（依赖注入，render-check 直测）：把列表快照与待回应表投影成
+     * 应发通知，顺带把沿写回 state。抑制：功能关；页面可见且聚焦、且事件就是
+     * 当前正看的那个会话（人就在跟前，官方界面自己会说）；子会话（导航细节，
+     * 属噪音）；首帧播种。
+     * @param input {ids,byId,current,foreground,pending:Map<sessionId,interaction>}
+     * @returns [{kind:"complete"|"question"|"approval", sessionId, title, body?}]
+     */
+    function notifyDiffCore(state, input, cfg) {
+      const events = [];
+      const byId = input.byId ?? {};
+      const foreground = input.foreground === true;
+      /** 事件是否值得打扰：总开关 + 分类开关 + 不是「人正看着这个会话」。状态照常
+       *  记账（沿与待回应 key 都写回），所以关掉期间的动静不会在打开后补发 */
+      const wanted = (sessionId, kind) => {
+        if (!cfg.notifyEnabled) return false;
+        if (kind === "complete" ? !cfg.notifyOnComplete : !cfg.notifyOnQuestion) return false;
+        return !(foreground && sessionId === input.current);
+      };
+      const titleOf = (id) => byId[id]?.displayTitle ?? id;
+      const seen = new Set();
+      for (const id of input.ids ?? []) {
+        const row = byId[id];
+        if (!row) continue;
+        seen.add(id);
+        const was = state.running.get(id);
+        state.running.set(id, row.running === true);
+        // 只认 true→false 的沿：首帧播种、仍在跑、子会话都不发
+        if (!state.primed || was !== true || row.running === true || row.origin === "subagent") continue;
+        if (wanted(id, "complete")) events.push({ kind: "complete", sessionId: id, title: titleOf(id) });
+      }
+      for (const id of [...state.running.keys()]) if (!seen.has(id)) state.running.delete(id);
+      // 待回应：key 变化即新请求（一个会话同时只投影一个待回应）
+      const pending = input.pending instanceof Map ? input.pending : new Map();
+      const pendingSeen = new Set();
+      for (const [id, interaction] of pending) {
+        if (!interaction || typeof interaction.key !== "string") continue;
+        pendingSeen.add(id);
+        if (state.pendingKey.get(id) === interaction.key) continue;
+        state.pendingKey.set(id, interaction.key);
+        if (!state.primed) continue;
+        const kind = interaction.kind === "approval" ? "approval" : "question";
+        if (!wanted(id, kind)) continue;
+        events.push({ kind, sessionId: id, title: titleOf(id), body: notifyBodyOf(interaction, kind) });
+      }
+      for (const id of [...state.pendingKey.keys()]) if (!pendingSeen.has(id)) state.pendingKey.delete(id);
+      state.primed = true;
+      return events;
+    }
+
+    /** 前台判据：页面可见 **且** 窗口聚焦。切到别的程序时 visibilityState 仍是
+     *  visible（只有切标签/最小化才变 hidden），只看它会漏判成"人在跟前" */
+    function notifyForeground() {
+      try {
+        return document.visibilityState === "visible" && document.hasFocus() === true;
+      } catch {
+        return false;
+      }
+    }
+
+    /** 当前通知权限：granted | denied | default | unsupported（浏览器侧事实，不在
+     *  settings 里）。老浏览器返回的可能是 undefined——按未授权处理 */
+    function notifyPermState() {
+      if (typeof Notification !== "function") return "unsupported";
+      const perm = Notification.permission;
+      return perm === "granted" || perm === "denied" ? perm : "default";
+    }
+
+    /** 桌面通知可用：浏览器有 API 且已授权（未授权不能在此处请求——requestPermission
+     *  必须在用户手势里发，入口在设置卡的按钮与开关勾选） */
+    function notifyCanPost() {
+      return notifyPermState() === "granted";
+    }
+
+    /** 标题闪烁兜底：未授权/非安全上下文时至少留痕（标签条上看得见未读计数）。
+     *  DSH 自己会改写标题（换会话、生成标题），所以挂着 <title> 观察器把前缀贴
+     *  回去；回窗口（可见且聚焦）即复原 */
+    function notifyApplyFlash() {
+      if (typeof document === "undefined" || notifyState.flashCount === 0) return;
+      const base = document.title.replace(NOTIFY_FLASH_RE, "");
+      const next = `(${notifyState.flashCount}) ${base}`;
+      if (document.title !== next) document.title = next;
+    }
+    function notifyFlash() {
+      if (typeof document === "undefined") return;
+      notifyState.flashCount += 1;
+      notifyApplyFlash();
+      if (!notifyState.flashWatch && typeof MutationObserver === "function") {
+        const titleEl = document.querySelector("title");
+        if (titleEl) {
+          notifyState.flashWatch = new MutationObserver(() => notifyApplyFlash());
+          notifyState.flashWatch.observe(titleEl, { childList: true, characterData: true, subtree: true });
+        }
+      }
+    }
+    function notifyUnflash() {
+      if (typeof document === "undefined" || notifyState.flashCount === 0) return;
+      notifyState.flashCount = 0;
+      const base = document.title.replace(NOTIFY_FLASH_RE, "");
+      if (document.title !== base) document.title = base;
+    }
+    /** 回窗口才复原标题：可见但仍未聚焦（切程序回来一半）时留着闪烁 */
+    function notifyMaybeUnflash() {
+      if (notifyForeground()) notifyUnflash();
+    }
+
+    /** 点通知 → 聚焦窗口并切到该会话（会话已被删除时只聚焦） */
+    function notifyOpenSession(sessions, sessionId) {
+      try {
+        window.focus();
+      } catch {
+        /* 非浏览器环境 */
+      }
+      try {
+        sessions.open(sessionId);
+      } catch {
+        /* 会话已不在列表：只聚焦 */
+      }
+    }
+
+    /** 投递一条：系统通知优先，退标题闪烁。tag 按会话归并——同一会话的新通知
+     *  替换旧的，人不在时也不会堆一屏 */
+    function notifyDeliver(sessions, ev) {
+      const key = ev.kind === "complete" ? "notifyCompleteTitle" : ev.kind === "approval" ? "notifyApprovalTitle" : "notifyQuestionTitle";
+      const title = tf(key, { title: ev.title });
+      const body = ev.kind === "complete" ? t("notifyCompleteBody") : ev.body ?? "";
+      if (notifyCanPost()) {
+        try {
+          const note = new Notification(title, { body, tag: `dsh-kit:${ev.sessionId}`, silent: true });
+          note.onclick = () => {
+            notifyOpenSession(sessions, ev.sessionId);
+            try {
+              note.close();
+            } catch {
+              /* 已自动关闭 */
+            }
+          };
+          return;
+        } catch {
+          /* 构造被拒（部分环境只认 ServiceWorker 通知）：退标题闪烁 */
+        }
+      }
+      notifyFlash();
+    }
+
+    /** 事件入口（订阅回调与首帧共用）：读快照 → 核心判定 → 逐条投递 */
+    function notifyEvaluate(sessions, pendingStore) {
+      let cfg;
+      let list;
+      let pending = null;
+      try {
+        cfg = cfgFromSnapshot(getCfgSnapshot());
+        list = sessions.list.getSnapshot();
+      } catch {
+        return; // 服务异常：本轮跳过，下条推送再来
+      }
+      try {
+        if (pendingStore && typeof pendingStore.getSnapshot === "function") pending = pendingStore.getSnapshot();
+      } catch {
+        /* 待回应源异常：只报完成 */
+      }
+      const events = notifyDiffCore(
+        notifyState,
+        { ids: list.ids, byId: list.byId, current: list.current, foreground: notifyForeground(), pending },
+        cfg,
+      );
+      for (const ev of events) notifyDeliver(sessions, ev);
+    }
+
     function VaultView() {
       const cfg = cfgFromSnapshot(getCfgSnapshot());
       // 只保留开关门槛；vaultRoot 不读 settings 快照——手机/远程浏览器拿不到设置
@@ -11327,6 +11588,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { key: "monitorWaitMs", kind: "number", min: 5000, max: 600000 },
       { key: "monitorMaxAuto", kind: "number", min: 1, max: 10 },
       { key: "monitorRepeatThreshold", kind: "number", min: 2, max: 10 },
+      { key: "notifyEnabled", kind: "bool" },
+      { key: "notifyOnComplete", kind: "bool" },
+      { key: "notifyOnQuestion", kind: "bool" },
       { key: "vaultEnabled", kind: "bool" },
       { key: "vaultRoot", kind: "text" },
       { key: "terminalShortcut", kind: "combo" },
@@ -11339,9 +11603,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 分组渲染：开关行 + 该功能启用时才显示的子配置（所见即所得，保存才落盘生效）；
     // switchKey 为 null 的组没有开关行，只列字段（侧边栏组：左右两键，无启用开关）。
     // title 组头（侧边栏这类无单一开关的组）——其余组的功能开关行本身就是组头。
+    // permRow = 该组末尾追加「通知权限」行（权限状态不在 settings 里，是浏览器
+    // 侧事实，只能就地读/就地请求）。
     // 组顺序：侧边栏（左右放一起）→ 文件树 → 源代码管理
-    // → 终端 → 知识库 → 后台任务 → 浏览器 → 会话监视 → 对话文件预览 → 技能页
-    // → 网页搜索 → 手机访问（放最下）。远程域名不在此卡——编辑入口在
+    // → 终端 → 知识库 → 后台任务 → 浏览器 → 会话监视 → 会话通知 → 对话文件预览
+    // → 技能页 → 网页搜索 → 手机访问（放最下）。远程域名不在此卡——编辑入口在
     // 「手机访问」页内。
     const CFG_GROUPS = [
       { title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut"] },
@@ -11352,6 +11618,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { switchKey: "jobsEnabled", fields: [] },
       { switchKey: "browserEnabled", fields: [] },
       { switchKey: "monitorEnabled", fields: ["monitorWaitMs", "monitorMaxAuto", "monitorRepeatThreshold"] },
+      { switchKey: "notifyEnabled", fields: ["notifyOnComplete", "notifyOnQuestion"], permRow: true },
       { switchKey: "chatOpenFilePreview", fields: [] },
       { switchKey: "chatOpenLinkInBrowser", fields: [] },
       { switchKey: "skillsPageEnabled", fields: [] },
@@ -11396,6 +11663,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [open, setOpen] = react.useState(false);
       // 正在录制快捷键的字段；null = 非录制态（同一时间至多一个）
       const [capturing, setCapturing] = react.useState(null);
+      // 通知权限（浏览器侧事实，不是响应式值）：请求/授权后手动重读刷新显示
+      const [notifyPerm, setNotifyPerm] = react.useState(() => notifyPermState());
       // 非本机访问（手机/远程）时上游把设置镜像钉在本机，快照会永远停在 loading——
       // 数秒后仍未就绪且地址栏非回环，就把"读取中"换成明确的远程只读提示。
       const [stuckLoading, setStuckLoading] = react.useState(false);
@@ -11477,8 +11746,56 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         };
 
         const edit = (field, text) => {
+          // 勾上「会话通知」顺手请求权限：勾选就是用户手势，错过这次浏览器不再
+          // 给请求机会（启动时自动请求会被忽略）
+          if (field === "notifyEnabled" && text === "true") requestNotifyPerm();
           setDrafts((d) => ({ ...d, [field]: { text, clear: false } }));
           setFailed(false);
+        };
+        /** 请求桌面通知权限（按钮与上面的开关共用）；已决定过就不再问 */
+        const requestNotifyPerm = () => {
+          if (typeof Notification !== "function" || notifyPermState() !== "default") {
+            setNotifyPerm(notifyPermState());
+            return;
+          }
+          try {
+            const asked = Notification.requestPermission();
+            if (asked && typeof asked.then === "function") {
+              asked.then(() => setNotifyPerm(notifyPermState()), () => setNotifyPerm(notifyPermState()));
+            }
+          } catch {
+            /* 老浏览器不支持 Promise 形态且无回调：按原状态显示 */
+            setNotifyPerm(notifyPermState());
+          }
+        };
+        /** 通知权限行：状态与提示都取自浏览器侧事实，按钮只在可请求时可用 */
+        const notifyPermRow = () => {
+          const text =
+            { granted: "cfgNotifyPermGranted", denied: "cfgNotifyPermDenied", unsupported: "cfgNotifyPermUnsupported" }[notifyPerm] ??
+            "cfgNotifyPermAsk";
+          const hint =
+            { granted: "cfgNotifyPermHintGranted", denied: "cfgNotifyPermHintDenied", unsupported: "cfgNotifyPermHintUnsupported" }[
+              notifyPerm
+            ] ?? "cfgNotifyPermHintDefault";
+          return jsxRuntime.jsxs("div", {
+            className: "dshk-cfg-field dshk-cfg-sub",
+            children: [
+              jsxRuntime.jsxs("div", {
+                className: "dshk-cfg-fieldtext",
+                children: [
+                  jsxRuntime.jsx("span", { className: "dshk-cfg-label", children: t("cfgNotifyPerm") }),
+                  jsxRuntime.jsx("span", { className: "dshk-cfg-hint", children: t(hint) }),
+                ],
+              }),
+              jsxRuntime.jsx("button", {
+                type: "button",
+                className: "dshk-cfg-combo",
+                disabled: notifyPerm !== "default",
+                onClick: requestNotifyPerm,
+                children: t(text),
+              }),
+            ],
+          });
         };
         // 恢复默认：暂存基座值 + clear 标记（保存时 unset，回落 schema 默认）。
         // 基座只带 vaultRoot 一项，其余键由 cfgFormat 回落内置默认
@@ -11683,6 +12000,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                                 group.title ? jsxRuntime.jsx("div", { className: "dshk-cfg-grouptitle", children: t(group.title) }) : null,
                                 group.switchKey === null ? null : renderField(group.switchKey),
                                 on ? group.fields.map((f) => renderField(f, group.switchKey !== null)) : null,
+                                on && group.permRow ? notifyPermRow() : null,
                               ],
                             },
                             group.switchKey ?? group.title ?? group.fields.join("+"),
@@ -11777,6 +12095,35 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 全局 429 续跑器主循环：轮询自守卫（slots/settings 未就绪直接跳过），
       // monitorEnabled 关闭时 tick 空转；模块随页面销毁，无独立清理需求
       setInterval(monitorTick, MONITOR_TICK_MS);
+      // 会话通知：订阅官方两个数据源（就绪时机不保证，用 inject 等）。uiSession
+      // 缺位（精简组合/老宿主）时只订阅列表——完成通知照发，提问通知降级为不发
+      ctx.inject(["sessions"], (sctx) => {
+        const offs = [];
+        let pendingStore = null;
+        const evaluate = () => notifyEvaluate(sctx.sessions, pendingStore);
+        if (typeof sctx.inject === "function") {
+          sctx.inject(["uiSession"], (uctx) => {
+            pendingStore = uctx.uiSession ? uctx.uiSession.pendingInteractions : null;
+            if (pendingStore && typeof pendingStore.subscribe === "function") offs.push(pendingStore.subscribe(evaluate));
+            evaluate();
+          });
+        }
+        const listStore = sctx.sessions ? sctx.sessions.list : null;
+        if (listStore && typeof listStore.subscribe === "function") offs.push(listStore.subscribe(evaluate));
+        evaluate(); // 首帧播种：列表里已在跑的会话不补发通知
+        sctx.effect(() => () => {
+          for (const off of offs) {
+            try {
+              off();
+            } catch {
+              /* 已注销 */
+            }
+          }
+        });
+      });
+      // 标题闪烁复原（未授权时的兜底标记）：回窗口即清
+      document.addEventListener("visibilitychange", notifyMaybeUnflash);
+      window.addEventListener("focus", notifyMaybeUnflash);
       injectStyles();
       // 插件配置数据通道：官方 settings scope 绑定本插件命名空间（宿主半边
       // 已按 ctx.settings.installSection 注册 dsh-kit）。绑定失败（老宿主缺 settingsScope）
