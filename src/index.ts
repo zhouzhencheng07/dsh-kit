@@ -551,7 +551,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
   // vaultRoot 上次已知值：onChange 对任意保存都触发，靠值比对识别「知识库位置
   // 真的变了」，变了才补种骨架目录（null = 尚未见过值）
   let lastVaultRoot: string | null = null
-  /** 知识库开着时，vaultRoot 变化（含首次就绪）补建骨架（root + wiki/attachments，
+  /** 知识库开着时，vaultRoot 变化（含首次就绪）补建骨架（root + attachments，
    *  见 ensureVaultSkeleton）。留空 = 用默认根；总开关关着时直接返回、不记
    *  lastVaultRoot——盘上不留痕，之后开启还会正常补种 */
   function trackVaultRoot(): void {

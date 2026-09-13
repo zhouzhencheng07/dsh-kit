@@ -618,7 +618,7 @@ let vaultFetchPrev = null;
 {
   stateSeq = 0;
   stateStore.clear();
-  stateStore.set(0, { root: "D:/v", folders: ["wiki", "wiki/Python", "library"], pages: [{ path: "D:/v/wiki/a.md", rel: "wiki/a", space: "wiki", title: "A", links: [] }] }); // index
+  stateStore.set(0, { root: "D:/v", folders: ["wiki", "wiki/Python"], pages: [{ path: "D:/v/wiki/a.md", rel: "wiki/a", space: "wiki", title: "A", links: [] }] }); // index
   stateStore.set(1, ""); // indexErr
   stateStore.set(2, ""); // space = 全部库
   stateStore.set(3, { "D:/v": [{ name: "wiki", path: "D:/v/wiki", dir: true }], "D:/v/wiki": [{ name: "a.md", path: "D:/v/wiki/a.md", dir: false }] }); // treeDirs
