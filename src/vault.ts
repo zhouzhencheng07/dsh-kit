@@ -54,12 +54,12 @@ export function defaultVaultRoot(): string {
 
 /**
  * vault 骨架目录补种（配置保存 vaultRoot 时调用）：root 本体随 recursive mkdir
- * 一并创建，约定目录布局放 wiki/（策展层）、library/（参考
- * 层）、attachments/（二进制，SKIP_DIRS 已豁免索引）。幂等——已存在原样保留；
- * 失败静默（只读盘等场景不该挡住配置保存，骨架是便利设施不是前置条件）。
+ * 一并创建。根即 wiki 本体（不再有策展层嵌套），唯一约定目录是 attachments/
+ * （二进制，SKIP_DIRS 已豁免索引）。幂等——已存在原样保留；失败静默（只读盘
+ * 等场景不该挡住配置保存，骨架是便利设施不是前置条件）。
  */
 export async function ensureVaultSkeleton(root: string): Promise<void> {
-  for (const dir of ['wiki', 'library', 'attachments']) {
+  for (const dir of ['attachments']) {
     try {
       await fs.promises.mkdir(path.join(root, dir), { recursive: true })
     } catch {
@@ -253,9 +253,9 @@ export class VaultScanner {
     }
   }
 
-  /** 全文搜索，仅 wiki/ 区：library 是原始资料、根级散页
-   *  不属策展层，都不进检索池。文件名/标题命中权重高于正文次数；小库逐文件读
-   *  可接受，大库换索引是后续阶段。返回带 snippet 的前 limit 条。 */
+  /** 全文搜索覆盖根下全部索引页（attachments 与点前缀目录本就不进索引）。
+   *  文件名/标题命中权重高于正文次数；小库逐文件读可接受，大库换索引是
+   *  后续阶段。返回带 snippet 的前 limit 条。 */
   async search(
     query: string,
     limit: number,
@@ -267,7 +267,6 @@ export class VaultScanner {
     const terms = q.split(/\s+/).filter((t) => t !== '')
     const results: Array<{ path: string; rel: string; title: string; snippet: string; score: number }> = []
     for (const page of index.pages) {
-      if (!page.rel.startsWith('wiki/')) continue
       // 正文优先取 mtime 缓存（scan 刚刷新过，命中即免读盘）；超大页等未缓存者现读
       let content = this.cache.get(page.path)?.content ?? null
       if (content === null) {

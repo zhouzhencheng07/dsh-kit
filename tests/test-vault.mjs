@@ -51,20 +51,18 @@ await test('extractWikiLinks 提取目标/剥锚与别名/去重不分大小写'
   assert.deepEqual(links, ['A', 'B', 'C'])
 })
 
-// VaultScanner：临时目录夹具
+// VaultScanner：临时目录夹具（根即 wiki 本体，目录只是普通组织）
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dshk-vault-'))
-fs.mkdirSync(path.join(root, 'wiki', 'Python'), { recursive: true })
-fs.mkdirSync(path.join(root, 'library'), { recursive: true })
+fs.mkdirSync(path.join(root, 'Python'), { recursive: true })
 fs.mkdirSync(path.join(root, 'attachments'), { recursive: true })
 fs.mkdirSync(path.join(root, '.hidden'), { recursive: true })
 fs.writeFileSync(
-  path.join(root, 'wiki', 'Python', '基础.md'),
+  path.join(root, 'Python', '基础.md'),
   '---\ntags: [python]\n---\n# Python 基础\n\n见 [[工具链]] 与 [[AGENTS 常见问题]]。',
 )
-fs.writeFileSync(path.join(root, 'wiki', 'Python', '工具链.md'), '# 工具链\n\n回到 [[基础]]。\n\n- uv：`uv add <pkg>`\n- ruff：lint + format 一体')
-fs.writeFileSync(path.join(root, 'wiki', 'git.md'), '# git\n忽略 [[ disappeared ]]')
-fs.writeFileSync(path.join(root, 'library', '原始资料.md'), '# 原始资料\n\nuv 是 python 包管理器，不进检索池')
-fs.writeFileSync(path.join(root, '根级散页.md'), '# 根级散页\n\nuv 也不该被搜到')
+fs.writeFileSync(path.join(root, 'Python', '工具链.md'), '# 工具链\n\n回到 [[基础]]。\n\n- uv：`uv add <pkg>`\n- ruff：lint + format 一体')
+fs.writeFileSync(path.join(root, 'git.md'), '# git\n忽略 [[ disappeared ]]')
+fs.writeFileSync(path.join(root, '根级页.md'), '# 根级页\n\nuv 也在检索池里')
 fs.writeFileSync(path.join(root, 'attachments', '忽略.md'), '# 不进索引')
 fs.writeFileSync(path.join(root, '.hidden', 'x.md'), '# 不进索引')
 let scanner = new VaultScanner(() => root)
@@ -74,31 +72,31 @@ await test('scan：md 建页、跳过 attachments/点前缀、space 归属正确
   index = await scanner.scan()
   assert.equal(index.root, fs.realpathSync(root))
   // folders = 全部目录（含各级），选择器据此可挑任意层级；空目录也在
-  assert.deepEqual(index.folders, ['library', 'wiki', 'wiki/Python'])
-  assert.equal(index.pages.length, 5)
-  const base = index.pages.find((p) => p.rel === 'wiki/Python/基础')
-  assert.equal(base.space, 'wiki')
+  assert.deepEqual(index.folders, ['Python'])
+  assert.equal(index.pages.length, 4)
+  const base = index.pages.find((p) => p.rel === 'Python/基础')
+  assert.equal(base.space, 'Python')
   assert.equal(base.title, 'Python 基础')
   assert.deepEqual(base.links, ['工具链', 'AGENTS 常见问题'])
 })
 
 await test('rewriteWikiLinks：整名匹配改写，锚点/别名保留，近似名不动', () => {
-  const md = '见 [[基础]]、[[基础#小节]]、[[基础|别名]]、[[基础x]] 与 [[ wiki/基础 ]]。'
+  const md = '见 [[基础]]、[[基础#小节]]、[[基础|别名]]、[[基础x]] 与 [[ Python/基础 ]]。'
   const out = rewriteWikiLinks(md, ['基础'], 'Python 基础')
   assert.ok(out.includes('[[Python 基础]]'), '裸链改写')
   assert.ok(out.includes('[[Python 基础#小节]]'), '锚点保留')
   assert.ok(out.includes('[[Python 基础|别名]]'), '别名保留')
   assert.ok(out.includes('[[基础x]]'), '近似名不动')
-  assert.ok(out.includes('[[ wiki/基础 ]]'), '带空格的目标不算整名匹配（不动）')
+  assert.ok(out.includes('[[ Python/基础 ]]'), '带空格的目标不算整名匹配（不动）')
   assert.equal(rewriteWikiLinks(md, [], 'X'), md, '同名列表为空原样返回')
-  // 带目录的相对名形态也要能改写（索引里 links 可能写成 wiki/基础）
-  const rel = rewriteWikiLinks('见 [[wiki/基础]]。', ['基础', 'wiki/基础'], 'Python 基础')
+  // 带目录的相对名形态也要能改写（索引里 links 可能写成 Python/基础）
+  const rel = rewriteWikiLinks('见 [[Python/基础]]。', ['基础', 'Python/基础'], 'Python 基础')
   assert.ok(rel.includes('[[Python 基础]]'), '相对路径形态改写')
 })
 
 await test('scan：mtime 缓存命中不重读（改缓存时间戳探测）', async () => {
   await scanner.scan()
-  const relPath = path.join(root, 'wiki', 'git.md')
+  const relPath = path.join(root, 'git.md')
   const before = scanner.cache.get(fs.realpathSync(relPath))
   assert.ok(before)
   // 第二次扫描内容未变 → 缓存条目引用不变
@@ -110,16 +108,17 @@ await test('scan：mtime 缓存命中不重读（改缓存时间戳探测）', a
 await test('search：多词 AND，文件名/标题加权，正文计次', async () => {
   const hit = await scanner.search('uv ruff', 10)
   assert.equal(hit.results.length, 1)
-  assert.equal(hit.results[0].rel, 'wiki/Python/工具链')
+  assert.equal(hit.results[0].rel, 'Python/工具链')
   const none = await scanner.search('不存在的词组xyz', 10)
   assert.equal(none.results.length, 0)
 })
 
-await test('search：仅 wiki 区——library 与根级散页不进检索池', async () => {
-  const lib = await scanner.search('uv 包管理器', 10)
-  assert.equal(lib.results.length, 0)
-  const loose = await scanner.search('根级散页', 10)
-  assert.equal(loose.results.length, 0)
+await test('search：检索池 = 根下全部索引页（根级页可搜，attachments 不进）', async () => {
+  const loose = await scanner.search('根级页', 10)
+  assert.equal(loose.results.length, 1)
+  assert.equal(loose.results[0].rel, '根级页')
+  const att = await scanner.search('不进索引', 10)
+  assert.equal(att.results.length, 0)
 })
 
 await test('root：未配置/不存在回 null', async () => {
@@ -135,12 +134,11 @@ await test('ensureVaultSkeleton 补种骨架目录且幂等', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshkit-vault-sk-'))
   const root = path.join(dir, '新建库')
   await ensureVaultSkeleton(root)
-  assert.ok(fs.statSync(path.join(root, 'wiki')).isDirectory())
-  assert.ok(fs.statSync(path.join(root, 'library')).isDirectory())
   assert.ok(fs.statSync(path.join(root, 'attachments')).isDirectory())
+  assert.ok(!fs.existsSync(path.join(root, 'wiki')), '根即 wiki，不再种嵌套层')
   // 已有内容不被覆盖
-  fs.writeFileSync(path.join(root, 'wiki', '已有.md'), '# x', 'utf8')
+  fs.writeFileSync(path.join(root, '已有.md'), '# x', 'utf8')
   await ensureVaultSkeleton(root)
-  assert.ok(fs.existsSync(path.join(root, 'wiki', '已有.md')))
+  assert.ok(fs.existsSync(path.join(root, '已有.md')))
   fs.rmSync(dir, { recursive: true, force: true })
 })

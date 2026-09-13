@@ -6,9 +6,9 @@
 //   3) 删除后（delete 端点）——整体可撤回。
 //
 // 降级语义：git 未安装/命令失败/超时一律静默跳过——存档是便利设施，绝不阻断
-// 编辑主流程。附件与原始资料不进存档（.gitignore：attachments/ 是图片 pdf 等
-// 二进制，library/ 是外部导入的原始资料——两者都只增不减、进存档只会把仓库
-// 撑爆；*.tmp 是 vault/write 原子落盘的残件）。已有 .git 的 vault 不接管历史，
+// 编辑主流程。附件不进存档（.gitignore：attachments/ 是图片 pdf 等二进制，
+// 只增不减，进存档只会把仓库撑爆；*.tmp 是 vault/write 原子落盘的残件）。
+// 已有 .git 的 vault 不接管历史，
 // 只对「内容确为本模块所写」的 .gitignore 做增量补齐（见 ownsGitignore）。
 // 并发：提交经模块级 promise 链串行——人工保存与删除同时触发时避免
 // git index.lock 撞车；可用性探测进程内缓存（运行期装 git 属罕见，不追）。
@@ -19,8 +19,8 @@ import path from 'node:path'
 
 const GIT_TIMEOUT_MS = 15000
 
-/** 不进存档的三类内容；.gitignore 由本模块写（用户自己的仓库一字不改） */
-const IGNORE_ENTRIES = ['attachments/', 'library/', '*.tmp']
+/** 不进存档的内容；.gitignore 由本模块写（用户自己的仓库一字不改） */
+const IGNORE_ENTRIES = ['attachments/', '*.tmp']
 const GITIGNORE = IGNORE_ENTRIES.join('\n') + '\n'
 
 /** .gitignore 是否可判定为「本模块生成的」：只剩忽略项与注释行即算——
@@ -137,7 +137,7 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
 }
 
 /**
- * 有变化才提交（porcelain 为空即跳过，attachments/library 已被忽略不计入）；
+ * 有变化才提交（porcelain 为空即跳过，attachments 已被忽略不计入）；
  * 返回是否真的提交了。身份用 -c 兜底，不依赖宿主机 git 全局配置。
  */
 export async function commitVault(root: string, message: string): Promise<boolean> {
@@ -154,9 +154,8 @@ export async function commitVault(root: string, message: string): Promise<boolea
 
 /**
  * 骨架建立/vaultRoot 变更时调用（插件启动与设置变更都会走到）：无仓库则
- * init + 写 .gitignore + 初始提交一次；已有仓库只做「补齐忽略项 + 把误入
- * 索引的 library/ 移出索引」一次（工作区文件不动，历史保留）。幂等——没有
- * 需要补的东西时一条 git 命令都不发。
+ * init + 写 .gitignore + 初始提交一次；已有仓库只补齐缺失的忽略项。
+ * 幂等——没有要补的东西时一条 git 命令都不发。
  */
 export async function ensureVaultGit(root: string): Promise<void> {
   await enqueue(async () => {
@@ -172,14 +171,8 @@ export async function ensureVaultGit(root: string): Promise<void> {
       await runGit(root, ['-c', 'user.name=dsh-kit', '-c', 'user.email=dsh-kit@local', 'commit', '-m', 'dsh-kit: 初始存档'])
       return
     }
-    // 已有仓库：.gitignore 补齐 + library 出索引。`.gitignore` 只对未跟踪文件
-    // 生效，已把 library/ 提交进索引的库，得显式 --cached 摘掉——
-    // 只动索引，磁盘上的原始资料一个字节都不碰。
-    const wrote = ensureOwnGitignore(root)
-    const tracked = await runGit(root, ['ls-files', '--', 'library'])
-    const untrack = tracked !== null && tracked.trim() !== ''
-    if (untrack) await runGit(root, ['rm', '-r', '--cached', '--quiet', '--ignore-unmatch', '--', 'library'])
-    if (!wrote && !untrack) return
+    // 已有仓库：只补齐缺失的忽略项（用户自己加过规则的 .gitignore 整体让路）
+    if (!ensureOwnGitignore(root)) return
     if ((await runGit(root, ['add', '-A'])) === null) return
     await runGit(root, [
       '-c',
@@ -188,7 +181,7 @@ export async function ensureVaultGit(root: string): Promise<void> {
       'user.email=dsh-kit@local',
       'commit',
       '-m',
-      'dsh-kit: library 移出存档（原始资料不进版本控制）',
+      'dsh-kit: 存档忽略项补齐',
     ])
   })
 }
