@@ -341,19 +341,34 @@ function resolveShell() {
     if (shellCache)
         return shellCache;
     if (process.platform === 'win32') {
+        // Store 版 pwsh 的执行别名（%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe）stat 抛
+        // EACCES、existsSync 恒 false——EACCES 要视作存在，否则漏检兜底到 5.1，其自带
+        // PSReadLine 2.0 无 -PredictionSource，历史预测静默失效
+        const pwshExists = (p) => {
+            try {
+                fs.statSync(p);
+                return true;
+            }
+            catch (e) {
+                return e.code === 'EACCES';
+            }
+        };
         let pwsh = null;
         for (const dir of (process.env.PATH ?? '').split(';')) {
             if (!dir)
                 continue;
-            try {
-                if (fs.existsSync(path.join(dir.trim(), 'pwsh.exe'))) {
-                    pwsh = path.join(dir.trim(), 'pwsh.exe');
-                    break;
-                }
+            if (pwshExists(path.join(dir.trim(), 'pwsh.exe'))) {
+                pwsh = path.join(dir.trim(), 'pwsh.exe');
+                break;
             }
-            catch {
-                // 忽略不可读的 PATH 项
-            }
+        }
+        // PATH 没有时再探两个常规安装位：MSI 装 Program Files，Store 装用户 WindowsApps
+        if (!pwsh) {
+            const fallbacks = [
+                path.join(process.env['ProgramFiles'] ?? 'C:\\Program Files', 'PowerShell', '7', 'pwsh.exe'),
+                path.join(process.env['LOCALAPPDATA'] ?? '', 'Microsoft', 'WindowsApps', 'pwsh.exe'),
+            ];
+            pwsh = fallbacks.find(pwshExists) ?? null;
         }
         shellCache = pwsh
             ? { file: pwsh, args: ['-NoLogo', '-NoExit', '-EncodedCommand', PS_PREDICT_INIT], label: 'pwsh' }
