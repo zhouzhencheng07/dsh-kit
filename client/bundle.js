@@ -1180,7 +1180,7 @@ window.__ModuleLoader__.load({
       vaultHistBack: "后退",
       vaultHistFwd: "前进",
       vaultSpaceAll: "全部",
-      vaultSearchPh: "搜索 wiki 笔记，回车执行",
+      vaultSearchPh: "搜索 wiki 笔记",
       vaultSearchEmpty: "无结果",
       vaultSearchFail: "搜索失败：{error}",
       vaultRefresh: "刷新索引与目录树",
@@ -1622,7 +1622,7 @@ window.__ModuleLoader__.load({
       vaultHistBack: "Back",
       vaultHistFwd: "Forward",
       vaultSpaceAll: "All",
-      vaultSearchPh: "Search wiki notes, Enter to run",
+      vaultSearchPh: "Search wiki notes",
       vaultSearchEmpty: "No results",
       vaultSearchFail: "Search failed: {error}",
       vaultRefresh: "Refresh index and tree",
@@ -9296,6 +9296,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const [searchIdx, setSearchIdx] = react.useState(0);
       const [searchRect, setSearchRect] = react.useState(null);
       const searchRef = react.useRef(null);
+      const searchTimer = react.useRef(null);
+      const searchSeq = react.useRef(0);
       const [searching, setSearching] = react.useState(false);
       const [toast, setToast] = react.useState("");
 
@@ -9497,24 +9499,41 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }
       };
 
-      // 搜索结果是锚在搜索框下的临时浮层（不挤目录树）：Enter 出结果，改查询/点外/Esc/选中即关
-      const runSearch = async () => {
-        const q = searchQ.trim();
+      // 搜索结果是锚在搜索框下的临时浮层（不挤目录树）：随输入实时更新（去抖），
+      // 点浮层外 / Esc / 选中 / 清空即关。seq 守卫：连打时只认最后一次查询的回包
+      const runSearch = async (raw) => {
+        const q = String(raw ?? "").trim();
         if (q === "") {
           setSearchRes(null);
           return;
         }
-        setSearching(true);
+        const seq = ++searchSeq.current;
         setSearchIdx(0);
         setSearchRect(searchRef.current ? searchRef.current.getBoundingClientRect() : null);
+        setSearching(true);
         try {
           const body = await kitJson(`/dsh-kit/vault/search?q=${encodeURIComponent(q)}`);
-          setSearchRes(body.results ?? []);
+          if (seq === searchSeq.current) setSearchRes(body.results ?? []);
         } catch (error) {
-          setToast(`${t("vaultSearchFail")} ${String(error?.message ?? error)}`);
+          if (seq === searchSeq.current) setToast(`${t("vaultSearchFail")} ${String(error?.message ?? error)}`);
         }
-        setSearching(false);
+        if (seq === searchSeq.current) setSearching(false);
       };
+      const scheduleSearch = (raw) => {
+        const q = String(raw ?? "").trim();
+        if (searchTimer.current !== null) clearTimeout(searchTimer.current);
+        if (q === "") {
+          setSearchRes(null);
+          return;
+        }
+        searchTimer.current = setTimeout(() => {
+          searchTimer.current = null;
+          void runSearch(q);
+        }, 200);
+      };
+      react.useEffect(() => () => {
+        if (searchTimer.current !== null) clearTimeout(searchTimer.current);
+      }, []);
 
       // 关闭手势长在浮层自己身上（同文件夹选择器/TreeRowMenu 契约）：点浮层与搜索框之外才关；
       // 开着期间挂 vaultSearchOpen，KitSurfaces 的全局 Esc 让路——Esc 只关浮层，不收页签/侧栏
@@ -9894,22 +9913,22 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               placeholder: t("vaultSearchPh"),
               spellCheck: false,
               onChange: (e) => {
-                // 查询一变结果就是旧的：随改随关，回车再出新浮层
+                // 随输入实时搜（去抖）；清空即关浮层
                 setSearchQ(e.target.value);
-                setSearchRes(null);
+                scheduleSearch(e.target.value);
               },
               onKeyDown: (e) => {
-                // 浮层开着时回车=打开当前条目、↑↓ 移动、Esc 关；否则回车执行新搜索
+                // 回车=打开当前条目（浮层没开但有词就立即搜，免等去抖）；↑↓ 移动；Esc 只关浮层
                 if (e.key === "Enter") {
+                  e.preventDefault();
                   if (searchRes !== null) {
-                    e.preventDefault();
                     const hit = searchRes[Math.min(searchIdx, Math.max(0, searchRes.length - 1))];
                     if (hit) {
                       setSearchRes(null);
                       openPath(hit.path);
                     }
-                  } else {
-                    void runSearch();
+                  } else if (searchQ.trim() !== "") {
+                    void runSearch(searchQ);
                   }
                 } else if (e.key === "ArrowDown" && searchRes !== null) {
                   e.preventDefault();
