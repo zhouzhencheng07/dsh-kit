@@ -1817,7 +1817,11 @@ window.__ModuleLoader__.load({
 .dshk-btn{appearance:none;background:transparent;border:0;color:var(--dsw-alias-label-secondary);width:26px;height:26px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;line-height:1;padding:0}
 .dshk-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-term{height:100%}
-.dshk-term .xterm{height:100%}
+/* padding 加在 .xterm 元素上：fit addon 从该元素读 padding 并从可用面积扣除，cols/rows 不会算错 */
+.dshk-term .xterm{height:100%;box-sizing:border-box;padding:6px 10px}
+.dshk-term .xterm-viewport::-webkit-scrollbar{width:8px}
+.dshk-term .xterm-viewport::-webkit-scrollbar-thumb{background:rgba(127,127,127,.3);border-radius:4px}
+.dshk-term .xterm-viewport::-webkit-scrollbar-track{background:transparent}
 .dshk-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);font-size:13px}
 /* 多终端：入口图标数量角标 + 标签条 + 堆叠 pane（隐藏 pane 离屏缓冲输出） */
 .dshk-enbtn{position:relative}
@@ -3103,7 +3107,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             if (disposed) return;
             termInst = new window.Terminal({
               fontSize: 13,
-              lineHeight: 1.25,
+              lineHeight: 1.15,
               fontFamily: 'ui-monospace, Consolas, "Cascadia Mono", "Courier New", monospace',
               cursorBlink: true,
               scrollback: 5000,
