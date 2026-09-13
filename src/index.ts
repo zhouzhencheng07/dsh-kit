@@ -659,7 +659,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
   //   schedule_delete 按 id 删，不给 update）——工具面锁死；舞台日程签、侧栏
   //   待办索引与输入区计时芯片在 client/bundle.js 挂各自槽位；
   //   HTTP 端点在下方 webServer 注入块注册。
-  // 日程存储固定 $DSH_HOME/dsh-kit/schedule.json，与知识库（vaultRoot）无关，
+  // 日程存储固定 $DSH_HOME/dsh-kit/schedule/（一条一文件），与知识库（vaultRoot）无关，
   // 无配置门槛
   const scheduleStore = syncScheduleStore()
   const scheduleToolsMod = await loadToolsModule((m) => console.warn(`dsh-kit: ${m}`))
@@ -2984,7 +2984,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
         } else if (stat.mtimeMs !== baseMtime) {
           return { modified: true, mtimeMs: stat.mtimeMs }
         }
-        // tmp+rename 原子落盘（schedule.json 同款）：写一半崩溃/断电不会留下截断页
+        // tmp+rename 原子落盘（日程落盘同款）：写一半崩溃/断电不会留下截断页
         const tmp = `${resolved}.tmp`
         fs.writeFileSync(tmp, content, 'utf8')
         fs.renameSync(tmp, resolved)
