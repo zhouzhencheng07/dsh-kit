@@ -1811,6 +1811,9 @@ window.__ModuleLoader__.load({
 .dshk-dock{position:fixed;left:0;width:100%;bottom:0;height:var(--dshk-dock-h,${DOCK_H});display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:1px solid var(--dsw-alias-border-l1);box-shadow:0 -6px 20px rgba(0,0,0,.14);z-index:800;pointer-events:auto}
 .dshk-head{flex:none;min-height:34px;display:flex;align-items:center;gap:8px;padding:0 6px 0 12px;color:var(--dsw-alias-label-secondary);font-size:12px;border-bottom:1px solid var(--dsw-alias-border-l1)}
 .dshk-title{font-weight:600;color:var(--dsw-alias-label-primary);flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+/* 终端坞标签是固定短文字，不参与弹性：head 里 title 与 spring 双 flex:1 会把空闲
+   空间对半分，宽窗口下标签簇（页签/路径）飘到中间，只有窄窗口看着正常 */
+.dshk-dock-label{flex:0 0 auto}
 .dshk-sub{color:var(--dsw-alias-label-tertiary);font-family:ui-monospace,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46%}
 .dshk-status{color:var(--dsw-alias-label-tertiary)}
 .dshk-spring{flex:1}
@@ -3061,6 +3064,20 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // TerminalDock = 底部停靠容器：头部标签条（＋ 新建 / — 隐藏），body 纵向堆叠
     // 各 pane，仅激活 pane 可见。隐藏的 pane 保持挂载：xterm 离屏继续缓冲输出，
     // 切回不丢内容（display:none 期间跳过 fit，切回由 ResizeObserver 自动补）。
+    /** execCommand 兜底复制：手机经局域网 http 访问属非安全上下文，navigator.clipboard 不存在 */
+    function execCopyText(text) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        // 尽力而为
+      }
+      ta.remove();
+    }
     function TerminalPane({ term, visible, restartKey, onRestart, onShell }) {
       const bodyRef = react.useRef(null);
       const [state, setState] = react.useState({ phase: "connecting", detail: "" });
@@ -3112,6 +3129,24 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               cursorBlink: true,
               scrollback: 5000,
               theme: xtermTheme(),
+            });
+            // 有选区时 Ctrl+C = 复制并清选区（随后无选区的 Ctrl+C 恢复中断语义，
+            // VS Code 同款）——否则想复制选中文字，^C 直达 shell 把正在运行的
+            // 前台进程停掉。Ctrl+Shift+C 恒为复制
+            termInst.attachCustomKeyEventHandler((ev) => {
+              if (ev.type !== "keydown" || !ev.ctrlKey || ev.altKey) return true;
+              if (ev.key !== "c" && ev.key !== "C") return true;
+              if (!ev.shiftKey && !termInst.hasSelection()) return true;
+              const text = termInst.getSelection();
+              if (text) {
+                if (navigator.clipboard && window.isSecureContext) {
+                  navigator.clipboard.writeText(text).catch(() => execCopyText(text));
+                } else {
+                  execCopyText(text);
+                }
+              }
+              termInst.clearSelection();
+              return false;
             });
             // DSH 明暗切换时热更新调色板（presenter 改 body 属性）
             themeObserver = new MutationObserver(() => {
@@ -3274,7 +3309,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           jsxRuntime.jsxs("div", {
             className: "dshk-head",
             children: [
-              jsxRuntime.jsx("span", { className: "dshk-title", children: t("label") }),
+              jsxRuntime.jsx("span", { className: "dshk-title dshk-dock-label", children: t("label") }),
               jsxRuntime.jsxs("span", { className: "dshk-tabs", children: [
                 items.map((tab) =>
                   jsxRuntime.jsxs("div", {
