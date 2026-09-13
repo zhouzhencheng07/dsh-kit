@@ -2967,10 +2967,10 @@ export async function apply(ctx) {
                 const file = path.join(dir, `${segs[segs.length - 1] ?? ''}.md`);
                 if (fs.existsSync(file))
                     return { exists: true, path: file, mtimeMs: fs.statSync(file).mtimeMs };
-                // 建页不种 frontmatter：创建/修改时间文件系统本身就有属性，
-                // 外部导入的 md 也没有该字段——frontmatter 留给真正需要语义的页
-                const template = `# ${segs[segs.length - 1] ?? ''}\n\n`;
-                fs.writeFileSync(file, template, 'utf8');
+                // 建页写空文件（三端同款）：不种 frontmatter——创建/修改时间文件系统本身就有
+                // 属性，外部导入的 md 也没有该字段；也不写一行与文件名同名的标题：标题归正文，
+                // 想要就自己写一行 `#`，不写则索引显示名回退成文件名
+                fs.writeFileSync(file, '', 'utf8');
                 return { path: file, mtimeMs: fs.statSync(file).mtimeMs };
             });
             // 建目录：标题带 `/` 多级递归创建（树上「新建目录」用；已存在=幂等成功）
