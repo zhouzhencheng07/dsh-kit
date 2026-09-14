@@ -72,7 +72,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, VaultFolderPicker, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, renameVaultPageTab, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultCascadeDeleteMany, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, notifyDiffCore, notifyState, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
+  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, VaultFolderPicker, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, renameVaultPageTab, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultCascadeDeleteMany, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, notifyDiffCore, notifyCompleteSettled, notifyState, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -1380,6 +1380,80 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
     "N seen 只挡同一次请求（另一次提问照发）",
     comps.notifyDiffCore(st9, { ...listOf(rows9, null), pending: pendingOf("n12", { key: "question:21", kind: "question", questions: [{ question: "另一问" }] }), seen: seenSet }, cfgAll).length === 1,
   );
+
+  // —— 计划评审（exit_plan_mode 的 intent=plan-review，走同一条 user-questions 请求）
+  //    单独成类：标题走「等你批准计划」，正文取计划 markdown 的首个标题 ——
+  const st10 = freshState();
+  const rows10 = [{ id: "n13", running: true, title: "项目 B" }];
+  comps.notifyDiffCore(st10, listOf(rows10, null), cfgAll); // 首帧播种
+  const evPlan = comps.notifyDiffCore(
+    st10,
+    {
+      ...listOf(rows10, null),
+      pending: pendingOf("n13", {
+        key: "question:30",
+        kind: "plan-review",
+        questions: [{ question: "Approve this plan and leave plan mode?", detail: "# 重构终端坞\n\n1. 拆模块" }],
+      }),
+    },
+    cfgAll,
+  );
+  check("N 计划评审单独成类，正文取计划首标题", evPlan.length === 1 && evPlan[0].kind === "plan" && evPlan[0].body === "重构终端坞" && evPlan[0].title === "项目 B");
+  check(
+    "N 计划评审无标题时退回提问原文",
+    comps.notifyDiffCore(st10, { ...listOf(rows10, null), pending: pendingOf("n13", { key: "question:31", kind: "plan-review", questions: [{ question: "批准吗？", detail: "没有标题的计划" }] }) }, cfgAll)[0]?.body === "批准吗？",
+  );
+  check(
+    "N 计划提醒同受提问开关门控",
+    comps.notifyDiffCore(st10, { ...listOf(rows10, null), pending: pendingOf("n13", { key: "question:32", kind: "plan-review", questions: [{ question: "x", detail: "# Y" }] }) }, { ...cfgAll, notifyOnQuestion: false }).length === 0,
+  );
+}
+
+// 10e) 收尾判定（notifyCompleteSettled 依赖注入直测）：限流失败也会让 running 落地，
+//      续跑器 2s 后才排「继续」——延迟判定必须把待续跑的失败挡掉不发通知
+{
+  const sessionsOf = (running) => ({
+    list: { getSnapshot: () => ({ ids: ["n14"], byId: { n14: { running, displayTitle: "会话 P" } }, current: null }) },
+    open: () => {},
+  });
+  const ev = { kind: "complete", sessionId: "n14", title: "会话 P" };
+  const posted = [];
+  const prevNotification = global.Notification;
+  class TestNote {
+    constructor(title, opts) {
+      posted.push({ title, body: opts && opts.body });
+    }
+    close() {}
+  }
+  TestNote.permission = "granted";
+  global.Notification = TestNote;
+  const prevSnapshot = comps.monitorStore.snapshot;
+  try {
+    posted.length = 0;
+    comps.monitorStore.snapshot = { items: [{ id: "n14", phase: "waiting" }] };
+    comps.notifyCompleteSettled(sessionsOf(false), ev);
+    check("N 待续跑的失败沿不发收尾通知", posted.length === 0);
+    posted.length = 0;
+    comps.monitorStore.snapshot = { items: [] };
+    comps.notifyCompleteSettled(sessionsOf(true), ev);
+    check("N 回合又跑起来（沿抖动）不发收尾通知", posted.length === 0);
+    posted.length = 0;
+    comps.notifyCompleteSettled(sessionsOf(false), ev);
+    check("N 真收尾发完成通知", posted.length === 1 && /回合完成|turn finished/.test(posted[0].title));
+    posted.length = 0;
+    comps.monitorStore.snapshot = { items: [{ id: "n14", phase: "capped" }] };
+    comps.notifyCompleteSettled(sessionsOf(false), ev);
+    check(
+      "N 自动续跑放弃（capped）换文案提醒",
+      posted.length === 1 && /自动续跑已暂停|auto-continue paused/.test(posted[0].title) && /自动重试|auto-retry/.test(posted[0].body),
+    );
+    posted.length = 0;
+    comps.notifyCompleteSettled({ list: { getSnapshot: () => ({ ids: [], byId: {}, current: null }) } }, ev);
+    check("N 会话已不在列表：不发", posted.length === 0);
+  } finally {
+    comps.monitorStore.snapshot = prevSnapshot;
+    global.Notification = prevNotification;
+  }
 }
 
 // 10e) 阅读位置记忆（F2）：按路径存取 + 隐藏容器不记（display:none 时 scrollTop

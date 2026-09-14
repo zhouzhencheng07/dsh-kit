@@ -1070,7 +1070,7 @@ window.__ModuleLoader__.load({
       cfgNotifyOnComplete: "回合完成提醒",
       cfgNotifyOnCompleteHint: "一轮回复收尾时提醒",
       cfgNotifyOnQuestion: "提问/批准提醒",
-      cfgNotifyOnQuestionHint: "agent 提问或等你批准工具调用时提醒",
+      cfgNotifyOnQuestionHint: "agent 提问、等你批准工具调用或提交计划待批时提醒",
       cfgNotifyPerm: "通知权限",
       cfgNotifyPermHintDefault: "浏览器还没授权：点右侧按钮并选「允许」（手机走局域网 http 时无桌面通知）",
       cfgNotifyPermHintGranted: "已授权：页面不在前台时弹系统通知，点击回到对应会话",
@@ -1082,10 +1082,14 @@ window.__ModuleLoader__.load({
       cfgNotifyPermUnsupported: "不支持",
       notifyCompleteTitle: "{title} · 回合完成",
       notifyCompleteBody: "点击回到该会话",
+      notifyCappedTitle: "{title} · 自动续跑已暂停",
+      notifyCappedBody: "连续限流失败，已停止自动重试，点开看看",
       notifyQuestionTitle: "{title} · 等你回答",
       notifyQuestionBody: "agent 提了一个问题",
       notifyApprovalTitle: "{title} · 等你批准",
       notifyApprovalBody: "{tool} 等待批准",
+      notifyPlanTitle: "{title} · 等你批准计划",
+      notifyPlanBody: "agent 提交了计划等你批准",
       notifyToolFallback: "工具调用",
       cfgPreviewMaxTabs: "文件标签数上限",
       cfgPreviewMaxTabsHint: "超限自动关最久没看的（1-20）",
@@ -1514,7 +1518,7 @@ window.__ModuleLoader__.load({
       cfgNotifyOnComplete: "Turn finished alert",
       cfgNotifyOnCompleteHint: "Notify when a reply finishes",
       cfgNotifyOnQuestion: "Question / approval alert",
-      cfgNotifyOnQuestionHint: "Notify when the agent asks a question or awaits tool approval",
+      cfgNotifyOnQuestionHint: "Notify when the agent asks a question, awaits tool approval, or submits a plan for review",
       cfgNotifyPerm: "Notification permission",
       cfgNotifyPermHintDefault: "Not granted yet: click the button and choose Allow (no desktop notifications over plain http on phones)",
       cfgNotifyPermHintGranted: "Granted: a system notification pops up while the page is in the background; click it to return to that session",
@@ -1526,10 +1530,14 @@ window.__ModuleLoader__.load({
       cfgNotifyPermUnsupported: "Unsupported",
       notifyCompleteTitle: "{title} · turn finished",
       notifyCompleteBody: "Click to return to this session",
+      notifyCappedTitle: "{title} · auto-continue paused",
+      notifyCappedBody: "Repeated rate-limit failures stopped the auto-retry — open it to take a look",
       notifyQuestionTitle: "{title} · waiting for your answer",
       notifyQuestionBody: "The agent asked a question",
       notifyApprovalTitle: "{title} · waiting for approval",
       notifyApprovalBody: "{tool} awaits approval",
+      notifyPlanTitle: "{title} · plan awaiting approval",
+      notifyPlanBody: "The agent submitted a plan for your approval",
       notifyToolFallback: "A tool call",
       cfgPreviewMaxTabs: "Max file tabs",
       cfgPreviewMaxTabsHint: "Closes the least-recently-viewed tab over the limit (1-20)",
@@ -8570,8 +8578,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     //   提问/批准 ← 旁听官方 remote 瀑布（user-questions|approval/request）——
     //     官方 UI 只在会话「上台」时才注册待回应，后台会话的请求在它那里是空档，
     //     本插件挂在根 ctx 上能收到全部会话的请求（会话身份从事件 ctx 的 scope 取）；
-    //     官方待回应投影（uiSession.pendingInteractions）只作补充口存在——两者是
-    //     同一次请求的两个观察口，谁先看到都能提醒，去重见 notifySeenRequests。
+    //     计划评审（exit_plan_mode 的 intent=plan-review）走的是同一条 user-questions
+    //     请求，只是另成一类文案与正文取法（见 notifyKindOf）。官方待回应投影
+    //     （uiSession.pendingInteractions）只作补充口存在——两者是同一次请求的两个
+    //     观察口，谁先看到都能提醒，去重见 notifySeenRequests。
     // 抑制规则见 notifyWanted；页面完全关掉时浏览器端无从运行，无通知可言。
     const notifyState = {
       /** sessionId -> 上次已知 running（沿检测基线；首帧只播种不发通知） */
@@ -8583,6 +8593,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       /** 标题闪烁：未读计数（0 = 未闪烁）与 <title> 观察器 */
       flashCount: 0,
       flashWatch: null,
+      /** 在途的收尾判定定时器（页面销毁无需清理，留着只为可观测） */
+      settles: new Set(),
     };
     /** 事件路径已处置过的提问请求（key 用 questions 数组——待回应投影里存的是
      *  同一个引用，据此让两条观察口只提醒一次）。批准请求没有共用引用可用，靠
@@ -8590,6 +8602,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     const notifySeenRequests = new WeakSet();
     const NOTIFY_BODY_MAX = 140; // 提问正文截断长度：桌面通知两行即满，长了被裁
     const NOTIFY_FLASH_RE = /^\(\d+\) /; // 闪烁前缀：复原时按它剥掉，不存旧标题
+    const NOTIFY_SETTLE_MS = 2500; // 收尾判定延迟：盖过续跑器 2s 的 tick
 
     /** 折叠空白并按上限截断（通知正文只取一行；超长补省略号） */
     function notifyClip(text, max) {
@@ -8597,7 +8610,23 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
     }
 
-    /** 待回应的正文：提问取首问全文，批准取理由（无理由用工具名兜底） */
+    /** 提问批次的类别：官方计划评审（`intent.kind = "plan-review"`）单独成一类，
+     *  提醒文案与正文取法都不同（正文取计划 markdown 的首个标题） */
+    function notifyKindOf(baseKind, request) {
+      if (baseKind !== "question") return baseKind;
+      const first = Array.isArray(request?.questions) ? request.questions[0] : null;
+      return first && first.intent && first.intent.kind === "plan-review" ? "plan" : "question";
+    }
+
+    /** 计划评审正文：取计划首个 markdown 标题（比"批准这份计划吗"有用），
+     *  没有标题（理论上 exit_plan_mode 会拦）就退回提问原文 */
+    function notifyPlanBody(detail, fallback) {
+      const heading = /(?:^|\n)#{1,6}\s+([^\n]+)/.exec(typeof detail === "string" ? detail : "");
+      const text = heading ? heading[1].trim() : "";
+      return notifyClip(text !== "" ? text : fallback, NOTIFY_BODY_MAX);
+    }
+
+    /** 待回应的正文：提问取首问全文，计划取计划标题，批准取理由（无理由用工具名兜底） */
     function notifyBodyOf(interaction, kind) {
       if (kind === "approval") {
         const reason = typeof interaction.reason === "string" ? interaction.reason.trim() : "";
@@ -8607,6 +8636,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }
       const first = Array.isArray(interaction.questions) ? interaction.questions[0] : null;
       const text = first && typeof first.question === "string" ? first.question.trim() : "";
+      if (kind === "plan") return notifyPlanBody(first ? first.detail : "", text !== "" ? text : t("notifyPlanBody"));
       return notifyClip(text !== "" ? text : t("notifyQuestionBody"), NOTIFY_BODY_MAX);
     }
 
@@ -8655,7 +8685,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (state.pendingKey.get(id) === interaction.key) continue;
         state.pendingKey.set(id, interaction.key);
         if (!state.primed) continue;
-        const kind = interaction.kind === "approval" ? "approval" : "question";
+        const kind = interaction.kind === "approval" ? "approval" : interaction.kind === "plan-review" ? "plan" : "question";
         if (!wanted(id, kind)) continue;
         events.push({ kind, sessionId: id, title: titleOf(id), body: notifyBodyOf(interaction, kind) });
       }
@@ -8737,9 +8767,19 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     /** 投递一条：系统通知优先，退标题闪烁。tag 按会话归并——同一会话的新通知
      *  替换旧的，人不在时也不会堆一屏 */
     function notifyDeliver(sessions, ev) {
-      const key = ev.kind === "complete" ? "notifyCompleteTitle" : ev.kind === "approval" ? "notifyApprovalTitle" : "notifyQuestionTitle";
+      const key =
+        ev.kind === "complete"
+          ? "notifyCompleteTitle"
+          : ev.kind === "capped"
+            ? "notifyCappedTitle"
+            : ev.kind === "approval"
+              ? "notifyApprovalTitle"
+              : ev.kind === "plan"
+                ? "notifyPlanTitle"
+                : "notifyQuestionTitle";
       const title = tf(key, { title: ev.title });
-      const body = ev.kind === "complete" ? t("notifyCompleteBody") : ev.body ?? "";
+      const body =
+        ev.kind === "complete" ? t("notifyCompleteBody") : ev.kind === "capped" ? t("notifyCappedBody") : ev.body ?? "";
       if (notifyCanPost()) {
         try {
           const note = new Notification(title, { body, tag: `dsh-kit:${ev.sessionId}`, silent: true });
@@ -8780,7 +8820,35 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         { ids: list.ids, byId: list.byId, current: list.current, foreground: notifyForeground(), pending, seen: notifySeenRequests },
         cfg,
       );
-      for (const ev of events) notifyDeliver(sessions, ev);
+      for (const ev of events) {
+        // 收尾不是立刻就能断定的：限流失败也会让 running 落地，而续跑器 2s 后才会
+        // 排上「继续」——不等这一下就会把"待续跑的失败"报成"任务完成"
+        if (ev.kind !== "complete") {
+          notifyDeliver(sessions, ev);
+          continue;
+        }
+        const timer = setTimeout(() => {
+          notifyState.settles.delete(timer);
+          notifyCompleteSettled(sessions, ev);
+        }, NOTIFY_SETTLE_MS);
+        notifyState.settles.add(timer);
+      }
+    }
+
+    /** 收尾通知的延迟判定：到点仍空闲、且续跑器没排「等待继续」的计划，才算真收尾。
+     *  已 capped（自动续跑放弃）确实停了，但文案要说清不是任务做完——那是要人回去
+     *  处理的终态。判定读的都是内存快照，无网络调用。 */
+    function notifyCompleteSettled(sessions, ev) {
+      let row = null;
+      try {
+        row = sessions.list.getSnapshot().byId?.[ev.sessionId] ?? null;
+      } catch {
+        return; // 服务异常：放弃本次
+      }
+      if (!row || row.running === true) return; // 已不在列表 / 又跑起来了：不算收尾
+      const plan = monitorStore.snapshot.items.find((x) => x.id === ev.sessionId);
+      if (plan && plan.phase === "waiting") return; // 等会儿就自动继续，别打扰
+      notifyDeliver(sessions, plan ? { ...ev, kind: "capped" } : ev);
     }
 
     /** 事件路径投递（提问 / 批准）：会话名从列表快照取，抑制与完成沿同一套判据 */
@@ -8813,7 +8881,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           if (sessionId !== undefined) {
             // 先记账再投递：官方待回应投影稍后也会看到这次请求，别提醒两遍
             notifySeenRequests.add(kind === "question" ? request.questions : request);
-            notifyEventDeliver(sessions, kind, sessionId, request);
+            notifyEventDeliver(sessions, notifyKindOf(kind, request), sessionId, request);
           }
         } catch {
           /* 旁听失败不影响作答链路 */
