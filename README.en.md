@@ -64,13 +64,15 @@ slot; the conversation column stays put.
   applies to the currently open session); a banner above the composer shows the pending
   action and can cancel it
 - **Session notifications** (on by default): a desktop notification when a turn finishes,
-  or the agent asks a question / awaits tool approval / submits a plan for review
-  (browser Notification API; click it to return to that session) — fires while the page
-  sits in a background tab or another window, or when the event belongs to a session you
-  are not looking at; silent while you are watching that very session. Auto-continue
-  retries never report a bogus "finished" (you are told only once it really stops).
-  Permission is requested from the settings card (without it an unread count is shown in
-  the tab title instead)
+  context compaction completes, or the agent asks a question / awaits tool approval /
+  submits a plan for review (browser Notification API; click it to return to that
+  session) — fires while the page sits in a background tab or another window, or when the
+  event belongs to a session you are not looking at; silent while you are watching that
+  very session. Auto-continue retries never report a bogus "finished" (you are told only
+  once it really stops); compaction alerts cover sessions you have opened (the official
+  client loads history only for the current session, so a never-opened session's
+  compaction is invisible). Permission is requested from the settings card (without it an
+  unread count is shown in the tab title instead)
 - **Settings card**: dsh-kit config card — per-feature switches, shortcut
   customization (terminal / file tree / source control / knowledge base / both
   sidebars), search result count, max file tabs, vault directory, monitor parameters,

@@ -1068,7 +1068,7 @@ window.__ModuleLoader__.load({
       cfgNotifyEnabled: "会话通知",
       cfgNotifyEnabledHint: "页面不在前台（或完成的不是当前会话）时弹桌面通知",
       cfgNotifyOnComplete: "回合完成提醒",
-      cfgNotifyOnCompleteHint: "一轮回复收尾时提醒",
+      cfgNotifyOnCompleteHint: "一轮回复收尾、或上下文压缩完成时提醒",
       cfgNotifyOnQuestion: "提问/批准提醒",
       cfgNotifyOnQuestionHint: "agent 提问、等你批准工具调用或提交计划待批时提醒",
       cfgNotifyPerm: "通知权限",
@@ -1082,6 +1082,9 @@ window.__ModuleLoader__.load({
       cfgNotifyPermUnsupported: "不支持",
       notifyCompleteTitle: "{title} · 回合完成",
       notifyCompleteBody: "点击回到该会话",
+      notifyCompactTitle: "{title} · 上下文压缩完成",
+      notifyCompactBody: "上下文已压缩完成",
+      notifyCompactBodyTokens: "已压缩约 {tokens} tokens 的历史",
       notifyCappedTitle: "{title} · 自动续跑已暂停",
       notifyCappedBody: "连续限流失败，已停止自动重试，点开看看",
       notifyQuestionTitle: "{title} · 等你回答",
@@ -1516,7 +1519,7 @@ window.__ModuleLoader__.load({
       cfgNotifyEnabled: "Session notifications",
       cfgNotifyEnabledHint: "Desktop notification when a turn finishes or the agent asks, while the page is in the background",
       cfgNotifyOnComplete: "Turn finished alert",
-      cfgNotifyOnCompleteHint: "Notify when a reply finishes",
+      cfgNotifyOnCompleteHint: "Notify when a reply finishes or context compaction completes",
       cfgNotifyOnQuestion: "Question / approval alert",
       cfgNotifyOnQuestionHint: "Notify when the agent asks a question, awaits tool approval, or submits a plan for review",
       cfgNotifyPerm: "Notification permission",
@@ -1530,6 +1533,9 @@ window.__ModuleLoader__.load({
       cfgNotifyPermUnsupported: "Unsupported",
       notifyCompleteTitle: "{title} · turn finished",
       notifyCompleteBody: "Click to return to this session",
+      notifyCompactTitle: "{title} · context compacted",
+      notifyCompactBody: "Context compaction finished",
+      notifyCompactBodyTokens: "Compacted ~{tokens} tokens of history",
       notifyCappedTitle: "{title} · auto-continue paused",
       notifyCappedBody: "Repeated rate-limit failures stopped the auto-retry — open it to take a look",
       notifyQuestionTitle: "{title} · waiting for your answer",
@@ -8657,12 +8663,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       });
     }
 
-    // ─────────── 会话通知（回合收尾 / agent 提问）───────────
+    // ─────────── 会话通知（回合收尾 / 上下文压缩 / agent 提问）───────────
     // 页面不在前台、或事件不属于当前打开的会话时弹一条桌面通知（浏览器
     // Notification API）；未授权 / 非安全上下文（手机走局域网 http）退标题闪烁。
-    // 纯浏览器端，宿主只提供 settings 字段。提问与完成的观察口不同：
+    // 纯浏览器端，宿主只提供 settings 字段。三类事件的观察口不同：
     //   回合收尾 ← sessions.list 快照的 running（订阅式而非轮询：后台标签的定时器
     //     被浏览器节流到分钟级，而宿主的推送不受影响）；
+    //   压缩完成 ← 会话事件窗口的增量（会话绑定的 eventSource 里的 compaction/end）——
+    //     官方只为「上台」过的会话开这个窗，所以只覆盖打开过的会话（切走仍在收流，
+    //     刷新后只剩当前会话）；首帧与重放增量只播种不通知，见 notifyCompactionCore；
     //   提问/批准 ← 旁听官方 remote 瀑布（user-questions|approval/request）——
     //     官方 UI 只在会话「上台」时才注册待回应，后台会话的请求在它那里是空档，
     //     本插件挂在根 ctx 上能收到全部会话的请求（会话身份从事件 ctx 的 scope 取）；
@@ -8670,12 +8679,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     //     请求，只是另成一类文案与正文取法（见 notifyKindOf）。官方待回应投影
     //     （uiSession.pendingInteractions）只作补充口存在——两者是同一次请求的两个
     //     观察口，谁先看到都能提醒，去重见 notifySeenRequests。
-    // 抑制规则见 notifyWanted；页面完全关掉时浏览器端无从运行，无通知可言。
+    // 抑制规则见 notifyWanted（压缩归「完成」一类开关，无独立开关）；页面完全
+    // 关掉时浏览器端无从运行，无通知可言。
     const notifyState = {
       /** sessionId -> 上次已知 running（沿检测基线；首帧只播种不发通知） */
       running: new Map(),
       /** sessionId -> 已提醒过的待回应 key（同一请求只提醒一次） */
       pendingKey: new Map(),
+      /** sessionId -> {seq}：事件窗口已读到的持久 seq（压缩沿的基线，首帧只播种） */
+      compactions: new Map(),
       /** 首帧标志：页面刚打开时列表里已在跑的会话不补发通知 */
       primed: false,
       /** 标题闪烁：未读计数（0 = 未闪烁）与 <title> 观察器 */
@@ -8782,6 +8794,77 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return events;
     }
 
+    /** 事件条目上的持久 seq（transient 条目的 seq 只是排序号，不在持久序列上） */
+    function notifyDurableSeq(entry) {
+      const event = entry && entry.type === "event" ? entry.event : null;
+      return event && typeof event.seq === "number" ? event.seq : -1;
+    }
+
+    /** 窗口里最大的持久 seq：播种基线用（窗口含翻旧页 prepend 的整段历史） */
+    function notifyMaxSeq(entries, fallback) {
+      let max = fallback;
+      for (const entry of entries) {
+        const seq = notifyDurableSeq(entry);
+        if (seq > max) max = seq;
+      }
+      return max;
+    }
+
+    /** 压缩规模：同一次压缩的 `compaction/summary` 带被压掉历史的 token 估值 */
+    function notifyCompactTokens(entries, compactionId) {
+      for (const entry of entries) {
+        const event = entry && entry.type === "event" ? entry.event : null;
+        if (!event || event.type !== "compaction/summary" || !event.data) continue;
+        if (event.data.compactionId !== compactionId) continue;
+        const tokens = event.data.shadowedTokenCount;
+        if (typeof tokens === "number" && tokens > 0) return tokens;
+      }
+      return 0;
+    }
+
+    /** 压缩正文：说得出规模就说规模，说不出就只报完成 */
+    function notifyCompactBody(entries, compactionId) {
+      const tokens = notifyCompactTokens(entries, compactionId);
+      if (tokens <= 0) return t("notifyCompactBody");
+      return tf("notifyCompactBodyTokens", { tokens: tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens) });
+    }
+
+    /**
+     * 压缩完成判定核心（依赖注入，render-check 直测）：事件窗口的增量里出现
+     * `compaction/end`（不带 error）即一次压缩收尾——手动 /compact 与回合中途的
+     * 自动压缩都落这条事件，模型无关的 tool-result prune 不在其中。
+     * 只认 append 增量：窗口首帧（页面刚打开）与 replace/prepend（重连重放、翻旧页）
+     * 一律只播种——刷新页面不重报历史压缩。
+     * 覆盖边界：官方只为「上台」过的会话开事件窗，从未打开过的会话看不到它的压缩。
+     * @param input {sessionId,title,entries,change,origin,current,foreground}
+     * @returns [{kind:"compact", sessionId, title, body}]
+     */
+    function notifyCompactionCore(state, input, cfg) {
+      const events = [];
+      const id = input.sessionId;
+      const st = state.compactions.get(id) ?? { seq: -1 };
+      state.compactions.set(id, st);
+      const entries = Array.isArray(input.entries) ? input.entries : [];
+      const change = input.change;
+      if (!change || change.kind !== "append") {
+        st.seq = notifyMaxSeq(entries, st.seq); // 首帧 / 重放 / 翻旧页：只播种不通知
+        return events;
+      }
+      for (const entry of Array.isArray(change.entries) ? change.entries : []) {
+        const seq = notifyDurableSeq(entry);
+        if (seq <= st.seq) continue; // 重复投递 / 重放：同一条不报两次
+        st.seq = seq;
+        const event = entry.event;
+        if (event.type !== "compaction/end") continue;
+        const data = event.data;
+        if (!data || data.error) continue; // 失败的压缩不算完成（那个回合的失败另有报法）
+        if (input.origin === "subagent") continue; // 子会话属导航噪音
+        if (!notifyWanted(cfg, id, "complete", input.current, input.foreground === true)) continue;
+        events.push({ kind: "compact", sessionId: id, title: input.title, body: notifyCompactBody(entries, data.compactionId) });
+      }
+      return events;
+    }
+
     /** 前台判据：页面可见 **且** 窗口聚焦。切到别的程序时 visibilityState 仍是
      *  visible（只有切标签/最小化才变 hidden），只看它会漏判成"人在跟前" */
     function notifyForeground() {
@@ -8858,13 +8941,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const key =
         ev.kind === "complete"
           ? "notifyCompleteTitle"
-          : ev.kind === "capped"
-            ? "notifyCappedTitle"
-            : ev.kind === "approval"
-              ? "notifyApprovalTitle"
-              : ev.kind === "plan"
-                ? "notifyPlanTitle"
-                : "notifyQuestionTitle";
+          : ev.kind === "compact"
+            ? "notifyCompactTitle"
+            : ev.kind === "capped"
+              ? "notifyCappedTitle"
+              : ev.kind === "approval"
+                ? "notifyApprovalTitle"
+                : ev.kind === "plan"
+                  ? "notifyPlanTitle"
+                  : "notifyQuestionTitle";
       const title = tf(key, { title: ev.title });
       const body =
         ev.kind === "complete" ? t("notifyCompleteBody") : ev.kind === "capped" ? t("notifyCappedBody") : ev.body ?? "";
@@ -8921,6 +9006,36 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         }, NOTIFY_SETTLE_MS);
         notifyState.settles.add(timer);
       }
+    }
+
+    /** 压缩完成入口（事件窗口订阅回调）：读窗口快照 → 核心判定 → 逐条投递。
+     *  不走收尾那套延迟判定：压缩是已经落地的事实，没有"待续跑"的歧义 */
+    function notifyCompactionEvaluate(sessions, sessionId) {
+      let cfg;
+      let list;
+      let win;
+      try {
+        cfg = cfgFromSnapshot(getCfgSnapshot());
+        list = sessions.list.getSnapshot();
+        win = sessions.binding(sessionId).eventSource.getSnapshot();
+      } catch {
+        return; // 服务/窗口异常：本轮跳过，下条推送再来
+      }
+      const row = list.byId?.[sessionId];
+      const events = notifyCompactionCore(
+        notifyState,
+        {
+          sessionId,
+          title: row?.displayTitle ?? sessionId,
+          entries: win.entries,
+          change: win.change,
+          origin: row?.origin,
+          current: list.current,
+          foreground: notifyForeground(),
+        },
+        cfg,
+      );
+      for (const ev of events) notifyDeliver(sessions, ev);
     }
 
     /** 收尾通知的延迟判定：到点仍空闲、且续跑器没排「等待继续」的计划，才算真收尾。
@@ -12307,6 +12422,44 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const offs = [];
         let pendingStore = null;
         const evaluate = () => notifyEvaluate(sctx.sessions, pendingStore);
+        // 压缩完成：给列表里的会话各挂一个事件窗口订阅。窗口是会话「上台」才开的
+        // （历史按需拉），没上过台的窗口恒空、自然静默；上过台的即便切走也仍在收流。
+        // 列表变化时对账增删——会话被移除/归档即退订
+        const compactionSubs = new Map(); // sessionId -> off
+        const syncCompactionSubs = () => {
+          let ids;
+          try {
+            ids = sctx.sessions.list.getSnapshot().ids ?? [];
+          } catch {
+            return; // 服务异常：下条推送再来
+          }
+          for (const id of ids) {
+            if (compactionSubs.has(id)) continue;
+            try {
+              const source = sctx.sessions.binding(id)?.eventSource;
+              if (source && typeof source.subscribe === "function") {
+                compactionSubs.set(id, source.subscribe(() => notifyCompactionEvaluate(sctx.sessions, id)));
+              }
+            } catch {
+              /* 该会话暂不可绑定：下一轮列表变化再试 */
+            }
+          }
+          const live = new Set(ids);
+          for (const [id, off] of [...compactionSubs]) {
+            if (live.has(id)) continue;
+            compactionSubs.delete(id);
+            try {
+              off();
+            } catch {
+              /* 已注销 */
+            }
+          }
+          for (const id of [...notifyState.compactions.keys()]) if (!live.has(id)) notifyState.compactions.delete(id);
+        };
+        const sync = () => {
+          evaluate();
+          syncCompactionSubs();
+        };
         if (typeof sctx.inject === "function") {
           sctx.inject(["uiSession"], (uctx) => {
             pendingStore = uctx.uiSession ? uctx.uiSession.pendingInteractions : null;
@@ -12315,8 +12468,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           });
         }
         const listStore = sctx.sessions ? sctx.sessions.list : null;
-        if (listStore && typeof listStore.subscribe === "function") offs.push(listStore.subscribe(evaluate));
-        evaluate(); // 首帧播种：列表里已在跑的会话不补发通知
+        if (listStore && typeof listStore.subscribe === "function") offs.push(listStore.subscribe(sync));
+        sync(); // 首帧播种：列表里已在跑的会话不补发通知，窗口里已有的压缩同理
         sctx.effect(() => () => {
           for (const off of offs) {
             try {
@@ -12325,6 +12478,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               /* 已注销 */
             }
           }
+          for (const off of compactionSubs.values()) {
+            try {
+              off();
+            } catch {
+              /* 已注销 */
+            }
+          }
+          compactionSubs.clear();
         });
       });
       // 标题闪烁复原（未授权时的兜底标记）：回窗口即清
