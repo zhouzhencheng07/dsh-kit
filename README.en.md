@@ -63,7 +63,7 @@ slot; the conversation column stays put.
   output repeats itself (a loop symptom) it stops the turn and retries (that part only
   applies to the currently open session); a banner above the composer shows the pending
   action and can cancel it
-- **Session notifications** (on by default): a desktop notification when a turn finishes,
+- **Session notifications** (on by default; one switch covers every alert): a desktop notification when a turn finishes,
   context compaction completes, or the agent asks a question / awaits tool approval /
   submits a plan for review (browser Notification API; click it to return to that
   session) — fires while the page sits in a background tab or another window, or when the

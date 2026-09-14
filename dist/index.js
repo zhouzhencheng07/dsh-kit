@@ -488,12 +488,10 @@ export async function apply(ctx) {
         monitorWaitMs: z.number().step(1).min(5000).max(600000).default(15000),
         monitorMaxAuto: z.number().step(1).min(1).max(10).default(5),
         monitorRepeatThreshold: z.number().step(1).min(2).max(10).default(3),
-        // 会话通知（纯浏览器端消费，宿主不读）：回合收尾或 agent 提问时，若页面不在
-        // 前台（或事件不属于当前打开的会话）弹桌面通知——浏览器 Notification API，
-        // 未授权时退标题闪烁。notifyOnComplete / notifyOnQuestion 分门控两类事件。
+        // 会话通知（纯浏览器端消费，宿主不读）：回合收尾、上下文压缩完成或 agent 提问时，
+        // 若页面不在前台（或事件不属于当前打开的会话）弹桌面通知——浏览器 Notification
+        // API，未授权时退标题闪烁。一个总开关管全部提醒，不分类配置。
         notifyEnabled: z.boolean().default(true),
-        notifyOnComplete: z.boolean().default(true),
-        notifyOnQuestion: z.boolean().default(true),
         sidebarShortcut: z.string().default('Ctrl+B'),
         rightbarShortcut: z.string().default('Ctrl+Alt+B'),
         terminalShortcut: z.string().default('Ctrl+/'),
