@@ -56,10 +56,13 @@ slot; the conversation column stays put.
   (GitHub / arXiv / StackExchange / HN), then the general ones (Tavily keyless → Bing →
   Sogou) with automatic failover; toggle and result count via the settings card
 - **Session monitor** (on by default): after a turn ends in a retryable error (429 etc.)
-  it waits and sends "continue" automatically (capped consecutive retries); when the
-  streamed output repeats itself (a loop symptom) it stops the turn and retries; a
-  banner above the composer shows the pending action and can cancel it; only the
-  currently open session is watched
+  it waits and sends "continue" automatically (capped consecutive retries) — every
+  session is watched, so it keeps going while the page is in the background; only the
+  failure that actually ended that turn counts, so a stale 429 left over from a turn
+  that finished (or one you stopped by hand) is never continued; when the streamed
+  output repeats itself (a loop symptom) it stops the turn and retries (that part only
+  applies to the currently open session); a banner above the composer shows the pending
+  action and can cancel it
 - **Session notifications** (on by default): a desktop notification when a turn finishes,
   or the agent asks a question / awaits tool approval / submits a plan for review
   (browser Notification API; click it to return to that session) — fires while the page
