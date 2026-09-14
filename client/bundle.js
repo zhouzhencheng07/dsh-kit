@@ -6721,6 +6721,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 行动作从「结束」变「关闭」=仅从显示移除；关闭记录与终态清单都是页面
       // 会话内存态——刷新/重启不保留（终态任务本来就只活在宿主进程内存里）。
       const [dismissed, setDismissed] = react.useState(() => new Set());
+      // 本页已关闭的任务：关闭后迟到的轮询响应不再把正文写回来（见 dismissJob）
+      const closed = react.useRef(new Set());
       const doneFetched = react.useRef(new Set()); // 终态且已成功拉过输出 → 不再轮询（终态无新量）
       // 每个任务下一次要带的绝对偏移：本页面自持（宿主不记面板位置），刷新即回到 0
       // 从保留窗口头重读，多标签页各带各的偏移互不瓜分。
@@ -6770,7 +6772,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           )
             .then((res) => res.json().catch(() => null))
             .then((body) => {
-              if (disposed) return;
+              if (disposed || closed.current.has(id)) return;
               if (!body || !body.job) {
                 setOutputs((prev) => ({ ...prev, [id]: jobsOutputMerge(prev[id], null, "HTTP") }));
                 return;
@@ -6781,7 +6783,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               if (st === "completed" || st === "killed" || st === "failed") doneFetched.current.add(id);
             })
             .catch(() => {
-              if (!disposed) setOutputs((prev) => ({ ...prev, [id]: jobsOutputMerge(prev[id], null, "network") }));
+              if (!disposed && !closed.current.has(id)) setOutputs((prev) => ({ ...prev, [id]: jobsOutputMerge(prev[id], null, "network") }));
             });
         };
         const tick = () => {
@@ -6809,6 +6811,25 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         } finally {
           setKilling(null);
         }
+      };
+
+      /**
+       * 「关闭」= 只从本页显示移除：宿主那边记录与保留窗口照旧（刷新后行会回来、输出仍能重读），
+       * 但本页为它攒的正文、偏移与吸底状态要一并丢掉——关掉的行不该继续占着页面内存，
+       * 也免得迟到的轮询响应把正文写回来（closed 里记一笔）。
+       */
+      const dismissJob = (id) => {
+        closed.current.add(id);
+        delete offsets.current[id];
+        delete stickBottom.current[id];
+        doneFetched.current.delete(id);
+        setOutputs((prev) => {
+          if (prev[id] === undefined) return prev;
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+        setDismissed((prev) => new Set(prev).add(id));
       };
 
       // 让位布局（body 类/宽度/拖拽）由右侧标签页容器统一负责，本组件只管内容。
@@ -6874,7 +6895,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                                     type: "button",
                                     className: "dshk-jobs-btn",
                                     title: t("jobsRowCloseHint"),
-                                    onClick: () => setDismissed((prev) => new Set(prev).add(job.id)),
+                                    onClick: () => dismissJob(job.id),
                                     children: t("jobsRowClose"),
                                   })
                                 : jsxRuntime.jsx("button", {

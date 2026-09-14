@@ -347,6 +347,13 @@ const killBtns = callLog.filter((c) => (c[0] === "jsx") && c[2] && (c[2].childre
 const doneOutBlocks = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-jobs-output").length;
 check("JobsPanel 终态行保留在列且标 data-done（1 行）", doneRows === 1);
 check("JobsPanel 终态动作是关闭、运行中仍是结束", closeBtn && killBtns === 1);
+// 「关闭」回调要能真的跑（清本页正文/偏移/吸底状态 + 记进已关闭集合），不该在渲染桩下炸
+{
+  const closeNode = callLog.find((c) => c[0] === "jsx" && c[2] && (c[2].children === "Close" || c[2].children === "关闭"));
+  let threw = null;
+  try { closeNode[2].onClick(); } catch (error) { threw = String(error); }
+  check("JobsPanel 关闭回调可执行（清本页残留不抛）", threw === null);
+}
 check("JobsPanel 终态行输出块仍在（2 行 2 输出块）", doneOutBlocks === 2);
 // 输出合并规则（页面自持偏移：正文增量追加、截断标记一旦出现就留存、读失败不清空已见进度）
 let outMerge = comps.jobsOutputMerge(undefined, { text: "a", next: 4, truncated: false }, null);
