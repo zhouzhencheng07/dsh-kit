@@ -60,12 +60,14 @@ slot; the conversation column stays put.
   streamed output repeats itself (a loop symptom) it stops the turn and retries; a
   banner above the composer shows the pending action and can cancel it; only the
   currently open session is watched
-- **Session notifications** (on by default): a desktop notification when a turn finishes
-  or the agent asks a question / awaits tool approval (browser Notification API; click it
-  to return to that session) — fires while the page sits in a background tab or another
-  window, or when the event belongs to a session you are not looking at; silent while you
-  are watching that very session. Permission is requested from the settings card (without
-  it an unread count is shown in the tab title instead)
+- **Session notifications** (on by default): a desktop notification when a turn finishes,
+  or the agent asks a question / awaits tool approval / submits a plan for review
+  (browser Notification API; click it to return to that session) — fires while the page
+  sits in a background tab or another window, or when the event belongs to a session you
+  are not looking at; silent while you are watching that very session. Auto-continue
+  retries never report a bogus "finished" (you are told only once it really stops).
+  Permission is requested from the settings card (without it an unread count is shown in
+  the tab title instead)
 - **Settings card**: dsh-kit config card — per-feature switches, shortcut
   customization (terminal / file tree / source control / knowledge base / both
   sidebars), search result count, max file tabs, vault directory, monitor parameters,
