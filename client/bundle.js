@@ -6701,6 +6701,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       };
     }
 
+    /**
+     * 输出框是否贴着底。留 24px 容差：行高与亚像素误差内仍算贴底，吸底不该因为差几像素
+     * 就悄悄停掉——判据只在"用户确实往上翻了"时才转假。
+     */
+    function jobsAtBottom(el) {
+      return el.scrollHeight - el.scrollTop - el.clientHeight <= 24;
+    }
+
     function JobsPanel(props) {
       const useSessions = props && typeof props.useSessions === "function" ? props.useSessions : null;
       const current = useSessions ? useSessions((s) => s.current) : undefined;
@@ -6717,6 +6725,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 每个任务下一次要带的绝对偏移：本页面自持（宿主不记面板位置），刷新即回到 0
       // 从保留窗口头重读，多标签页各带各的偏移互不瓜分。
       const offsets = react.useRef({});
+      // 输出框吸底：只在"用户没往上翻"时把新内容顶到最底（默认吸底，含刷新后的首帧
+      // ——看进度要的是最新几行）；上翻查看历史期间不动视口，滚回底部即自动恢复。
+      const outRefs = react.useRef({});
+      const stickBottom = react.useRef({});
       const isLive = (j) => j.status === "running" || j.status === "stopping";
       const shownOrdered = Array.isArray(jobs)
         ? [...jobs.filter((j) => !dismissed.has(j.id) && isLive(j)), ...jobs.filter((j) => !dismissed.has(j.id) && !isLive(j))]
@@ -6729,6 +6741,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const timer = setInterval(() => setNow(Date.now()), 1000);
         return () => clearInterval(timer);
       }, [live.length]);
+
+      // 吸底在绘制前生效（布局阶段写 scrollTop，避免新内容先闪在顶部再被拽下去）。
+      // 每次渲染都跑：时长每秒一跳也会渲染，但对已经贴底的框写同一个 scrollTop 是无操作。
+      react.useLayoutEffect(() => {
+        for (const job of shownOrdered) {
+          if (stickBottom.current[job.id] === false) continue;
+          const el = outRefs.current[job.id];
+          if (el) el.scrollTop = el.scrollHeight;
+        }
+      });
 
       // 输出轮询：显示中且未拉到终态的任务各每秒拉一次（输出
       // 常显不再要「输出」按钮）。拉到终态即标记 doneFetched 停拉——终态没有
@@ -6869,6 +6891,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                       }),
                       jsxRuntime.jsx("div", {
                         className: "dshk-jobs-output",
+                        ref: (el) => {
+                          if (el) outRefs.current[job.id] = el;
+                          else delete outRefs.current[job.id];
+                        },
+                        onScroll: (event) => {
+                          stickBottom.current[job.id] = jobsAtBottom(event.currentTarget);
+                        },
                         children:
                           out && out.error
                             ? tf("jobsOutputTransient", { error: out.error })
