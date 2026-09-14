@@ -2618,9 +2618,10 @@ export async function apply(ctx) {
             // 浏览器半边「任务」面板（运行中任务 + 结束 + 常显输出）的数据源是官方
             // session/jobs 推送（只带元数据，无输出正文）；这里补两个操作口：
             //   1) POST /dsh-kit/jobs/kill    body {sessionId, jobId} —— 结束任务
-            //   2) GET  /dsh-kit/jobs/output?sessionId=&jobId= —— 增量读输出
+            //   2) GET  /dsh-kit/jobs/output?sessionId=&jobId=&offset= —— 按偏移读输出
             // 输出读取走 job-tee（src/job-tee.ts）：底层 readOutput 降级为取新块进
-            // 公共 buffer，面板与模型侧 job_output 各持独立游标切片，互不抢量。
+            // 公共 buffer，模型侧 job_output 语义不变；面板侧按调用方给的绝对偏移切片，
+            // 偏移由浏览器自持——刷新页面、多开标签页各读各的，宿主不记面板位置。
             // 身份语义（如实记）：caller 由请求参数 sessionId 反查 agents 注册表得到，
             // 报得出所属会话即可操作其任务——并非真正的调用方鉴权。定位是「面板只操作
             // 当前会话的后台任务」的约定门（越界任务仍然 kill/output 不出），守住非浏览器
@@ -2701,6 +2702,8 @@ export async function apply(ctx) {
                     const url = new URL(req.url ?? '/', 'http://dsh-kit.local');
                     const sessionId = url.searchParams.get('sessionId') ?? '';
                     const jobId = url.searchParams.get('jobId') ?? '';
+                    const offsetRaw = url.searchParams.get('offset');
+                    const offset = offsetRaw === null ? 0 : Number(offsetRaw);
                     if (sessionId === '' || jobId === '') {
                         json(400, { error: '需要 sessionId 与 jobId' });
                         return;
@@ -2715,24 +2718,27 @@ export async function apply(ctx) {
                         return;
                     }
                     try {
-                        // 面板读取走 job-tee 的独立游标（panelReadJobOutput）：底层 readOutput
-                        // 被降级为"取新块进公共 buffer"，面板与模型侧 job_output 各切各的，
-                        // 谁也不抢谁的增量。get 提供与 read 相同的存在性/权限把关（无副作用）。
+                        // 面板读取走 job-tee 的偏移切片（panelReadJobOutput）：底层 readOutput 被
+                        // 降级为"取新块进公共 buffer"，模型侧 job_output 照旧拿自己的增量。offset
+                        // 缺省 0 = 从保留窗口头看全量；响应回 base/next/truncated，客户端拿 next
+                        // 当下一次的 offset。get 提供与 read 相同的存在性/权限把关（无副作用）。
                         const snapshot = jobsRegistry.get(jobId, caller);
+                        const meta = {
+                            id: snapshot.id,
+                            kind: snapshot.kind,
+                            label: snapshot.label,
+                            status: snapshot.status,
+                            ...(snapshot.detail !== undefined ? { detail: snapshot.detail } : {}),
+                            startedAt: snapshot.startedAt,
+                            ...(snapshot.finishedAt !== undefined ? { finishedAt: snapshot.finishedAt } : {}),
+                        };
                         const job = jobsRegistry.store?.get(jobId);
-                        const text = job !== undefined ? panelReadJobOutput(job) : jobsRegistry.read(jobId, caller).text;
-                        json(200, {
-                            text,
-                            job: {
-                                id: snapshot.id,
-                                kind: snapshot.kind,
-                                label: snapshot.label,
-                                status: snapshot.status,
-                                ...(snapshot.detail !== undefined ? { detail: snapshot.detail } : {}),
-                                startedAt: snapshot.startedAt,
-                                ...(snapshot.finishedAt !== undefined ? { finishedAt: snapshot.finishedAt } : {}),
-                            },
-                        });
+                        // 记录不在 registry.store（宿主换了实现）：回退官方 read 的增量语义，next 固定 0
+                        // 让客户端始终以偏移 0 请求——等价于"本端点不支持偏移"。
+                        const win = job !== undefined
+                            ? panelReadJobOutput(job, offset)
+                            : { text: jobsRegistry.read(jobId, caller).text, base: 0, next: 0, truncated: false };
+                        json(200, { text: win.text, base: win.base, next: win.next, truncated: win.truncated, job: meta });
                     }
                     catch (error) {
                         json(404, { error: String(error instanceof Error ? error.message : error) });
