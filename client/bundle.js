@@ -8564,12 +8564,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // ─────────── 会话通知（回合收尾 / agent 提问）───────────
     // 页面不在前台、或事件不属于当前打开的会话时弹一条桌面通知（浏览器
     // Notification API）；未授权 / 非安全上下文（手机走局域网 http）退标题闪烁。
-    // 纯浏览器端，宿主只提供 settings 字段。两个数据源都是官方面：
-    //   列表沿 ← sessions.list 快照的 running（订阅式而非轮询：后台标签的定时器
-    //     被浏览器节流到分钟级，而 WS 推送不受影响）；
-    //   待回应 ← uiSession.pendingInteractions 快照（官方 question / plan-review /
-    //     approval 各域 publish 的 Session 级待回应，含未打开的会话）。
-    // 抑制规则见 notifyDiffCore；页面完全关掉时浏览器端无从运行，无通知可言。
+    // 纯浏览器端，宿主只提供 settings 字段。提问与完成的观察口不同：
+    //   回合收尾 ← sessions.list 快照的 running（订阅式而非轮询：后台标签的定时器
+    //     被浏览器节流到分钟级，而宿主的推送不受影响）；
+    //   提问/批准 ← 旁听官方 remote 瀑布（user-questions|approval/request）——
+    //     官方 UI 只在会话「上台」时才注册待回应，后台会话的请求在它那里是空档，
+    //     本插件挂在根 ctx 上能收到全部会话的请求（会话身份从事件 ctx 的 scope 取）；
+    //     官方待回应投影（uiSession.pendingInteractions）只作补充口存在——两者是
+    //     同一次请求的两个观察口，谁先看到都能提醒，去重见 notifySeenRequests。
+    // 抑制规则见 notifyWanted；页面完全关掉时浏览器端无从运行，无通知可言。
     const notifyState = {
       /** sessionId -> 上次已知 running（沿检测基线；首帧只播种不发通知） */
       running: new Map(),
@@ -8581,6 +8584,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       flashCount: 0,
       flashWatch: null,
     };
+    /** 事件路径已处置过的提问请求（key 用 questions 数组——待回应投影里存的是
+     *  同一个引用，据此让两条观察口只提醒一次）。批准请求没有共用引用可用，靠
+     *  通知 tag 由浏览器归并 */
+    const notifySeenRequests = new WeakSet();
     const NOTIFY_BODY_MAX = 140; // 提问正文截断长度：桌面通知两行即满，长了被裁
     const NOTIFY_FLASH_RE = /^\(\d+\) /; // 闪烁前缀：复原时按它剥掉，不存旧标题
 
@@ -8603,25 +8610,26 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return notifyClip(text !== "" ? text : t("notifyQuestionBody"), NOTIFY_BODY_MAX);
     }
 
+    /** 值不值得打扰：总开关 + 分类开关 + 不是「人正看着这个会话」（页面可见且聚焦、
+     *  事件又正是当前会话时，官方界面自己会说）。完成沿与提问事件共用这一条判据 */
+    function notifyWanted(cfg, sessionId, kind, current, foreground) {
+      if (!cfg.notifyEnabled) return false;
+      if (kind === "complete" ? !cfg.notifyOnComplete : !cfg.notifyOnQuestion) return false;
+      return !(foreground === true && sessionId === current);
+    }
+
     /**
      * 通知判定核心（依赖注入，render-check 直测）：把列表快照与待回应表投影成
-     * 应发通知，顺带把沿写回 state。抑制：功能关；页面可见且聚焦、且事件就是
-     * 当前正看的那个会话（人就在跟前，官方界面自己会说）；子会话（导航细节，
-     * 属噪音）；首帧播种。
-     * @param input {ids,byId,current,foreground,pending:Map<sessionId,interaction>}
+     * 应发通知，顺带把沿写回 state。抑制：见 notifyWanted；子会话（导航细节，
+     * 属噪音）与首帧播种也不发。
+     * @param input {ids,byId,current,foreground,pending:Map<sessionId,interaction>,seen:WeakSet}
      * @returns [{kind:"complete"|"question"|"approval", sessionId, title, body?}]
      */
     function notifyDiffCore(state, input, cfg) {
       const events = [];
       const byId = input.byId ?? {};
       const foreground = input.foreground === true;
-      /** 事件是否值得打扰：总开关 + 分类开关 + 不是「人正看着这个会话」。状态照常
-       *  记账（沿与待回应 key 都写回），所以关掉期间的动静不会在打开后补发 */
-      const wanted = (sessionId, kind) => {
-        if (!cfg.notifyEnabled) return false;
-        if (kind === "complete" ? !cfg.notifyOnComplete : !cfg.notifyOnQuestion) return false;
-        return !(foreground && sessionId === input.current);
-      };
+      const wanted = (sessionId, kind) => notifyWanted(cfg, sessionId, kind, input.current, foreground);
       const titleOf = (id) => byId[id]?.displayTitle ?? id;
       const seen = new Set();
       for (const id of input.ids ?? []) {
@@ -8635,12 +8643,15 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (wanted(id, "complete")) events.push({ kind: "complete", sessionId: id, title: titleOf(id) });
       }
       for (const id of [...state.running.keys()]) if (!seen.has(id)) state.running.delete(id);
-      // 待回应：key 变化即新请求（一个会话同时只投影一个待回应）
+      // 待回应：key 变化即新请求（一个会话同时只投影一个待回应）。事件路径已经
+      // 处置过的那次请求直接跳过——同一次提问被两条观察口各报一次只算一次
       const pending = input.pending instanceof Map ? input.pending : new Map();
+      const seenRequests = input.seen instanceof WeakSet ? input.seen : null;
       const pendingSeen = new Set();
       for (const [id, interaction] of pending) {
         if (!interaction || typeof interaction.key !== "string") continue;
         pendingSeen.add(id);
+        if (seenRequests && seenRequests.has(interaction.questions ?? interaction)) continue;
         if (state.pendingKey.get(id) === interaction.key) continue;
         state.pendingKey.set(id, interaction.key);
         if (!state.primed) continue;
@@ -8766,10 +8777,49 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }
       const events = notifyDiffCore(
         notifyState,
-        { ids: list.ids, byId: list.byId, current: list.current, foreground: notifyForeground(), pending },
+        { ids: list.ids, byId: list.byId, current: list.current, foreground: notifyForeground(), pending, seen: notifySeenRequests },
         cfg,
       );
       for (const ev of events) notifyDeliver(sessions, ev);
+    }
+
+    /** 事件路径投递（提问 / 批准）：会话名从列表快照取，抑制与完成沿同一套判据 */
+    function notifyEventDeliver(sessions, kind, sessionId, request) {
+      let cfg;
+      let list;
+      try {
+        cfg = cfgFromSnapshot(getCfgSnapshot());
+        list = sessions.list.getSnapshot();
+      } catch {
+        return; // 服务异常：放弃本次（作答链路不受影响）
+      }
+      if (!notifyWanted(cfg, sessionId, kind, list.current, notifyForeground())) return;
+      notifyDeliver(sessions, {
+        kind,
+        sessionId,
+        title: list.byId?.[sessionId]?.displayTitle ?? sessionId,
+        body: notifyBodyOf(request, kind),
+      });
+    }
+
+    /** 官方 remote 瀑布的旁听者（提问 / 批准各一条）：**恒 return next()**——作答仍
+     *  归官方 UI，插件只借这条事件补上官方接不到的那一半：官方 UI 只在会话「上台」
+     *  时才注册待回应，后台会话的请求在它那里是空档，而根 ctx 上的监听器能收到
+     *  全部会话的请求（会话身份沿用官方取法：事件 ctx 的 scope）。 */
+    function notifyRequestListener(sessions, kind) {
+      return function (request, next) {
+        try {
+          const sessionId = sessions.scopeOf(this);
+          if (sessionId !== undefined) {
+            // 先记账再投递：官方待回应投影稍后也会看到这次请求，别提醒两遍
+            notifySeenRequests.add(kind === "question" ? request.questions : request);
+            notifyEventDeliver(sessions, kind, sessionId, request);
+          }
+        } catch {
+          /* 旁听失败不影响作答链路 */
+        }
+        return next();
+      };
     }
 
     function VaultView() {
@@ -12124,6 +12174,17 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 标题闪烁复原（未授权时的兜底标记）：回窗口即清
       document.addEventListener("visibilitychange", notifyMaybeUnflash);
       window.addEventListener("focus", notifyMaybeUnflash);
+      // 提问 / 批准事件：旁听官方 remote 瀑布（根 ctx 上收全部会话的请求，含后台
+      // 会话——官方 UI 只在会话上台时接管，那半边它接不到）。remote 服务缺位
+      // （老宿主）时静默降级：只剩完成通知与官方待回应投影那一半
+      ctx.inject(["remote", "sessions"], (rctx) => {
+        try {
+          rctx.remote.$on("user-questions/request", notifyRequestListener(rctx.sessions, "question"));
+          rctx.remote.$on("approval/request", notifyRequestListener(rctx.sessions, "approval"));
+        } catch {
+          /* 缺 $on（宿主形态不同）：静默降级为只剩完成通知那一半 */
+        }
+      });
       injectStyles();
       // 插件配置数据通道：官方 settings scope 绑定本插件命名空间（宿主半边
       // 已按 ctx.settings.installSection 注册 dsh-kit）。绑定失败（老宿主缺 settingsScope）

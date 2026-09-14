@@ -1363,6 +1363,23 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
   comps.notifyDiffCore(st8, listOf(rows8, null), cfgAll);
   comps.notifyDiffCore(st8, { ids: [], byId: {}, current: undefined }, cfgAll);
   check("N 会话消失后状态回收", !st8.running.has("n11") && !st8.pendingKey.has("n11"));
+
+  // —— 两个观察口去重：remote 瀑布事件路径（seen 里记的是 questions 数组，官方
+  //    待回应投影存的是同一个引用）先处置过的请求，投影那一路不能再提醒一遍 ——
+  const st9 = freshState();
+  const rows9 = [{ id: "n12", running: true }];
+  const seenSet = new WeakSet();
+  const qArr = [{ question: "去不去？" }];
+  seenSet.add(qArr);
+  comps.notifyDiffCore(st9, listOf(rows9, null), cfgAll); // 首帧播种
+  check(
+    "N 事件路径已处置的提问，投影路径不重复提醒",
+    comps.notifyDiffCore(st9, { ...listOf(rows9, null), pending: pendingOf("n12", { key: "question:20", kind: "question", questions: qArr }), seen: seenSet }, cfgAll).length === 0,
+  );
+  check(
+    "N seen 只挡同一次请求（另一次提问照发）",
+    comps.notifyDiffCore(st9, { ...listOf(rows9, null), pending: pendingOf("n12", { key: "question:21", kind: "question", questions: [{ question: "另一问" }] }), seen: seenSet }, cfgAll).length === 1,
+  );
 }
 
 // 10e) 阅读位置记忆（F2）：按路径存取 + 隐藏容器不记（display:none 时 scrollTop
