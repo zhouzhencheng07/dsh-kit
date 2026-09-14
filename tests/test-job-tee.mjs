@@ -4,7 +4,7 @@
 // 各取各的：模型语义与原版逐位等价，面板从保留窗口里按偏移取——任何一方读取都不得让
 // 对方丢量，且刷新页面 / 多开标签页 = 换一个偏移重读，读者之间零耦合。
 // 用法（dsh-kit 根）：node tests\test-job-tee.mjs
-import { installJobTee, panelReadJobOutput, teeRegistryJobs, JOB_TEE_BUFFER_CAP } from '../src/job-tee.ts'
+import { installJobTee, panelReadJobOutput, teeRegistryJobs, releaseJobWindow, JOB_TEE_BUFFER_CAP } from '../src/job-tee.ts'
 
 let failed = 0
 const check = (label, cond) => {
@@ -176,6 +176,50 @@ function makeLiveJob() {
   check('落后于窗口的读者：从窗口头给起并标记截断', behind.truncated === true && behind.text.length === st2.buffer.length)
   const modelTail = big.readOutput()
   check('模型读：拿到保留尾巴且不超 CAP', modelTail.length > 0 && modelTail.length <= JOB_TEE_BUFFER_CAP && modelTail.includes('39|'))
+}
+
+// 11) releaseJobWindow（面板「关闭」）：窗口内容真的丢掉，此后任何读者都读到空
+{
+  const { job, emit } = makeLiveJob()
+  const st = installJobTee(job)
+  emit('a'.repeat(4096) + '\n')
+  panelReadJobOutput(job)
+  check('释放前：窗口里有内容', st.buffer.length > 4000)
+  const dropped = releaseJobWindow(job)
+  check('释放：确实丢掉了已缓存内容（返回 true）', dropped === true)
+  check('释放：缓冲清空、模型游标归零（内存归还）', st.buffer === '' && st.modelCursor === 0)
+  const after = panelReadJobOutput(job)
+  check('释放后：面板读到空窗并带 released 标记', after.text === '' && after.released === true)
+  check('释放后：老偏移的读者同样读空', panelReadJobOutput(job, 10).text === '' && panelReadJobOutput(job, 10).released === true)
+  check('释放后：模型侧 job_output 读到空', job.readOutput() === '')
+  emit('late\n')
+  check('释放后：新产出也不再收（窗口不再复活）', st.buffer === '' && panelReadJobOutput(job).text === '' && job.readOutput() === '')
+  check('重复释放：幂等且不报错', releaseJobWindow(job) === false)
+}
+
+// 12) 释放只作用于那一个任务，不碰别人的窗口
+{
+  const a = makeLiveJob()
+  const b = makeLiveJob()
+  installJobTee(a.job)
+  installJobTee(b.job)
+  a.emit('A1\n')
+  b.emit('B1\n')
+  panelReadJobOutput(a.job)
+  panelReadJobOutput(b.job)
+  releaseJobWindow(a.job)
+  check('释放 A 后：A 空、B 仍能读到自己的全量', panelReadJobOutput(a.job).text === '' && panelReadJobOutput(b.job).text === 'B1\n')
+  check('释放 A 后：B 的模型侧照旧拿增量', b.job.readOutput() === 'B1\n')
+}
+
+// 13) 从未被读过的任务也能释放：之后第一次读取不会重新攒出一份
+{
+  const { job, emit } = makeLiveJob()
+  emit('history\n')
+  releaseJobWindow(job)
+  const win = panelReadJobOutput(job)
+  check('未读过的任务释放后首读：空窗 + released', win.text === '' && win.released === true)
+  check('未读过的任务释放后：模型侧也读空', job.readOutput() === '')
 }
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAIL`)

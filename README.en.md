@@ -41,7 +41,8 @@ slot; the conversation column stays put.
   session's running background jobs, with output viewing and job termination
   (official `job_output`/`job_kill` semantics). Output stays visible per job inside a
   retained window (latest 2MB), so a page refresh or a second tab re-reads it instead of
-  losing it, and never steals output from the model's `job_output`
+  losing it, and never steals output from the model's `job_output`; closing a settled row
+  removes it and releases that window (a reload then shows the row with no content)
 - **Built-in browser** (right-dock Browser tab, on by default): the agent drives the
   system Edge via **7** `browser_*` tools (vendored playwright-core, dedicated
   persistent profile) — snapshot → act → assert GUI-testing loops, screenshots

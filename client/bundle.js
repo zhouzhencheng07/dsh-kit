@@ -1144,10 +1144,12 @@ window.__ModuleLoader__.load({
       jobsKill: "结束",
       jobsKillHint: "结束此任务（等同 job_kill）",
       jobsRowClose: "关闭",
-      jobsRowCloseHint: "从列表移除（任务已结束，仅收起显示）",
+      jobsRowCloseHint: "从列表移除并释放宿主保留的输出（此后刷新也不再显示内容）",
       jobsKillDone: "已请求结束",
       jobsKillFail: "结束失败：{error}",
+      jobsReleaseFail: "释放输出失败：{error}",
       jobsOutputEmpty: "（暂无输出）",
+      jobsOutputReleased: "（输出已释放）",
       jobsOutputTruncated: "（更早的输出已丢弃）",
       jobsOutputTransient: "输出读取失败：{error}",
       schedTab: "日程",
@@ -1615,7 +1617,9 @@ window.__ModuleLoader__.load({
       jobsRowCloseHint: "Remove from list (job has finished; display only)",
       jobsKillDone: "Stop requested",
       jobsKillFail: "Failed to stop: {error}",
+      jobsReleaseFail: "Failed to release output: {error}",
       jobsOutputEmpty: "(no output yet)",
+      jobsOutputReleased: "(output released)",
       jobsOutputTruncated: "(earlier output dropped)",
       jobsOutputTransient: "Failed to read output: {error}",
       schedTab: "Schedule",
@@ -6697,6 +6701,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return {
         text: (base.text ?? "") + (body && typeof body.text === "string" ? body.text : ""),
         truncated: base.truncated === true || (body != null && body.truncated === true),
+        released: base.released === true || (body != null && body.released === true),
         error: error ?? null,
       };
     }
@@ -6814,9 +6819,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       };
 
       /**
-       * 「关闭」= 只从本页显示移除：宿主那边记录与保留窗口照旧（刷新后行会回来、输出仍能重读），
-       * 但本页为它攒的正文、偏移与吸底状态要一并丢掉——关掉的行不该继续占着页面内存，
-       * 也免得迟到的轮询响应把正文写回来（closed 里记一笔）。
+       * 「关闭」= 从本页显示移除 + 让宿主丢掉为这个任务保留的输出窗口（内存随即归还）。
+       * 释放不可恢复：那份历史是我们为常显/可重读留的，关掉即表示不再需要——刷新页面后
+       * 该行会随官方记录回来，但内容显示「输出已释放」。本页攒的正文/偏移/吸底状态一并丢掉，
+       * 并记进 closed 挡住迟到的轮询写回。
        */
       const dismissJob = (id) => {
         closed.current.add(id);
@@ -6830,6 +6836,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           return next;
         });
         setDismissed((prev) => new Set(prev).add(id));
+        kitPostJson("/dsh-kit/jobs/release", { sessionId: current, jobId: id }).catch((error) => {
+          flashToast(tf("jobsReleaseFail", { error: String(error?.message ?? error) }));
+        });
       };
 
       // 让位布局（body 类/宽度/拖拽）由右侧标签页容器统一负责，本组件只管内容。
@@ -6922,16 +6931,18 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                         children:
                           out && out.error
                             ? tf("jobsOutputTransient", { error: out.error })
-                            : jsxRuntime.jsxs(jsxRuntime.Fragment, {
-                                children: [
-                                  out && out.truncated === true
-                                    ? jsxRuntime.jsx("div", { className: "dshk-jobs-outnote", children: t("jobsOutputTruncated") })
-                                    : null,
-                                  jsxRuntime.jsx("span", {
-                                    children: out && out.text && out.text.length > 0 ? out.text : t("jobsOutputEmpty"),
-                                  }),
-                                ],
-                              }),
+                            : out && out.released === true
+                              ? t("jobsOutputReleased")
+                              : jsxRuntime.jsxs(jsxRuntime.Fragment, {
+                                  children: [
+                                    out && out.truncated === true
+                                      ? jsxRuntime.jsx("div", { className: "dshk-jobs-outnote", children: t("jobsOutputTruncated") })
+                                      : null,
+                                    jsxRuntime.jsx("span", {
+                                      children: out && out.text && out.text.length > 0 ? out.text : t("jobsOutputEmpty"),
+                                    }),
+                                  ],
+                                }),
                       }),
                     ],
                   }, job.id);
