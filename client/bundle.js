@@ -443,8 +443,6 @@ window.__ModuleLoader__.load({
       monitorMaxAuto: 5,
       monitorRepeatThreshold: 3,
       notifyEnabled: true,
-      notifyOnComplete: true,
-      notifyOnQuestion: true,
       vaultEnabled: false,
       vaultRoot: "",
       terminalShortcut: "Ctrl+/",
@@ -529,8 +527,6 @@ window.__ModuleLoader__.load({
             ? v.monitorRepeatThreshold
             : CFG_DEFAULTS.monitorRepeatThreshold,
         notifyEnabled: v.notifyEnabled !== false,
-        notifyOnComplete: v.notifyOnComplete !== false,
-        notifyOnQuestion: v.notifyOnQuestion !== false,
         vaultEnabled: v.vaultEnabled === true,
         vaultRoot: typeof v.vaultRoot === "string" ? v.vaultRoot : "",
         terminalShortcut:
@@ -1066,11 +1062,7 @@ window.__ModuleLoader__.load({
       monitorBgItem: "{title}：{sec} 秒后自动继续（第 {n}/{max} 次）",
       monitorBgCapped: "{title}：已连续自动继续 {max} 次，暂停（正常完成一轮后恢复）",
       cfgNotifyEnabled: "会话通知",
-      cfgNotifyEnabledHint: "页面不在前台（或完成的不是当前会话）时弹桌面通知",
-      cfgNotifyOnComplete: "回合完成提醒",
-      cfgNotifyOnCompleteHint: "一轮回复收尾、或上下文压缩完成时提醒",
-      cfgNotifyOnQuestion: "提问/批准提醒",
-      cfgNotifyOnQuestionHint: "agent 提问、等你批准工具调用或提交计划待批时提醒",
+      cfgNotifyEnabledHint: "页面不在前台（或事件不属于当前会话）时弹桌面通知：回合完成 / 上下文压缩 / 提问待批",
       cfgNotifyPerm: "通知权限",
       cfgNotifyPermHintDefault: "浏览器还没授权：点右侧按钮并选「允许」（手机走局域网 http 时无桌面通知）",
       cfgNotifyPermHintGranted: "已授权：页面不在前台时弹系统通知，点击回到对应会话",
@@ -1517,11 +1509,7 @@ window.__ModuleLoader__.load({
       monitorBgItem: "{title}: auto-continue in {sec}s (attempt {n}/{max})",
       monitorBgCapped: "{title}: paused after {max} consecutive continues (resumes after one clean round)",
       cfgNotifyEnabled: "Session notifications",
-      cfgNotifyEnabledHint: "Desktop notification when a turn finishes or the agent asks, while the page is in the background",
-      cfgNotifyOnComplete: "Turn finished alert",
-      cfgNotifyOnCompleteHint: "Notify when a reply finishes or context compaction completes",
-      cfgNotifyOnQuestion: "Question / approval alert",
-      cfgNotifyOnQuestionHint: "Notify when the agent asks a question, awaits tool approval, or submits a plan for review",
+      cfgNotifyEnabledHint: "Desktop notification while the page is in the background: turn finished, context compacted, agent asking",
       cfgNotifyPerm: "Notification permission",
       cfgNotifyPermHintDefault: "Not granted yet: click the button and choose Allow (no desktop notifications over plain http on phones)",
       cfgNotifyPermHintGranted: "Granted: a system notification pops up while the page is in the background; click it to return to that session",
@@ -8679,8 +8667,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     //     请求，只是另成一类文案与正文取法（见 notifyKindOf）。官方待回应投影
     //     （uiSession.pendingInteractions）只作补充口存在——两者是同一次请求的两个
     //     观察口，谁先看到都能提醒，去重见 notifySeenRequests。
-    // 抑制规则见 notifyWanted（压缩归「完成」一类开关，无独立开关）；页面完全
-    // 关掉时浏览器端无从运行，无通知可言。
+    // 抑制规则见 notifyWanted（一个总开关管全部提醒，不分类配置）；页面完全关掉时
+    // 浏览器端无从运行，无通知可言。
     const notifyState = {
       /** sessionId -> 上次已知 running（沿检测基线；首帧只播种不发通知） */
       running: new Map(),
@@ -8740,11 +8728,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return notifyClip(text !== "" ? text : t("notifyQuestionBody"), NOTIFY_BODY_MAX);
     }
 
-    /** 值不值得打扰：总开关 + 分类开关 + 不是「人正看着这个会话」（页面可见且聚焦、
-     *  事件又正是当前会话时，官方界面自己会说）。完成沿与提问事件共用这一条判据 */
-    function notifyWanted(cfg, sessionId, kind, current, foreground) {
+    /** 值不值得打扰：总开关 + 不是「人正看着这个会话」（页面可见且聚焦、事件又正是
+     *  当前会话时，官方界面自己会说）。五类提醒共用这一条判据（不分类配置） */
+    function notifyWanted(cfg, sessionId, current, foreground) {
       if (!cfg.notifyEnabled) return false;
-      if (kind === "complete" ? !cfg.notifyOnComplete : !cfg.notifyOnQuestion) return false;
       return !(foreground === true && sessionId === current);
     }
 
@@ -8759,7 +8746,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       const events = [];
       const byId = input.byId ?? {};
       const foreground = input.foreground === true;
-      const wanted = (sessionId, kind) => notifyWanted(cfg, sessionId, kind, input.current, foreground);
+      const wanted = (sessionId) => notifyWanted(cfg, sessionId, input.current, foreground);
       const titleOf = (id) => byId[id]?.displayTitle ?? id;
       const seen = new Set();
       for (const id of input.ids ?? []) {
@@ -8770,7 +8757,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         state.running.set(id, row.running === true);
         // 只认 true→false 的沿：首帧播种、仍在跑、子会话都不发
         if (!state.primed || was !== true || row.running === true || row.origin === "subagent") continue;
-        if (wanted(id, "complete")) events.push({ kind: "complete", sessionId: id, title: titleOf(id) });
+        if (wanted(id)) events.push({ kind: "complete", sessionId: id, title: titleOf(id) });
       }
       for (const id of [...state.running.keys()]) if (!seen.has(id)) state.running.delete(id);
       // 待回应：key 变化即新请求（一个会话同时只投影一个待回应）。事件路径已经
@@ -8786,7 +8773,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         state.pendingKey.set(id, interaction.key);
         if (!state.primed) continue;
         const kind = interaction.kind === "approval" ? "approval" : interaction.kind === "plan-review" ? "plan" : "question";
-        if (!wanted(id, kind)) continue;
+        if (!wanted(id)) continue;
         events.push({ kind, sessionId: id, title: titleOf(id), body: notifyBodyOf(interaction, kind) });
       }
       for (const id of [...state.pendingKey.keys()]) if (!pendingSeen.has(id)) state.pendingKey.delete(id);
@@ -8859,7 +8846,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         const data = event.data;
         if (!data || data.error) continue; // 失败的压缩不算完成（那个回合的失败另有报法）
         if (input.origin === "subagent") continue; // 子会话属导航噪音
-        if (!notifyWanted(cfg, id, "complete", input.current, input.foreground === true)) continue;
+        if (!notifyWanted(cfg, id, input.current, input.foreground === true)) continue;
         events.push({ kind: "compact", sessionId: id, title: input.title, body: notifyCompactBody(entries, data.compactionId) });
       }
       return events;
@@ -9064,7 +9051,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       } catch {
         return; // 服务异常：放弃本次（作答链路不受影响）
       }
-      if (!notifyWanted(cfg, sessionId, kind, list.current, notifyForeground())) return;
+      if (!notifyWanted(cfg, sessionId, list.current, notifyForeground())) return;
       notifyDeliver(sessions, {
         kind,
         sessionId,
@@ -11910,8 +11897,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { key: "monitorMaxAuto", kind: "number", min: 1, max: 10 },
       { key: "monitorRepeatThreshold", kind: "number", min: 2, max: 10 },
       { key: "notifyEnabled", kind: "bool" },
-      { key: "notifyOnComplete", kind: "bool" },
-      { key: "notifyOnQuestion", kind: "bool" },
       { key: "vaultEnabled", kind: "bool" },
       { key: "vaultRoot", kind: "text" },
       { key: "terminalShortcut", kind: "combo" },
@@ -11939,7 +11924,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { switchKey: "jobsEnabled", fields: [] },
       { switchKey: "browserEnabled", fields: [] },
       { switchKey: "monitorEnabled", fields: ["monitorWaitMs", "monitorMaxAuto", "monitorRepeatThreshold"] },
-      { switchKey: "notifyEnabled", fields: ["notifyOnComplete", "notifyOnQuestion"], permRow: true },
+      { switchKey: "notifyEnabled", fields: [], permRow: true },
       { switchKey: "chatOpenFilePreview", fields: [] },
       { switchKey: "chatOpenLinkInBrowser", fields: [] },
       { switchKey: "skillsPageEnabled", fields: [] },

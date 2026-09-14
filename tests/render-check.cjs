@@ -1401,7 +1401,7 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
     ),
     current,
   });
-  const cfgAll = { notifyEnabled: true, notifyOnComplete: true, notifyOnQuestion: true };
+  const cfgAll = { notifyEnabled: true };
   const pendingOf = (id, item) => new Map([[id, item]]);
 
   // —— 沿检测：首帧播种，收尾才发；同一快照重复读不重发 ——
@@ -1430,23 +1430,18 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
   const ev3 = comps.notifyDiffCore(st3, { ...listOf(rows3, "n3"), foreground: true }, cfgAll);
   check("N 前台但收尾的是另一个会话：照发", ev3.length === 1 && ev3[0].sessionId === "n4");
 
-  // —— 开关（关闭期间照常记沿，打开后不补发）与子会话 ——
+  // —— 开关（就一个总开关；关闭期间照常记沿，打开后不补发）与子会话 ——
   const st4 = freshState();
   const rows4 = [{ id: "n5", running: true }];
-  comps.notifyDiffCore(st4, listOf(rows4, null), cfgAll);
+  comps.notifyDiffCore(st4, listOf(rows4, null), { notifyEnabled: false });
   rows4[0].running = false;
-  check("N 完成提醒关掉即不发", comps.notifyDiffCore(st4, listOf(rows4, null), { ...cfgAll, notifyOnComplete: false }).length === 0);
+  check("N 总开关关闭：不发", comps.notifyDiffCore(st4, listOf(rows4, null), { notifyEnabled: false }).length === 0);
   check("N 关掉期间记下的沿不补发（重开也静默）", comps.notifyDiffCore(st4, listOf(rows4, null), cfgAll).length === 0);
   const st5 = freshState();
-  const rows5 = [{ id: "n6", running: true }];
-  comps.notifyDiffCore(st5, listOf(rows5, null), { ...cfgAll, notifyEnabled: false });
+  const rows5 = [{ id: "n6", running: true, origin: "subagent" }];
+  comps.notifyDiffCore(st5, listOf(rows5, null), cfgAll);
   rows5[0].running = false;
-  check("N 总开关关闭：不发且沿不补发", comps.notifyDiffCore(st5, listOf(rows5, null), { ...cfgAll, notifyEnabled: false }).length === 0 && comps.notifyDiffCore(st5, listOf(rows5, null), cfgAll).length === 0);
-  const st6 = freshState();
-  const rows6 = [{ id: "n7", running: true, origin: "subagent" }];
-  comps.notifyDiffCore(st6, listOf(rows6, null), cfgAll);
-  rows6[0].running = false;
-  check("N 子会话收尾不发（导航细节属噪音）", comps.notifyDiffCore(st6, listOf(rows6, null), cfgAll).length === 0);
+  check("N 子会话收尾不发（导航细节属噪音）", comps.notifyDiffCore(st5, listOf(rows5, null), cfgAll).length === 0);
 
   // —— 待回应：key 变化即新请求，正文取首问；同一请求只提醒一次 ——
   const st7 = freshState();
@@ -1465,7 +1460,7 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
     "N 同一请求不重复提醒",
     comps.notifyDiffCore(st7, { ...listOf(rows7, null), pending: pendingOf("n8", { key: "question:2", kind: "question", questions: [{ question: "选哪个方案？" }] }) }, cfgAll).length === 0,
   );
-  check("N 提问提醒关掉即不发", comps.notifyDiffCore(st7, { ...listOf(rows7, null), pending: pendingOf("n8", { key: "question:3", kind: "question", questions: [{ question: "又问？" }] }) }, { ...cfgAll, notifyOnQuestion: false }).length === 0);
+  check("N 提问提醒同受总开关门控", comps.notifyDiffCore(st7, { ...listOf(rows7, null), pending: pendingOf("n8", { key: "question:3", kind: "question", questions: [{ question: "又问？" }] }) }, { notifyEnabled: false }).length === 0);
   const ev8 = comps.notifyDiffCore(
     st7,
     { ...listOf(rows7, null), pending: pendingOf("n8", { key: "approval:1", kind: "approval", toolName: "pwsh", reason: "" }) },
@@ -1530,8 +1525,8 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
     comps.notifyDiffCore(st10, { ...listOf(rows10, null), pending: pendingOf("n13", { key: "question:31", kind: "plan-review", questions: [{ question: "批准吗？", detail: "没有标题的计划" }] }) }, cfgAll)[0]?.body === "批准吗？",
   );
   check(
-    "N 计划提醒同受提问开关门控",
-    comps.notifyDiffCore(st10, { ...listOf(rows10, null), pending: pendingOf("n13", { key: "question:32", kind: "plan-review", questions: [{ question: "x", detail: "# Y" }] }) }, { ...cfgAll, notifyOnQuestion: false }).length === 0,
+    "N 计划提醒同受总开关门控",
+    comps.notifyDiffCore(st10, { ...listOf(rows10, null), pending: pendingOf("n13", { key: "question:32", kind: "plan-review", questions: [{ question: "x", detail: "# Y" }] }) }, { notifyEnabled: false }).length === 0,
   );
 }
 
@@ -1602,7 +1597,7 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
 //      （刷新/重连/翻旧页不补报），失败与 prune 不算，按持久 seq 去重；
 //      正文取配对 compaction/summary 的被压规模
 {
-  const cfgAll = { notifyEnabled: true, notifyOnComplete: true, notifyOnQuestion: true };
+  const cfgAll = { notifyEnabled: true };
   const fresh = () => ({ compactions: new Map() });
   const evt = (seq, type, data) => ({ type: "event", event: { type, seq, time: seq, data } });
   const end = (seq, extra) => evt(seq, "compaction/end", { compactionId: `k${seq}`, turn: null, ...extra });
@@ -1640,8 +1635,7 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
   comps.notifyCompactionCore(st3, input({ change: appended([]) }), cfgAll);
   check("C 前台且是当前会话：不打扰", comps.notifyCompactionCore(st3, input({ entries: [end(31)], change: appended([end(31)]), current: "c1", foreground: true }), cfgAll).length === 0);
   check("C 前台但压缩的是另一个会话：照发", comps.notifyCompactionCore(st3, input({ sessionId: "c2", entries: [end(32)], change: appended([end(32)]), current: "c1", foreground: true }), cfgAll).length === 1);
-  check("C 完成提醒关掉即不发", comps.notifyCompactionCore(st3, input({ entries: [end(33)], change: appended([end(33)]) }), { ...cfgAll, notifyOnComplete: false }).length === 0);
-  check("C 总开关关掉即不发", comps.notifyCompactionCore(st3, input({ entries: [end(34)], change: appended([end(34)]) }), { ...cfgAll, notifyEnabled: false }).length === 0);
+  check("C 压缩提醒同受总开关门控", comps.notifyCompactionCore(st3, input({ entries: [end(33)], change: appended([end(33)]) }), { notifyEnabled: false }).length === 0);
   check("C 子会话压缩不发（导航细节属噪音）", comps.notifyCompactionCore(st3, input({ entries: [end(35)], change: appended([end(35)]), origin: "subagent" }), cfgAll).length === 0);
 
   // 重连重放（replace）与翻旧页（prepend）不报；之后落地的新压缩照报
