@@ -8153,13 +8153,22 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     //   续跑动作    ← binding.session.prompt([{"继续"}],"queue")（composer 同款
     //                 发送通道）；prompt 第一行同步清空 lastAgentError，同一条
     //                 失败天然不会重复触发。
-    // 判定：空闲（list running=false）+ 镜像 lastAgentError 匹配限流特征 + 该错
-    // 误文本未处置过（handledErr 记账去重——list 的 running 推送与错误广播到达
-    // 顺序无保证，沿驱动在沿时刻会读到未置位的镜像，实测踩过）。只认措辞不认
+    // 判定：空闲（list running=false）+ 镜像 lastAgentError 匹配限流特征 + 这次收尾
+    // 就是它造成的（新鲜）+ 未处置过（handledErr 记账去重）。只认措辞不认
     // body code——sensenova 的 429 形态不定（insufficient_quota/429001/
     // quota_exceeded_error 都见过，前者会被宿主误分类成 QUOTA 而不内部重试），
     // 稳定的只有 "429: " 前缀（宿主 formatProviderError 拼的 HTTP 状态）和限流
     // 措辞本身。不匹配的失败（AUTH/上下文超限等终态类）不自动续。
+    // 「新鲜」是这套判定的命门：镜像只在 prompt() 里清（宿主 client.js），回合正常
+    // 收尾、被用户手动停止都不清——镜像里躺着的 429 完全可能是上一轮的旧账。只看
+    // "空闲 + 有 429 文本"就续跑，会把已经做完的任务、被手动停下的任务再续一遍
+    // （实测踩过）。判据落在观察时序上：错误文本的首次出现时刻必须在本段空闲起点前
+    // MONITOR_ERR_WINDOW_MS 内（= 回合刚因它落地）；在镜像里躺过这个窗口的旧错误
+    // 一律不触发。页面打开时镜像里已有的错误按陈旧播种（errAt=0），刷新页面不会把
+    // 早已结束的任务补续一遍——代价是刷新后不再自动接续旧失败。
+    // 另有一道显式闸门：会话被「停止」过（官方停按钮与本插件的死循环打断都调
+    // session.cancel，见 monitorWrapCancel）之后落地的失败沿不续跑——429 与 abort
+    // 抢同一个回合时会留下一条看着很新鲜的失败沿，新鲜度判据挡不住它。
     // 计数：每会话独立，继续后一轮正常收尾（lastAgentError 为 null）
     // 即清零；连续续跑达 monitorMaxAuto 暂停（capped）。等待期到点时回合又跑起来
     // （用户手动介入）即放弃本次。
@@ -8170,6 +8179,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // 止当前回合，停止完成后发循环打断话术——检测→停→话术一条链，独立于续跑器。
     const MONITOR_TICK_MS = 2000; // 轮询周期：429 是分钟级窗口，2s 跟踪绰绰有余
     const MONITOR_RATE_LIMIT_RE = /\b429\b|rate.?limit|tpm\/rpm/i;
+    const MONITOR_ERR_WINDOW_MS = 6000; // 「失败即收尾」窗口（3 个 tick）：错误首见时刻早于
+    // 本段空闲起点这么多，说明回合不是因它结束的（旧账），不续跑
+    const MONITOR_ABORT_WINDOW_MS = 6000; // 「刚被停止」窗口：停止后落地的失败沿不续跑
+    const MONITOR_CANCEL_MARK = "__dshkMonitorCancel"; // cancel 包装标记（防重复包装）
     const MONITOR_SCAN_MS = 1000; // 扫描周期：检测延迟 1-2s；真实死循环以分钟计，绰绰有余
     const MONITOR_MIN_BLOCK = 8; // 重复块最短长度：放过短分隔符/标点（--- 、换行噪声）
     const MONITOR_MAX_BLOCK = 128; // 重复块最长扫描长度：兜住长句循环，扫描成本封顶
@@ -8191,8 +8204,40 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     };
     /** 每会话运行态（只在 tick 内读写）：running 上次已知位、continues 连续续跑
      *  计数、capped 暂停标记、plan 待发射续跑、handledErr 已处置的错误文本（去重
-     *  记账）、materialized 镜像是否已物化、title/max 失败时缓存的展示字段 */
+     *  记账）、materialized 镜像是否已物化、title/max 失败时缓存的展示字段；
+     *  errText/errAt = 镜像错误的观察记账（当前文本 + 首次出现时刻，0 表示陈旧或
+     *  首见播种），idleSince = 本段空闲的观察起点（0 = 正在跑），primed = 是否已过
+     *  首见播种 */
     const monitorSessions = new Map();
+    /** 各会话最近一次「被停止」的时刻（sessionId -> 毫秒）。停止是用户明确的
+     *  "别继续"：停止瞬间若正好有一条失败沿落地（429 与 abort 抢同一个回合是
+     *  有的），按新鲜度判定会把它当成真失败又续一轮——这张表把那条沿挡掉 */
+    const monitorAborts = new Map();
+
+    /** 给会话实例的 cancel 包一层记账：官方 UI 的「停止」按钮与本插件的死循环
+     *  打断走的都是它，是浏览器端唯一能观察到"用户刚说了停"的地方。包不上
+     *  （方法缺失/对象冻结）就退化为只靠新鲜度判定，不影响续跑本身。
+     *  每个 tick 调一次：标记在实例上，重复调用是空操作；实例被宿主换掉时能重包。 */
+    function monitorWrapCancel(sessions, id) {
+      let sess = null;
+      try {
+        const b = sessions.binding(id);
+        sess = b ? b.session : null;
+      } catch {
+        return; // 会话刚移除 / 服务异常
+      }
+      if (!sess || typeof sess.cancel !== "function" || sess[MONITOR_CANCEL_MARK]) return;
+      const orig = sess.cancel;
+      try {
+        sess[MONITOR_CANCEL_MARK] = true;
+        sess.cancel = function (...args) {
+          monitorAborts.set(id, Date.now());
+          return orig.apply(this, args);
+        };
+      } catch {
+        /* 只读/冻结的实例：放弃记账 */
+      }
+    }
 
     /** 取会话镜像快照；顺带完成惰性物化（binding 对列表内会话恒成功）。异常按
      *  无镜像处理——调用方各自兜底。 */
@@ -8243,7 +8288,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
      *  status）与错误广播（api-session/error）到达顺序无保证，沿时刻读镜像可能
      *  还没置位（实测踩过）。改以镜像 lastAgentError 的「新文本」为触发——以
      *  handledErr 记账去重，免疫到达顺序；文本级去重也天然放行续跑后的再次失败
-     *  （发射即清 handledErr）。 */
+     *  （发射即清 handledErr）。
+     *  但「新」必须叠上「这次收尾就是它造成的」：镜像不会被回合收尾清掉，新文本
+     *  也可能是回合中途的旧账（回合后来成功收尾 / 被用户停下）。判据是同一次观察里
+     *  的时序——errAt 必须落在本段空闲起点前 MONITOR_ERR_WINDOW_MS 内，见模块头。 */
     function monitorTickCore(sessions, cfg, now, archived = new Set()) {
       if (!sessions || !sessions.list || typeof sessions.binding !== "function") return;
       let list;
@@ -8258,24 +8306,55 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         if (archived.has(id)) continue; // 归档会话：不监视不续跑，状态在尾部回收
         let st = monitorSessions.get(id);
         if (!st) {
-          st = { running: false, continues: 0, capped: false, plan: null, materialized: false, handledErr: null, title: null, max: 0 };
+          st = {
+            running: false,
+            continues: 0,
+            capped: false,
+            plan: null,
+            materialized: false,
+            handledErr: null,
+            title: null,
+            max: 0,
+            errText: null,
+            errAt: 0,
+            idleSince: 0,
+            primed: false,
+          };
           monitorSessions.set(id, st);
+        }
+        const snap = monitorSnapOf(sessions, id, st);
+        const lastErr = snap?.lastAgentError ?? null;
+        monitorWrapCancel(sessions, id); // 停止入口记账（用户点「停止」= 别继续）
+        // 错误文本的观察记账：首见只播种（页面打开时镜像里已躺着的错误算陈旧），之后
+        // 只在文本变化时刷新出现时刻——停在镜像里不改写，判据才不会把旧错误当新失败
+        if (!st.primed) {
+          st.primed = true;
+          st.errText = lastErr;
+        } else if (lastErr !== st.errText) {
+          st.errText = lastErr;
+          st.errAt = lastErr === null ? 0 : now;
         }
         if (summary.running) {
           // 运行中：物化镜像（之后失败才有人接 lastAgentError）；等待期回合跑起来
           // = 用户介入，放弃本次 plan；上一条失败的记账一并清除——新回合的失败是
-          // 新失败，即使文本相同也要重新触发
-          if (!st.materialized) monitorSnapOf(sessions, id, st);
+          // 新失败，即使文本相同也要重新触发。停止记账也到此用掉（回合又跑起来了）
           if (st.plan) st.plan = null;
           st.handledErr = null;
           st.running = true;
+          st.idleSince = 0; // 本段空闲到此为止
+          monitorAborts.delete(id);
           continue;
         }
         st.running = false;
-        const snap = monitorSnapOf(sessions, id, st);
-        const lastErr = snap?.lastAgentError ?? null;
+        if (st.idleSince === 0) st.idleSince = now; // 本段空闲的观察起点
+        const aborted = (monitorAborts.get(id) ?? 0) >= st.idleSince - MONITOR_ABORT_WINDOW_MS;
+        const fresh = !aborted && st.errAt > 0 && st.errAt >= st.idleSince - MONITOR_ERR_WINDOW_MS;
         if (lastErr && MONITOR_RATE_LIMIT_RE.test(lastErr)) {
-          if (st.handledErr === lastErr) {
+          if (!fresh) {
+            // 错误早于本段空闲、或这一段空闲是被「停止」打开的：回合是别的原因收的
+            // 尾（正常做完 / 被手动停止），镜像里是旧账——不续跑，也不进 capped
+            //（capped 是要人处理的真终态，不该被旧账点亮）
+          } else if (st.handledErr === lastErr) {
             // 已处置过的同一条失败：不重排（取消后静默，直到正常收尾）
           } else if (!st.capped && st.continues < cfg.monitorMaxAuto) {
             st.handledErr = lastErr;
@@ -8308,15 +8387,24 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             try {
               const b = sessions.binding(id);
               void b.session.prompt([{ type: "text", text: tf("monitorContinueText") }], "queue").catch(() => {});
+              // prompt 同步清镜像 lastAgentError：本插件据此把观察记账一并作废，
+              // 续跑后的失败哪怕文本一模一样，也会被认成"新出现"的一次失败。
+              // 放在 prompt 之后：同步抛错就保留旧记账，不反复重排
+              st.errText = null;
+              st.errAt = 0;
+              st.idleSince = 0;
             } catch {
-              /* 发送通道异常：放弃本次，错误标记仍在，下个 tick 重新排期 */
+              /* 发送通道异常：放弃本次（错误标记仍在但已不算新鲜，不会反复重排） */
             }
           }
         }
       }
       // 已移除/已归档会话的状态回收（归档时若有待发射 plan 一并作废）
       for (const id of [...monitorSessions.keys()]) {
-        if (!list.byId[id] || archived.has(id)) monitorSessions.delete(id);
+        if (!list.byId[id] || archived.has(id)) {
+          monitorSessions.delete(id);
+          monitorAborts.delete(id);
+        }
       }
       monitorRebuildItems();
     }
