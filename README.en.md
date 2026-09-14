@@ -39,7 +39,9 @@ slot; the conversation column stays put.
   writes with file tools; git archive on init / human save / delete
 - **Background tasks** (entry from the right-dock start page and auto-follow): lists the
   session's running background jobs, with output viewing and job termination
-  (official `job_output`/`job_kill` semantics)
+  (official `job_output`/`job_kill` semantics). Output stays visible per job inside a
+  retained window (latest 2MB), so a page refresh or a second tab re-reads it instead of
+  losing it, and never steals output from the model's `job_output`
 - **Built-in browser** (right-dock Browser tab, on by default): the agent drives the
   system Edge via **7** `browser_*` tools (vendored playwright-core, dedicated
   persistent profile) — snapshot → act → assert GUI-testing loops, screenshots

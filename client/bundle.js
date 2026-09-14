@@ -1148,6 +1148,7 @@ window.__ModuleLoader__.load({
       jobsKillDone: "已请求结束",
       jobsKillFail: "结束失败：{error}",
       jobsOutputEmpty: "（暂无输出）",
+      jobsOutputTruncated: "（更早的输出已丢弃）",
       jobsOutputTransient: "输出读取失败：{error}",
       schedTab: "日程",
       schedToday: "今天",
@@ -1615,6 +1616,7 @@ window.__ModuleLoader__.load({
       jobsKillDone: "Stop requested",
       jobsKillFail: "Failed to stop: {error}",
       jobsOutputEmpty: "(no output yet)",
+      jobsOutputTruncated: "(earlier output dropped)",
       jobsOutputTransient: "Failed to read output: {error}",
       schedTab: "Schedule",
       schedToday: "Today",
@@ -2090,6 +2092,8 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-jobs-btn-kill{border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);color:var(--dsw-alias-danger,#cd3131)}
 .dshk-jobs-output{margin-top:2px;padding:6px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-3);font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;word-break:break-all;max-height:180px;overflow:auto;user-select:text}
 .dshk-jobs-empty{padding:10px 8px;font-size:12px;color:var(--dsw-alias-label-tertiary);text-align:center}
+/* 保留窗口被裁后的提示行：贴在输出框顶部（正文是 pre-wrap，它是块级自己占一行） */
+.dshk-jobs-outnote{margin-bottom:2px;font-size:10px;color:var(--dsw-alias-label-tertiary)}
 /* 知识库（vault）：工具条+目录树投侧栏索引宿主，页编辑器投右栏 pane 宿主（拆两半 portal）。 */
    「选库进入阅读」——空间=顶层目录，树懒加载，[[wikilink]] 页内跳转带历史 */
 .dshk-vault{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
@@ -6665,7 +6669,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // JobListAction 相同——useSessions 的 jobsBySession（session/jobs 推送）。
     // 「结束」走 dsh-kit 宿主端点（/dsh-kit/jobs/kill，权限按 session 隔离，
     // 与 job_kill 同一套 caller 语义）；输出常显，每个任务各走 /dsh-kit/jobs/
-    // output 增量轮询。终态任务保留在列（session/jobs 推送本就含终态），
+    // output 轮询，请求带本页面自持的偏移、响应回保留窗口（宿主不记面板位置）——
+    // 刷新页面与多开标签页都能从窗口头重读，互不瓜分。
+    // 终态任务保留在列（session/jobs 推送本就含终态），
     // 行动作变「关闭」=仅从显示移除，不持久化。
 
     /** 任务时长：中文「x分y秒」/ 英文 "x m y s"，秒级取整 */
@@ -6678,6 +6684,21 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       if (hours > 0) return zhLang ? `${hours}小时${minutes}分` : `${hours}h ${minutes}m`;
       if (minutes > 0) return zhLang ? `${minutes}分${seconds}秒` : `${minutes}m ${seconds}s`;
       return zhLang ? `${seconds}秒` : `${seconds}s`;
+    }
+
+    /**
+     * 轮询响应并入某任务的显示态：端点回的是 [offset, next) 这一段的正文，这里增量
+     * 追加；截断标记一旦出现就留存（提示更早的输出已丢弃），后续响应不再清掉。
+     * body 为 null 表示这次响应不可读（HTTP 错 / 解析失败），error 记错误码；正文与
+     * 截断标记都保留——读失败不该抹掉已经看到的进度。
+     */
+    function jobsOutputMerge(cur, body, error) {
+      const base = cur ?? {};
+      return {
+        text: (base.text ?? "") + (body && typeof body.text === "string" ? body.text : ""),
+        truncated: base.truncated === true || (body != null && body.truncated === true),
+        error: error ?? null,
+      };
     }
 
     function JobsPanel(props) {
@@ -6693,6 +6714,9 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // 会话内存态——刷新/重启不保留（终态任务本来就只活在宿主进程内存里）。
       const [dismissed, setDismissed] = react.useState(() => new Set());
       const doneFetched = react.useRef(new Set()); // 终态且已成功拉过输出 → 不再轮询（终态无新量）
+      // 每个任务下一次要带的绝对偏移：本页面自持（宿主不记面板位置），刷新即回到 0
+      // 从保留窗口头重读，多标签页各带各的偏移互不瓜分。
+      const offsets = react.useRef({});
       const isLive = (j) => j.status === "running" || j.status === "stopping";
       const shownOrdered = Array.isArray(jobs)
         ? [...jobs.filter((j) => !dismissed.has(j.id) && isLive(j)), ...jobs.filter((j) => !dismissed.has(j.id) && !isLive(j))]
@@ -6706,39 +6730,36 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return () => clearInterval(timer);
       }, [live.length]);
 
-      // 输出增量轮询：显示中且未拉到终态的任务各每秒拉一次（输出
+      // 输出轮询：显示中且未拉到终态的任务各每秒拉一次（输出
       // 常显不再要「输出」按钮）。拉到终态即标记 doneFetched 停拉——终态没有
       // 新量，且无 readOutput 的终态任务每次都返回全量 output，重复拉会重复
-      // 追加。终态行保留在列（见上），输出冻结在最后一拉。面板读取走宿主
-      // job-tee 的独立游标（src/job-tee.ts），与模型侧 job_output 互不抢量，
-      // 两边都能看到全量输出；页面隐藏时暂停，回前台下一秒续上。
+      // 追加。终态行保留在列（见上），输出冻结在最后一拉。读取走宿主 job-tee 的
+      // 偏移切片（src/job-tee.ts），与模型侧 job_output 互不抢量，两边都能看到
+      // 全量输出；页面隐藏时暂停，回前台下一秒带着旧偏移续上（窗口被裁则回
+      // truncated，行内提示更早的输出已丢弃）。
       const shownIdsKey = shownOrdered.map((j) => j.id).join("\n");
       react.useEffect(() => {
         if (!current || shownIdsKey === "") return undefined;
         let disposed = false;
         const pollOne = (id) => {
+          const offset = offsets.current[id] ?? 0;
           fetch(
-            `/dsh-kit/jobs/output?sessionId=${encodeURIComponent(current)}&jobId=${encodeURIComponent(id)}`,
+            `/dsh-kit/jobs/output?sessionId=${encodeURIComponent(current)}&jobId=${encodeURIComponent(id)}&offset=${offset}`,
           )
             .then((res) => res.json().catch(() => null))
             .then((body) => {
               if (disposed) return;
               if (!body || !body.job) {
-                setOutputs((prev) => ({ ...prev, [id]: { text: "", error: "HTTP" } }));
+                setOutputs((prev) => ({ ...prev, [id]: jobsOutputMerge(prev[id], null, "HTTP") }));
                 return;
               }
-              setOutputs((prev) => ({
-                ...prev,
-                [id]: {
-                  text: (prev[id]?.text ?? "") + (typeof body.text === "string" ? body.text : ""),
-                  error: null,
-                },
-              }));
+              if (typeof body.next === "number" && body.next >= 0) offsets.current[id] = body.next;
+              setOutputs((prev) => ({ ...prev, [id]: jobsOutputMerge(prev[id], body, null) }));
               const st = body.job.status;
               if (st === "completed" || st === "killed" || st === "failed") doneFetched.current.add(id);
             })
             .catch(() => {
-              if (!disposed) setOutputs((prev) => ({ ...prev, [id]: { text: prev[id]?.text ?? "", error: "network" } }));
+              if (!disposed) setOutputs((prev) => ({ ...prev, [id]: jobsOutputMerge(prev[id], null, "network") }));
             });
         };
         const tick = () => {
@@ -6851,9 +6872,16 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                         children:
                           out && out.error
                             ? tf("jobsOutputTransient", { error: out.error })
-                            : out && out.text && out.text.length > 0
-                              ? out.text
-                              : t("jobsOutputEmpty"),
+                            : jsxRuntime.jsxs(jsxRuntime.Fragment, {
+                                children: [
+                                  out && out.truncated === true
+                                    ? jsxRuntime.jsx("div", { className: "dshk-jobs-outnote", children: t("jobsOutputTruncated") })
+                                    : null,
+                                  jsxRuntime.jsx("span", {
+                                    children: out && out.text && out.text.length > 0 ? out.text : t("jobsOutputEmpty"),
+                                  }),
+                                ],
+                              }),
                       }),
                     ],
                   }, job.id);
