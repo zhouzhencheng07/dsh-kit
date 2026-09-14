@@ -59,7 +59,14 @@ if (!global.localStorage) {
 // Node 无浏览器全局，浏览器面板组件的渲染体直接读 document/location/window——
 // 渲染检查补最小桩（真实运行在浏览器里天然存在）
 if (!global.document) {
-  global.document = { visibilityState: "visible", addEventListener: () => {}, removeEventListener: () => {}, body: { classList: { add() {}, remove() {} } } };
+  // createElement/appendChild：flashToast 会建一个提示元素（关闭/结束失败时走这里）
+  global.document = {
+    visibilityState: "visible",
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    createElement: () => ({ className: "", textContent: "", setAttribute: () => {}, removeAttribute: () => {}, remove: () => {} }),
+    body: { classList: { add() {}, remove() {} }, appendChild: () => {} },
+  };
 }
 if (!global.window) {
   global.window = { innerWidth: 1600, requestAnimationFrame: () => 0, setTimeout: () => 0, clearTimeout: () => {} };
@@ -366,6 +373,8 @@ outMerge = comps.jobsOutputMerge(outMerge, { text: "d", next: 10, truncated: fal
 check("jobsOutputMerge 后续响应不抹掉截断标记", outMerge.truncated === true && outMerge.text === "abcd");
 outMerge = comps.jobsOutputMerge(outMerge, null, "HTTP");
 check("jobsOutputMerge 读失败保留已见正文与截断标记", outMerge.text === "abcd" && outMerge.error === "HTTP" && outMerge.truncated === true);
+outMerge = comps.jobsOutputMerge(undefined, { text: "", next: 7, truncated: false, released: true }, null);
+check("jobsOutputMerge 记下宿主已释放（面板据此显示「输出已释放」）", outMerge.released === true && outMerge.text === "");
 // 吸底判据：贴底（含 24px 容差）为真 → 后续渲染把新内容顶到最底；用户上翻后为假 → 不打扰
 check("jobsAtBottom 贴底为真", comps.jobsAtBottom({ scrollHeight: 1000, scrollTop: 820, clientHeight: 180 }) === true);
 check("jobsAtBottom 容差内仍算贴底", comps.jobsAtBottom({ scrollHeight: 1000, scrollTop: 800, clientHeight: 180 }) === true);

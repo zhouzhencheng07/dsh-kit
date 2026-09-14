@@ -66,7 +66,7 @@ import { applyOpenCodeSessionHeader } from "./opencode-session.js";
 import { applyWebSearch } from "./web-search.js";
 import { parseStatusBranch, parseLogRecords, parseBranchList, parseTrack } from "./git.js";
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from "./phone-gateway.js";
-import { teeRegistryJobs, panelReadJobOutput } from "./job-tee.js";
+import { teeRegistryJobs, panelReadJobOutput, releaseJobWindow } from "./job-tee.js";
 import { decodePreviewText } from "./text-decode.js";
 import { rawContentType, rawDownloadContentType, rawDisposition, parseRangeHeader } from "./raw-file.js";
 import { multipartBoundary, parseMultipart, safeUploadName, dedupeName } from "./upload.js";
@@ -2619,6 +2619,8 @@ export async function apply(ctx) {
             // session/jobs 推送（只带元数据，无输出正文）；这里补两个操作口：
             //   1) POST /dsh-kit/jobs/kill    body {sessionId, jobId} —— 结束任务
             //   2) GET  /dsh-kit/jobs/output?sessionId=&jobId=&offset= —— 按偏移读输出
+            //   3) POST /dsh-kit/jobs/release body {sessionId, jobId} —— 丢掉该任务的输出窗口
+            //      （面板「关闭」= 用户说这份输出不再需要；只放终态任务，运行中的先结束）
             // 输出读取走 job-tee（src/job-tee.ts）：底层 readOutput 降级为取新块进
             // 公共 buffer，模型侧 job_output 语义不变；面板侧按调用方给的绝对偏移切片，
             // 偏移由浏览器自持——刷新页面、多开标签页各读各的，宿主不记面板位置。
@@ -2682,6 +2684,66 @@ export async function apply(ctx) {
                     });
                 },
             });
+            const disposeJobsRelease = webCtx.webServer.register({
+                kind: 'exact',
+                path: '/dsh-kit/jobs/release',
+                handler: (req, res) => {
+                    const json = (code, obj) => {
+                        res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+                        res.end(JSON.stringify(obj));
+                    };
+                    if (req.method !== 'POST') {
+                        json(405, { error: 'method not allowed' });
+                        return;
+                    }
+                    if (req.headers.origin !== undefined && !sameOrigin(req)) {
+                        json(403, { error: 'cross-origin denied' });
+                        return;
+                    }
+                    let raw = '';
+                    req.on('data', (c) => { raw += c.toString('utf8'); });
+                    req.on('end', () => {
+                        let body;
+                        try {
+                            body = JSON.parse(raw || '{}');
+                        }
+                        catch {
+                            json(400, { error: 'bad json' });
+                            return;
+                        }
+                        const sessionId = String(body?.sessionId ?? '');
+                        const jobId = String(body?.jobId ?? '');
+                        if (sessionId === '' || jobId === '') {
+                            json(400, { error: '需要 sessionId 与 jobId' });
+                            return;
+                        }
+                        if (!jobsRegistry || !agentsRegistry) {
+                            json(503, { error: '后台任务能力不可用（jobs/agents 服务缺失）' });
+                            return;
+                        }
+                        const caller = agentsRegistry.get(sessionId);
+                        if (!caller) {
+                            json(404, { error: '会话不存在（本任务面板只操作当前会话的后台任务）' });
+                            return;
+                        }
+                        try {
+                            // 存在性 + 归属把关（同 kill/output）。运行中的任务不给释放：窗口一丢，
+                            // 模型侧 job_output 与其它标签页都再看不到内容，必须先结束再关。
+                            const snapshot = jobsRegistry.get(jobId, caller);
+                            if (snapshot.status === 'running' || snapshot.status === 'stopping') {
+                                json(409, { error: '任务还在运行，先结束后再关闭' });
+                                return;
+                            }
+                            const job = jobsRegistry.store?.get(jobId);
+                            const dropped = job !== undefined ? releaseJobWindow(job) : false;
+                            json(200, { ok: true, released: dropped });
+                        }
+                        catch (error) {
+                            json(404, { error: String(error instanceof Error ? error.message : error) });
+                        }
+                    });
+                },
+            });
             const disposeJobsOutput = webCtx.webServer.register({
                 kind: 'exact',
                 path: '/dsh-kit/jobs/output',
@@ -2737,8 +2799,8 @@ export async function apply(ctx) {
                         // 让客户端始终以偏移 0 请求——等价于"本端点不支持偏移"。
                         const win = job !== undefined
                             ? panelReadJobOutput(job, offset)
-                            : { text: jobsRegistry.read(jobId, caller).text, base: 0, next: 0, truncated: false };
-                        json(200, { text: win.text, base: win.base, next: win.next, truncated: win.truncated, job: meta });
+                            : { text: jobsRegistry.read(jobId, caller).text, base: 0, next: 0, truncated: false, released: false };
+                        json(200, { text: win.text, base: win.base, next: win.next, truncated: win.truncated, released: win.released, job: meta });
                     }
                     catch (error) {
                         json(404, { error: String(error instanceof Error ? error.message : error) });
@@ -3203,6 +3265,7 @@ export async function apply(ctx) {
                 disposePhoneRotate();
                 disposePhoneGateway();
                 disposeJobsKill();
+                disposeJobsRelease();
                 disposeJobsOutput();
                 for (const dispose of disposeSchedule)
                     dispose();

@@ -10,14 +10,19 @@
 // 同开还会互相瓜分增量，两边都不完整。改成"绝对偏移 + 保留窗口"后，任何新读者都能从
 // 窗口头重读全量，读者之间零耦合（模型游标不受影响）。
 //
+// 窗口的寿命：随任务记录一起被回收（记录被宿主移除 → WeakMap 失联 → GC），或由面板
+// 「关闭」显式 releaseJobWindow 丢掉——那是用户说"这份输出我不需要了"的唯一信号，
+// 否则窗口会一直留到会话结束。
+//
 // 安装时机：teeRegistryJobs 包装 registry.start（创建即装，模型游标从零无重复
 // 前缀）+ 面板首次读取兜底补装（晚装时模型此前已读走的前缀会在下次读取重复
 // 出现，属极端边角——实际时序下插件 boot 远早于任何任务创建）。
 const isTerminal = (status) => status === 'completed' || status === 'killed' || status === 'failed';
 const tees = new WeakMap();
 /** 保留窗口上限（导出供单测引用）。窗口是"面板随时能重读"的唯一来源，所以不按读者
- *  进度回收、只按上限丢最旧：话多的长跑任务（dev server 日志）不设上限就是把整段
- *  历史常驻宿主内存，而读者要的只是"最近的进度与结果"。 */
+ *  进度回收、只按上限丢最旧（面板「关闭」是另一条出口：显式释放整个窗口）。话多的
+ *  长跑任务（dev server 日志）不设上限就是把整段历史常驻宿主内存，而读者要的只是
+ *  "最近的进度与结果"。 */
 export const JOB_TEE_BUFFER_CAP = 2 * 1024 * 1024;
 /** 追加新块并裁到窗口上限。裁剪后 base 与模型游标一起前移，切片起点保持指向同一
  *  逻辑位置——模型侧因此可能丢掉"很久以前没人读"的增量，属刻意取舍（两个读取方都是
@@ -38,11 +43,14 @@ export function installJobTee(job) {
     const existing = tees.get(job);
     if (existing)
         return existing;
-    const st = { buffer: '', base: 0, modelCursor: 0 };
+    const st = { buffer: '', base: 0, modelCursor: 0, released: false };
     if (typeof job.readOutput === 'function') {
         const orig = job.readOutput;
         st.orig = orig;
         job.readOutput = () => {
+            // 释放后不再排水：模型侧的 job_output 读到空，属"用户已丢弃这份输出"的既定语义
+            if (st.released)
+                return '';
             appendOutput(st, orig());
             const text = st.buffer.slice(st.modelCursor);
             st.modelCursor = st.buffer.length;
@@ -51,6 +59,21 @@ export function installJobTee(job) {
     }
     tees.set(job, st);
     return st;
+}
+/**
+ * 释放某个任务的输出窗口（面板「关闭」用）：丢掉宿主替它保留的那份历史，内存随即归还。
+ * 没有分身（从未被读过）的任务也装上并立刻置为已释放——否则之后第一次读取会重新攒出一份。
+ * 释放**不可恢复**：此后任何读者（面板、模型侧 job_output）都读到空，刷新页面也一样；
+ * 任务记录本身与官方终态 output 不归这里管，仍在宿主手里（那部分生命周期见知识库页）。
+ * @returns 是否确实丢掉了已缓存的内容（无缓存时也置为已释放，返回 false）
+ */
+export function releaseJobWindow(job) {
+    const st = installJobTee(job);
+    const had = st.buffer.length > 0;
+    st.released = true;
+    st.buffer = '';
+    st.modelCursor = 0;
+    return had;
 }
 /**
  * 面板侧读取：排水新块后按绝对偏移切片。offset 缺省/0 = 从窗口头看全量（新开面板、
@@ -62,14 +85,16 @@ export function installJobTee(job) {
 export function panelReadJobOutput(job, offset = 0) {
     const st = installJobTee(job);
     const want = Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0;
+    if (st.released)
+        return { text: '', base: st.base, next: st.base, truncated: false, released: true };
     if (!st.orig) {
         const full = isTerminal(job.status) ? job.output ?? '' : '';
-        return { text: full.slice(Math.min(want, full.length)), base: 0, next: full.length, truncated: false };
+        return { text: full.slice(Math.min(want, full.length)), base: 0, next: full.length, truncated: false, released: false };
     }
     appendOutput(st, st.orig());
     const end = st.base + st.buffer.length;
     const start = Math.max(want, st.base);
-    return { text: st.buffer.slice(start - st.base), base: st.base, next: end, truncated: start > want };
+    return { text: st.buffer.slice(start - st.base), base: st.base, next: end, truncated: start > want, released: false };
 }
 /** 包装 registry.start：任务创建即装分身。registry 形状不符（宿主升级换实现）
  * 时静默不装——面板端点会兜底补装，只是模型游标可能带重复前缀。 */
