@@ -1649,7 +1649,7 @@ stateStore.clear();
 // 开关——Ctrl+B 恒生效），字段行走官方通用设置模型（标题+说明左列、控件右置）
 check(
   "侧边栏组含左右两键与官方工作区文件入口开关、带组头、无启用位",
-  src.includes('{ title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut", "hideOfficialFilesEntry"] }') && src.includes('cfgGroupSidebar: "侧边栏"') && !src.includes("sidebarShortcutEnabled") && !src.includes("chatOpenFilePreview"),
+  src.includes('{ title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut", "hideOfficialFilesEntry", "hideOfficialBrowserEntry"] }') && src.includes('cfgGroupSidebar: "侧边栏"') && !src.includes("sidebarShortcutEnabled") && !src.includes("chatOpenFilePreview"),
 );
 // 默认值与宿主 Config schema（src/index.ts）逐项同值：恢复默认拿的是宿主组合基座
 // （base 只带 vaultRoot 一项），其余键由 cfgFormat 回落

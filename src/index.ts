@@ -397,6 +397,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
     // 隐藏官方右栏「工作区文件」入口胶囊（纯浏览器端消费，宿主不读）：那只是个
     // 目录按钮，与文件树功能重复；隐藏后文件仍可从对话/文件树/搜索进入
     hideOfficialFilesEntry: z.boolean().default(false),
+    hideOfficialBrowserEntry: z.boolean().default(false),
     // 对话里的 http(s) 链接点击改投内置浏览器（默认开）。门控在浏览器半边（需要
     // browserEnabled 同时开），宿主只提供 /dsh-kit/browser/open 这条管道
     chatOpenLinkInBrowser: z.boolean().default(true),
