@@ -752,6 +752,66 @@ window.__ModuleLoader__.load({
       }).catch(() => {});
     }
 
+    // ─────────── 官方文件预览头部挂「下载到本机」───────────
+    // 官方右栏文件预览的 text/markdown/PDF 各视图共用同一头部，末尾补一枚下载按钮。
+    // 锚点只用官方 data 属性（类名是 CSS-modules 哈希逐版会变）：预览根
+    // [data-textpreview-url]，路径取头部 [data-textpreview-path] 的 title——那是宿主
+    // 解析好的绝对路径；meta 未到时是相对路径，非绝对先不挂（meta 到了头部重渲，
+    // 观察器再进来补）。下载走 /dsh-kit/raw 的 dl 模式（服务端发 attachment，
+    // iOS 不认 <a download>）。
+    function injectPreviewDownload(root) {
+      const pathEl = root.querySelector("[data-textpreview-path]");
+      const header = pathEl !== null && pathEl.parentElement;
+      if (!pathEl || !header || header.querySelector("[data-dshk-dl]")) return;
+      const path = pathEl.getAttribute("title") || "";
+      if (!/^(?:[a-z]:[\\/]|\/)/i.test(path)) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "dshk-preview-dl";
+      btn.title = t("fileDownload");
+      btn.setAttribute("aria-label", t("fileDownload"));
+      btn.setAttribute("data-dshk-dl", "");
+      btn.innerHTML =
+        '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M8 2.5v7.3"/><path d="M4.9 7.4 8 10.5l3.1-3.1"/><path d="M2.75 13.25h10.5"/>' +
+        "</svg>";
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        // 点击时重读 title：头部会被官方复用（换文件/后到 meta 只改属性），闭包里
+        // 的路径可能已过期
+        const p = ev.currentTarget.closest("[data-textpreview-url]")?.querySelector("[data-textpreview-path]")?.getAttribute("title") || "";
+        if (!p) return;
+        const a = document.createElement("a");
+        a.href = `/dsh-kit/raw?path=${encodeURIComponent(p)}&dl=1`;
+        a.download = "";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
+      header.appendChild(btn);
+    }
+
+    function scanPreviewDownload() {
+      for (const root of document.querySelectorAll("[data-textpreview-url]")) {
+        try {
+          injectPreviewDownload(root);
+        } catch (e) {
+          /* 单根失败不挡其余 */
+        }
+      }
+    }
+
+    let previewDlScheduled = false;
+    function schedulePreviewDownloadScan() {
+      if (previewDlScheduled) return;
+      previewDlScheduled = true;
+      setTimeout(() => {
+        previewDlScheduled = false;
+        scanPreviewDownload();
+      }, 100);
+    }
+
     // ─────────── 对话 @ 引用（文件树 → 输入框）───────────
     // 官方 ui-conversation 注册 `conversation` 服务（ConversationController），
     // 其 .input = InputHub，`hub.shell(当前会话 id)` 返回 SessionInputShell
@@ -1878,6 +1938,10 @@ window.__ModuleLoader__.load({
 .dshk-spring{flex:1}
 .dshk-btn{appearance:none;background:transparent;border:0;color:var(--dsw-alias-label-secondary);width:26px;height:26px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;line-height:1;padding:0}
 .dshk-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+/* 官方文件预览头部注入的下载按钮：度量对齐官方 tool 按钮（28×28 圆形热区、15px 图形） */
+.dshk-preview-dl{appearance:none;background:transparent;border:0;color:var(--dsw-alias-label-secondary);width:28px;height:28px;border-radius:28px;cursor:pointer;flex:none;display:inline-flex;align-items:center;justify-content:center;padding:6px;line-height:1}
+.dshk-preview-dl:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-preview-dl svg{width:15px;height:15px;display:block}
 .dshk-term{height:100%}
 /* padding 加在 .xterm 元素上：fit addon 从该元素读 padding 并从可用面积扣除，cols/rows 不会算错 */
 .dshk-term .xterm{height:100%;box-sizing:border-box;padding:6px 10px}
@@ -12669,6 +12733,17 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       document.addEventListener("click", onChatOpenFileClick, true);
       // 对话链接改投内置浏览器（默认开：设置卡 chatOpenLinkInBrowser）
       document.addEventListener("click", onChatLinkClick, true);
+      // 官方文件预览头部的下载按钮：预览根 mount（loading→text 整根重建）与路径
+      // title 变化（meta 后到才补成绝对路径）都要接住，全走同一防抖扫描
+      if (typeof MutationObserver !== "undefined" && document.documentElement) {
+        new MutationObserver(schedulePreviewDownloadScan).observe(document.documentElement, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ["title"],
+        });
+        scanPreviewDownload();
+      }
     }
 
     exports.inject = ["slots", "settingsScope"];
