@@ -488,6 +488,7 @@ window.__ModuleLoader__.load({
       fileTreeEnabled: true,
       sourceControlEnabled: true,
       hideOfficialFilesEntry: false,
+      hideOfficialBrowserEntry: false,
       chatOpenLinkInBrowser: true,
       skillsPageEnabled: true,
       searchEnabled: true,
@@ -562,6 +563,7 @@ window.__ModuleLoader__.load({
         fileTreeEnabled: v.fileTreeEnabled !== false,
         sourceControlEnabled: v.sourceControlEnabled !== false,
         hideOfficialFilesEntry: v.hideOfficialFilesEntry === true,
+        hideOfficialBrowserEntry: v.hideOfficialBrowserEntry === true,
         chatOpenLinkInBrowser: v.chatOpenLinkInBrowser === true,
         skillsPageEnabled: v.skillsPageEnabled !== false,
         searchEnabled: v.searchEnabled !== false,
@@ -1120,6 +1122,8 @@ window.__ModuleLoader__.load({
       cfgFileTreeEnabledHint: "隐藏入口与快捷键",
       cfgHideOfficialFilesEntry: "隐藏官方「工作区文件」入口",
       cfgHideOfficialFilesEntryHint: "官方右栏的目录按钮；隐藏后文件从对话、文件树、搜索进",
+      cfgHideOfficialBrowserEntry: "隐藏官方「浏览器」入口",
+      cfgHideOfficialBrowserEntryHint: "官方右栏的 iframe 网页预览框；套件浏览器与对话链接改投不受影响",
       cfgChatOpenLinkInBrowser: "对话中的网址用内置浏览器打开",
       cfgChatOpenLinkInBrowserHint: "关 = 交回系统浏览器新标签",
       cfgSkillsPageEnabled: "启用技能页",
@@ -1562,6 +1566,8 @@ window.__ModuleLoader__.load({
       cfgFileTreeEnabledHint: "Hides entry and shortcut",
       cfgHideOfficialFilesEntry: "Hide the official Workspace Files entry",
       cfgHideOfficialFilesEntryHint: "The directory button on the right bar; files remain reachable via chat, tree and search",
+      cfgHideOfficialBrowserEntry: "Hide the official Browser entry",
+      cfgHideOfficialBrowserEntryHint: "The iframe web preview on the right bar; the kit browser and chat-link routing are unaffected",
       cfgChatOpenLinkInBrowser: "Open chat links in the built-in browser",
       cfgChatOpenLinkInBrowserHint: "Off = system browser new tab",
       cfgSkillsPageEnabled: "Enable skills page",
@@ -1966,6 +1972,8 @@ window.__ModuleLoader__.load({
 .dshk-preview-dl svg{width:15px;height:15px;display:block}
 /* 隐藏官方右栏「工作区文件」入口（hideOfficialFilesEntry 开时 body 挂标记类） */
 body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:none}
+/* 隐藏官方右栏「浏览器」入口（hideOfficialBrowserEntry）：iframe 预览框，站点覆盖面天然受限 */
+body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{display:none}
 .dshk-term{height:100%}
 /* padding 加在 .xterm 元素上：fit addon 从该元素读 padding 并从可用面积扣除，cols/rows 不会算错 */
 .dshk-term .xterm{height:100%;box-sizing:border-box;padding:6px 10px}
@@ -3362,26 +3370,21 @@ textarea.dshk-sched-input{resize:vertical}
       );
     }
 
-    /** 终端图标：与 FolderIcon 同为描边风格（16 网格），保证两个 footer 按钮观感一致 */
-    /** 终端图标：与 FolderIcon 同为描边风格（16 网格），保证两个 footer 按钮观感一致
-     *  （官方 IconCodeOutline16 是「代码」不是「终端」，故自绘） */
+    /** 终端图标：官方 TerminalGuideIcon 同款（dsh-client-ui-sidebar-terminal 的
+     *  引导条目图形，未导出，按 0.1.6-alpha.2 原样复刻两笔：深色圆角卡 + 白色提示符）。
+     *  深浅主题都用硬编码配色（官方原样）——深色下白提示符仍是高对比主体 */
     function TerminalIcon(props) {
       return jsxRuntime.jsxs(
         "svg",
         {
           width: 15,
           height: 15,
-          viewBox: "0 0 16 16",
+          viewBox: "0 0 28 28",
           "aria-hidden": true,
           fill: "none",
-          stroke: "currentColor",
-          strokeWidth: 1.2,
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
           children: [
-            jsxRuntime.jsx("path", { d: "M2 4.5h12v8H2z" }),
-            jsxRuntime.jsx("path", { d: "M4.4 7.2l1.8 1.3-1.8 1.3" }),
-            jsxRuntime.jsx("path", { d: "M8.5 9.3h2.6" }),
+            jsxRuntime.jsx("rect", { x: "3", y: "5", width: "22", height: "19", rx: "3", fill: "#17191d" }),
+            jsxRuntime.jsx("path", { d: "m8 10 4 4-4 4M15 18h5", stroke: "#fff", strokeWidth: "1.7", strokeLinecap: "round", strokeLinejoin: "round" }),
           ],
         },
       );
@@ -10539,8 +10542,12 @@ textarea.dshk-sched-input{resize:vertical}
       // data-sidebar-right-guide-entry 是官方胶囊的稳定属性（旧置灰方案同款）
       react.useEffect(() => {
         document.body.classList.toggle("dshk-hide-official-files", cfg.hideOfficialFilesEntry === true);
-        return () => document.body.classList.remove("dshk-hide-official-files");
-      }, [cfg.hideOfficialFilesEntry]);
+        document.body.classList.toggle("dshk-hide-official-browser", cfg.hideOfficialBrowserEntry === true);
+        return () => {
+          document.body.classList.remove("dshk-hide-official-files");
+          document.body.classList.remove("dshk-hide-official-browser");
+        };
+      }, [cfg.hideOfficialFilesEntry, cfg.hideOfficialBrowserEntry]);
 
       // 终端让位布局：坞可见时挂 body 类 + 设高度变量，样式规则顶起对话/详情列
       //（隐藏/无会话时不顶——后台会话继续跑但不占布局）
@@ -11085,6 +11092,7 @@ textarea.dshk-sched-input{resize:vertical}
       { key: "fileTreeEnabled", kind: "bool" },
       { key: "sourceControlEnabled", kind: "bool" },
       { key: "hideOfficialFilesEntry", kind: "bool" },
+      { key: "hideOfficialBrowserEntry", kind: "bool" },
       { key: "chatOpenLinkInBrowser", kind: "bool" },
       { key: "skillsPageEnabled", kind: "bool" },
       { key: "searchEnabled", kind: "bool" },
@@ -11117,7 +11125,7 @@ textarea.dshk-sched-input{resize:vertical}
     // → 技能页 → 网页搜索 → 手机访问（放最下）。远程域名不在此卡——编辑入口在
     // 「手机访问」页内。
     const CFG_GROUPS = [
-      { title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut", "hideOfficialFilesEntry"] },
+      { title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut", "hideOfficialFilesEntry", "hideOfficialBrowserEntry"] },
       { switchKey: "fileTreeEnabled", fields: ["fileTreeShortcut"] },
       { switchKey: "sourceControlEnabled", fields: ["scShortcut"] },
       { switchKey: "terminalEnabled", fields: ["terminalShortcut"] },
