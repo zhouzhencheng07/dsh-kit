@@ -12576,6 +12576,45 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           /* 缺 $on（宿主形态不同）：静默降级为只剩完成通知那一半 */
         }
       });
+      // ── 官方文件预览的鸿蒙兼容兜底（依赖宿主断言，升级复核见知识库「DSH 插件开发坑」）──
+      // OpenHarmony 等引擎有两个叠加缺陷，缺一个就全站正常、只在真机发作：
+      // ① 自定义 scheme 的 URL 解析：dsh-resource://file/… 的 hostname 恒为空 → 宿主
+      //    client-resources 的 protocolOf 返回 undefined → 资源查找恒 none，预览恒报
+      //    「文件资源服务不可用」；
+      // ② boot 对 api-workspace-files 条目激活失败且**静默**（无报错无日志），file 协议
+      //    provider 无人注册。
+      // 兜底两步：shim 把 providerOf(undefined) 兜到 file provider；补注册在 boot 结束后
+      // 手动跑一次该模块的 apply（合成最小 ctx，effect 立即执行）。**必须晚于 boot**：
+      // boot 中途物化该模块会把宿主的静默激活失败变成「Failed to load plugins」横幅。
+      // 健康浏览器：特性检测不过 + providers 已有 file，两步都空转。
+      ctx.inject(["resources"], (rc) => {
+        try {
+          const reg = rc.resources;
+          if (!reg || typeof reg.providerOf !== "function" || !(reg.providers instanceof Map)) return;
+          let brokenUrlHost = false;
+          try { brokenUrlHost = new URL("dsh-resource://file/x").hostname === ""; } catch (e) { brokenUrlHost = true; }
+          if (!brokenUrlHost || reg.__dshkShimmed) return;
+          reg.__dshkShimmed = true;
+          const origProviderOf = reg.providerOf.bind(reg);
+          reg.providerOf = function (protocol) {
+            return protocol === void 0 ? reg.providers.get("file") : origProviderOf(protocol);
+          };
+        } catch (e) { /* 无害 */ }
+      });
+      ctx.inject(["resources", "remote"], (svc) => {
+        setTimeout(() => {
+          try {
+            if (svc.resources.providers && svc.resources.providers.has("file")) return;
+            const mod = require("@deepseek-ai/dsh-api-workspace-files");
+            if (!mod || typeof mod.apply !== "function") return;
+            mod.apply({
+              resources: svc.resources,
+              remote: svc.remote,
+              effect: (fn) => { fn(); },
+            });
+          } catch (e) { /* 激活失败不可挽时维持宿主原状：预览报「文件资源服务不可用」 */ }
+        }, 5000);
+      });
       injectStyles();
       // 插件配置数据通道：官方 settings scope 绑定本插件命名空间（宿主半边
       // 已按 ctx.settings.installSection 注册 dsh-kit）。绑定失败（老宿主缺 settingsScope）
