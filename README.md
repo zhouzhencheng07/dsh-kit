@@ -13,8 +13,9 @@
 编辑走 VS Code 或让 agent 改。
 索引类视图（文件树、源代码管理、知识库目录）共用左侧边栏一格，对话列常驻。
 
-- **终端**（工具行开关 / **Ctrl+/**）：底部多标签终端坞，绑定开启时所在会话的工作区，
-  隐藏时后台 shell 继续运行；Windows 优先 pwsh
+- **终端**（工具行开关 / **Ctrl+/**）：底部多标签终端坞，绑定开启时所在会话（宽度跟随
+  对话列），隐藏时后台 shell 继续运行；引擎为**官方 webTerminals 服务**（PTY 归宿主：
+  系统用户权限、刷新页面进程不断、shell 选择），需要 DSH 0.1.6+
 - **文件树**（工具行开关 / **Ctrl+,**）：以会话工作区为根浏览、新建/重命名/删除
   （回收站）/复制路径 / @ 到对话；点文件交**官方右栏文件预览**打开，库内的 md 页
   则直达知识库编辑器（所见即所得）
@@ -91,14 +92,13 @@ dsh plugin --profile web update dsh-kit
 
 ## 工作原理
 
-- `src/*.ts` → `dist/`（tsc 构建产物入库）：宿主半边——挂 `/dsh-kit/terminal` WS
-  （node-pty）、`/tree`、`/read`、`/stat`、`/raw`（Range/206）、`/write`（cwd 子树 +
-  mtime CAS）、`/fs/op`、`/upload`、`/git/*`、`/browser`（内置浏览器 WS）、`/jobs/*`、
+- `src/*.ts` → `dist/`（tsc 构建产物入库）：宿主半边——挂 `/tree`、`/read`、`/raw`
+  （Range/206）、`/fs/op`、`/upload`、`/git/*`、`/browser`（内置浏览器 WS）、`/jobs/*`、
   `/schedule/*`、`/vault/*`（知识库）、`/skills`、`/phone/*`（手机网关）等端点
 - `client/bundle.js`：浏览器半边（手写 ModuleLoader bundle，**零构建**）——
   `conversation.input.left` 注册四个入口钮；官方右栏 `sidebarRightTabs` 注册五类 dock 签、
-  pane 正文经 `sidebar.right.pane.tab` 提供；终端坞与计时件自绘；设置页与设置卡注册进
-  settings 槽位
+  pane 正文经 `sidebar.right.pane.tab` 提供；终端坞引擎为官方 `webTerminals` 服务；
+  设置卡注册进插件管理页 `plugins.bundle.config` 槽位
 - `client/vendor/*`：xterm / TipTap 富文本 / KaTeX / qrcode，全部按需懒加载，
   由 `/dsh-kit/vendor/*` 静态伺服
 - `src/web-search.ts` + `src/engine-chain.ts` + `src/engines/*`：向 web seam 注册

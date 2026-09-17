@@ -15,7 +15,8 @@
 //     垫底（设置卡可隐藏）。
 //     缺 sidebarRight 服务时只剩 kitUi 侧的存在性补丁——入口按钮
 //     不报错，签由官方侧自己决定要不要出现。
-//   终端：底部停靠面板（快捷键亦可切换），数据走宿主半边 /dsh-kit/terminal WS。
+//   终端：底部停靠面板（快捷键亦可切换），0.1.6 起引擎为官方 webTerminals
+//   服务（PTY 归宿主），本插件只做 xterm 胶水。
 //   功能存在性（kitUi）：files/activeFile（diff 签）与
 //     vaultPages/activeVaultPage+vaultHist 是文档签与访问序；jobsOpen/schedOpen/browserOpen/vaultOpen 是功能签在场
 //     （入口按钮选中态与角标读它）；activeFeature 是当前激活的功能（Esc 关哪张
@@ -283,6 +284,9 @@ window.__ModuleLoader__.load({
     let rightbarSr = null;
     /** 官方 sessions 服务（拿当前会话 id 与 cwd，拼文件地址用），同上运行期捕获 */
     let sessionsSvc = null;
+    /** 官方终端模型服务（dock 终端引擎，0.1.6+）：view() 按 (会话, key) 给
+     *  TerminalView，xterm 胶水见 TerminalPane。缺服务 = 终端坞报「需要 0.1.6+」 */
+    let webTerminalsSvc = null;
     /** 打开/聚焦右栏 dock 签（UI 事件路径）。服务未就绪或宿主不支持时静默放弃
      *  ——调用方都已先走了 kitUi 侧的开签补丁，签内容状态不会丢 */
     function openRightbarTab(feature) {
@@ -349,7 +353,7 @@ window.__ModuleLoader__.load({
       const sr = rightbarSr;
       if (!sr || typeof sr.openResource !== "function") return false;
       const list = sessionsSvc && typeof sessionsSvc.list?.getSnapshot === "function" ? sessionsSvc.list.getSnapshot() : null;
-      const sessionId = list?.current;
+      const sessionId = mainRowOf(list)?.id;
       if (!sessionId) return false;
       const cwd = list.byId?.[sessionId]?.cwd ?? null;
       let address = null;
@@ -440,24 +444,24 @@ window.__ModuleLoader__.load({
     const useHostSlot = (slot) => react.useSyncExternalStore(slot.subscribe, slot.get);
 
     // ── 多终端会话模型 ──
-    // terminals:[{id,cwd}] 创建顺序即标签顺序；每个终端在创建那一刻绑定当时的
-    // 会话工作区，之后切换会话不影响已开的终端。termDockOpen 只管坞的可见性——
-    // 隐藏不杀进程，后台标签的 shell 继续跑、xterm 继续缓冲输出；标签 ✕ 才断开
-    // 对应 WS（宿主随即杀掉 pty）。
+    // terminals:[{id, sessionId, cwd}] 创建顺序即标签顺序；每个终端在创建那一刻
+    // 绑定当时的会话（官方引擎按会话起 PTY，cwd 定在会话工作区，cwd 只剩标签
+    // 文案用途）。termDockOpen 只管坞的可见性——隐藏不杀进程，后台标签的 shell
+    // 继续跑、xterm 继续缓冲输出；标签 ✕ 才真正结束对应宿主终端。
     let termSeq = 0;
-    const makeTerm = (cwd) => ({ id: `term-${++termSeq}`, cwd });
-    /** 入口按钮与 Ctrl+/ 共用：开=恢复视图（无会话则新建绑定当前 cwd）；关=仅隐藏 */
-    function toggleTermDock(ui, cwd) {
+    const makeTerm = (sessionId, cwd) => ({ id: `term-${++termSeq}`, sessionId, cwd });
+    /** 入口按钮与 Ctrl+/ 共用：开=恢复视图（无会话则新建绑定当前会话）；关=仅隐藏 */
+    function toggleTermDock(ui, sessionId, cwd) {
       if (ui.termDockOpen) return { termDockOpen: false };
       if (ui.terminals.length === 0) {
-        const nt = cwd ? makeTerm(cwd) : null;
+        const nt = sessionId ? makeTerm(sessionId, cwd) : null;
         return nt ? { termDockOpen: true, terminals: [nt], activeTermId: nt.id } : { termDockOpen: true };
       }
       return { termDockOpen: true, activeTermId: ui.activeTermId ?? ui.terminals[ui.terminals.length - 1].id };
     }
-    /** ＋ 新建终端：绑定调用那一刻的当前会话工作区 */
-    function spawnTerm(ui, cwd) {
-      const nt = makeTerm(cwd ?? "");
+    /** ＋ 新建终端：绑定调用那一刻的当前会话 */
+    function spawnTerm(ui, sessionId, cwd) {
+      const nt = makeTerm(sessionId ?? "", cwd ?? "");
       return { terminals: [...ui.terminals, nt], activeTermId: nt.id, termDockOpen: true };
     }
     /** 标签 ✕：从列表移除（组件卸载即断 WS 杀进程），激活位顺延邻居 */
@@ -870,7 +874,7 @@ window.__ModuleLoader__.load({
       } catch {
         return null;
       }
-      const current = sessions?.list?.getSnapshot?.()?.current;
+      const current = mainRowOf(sessions?.list?.getSnapshot?.())?.id;
       if (!current) return null;
       try {
         return hub.shell(current) ?? null;
@@ -986,6 +990,8 @@ window.__ModuleLoader__.load({
       termTabClose: "结束此终端",
       termCloseAll: "结束全部终端",
       vendorFail: "终端组件加载失败",
+      officialTermUnavailable: "官方终端服务不可用：此功能需要 DSH 0.1.6+",
+      termLimit: "宿主终端数量已达上限：先结束一些再新建",
       treeLabel: "文件树",
       treeRefresh: "刷新",
       treeLoading: "加载中…",
@@ -1426,6 +1432,8 @@ window.__ModuleLoader__.load({
       termTabClose: "Kill this terminal",
       termCloseAll: "Kill all terminals",
       vendorFail: "Failed to load terminal components",
+      officialTermUnavailable: "Official terminal service unavailable: requires DSH 0.1.6+",
+      termLimit: "Host terminal limit reached: kill some terminals first",
       treeLabel: "Files",
       treeRefresh: "Refresh",
       treeLoading: "Loading…",
@@ -2699,20 +2707,34 @@ textarea.dshk-sched-input{resize:vertical}
     }
 
     // ─────────── 当前会话工作区 ───────────
-    // 选择器必须返回稳定引用（uSES getSnapshot 约束），派生放在选择器外。
-    function useCurrentCwd(props) {
-      const useSessions = props && typeof props.useSessions === "function" ? props.useSessions : null;
-      const useWorkspaces = props && typeof props.useWorkspaces === "function" ? props.useWorkspaces : null;
-      const current = useSessions ? useSessions((s) => s.current) : undefined;
-      const summary = useSessions ? useSessions((s) => (current ? s.byId[current] : undefined)) : undefined;
-      const recentId = useWorkspaces ? useWorkspaces((s) => s.recentWorkspaceId) : undefined;
-      const items = useWorkspaces ? useWorkspaces((s) => s.items) : undefined;
-      if (summary && typeof summary.cwd === "string" && summary.cwd.trim() !== "") return summary.cwd;
-      if (items && recentId) {
-        const ws = items.find((w) => w.workspaceId === recentId);
-        if (ws && typeof ws.path === "string" && ws.path.trim() !== "") return ws.path;
+    // 0.1.6 宿主多实例化：会话选择归视图所有，sessions.list 快照不再有 current；
+    // 主视图会话 = retainedBy.mainView > 0 的行（与官方 ui-session publishMain
+    // 同判据）。选择器必须返回稳定引用（uSES getSnapshot 约束）——返回 byId 里的
+    // 行对象本身；retainedBy 是本地引用计数、不在 list 快照变更里，切会话要靠
+    // 订阅当前主行的 retainInfo（旧主行归零）触发重扫。
+    function mainRowOf(state) {
+      const rows = Object.values(state?.byId ?? {});
+      for (const row of rows) {
+        if ((row?.retainedBy?.mainView ?? 0) > 0) return row;
       }
       return null;
+    }
+    function useCurrentRow(props) {
+      const useSessions = props && typeof props.useSessions === "function" ? props.useSessions : null;
+      const row = useSessions ? useSessions(mainRowOf) : null;
+      const sessionId = row?.id;
+      const svc = sessionId ? sessionsSvc : null;
+      const retain = svc && typeof svc.retainInfo === "function" ? svc.retainInfo(sessionId) : null;
+      react.useSyncExternalStore(
+        retain ? (fn) => retain.subscribe(fn) : () => () => {},
+        retain ? () => retain.getSnapshot() : () => null,
+      );
+      return row ?? null;
+    }
+    function useCurrentCwd(props) {
+      const row = useCurrentRow(props);
+      const cwd = typeof row?.cwd === "string" ? row.cwd.trim() : "";
+      return cwd || null;
     }
 
     // ─────────── 终端坞（多标签）───────────
@@ -2741,7 +2763,14 @@ textarea.dshk-sched-input{resize:vertical}
       visibleRef.current = visible;
 
       react.useEffect(() => {
-        if (!term.cwd) {
+        // 引擎 = 官方 webTerminals（宿主 PTY：系统用户权限、刷新不丢、后台清理）；
+        // 本组件只做 xterm 胶水。旧自家 WS+node-pty 引擎已随 0.1.6 适配退役。
+        const svc = webTerminalsSvc;
+        if (!svc || typeof svc.view !== "function") {
+          setState({ phase: "error", detail: t("officialTermUnavailable") });
+          return undefined;
+        }
+        if (!term.sessionId) {
           setState({ phase: "error", detail: t("noCwd") });
           return undefined;
         }
@@ -2750,10 +2779,12 @@ textarea.dshk-sched-input{resize:vertical}
 
         let termInst = null;
         let host = null;
-        let ws = null;
         let fitAddon = null;
         let resizeTimer = 0;
         let themeObserver = null;
+        let view = null;
+        let cleanupState = null;
+        const detachRef = { current: null };
 
         const sendResize = () => {
           if (disposed || !visibleRef.current || !termInst || !fitAddon) return; // 隐藏时不 fit
@@ -2762,8 +2793,10 @@ textarea.dshk-sched-input{resize:vertical}
           } catch {
             return;
           }
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ t: "r", cols: termInst.cols, rows: termInst.rows }));
+          try {
+            view.resize(termInst.cols, termInst.rows);
+          } catch {
+            // 进程可能刚退出
           }
         };
         const scheduleResize = () => {
@@ -2827,39 +2860,76 @@ textarea.dshk-sched-input{resize:vertical}
               // ResizeObserver 会再触发
             }
             termInst.onData((d) => {
-              if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: "i", d }));
+              try {
+                if (view.writable !== false) view.write(d);
+              } catch {
+                // 尚未连接
+              }
             });
             ro.observe(bodyRef.current);
 
-            ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/dsh-kit/terminal`);
-            ws.onopen = () => {
-              ws.send(JSON.stringify({ t: "init", cwd: term.cwd, cols: termInst.cols, rows: termInst.rows }));
+            // gen（= restartKey）进 key/contentId：⟳ 换代后旧 view 已 close、
+            // 新 contentId 才会分配全新宿主终端（closed 身份不可复用）
+            const viewKey = `dsh-kit-dock-${term.id}-g${restartKey}`;
+            const contentId = `dsh-kit-dock-${term.id}-g${restartKey}`;
+            view = svc.view(term.sessionId, viewKey, contentId);
+            const detach = view.mount();
+            detachRef.current = typeof detach === "function" ? detach : null;
+            let lastAck = -1;
+            let shellLabel = "";
+            let focused = false;
+            const onState = () => {
+              if (disposed) return;
+              const s = view.state.getSnapshot();
+              const render = s.render;
+              if (render && render.revision !== lastAck && termInst) {
+                lastAck = render.revision;
+                const f = render.frame;
+                try {
+                  if (f.type === "snapshot") {
+                    termInst.reset();
+                    termInst.write(f.screen);
+                  } else {
+                    termInst.write(f.data);
+                  }
+                } catch {
+                  // xterm 已释放
+                }
+                try {
+                  view.acknowledge(render.revision);
+                } catch {
+                  // 视图已关闭
+                }
+                if (f.type === "snapshot" && f.info) {
+                  const name = f.info.shell?.name ?? "";
+                  if (name && name !== shellLabel) {
+                    shellLabel = name;
+                    if (onShell) onShell(term.id, name);
+                  }
+                }
+              }
+              if (s.phase === "connected") {
+                setState((prev) => (prev.phase === "ready" ? prev : { phase: "ready", detail: "" }));
+                if (!focused && visibleRef.current && termInst) {
+                  focused = true;
+                  termInst.focus(); // 后台启动的终端不抢焦点
+                }
+              } else if (s.phase === "failed") {
+                const detail = s.issue === "terminalLimit" ? t("termLimit") : String(s.error ?? s.issue ?? "");
+                setState((prev) => (prev.phase === "error" && prev.detail === detail ? prev : { phase: "error", detail }));
+              } else if (s.phase === "closed" || s.phase === "disconnected") {
+                const code = s.info && s.info.exitCode !== null && s.info.exitCode !== undefined ? String(s.info.exitCode) : "";
+                setState((prev) => (prev.phase === "exited" && prev.detail === code ? prev : { phase: "exited", detail: code }));
+              }
             };
-            ws.onmessage = (ev) => {
-              let m;
+            const offState = view.state.subscribe(onState);
+            onState();
+            cleanupState = () => {
+              offState();
               try {
-                m = JSON.parse(ev.data);
+                svc.close(term.sessionId, viewKey, contentId);
               } catch {
-                return;
-              }
-              if (!m || typeof m !== "object") return;
-              if (m.t === "o" && typeof m.d === "string") {
-                termInst.write(m.d);
-              } else if (m.t === "started") {
-                setState({ phase: "ready", detail: m.shell ?? "" });
-                if (onShell) onShell(term.id, m.shell ?? "");
-                if (visibleRef.current) termInst.focus(); // 后台启动的终端不抢焦点
-              } else if (m.t === "exit") {
-                setState({ phase: "exited", detail: String(m.exitCode ?? "") });
-                termInst.write(`\r\n\x1b[90m[${t("exited")} · ${t("code")} ${m.exitCode}]\x1b[0m\r\n`);
-              } else if (m.t === "error") {
-                setState({ phase: "error", detail: String(m.message ?? "") });
-                termInst.write(`\r\n\x1b[31m${m.message ?? ""}\x1b[0m\r\n`);
-              }
-            };
-            ws.onclose = () => {
-              if (!disposed) {
-                setState((s) => (s.phase === "ready" || s.phase === "connecting" ? { phase: "exited", detail: "" } : s));
+                // 服务已释放
               }
             };
           })
@@ -2872,12 +2942,12 @@ textarea.dshk-sched-input{resize:vertical}
           if (resizeTimer) window.clearTimeout(resizeTimer);
           ro.disconnect();
           if (themeObserver) themeObserver.disconnect();
-          if (ws) {
-            ws.onclose = null;
+          if (cleanupState) cleanupState(); // 结束宿主终端（同旧引擎「关闭即杀」）
+          if (detachRef.current) {
             try {
-              ws.close();
+              detachRef.current();
             } catch {
-              // 已关闭
+              // 已分离
             }
           }
           if (termInst) {
@@ -2889,7 +2959,7 @@ textarea.dshk-sched-input{resize:vertical}
           }
           if (host) host.remove();
         };
-      }, [term.id, restartKey]);
+      }, [term.id, restartKey, term.sessionId]);
 
       const statusText =
         state.phase === "connecting"
@@ -5271,7 +5341,9 @@ textarea.dshk-sched-input{resize:vertical}
     // 不存在的变量（如 --dsw-alias-fill-l2）会解析成透明，选中态等于没有。
     function TerminalEntry(props) {
       const ui = useKitUi();
-      const cwd = useCurrentCwd(props);
+      const row = useCurrentRow(props);
+      const sessionId = row?.id ?? null;
+      const cwd = typeof row?.cwd === "string" ? row.cwd : null;
       const count = ui.terminals.length;
       const dockOn = ui.termDockOpen && count > 0;
       return jsxRuntime.jsxs("button", {
@@ -5281,8 +5353,8 @@ textarea.dshk-sched-input{resize:vertical}
         title: count > 0 ? `${t("label")} · ${count}` : t("label"),
         onClick: () => {
           // 只开/关终端坞：隐藏不杀进程，后台会话继续跑；无会话时新建并绑定
-          // 当时的当前会话工作区（之后切换会话不影响已开终端）
-          setKitUi(toggleTermDock(kitUi, cwd));
+          // 当时的当前会话（之后切换会话不影响已开终端）
+          setKitUi(toggleTermDock(kitUi, sessionId, cwd));
         },
         children: [
           jsxRuntime.jsx(TerminalIcon, {}),
@@ -5762,7 +5834,8 @@ textarea.dshk-sched-input{resize:vertical}
 
     function JobsPanel(props) {
       const useSessions = props && typeof props.useSessions === "function" ? props.useSessions : null;
-      const current = useSessions ? useSessions((s) => s.current) : undefined;
+      const row = useSessions ? useSessions(mainRowOf) : undefined;
+      const current = row?.id;
       const jobs = useSessions ? useSessions((s) => (current ? s.jobsBySession[current] : undefined)) : undefined;
       const live = Array.isArray(jobs) ? jobs.filter((j) => j.status === "running" || j.status === "stopping") : [];
       const [outputs, setOutputs] = react.useState({});
@@ -8112,7 +8185,7 @@ textarea.dshk-sched-input{resize:vertical}
       }
       const events = notifyDiffCore(
         notifyState,
-        { ids: list.ids, byId: list.byId, current: list.current, foreground: notifyForeground(), pending, seen: notifySeenRequests },
+        { ids: list.ids, byId: list.byId, current: mainRowOf(list)?.id, foreground: notifyForeground(), pending, seen: notifySeenRequests },
         cfg,
       );
       for (const ev of events) {
@@ -8152,7 +8225,7 @@ textarea.dshk-sched-input{resize:vertical}
           entries: win.entries,
           change: win.change,
           origin: row?.origin,
-          current: list.current,
+          current: mainRowOf(list)?.id,
           foreground: notifyForeground(),
         },
         cfg,
@@ -8186,7 +8259,7 @@ textarea.dshk-sched-input{resize:vertical}
       } catch {
         return; // 服务异常：放弃本次（作答链路不受影响）
       }
-      if (!notifyWanted(cfg, sessionId, list.current, notifyForeground())) return;
+      if (!notifyWanted(cfg, sessionId, mainRowOf(list)?.id, notifyForeground())) return;
       notifyDeliver(sessions, {
         kind,
         sessionId,
@@ -10329,7 +10402,9 @@ textarea.dshk-sched-input{resize:vertical}
     // 动态注册、几何 RO、快捷键监听全部挂在这个常驻根组件里。
     function KitSurfaces(props) {
       react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
-      const cwd = useCurrentCwd(props);
+      const sessionRow = useCurrentRow(props);
+      const cwd = typeof sessionRow?.cwd === "string" && sessionRow.cwd.trim() !== "" ? sessionRow.cwd : null;
+      const sessionId = sessionRow?.id ?? null;
       const ui = useKitUi();
       const snap = react.useSyncExternalStore(subscribeCfg, getCfgSnapshot);
       const cfg = cfgFromSnapshot(snap);
@@ -10497,8 +10572,8 @@ textarea.dshk-sched-input{resize:vertical}
           if (termCombo && cfg.terminalEnabled && comboMatches(e, termCombo)) {
             e.preventDefault();
             e.stopPropagation();
-            // 与入口按钮同语义：只开/关坞（隐藏不杀进程）；无会话时新建绑定当前 cwd
-            setKitUi(toggleTermDock(kitUi, cwd));
+            // 与入口按钮同语义：只开/关坞（隐藏不杀进程）；无会话时新建绑定当前会话
+            setKitUi(toggleTermDock(kitUi, sessionId, cwd));
             return;
           }
           if (treeCombo && cfg.fileTreeEnabled && comboMatches(e, treeCombo)) {
@@ -10633,11 +10708,11 @@ textarea.dshk-sched-input{resize:vertical}
                 open: ui.termDockOpen,
                 cwd,
                 onSpawn: () => {
-                  if (!cwd) {
+                  if (!sessionId) {
                     flashToast(t("noCwd"));
                     return;
                   }
-                  setKitUi(spawnTerm(kitUi, cwd));
+                  setKitUi(spawnTerm(kitUi, sessionId, cwd));
                 },
                 onHide: () => setKitUi({ termDockOpen: false }),
                 onActivate: (id) => setKitUi({ activeTermId: id, termDockOpen: true }),
@@ -11091,7 +11166,8 @@ textarea.dshk-sched-input{resize:vertical}
       const [drafts, setDrafts] = react.useState({});
       const [saving, setSaving] = react.useState(false);
       const [failed, setFailed] = react.useState(false);
-      const [open, setOpen] = react.useState(false);
+      // 插件管理页的配置区已给足上下文，卡片默认展开省一次点击
+      const [open, setOpen] = react.useState(true);
       // 正在录制快捷键的字段；null = 非录制态（同一时间至多一个）
       const [capturing, setCapturing] = react.useState(null);
       // 通知权限（浏览器侧事实，不是响应式值）：请求/授权后手动重读刷新显示
@@ -11505,7 +11581,6 @@ textarea.dshk-sched-input{resize:vertical}
           // 渲染期的 props 由 KitSurfaces 的常驻桥供最新值）
           inject: () => ({
             useSessions: shellShare.current?.useSessions,
-            useWorkspaces: shellShare.current?.useWorkspaces,
           }),
         }, Body)), `dsh-kit: rightbar pane body ${f.kind}`);
       }
@@ -11666,20 +11741,16 @@ textarea.dshk-sched-input{resize:vertical}
           KitSurfaces,
         ),
       );
-      // 设置→插件配置 卡片（dsh-kit 命名空间）。常驻不受功能开关门控——
+      // 设置→插件 页的配置卡：0.1.6 起该页由官方插件管理页承载，bundle 配置
+      // 注册进 keyed 槽 plugins.bundle.config——页面按包名（pkg.name）派发，
+      // key 必须与 package.json 的 name 一致。常驻不受功能开关门控——
       // 否则关掉就再也打不开。
       if (cfgScope) {
-        ctx.slots.inject("settings.plugin.item", () =>
+        ctx.slots.inject("plugins.bundle.config", () =>
           ctx.slots.register(
             {
-              name: "settings.plugin.item",
+              name: "plugins.bundle.config",
               key: "dsh-kit",
-              id: "dsh-kit",
-              // 卡片顺序只认 priority：keyed 槽的注册排序不排 order（见
-              // dsh-client-ui-renderer 的 slots 核心），priority 全默认 0 时顺序 =
-              // 各客户端半边谁先 apply，本卡因此在首位/末位之间跳。给个大值把
-              // dsh-kit 钉在最后一张
-              priority: 1000,
               inject: () => ({ scope: cfgScope }),
             },
             KitConfigCard,
@@ -11694,6 +11765,8 @@ textarea.dshk-sched-input{resize:vertical}
         ctx.inject(["sidebarRight"], (srCtx) => { rightbarSr = srCtx.sidebarRight; });
         // 官方 sessions 服务捕获：openOfficialFile 拼文件地址要当前会话 id 与 cwd
         ctx.inject(["sessions"], (sctx) => { sessionsSvc = sctx.sessions; });
+        // 官方终端模型服务捕获：dock 终端引擎（0.1.6+，缺失时终端坞报版本提示）
+        ctx.inject(["webTerminals"], (tctx) => { webTerminalsSvc = tctx.webTerminals; });
       } else {
         registerRightbar(ctx);
       }

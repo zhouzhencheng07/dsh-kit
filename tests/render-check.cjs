@@ -305,8 +305,7 @@ check("JobsPanel 无hooks渲染无异常(空列表)", !!out && typeof out === "o
 const jobsHooks = {
   useSessions: (sel) =>
     sel({
-      current: "s1",
-      byId: { s1: { cwd: "C:/x" } },
+      byId: { s1: { id: "s1", cwd: "C:/x", retainedBy: { mainView: 1 } } },
       jobsBySession: {
         s1: [
           { id: "pwsh-1", kind: "pwsh", label: "npm run dev", status: "running", startedAt: Date.now() - 30000 },
@@ -314,7 +313,6 @@ const jobsHooks = {
         ],
       },
     }),
-  useWorkspaces: () => undefined,
 };
 callLog = [];
 out = comps.JobsPanel(jobsHooks);
@@ -329,8 +327,7 @@ check("JobsPanel 不再渲染「输出」按钮", !callLog.some((c) => (c[0] ===
 const doneHooks = {
   useSessions: (sel) =>
     sel({
-      current: "s1",
-      byId: { s1: { cwd: "C:/x" } },
+      byId: { s1: { id: "s1", cwd: "C:/x", retainedBy: { mainView: 1 } } },
       jobsBySession: {
         s1: [
           { id: "pwsh-9", kind: "pwsh", label: "npm run build", status: "running", startedAt: Date.now() - 5000 },
@@ -338,7 +335,6 @@ const doneHooks = {
         ],
       },
     }),
-  useWorkspaces: () => undefined,
 };
 callLog = [];
 out = comps.JobsPanel(doneHooks);
@@ -929,12 +925,12 @@ check("openFileTab 从 SCM 重开同路径清除钉定", commitReopen.files[0].c
 
 // 7.5) 终端坞（多标签）：预置两个会话（含同 cwd 多开）后渲染——标签 map 曾因
 // 变量遮蔽翻译函数 t 而崩溃，此用例专防"有状态后才走到的渲染分支"
-comps.setKitUi({ terminals: [comps.makeTerm("C:/x"), comps.makeTerm("C:/x")], activeTermId: null, termDockOpen: true });
+comps.setKitUi({ terminals: [comps.makeTerm("s1", "C:/x"), comps.makeTerm("s1", "C:/x")], activeTermId: null, termDockOpen: true });
 callLog = [];
 out = comps.TerminalDock({ open: true, cwd: "C:/x", onSpawn: () => {}, onHide: () => {}, onActivate: () => {}, onKill: () => {} });
 check("TerminalDock 带标签渲染无异常", !!out && typeof out === "object");
 callLog = [];
-out = comps.TerminalPane({ term: { id: "t1", cwd: "C:/x" }, visible: true });
+out = comps.TerminalPane({ term: { id: "t1", sessionId: "s1", cwd: "C:/x" }, visible: true });
 check("TerminalPane 渲染无异常", !!out && typeof out === "object");
 comps.setKitUi({ terminals: [], activeTermId: null, termDockOpen: false });
 callLog = [];
@@ -1015,8 +1011,7 @@ check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
 // 8) SkillsManager（技能管理页）：无 hooks（cwd=null）与有 cwd 两种
 callLog = [];
 const fakeHooks = {
-  useSessions: (sel) => sel({ current: "s1", byId: { s1: { cwd: "C:/x" } } }),
-  useWorkspaces: () => undefined,
+  useSessions: (sel) => sel({ byId: { s1: { id: "s1", cwd: "C:/x", retainedBy: { mainView: 1 } } } }),
 };
 out = comps.KitSurfaces(fakeHooks);
 check("KitSurfaces 带cwd渲染无异常", !!out && typeof out === "object");

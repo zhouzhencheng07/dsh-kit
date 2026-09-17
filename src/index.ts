@@ -1,7 +1,6 @@
 // dsh-kit — DSH 页面能力插件包（宿主半边）
 //
 // 当前能力：
-//   终端（terminal）——见下方协议注释；
 //   文件树（file tree）——GET /dsh-kit/tree?path=<绝对目录> 返回该层
 //     目录+文件的 JSON 列表（官方 browse RPC 只列目录不列文件，故自建）；
 //   文件预览（file preview）——GET /dsh-kit/read?path=<绝对文件> 读取文本
@@ -13,40 +12,27 @@
 // 浏览器半边（client/bundle.js）：终端/文件树入口按钮注册在对话输入框工具行
 // （conversation.input.left），面板本体挂 shell.overlay 全帧浮层；终端开合底部
 // 停靠面板（Ctrl+`），文件树临时接管侧边栏浏览区（sidebar.workspaces 单槽）。
-// 插件设置卡（dsh-kit 命名空间，settings.plugin.item）提供功能开关与快捷键自定义；
+// 插件设置卡（dsh-kit 命名空间，plugins.bundle.config）提供功能开关与快捷键自定义；
 // 其中 searchEnabled 由宿主消费（开=免费引擎链，关=转发官方渠道，重启后生效），
 // 其余开关浏览器端消费。
 //
 // 宿主半边（本文件）挂这些端点（webserver 默认只绑 loopback）：
-//   1) WebSocket /dsh-kit/terminal —— 每条连接一个 node-pty 会话；
-//   2) 静态 /dsh-kit/vendor/* —— xterm 官方预编译 UMD，按需加载；
-//   3) GET /dsh-kit/tree?path=… —— 单层目录列表（含文件），只读；
-//   4) GET /dsh-kit/read?path=… —— 单文件文本内容，只读；
-//   5) GET /dsh-kit/raw?path=… —— 原始字节透传（扩展名白名单 + Range/206；官方
+//   1) 静态 /dsh-kit/vendor/* —— xterm 官方预编译 UMD，按需加载；
+//   2) GET /dsh-kit/tree?path=… —— 单层目录列表（含文件），只读；
+//   3) GET /dsh-kit/read?path=… —— 单文件文本内容，只读；
+//   4) GET /dsh-kit/raw?path=… —— 原始字节透传（扩展名白名单 + Range/206；官方
 //      文件预览头部的「下载到本机」与 vault 图片/附件走这里）；
-//   6) POST /dsh-kit/fs/op —— 文件树新建/重命名/删除（删除优先移入回收站）；
-//   7) GET /dsh-kit/git/status|diff|log|show|branch、POST /dsh-kit/git/init|op ——
+//   5) POST /dsh-kit/fs/op —— 文件树新建/重命名/删除（删除优先移入回收站）；
+//   6) GET /dsh-kit/git/status|diff|log|show|branch、POST /dsh-kit/git/init|op ——
 //      源代码管理。status 含分支/领先信息（branch/upstream/ahead/behind），
 //      log 是提交图谱（git log --all --graph），show 是单个提交详情，
 //      branch 是本地分支列表；op 含 stage/unstage/discard/commit/push/
 //      branchCreate/branchSwitch/branchDelete。
+//   另有 WebSocket /dsh-kit/browser（见下方浏览器面板端点）。
 //
-// 终端的工作目录由浏览器端传入（当前会话的 cwd），宿主侧校验后才启动 shell。
-//
-// 协议（JSON 文本帧，双向）：
-//   浏览器 → 宿主：
-//     {t:'init', cwd, cols, rows}   连接后第一条：校验 cwd 并启动 shell
-//     {t:'i', d}                    键盘输入（原样写入 pty）
-//     {t:'r', cols, rows}           面板尺寸变化
-//   宿主 → 浏览器：
-//     {t:'started', shell, cwd}     pty 就绪
-//     {t:'o', d}                    输出
-//     {t:'exit', exitCode}          进程退出（随后服务端关闭连接）
-//     {t:'error', message}          致命错误（随后关闭连接）
-//
-// 工作区语义：浏览器端在「打开终端」那一刻把当时的
-// 工作目录固定下来传给本端点；面板存续期间无论怎么切换会话/工作区都不会
-// 重连或换 shell，直到用户关闭面板（连接关闭即杀进程）。
+// 终端自 0.1.6 起不走本插件：dock 界面仍在（client 半边），引擎换官方
+// webTerminals 服务（PTY 归宿主：系统用户权限、刷新不丢、shell 选择），宿主半边
+// 不再需要 node-pty 与终端端点。
 
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -127,12 +113,6 @@ interface KitWebCtx {
   effect(fn: () => void | (() => void), label?: string): void
 }
 
-interface ShellChoice {
-  file: string
-  args: string[]
-  label: string
-}
-
 interface GitRunResult {
   ok: boolean
   out: string
@@ -159,16 +139,16 @@ function findMonorepoRoot(): string | null {
 }
 
 /**
- * 多锚点加载 dsh-kit 的运行时依赖（node-pty / ws，均为 DSH 自身依赖，不在
- * dsh-kit 的 package.json 里）。按可靠度依次尝试：
+ * 多锚点加载 dsh-kit 的运行时依赖（ws，为 DSH 自身依赖，不在 dsh-kit 的
+ * package.json 里）。按可靠度依次尝试：
  *   1) 本模块 import.meta.url —— 真实安装形态（registry tarball 带依赖）命中这里；
  *   2) DSH 本体锚点（process.argv[1]，绝对路径化）—— 软链装进 profile 后真实路径
  *      落在源仓库、够不到 fallback node_modules，改用 dsh 启动脚本所在处的
  *      node_modules（ws 挂在这里）；
- *   3) DSH monorepo 的 .pnpm store —— node-pty 等原生/patched 依赖挂在某个
- *      workspace 包（如 subprocess-local）的 node_modules，profile 与 dsh bin
- *      都够不到；直接从 pnpm store 按 spec 定位实体加载。
- * 都失败返回 null（终端能力不可用，插件其余功能正常）。
+ *   3) DSH monorepo 的 .pnpm store —— patched 依赖挂在某个 workspace 包
+ *      （如 subprocess-local）的 node_modules，profile 与 dsh bin 都够不到；
+ *      直接从 pnpm store 按 spec 定位实体加载。
+ * 都失败返回 null（浏览器面板不可用，插件其余功能正常）。
  */
 function loadDep(spec: string): any {
   try {
@@ -264,17 +244,9 @@ async function loadSettingsDep(spec: string, monorepoEntry?: string): Promise<an
   return monorepoEntry ? loadMonorepoDep(monorepoEntry) : null
 }
 
-const pty = loadDep('node-pty')
 const WebSocketServer = loadDep('ws')?.WebSocketServer ?? null
-if (!pty || !WebSocketServer) {
-  console.warn('dsh-kit: node-pty/ws 不可用，终端能力不可用')
-}
-
-/** 尺寸参数收敛到安全区间 */
-function clampDim(value: unknown, min: number, max: number, fallback: number): number {
-  const n = Math.floor(Number(value))
-  if (!Number.isFinite(n)) return fallback
-  return Math.min(max, Math.max(min, n))
+if (!WebSocketServer) {
+  console.warn('dsh-kit: ws 不可用，浏览器面板不可用')
 }
 
 type ValidateOk<T> = { ok: true } & T
@@ -365,59 +337,6 @@ function invalidFsName(raw: unknown): boolean {
   if (/[\u0000-\u001f<>:"|?*]/.test(name)) return true
   if (WIN_RESERVED_NAME.test(name.split('.')[0] ?? '')) return true
   return false
-}
-
-/** Windows 优先 pwsh（PowerShell 7+），退回 powershell.exe；其它平台用 $SHELL 或 bash。结果缓存。 */
-let shellCache: ShellChoice | undefined
-/** PSReadLine 历史预测初始化（灰字建议 + → 接受整条建议，fish 风格）：PowerShell
- *  默认不启用，启动参数显式开启。-EncodedCommand（UTF-16LE base64）把初始化脚本
- *  变成单一 token，规避 Windows 命令行的引号/空格问题；-NoExit 保证执行完初始化
- *  仍进入交互会话，用户 profile 照常加载。Windows PowerShell 5.1 自带的旧版
- *  PSReadLine 无该参数，try/catch 静默跳过；预测要求 VT 控制台，node-pty 的
- *  ConPTY 满足（实测 PREDICT=History）。 */
-const PS_PREDICT_INIT = Buffer.from(
-  'try { Set-PSReadLineOption -PredictionSource History -ErrorAction Ignore } catch {}',
-  'utf16le',
-).toString('base64')
-
-function resolveShell(): ShellChoice {
-  if (shellCache) return shellCache
-  if (process.platform === 'win32') {
-    // Store 版 pwsh 的执行别名（%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe）stat 抛
-    // EACCES、existsSync 恒 false——EACCES 要视作存在，否则漏检兜底到 5.1，其自带
-    // PSReadLine 2.0 无 -PredictionSource，历史预测静默失效
-    const pwshExists = (p: string): boolean => {
-      try {
-        fs.statSync(p)
-        return true
-      } catch (e) {
-        return (e as NodeJS.ErrnoException).code === 'EACCES'
-      }
-    }
-    let pwsh: string | null = null
-    for (const dir of (process.env.PATH ?? '').split(';')) {
-      if (!dir) continue
-      if (pwshExists(path.join(dir.trim(), 'pwsh.exe'))) {
-        pwsh = path.join(dir.trim(), 'pwsh.exe')
-        break
-      }
-    }
-    // PATH 没有时再探两个常规安装位：MSI 装 Program Files，Store 装用户 WindowsApps
-    if (!pwsh) {
-      const fallbacks = [
-        path.join(process.env['ProgramFiles'] ?? 'C:\\Program Files', 'PowerShell', '7', 'pwsh.exe'),
-        path.join(process.env['LOCALAPPDATA'] ?? '', 'Microsoft', 'WindowsApps', 'pwsh.exe'),
-      ]
-      pwsh = fallbacks.find(pwshExists) ?? null
-    }
-    shellCache = pwsh
-      ? { file: pwsh, args: ['-NoLogo', '-NoExit', '-EncodedCommand', PS_PREDICT_INIT], label: 'pwsh' }
-      : { file: 'powershell.exe', args: ['-NoLogo', '-NoExit', '-EncodedCommand', PS_PREDICT_INIT], label: 'powershell' }
-  } else {
-    const file = process.env.SHELL || '/bin/bash'
-    shellCache = { file, args: [], label: file }
-  }
-  return shellCache
 }
 
 // vendor 静态资源：白名单文件名 → client/vendor/ 下同名文件
@@ -1878,122 +1797,6 @@ export async function apply(ctx: KitCtx): Promise<void> {
         },
       })
 
-      // ── 终端 WebSocket 端点 ──
-      // 一条 WS 连接 = 一个 pty 会话；连接关闭即杀进程（面板语义见文件头注释）。
-      let disposeUpgrade: (() => void) | null = null
-      let disposeHttp: (() => void) | null = null
-      if (pty && WebSocketServer) {
-        const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 })
-
-        wss.on('connection', (ws: any) => {
-          let proc: any = null
-          let dead = false
-          const send = (obj: unknown) => {
-            if (!dead && ws.readyState === ws.OPEN) {
-              try {
-                ws.send(JSON.stringify(obj))
-              } catch {
-                // 连接正在断开，忽略
-              }
-            }
-          }
-
-          ws.on('message', (raw: any) => {
-            let msg: any
-            try {
-              msg = JSON.parse(String(raw))
-            } catch {
-              return
-            }
-            if (!msg || typeof msg !== 'object') return
-
-            if (msg.t === 'init') {
-              if (proc) return
-              const dir = validateCwd(msg.cwd)
-              if (!dir.ok) {
-                send({ t: 'error', message: dir.message })
-                ws.close(1008, 'invalid cwd')
-                return
-              }
-              const shell = resolveShell()
-              const cols = clampDim(msg.cols, 2, 500, 80)
-              const rows = clampDim(msg.rows, 2, 300, 24)
-              try {
-                proc = pty.spawn(shell.file, shell.args, {
-                  name: 'xterm-256color',
-                  cols,
-                  rows,
-                  cwd: dir.path,
-                  env: { ...process.env, TERM: 'xterm-256color' },
-                })
-              } catch (error) {
-                send({ t: 'error', message: `启动 shell 失败：${error instanceof Error ? error.message : error}` })
-                ws.close(1011, 'spawn failed')
-                return
-              }
-              send({ t: 'started', shell: shell.label, cwd: dir.path })
-              proc.onData((data: any) => send({ t: 'o', d: data }))
-              proc.onExit(({ exitCode }: any) => {
-                send({ t: 'exit', exitCode })
-                try {
-                  ws.close(1000, 'exited')
-                } catch {
-                  // 已关闭
-                }
-              })
-              return
-            }
-
-            if (!proc) return
-            if (msg.t === 'i' && typeof msg.d === 'string') {
-              proc.write(msg.d)
-            } else if (msg.t === 'r') {
-              try {
-                proc.resize(clampDim(msg.cols, 2, 500, 80), clampDim(msg.rows, 2, 300, 24))
-              } catch {
-                // 进程可能刚退出
-              }
-            }
-          })
-
-          ws.on('close', () => {
-            dead = true
-            if (proc) {
-              try {
-                proc.kill()
-              } catch {
-                // 已退出
-              }
-              proc = null
-            }
-          })
-          ws.on('error', () => {
-            // close 会跟着来
-          })
-        })
-
-        disposeUpgrade = webCtx.webServer.registerUpgrade({
-          path: '/dsh-kit/terminal',
-          handler: (req, socket, head) => {
-            if (!sameOrigin(req)) {
-              socket.destroy()
-              return
-            }
-            wss.handleUpgrade(req, socket, head, (ws: any) => wss.emit('connection', ws, req))
-          },
-        })
-
-        // 纯 HTTP 探测时给出明确提示（也方便确认端点存在）
-        disposeHttp = webCtx.webServer.register({
-          kind: 'exact',
-          path: '/dsh-kit/terminal',
-          handler: (_req, res) => {
-            res.writeHead(426, { 'content-type': 'text/plain; charset=utf-8' })
-            res.end('dsh-kit terminal: WebSocket Upgrade Required')
-          },
-        })
-      }
-
       // ── 浏览器面板 WebSocket 端点（src/browser.ts 的面板面）──
       // 协议：hello（连接即回 state）→ 浏览器端；watch {on}（帧流订阅引用计数，
       // 0 时停流）/ open {url}（URL 栏导航）/ activate {tabId}（切观察页）/
@@ -3065,8 +2868,6 @@ export async function apply(ctx: KitCtx): Promise<void> {
         disposeGitLog()
         disposeGitShow()
         disposeGitBranch()
-        if (disposeHttp) disposeHttp()
-        if (disposeUpgrade) disposeUpgrade()
         disposePhoneInfo()
         disposePhoneLink()
         disposePhoneRotate()
