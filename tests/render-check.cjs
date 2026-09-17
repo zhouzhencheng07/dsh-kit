@@ -1,5 +1,5 @@
 // 渲染级验证：桩掉 react hooks，直接函数调用 dsh-kit 的组件
-// （TreeNode/FileTreePanel/FileEditorPane/TerminalEntry/FileTreeEntry/KitSurfaces/
+// （TreeNode/FileTreePanel/DiffPane/TerminalEntry/FileTreeEntry/KitSurfaces/
 // KitConfigCard/GitChangesPanel/SkillsManager/TerminalDock/TerminalPane），跑完整渲染体。
 // TerminalDock/TerminalPane 通过 setKitUi 预置会话后渲染（防"有状态后才走到的分支"逃逸）。
 // ⚠️ 盲区：桩不会重渲染（effect 不执行、state 不更新），依赖 effect 产出后才走到的
@@ -79,7 +79,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, FileEditorPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, VaultFolderPicker, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, renameVaultPageTab, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultCascadeDeleteMany, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, notifyDiffCore, notifyCompactionCore, notifyCompleteSettled, notifyState, readPosStore, recordReadPos, jobsOutputMerge, jobsAtBottom, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
+  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, DiffPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, VaultFolderPicker, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, renameVaultPageTab, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultCascadeDeleteMany, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, notifyDiffCore, notifyCompactionCore, notifyCompleteSettled, notifyState, readPosStore, recordReadPos, jobsOutputMerge, jobsAtBottom, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -93,7 +93,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "FileEditorPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "VaultFolderPicker", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "renameVaultPageTab", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultCascadeDeleteMany", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTickCore", "monitorCancelPlan", "notifyDiffCore", "notifyCompactionCore", "recordReadPos", "jobsOutputMerge", "jobsAtBottom", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["TreeNode", "FileTreePanel", "DiffPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "VaultFolderPicker", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "renameVaultPageTab", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultCascadeDeleteMany", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTickCore", "monitorCancelPlan", "notifyDiffCore", "notifyCompactionCore", "recordReadPos", "jobsOutputMerge", "jobsAtBottom", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -156,102 +156,96 @@ callLog = [];
 out = comps.FileTreePanel({ cwd: "C:/x", onOpenFile: () => {} });
 check("FileTreePanel noCwd(根未加载) 渲染无异常(loading→error兜底)", !!out && typeof out === "object");
 
-// 6) FileEditorPane：加载中（fetch 被桩跳过 -> 保持 loading）
+// 6) DiffPane（SCM 专用 diff 签）：加载中（fetch 被桩跳过 -> diff 保持 loading）。
+//    状态索引 #0=read 态、#1=diff；桩环境 effect 不执行，预置 stateStore 验渲染体
 callLog = [];
-out = comps.FileEditorPane({ path: "C:/x/b.js", cwd: "C:/x", onClose: () => {} });
-check("FileEditorPane 渲染无异常", !!out && typeof out === "object");
+out = comps.DiffPane({ path: "C:/x/b.js", cwd: "C:/x" });
+check("DiffPane 渲染无异常", !!out && typeof out === "object");
 
-// 6.1) FileEditorPane PDF ready 分支：pdf.js 宿主容器 + ↗ 兜底（canvas 由
-//      effect 挂载，桩覆盖不到——重置序号预置 useState#0 让渲染体走到新分支）
+// 6.1) 已删除文件：删除说明 + 纯红删除行（无 git 元数据噪音、无 ⇄ 切换）
 stateSeq = 0;
-stateStore.clear();
-stateStore.set(0, {
-  phase: "ready",
-  body: { path: "C:/x/doc.pdf", size: 10, mtimeMs: 1, truncated: false, binary: true, content: null },
-});
-callLog = [];
-out = comps.FileEditorPane({ path: "C:/x/doc.pdf", cwd: "C:/x", onClose: () => {} });
-const pdfHost = callLog.find((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-pdf-scroll");
-check("FileEditorPane PDF ready 渲染无异常", !!out && typeof out === "object");
-check("PDF 渲染出 pdf.js 宿主容器", !!pdfHost);
-
-// 6.2) xlsx ready 分支：表格宿主容器产出（SheetJS 解析在沙箱 effect 里，桩不覆盖）
-stateSeq = 0;
-stateStore.clear();
-stateStore.set(0, {
-  phase: "ready",
-  body: { path: "C:/x/t.xlsx", size: 10, mtimeMs: 1, truncated: false, binary: true, content: null },
-});
-callLog = [];
-out = comps.FileEditorPane({ path: "C:/x/t.xlsx", cwd: "C:/x", onClose: () => {} });
-const sheetHost = callLog.find(
-  (c) =>
-    (c[0] === "jsx" || c[0] === "jsxs") &&
-    c[2] &&
-    typeof c[2].className === "string" &&
-    c[2].className.includes("dshk-sheetwrap"),
-);
-check("FileEditorPane xlsx ready 渲染无异常", !!out && typeof out === "object");
-check("xlsx 渲染出表格宿主容器", !!sheetHost);
-
-// 6.3) docx ready 分支：文档宿主容器产出（mammoth 转换在沙箱 effect 里，桩不覆盖）
-stateSeq = 0;
-stateStore.clear();
-stateStore.set(0, {
-  phase: "ready",
-  body: { path: "C:/x/t.docx", size: 10, mtimeMs: 1, truncated: false, binary: true, content: null },
-});
-callLog = [];
-out = comps.FileEditorPane({ path: "C:/x/t.docx", cwd: "C:/x", onClose: () => {} });
-const docHost = callLog.find(
-  (c) =>
-    (c[0] === "jsx" || c[0] === "jsxs") &&
-    c[2] &&
-    typeof c[2].className === "string" &&
-    c[2].className.includes("dshk-docwrap"),
-);
-check("FileEditorPane docx ready 渲染无异常", !!out && typeof out === "object");
-check("docx 渲染出文档宿主容器", !!docHost);
-
-// 6.4) 已删除文件（deleted）：仅 diff 预览——⇄ 不出现，渲染删除说明 + diff 体
-// （read 请求被 deleted 守卫跳过，桩环境 effect 不执行、直接验渲染体）
-callLog = [];
-out = comps.FileEditorPane({ path: "C:/x/gone.js", cwd: "C:/x", deleted: true });
-const deletedNote = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.includes("文件已删除") || c[2].children.includes("File deleted")));
-const deletedToggle = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].children === "⇄");
-check("FileEditorPane deleted 渲染无异常", !!out && typeof out === "object");
-check("deleted 预览渲染删除说明且无 ⇄ 切换", !!deletedNote && !deletedToggle);
-
-// 6.4.1) 真实时序（effect 已跑）：state 进入 phase:"deleted" 后的渲染体——
-// body 计算块必须兜住该态（曾崩 b.binary，effect 产出的态是桩盲区，须预置验证）
-stateSeq = 0;
-stateStore.clear();
 stateStore.set(0, { phase: "deleted" });
-callLog = [];
-out = comps.FileEditorPane({ path: "C:/x/gone.js", cwd: "C:/x", deleted: true });
-const deletedNote2 = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.includes("文件已删除") || c[2].children.includes("File deleted")));
-check("FileEditorPane deleted态(body计算块)渲染无异常", !!out && typeof out === "object" && !!deletedNote2);
-stateSeq = 0;
-stateStore.clear();
-
-// 6.4.2) 删除内容纯红展示：pre-seed phase deleted + 删除 diff → 不见 git 元数据
-// （diff --git/index/@@ 等），只余剥掉 `-` 前缀的删除行（dshk-il-del）
-stateSeq = 0;
-stateStore.clear();
-stateStore.set(0, { phase: "deleted" });
-stateStore.set(2, {
+stateStore.set(1, {
   phase: "ready",
-  xy: " D",
+  clean: false,
   text: "diff --git a/f.md b/f.md\ndeleted file mode 100644\nindex 5d7d2f8..0000000\n--- a/f.md\n+++ /dev/null\n@@ -1,3 +0,0 @@\n-name: hello-kit\n-\n-# hello\n",
 });
 callLog = [];
-out = comps.FileEditorPane({ path: "C:/x/gone.md", cwd: "C:/x", deleted: true });
+out = comps.DiffPane({ path: "C:/x/gone.md", cwd: "C:/x", deleted: true });
+const deletedNote = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.includes("文件已删除") || c[2].children.includes("File deleted")));
+const deletedToggle = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].children === "⇄");
 const metaNoise = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("diff --git") || c[2].children.startsWith("deleted file mode") || c[2].children.startsWith("@@")));
 const delRedLines = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-il-del").map((c) => c[2].children);
-check("删除预览纯内容渲染无异常", !!out && typeof out === "object");
-check("删除预览无 git 元数据且为剥前缀红行", !metaNoise && delRedLines.length === 3 && delRedLines[0] === "name: hello-kit" && delRedLines.includes("# hello"));
-stateSeq = 0;
+check("DiffPane deleted 渲染无异常", !!out && typeof out === "object");
+check("deleted 渲染删除说明且无 ⇄ 切换", !!deletedNote && !deletedToggle);
+check("删除内容无 git 元数据且为剥前缀红行", !metaNoise && delRedLines.length === 3 && delRedLines[0] === "name: hello-kit" && delRedLines.includes("# hello"));
 stateStore.clear();
+stateSeq = 0;
+
+// 6.2) 提交钉定：顶部基线说明（父短哈希/根提交空树）；全文件着色的新像 = diff
+//      响应带回的提交时刻内容；blobMissing 走纯红；无新像回落原始 patch
+const commitDiffText = "diff --git a/f.js b/f.js\nindex 111..222 100644\n--- a/f.js\n+++ b/f.js\n@@ -1 +1 @@\n-old\n+new\n";
+const readyBody = { phase: "ready", body: { path: "C:/x/f.js", size: 2, mtimeMs: 1, truncated: false, binary: false, content: "new\n" } };
+stateStore.set(0, readyBody);
+stateStore.set(1, { phase: "ready", clean: false, base: "abcd123", text: commitDiffText, content: "new\n" });
+callLog = [];
+out = comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", commit: "full40hash" });
+const baseNote = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diffnote" && typeof c[2].children === "string" && c[2].children.includes("abcd123"));
+const overlayRows = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-inline");
+const rawOnly = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diff");
+check("提交钉定 diff 渲染基线说明（父提交 abcd123）", !!baseNote);
+check("提交钉定 diff 复用全文件着色（新像=提交时刻内容）", !!overlayRows && !rawOnly);
+stateStore.clear();
+stateSeq = 0;
+stateStore.set(0, readyBody);
+stateStore.set(1, { phase: "ready", clean: false, base: "abcd123", text: commitDiffText, blobMissing: true });
+callLog = [];
+out = comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", commit: "full40hash" });
+const delRed = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-il-del").map((c) => c[2].children);
+const delMeta = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("diff --git") || c[2].children.startsWith("@@")));
+check("提交钉定删除文件走纯红块（无元数据噪音）", delRed.includes("old") && !delRed.includes("new") && !delMeta);
+stateStore.clear();
+stateSeq = 0;
+stateStore.set(0, readyBody);
+stateStore.set(1, { phase: "ready", clean: false, base: "abcd123", text: commitDiffText });
+callLog = [];
+out = comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", commit: "full40hash" });
+const rawFallback = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diff");
+check("钉定无新像回落原始 patch", !!rawFallback);
+stateStore.clear();
+stateSeq = 0;
+stateStore.set(0, readyBody);
+stateStore.set(1, { phase: "ready", clean: false, base: "", text: commitDiffText });
+callLog = [];
+out = comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", commit: "root40hash" });
+const rootNote = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diffnote" && typeof c[2].children === "string" && (c[2].children.includes("empty tree") || c[2].children.includes("空树")));
+check("根提交钉定显示空树基线说明", !!rootNote);
+// 常规 diff：hunk 套回盘上内容（全文件着色）
+stateStore.clear();
+stateSeq = 0;
+stateStore.set(0, readyBody);
+stateStore.set(1, { phase: "ready", clean: false, text: commitDiffText });
+callLog = [];
+out = comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x" });
+const normalOverlay = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-inline");
+check("常规 diff 视图仍套盘上内容（无 commit 钉定）", !!normalOverlay);
+// 未跟踪：整文件按新增着色（内容来自 read）
+stateStore.clear();
+stateSeq = 0;
+stateStore.set(0, { phase: "ready", body: { path: "C:/x/n.js", size: 3, mtimeMs: 1, truncated: false, binary: false, content: "a\nb" } });
+stateStore.set(1, { phase: "ready", untracked: true, clean: false, text: null });
+callLog = [];
+out = comps.DiffPane({ path: "C:/x/n.js", cwd: "C:/x", untracked: true });
+const addRows = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-il-add").map((c) => c[2].children);
+check("未跟踪整文件按新增着色", addRows.join("|") === "a|b");
+stateStore.clear();
+stateSeq = 0;
+// 头部标题：绝对路径直显、不挂 title 悬停（文件名由页签 chip 承担）
+callLog = [];
+out = comps.DiffPane({ path: "C:/x/dir/f.js", cwd: "C:/x" });
+const titleAbs = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-title" && c[2].children === "C:/x/dir/f.js");
+check("diff 头部标题显示绝对路径", !!titleAbs);
+check("diff 头部不挂 title 悬停（全路径已直显，悬停只留页签 chip）", !!(titleAbs && titleAbs[2] && titleAbs[2].title === undefined));
 
 // 7) 入口按钮 / 浮层宿主顶部渲染（conversation.input.left + shell.overlay 槽位）
 callLog = [];
@@ -491,7 +485,7 @@ check("closeFileTab 关最后一个：整片文件舞台收摊且激活位顺延
 // 这里直接渲染各 pane 正文验证渲染体；存在性同步走 effect（桩不执行）
 comps.setKitUi({
   files: [
-    { path: "C:/x/a.js", from: "tree", untracked: false, usedAt: 1 },
+    { path: "C:/x/a.js", from: "scm", untracked: false, usedAt: 1 },
     { path: "C:/x/b.md", from: "scm", untracked: true, usedAt: 2 },
   ],
   activeFile: "C:/x/b.md",
@@ -499,10 +493,10 @@ comps.setKitUi({
 callLog = [];
 out = comps.FilePaneBody({});
 const fpChips = callLog.filter((c) => (c[0] === "jsxs") && c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-tab") && typeof c[2].title === "string" && c[2].title.startsWith("C:/x/"));
-const fpEditors = callLog.filter((c) => c[1] === comps.FileEditorPane);
+const fpEditors = callLog.filter((c) => c[1] === comps.DiffPane);
 const fpWraps = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-pane-view" && c[2].style && typeof c[2].style.display === "string");
 const fpLabels = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-tab-label" && ["a.js", "b.md"].includes(c[2].children));
-check("FilePaneBody 渲染无异常（文档签条 + 两个 FileEditorPane 实例）", !!out && fpChips.length === 2 && fpEditors.length === 2 && fpLabels.length === 2);
+check("FilePaneBody 渲染无异常（文档签条 + 两个 DiffPane 实例）", !!out && fpChips.length === 2 && fpEditors.length === 2 && fpLabels.length === 2);
 check("FilePaneBody 每文件一签、只激活当前签、每签各带 ✕ 单关", fpChips.filter((c) => c[2].className.includes("dshk-tab-on")).length === 1 && fpChips.every((c) => Array.isArray(c[2].children) && c[2].children.some((ch) => ch && ch.props && ch.props.className === "dshk-tab-x")));
 check("FilePaneBody 非激活文件仍挂载（激活 flex / 非激活 none）", fpWraps.filter((c) => c[2].style.display === "flex").length === 1 && fpWraps.some((c) => c[2].style.display === "none"));
 comps.setKitUi({ files: [], activeFile: null });
@@ -919,8 +913,8 @@ let vaultFetchPrev = null;
 // 7.2.3) 文件标签 LRU 纯逻辑：默认上限 3，超限开新文件逐出 usedAt 最小者（=关掉
 // 最久没看的那张标签）；重开已存在文件置顶激活不逐出自身
 const lruBase = [];
-for (let i = 1; i <= 3; i++) lruBase.push({ path: `C:/x/f${i}.js`, from: "tree", untracked: false, usedAt: i });
-const opened = comps.openFileTab({ files: lruBase, activeFile: "C:/x/f3.js" }, "C:/x/f4.js", "tree", false);
+for (let i = 1; i <= 3; i++) lruBase.push({ path: `C:/x/f${i}.js`, from: "scm", untracked: false, usedAt: i });
+const opened = comps.openFileTab({ files: lruBase, activeFile: "C:/x/f3.js" }, "C:/x/f4.js", "scm", false);
 check("openFileTab 超限 LRU 逐出最久未用", opened.files.length === 3 && !opened.files.some((p) => p.path === "C:/x/f1.js") && opened.files.some((p) => p.path === "C:/x/f4.js") && opened.activeFile === "C:/x/f4.js" && opened.activeFeature === "file");
 const reopened = comps.openFileTab({ files: opened.files, activeFile: "C:/x/f4.js" }, "C:/x/f2.js", "scm", false);
 const reopenedItem = reopened.files.find((p) => p.path === "C:/x/f2.js");
@@ -932,67 +926,6 @@ const commitOpen = comps.openFileTab({ files: [], activeFile: null }, "C:/x/hist
 check("openFileTab 携带 commit 钉定", commitOpen.files.length === 1 && commitOpen.files[0].commit === "abc1234def" && commitOpen.activeFile === "C:/x/hist.js");
 const commitReopen = comps.openFileTab(commitOpen, "C:/x/hist.js", "scm", false);
 check("openFileTab 从 SCM 重开同路径清除钉定", commitReopen.files[0].commit === undefined);
-
-// 7.2.3c) 提交钉定 diff 视图：顶部基线说明（父短哈希/根提交空树）；复用全文件
-// 着色（新像 = 该提交时刻的内容，由 diff 响应带回）而非叠当前盘上内容；
-// 新像缺失分支——该提交已删除的文件走纯红删除块，过大/二进制回落原始 patch。
-// 桩 effect 不执行，diff 态用 stateStore 预置（#0 state、#1 mode、#2 diff）
-const commitDiffText = "diff --git a/f.js b/f.js\nindex 111..222 100644\n--- a/f.js\n+++ b/f.js\n@@ -1 +1 @@\n-old\n+new\n";
-const readyBody = { phase: "ready", body: { path: "C:/x/f.js", size: 2, mtimeMs: 1, truncated: false, binary: false, content: "x\n" } };
-stateStore.clear();
-stateSeq = 0;
-stateStore.set(0, readyBody);
-stateStore.set(2, { phase: "ready", clean: false, base: "abcd123", text: commitDiffText, content: "new\n" });
-callLog = [];
-out = comps.FileEditorPane({ path: "C:/x/f.js", cwd: "C:/x", source: "scm", commit: "full40hash" });
-const baseNote = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diffnote" && typeof c[2].children === "string" && c[2].children.includes("abcd123"));
-const overlayRows = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-inline");
-const rawOnly = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diff");
-check("提交钉定 diff 渲染基线说明（父提交 abcd123）", !!baseNote);
-check("提交钉定 diff 复用全文件着色（新像=提交时刻内容）", !!overlayRows && !rawOnly);
-// 该提交已删除的文件（blobMissing）：纯红删除块，不出元数据噪音
-stateStore.clear();
-stateSeq = 0;
-stateStore.set(0, readyBody);
-stateStore.set(2, { phase: "ready", clean: false, base: "abcd123", text: commitDiffText, blobMissing: true });
-callLog = [];
-out = comps.FileEditorPane({ path: "C:/x/f.js", cwd: "C:/x", source: "scm", commit: "full40hash" });
-const delRed = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-il-del").map((c) => c[2].children);
-const delMeta = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("diff --git") || c[2].children.startsWith("@@")));
-check("提交钉定删除文件走纯红块（无元数据噪音）", delRed.includes("old") && !delRed.includes("new") && !delMeta);
-// 新像缺失（过大/二进制，无 content 无 blobMissing）：回落原始 patch
-stateStore.clear();
-stateSeq = 0;
-stateStore.set(0, readyBody);
-stateStore.set(2, { phase: "ready", clean: false, base: "abcd123", text: commitDiffText });
-callLog = [];
-out = comps.FileEditorPane({ path: "C:/x/f.js", cwd: "C:/x", source: "scm", commit: "full40hash" });
-const rawFallback = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diff");
-check("钉定无新像回落原始 patch", !!rawFallback);
-stateStore.clear();
-stateSeq = 0;
-stateStore.set(0, readyBody);
-stateStore.set(2, { phase: "ready", clean: false, base: "", text: commitDiffText });
-callLog = [];
-out = comps.FileEditorPane({ path: "C:/x/f.js", cwd: "C:/x", source: "scm", commit: "root40hash" });
-const rootNote = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diffnote" && typeof c[2].children === "string" && (c[2].children.includes("empty tree") || c[2].children.includes("空树")));
-check("根提交钉定显示空树基线说明", !!rootNote);
-// 非 commit 的常规 diff 视图不受影响：hunk 仍套回盘上内容（全文件着色）
-stateStore.clear();
-stateSeq = 0;
-stateStore.set(0, readyBody);
-stateStore.set(2, { phase: "ready", clean: false, text: commitDiffText });
-callLog = [];
-out = comps.FileEditorPane({ path: "C:/x/f.js", cwd: "C:/x", source: "scm" });
-const normalOverlay = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-inline");
-check("常规 diff 视图仍套盘上内容（无 commit 钉定）", !!normalOverlay);
-// 预览头部标题：绝对路径（文件名由页签 chip 承担）
-callLog = [];
-out = comps.FileEditorPane({ path: "C:/x/dir/f.js", cwd: "C:/x", source: "scm" });
-const titleAbs = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-title" && c[2].children === "C:/x/dir/f.js");
-check("预览头部标题显示绝对路径", !!titleAbs);
-check("预览头部不挂 title 悬停（全路径已直显，悬停只留页签 chip）", !!(titleAbs && titleAbs[2] && titleAbs[2].title === undefined));
-stateStore.clear();
 
 // 7.5) 终端坞（多标签）：预置两个会话（含同 cwd 多开）后渲染——标签 map 曾因
 // 变量遮蔽翻译函数 t 而崩溃，此用例专防"有状态后才走到的渲染分支"
@@ -1717,11 +1650,11 @@ check(
 );
 stateSeq = 0;
 stateStore.clear();
-// 设置卡布局：两个侧边栏快捷键在「侧边栏」组（组头 + 左/右两键，无启用开关——
-// Ctrl+B 恒生效），字段行走官方通用设置模型（标题+说明左列、控件右置）
+// 设置卡布局：左右两键 + 官方「工作区文件」入口开关在「侧边栏」组（组头，无启用
+// 开关——Ctrl+B 恒生效），字段行走官方通用设置模型（标题+说明左列、控件右置）
 check(
-  "侧边栏组只含左右两键且带组头、无启用位",
-  src.includes('{ title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut"] }') && src.includes('cfgGroupSidebar: "侧边栏"') && !src.includes("sidebarShortcutEnabled"),
+  "侧边栏组含左右两键与官方工作区文件入口开关、带组头、无启用位",
+  src.includes('{ title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut", "hideOfficialFilesEntry"] }') && src.includes('cfgGroupSidebar: "侧边栏"') && !src.includes("sidebarShortcutEnabled") && !src.includes("chatOpenFilePreview"),
 );
 // 默认值与宿主 Config schema（src/index.ts）逐项同值：恢复默认拿的是宿主组合基座
 // （base 只带 vaultRoot 一项），其余键由 cfgFormat 回落
@@ -1765,29 +1698,14 @@ check(
   !src.includes("cfgOpenCodeSession") && !src.includes('"/dsh-kit/opencode-session"'),
 );
 
-// 文件编辑面：① 自动保存提示条不得存在（提示条容器与两枚 i18n 键都不许出现）；
-// ② CM 宿主走状态化回调 ref——宿主会被 React 换新节点，元素不进依赖就等于「切 diff
-// 再切回原文一片空白」；③ 空文件不落「文件为空」分支（新建的空文件要能写）
+// 工作区文件编辑/预览面已退役（树与对话区点击改投官方右栏文件签，diff 签归 SCM
+// 专用）：CM/编辑区/保存链路/pdf·xlsx·docx 沙箱与其 vendor 都不得再出现
 check(
-  "文件编辑面不再有自动保存提示条（.dshk-editbar 与两枚 i18n 键均移除）",
-  !src.includes("dshk-editbar") && !src.includes("editRteHint") && !src.includes("editAutosaveHint"),
+  "工作区文件编辑预览面已退役（CM/编辑区/write 端点/沙箱库全链移除）",
+  !src.includes("dshk-cm-host") && !src.includes("dshk-editarea") && !src.includes("setCmHost") &&
+    !src.includes("window.CM6") && !src.includes('"/dsh-kit/write"') && !src.includes("/dsh-kit/vendor/pdf.min.js") &&
+    !src.includes("mountPdfViewer") && !src.includes("dshk-sheetwrap") && !src.includes("dshk-docwrap"),
 );
-check(
-  "CM 编辑面宿主走状态化回调 ref（切视图能重建，不留悬空实例/死 ref）",
-  src.includes("ref: setCmHost") && !src.includes("readHostRef") && !src.includes("cmHostRef"),
-);
-check("空文本文件不落「文件为空」分支（可编辑）", !src.includes('b.content === null || b.content === ""'));
-// 语法配色令牌（--dshk-tok-*）挂在 .dshk-cm-scope 上，而 vendor 的 CM6.create 是把
-// 这个类加到 view.dom（.cm-editor）上的——CM6 首次更新会重写自己的 className，那些类
-// 会被抹掉，于是「打开有高亮、一点击/一输入就没色」。所以宿主 div 必须自己带这个类
-// （React 拥有的稳定祖先，配色变量经继承生效）
-check(
-  "CM 宿主自带 dshk-cm-scope（配色变量靠 React 祖先承载，不靠 vendor 加在 view.dom 上的类）",
-  src.includes('"dshk-editarea dshk-cm-host dshk-cm-scope"'),
-);
-// CM6 baseTheme 自带 .cm-focused 的 1px dotted #212121 轮廓（点击进编辑器就冒虚线框）：
-// 明写清掉，防日后「顺手」把它删了又冒出来
-check("CM 焦点虚线框已清掉（.cm-focused outline:none）", src.includes(".dshk-cm-host .cm-editor.cm-focused{outline:none}"));
 
 // 日程只有右栏 dock 签（入口归右栏开始页与待办卡）：侧栏待办索引、日程快捷键及其
 // 设置项都不得出现；开合走右栏快捷键（Ctrl+Alt+B，可配置）

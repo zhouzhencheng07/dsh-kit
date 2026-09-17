@@ -128,18 +128,6 @@ const HOST_ONLY_LOCKED = [
 // 0.1.5-rc.2 只能看目录——那是当初锁它的原因
 
 /**
- * 交付文件卡（`dsh-client-ui-deliverables` 的 PresentedFileCard）——**条件锁**：
- * 卡上的「打开」只是浏览器侧预览，**登录端能自己接管这次点击时不该锁**（kit 客户端
- * 的 capture 拦截器会把卡点击改投自己的文件签，先看后下，下载按钮长在文件签上）；
- * 接管关着时（chatOpenFilePreview 关，或文件树与源代码管理都关）才锁——否则点击
- * 落到"手机上看不了"的官方侧边栏预览。判据见 index.ts 的 lockPresentedCard。
- * 卡下拉里的宿主动作始终由 PRESENTED_HOST_ACTION_RE 按项文本拦（菜单走 portal）。
- * 「本轮文件改动」chip 行的属性是 data-produced-files-row，与交付卡的
- * data-presented-file 不是同一属性的单复数形态，别按名字推关系。
- */
-const PRESENTED_LOCKED = ['[data-presented-file]']
-
-/**
  * 「添加工作区」入口：只在宿主 picker 服务不了远程客户端时并入。browse 后端让远程
  * 浏览器自己在页面里列目录、建文件夹，锁掉是白丢功能；native 的 pick 会在宿主屏幕
  * 弹 OS 对话框（点击者与那块屏幕不在一处），且它没有 browse 的 list 能力（RPC 直接
@@ -181,11 +169,6 @@ export interface PhoneAssistOptions {
   remoteView: boolean
   /** 宿主 picker 服务不了远程客户端（不是 browse）时，把挑选入口一并锁住 */
   pickerLocked: boolean
-  /**
-   * 交付卡是否置灰：登录端能自己接管卡片点击时不锁（改投 kit 文件签），
-   * 接管关着时才锁。判据见 index.ts 的 lockPresentedCard。
-   */
-  presentedLocked: boolean
 }
 
 /**
@@ -194,7 +177,7 @@ export interface PhoneAssistOptions {
  * 复核基线 dsh 0.1.5-rc.2。
  * ① 内测声明弹窗（welcome notice）：远程浏览器的 settings scope 是内存模式，已读状态
  *    存不住，每次加载都会弹——脚本轮询自动点「继续」。
- * ② 宿主专属入口置灰（见 HOST_ONLY_LOCKED / PICKER_LOCKED / PRESENTED_LOCKED / 两个
+ * ② 宿主专属入口置灰（见 HOST_ONLY_LOCKED / PICKER_LOCKED / 两个
  *    文本正则）：捕获阶段拦掉点击并弹同一句提示，既不把对话框/编辑器弹到电脑上，
  *    也不在手机上留一块空白。
  *    选择器能命中的用 CSS 置灰（重渲染安全）；只有文本可认的（菜单项、设置页按钮）
@@ -217,8 +200,8 @@ export interface PhoneAssistOptions {
  *    重取（事件发给脱离文档的节点不会冒泡到 React 根）；手势被判成滚动时浏览器只发 touchcancel，
  *    故两个都挂。
  */
-export function phoneAssistScript({ remoteView, pickerLocked, presentedLocked }: PhoneAssistOptions): string {
-  const sels = [...HOST_ONLY_LOCKED, ...(pickerLocked ? PICKER_LOCKED : []), ...(presentedLocked ? PRESENTED_LOCKED : [])]
+export function phoneAssistScript({ remoteView, pickerLocked }: PhoneAssistOptions): string {
+  const sels = [...HOST_ONLY_LOCKED, ...(pickerLocked ? PICKER_LOCKED : [])]
   const texts = [...(pickerLocked ? [ADD_MENU_ITEM_RE] : []), OPEN_DOCUMENT_RE, PRESENTED_HOST_ACTION_RE]
   const data = JSON.stringify({
     // 非远程视图时数据为空：脚本只剩内测弹窗那段
@@ -467,12 +450,6 @@ export interface PhoneGatewayOptions {
    * 无需重启网关即可跟随。
    */
   lockPickerEntries?: () => boolean
-  /**
-   * 交付卡是否置灰。登录端能自己接管卡片点击（chatOpenFilePreview 开，且文件树或
-   * 源代码管理至少开一个——与客户端 chatPreviewHook.ready 同一判据）时不锁；判据
-   * 抛错按"锁住"处理（保守：宁可置灰，也不让点击落到手机上看不了的官方预览）。
-   */
-  lockPresentedCard?: () => boolean
 }
 
 export interface PhoneGatewayHandle {
@@ -489,7 +466,7 @@ export interface PhoneGatewayHandle {
   close(): void
 }
 
-export function startPhoneGateway({ port, upstreamPort, stateFile = defaultStateFile(), log = () => {}, sessionSecret = null, lockPickerEntries = () => true, lockPresentedCard = () => true }: PhoneGatewayOptions): PhoneGatewayHandle {
+export function startPhoneGateway({ port, upstreamPort, stateFile = defaultStateFile(), log = () => {}, sessionSecret = null, lockPickerEntries = () => true }: PhoneGatewayOptions): PhoneGatewayHandle {
   if (!Number.isInteger(port) || port < 0 || !Number.isInteger(upstreamPort) || upstreamPort <= 0) {
     throw new Error('startPhoneGateway: port 必须是非负整数（0=系统自选），upstreamPort 必须是正整数')
   }
@@ -515,15 +492,6 @@ export function startPhoneGateway({ port, upstreamPort, stateFile = defaultState
   const pickerLocked = (): boolean => {
     try {
       return lockPickerEntries()
-    } catch {
-      return true
-    }
-  }
-
-  /** 取当前交付卡判定；抛错按"锁住"处理（同 pickerLocked 的保守方向） */
-  const presentedLocked = (): boolean => {
-    try {
-      return lockPresentedCard()
     } catch {
       return true
     }
@@ -633,7 +601,7 @@ export function startPhoneGateway({ port, upstreamPort, stateFile = defaultState
           const chunks: Buffer[] = []
           upRes.on('data', (c) => chunks.push(c))
           upRes.on('end', () => {
-            const injected = Buffer.from(injectHeadScript(Buffer.concat(chunks).toString('utf8'), POLYFILL_SCRIPT + phoneAssistScript({ remoteView, pickerLocked: pickerLocked(), presentedLocked: presentedLocked() })), 'utf8')
+            const injected = Buffer.from(injectHeadScript(Buffer.concat(chunks).toString('utf8'), POLYFILL_SCRIPT + phoneAssistScript({ remoteView, pickerLocked: pickerLocked() })), 'utf8')
             delete out.etag
             if (enc !== null && !alreadyEncoded && injected.length >= COMPRESS_MIN_BYTES) {
               compressBuffer(enc, injected).then(

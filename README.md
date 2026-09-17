@@ -7,19 +7,20 @@
 
 ## 功能
 
-工作台住在**官方右侧边栏**（宿主 0.1.5+ 的 `sidebar.right`）：文件 / 知识库 / 日程 /
-后台任务 / 浏览器各一张 dock 签，签里再分文档签（一文件一签、一知识库页一签）。
+工作台住在**官方右侧边栏**（宿主 0.1.5+ 的 `sidebar.right`）：diff / 知识库 / 日程 /
+后台任务 / 浏览器各一张 dock 签，知识库签里再分文档签（一页一签）。工作区文件的查看
+走**官方文件预览**（kit 在其头部补一枚「下载到本机」）；工作区文件不做插件内编辑——
+编辑走 VS Code 或让 agent 改。
 索引类视图（文件树、源代码管理、知识库目录）共用左侧边栏一格，对话列常驻。
 
 - **终端**（工具行开关 / **Ctrl+/**）：底部多标签终端坞，绑定开启时所在会话的工作区，
   隐藏时后台 shell 继续运行；Windows 优先 pwsh
 - **文件树**（工具行开关 / **Ctrl+,**）：以会话工作区为根浏览、新建/重命名/删除
-  （回收站）/复制路径；点文件在右栏「文件」签开一个文档签（一文件一签、点签切换、
-  ✕ 单关；超过设置卡的「文件标签数上限」，默认 3，自动关掉最久没看的那个），
-  md 所见即所得、自动保存 + mtime CAS 防覆盖，AI 改盘自动跟随 / diff 着色；
-  **md 里的相对 / 站内链接点击直接在文件签打开目标文件**
+  （回收站）/复制路径 / @ 到对话；点文件交**官方右栏文件预览**打开，库内的 md 页
+  则直达知识库编辑器（所见即所得）
 - **源代码管理**（工具行开关 / **Ctrl+Alt+.**）：页内 git 工作台——暂存/取消暂存/
-  放弃/提交、diff 视图、分支切换与新建删除、↑↓ 同步（先拉后推）、提交图谱；
+  放弃/提交、点文件在右栏 diff 签看差异（全文件着色，提交图谱可钉定任一提交的
+  历史版本对比）、分支切换与新建删除、↑↓ 同步（先拉后推）、提交图谱；
   非 git 目录可一键初始化
 - **日程**（入口在右栏开始页条目与待办卡；无 composer 钮、无专属快捷键）：
   日程 pane 内左待办 + 右周网格 + 本周统计；agent 经 `schedule_query`/`schedule_create`
@@ -57,7 +58,7 @@
   （官方只为当前会话拉历史，没打开过的会话看不到它的压缩）。权限在设置卡里一键申请
   （未授权时退化为标签标题上的未读计数）
 - **设置卡**：dsh-kit 配置卡——各功能独立开关、快捷键自定义（终端/文件树/源代码管理/
-  知识库/侧栏左右两键）、搜索结果条数、文件签上限、知识库目录、会话监视参数、
+  知识库/侧栏左右两键）、隐藏官方「工作区文件」入口、搜索结果条数、知识库目录、会话监视参数、
   会话通知与通知权限、手机访问
 
 ## 安装与更新
@@ -98,8 +99,8 @@ dsh plugin --profile web update dsh-kit
   `conversation.input.left` 注册四个入口钮；官方右栏 `sidebarRightTabs` 注册五类 dock 签、
   pane 正文经 `sidebar.right.pane.tab` 提供；终端坞与计时件自绘；设置页与设置卡注册进
   settings 槽位
-- `client/vendor/*`：xterm / CodeMirror 6 / TipTap 富文本 / pdf.js / SheetJS / mammoth /
-  KaTeX / DOMPurify，全部按需懒加载，由 `/dsh-kit/vendor/*` 静态伺服
+- `client/vendor/*`：xterm / TipTap 富文本 / KaTeX / qrcode，全部按需懒加载，
+  由 `/dsh-kit/vendor/*` 静态伺服
 - `src/web-search.ts` + `src/engine-chain.ts` + `src/engines/*`：向 web seam 注册
   `free-search` provider，受设置卡 `searchEnabled` 门控
 - `cordis.patch.yml`：把 dsh-kit 插件行 insert 进 bundle 层，web 行 `searchProvider`
