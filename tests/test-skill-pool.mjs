@@ -81,7 +81,11 @@ try {
   void dupHigh;
   check("枚举：providers 为数组", Array.isArray(body.providers));
 
-  // 3) 复制到池（dest=物理根 id）
+  // 3) 复制到池（dest=物理根 id）。先按枚举删掉池里的残留同名技能——残留在会让
+  // 复制变 409；走 API 删（服务端真相，平铺 .md / 目录都覆盖，不依赖本地 DSH_HOME 对不对）
+  for (const s of groupOf(await listSkills(), "pool")?.skills ?? []) {
+    if (s.name === "hello-kit" || s.name === "flat-kit") await op({ op: "delete", src: s.path });
+  }
   let res = await op({ op: "copy", src: hello.path, dest: "pool" });
   check("复制到池：200", res.status === 200);
   body = await listSkills();
