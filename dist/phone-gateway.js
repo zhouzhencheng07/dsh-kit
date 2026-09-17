@@ -116,11 +116,9 @@ const HOST_ONLY_LOCKED = [
     'button[aria-label="Choose an app to open in"]',
     'button[aria-label^="在 "][aria-label$=" 中打开工作目录"]',
     'button[aria-label^="Open workspace in "]',
-    // 官方右侧边栏开始页的「工作区文件」胶囊（`dsh-client-ui-sidebar-files` 的 guide 条目，
-    // id 固定为 files）。远程视图里一并置灰——kit 自己的文件树才是
-    // 手机端要用的那个，官方这份只读列表留着就是两个文件入口打架
-    'button[data-sidebar-right-guide-entry="files"]',
 ];
+// 官方右栏「工作区文件」胶囊不锁：宿主 0.1.6 起手机上文件预览（md/PDF）可用，
+// 0.1.5-rc.2 只能看目录——那是当初锁它的原因
 /**
  * 交付文件卡（`dsh-client-ui-deliverables` 的 PresentedFileCard）——**条件锁**：
  * 卡上的「打开」只是浏览器侧预览，**登录端能自己接管这次点击时不该锁**（kit 客户端

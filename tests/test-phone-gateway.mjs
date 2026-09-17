@@ -208,8 +208,8 @@ try {
   // 远程视图辅助脚本：自动关内测声明弹窗 + 锁住宿主专属入口（置灰 + 点击同一句提示，不隐藏）
   // 「在应用中打开」与设置页「打开配置文件」一律锁；宿主 picker 非 browse 时连挑选入口一起锁
   check('HTML 页注入了远程视图辅助脚本', page.body.includes('dismissNotice') && page.body.includes('选择打开方式') && page.body.includes('中打开工作目录') && page.body.includes('添加工作区') && page.body.includes('打开配置文件'))
-  // 官方右侧边栏开始页的「工作区文件」胶囊（kit 自己那份文件树才是手机端用的）
-  check('官方「工作区文件」入口入列置灰', page.body.includes('data-sidebar-right-guide-entry=\\"files\\"'))
+  // 官方右栏「工作区文件」不锁：宿主 0.1.6 起手机可预览文件内容（0.1.5-rc.2 只能看目录，旧版曾锁）
+  check('官方「工作区文件」不入列置灰（宿主 0.1.6 起手机可预览）', !page.body.includes('data-sidebar-right-guide-entry'))
   // 交付卡片（PresentedFileCard）是**条件锁**，默认（判据未知/接管关着）取保守态：
   // 整卡置灰，免得点击落到「手机上看不了」的官方侧边栏预览；接管开着时不锁，见下一块。
   // 同理「本轮文件改动」chip 行（容器属性是 data-produced-files-row，与交付卡的
