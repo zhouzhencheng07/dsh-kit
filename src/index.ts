@@ -22,10 +22,10 @@
 //   2) 静态 /dsh-kit/vendor/* —— xterm 官方预编译 UMD，按需加载；
 //   3) GET /dsh-kit/tree?path=… —— 单层目录列表（含文件），只读；
 //   4) GET /dsh-kit/read?path=… —— 单文件文本内容，只读；
-//   5) GET /dsh-kit/raw?path=… —— 原始字节透传（扩展名白名单 + Range/206，PDF 预览用）；
-//   6) POST /dsh-kit/write —— 编辑保存（cwd 子树校验 + mtime CAS）；
-//   7) POST /dsh-kit/fs/op —— 文件树新建/重命名/删除（删除优先移入回收站）；
-//   8) GET /dsh-kit/git/status|diff|log|show|branch、POST /dsh-kit/git/init|op ——
+//   5) GET /dsh-kit/raw?path=… —— 原始字节透传（扩展名白名单 + Range/206；官方
+//      文件预览头部的「下载到本机」与 vault 图片/附件走这里）；
+//   6) POST /dsh-kit/fs/op —— 文件树新建/重命名/删除（删除优先移入回收站）；
+//   7) GET /dsh-kit/git/status|diff|log|show|branch、POST /dsh-kit/git/init|op ——
 //      源代码管理。status 含分支/领先信息（branch/upstream/ahead/behind），
 //      log 是提交图谱（git log --all --graph），show 是单个提交详情，
 //      branch 是本地分支列表；op 含 stage/unstage/discard/commit/push/
@@ -427,24 +427,13 @@ const VENDOR_FILES = new Map([
   ['/dsh-kit/vendor/addon-fit.js', 'addon-fit.js'],
   ['/dsh-kit/vendor/xterm.css', 'xterm.css'],
   ['/dsh-kit/vendor/qrcode.js', 'qrcode.js'],
-  ['/dsh-kit/vendor/purify.min.js', 'purify.min.js'],
-  ['/dsh-kit/vendor/codemirror.bundle.js', 'codemirror.bundle.js'],
   // vault 页面富文本编辑器（TipTap 引擎，md↔富文本往返；懒加载）
   ['/dsh-kit/vendor/richeditor.bundle.js', 'richeditor.bundle.js'],
-  // pdf.js 预览（主文件懒加载；worker/cmaps/standard_fonts 由库按需再取）
-  ['/dsh-kit/vendor/pdf.min.js', 'pdf.min.js'],
-  ['/dsh-kit/vendor/pdf.worker.min.js', 'pdf.worker.min.js'],
-  // Excel/Word 预览解析库（xlsx/docx 懒加载，进沙箱 iframe 解析）
-  ['/dsh-kit/vendor/xlsx.full.min.js', 'xlsx.full.min.js'],
-  ['/dsh-kit/vendor/mammoth.browser.min.js', 'mammoth.browser.min.js'],
   // KaTeX 数学公式（vault 阅读态渲染 $...$ / $$...$$；懒加载）
   ['/dsh-kit/vendor/katex.min.js', 'katex.min.js'],
   ['/dsh-kit/vendor/katex.min.css', 'katex.min.css'],
 ])
-// pdf.js 按需取用的资源子目录（CJK cmaps / 标准字体回退），单文件白名单覆盖不了
 const VENDOR_SUBDIRS = new Map([
-  ['cmaps', 'cmaps'],
-  ['standard_fonts', 'standard_fonts'],
   // KaTeX 字体：css 里以 fonts/ 相对路径引用，URL 段固定 fonts，磁盘上隔离在
   // katex_fonts/ 免得和未来其他字体混放
   ['fonts', 'katex_fonts'],
@@ -486,16 +475,15 @@ export async function apply(ctx: KitCtx): Promise<void> {
     terminalEnabled: z.boolean().default(true),
     fileTreeEnabled: z.boolean().default(true),
     sourceControlEnabled: z.boolean().default(true),
-    chatOpenFilePreview: z.boolean().default(true),
+    // 隐藏官方右栏「工作区文件」入口胶囊（纯浏览器端消费，宿主不读）：那只是个
+    // 目录按钮，与文件树功能重复；隐藏后文件仍可从对话/文件树/搜索进入
+    hideOfficialFilesEntry: z.boolean().default(false),
     // 对话里的 http(s) 链接点击改投内置浏览器（默认开）。门控在浏览器半边（需要
     // browserEnabled 同时开），宿主只提供 /dsh-kit/browser/open 这条管道
     chatOpenLinkInBrowser: z.boolean().default(true),
     skillsPageEnabled: z.boolean().default(true),
     searchEnabled: z.boolean().default(true),
     searchMaxResults: z.number().step(1).min(1).max(8).default(2),
-    // 文件预览标签上限（预览大标签内的文件小标签数）：超过时打开新文件按 LRU
-    // 逐出最久未看的预览（客户端即时生效）
-    previewMaxTabs: z.number().step(1).min(1).max(20).default(3),
     // phoneEnabled = 「手机访问」页入口可见性（配置卡最下，纯显示开关）。
     // 网关启停不走 settings（读取器回填滞后），改由状态文件 + kit 端点直管。
     phoneEnabled: z.boolean().default(true),
@@ -728,10 +716,10 @@ export async function apply(ctx: KitCtx): Promise<void> {
             res.writeHead(404)
             res.end()
           }
-          // 子目录资源（cmaps/*.bcmap、standard_fonts/*.pfb 等）：单段文件名
-          // 白名单字符校验，杜绝路径穿越
+          // 子目录资源（KaTeX 字体 fonts/*.woff2 等）：单段文件名白名单字符校验，
+          // 杜绝路径穿越
           let file: string | null
-          const sub = /^\/dsh-kit\/vendor\/(cmaps|standard_fonts|fonts)\/([A-Za-z0-9][A-Za-z0-9._-]*)$/.exec(pathname)
+          const sub = /^\/dsh-kit\/vendor\/(fonts)\/([A-Za-z0-9][A-Za-z0-9._-]*)$/.exec(pathname)
           if (sub) {
             file = path.join(VENDOR_SUBDIRS.get(sub[1] ?? '') ?? '', sub[2] ?? '')
           } else {
@@ -902,42 +890,11 @@ export async function apply(ctx: KitCtx): Promise<void> {
         },
       })
 
-      // ── 轻量 stat 端点：GET /dsh-kit/stat?path=<绝对文件> ──
-      // 工作区文件标签的外部修改可见性：只回 mtime
-      // 不读正文，前端轮询发现变化且本地无脏改才重读整页。安全链与 /read 相同
-      // （validateFile：sameOrigin + cwd 子树 + 存在性）
-      const disposeStat = webCtx.webServer.register({
-        kind: 'exact',
-        path: '/dsh-kit/stat',
-        handler: (req, res) => {
-          const json = (code: number, obj: unknown) => {
-            res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' })
-            res.end(JSON.stringify(obj))
-          }
-          if (req.method !== 'GET') {
-            json(405, { error: 'method not allowed' })
-            return
-          }
-          const origin = req.headers.origin
-          if (typeof origin === 'string' && origin !== '' && !sameOrigin(req)) {
-            json(403, { error: 'cross-origin denied' })
-            return
-          }
-          const url = new URL(req.url ?? '/', 'http://dsh-kit.local')
-          const file = validateFile(url.searchParams.get('path') ?? '')
-          if (!file.ok) {
-            json(400, { error: file.message })
-            return
-          }
-          json(200, { path: file.path, mtimeMs: file.mtimeMs, size: file.size })
-        },
-      })
-
       // ── 原始字节端点：GET /dsh-kit/raw?path=<绝对文件>[&dl=1] ──
-      // 二进制透传（PDF 预览用）：扩展名白名单给 content-type，完整流式返回
-      // 不截断，支持 Range/206（pdf.js 渐进加载需要）。安全链与 /read 相同；
-      // 手机网关是全路径反代，新路径无需单独登记。
-      // &dl=1 = 下载模式（文件签的「下载」按钮）：任意类型 + attachment，见下。
+      // 原始字节透传（官方文件预览头部的「下载到本机」按钮、vault 图片/附件）：
+      // 扩展名白名单给 content-type，完整流式返回不截断，支持 Range/206。安全链
+      // 与 /read 相同；手机网关是全路径反代，新路径无需单独登记。
+      // &dl=1 = 下载模式：任意类型 + attachment，见下。
       const disposeRaw = webCtx.webServer.register({
         kind: 'exact',
         path: '/dsh-kit/raw',
@@ -1015,112 +972,10 @@ export async function apply(ctx: KitCtx): Promise<void> {
         },
       })
 
-      // ── 编辑保存端点：POST /dsh-kit/write ──
-      // body {path, content, baseMtime, cwd}。校验链：同源（sameOrigin：Host 必须
-      // 回环名 + Origin 存在时匹配，见 web-guard.ts）→ 文件必须位于 realpath(cwd)
-      // 子树内 → 必须是已存在文件 → 内容 ≤512KB 且不含 NUL → mtime CAS（baseMtime
-      // 不等于当前值回 409 modified，附带当前 mtimeMs 供前端重载）。成功返回新的 mtimeMs。
-      const disposeWrite = webCtx.webServer.register({
-        kind: 'exact',
-        path: '/dsh-kit/write',
-        handler: (req, res) => {
-          const json = (code: number, obj: unknown) => {
-            res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' })
-            res.end(JSON.stringify(obj))
-          }
-          if (req.method !== 'POST') {
-            json(405, { error: 'method not allowed' })
-            return
-          }
-          if (!sameOrigin(req)) {
-            json(403, { error: 'cross-origin denied' })
-            return
-          }
-          const chunks: Buffer[] = []
-          let total = 0
-          let aborted = false
-          req.on('data', (c) => {
-            if (aborted) return
-            total += c.length
-            if (total > READ_LIMIT + 65536) {
-              aborted = true
-              json(413, { error: 'payload too large' })
-              req.destroy()
-              return
-            }
-            chunks.push(c)
-          })
-          req.on('end', () => {
-            if (aborted) return
-            let body: any
-            try {
-              body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
-            } catch {
-              json(400, { error: 'bad json' })
-              return
-            }
-            const dir = validateCwd(String(body?.cwd ?? ''))
-            const file = validateFile(String(body?.path ?? ''))
-            if (!dir.ok) {
-              json(400, { error: dir.message })
-              return
-            }
-            if (!file.ok) {
-              json(400, { error: file.message })
-              return
-            }
-            const rel = path.relative(dir.path, file.path)
-            if (rel.startsWith('..') || path.isAbsolute(rel)) {
-              json(400, { error: '文件不在当前工作区内' })
-              return
-            }
-            if (typeof body.content !== 'string') {
-              json(400, { error: '缺少 content' })
-              return
-            }
-            if (Buffer.byteLength(body.content, 'utf8') > READ_LIMIT) {
-              json(400, { error: '内容超过 512KB 上限' })
-              return
-            }
-            if (Buffer.from(body.content, 'utf8').includes(0)) {
-              json(400, { error: '二进制内容拒绝写入' })
-              return
-            }
-            const baseMtime = Number(body.baseMtime)
-            if (!Number.isFinite(baseMtime)) {
-              json(400, { error: '缺少 baseMtime' })
-              return
-            }
-            let stat: fs.Stats
-            try {
-              stat = fs.statSync(file.path)
-            } catch (error) {
-              json(404, { error: `读取文件失败：${error instanceof Error ? error.message : error}` })
-              return
-            }
-            if (stat.mtimeMs !== baseMtime) {
-              json(409, { error: 'modified', mtimeMs: stat.mtimeMs })
-              return
-            }
-            fs.writeFile(file.path, body.content, 'utf8', (writeError) => {
-              if (writeError) {
-                json(500, { error: `写入失败：${writeError?.message ?? writeError}` })
-                return
-              }
-              let next: number | undefined
-              try {
-                next = fs.statSync(file.path).mtimeMs
-              } catch {}
-              json(200, { ok: true, mtimeMs: next ?? null })
-            })
-          })
-        },
-      })
-
       // ── 上传端点：POST /dsh-kit/upload?dir=<绝对目录>（multipart 文件，落盘该目录）──
       // 场景：手机访问 DSH 时用 <input type=file> 唤起手机自己的选择器（原生对话框
       // 只会弹在运行它的机器上，手机够不到电脑的），选完经 HTTP 传回写入工作区。
-      // 校验链与 /write 一致：sameOrigin → dir 走 validateCwd；文件名
+      // 校验链：sameOrigin → dir 走 validateCwd；文件名
       // 只取 basename + 去非法字符，重名自动追加 " (n)" 序号不覆盖。整体缓冲有上限，
       // 单文件另设上限（multipart 手工解析，见 src/upload.ts）。
       const UPLOAD_TOTAL_LIMIT = 200 * 1024 * 1024
@@ -1213,7 +1068,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
       //   rename {path, name}              同目录内重命名（目标已存在报错）
       //   delete {path}                    删除；Windows 移入回收站，其它平台直接递归删。
       //                                    破坏性操作，前端已二次确认。
-      // 校验链与 /write 一致：sameOrigin → 目标必须位于 realpath(cwd) 子树内
+      // 校验链：sameOrigin → 目标必须位于 realpath(cwd) 子树内
       // （工作区根本身不可改删）→ 名称过 invalidFsName 校验。
       const disposeFsOp = webCtx.webServer.register({
         kind: 'exact',
@@ -2362,15 +2217,6 @@ export async function apply(ctx: KitCtx): Promise<void> {
           return true
         }
       }
-      // 交付卡要不要置灰：登录端能自己接管卡片点击时**不锁**——kit 客户端的 capture
-      // 拦截器会把卡点击改投自己的文件签（先看后下，下载按钮长在文件签上）；接管关着
-      // 时点击会落到「手机上看不了」的官方侧边栏预览，那才锁。判据与客户端
-      // chatPreviewHook.ready 同源：chatOpenFilePreview 开，且文件树或源代码管理至少
-      // 开一个（两处任一处改了必须同改，否则手机端会出现"锁着但没人接管"或反之）。
-      const lockPresentedCard = (): boolean => {
-        const s = readSettings()
-        return !(s.chatOpenFilePreview === true && (s.fileTreeEnabled !== false || s.sourceControlEnabled !== false))
-      }
       // dsh web ≥ v0.1.2-alpha.5 的浏览器鉴权：网关反代须自带签名会话 cookie，
       // 否则手机端访问 index 一律 401。密钥即 credentials 服务的
       // client-connection/browser-session 记录（与 dsh web 共享），b64url 解码回
@@ -2447,7 +2293,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
           }
           try {
             gwPort = phonePort()
-            phoneGw = startPhoneGateway({ port: gwPort, upstreamPort: webCtx.webServer.port, log: warnLog, sessionSecret: () => dshSessionSecret, lockPickerEntries, lockPresentedCard })
+            phoneGw = startPhoneGateway({ port: gwPort, upstreamPort: webCtx.webServer.port, log: warnLog, sessionSecret: () => dshSessionSecret, lockPickerEntries })
             phoneGwError = null
           } catch (error) {
             gwPort = null
@@ -3043,7 +2889,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
         fs.mkdirSync(dir, { recursive: true })
         return { path: dir }
       })
-      // 写回：路径必须落在 vault 根内且是 md；mtime CAS 同 /dsh-kit/write 语义
+      // 写回：路径必须落在 vault 根内且是 md；mtime CAS 冲突回 409 modified（附带当前 mtimeMs）
       vaultPost('/dsh-kit/vault/write', async (body, root) => {
         const rawPath = String(body.path ?? '')
         const resolved = path.resolve(rawPath)
@@ -3209,9 +3055,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
         disposeVendor()
         disposeTree()
         disposeRead()
-        disposeStat()
         disposeRaw()
-        disposeWrite()
         disposeUpload()
         disposeFsOp()
         disposeGitStatus()

@@ -8,8 +8,11 @@ dsh browser UI, each independent and dependency-free; with none used, dsh stays 
 ## Features
 
 The workbench lives in the **official right sidebar** (host 0.1.5+, `sidebar.right`):
-one dock tab each for Files / Knowledge base / Schedule / Background tasks / Browser,
-with document tabs inside a tab (one per file, one per knowledge-base page).
+one dock tab each for Diff / Knowledge base / Schedule / Background tasks / Browser,
+with document tabs inside the Knowledge base tab (one per page). Workspace files are
+viewed through the **official file preview** (kit adds a "Download" button to its
+header); there is no in-plugin editing of workspace files — edit in VS Code or let
+the agent do it.
 Index views (file tree, source control, vault directory) share a single left-sidebar
 slot; the conversation column stays put.
 
@@ -17,14 +20,14 @@ slot; the conversation column stays put.
   bound to the session workspace at open time; hidden docks keep running; prefers
   pwsh on Windows
 - **File tree** (composer-row toggle / **Ctrl+,**): browse the session workspace;
-  create/rename/delete (to Recycle Bin)/copy path; click a file to open a document
-  tab in the right-dock **Files** tab (one tab per file, click to switch, ✕ to
-  close; beyond the "max file tabs" setting — 3 by default — the least-recently-viewed
-  tab closes); WYSIWYG markdown with mtime-CAS autosave, colored diff;
-  **relative / site-rooted links inside markdown open the target file in a file tab**
+  create/rename/delete (to Recycle Bin)/copy path / @-mention to chat; clicking a file
+  opens it in the **official right-sidebar preview**, while md pages inside the vault
+  go straight to the knowledge-base editor (WYSIWYG)
 - **Source control** (composer-row toggle / **Ctrl+Alt+.**): an in-page git
-  workbench — stage/unstage/discard/commit, diff view, branch switch/create/delete,
-  ↑↓ sync (pull then push), commit graph; one-click repo init for non-git directories
+  workbench — stage/unstage/discard/commit, click a file to see its diff in a
+  right-dock diff tab (full-file coloring; pin any commit from the graph to diff
+  against it), branch switch/create/delete, ↑↓ sync (pull then push), commit graph;
+  one-click repo init for non-git directories
 - **Schedule** (entry from the right-dock start page and the task card; no composer
   toggle and no dedicated shortcut): todos on the left, weekly grid + stats on the
   right; the agent gets read-only `schedule_query` and `schedule_create`; data is
@@ -78,8 +81,9 @@ slot; the conversation column stays put.
   unread count is shown in the tab title instead)
 - **Settings card**: dsh-kit config card — per-feature switches, shortcut
   customization (terminal / file tree / source control / knowledge base / both
-  sidebars), search result count, max file tabs, vault directory, monitor parameters,
-  session notifications and their permission, phone access
+  sidebars), hide-the-official-Workspace-Files-entry, search result count, vault directory,
+  monitor parameters, session notifications and their
+  permission, phone access
 
 ## Install & update
 
@@ -122,8 +126,8 @@ appear and the toggles have nothing to open — upgrade dsh first.
   `sidebarRightTabs` with pane bodies served through `sidebar.right.pane.tab`; the
   terminal dock and timer widgets are drawn by the plugin; settings page + card on the
   settings slots
-- `client/vendor/*`: xterm / CodeMirror 6 / TipTap rich text / pdf.js / SheetJS /
-  mammoth / KaTeX / DOMPurify, all lazily loaded and served from `/dsh-kit/vendor/*`
+- `client/vendor/*`: xterm / TipTap rich text / KaTeX / qrcode, all lazily loaded
+  and served from `/dsh-kit/vendor/*`
 - `src/web-search.ts` + `src/engine-chain.ts` + `src/engines/*`: registers the
   `free-search` provider on the web seam, gated by the settings card's `searchEnabled`
 - `cordis.patch.yml`: inserts the dsh-kit row into the bundle layer and rewrites

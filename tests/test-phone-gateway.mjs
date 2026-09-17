@@ -210,12 +210,13 @@ try {
   check('HTML 页注入了远程视图辅助脚本', page.body.includes('dismissNotice') && page.body.includes('选择打开方式') && page.body.includes('中打开工作目录') && page.body.includes('添加工作区') && page.body.includes('打开配置文件'))
   // 官方右栏「工作区文件」不锁：宿主 0.1.6 起手机可预览文件内容（0.1.5-rc.2 只能看目录，旧版曾锁）
   check('官方「工作区文件」不入列置灰（宿主 0.1.6 起手机可预览）', !page.body.includes('data-sidebar-right-guide-entry'))
-  // 交付卡片（PresentedFileCard）是**条件锁**，默认（判据未知/接管关着）取保守态：
-  // 整卡置灰，免得点击落到「手机上看不了」的官方侧边栏预览；接管开着时不锁，见下一块。
-  // 同理「本轮文件改动」chip 行（容器属性是 data-produced-files-row，与交付卡的
-  // data-presented-file 不是同一属性的单复数）始终不锁
-  check('交付卡片默认入列置灰（接管未知时的保守态）', page.body.includes('[data-presented-file]') && !page.body.includes('data-produced-files-row'))
-  check('交付卡片下拉的宿主动作有文本兜底（菜单走 portal，卡片选择器够不到）', page.body.includes('用默认应用打开') && page.body.includes('打开所在文件夹'))
+  // 交付卡片（PresentedFileCard）**不锁**：卡片点击非官即 vault——工作区文件卡走
+  // 官方右栏文件签（宿主 0.1.6 起手机可预览，与「工作区文件」入口放行同一前提），
+  // vault 卡由客户端拦截器改道知识库编辑器；官方预览不可用的旧宿主上会看到
+  // 官方报错，与「工作区文件」入口同一取舍。
+  // 卡下拉里的宿主动作（默认应用/所在文件夹）仍按文本拦（菜单走 portal）；
+  // 「本轮文件改动」chip 行（data-produced-files-row）同样不锁
+  check('交付卡片不锁（点击非官即 vault），下拉宿主动作仍有文本兜底', !page.body.includes('[data-presented-file]') && page.body.includes('用默认应用打开') && page.body.includes('打开所在文件夹'))
   // 「选择工作区」是工作区切换 chip（aria-label 恒定，选中的工作区名只在文本里），锁了就没法切工作区
   check('不锁「选择工作区」chip（只能切不能新增）', !page.body.includes('选择工作区') && !page.body.includes('Select workspace'))
   check('锁的方式是置灰 + 点击提示（不是 display:none）', page.body.includes('opacity:.45!important') && !page.body.includes('display:none!important'))
@@ -254,25 +255,6 @@ try {
       check('宿主 picker 为 browse：挑选入口不锁、宿主专属入口仍锁', browsePage.body.includes('dismissNotice') && !browsePage.body.includes('添加工作区|Add workspace') && browsePage.body.includes('打开配置文件') && browsePage.body.includes('选择打开方式'))
     } finally {
       gwBrowse.close()
-    }
-  }
-  // 登录端能自己接管卡片点击（chatOpenFilePreview 开 + 文件树/源代码管理至少开一个，
-  // 判据在 index.ts 的 lockPresentedCard）→ 卡片不锁：点击由客户端 capture 改投 kit
-  // 文件签（先看后下，下载按钮长在文件签上）；卡下拉的宿主动作照旧按文本锁
-  {
-    const gwTakeover = startPhoneGateway({
-      port: 0,
-      upstreamPort: upstream.port,
-      stateFile,
-      log: () => {},
-      lockPresentedCard: () => false,
-    })
-    try {
-      await new Promise((r) => setTimeout(r, 120))
-      const takeoverPage = await request(gwTakeover.port(), { path: '/page', headers: { cookie: cookieHeader } })
-      check('接管开着：交付卡片不锁（点击改投 kit 文件签）', !takeoverPage.body.includes('[data-presented-file]') && takeoverPage.body.includes('用默认应用打开'))
-    } finally {
-      gwTakeover.close()
     }
   }
   // 视图覆盖：?dshk_view=desktop 落 Cookie 后退出远程视图（只剩内测弹窗那段）

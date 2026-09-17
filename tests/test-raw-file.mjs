@@ -9,13 +9,12 @@ const check = (label, cond) => {
 }
 
 // ── rawExtOf / rawContentType ──
-check('小写扩展名命中 pdf', rawContentType('a.pdf') === 'application/pdf')
-check('大写扩展名命中', rawContentType('报告.PDF') === 'application/pdf')
-check('Windows 反斜杠路径取基名', rawContentType('D:\\x\\a.pdf') === 'application/pdf')
-check('xlsx 命中 OOXML 表格类型', rawContentType('a.xlsx') === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-check('xlsm 命中宏表类型', rawContentType('a.xlsm') === 'application/vnd.ms-excel.sheet.macroEnabled.12')
-check('xls 命中 legacy 类型', rawContentType('a.xls') === 'application/vnd.ms-excel')
-check('docx 命中 OOXML 文档类型', rawContentType('a.docx') === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+check('小写扩展名命中 png', rawContentType('a.png') === 'image/png')
+check('大写扩展名命中', rawContentType('截图.PNG') === 'image/png')
+check('Windows 反斜杠路径取基名', rawContentType('D:\\x\\a.webp') === 'image/webp')
+check('svg 命中（CSP sandbox 兜内嵌脚本）', rawContentType('a.svg') === 'image/svg+xml')
+// pdf/office 类型已随预览通道退役移除：inline 渲染 415，下载模式走 octet-stream
+check('退役类型（pdf/office）返回 null', rawContentType('a.pdf') === null && rawContentType('a.xlsx') === null && rawContentType('a.docx') === null)
 check('白名单外返回 null', rawContentType('a.exe') === null && rawContentType('a.doc') === null && rawContentType('a.wasm') === null)
 check('无扩展名返回 null', rawContentType('a') === null && rawContentType('a.') === null)
 check('点文件不算扩展名', rawExtOf('.pdf') === '')
@@ -47,8 +46,8 @@ check('双空 → undefined', parseRangeHeader('bytes=-', 100) === undefined)
 // ── 下载模式（?dl=1）：白名单外也要能发出去 + attachment ──
 check('下载模式：白名单外回落 octet-stream', rawDownloadContentType('a.zip') === 'application/octet-stream')
 check('下载模式：无扩展名同样回落', rawDownloadContentType('a') === 'application/octet-stream')
-check('下载模式：白名单类型照旧', rawDownloadContentType('a.pdf') === 'application/pdf')
-check('预览 disposition 是 inline', rawDisposition(false, 'a.pdf') === "inline; filename*=UTF-8''a.pdf")
+check('下载模式：白名单类型照旧', rawDownloadContentType('a.png') === 'image/png')
+check('预览 disposition 是 inline', rawDisposition(false, 'a.png') === "inline; filename*=UTF-8''a.png")
 check('下载 disposition 是 attachment', rawDisposition(true, 'a.zip') === "attachment; filename*=UTF-8''a.zip")
 check('disposition 中文名走 RFC 5987 编码', rawDisposition(true, '李白诗.md') === `attachment; filename*=UTF-8''${encodeURIComponent('李白诗.md')}`)
 

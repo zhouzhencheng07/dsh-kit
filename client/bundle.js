@@ -8,24 +8,24 @@
 //     家：右栏 dock 签，入口归右栏开始页条目与待办卡）。
 //   右栏（唯一工作台形态，宿主 0.1.5+）：sidebarRightTabs 注册五类 dock 签，
 //     pane 正文经 slots.inject（sidebar.right.pane.tab）按 id 提供，pane 内自管
-//     文档签条。dock 签本身没有按钮：文件/知识库是被动签（索引/对话链接点开
+//     文档签条。dock 签本身没有按钮：diff/知识库是被动签（SCM/树/对话点开
 //     即开），任务/日程/浏览器走右栏开始页清单与自动跟随。开始页保留官方
 //     ShippedGuide（罗盘 + 胶囊条目），我们只贡献 guide 条目：日程/浏览器/
-//     后台任务三枚（文件/知识库是被动签，不给条目），官方「文件」条目垫底。
+//     后台任务三枚（diff/知识库是被动签，不给条目），官方「工作区文件」条目
+//     垫底（设置卡可隐藏）。
 //     缺 sidebarRight 服务时只剩 kitUi 侧的存在性补丁——入口按钮
 //     不报错，签由官方侧自己决定要不要出现。
 //   终端：底部停靠面板（快捷键亦可切换），数据走宿主半边 /dsh-kit/terminal WS。
-//   功能存在性（kitUi）：files/activeFile 与 vaultPages/activeVaultPage+vaultHist
-//     是文档签与访问序；jobsOpen/schedOpen/browserOpen/vaultOpen 是功能签在场
+//   功能存在性（kitUi）：files/activeFile（diff 签）与
+//     vaultPages/activeVaultPage+vaultHist 是文档签与访问序；jobsOpen/schedOpen/browserOpen/vaultOpen 是功能签在场
 //     （入口按钮选中态与角标读它）；activeFeature 是当前激活的功能（Esc 关哪张
 //     文档签、浏览器自动跟随的判据）。索引类视图（知识库目录树）住侧栏
 //     sidebar.workspaces 单槽，点条目开对应右栏签。
 //   文件树：打开时临时注册进单槽 sidebar.workspaces——把侧边栏浏览区整体换成
 //     文件树，关闭时 dispose 注销、原生工作区列表自动回归。根目录 = 当前会话工作
-//     目录，数据走宿主半边 /dsh-kit/tree。点击文件 → 右栏文件签展示/编辑内容，
-//     数据走宿主半边 /dsh-kit/read；PDF 走 /dsh-kit/raw 原始字节端点（Range/206），
-//     pdf.js（vendor 懒加载）逐页 canvas 渲染——Edge 内置查看器对 http:// 源
-//     灰屏，不可依赖。
+//     目录，数据走宿主半边 /dsh-kit/tree。点击文件改投官方右栏文件签
+//     （sidebarRight.openResource，kit 不自建预览/编辑）；vault 内 md 页直达
+//     知识库编辑器。
 // xterm 不打进 bundle，由宿主半边伺服 /dsh-kit/vendor/* 静态资源（官方预编译
 // UMD），首次打开终端面板时按需加载。
 //
@@ -72,12 +72,13 @@ window.__ModuleLoader__.load({
     // 独立槽位组件，状态必须跨槽共享：模块级不可变快照 + useSyncExternalStore 订阅
     // （getSnapshot 返回模块绑定值，恒定引用直到 set 替换）。
     // 功能存在性（open 位）与激活位（activeFeature）分离：打开某功能 = 确保签
-    // 存在并激活，切走不丢状态（文件/知识库的文档签状态在 kitUi 里，官方 dock
+    // 存在并激活，切走不丢状态（diff/知识库的文档签状态在 kitUi 里，官方 dock
     // 签关掉再开即恢复）。files 与 vaultPages 同构（浏览器式：顶部一条标签条 +
-    // 下面若干内容页）——一页一标签、点击切换、✕ 单关；文件树/源代码管理/对话
-    // 链接点开都往这条标签条里加标签，同路径复用一个（重开刷新 diff/未跟踪状态）。
-    // 文件非激活仍挂载（display:none）保住滚动与未落盘草稿，超「文件标签数上限」
-    // 自动关最久没看的那张；vaultHist 是知识库 ← → 的访问序（与标签存在性解耦）。
+    // 下面若干内容页）——一页一标签、点击切换、✕ 单关；源代码管理/提交图谱点开
+    // 都往 files 标签条里加标签，同路径复用一个（重开刷新 diff/未跟踪状态）。
+    // 文件树与对话区点击已改投官方右栏文件签，不进这里。diff 签非激活仍挂载
+    // （display:none）保住滚动位置，超内部上限（3）自动关最久没看的那张；
+    // vaultHist 是知识库 ← → 的访问序（与标签存在性解耦）。
     let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 }, activeFeature: null };
     const kitUiListeners = new Set();
     function setKitUi(patch) {
@@ -107,13 +108,9 @@ window.__ModuleLoader__.load({
       setKitUi(closeFeatureTab(kitUi, "browser"));
     }
 
-    const PREVIEW_MAX_DEFAULT = 3;
-    /** 文件标签上限（设置卡可配 1-20；快照未就绪回落默认 3，与 CFG_DEFAULTS
-     *  同值）——标签条上最多同时开几个文件标签，再开新的就关掉最久没看的那张 */
-    function previewLimit() {
-      const v = cfgFromSnapshot(getCfgSnapshot()).previewMaxTabs;
-      return Math.max(1, Number.isInteger(v) ? v : PREVIEW_MAX_DEFAULT);
-    }
+    /** diff 签内部上限（不外露为设置项——签只来自 SCM/提交图谱，堆积面小）：
+     *  超限自动关最久没看的那张 */
+    const PREVIEW_MAX = 3;
     /** 打开文件 = 文件签条上加一个文件标签（已开过则复用、只刷新状态并激活）。
      *  usedAt 是 LRU 判据（超上限时关掉最久没看的那张，绝不含本次）；
      *  deleted=已删除文件，只承载删除 diff。commit（可选）= 提交钉定模式
@@ -125,8 +122,8 @@ window.__ModuleLoader__.load({
       const items = ui.files ?? [];
       let list = items.some((x) => x.path === path)
         ? items.map((x) => (x.path === path ? { ...x, from: from ?? x.from, untracked: untracked === true, deleted: deleted === true, commit: commitRef, usedAt: now } : x))
-        : [...items, { path, from: from ?? "tree", untracked: untracked === true, deleted: deleted === true, commit: commitRef, usedAt: now }];
-      const max = previewLimit();
+        : [...items, { path, from: from ?? "scm", untracked: untracked === true, deleted: deleted === true, commit: commitRef, usedAt: now }];
+      const max = PREVIEW_MAX;
       while (list.length > max) {
         let oldest = null;
         for (const x of list) {
@@ -284,6 +281,8 @@ window.__ModuleLoader__.load({
      *  捕获——服务属性不能直接读（`cannot get property without inject`），又不能
      *  写进 exports.inject（0.1.2 无此服务，硬声明整插件起不来） */
     let rightbarSr = null;
+    /** 官方 sessions 服务（拿当前会话 id 与 cwd，拼文件地址用），同上运行期捕获 */
+    let sessionsSvc = null;
     /** 打开/聚焦右栏 dock 签（UI 事件路径）。服务未就绪或宿主不支持时静默放弃
      *  ——调用方都已先走了 kitUi 侧的开签补丁，签内容状态不会丢 */
     function openRightbarTab(feature) {
@@ -320,7 +319,8 @@ window.__ModuleLoader__.load({
       openRightbarTab(feature);
       return openFeatureTab(ui, feature);
     }
-    /** 打开文件并确保「文件」dock 签在眼前（文件树/源代码管理/图谱/对话链接统一入口） */
+    /** 打开 diff 签并确保「文件」dock 签在眼前（源代码管理/提交图谱统一入口；
+     *  文件树与对话区点击已改投官方右栏文件签，不再进这里） */
     function openFileAndDock(path, from, untracked, deleted, commit) {
       setKitUi(openFileTab(kitUi, path, from, untracked === true, deleted === true, typeof commit === "string" && commit !== "" ? commit : undefined));
       openRightbarTab("file");
@@ -330,6 +330,63 @@ window.__ModuleLoader__.load({
     function openVaultPageAndDock(path) {
       setKitUi(openVaultPageTab(kitUi, path));
       openRightbarTab("vault");
+    }
+    /** 点击路径落知识库标签（树行/对话拦截器共用）：先落地再派发——知识库未
+     *  挂载时 VaultRootView 不在，挂载后经 vaultOpenRequest 消费请求 */
+    function openVaultPathFromClick(path) {
+      openVaultPageAndDock(path);
+      vaultOpenRequest = path;
+      window.dispatchEvent(new CustomEvent("dshk-vault-open"));
+    }
+    // ─────────── 文件树点击 → 官方右栏文件签 ───────────
+    // 官方打开文件签的公开通道是 sidebarRight.openResource(地址)（官方文件树与
+    // 对话文件 chip 都走它）；文件签由宿主 documentpreview 以 `text` 类型认领
+    // `dsh-resource://file/**`。地址 = session 域 + 会话 id + 路径，编码复刻官方
+    // fileAddressFor：反斜杠归 /、剥前导 ./；cwd 内剥成相对，cwd 外保留绝对；
+    // 逐段 encodeURIComponent、`:` 保留字面量（Windows 盘符）。会话未选中时
+    // 无从定位工作区，放弃。
+    function openOfficialFile(path, line) {
+      const sr = rightbarSr;
+      if (!sr || typeof sr.openResource !== "function") return false;
+      const list = sessionsSvc && typeof sessionsSvc.list?.getSnapshot === "function" ? sessionsSvc.list.getSnapshot() : null;
+      const sessionId = list?.current;
+      if (!sessionId) return false;
+      const cwd = list.byId?.[sessionId]?.cwd ?? null;
+      let address = null;
+      try {
+        const util = require("@deepseek-ai/dsh-util-workspace-path");
+        if (util && typeof util.fileAddressFor === "function") address = util.fileAddressFor(sessionId, cwd, path);
+      } catch (e) {
+        /* 平台模块缺位：走下面的本地复刻 */
+      }
+      if (address === null) {
+        // 复刻官方编码；cwd 前缀比较有意不分大小写——盘符大小写不一致时剥成
+        // 相对路径（session 域按会话 cwd 解析），官方的大小写敏感版会落成绝对路径
+        const seg = (s) => encodeURIComponent(s).replace(/%3A/gi, ":");
+        let norm = String(path).replace(/\\/g, "/").replace(/^(?:\.\/)+/, "");
+        const cwdNorm = cwd ? String(cwd).replace(/\\/g, "/").replace(/[\\/]+$/, "") : null;
+        if (cwdNorm && norm.toLowerCase().startsWith(`${cwdNorm.toLowerCase()}/`)) norm = norm.slice(cwdNorm.length + 1);
+        address = `dsh-resource://file/session/${seg(sessionId)}/${norm.split("/").map(seg).join("/")}`;
+      }
+      try {
+        sr.openResource(address, line === undefined ? undefined : { params: { line } });
+        return true;
+      } catch (e) {
+        // 右栏 seat 未 mount（极早期）/ 宿主无文件认领类型（精简组合）：点了没
+        // 反应最难排查，至少给一句
+        flashToast(`${t("officialOpenFail")}：${String(e?.message ?? e).slice(0, 120)}`);
+        return false;
+      }
+    }
+    /** 文件树行点击：vault 内 → 知识库（所见即所得编辑器不变）；其余 → 官方
+     *  右栏文件签（kit 不再有工作区文件预览/编辑面） */
+    function openTreeFile(path) {
+      const r = vaultRootHint;
+      if (r !== null && isPathInsideVaultRoot(r, path)) {
+        openVaultPathFromClick(path);
+        return;
+      }
+      openOfficialFile(path);
     }
 
     // ── 侧栏索引视图单槽与入口按钮（文件树/源代码管理/知识库，三个入口按钮
@@ -426,12 +483,11 @@ window.__ModuleLoader__.load({
       terminalEnabled: true,
       fileTreeEnabled: true,
       sourceControlEnabled: true,
-      chatOpenFilePreview: true,
+      hideOfficialFilesEntry: false,
       chatOpenLinkInBrowser: true,
       skillsPageEnabled: true,
       searchEnabled: true,
       searchMaxResults: 2,
-      previewMaxTabs: 3,
       phoneEnabled: true,
       phoneRemoteDomain: "",
       phonePort: 3090,
@@ -501,14 +557,10 @@ window.__ModuleLoader__.load({
         terminalEnabled: v.terminalEnabled !== false,
         fileTreeEnabled: v.fileTreeEnabled !== false,
         sourceControlEnabled: v.sourceControlEnabled !== false,
-        chatOpenFilePreview: v.chatOpenFilePreview === true,
+        hideOfficialFilesEntry: v.hideOfficialFilesEntry === true,
         chatOpenLinkInBrowser: v.chatOpenLinkInBrowser === true,
         skillsPageEnabled: v.skillsPageEnabled !== false,
         searchEnabled: v.searchEnabled !== false,
-        previewMaxTabs:
-          Number.isInteger(v.previewMaxTabs) && v.previewMaxTabs >= 1 && v.previewMaxTabs <= 20
-            ? v.previewMaxTabs
-            : CFG_DEFAULTS.previewMaxTabs,
         phoneEnabled: v.phoneEnabled === true,
         phoneRemoteDomain: typeof v.phoneRemoteDomain === "string" ? v.phoneRemoteDomain : "",
         jobsEnabled: v.jobsEnabled !== false,
@@ -564,13 +616,10 @@ window.__ModuleLoader__.load({
     const subscribeCfg = (listener) => (cfgScope ? cfgScope.subscribe(listener) : () => {});
     const getCfgSnapshot = () => (cfgScope ? cfgScope.getSnapshot() : null);
 
-    // ─────────── 对话文件点击接管（设置项，默认关闭）───────────
-    // 官方对话中「产物文件」chips、markdown 内联代码提及与 read/write/edit
-    // 工具行的文件链接都点击走 session.openWorkspacePath RPC → 系统默认程序
-    // 打开（前两者渲染成 button[title=路径]，工具行是 button[class*=_fileLink]
-    // 文本路径，详见拦截器注释）；插件 /dsh-kit/read 支持任意绝对路径，开启
-    // cfg.chatOpenFilePreview 后在这里拦截并把路径交给右侧预览面板。
-    // 判定链任何一环不命中都放行官方。
+    // ─────────── 对话文件点击的知识库路由 ───────────
+    // 官方对话中的文件点击（chips / markdown 内联代码 / 工具行 / 交付卡）原生
+    // 走 sidebarRight.openResource 开右栏文件签，kit 不拦。唯一例外是 vault 内
+    // 路径：改道知识库标签的所见即所得编辑器（互通是知识库本体能力，无开关）。
     let chatPreviewHook = null;
     // KitSurfaces 渲染期 props 桥：右栏 pane/开始页的 inject 闭包经此取官方
     // useSessions（任务 pane/开始页要在跑任务数做徽标；槽位注册在 effect 里，
@@ -578,8 +627,8 @@ window.__ModuleLoader__.load({
     const shellShare = { current: null };
 
     // ── M4 会话→笔记：vault 路径点击直达知识库标签 ──
-    // vault root 的客户端缓存：拦截器路由判定用（vault 内路径开知识库标签而非
-    // 文件预览，且不受 chatOpenFilePreview 门控——互通是知识库本体能力）。
+    // vault root 的客户端缓存：拦截器/文件树路由判定用（vault 内路径开知识库标签
+    // 的所见即所得编辑器，其余路径放行官方文件签——互通是知识库本体能力，无开关）。
     // VaultRootView 每次拉索引同步刷新；从未开过知识库时点击现取一次（索引端
     // 点宿主侧有 mtime 缓存），失败按无 vault 处理走原行为。vaultOpenRequest：
     // 坞收起时 VaultRootView 未挂载、open 事件没人听——请求先落地，挂载后消费。
@@ -639,29 +688,24 @@ window.__ModuleLoader__.load({
       return out.join("\\");
     }
 
-    /** document capture：开启配置后接管官方对话区文件打开按钮的点击。
-     *  三种形态：① markdown 内联代码与「本轮文件改动」chips → button[title=路径]；
+    /** document capture：对话区文件点击的知识库路由（M4 会话→笔记）。三种载体
+     *  的路径解析：① markdown 内联代码与「本轮文件改动」chips → button[title=路径]；
      *  ② read/write/edit 工具行（ui-tool ToolRow）→ button[class*="_fileLink"]，
-     *     无 title，按钮文本即工具 path/file_path 参数按 cwd 相对化的路径
-     *     （relativizeToCwd 剥掉的前缀由 resolveChatOpenPath 拼回，语义还原）；
+     *     无 title，按钮文本即工具 path/file_path 参数按 cwd 相对化的路径；
      *  ③ 交付卡（dsh-client-ui-deliverables 的 PresentedFileCard）→ 路径在覆盖
      *     整卡的 .cardPreview 的 title 上。
-     *  vault 内路径优先路由到知识库标签（M4 会话→笔记），见尾部分支。 */
+     *  vault 内路径 preventDefault 改道知识库标签（所见即所得编辑器）；其余一律
+     *  放行官方——官方原生 openResource 开右栏文件签，kit 不再接管工作区文件。 */
     function onChatOpenFileClick(ev) {
       if (!ev.isTrusted) return;
       const hook = chatPreviewHook;
-      if (!hook || !(hook.ready || hook.vaultOn)) return;
+      if (!hook || !hook.vaultOn) return;
       if (!(ev.target instanceof Element)) return;
       // 弹层控件（aria-haspopup）不是文件链接，放行官方：模型选择器触发钮的
       // title=模型名（如 opencode-go/omen-alpha，含分隔符无空格）会被路径判定
       // 误吞，而 composer 就在对话 scrollBody 内部，位置判定挡不住它；交付卡的
       // 下拉键同理——那是宿主菜单，菜单项由网关注入脚本按项文本锁
       if (ev.target.closest("[aria-haspopup]")) return;
-      // 三种路径载体：① markdown 内联代码与「本轮文件改动」chips → button[title]；
-      // ② read/write/edit 工具行（ui-tool ToolRow）→ button[class*="_fileLink"]，
-      //    无 title，按钮文本即工具 path/file_path 参数按 cwd 相对化的路径；
-      // ③ 交付卡 PresentedFileCard → 卡上「打开」按钮同样没有 title，路径挂在
-      //    覆盖整卡的 .cardPreview 上（官方已按 cwd 解析，是绝对路径）
       const btn =
         ev.target.closest("button[title]") || ev.target.closest('button[class*="_fileLink"]');
       const card = ev.target.closest("[data-presented-file]");
@@ -669,8 +713,8 @@ window.__ModuleLoader__.load({
       if (anchor === null) return;
       // 插件自身面板/入口的元素不拦（title 可能是路径的只有文件树行等）。
       // 但命中元素必须是真插件容器：面板打开时 body 挂的让位标记类
-      // （dshk-pane-open/dshk-open）是全体对话的祖先，若不剔除，预览/终端
-      // 一开拦截就整体失效（点击放行官方 → 系统默认程序打开）
+      // （dshk-pane-open/dshk-open）是全体对话的祖先，若不剔除，面板
+      // 一开拦截就整体失效
       const kitAnc = anchor.closest('[class*="dshk-"]');
       if (kitAnc && kitAnc !== document.body && kitAnc !== document.documentElement) return;
       // 仅官方对话滚动区内的文件按钮（markdown 提及、产物 chips、工具行、交付卡
@@ -685,38 +729,28 @@ window.__ModuleLoader__.load({
       } else if (!isChatOpenPathish(path)) {
         return;
       }
-      // 无会话工作区时：仅盘符绝对/UNC（含 /D:… 归一的盘符形态）可脱离 cwd
-      // 预览；相对路径解析无依，放行官方
+      // 无会话工作区时：仅盘符绝对/UNC（含 /D:… 归一的盘符形态）可脱离 cwd 判定；
+      // 相对路径解析无依，放行官方
       if (!hook.cwd) {
         const t2 = path.startsWith("\\\\") ? path : path.replace(/^[\\/](?=[A-Za-z]:)/, "");
         if (!/^[A-Za-z]:[\\/]/.test(t2) && !t2.startsWith("\\\\")) return;
       }
       const resolved = resolveChatOpenPath(hook.cwd, path);
-      // 知识库优先路由（M4 会话→笔记）：vault 内路径的归宿是知识库标签的
-      // WYSIWYG 编辑器，不是文件预览。preventDefault 只在两条路都有着落时才
-      // 做（root 未缓存走异步判定时必须 hook.ready 兜底预览，否则吞掉官方
-      // 点击无法恢复）
-      if (hook.vaultOn && (vaultRootHint !== null || hook.ready)) {
-        if (vaultRootHint !== null && isPathInsideVaultRoot(vaultRootHint, resolved)) {
+      // root 已缓存：命中 vault 即改道（preventDefault），不命中放行官方
+      if (vaultRootHint !== null) {
+        if (isPathInsideVaultRoot(vaultRootHint, resolved)) {
           ev.preventDefault();
           ev.stopPropagation();
-          hook.openVaultPage(resolved);
-          return;
+          openVaultPathFromClick(resolved);
         }
-        if (vaultRootHint === null && hook.ready) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          void ensureVaultRootHint().then((r) => {
-            if (r !== null && isPathInsideVaultRoot(r, resolved)) hook.openVaultPage(resolved);
-            else hook.openPreview(resolved);
-          });
-          return;
-        }
+        return;
       }
-      if (!hook.ready) return; // 预览接管未开启：放行官方（系统默认程序打开）
-      ev.preventDefault();
-      ev.stopPropagation();
-      hook.openPreview(resolved);
+      // root 未缓存（插件刚挂载的头几秒）：官方动作同步触发、无法事后撤回，不能
+      // 先吞点击——放行官方，异步补判一次，命中 vault 再开知识库标签（此时官方
+      // 文件签也会开着，多一个签可接受；root 几乎总在首次点击前就预取好了）
+      void ensureVaultRootHint().then((r) => {
+        if (r !== null && isPathInsideVaultRoot(r, resolved)) openVaultPathFromClick(resolved);
+      });
     }
 
     // ─────────── 对话链接改投内置浏览器（设置项 chatOpenLinkInBrowser，默认开）───────────
@@ -1022,11 +1056,7 @@ window.__ModuleLoader__.load({
       scMergedCommit: "合并提交",
       scAuthored: "作者",
       scFiles: "更改的文件",
-      toDiff: "切换到 diff 视图",
-      toText: "切换到原文视图",
       edit: "编辑",
-      editSaved: "已保存",
-      editFail: "保存失败",
       diffFail: "diff 加载失败",
       diffEmpty: "（无未暂存差异）",
       diffUntracked: "未跟踪文件，暂无 diff",
@@ -1041,12 +1071,8 @@ window.__ModuleLoader__.load({
       contentLoading: "加载中…",
       contentBinary: "二进制文件，无法预览",
       fileDownload: "下载到本机",
-      pdfNewTab: "在新标签页打开",
-      pdfJump: "跳转到指定页",
-      sheetRowCap: "表格较大，仅加载部分行列；悬停单元格可看完整内容",
-      previewTooLarge: "文件超过 20MB，不预览",
-      contentTruncated: "文件较大，仅显示前 512 KB",
       contentFail: "读取失败",
+      officialOpenFail: "打开失败",
       contentEmpty: "（空文件）",
       skillsLabel: "技能",
       skRefresh: "刷新",
@@ -1086,8 +1112,8 @@ window.__ModuleLoader__.load({
       cfgTerminalEnabledHint: "隐藏入口与快捷键",
       cfgFileTreeEnabled: "启用文件树",
       cfgFileTreeEnabledHint: "隐藏入口与快捷键",
-      cfgChatOpenFilePreview: "对话文件用插件预览打开",
-      cfgChatOpenFilePreviewHint: "关 = 交回系统默认程序",
+      cfgHideOfficialFilesEntry: "隐藏官方「工作区文件」入口",
+      cfgHideOfficialFilesEntryHint: "官方右栏的目录按钮；隐藏后文件从对话、文件树、搜索进",
       cfgChatOpenLinkInBrowser: "对话中的网址用内置浏览器打开",
       cfgChatOpenLinkInBrowserHint: "关 = 交回系统浏览器新标签",
       cfgSkillsPageEnabled: "启用技能页",
@@ -1146,8 +1172,6 @@ window.__ModuleLoader__.load({
       notifyPlanTitle: "{title} · 等你批准计划",
       notifyPlanBody: "agent 提交了计划等你批准",
       notifyToolFallback: "工具调用",
-      cfgPreviewMaxTabs: "文件标签数上限",
-      cfgPreviewMaxTabsHint: "超限自动关最久没看的（1-20）",
       browserUrlPh: "输入网址，回车打开",
       browserGo: "打开",
       browserBack: "后退",
@@ -1472,8 +1496,6 @@ window.__ModuleLoader__.load({
       scMergedCommit: "Merge commit",
       scAuthored: "Author",
       scFiles: "Changed files",
-      toDiff: "Switch to diff view",
-      toText: "Switch to plain view",
       diffFail: "Failed to load diff",
       diffEmpty: "(no unstaged changes)",
       diffUntracked: "Untracked file, no diff yet",
@@ -1486,17 +1508,11 @@ window.__ModuleLoader__.load({
       gitU: "Untracked",
       gitTip: "git change",
       edit: "Edit",
-      editSaved: "Saved",
-      editFail: "Save failed",
       contentLoading: "Loading…",
       contentBinary: "Binary file, preview unavailable",
       fileDownload: "Download file",
-      pdfNewTab: "Open in new tab",
-      pdfJump: "Jump to page",
-      sheetRowCap: "Large sheet: partially loaded; hover a cell for full content",
-      previewTooLarge: "File exceeds 20MB, preview skipped",
-      contentTruncated: "File is large, only first 512 KB shown",
       contentFail: "Failed to read",
+      officialOpenFail: "Open failed",
       contentEmpty: "(empty file)",
       skillsLabel: "Skills",
       skRefresh: "Refresh",
@@ -1536,8 +1552,8 @@ window.__ModuleLoader__.load({
       cfgTerminalEnabledHint: "Hides entry and shortcut",
       cfgFileTreeEnabled: "Enable file tree",
       cfgFileTreeEnabledHint: "Hides entry and shortcut",
-      cfgChatOpenFilePreview: "Open chat files in plugin preview",
-      cfgChatOpenFilePreviewHint: "Off = system default app",
+      cfgHideOfficialFilesEntry: "Hide the official Workspace Files entry",
+      cfgHideOfficialFilesEntryHint: "The directory button on the right bar; files remain reachable via chat, tree and search",
       cfgChatOpenLinkInBrowser: "Open chat links in the built-in browser",
       cfgChatOpenLinkInBrowserHint: "Off = system browser new tab",
       cfgSkillsPageEnabled: "Enable skills page",
@@ -1596,8 +1612,6 @@ window.__ModuleLoader__.load({
       notifyPlanTitle: "{title} · plan awaiting approval",
       notifyPlanBody: "The agent submitted a plan for your approval",
       notifyToolFallback: "A tool call",
-      cfgPreviewMaxTabs: "Max file tabs",
-      cfgPreviewMaxTabsHint: "Closes the least-recently-viewed tab over the limit (1-20)",
       browserUrlPh: "Type a URL and press Enter",
       browserGo: "Go",
       browserBack: "Back",
@@ -1942,6 +1956,8 @@ window.__ModuleLoader__.load({
 .dshk-preview-dl{appearance:none;background:transparent;border:0;color:var(--dsw-alias-label-secondary);width:28px;height:28px;border-radius:28px;cursor:pointer;flex:none;display:inline-flex;align-items:center;justify-content:center;padding:6px;line-height:1}
 .dshk-preview-dl:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-preview-dl svg{width:15px;height:15px;display:block}
+/* 隐藏官方右栏「工作区文件」入口（hideOfficialFilesEntry 开时 body 挂标记类） */
+body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:none}
 .dshk-term{height:100%}
 /* padding 加在 .xterm 元素上：fit addon 从该元素读 padding 并从可用面积扣除，cols/rows 不会算错 */
 .dshk-term .xterm{height:100%;box-sizing:border-box;padding:6px 10px}
@@ -2001,37 +2017,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
    :hover 一并声明避免 hover 规则在选中态下把底色洗掉 */
 .dshk-enbtn[aria-pressed="true"],.dshk-enbtn[aria-pressed="true"]:hover{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-brand-primary)}
 .dshk-pane-body{flex:1 1 auto;min-height:0;overflow:auto;padding:4px 10px 12px}
-.dshk-pane-pre{margin:0;padding:4px 0;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;tab-size:4;-webkit-overflow-scrolling:touch;user-select:text}
-/* PDF 预览：pdf.js 逐页 canvas，纵向滚动（面板身即滚动容器）。懒加载：
-   全量占位（第 1 页纵横比）撑出真实滚动条，进预载区才渲染 canvas、滚远释放位图；
-   右下角 sticky 悬浮页码指示器（当前页实时 + 输入回车跳页） */
-.dshk-pdfwrap{padding:8px 0 16px;display:flex;flex-direction:column;align-items:center}
-.dshk-pdf-scroll{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
-.dshk-pdf-slot{background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.25);max-width:100%;display:flex;align-items:center;justify-content:center}
-.dshk-pdf-slotno{color:#9a9a9a;font-size:13px;user-select:none}
-/* 页码指示器挂预览面板标题栏（固定 UI 区，不遮内容），占位/canvas 全由 mountPdfViewer 管 */
-.dshk-pdf-indicator{flex:none;display:flex;align-items:center;gap:2px;padding:2px 10px;border-radius:999px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l1);font-size:12px;color:var(--dsw-alias-label-secondary)}
-.dshk-pdf-jump{width:3.2em;border:none;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;text-align:center;outline:none}
-/* Excel 预览：工作表标签 + 虚拟滚动表（冻结表头 sticky、窗口渲染、固定行高列宽，
-   单元格 textContent 注入免消毒） */
-.dshk-sheetwrap{padding:6px 0 16px;display:flex;flex-direction:column;gap:8px}
-.dshk-sheet-tabs{display:flex;gap:4px;flex-wrap:wrap}
-.dshk-sheet-tab{border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-secondary);border-radius:6px;padding:2px 10px;font-size:12px;cursor:pointer;max-width:14em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dshk-sheet-tab-on,.dshk-sheet-tab-on:hover{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-label-primary);border-color:transparent}
-.dshk-sheet-scroll{flex:1 1 auto;min-height:0;overflow:auto}
-.dshk-sheet-head{position:sticky;top:0;z-index:2;display:flex;width:max-content;min-width:100%;background:var(--dsw-alias-bg-base);border-bottom:2px solid var(--dsw-alias-border-l2)}
-.dshk-sheet-hcell{flex:none;padding:0 8px;line-height:25px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dshk-sheet-body{position:relative}
-.dshk-sheet-window{position:absolute;left:0}
-.dshk-sheet-row{display:flex;width:max-content;min-width:100%}
-.dshk-sheet-cell{flex:none;padding:0 8px;line-height:25px;font-size:12px;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1px solid var(--dsw-alias-border-l1);border-bottom:1px solid var(--dsw-alias-border-l1)}
-.dshk-sheet-num{text-align:right;font-variant-numeric:tabular-nums}
-/* docx 预览：mammoth 语义 HTML 复用 .dshk-md 排版，补表格/图片规则 */
-.dshk-docwrap{padding:8px 0 16px}
-.dshk-doc{max-width:72em;margin:0 auto}
-.dshk-doc table,.dshk-md table{border-collapse:collapse}
-.dshk-doc td,.dshk-doc th,.dshk-md td,.dshk-md th{border:1px solid var(--dsw-alias-border-l1);padding:3px 8px}
-.dshk-doc img{max-width:100%}
 /* 官方右栏 dock pane 正文（sidebar.right.pane.tab）：pane 内是普通文档流，
    外壳占满 100%×100%、内容区自己滚；这里只有普通文档流 */
 .dshk-rbpane{width:100%;height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base)}
@@ -2495,22 +2480,6 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-md img{max-width:100%}
 .dshk-md hr{border:none;border-top:1px solid var(--dsw-alias-border-l2);margin:1em 0}
 .dshk-md a{color:var(--dsw-alias-brand-primary)}
-/* CodeMirror 宿主与语法配色令牌（明暗两套，随 data-ds-dark-theme） */
-.dshk-cm-host{flex:1;min-height:0;display:flex}
-.dshk-cm-host .cm-editor{flex:1;min-width:0;height:100%;background:var(--dsw-alias-bg-base)}
-.dshk-cm-host .cm-scroller{overflow:auto;height:100%;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55}
-/* 短文件长行：内容区至少撑满面板高度，横向滚动条钉在面板底部而非内容中部 */
-.dshk-cm-host .cm-content{min-height:100%}
-/* CM6 baseTheme 自带 .cm-focused 的 1px dotted #212121 轮廓——写死的深灰虚线，点击进
-   编辑器就冒出来（暗色主题下更是深底上的黑线），用户实测报「点击后多个虚线边框」。
-   直接清掉：文本编辑面不需要焦点环（光标本身就是提示，当前签也标着当前文件），
-   容器边框保持常态不随点击变化 */
-.dshk-cm-host .cm-editor.cm-focused{outline:none}
-.dshk-cm-scope{--dshk-tok-keyword:#953800;--dshk-tok-string:#0a3069;--dshk-tok-comment:#697077;--dshk-tok-number:#0550ae;--dshk-tok-fn:#8250df;--dshk-tok-type:#0550ae;--dshk-tok-operator:#953800;--dshk-tok-meta:#6639ba;--dshk-tok-link:#0550ae;--dshk-tok-heading:#0550ae}
-body[data-ds-dark-theme] .dshk-cm-scope{--dshk-tok-keyword:#ff7b72;--dshk-tok-string:#a5d6ff;--dshk-tok-comment:#8b949e;--dshk-tok-number:#79c0ff;--dshk-tok-fn:#d2a8ff;--dshk-tok-type:#ffa657;--dshk-tok-operator:#ff7b72;--dshk-tok-meta:#79c0ff;--dshk-tok-link:#a5d6ff;--dshk-tok-heading:#f0883e}
-/* Live Preview 调色板（亮色兜底在 vendor 主题里，这里只补暗色） */
-body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:#30363d}
-.dshk-editarea.dshk-cm-host{min-height:280px}
 /* git 状态徽标与 diff 着色 */
 .dshk-gitbadge{flex:none;margin-left:auto;font-size:10px;line-height:14px;padding:0 5px;border-radius:6px;font-family:ui-monospace,Consolas,monospace;border:1px solid currentColor}
 .dshk-gitbadge[data-k="U"]{color:#73c991}
@@ -2549,9 +2518,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
 .dshk-diff-del{color:#cd3131;background:rgba(205,49,49,.08)}
 .dshk-diff-hunk{color:#4daafc}
 .dshk-diff-meta{color:var(--dsw-alias-label-tertiary)}
-/* 编辑模式 */
-.dshk-editarea{flex:1 1 auto;min-height:0;width:100%;box-sizing:border-box;resize:none;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;padding:8px 10px;white-space:pre;overflow:auto}
-.dshk-editarea:focus-visible{border-color:var(--dsw-alias-brand-primary);outline:none}
 .dshk-btn-save{appearance:none;border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);border-radius:6px;font:inherit;font-size:12px;line-height:1;padding:5px 10px;cursor:pointer}
 .dshk-btn-save[disabled]{opacity:.6;cursor:default}
 .dshk-btn-cancel{appearance:none;background:none;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);border-radius:6px;font:inherit;font-size:12px;line-height:1;padding:5px 10px;cursor:pointer}
@@ -2670,446 +2636,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       }
       return Promise.all(jobs);
     }
-    /** docx 预览的 HTML 消毒（mammoth 输出不可信，只有这条路径要 DOMPurify） */
-    function ensurePurify() {
-      return typeof window.DOMPurify === "undefined"
-        ? loadScript("/dsh-kit/vendor/purify.min.js")
-        : Promise.resolve();
-    }
-    function ensureCmLib() {
-      return typeof window.CM6 === "object" && window.CM6 !== null
-        ? Promise.resolve()
-        : loadScript("/dsh-kit/vendor/codemirror.bundle.js");
-    }
     function ensureRteLib() {
       return typeof window.DshRTE === "object" && window.DshRTE !== null
         ? Promise.resolve()
         : loadScript("/dsh-kit/vendor/richeditor.bundle.js");
-    }
-    /** 解析沙箱（srcdoc iframe 新 realm，原生 Promise）。不能在宿主页面直接跑解
-     *  析库：DSH 前端把 window.Promise 换成了自己的实现（外观伪装 native），pdf.js
-     *  3.x 渲染管线在它上面会卡死——第 1 页渲染后所有后续 page.render() 永久
-     *  pending（同浏览器同库在同源空白页 34ms 渲染成功，已二分定位）；mammoth 的
-     *  转换同样是真 Promise 链。srcdoc iframe 是全新 realm、原生 Promise；不带
-     *  sandbox 属性保持同源，主文档可直接调用沙箱函数、互传字节/字符串（pdf 的
-     *  canvas 反着来：在主文档创建、沙箱执笔——跨文档采纳会丢位图）。 */
-    const boxPromises = new Map(); // key → Promise<win>，失败即剔除可重试
-    function ensureBox(key, scripts, setup) {
-      const cached = boxPromises.get(key);
-      if (cached) return cached;
-      const p = new Promise((resolve, reject) => {
-        const ifr = document.createElement("iframe");
-        ifr.style.display = "none";
-        ifr.srcdoc = "<!doctype html><html><head></head><body></body></html>";
-        const fail = (error) => {
-          boxPromises.delete(key);
-          reject(error);
-        };
-        ifr.onload = () => {
-          const win = ifr.contentWindow;
-          const origin = location.origin;
-          const loadAt = (i) => {
-            if (i >= scripts.length) {
-              try {
-                if (setup) setup(win);
-                resolve(win);
-              } catch (error) {
-                fail(error);
-              }
-              return;
-            }
-            try {
-              const s = win.document.createElement("script");
-              s.src = origin + scripts[i];
-              s.onload = () => loadAt(i + 1);
-              s.onerror = () => fail(new Error(scripts[i] + " 加载失败"));
-              win.document.head.appendChild(s);
-            } catch (error) {
-              fail(error);
-            }
-          };
-          loadAt(0);
-        };
-        ifr.onerror = () => fail(new Error("沙箱 iframe 创建失败"));
-        document.body.appendChild(ifr);
-      });
-      boxPromises.set(key, p);
-      return p;
-    }
-    function ensurePdfBox() {
-      return ensureBox("pdf", ["/dsh-kit/vendor/pdf.min.js"], (win) => {
-        win.pdfjsLib.GlobalWorkerOptions.workerSrc = location.origin + "/dsh-kit/vendor/pdf.worker.min.js";
-      });
-    }
-    /** SheetJS 解析：打开工作簿留在沙箱（__dshkSheetOpen），按表号取**全量格式化
-     *  矩阵**（__dshkSheetGet）——虚拟滚动渲染，不再生成表格 HTML。上限 5 万行 ×
-     *  256 列 + 150 万单元格总量（超限裁行并标记 truncated）；列宽取自工作簿
-     *  !cols（wpx/wch 换算），无则默认。raw:false 取显示文本（日期等已格式化）。 */
-    function ensureSheetBox() {
-      return ensureBox("sheet", ["/dsh-kit/vendor/xlsx.full.min.js"], (win) => {
-        const X = win.XLSX;
-        const ROW_CAP = 50000;
-        const COL_CAP = 256;
-        const CELL_CAP = 1500000;
-        let boxWb = null;
-        win.__dshkSheetOpen = (bytes) => {
-          boxWb = X.read(bytes, { type: "array" });
-          return boxWb.SheetNames.slice();
-        };
-        win.__dshkSheetGet = (idx) => {
-          if (!boxWb) throw new Error("工作簿未打开");
-          const name = boxWb.SheetNames[idx];
-          const ws = boxWb.Sheets[name];
-          const range = X.utils.decode_range(ws["!ref"] ?? "A1");
-          const totalRows = range.e.r - range.s.r + 1;
-          const totalCols = range.e.c - range.s.c + 1;
-          const cols = Math.min(totalCols, COL_CAP);
-          const rows = Math.min(totalRows, ROW_CAP, Math.max(1, Math.floor(CELL_CAP / cols)));
-          range.e.c = range.s.c + cols - 1;
-          range.e.r = range.s.r + rows - 1;
-          // 裁剪后的工作表：范围收界；合并只保留完整落界的（虚拟滚动不跨格渲染，
-          // 仅首行横向合并由渲染层单独处理）
-          const merges = (ws["!merges"] ?? []).filter((m) => m.e.r <= range.e.r && m.e.c <= range.e.c);
-          const clipped = Object.assign({}, ws, { "!ref": X.utils.encode_range(range), "!merges": merges });
-          const matrix = X.utils.sheet_to_json(clipped, { header: 1, raw: false, defval: "" });
-          const norm = matrix.map((r) => {
-            const out = new Array(cols);
-            for (let c = 0; c < cols; c++) out[c] = r && r[c] != null ? String(r[c]) : "";
-            return out;
-          });
-          while (norm.length < rows) norm.push(new Array(cols).fill(""));
-          const header = norm.shift() ?? new Array(cols).fill("");
-          const headerSpans = merges
-            .filter((m) => m.s.r === range.s.r)
-            .map((m) => ({ c: m.s.c - range.s.c, span: Math.min(m.e.c, range.e.c) - m.s.c + 1 }))
-            .filter((s) => s.c >= 0 && s.span > 1);
-          const rawCols = ws["!cols"] ?? [];
-          const colWidths = [];
-          for (let c = 0; c < cols; c++) {
-            const w = rawCols[c];
-            if (w && w.wpx) colWidths.push(Math.min(360, Math.max(40, Math.round(w.wpx))));
-            else if (w && w.wch) colWidths.push(Math.min(360, Math.max(40, Math.round(w.wch * 8 + 12))));
-            else colWidths.push(110);
-          }
-          return {
-            name,
-            header,
-            headerSpans,
-            rows: norm,
-            colWidths,
-            totalRows,
-            totalCols,
-            shownRows: rows,
-            shownCols: cols,
-            truncated: totalRows > rows || totalCols > cols,
-          };
-        };
-      });
-    }
-    /** mammoth 解析：docx → 语义 HTML（标题/列表/表格/粗斜体/内联 base64 图片）。
-     *  jszip 用 instanceof ArrayBuffer 验型——跨 realm 会失败，须在沙箱内重建
-     *  原生 ArrayBuffer 再喂给 mammoth（SheetJS 只做索引访问所以不受此限）。 */
-    function ensureDocBox() {
-      return ensureBox("doc", ["/dsh-kit/vendor/mammoth.browser.min.js"], (win) => {
-        win.__dshkDocxParse = (bytes) => {
-          const ab = new win.ArrayBuffer(bytes.length);
-          new win.Uint8Array(ab).set(bytes);
-          return win.mammoth.convertToHtml({ arrayBuffer: ab }).then((r) => r.value);
-        };
-      });
-    }
-    /** PDF 懒加载查看器：先按第 1 页纵横比铺全量占位（滚动条即真实页数长度），
-     *  占位进入预载区（IntersectionObserver，root=滚动容器）才渲染 canvas，
-     *  距所有预载区页超过 EVICT 页则释放位图——大文档内存只随视口附近页数走。
-     *  页码指示器（实时当前页 + 回车跳页）挂 headSlot（面板标题栏槽位，固定区
-     *  不遮内容），跳转由占位承接、滚过去即渲染。cancelled() 为真则中止；返回
-     *  dispose（断观察器/监听 + 清 DOM）或 null（未建成）。 */
-    async function mountPdfViewer(scrollEl, headSlot, doc, cancelled) {
-      const p1 = await doc.getPage(1);
-      if (cancelled()) return null;
-      const vb1 = p1.getViewport({ scale: 1 });
-      const total = doc.numPages;
-      const scroller = scrollEl.closest(".dshk-pane-body") ?? scrollEl;
-      const EVICT = 6; // 距所有预载区页超过此数才释放位图（滞回，防边界反复渲染）
-      const slots = [null];
-      const rendered = new Map(); // 页码 → canvas
-      const pending = new Set();  // 已入队未完成
-      const visible = new Set();  // 预载区内的页（observer 维护）
-      const queue = [];
-      let disposed = false;
-      let rendering = false;
-      let pageTops = null; // 各占位在滚动内容中的 offset（二分当前页/跳页用）
-      let topsDirty = true;
-      let currentPage = 1;
-      let scrollRaf = 0;
-      let resizeTimer = 0;
-      let lastW = 0;
-
-      const slotWidth = () => Math.max(280, (scrollEl.clientWidth || 480) - 20);
-      const slotLabel = (p) => {
-        const no = document.createElement("span");
-        no.className = "dshk-pdf-slotno";
-        no.textContent = String(p);
-        return no;
-      };
-      // canvas 释放/重建尺寸后把占位还原成带页码的空白页
-      const restoreSlot = (p) => {
-        const slot = slots[p];
-        slot.textContent = "";
-        slot.appendChild(slotLabel(p));
-        slot.style.aspectRatio = `${vb1.width} / ${vb1.height}`;
-        topsDirty = true;
-      };
-
-      const frag = document.createDocumentFragment();
-      const indicator = document.createElement("div");
-      indicator.className = "dshk-pdf-indicator";
-      const jump = document.createElement("input");
-      jump.className = "dshk-pdf-jump";
-      jump.type = "text";
-      jump.inputMode = "numeric";
-      jump.value = "1";
-      jump.setAttribute("aria-label", t("pdfJump"));
-      const totalSpan = document.createElement("span");
-      totalSpan.textContent = `/ ${total}`;
-      indicator.append(jump, totalSpan);
-      for (let i = 1; i <= total; i++) {
-        const slot = document.createElement("div");
-        slot.className = "dshk-pdf-slot";
-        slot.dataset.page = String(i);
-        slot.appendChild(slotLabel(i));
-        slots.push(slot);
-        frag.appendChild(slot);
-      }
-      scrollEl.appendChild(frag);
-      // 指示器挂标题栏槽位（React 提供挂载点）；槽位缺席时静默降级为无指示器
-      if (headSlot) headSlot.appendChild(indicator);
-
-      const applySizes = () => {
-        lastW = slotWidth();
-        for (let i = 1; i <= total; i++) slots[i].style.width = `${lastW}px`;
-      };
-      applySizes();
-      for (let i = 1; i <= total; i++) slots[i].style.aspectRatio = `${vb1.width} / ${vb1.height}`;
-
-      const nearVisible = (p, slack) => {
-        for (const v of visible) if (Math.abs(p - v) <= slack) return true;
-        return false;
-      };
-      const evictFar = () => {
-        for (const [p, canvas] of rendered) {
-          if (nearVisible(p, EVICT)) continue;
-          canvas.remove();
-          rendered.delete(p);
-          restoreSlot(p);
-        }
-      };
-      const pump = () => {
-        if (rendering || disposed) return;
-        let next = 0;
-        while (queue.length) {
-          const p = queue.shift();
-          if (rendered.has(p) || !pending.has(p)) continue;
-          if (visible.has(p)) { next = p; break; }
-          pending.delete(p); // 已滚离预载区：丢弃，路过时 observer 会重新入队
-        }
-        if (!next) return;
-        rendering = true;
-        renderPage(next)
-          .catch((error) => console.warn("[dsh-kit] pdf 页渲染失败", next, error))
-          .finally(() => {
-            pending.delete(next);
-            rendering = false;
-            if (!disposed) pump();
-          });
-      };
-      const renderPage = async (p) => {
-        const slot = slots[p];
-        if (disposed || !slot || !slot.isConnected || rendered.has(p)) return;
-        const page = await doc.getPage(p);
-        if (disposed || rendered.has(p)) return;
-        const vb = page.getViewport({ scale: 1 });
-        const dpr = window.devicePixelRatio || 1;
-        const w = slotWidth();
-        const viewport = page.getViewport({ scale: (w / vb.width) * dpr });
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
-        canvas.style.width = `${Math.floor(viewport.width / dpr)}px`;
-        canvas.style.height = `${Math.floor(viewport.height / dpr)}px`;
-        // 混合页尺寸文档：渲染时把占位比例改成实际值，防渲染完成瞬间跳动
-        slot.style.aspectRatio = `${vb.width} / ${vb.height}`;
-        slot.textContent = "";
-        slot.appendChild(canvas);
-        rendered.set(p, canvas);
-        topsDirty = true;
-        // intent:"print"——续绘走微任务而非 rAF，宿主窗口被遮挡时不冻结（见 ensurePdfBox 注释）
-        await page.render({ canvasContext: canvas.getContext("2d"), viewport, background: "#ffffff", intent: "print" }).promise;
-      };
-      const io = new IntersectionObserver(
-        (entries) => {
-          if (disposed) return;
-          for (const en of entries) {
-            const p = Number(en.target.dataset.page);
-            if (en.isIntersecting) visible.add(p);
-            else visible.delete(p);
-          }
-          for (const p of visible) {
-            if (!rendered.has(p) && !pending.has(p)) { pending.add(p); queue.push(p); }
-          }
-          evictFar();
-          pump();
-        },
-        { root: scroller, rootMargin: "1500px 0px" }
-      );
-      for (let i = 1; i <= total; i++) io.observe(slots[i]);
-
-      const recomputeTops = () => {
-        const sRect = scroller.getBoundingClientRect();
-        const st = scroller.scrollTop;
-        pageTops = [0];
-        for (let i = 1; i <= total; i++) pageTops[i] = slots[i].getBoundingClientRect().top - sRect.top + st;
-        topsDirty = false;
-      };
-      const syncCurrent = () => {
-        if (topsDirty || !pageTops) recomputeTops();
-        const center = scroller.scrollTop + scroller.clientHeight * 0.5;
-        let lo = 1;
-        let hi = total;
-        let ans = 1;
-        while (lo <= hi) {
-          const mid = (lo + hi) >> 1;
-          if (pageTops[mid] <= center) { ans = mid; lo = mid + 1; } else hi = mid - 1;
-        }
-        currentPage = ans;
-        if (document.activeElement !== jump) jump.value = String(ans);
-      };
-      const onScroll = () => {
-        if (scrollRaf) return;
-        scrollRaf = requestAnimationFrame(() => {
-          scrollRaf = 0;
-          if (!disposed) syncCurrent();
-        });
-      };
-      scroller.addEventListener("scroll", onScroll, { passive: true });
-
-      const jumpTo = (n) => {
-        const target = Math.min(total, Math.max(1, n));
-        if (topsDirty || !pageTops) recomputeTops();
-        scroller.scrollTop = Math.max(0, pageTops[target] - 12);
-        syncCurrent();
-      };
-      jump.addEventListener("focus", () => jump.select());
-      jump.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { jumpTo(parseInt(jump.value, 10) || 1); jump.blur(); }
-        else if (e.key === "Escape") { jump.value = String(currentPage); jump.blur(); }
-      });
-      jump.addEventListener("blur", () => { jump.value = String(currentPage); });
-
-      // 面板可拖宽：宽度变化后按新宽度重摆——已渲染页全部释放重渲染，简单可靠
-      const ro = new ResizeObserver(() => {
-        if (disposed) return;
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => {
-          if (disposed || Math.abs(slotWidth() - lastW) < 4) return;
-          for (const [p, canvas] of [...rendered]) { canvas.remove(); rendered.delete(p); restoreSlot(p); }
-          applySizes();
-          syncCurrent();
-          for (const p of visible) {
-            if (!pending.has(p)) { pending.add(p); queue.push(p); }
-          }
-          pump();
-        }, 200);
-      });
-      ro.observe(scrollEl);
-
-      const teardown = () => {
-        disposed = true;
-        clearTimeout(resizeTimer);
-        if (scrollRaf) cancelAnimationFrame(scrollRaf);
-        io.disconnect();
-        ro.disconnect();
-        scroller.removeEventListener("scroll", onScroll);
-        // 只在本查看器 DOM 还挂着时清空——effect 清理可能已 innerHTML=""，
-        // 而新一次 mount 已建好内容，此时再清会误伤新查看器；指示器 pill 自摘
-        if (slots[1] && slots[1].isConnected) scrollEl.textContent = "";
-        indicator.remove();
-      };
-      syncCurrent();
-      return teardown;
-    }
-    /** Excel 虚拟滚动表：冻结表头（sticky）+ 窗口渲染——数据全量在手，只画视口
-     *  附近 ±若干行，滚动时重算窗口（rAF 节流）；固定行高 + 固定列宽（来自工作
-     *  簿）是窗口化的前提。单元格用 textContent 注入，天然免消毒。返回 dispose。 */
-    function mountSheetTable(scrollEl, sheet) {
-      scrollEl.textContent = "";
-      const ROW_H = 26;
-      const totalW = sheet.colWidths.reduce((a, b) => a + b, 0);
-      // 冻结表头：sticky 钉在滚动口顶部，横向随内容滚动，宽度对齐列
-      const head = document.createElement("div");
-      head.className = "dshk-sheet-head";
-      head.style.height = `${ROW_H}px`;
-      const spans = new Map(sheet.headerSpans.map((s) => [s.c, s.span]));
-      let c = 0;
-      while (c < sheet.header.length) {
-        const cell = document.createElement("div");
-        cell.className = "dshk-sheet-hcell";
-        const span = spans.has(c) ? spans.get(c) : 1;
-        cell.style.width = `${sheet.colWidths.slice(c, c + span).reduce((a, b) => a + b, 0)}px`;
-        cell.textContent = sheet.header[c] ?? "";
-        head.appendChild(cell);
-        c += span;
-      }
-      // 撑出真实滚动高度的空壳 + 绝对定位的渲染窗口
-      const bodyWrap = document.createElement("div");
-      bodyWrap.className = "dshk-sheet-body";
-      bodyWrap.style.height = `${sheet.rows.length * ROW_H}px`;
-      bodyWrap.style.width = `${totalW}px`;
-      const winEl = document.createElement("div");
-      winEl.className = "dshk-sheet-window";
-      bodyWrap.appendChild(winEl);
-      scrollEl.append(head, bodyWrap);
-
-      let raf = 0;
-      const isNumeric = (v) => /^-?[\d,.\s]+%?$/.test(v) && /\d/.test(v);
-      const render = () => {
-        raf = 0;
-        const first = Math.max(0, Math.floor(scrollEl.scrollTop / ROW_H) - 5);
-        const count = Math.ceil(scrollEl.clientHeight / ROW_H) + 11;
-        const last = Math.min(sheet.rows.length, first + count);
-        winEl.style.top = `${first * ROW_H}px`;
-        winEl.textContent = "";
-        const frag = document.createDocumentFragment();
-        for (let i = first; i < last; i++) {
-          const row = document.createElement("div");
-          row.className = "dshk-sheet-row";
-          row.style.height = `${ROW_H}px`;
-          const cells = sheet.rows[i];
-          for (let j = 0; j < cells.length; j++) {
-            const cell = document.createElement("div");
-            cell.className = "dshk-sheet-cell" + (isNumeric(cells[j]) ? " dshk-sheet-num" : "");
-            cell.style.width = `${sheet.colWidths[j]}px`;
-            cell.textContent = cells[j];
-            cell.title = cells[j]; // 省略时悬停看全值
-            row.appendChild(cell);
-          }
-          frag.appendChild(row);
-        }
-        winEl.appendChild(frag);
-      };
-      const onScroll = () => {
-        if (!raf) raf = requestAnimationFrame(render);
-      };
-      scrollEl.addEventListener("scroll", onScroll, { passive: true });
-      render();
-      return () => {
-        if (raf) cancelAnimationFrame(raf);
-        scrollEl.removeEventListener("scroll", onScroll);
-      };
-    }
-    function extOf(p) {
-      const m = /\.([a-z0-9]+)$/i.exec(String(p ?? ""));
-      return m ? m[1].toLowerCase() : "";
     }
     let vendorPromise = null;
     /** 官方预编译 UMD：xterm.js → window.Terminal；addon-fit.js → window.FitAddon.FitAddon */
@@ -5431,13 +4961,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       });
     }
 
-    // ─────────── 文件签（可编辑，自绘）───────────
-    // 文件树/源代码管理/对话链接点文件 → 文件签（点开即可编辑）：md 走 RteEditor
-    // （与知识库同一套 TipTap
-    // WYSIWYG + 自动保存）；其余文本走 CM6 直接编辑；两套都吃同一自动保存语义
-    // （2s 防抖 + Ctrl+S + 卸载保底 + mtime CAS 冲突条），保存走 /dsh-kit/write。
-    // 外部修改可见性（vault 同款）：/dsh-kit/stat 轮询 mtime，无脏改时静默重读
-    // ——AI 改文件页面自动跟随。PDF/Excel/docx 只读视图与 diff 视图保持原样。
+    // ─────────── 知识库 md 链接解析（VaultPagePane / RteEditor 用）───────────
     /** 链接点击要不要交给我们：页内锚点与带协议/协议的 href 放行（RTE 的 Link
      *  扩展配了 openOnClick:false，点了本来也不跳），其余（相对路径 / 站内 / 裸
      *  路径）都算「文档内链接」候选，由调用方决定能不能解析成文件。 */
@@ -5474,10 +4998,10 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return norm(`${dir}\\${raw}`);
     }
     // ─────────── 阅读位置记忆（按文件绝对路径）───────────
-    // 内容重载（刷新浏览器 / 外部改动跟随重读 / 手动 ↻ / 冲突回读）后落回用户
-    // 原本看的大致位置。每条记录 = { scrollTop, anchor }：anchor 是光标字符偏移
-    // （内容变了也能落回附近），scrollTop 是精确视口位。运行时 Map + localStorage
-    // 持久化（刷新之后也要在，纯内存不够）。CM6 与 RTE 两条编辑路径共用。
+    // 内容重载（刷新浏览器 / vault 重读 / 冲突回读）后落回用户原本看的大致
+    // 位置。每条记录 = { scrollTop, anchor }：anchor 是光标字符偏移（内容变了
+    // 也能落回附近），scrollTop 是精确视口位。运行时 Map + localStorage 持久化
+    // （刷新之后也要在，纯内存不够）。RTE 编辑路径在用。
     const readPosStore = (() => {
       let map = new Map();
       try {
@@ -5535,84 +5059,24 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       setTimeout(step, 60);
     }
 
-    function FileEditorPane({ path, source, untracked, deleted, cwd, commit, onOpenFile }) {
+    /** SCM 专用 diff 签（原 FileEditorPane 瘦身）：源代码管理/提交图谱点文件在
+     *  这里看差异。工作区文件的预览/编辑已退役——树与对话区点击改投官方右栏
+     *  文件签。commit（可选）= 提交钉定模式（图谱提交详情进入，diff 与该提交的
+     *  第一父对比）；deleted=工作区已删除（纯红展示全文）；untracked=未跟踪
+     *  （整文件按新增着色，内容来自 read）。 */
+    function DiffPane({ path, untracked, deleted, cwd, commit }) {
       const [state, setState] = react.useState({ phase: "loading" });
-      // git/diff 视图状态——xy=null 表示无变更或非仓库；diff 数据懒加载。
-      // 视图模式：默认随入口（源代码管理=diff，文件树=原文；未跟踪文件没有
-      // 基线，即便从 SCM 进入也默认原文），头部 ⇄ 随时互切；
-      // 同一标签会话内换文件保留用户选中的模式。
-      // 二进制专用预览通道（pdf/xlsx/docx）：git diff 只有 "Binary files differ"
-      // 一句话——无 diff 视图
-      const isPdf = /\.pdf$/i.test(path);
-      const isSheet = /\.(xlsx|xlsm|xls)$/i.test(path);
-      const isDoc = /\.docx$/i.test(path);
-      const binaryPreview = isPdf || isSheet || isDoc;
-      const isMd = /\.(md|markdown)$/i.test(path);
-      const [mode, setMode] = react.useState(deleted === true || (source === "scm" && untracked !== true && !binaryPreview) ? "diff" : "text");
       const [diff, setDiff] = react.useState({ phase: "loading" });
-      // 来源切换（文件树 ↔ 源代码管理）时视图模式回到该来源的默认视图：
-      // 标签在 tree/scm 之间复用同一实例，mode 只随挂载初始化一次，不跟随
-      // source 的话在树里看过原文后进 SCM 点文件仍是原文——来源变了
-      // 默认视图就该跟着换；同一来源内换文件仍保留用户手动选中的模式。
-      const sourceRef = react.useRef(source);
-      react.useEffect(() => {
-        if (sourceRef.current === source) return;
-        sourceRef.current = source;
-        setMode(deleted === true || (source === "scm" && untracked !== true && !binaryPreview) ? "diff" : "text");
-      }, [source]);
+      const [reloadNonce, setReloadNonce] = react.useState(0);
       // deleted 翻转（同一文件先打开后被删 / ↩ 恢复后重开）：实例不重挂（key=path），
-      // 这里手动跟上——进 deleted 强制 diff 视图并置 deleted 态；解除则重读文本
+      // 手动跟上——解除删除态时重读内容（未跟踪/着色用），进删除态无需动作
+      //（渲染分支直接读 deleted prop）
       const deletedRef = react.useRef(deleted);
       react.useEffect(() => {
         if (deletedRef.current === deleted) return;
         deletedRef.current = deleted;
-        if (deleted === true) {
-          setMode("diff");
-          setState({ phase: "deleted" });
-        } else {
-          setMode(source === "scm" && untracked !== true && !binaryPreview ? "diff" : "text");
-          setReloadNonce((n) => n + 1);
-        }
+        if (deleted !== true) setReloadNonce((n) => n + 1);
       }, [deleted]);
-      const [reloadNonce, setReloadNonce] = react.useState(0);
-      // md 编辑面：frontmatter 字节级原文（保存原样拼回）+ RTE 重挂 tick + 冲突
-      const [docTick, setDocTick] = react.useState(0);
-      const [conflict, setConflict] = react.useState(null); // { diskMtime } | null
-      const [dirtyDot, setDirtyDot] = react.useState(false);
-      const rteRef = react.useRef(null);
-      const rteCtlRef = react.useRef(null);
-      // 文本（非 md）CM 编辑面
-      const [textDraft, setTextDraft] = react.useState("");
-      const [textSaved, setTextSaved] = react.useState("");
-      const [saving, setSaving] = react.useState(false);
-      // CM 宿主元素进 state（回调 ref，不是 ref.current）：宿主随视图切换（原文 ⇄
-      // diff）会被 React 换成新节点，元素本身必须是 effect 依赖，编辑器才会重建到
-      // 新宿主上——否则旧实例留在已摘除的节点上，切回来是一片空白（GUI
-      // 实测抓出）
-      const [cmHost, setCmHost] = react.useState(null);
-      const conflictRef = react.useRef(conflict);
-      conflictRef.current = conflict;
-      const [cmReady, setCmReady] = react.useState(false);
-      // PDF 渲染态：错误信息 / 渲染完成（占位与 canvas 由 mountPdfViewer 直接管）
-      const [pdfError, setPdfError] = react.useState(null);
-      const [pdfDone, setPdfDone] = react.useState(false);
-      // Excel 渲染态：sheetNames（非 null 即工作簿已在沙箱打开）/ sheetIdx（活动表）/
-      // sheet（活动表全量矩阵，虚拟滚动渲染）/ 错误
-      const [sheetNames, setSheetNames] = react.useState(null);
-      const [sheetIdx, setSheetIdx] = react.useState(0);
-      const [sheet, setSheet] = react.useState(null);
-      const [sheetError, setSheetError] = react.useState(null);
-      const sheetHostRef = react.useRef(null);
-      // docx 渲染态：消毒后的语义 HTML / 错误
-      const [docHtml, setDocHtml] = react.useState(null);
-      const [docError, setDocError] = react.useState(null);
-      const pdfHostRef = react.useRef(null);
-      // 标题栏页码指示器槽位（React 只给挂载点，内容归 mountPdfViewer 命令式管理）
-      const pdfIndicatorRef = react.useRef(null);
-      react.useEffect(() => {
-        ensureCmLib().then(() => setCmReady(true)).catch(() => {});
-        return undefined;
-      }, []);
 
       // diff 拉取（静默版）：已有内容时后台更新不闪「加载中」，数据到位再整体替换
       const diffFetchRef = react.useRef(null);
@@ -5636,12 +5100,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
             if (!c.signal.aborted && error?.name !== "AbortError") setDiff({ phase: "error", error: String(error?.message ?? error) });
           });
       };
-      // diff 数据（仅 diff 视图激活时）：进入时拉一次，可见期间低频静默跟随
-      // （AI 边改边看也能跟上），转回可见/聚焦立即补；切回原文视图即停轮询。
-      // 已删除文件即使二进制也拉（删除 diff 是一行 "Binary files differ"，可显示）。
-      // commit 钉定模式的 diff 不可变（固定对某提交的第一父），拉一次即可不轮询
+      // diff 数据：进入时拉一次，可见期间低频静默跟随（AI 边改边看也能跟上），
+      // 转回可见/聚焦立即补。commit 钉定模式的 diff 不可变（固定对某提交的
+      // 第一父），拉一次即可不轮询
       react.useEffect(() => {
-        if (mode !== "diff" || (binaryPreview && deleted !== true) || !cwd) return undefined;
+        if (!cwd) return undefined;
         setDiff({ phase: "loading" });
         if (diffFetchRef.current) diffFetchRef.current();
         if (commit) return undefined;
@@ -5656,315 +5119,24 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           document.removeEventListener("visibilitychange", tick);
           window.removeEventListener("focus", tick);
         };
-      }, [mode, path, cwd, commit]);
+      }, [path, cwd, commit]);
 
+      // 内容读取：只服务于 diff 着色（常规视图的新像 = 盘上内容；未跟踪 = 整文件
+      // 按新增着色）。截断（>512KB）或读失败时着色回落原始 patch，不作为错误展示。
+      // 已删除文件读不到，不发请求
       react.useEffect(() => {
-        // 已删除文件：文本必然读不到（报错无意义），标签只承载删除 diff——
-        // 不发 read 请求，直接进 deleted 态（文本面全部隐藏）
-        if (deleted === true) {
-          setState({ phase: "deleted" });
-          return undefined;
-        }
+        if (deleted === true) return undefined;
         const controller = new AbortController();
-        setState({ phase: "loading" });
         kitGetJson(`/dsh-kit/read?path=${encodeURIComponent(path)}`, controller.signal, (b) => typeof b.content !== "undefined")
           .then((body) => {
             if (controller.signal.aborted) return;
             setState({ phase: "ready", body });
           })
-          .catch((error) => {
-            if (controller.signal.aborted) return;
-            setState({ phase: "error", error: String(error?.message ?? error) });
+          .catch(() => {
+            /* 读失败只降着色，不作为错误展示 */
           });
         return () => controller.abort();
       }, [path, reloadNonce, deleted]);
-
-      const ready = state.phase === "ready" && state.body && !state.body.binary && state.body.content !== null;
-      // md：frontmatter 拆分（保存原样拼回），正文交 RteEditor
-      const mdParts = react.useMemo(() => (ready && isMd ? vaultSplitFrontmatter(state.body.content ?? "") : null), [ready, isMd, state.body?.content]);
-      // 外部修改实时刷新（vault 同款）：无脏改、无冲突时轮询 mtime，变了静默重读
-      react.useEffect(() => {
-        if (state.phase !== "ready" || deleted === true) return undefined;
-        const timer = setInterval(() => {
-          if (document.visibilityState === "hidden") return;
-          if (conflictRef.current !== null) return;
-          const dirty = isMd ? (rteCtlRef.current?.dirty() ?? false) : textDirtyRef.current;
-          if (dirty) return;
-          void fetch(`/dsh-kit/stat?path=${encodeURIComponent(path)}`)
-            .then((r) => (r.ok ? r.json() : null))
-            .then((body) => {
-              if (!body || typeof body.mtimeMs !== "number") return;
-              if (Math.abs(body.mtimeMs - (state.body?.mtimeMs ?? 0)) < 1) return;
-              setReloadNonce((n) => n + 1);
-            })
-            .catch(() => {});
-        }, 4000);
-        return () => clearInterval(timer);
-      }, [state.phase, state.body?.mtimeMs, path, deleted, isMd]);
-
-      // ── 保存：POST /dsh-kit/write（cwd 子树校验 + mtime CAS）；409 → 冲突条
-      // （覆盖盘上/读取盘上），绝不静默覆盖。mode ∈ auto|manual|overwrite ──
-      const writeFile = async (content, baseMtime, mode) => {
-        let b;
-        try {
-          b = await kitPostJson("/dsh-kit/write", { path, cwd, content, baseMtime });
-        } catch (error) {
-          // 409 = 盘上已被改：进冲突条，不算保存失败
-          if (error.status === 409) {
-            setConflict({ diskMtime: typeof error.body?.mtimeMs === "number" ? error.body.mtimeMs : 0 });
-            return "conflict";
-          }
-          throw error;
-        }
-        setConflict(null);
-        setState((s) => (s.phase === "ready" && s.body ? { ...s, body: { ...s.body, content, mtimeMs: typeof b.mtimeMs === "number" ? b.mtimeMs : s.body.mtimeMs } } : s));
-        if (mode === "manual") flashToast(t("editSaved"));
-        return "ok";
-      };
-      /** md 保存（RteEditor onSave 回调）：content = frontmatter 原文 + 编辑器 md */
-      const saveMd = async (bodyMd, mode) => {
-        if (!mdParts) return "fail";
-        try {
-          return await writeFile(mdParts.fmText + bodyMd, mode === "overwrite" ? (conflictRef.current?.diskMtime ?? 0) : (state.body?.mtimeMs ?? 0), mode);
-        } catch (error) {
-          flashToast(`${t("editFail")}：${error?.message ?? error}`);
-          return "fail";
-        }
-      };
-      // 非 md 文本的脏判定走 ref（stat 轮询与 CM 闭包都要读最新值）
-      const textDirtyRef = react.useRef(false);
-      textDirtyRef.current = textDraft !== textSaved;
-      const textBaseRef = react.useRef(0);
-      textBaseRef.current = state.body?.mtimeMs ?? 0;
-      const saveText = async (content, mode) => {
-        try {
-          return await writeFile(content, mode === "overwrite" ? (conflictRef.current?.diskMtime ?? 0) : textBaseRef.current, mode);
-        } catch (error) {
-          flashToast(`${t("editFail")}：${error?.message ?? error}`);
-          return "fail";
-        }
-      };
-      // CM 自动保存：文档变更 2s 防抖落盘；Ctrl+S 立即；卸载保底 flush
-      react.useEffect(() => {
-        if (!cmReady || isMd || !ready || state.body?.truncated) return undefined;
-        setTextDraft(state.body.content ?? "");
-        setTextSaved(state.body.content ?? "");
-        return undefined;
-      }, [cmReady, isMd, ready, path, reloadNonce, state.body?.content]);
-      // CM 编辑面：文档变更 2s 防抖落盘；Ctrl+S 立即；卸载保底 flush。
-      // 截断文件（>512KB）只读——保存会丢 512KB 之后的内容，同一个宿主分两种模式
-      // （只读那份若用另一个没挂到 DOM 上的 ref，截断文件等于空白编辑器）
-      react.useEffect(() => {
-        if (!cmReady || isMd || !cmHost || !ready) return undefined;
-        const readOnly = state.body?.truncated === true;
-        let timer = null;
-        const h = window.CM6.create(cmHost, { doc: state.body.content ?? "", readOnly, language: extOf(path) });
-        // 阅读位置：滚动节流记录 + 内容就绪后恢复（截断只读分支同样适用）
-        const scrollEl = h.view?.scrollDOM ?? null;
-        let posTimer = null;
-        const posAnchor = () => {
-          try { return h.view.state.selection.main.head; } catch { return 0; }
-        };
-        const onPosScroll = () => {
-          if (posTimer !== null) return;
-          posTimer = setTimeout(() => {
-            posTimer = null;
-            recordReadPos(path, scrollEl, posAnchor());
-          }, 300);
-        };
-        scrollEl?.addEventListener("scroll", onPosScroll);
-        restoreReadPos(path, scrollEl, (anchor) => {
-          if (h.view && typeof anchor === "number" && anchor <= h.view.state.doc.length) h.view.dispatch({ selection: { anchor } });
-        });
-        const posCleanup = () => {
-          if (posTimer !== null) clearTimeout(posTimer);
-          scrollEl?.removeEventListener("scroll", onPosScroll);
-          recordReadPos(path, scrollEl, posAnchor()); // 切页/卸载兜底记一次
-        };
-        if (readOnly) {
-          // 只读：不装自动保存/Ctrl+S（无改动可存）
-          return () => {
-            posCleanup();
-            h.destroy();
-          };
-        }
-        h.onDocChanged((text) => {
-          setTextDraft(text);
-          if (timer) clearTimeout(timer);
-          timer = setTimeout(() => {
-            timer = null;
-            void saveText(text, "auto").then((outcome) => {
-              if (outcome === "ok") setTextSaved(text);
-            });
-          }, 2000);
-        });
-        const flushNow = () => {
-          if (timer) {
-            clearTimeout(timer);
-            timer = null;
-          }
-          return saveText(h.getDoc?.() ?? textDraftRef.current, "manual").then((outcome) => {
-            if (outcome === "ok") setTextSaved(textDraftRef.current);
-            return outcome;
-          });
-        };
-        const onKeyDown = (e) => {
-          if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
-            e.preventDefault();
-            e.stopPropagation();
-            void flushNow();
-          }
-        };
-        cmHost.addEventListener("keydown", onKeyDown, true);
-        return () => {
-          if (timer) {
-            clearTimeout(timer);
-            // 卸载保底：防抖未落盘的改动尽力写一次（冲突放弃）
-            if (!conflictRef.current && textDraftRef.current !== textSavedRef.current) {
-              void saveText(textDraftRef.current, "auto");
-            }
-          }
-          cmHost.removeEventListener("keydown", onKeyDown, true);
-          posCleanup();
-          h.destroy();
-        };
-      }, [cmHost, cmReady, isMd, ready, path, reloadNonce, state.body?.truncated]);
-      // CM 闭包用的最新草稿镜像
-      const textDraftRef = react.useRef(textDraft);
-      textDraftRef.current = textDraft;
-      const textSavedRef = react.useRef(textSaved);
-      textSavedRef.current = textSaved;
-
-      // ── PDF 渲染：pdf.js 在 iframe 沙箱（原生 Promise realm）里画 canvas
-      // （库懒加载）。查看器本体懒加载：全量占位 + 进视口渲染 + 滚远释放位图，
-      // 无页数上限；canvas 建在主文档（跨文档采纳会丢位图），沙箱 pdf.js 只执笔
-      react.useEffect(() => {
-        if (!isPdf || state.phase !== "ready") return undefined;
-        const host = pdfHostRef.current;
-        if (!host) return undefined;
-        let alive = true;
-        let doc = null;
-        let disposeUi = null;
-        setPdfError(null);
-        setPdfDone(false);
-        const origin = location.origin;
-        ensurePdfBox()
-          .then((win) => {
-            if (!alive) return null;
-            return win.pdfjsLib
-              .getDocument({
-                url: `${origin}/dsh-kit/raw?path=${encodeURIComponent(path)}`,
-                // 关 eval 化字体变换：pdf.js <4.2 有 FontMatrix 注入任意 JS 的路子
-                // （CVE-2024-4367），沙箱与主文档同源，不关等于给恶意 PDF 开后门
-                isEvalSupported: false,
-                cMapUrl: `${origin}/dsh-kit/vendor/cmaps/`,
-                cMapPacked: true,
-                standardFontDataUrl: `${origin}/dsh-kit/vendor/standard_fonts/`,
-              })
-              .promise.then((d) => d);
-          })
-          .then((d) => {
-            if (!alive || !d) return undefined;
-            doc = d;
-            return mountPdfViewer(host, pdfIndicatorRef.current, d, () => !alive);
-          })
-          .then((dispose) => {
-            if (!dispose) return;
-            disposeUi = dispose;
-            if (alive) setPdfDone(true);
-          })
-          .catch((error) => {
-            if (alive) setPdfError(String(error?.message ?? error));
-          });
-        return () => {
-          alive = false;
-          if (disposeUi) disposeUi();
-          host.innerHTML = "";
-          if (doc) doc.destroy();
-        };
-      }, [isPdf, state.phase, path, reloadNonce]);
-      // ── Excel 渲染：fetch raw 字节 → 沙箱打开工作簿（全量留沙箱）→ 按表取矩阵
-      react.useEffect(() => {
-        if (!isSheet || state.phase !== "ready") return undefined;
-        let alive = true;
-        setSheetNames(null);
-        setSheet(null);
-        setSheetIdx(0);
-        setSheetError(null);
-        if ((state.body?.size ?? 0) > 20 * 1024 * 1024) {
-          setSheetError(t("previewTooLarge"));
-          return undefined;
-        }
-        const origin = location.origin;
-        Promise.all([
-          fetch(`${origin}/dsh-kit/raw?path=${encodeURIComponent(path)}`).then((r) => {
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            return r.arrayBuffer();
-          }),
-          ensureSheetBox(),
-        ])
-          .then(([buf, win]) => setSheetNames(win.__dshkSheetOpen(new Uint8Array(buf))))
-          .catch((error) => {
-            if (alive) setSheetError(String(error?.message ?? error));
-          });
-        return () => {
-          alive = false;
-        };
-      }, [isSheet, state.phase, path, reloadNonce]);
-      // 活动表矩阵加载（工作簿留在沙箱，切表零重复解析）
-      react.useEffect(() => {
-        if (!isSheet || sheetNames === null) return undefined;
-        let alive = true;
-        setSheet(null);
-        ensureSheetBox()
-          .then((win) => {
-            if (!alive) return;
-            setSheet(win.__dshkSheetGet(Math.min(sheetIdx, sheetNames.length - 1)));
-          })
-          .catch((error) => {
-            if (alive) setSheetError(String(error?.message ?? error));
-          });
-        return () => {
-          alive = false;
-        };
-      }, [isSheet, sheetNames, sheetIdx]);
-      // 矩阵 → 虚拟滚动表挂载（切表/换文件时 host 内容由 mount 自己清）
-      react.useEffect(() => {
-        const host = sheetHostRef.current;
-        if (!isSheet || !sheet || !host) return undefined;
-        return mountSheetTable(host, sheet);
-      }, [isSheet, sheet]);
-      // ── docx 渲染：fetch raw 字节 → mammoth 沙箱转语义 HTML → DOMPurify 消毒
-      react.useEffect(() => {
-        if (!isDoc || state.phase !== "ready") return undefined;
-        let alive = true;
-        setDocHtml(null);
-        setDocError(null);
-        if ((state.body?.size ?? 0) > 20 * 1024 * 1024) {
-          setDocError(t("previewTooLarge"));
-          return undefined;
-        }
-        const origin = location.origin;
-        Promise.all([
-          fetch(`${origin}/dsh-kit/raw?path=${encodeURIComponent(path)}`).then((r) => {
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            return r.arrayBuffer();
-          }),
-          ensureDocBox(),
-          ensurePurify(),
-        ])
-          .then(([buf, win]) => win.__dshkDocxParse(new Uint8Array(buf)))
-          .then((html) => {
-            if (!alive) return;
-            setDocHtml(window.DOMPurify.sanitize(html, { ADD_DATA_URI_TAGS: ["img"] }));
-          })
-          .catch((error) => {
-            if (alive) setDocError(String(error?.message ?? error));
-          });
-        return () => {
-          alive = false;
-        };
-      }, [isDoc, state.phase, path, reloadNonce]);
 
       /** diff 视图：优先全文件着色（hunk 套回完整新像，删除红/新增绿）；
        *  截断大文件或 hunk 对不上时回退原始 patch 渲染。新像来源两分支——
@@ -6073,200 +5245,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return body;
       };
 
-      const renderConflictbar = () =>
-        conflict !== null
-          ? jsxRuntime.jsxs("div", { className: "dshk-vault-conflict", children: [
-              jsxRuntime.jsx("span", { children: `⚠ ${t("vaultConflict")}` }),
-              jsxRuntime.jsx("button", {
-                type: "button",
-                className: "dshk-sched-navbtn",
-                onClick: () => {
-                  // 覆盖盘上：md 走 RteEditor ctl（含暂停复位），文本直接写
-                  if (isMd) void rteCtlRef.current?.overwrite();
-                  else void saveText(textDraftRef.current, "overwrite").then((outcome) => {
-                    if (outcome === "ok") setTextSaved(textDraftRef.current);
-                  });
-                },
-                children: t("vaultConflictOverwrite"),
-              }),
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setReloadNonce((n) => n + 1), children: t("vaultConflictReload") }),
-            ] }, "conflict")
-          : null;
-
-      let body;
-      if (state.phase === "loading") {
-        body = jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentLoading") });
-      } else if (state.phase === "error") {
-        body = jsxRuntime.jsx("div", { className: "dshk-note", title: state.error, children: `${t("contentFail")}：${state.error}` });
-      } else if (state.phase === "deleted" || !state.body) {
-        // 已删除（或异常无 body）：deleted 的渲染走独立分支（说明行 + diff 视图），
-        // body 只兜占位——严禁在这里读 state.body 的字段（b.binary 崩溃的教训）
-        body = jsxRuntime.jsx("div", { className: "dshk-note", children: state.phase === "deleted" ? t("pvDeletedNote") : t("contentLoading") });
-      } else {
-        const b = state.body;
-        if (isPdf) {
-          // PDF：pdf.js 逐页 canvas 渲染（Edge 内置查看器对 http:// 源一律灰屏，
-          // iframe/顶层都不可用——见 src/index.js raw 端点注释）
-          body = jsxRuntime.jsxs("div", {
-            className: "dshk-pane-body dshk-pdfwrap",
-            children: [
-              pdfError
-                ? jsxRuntime.jsx("div", { className: "dshk-note", title: pdfError, children: `${t("contentFail")}：${pdfError}` })
-                : null,
-              jsxRuntime.jsx("div", { className: "dshk-pdf-scroll", ref: pdfHostRef }),
-              !pdfError && !pdfDone
-                ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentLoading") })
-                : null,
-            ],
-          });
-        } else if (isSheet) {
-          const activeIdx = sheetNames ? Math.min(sheetIdx, sheetNames.length - 1) : 0;
-          body = jsxRuntime.jsxs("div", {
-            className: "dshk-pane-body dshk-sheetwrap",
-            children: [
-              sheetError
-                ? jsxRuntime.jsx("div", { className: "dshk-note", title: sheetError, children: `${t("contentFail")}：${sheetError}` })
-                : null,
-              sheetNames
-                ? jsxRuntime.jsx(
-                    "div",
-                    {
-                      className: "dshk-sheet-tabs",
-                      children: sheetNames.map((name, i) =>
-                        jsxRuntime.jsx("button", {
-                          type: "button",
-                          className: "dshk-sheet-tab" + (i === activeIdx ? " dshk-sheet-tab-on" : ""),
-                          title: name,
-                          onClick: () => setSheetIdx(i),
-                          children: name,
-                        }),
-                      ),
-                    },
-                  )
-                : null,
-              jsxRuntime.jsx("div", { className: "dshk-sheet-scroll", ref: sheetHostRef }),
-              sheet && sheet.truncated
-                ? jsxRuntime.jsx("div", {
-                    className: "dshk-note",
-                    title: `共 ${sheet.totalRows} 行 × ${sheet.totalCols} 列，已加载前 ${sheet.shownRows} 行 × ${sheet.shownCols} 列`,
-                    children: t("sheetRowCap"),
-                  })
-                : null,
-              !sheetError && sheetNames === null
-                ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentLoading") })
-                : null,
-            ],
-          });
-        } else if (isDoc) {
-          body = jsxRuntime.jsxs("div", {
-            className: "dshk-pane-body dshk-docwrap",
-            children: [
-              docError
-                ? jsxRuntime.jsx("div", { className: "dshk-note", title: docError, children: `${t("contentFail")}：${docError}` })
-                : null,
-              docHtml !== null
-                ? jsxRuntime.jsx("div", { className: "dshk-md dshk-doc", dangerouslySetInnerHTML: { __html: docHtml } })
-                : null,
-              !docError && docHtml === null
-                ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentLoading") })
-                : null,
-            ],
-          });
-        } else if (b.binary) {
-          body = jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentBinary") });
-        } else if (b.content === null) {
-          // 空文件（content === ""）不落这里：那是个能写的目标，给编辑器；只有
-          // host 给不出文本（content 为 null）才提示空内容
-          body = jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentEmpty") });
-        } else {
-          body = jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-            b.truncated ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentTruncated") }) : null,
-            renderConflictbar(),
-            isMd
-              ? jsxRuntime.jsx(RteEditor, {
-                  rteRef,
-                  ctlRef: rteCtlRef,
-                  docKey: path,
-                  docTick,
-                  initialMd: mdParts?.rest.trimStart() ?? "",
-                  placeholder: t("rtePlaceholder"),
-                  labels: { codeCopy: t("vaultCopy"), codeCopied: t("vaultCopied") },
-                  // 相对/站内链接 → 工作区文件签打开（原 md 预览时代的能力，RTE 接管后
-                  // 由这层补回）：解析按「当前文件所在目录」，/ 开头按工作区根
-                  onRelLink: (href) => {
-                    const target = resolveMdLink(path, cwd, href);
-                    if (target && typeof onOpenFile === "function") onOpenFile(target);
-                  },
-                  onSave: saveMd,
-                  onState: (s) => setDirtyDot(s.dirty === true),
-                })
-              : cmReady
-                ? jsxRuntime.jsx("div", { className: "dshk-editarea dshk-cm-host dshk-cm-scope", ref: setCmHost })
-                : jsxRuntime.jsx("pre", { className: "dshk-pane-pre", children: b.content }),
-          ] });
-        }
-      }
-
+      // 头部只剩路径（签名由页签 chip 承担）；正文恒为 diff 视图
       return jsxRuntime.jsxs(jsxRuntime.Fragment, {
         children: [
-          jsxRuntime.jsxs("div", {
+          jsxRuntime.jsx("div", {
             className: "dshk-head",
-            children: [
-              // 标题行显示绝对路径（文件名已由页签 chip 承担，重复信息去掉；
-              // 同仓多目录/同名校验场景下绝对路径更有用）
-              jsxRuntime.jsx("span", { className: "dshk-title", children: path }),
-              // 未落盘脏点：跟在标题后（编辑面没有自动保存提示条，脏点放这里才不丢这个信息）
-              dirtyDot || textDraft !== textSaved
-                ? jsxRuntime.jsx("span", { className: "dshk-vault-dirtydot", title: t("vaultUnsaved"), children: "●" })
-                : null,
-              jsxRuntime.jsx("span", { className: "dshk-spring" }),
-              // 下载到本机：与预览/编辑无关（二进制文件签没有预览也照样能下），
-              // 故只有「文件已被删除」这一种情况不给。走 raw 的 dl 模式（服务端发
-              // attachment）——iOS 不认 <a download>，只有它能触发落盘
-              deleted !== true
-                ? jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-btn",
-                    title: t("fileDownload"),
-                    onClick: () => {
-                      // 临时锚点而不是 location 跳转：后者会把整个工作台换成下载
-                      // 响应，回不去（附件响应没有可渲染内容）
-                      const a = document.createElement("a");
-                      a.href = `/dsh-kit/raw?path=${encodeURIComponent(path)}&dl=1`;
-                      a.download = "";
-                      document.body.appendChild(a);
-                      a.click();
-                      a.remove();
-                    },
-                    children: "↓",
-                  })
-                : null,
-              // PDF 页码指示器：挂标题栏固定区不遮内容；文档加载失败时不给槽位
-              isPdf && state.phase === "ready" && !pdfError
-                ? jsxRuntime.jsx("span", { ref: pdfIndicatorRef })
-                : null,
-              // 原文 ⇄ diff 双视图切换（同一标签，入口只决定默认视图）；
-              // PDF 无 diff 视图，不显示
-              !binaryPreview && deleted !== true
-                ? jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-btn",
-                    title: t(mode === "diff" ? "toText" : "toDiff"),
-                    onClick: () => setMode((m) => (m === "diff" ? "text" : "diff")),
-                    children: "⇄",
-                  })
-                : null,
-              // PDF 新标签页兜底：手机端个别浏览器不支持 iframe 内嵌 PDF
-              isPdf && state.phase === "ready"
-                ? jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-btn",
-                    title: t("pdfNewTab"),
-                    onClick: () => window.open(`/dsh-kit/raw?path=${encodeURIComponent(path)}`, "_blank", "noopener"),
-                    children: "↗",
-                  })
-                : null,
-            ],
+            children: jsxRuntime.jsx("span", { className: "dshk-title", children: path }),
           }),
           deleted === true
             ? jsxRuntime.jsxs(jsxRuntime.Fragment, {
@@ -6275,9 +5259,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
                   jsxRuntime.jsx("div", { className: "dshk-pane-body", children: renderDiffView() }),
                 ],
               })
-            : mode === "diff" && !binaryPreview
-              ? jsxRuntime.jsx("div", { className: "dshk-pane-body", children: renderDiffView() })
-              : body,
+            : jsxRuntime.jsx("div", { className: "dshk-pane-body", children: renderDiffView() }),
         ],
       });
     }
@@ -9247,12 +8229,12 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       return jsxRuntime.jsx(VaultRootView, {});
     }
 
-    // ─────────── RTE 编辑面（知识库页与工作区 md 共用）───────────
+    // ─────────── RTE 编辑面（知识库页专用，所见即所得）───────────
     // TipTap 富文本编辑器挂载 + 斜杠菜单 + 泡泡菜单 + 自动保存（2s 防抖 +
-    // Ctrl+S + 卸载保底 + 冲突暂停）全部收拢在这里；端点差异（vault 带_fm
-    // / 工作区文件走 /dsh-kit/write）由 onSave(md, mode) 回调承担，mode ∈
-    // auto|manual|overwrite，返回 'ok'|'conflict'|'fail'。conflict 会暂停
-    // 自动保存，直到父层重载（docTick bump 重挂）或 overwrite 成功。
+    // Ctrl+S + 卸载保底 + 冲突暂停）全部收拢在这里；落盘由 onSave(md, mode)
+    // 回调承担（vault/write 带 _fm），mode ∈ auto|manual|overwrite，返回
+    // 'ok'|'conflict'|'fail'。conflict 会暂停自动保存，直到父层重载
+    // （docTick bump 重挂）或 overwrite 成功。
     // rteRef 直通 RTE 句柄（父层页条按钮 undo/redo/表格等照旧调用）；
     // ctlRef 暴露 { dirty, flush, flushManual, overwrite } 供切页 flush。
     function RteEditor({ rteRef, ctlRef, docKey, docTick, initialMd, placeholder, labels, onWikiLink, resolveWiki, resolveSrc, onRelLink, onSave, onState, onPaste }) {
@@ -11130,11 +10112,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
         return () => setKitUi(closeFeatureTab(kitUi, feature));
       }, [feature]);
     }
-    /** 文件 pane：文档签条 + 多实例 FileEditorPane（非激活 display:none 保挂载
-     *  ——滚动/草稿/撤销栈不丢）。不做存在性同步：
-     *  files 状态本来就在 kitUi，官方签关了重开，文档签原样恢复。
-     *  最后一页文档签关掉 → 官方「文件」dock 签一起关（同浏览器「没了就没了」，
-     *  没有空页状态；再点文件时 openFileAndDock 重开签） */
+    /** diff pane：文档签条 + 多实例 DiffPane（非激活 display:none 保挂载——
+     *  滚动位置不丢）。只承载源代码管理/提交图谱点开的 diff；工作区文件的
+     *  预览/编辑已改投官方右栏文件签。不做存在性同步：files 状态本来就在
+     *  kitUi，官方签关了重开，文档签原样恢复。最后一页 diff 签关掉 → 官方
+     *  「文件」dock 签一起关（同浏览器「没了就没了」，没有空页状态） */
     function FilePaneBody(props) {
       const ui = useKitUi();
       const cwd = useCurrentCwd(props);
@@ -11149,15 +10131,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               jsxRuntime.jsx("div", {
                 className: "dshk-pane-view",
                 style: { display: pv.path === ui.activeFile ? "flex" : "none" },
-                children: jsxRuntime.jsx(FileEditorPane, {
+                children: jsxRuntime.jsx(DiffPane, {
                   key: pv.path,
                   path: pv.path,
-                  source: pv.from ?? "tree",
                   untracked: pv.untracked === true,
                   deleted: pv.deleted === true,
                   commit: pv.commit,
                   cwd,
-                  onOpenFile: (p, untracked) => openFileAndDock(p, "md-link", untracked === true),
                 }),
               }, pv.path),
             ),
@@ -11344,10 +10324,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     }
 
     // ─────────── 面板宿主（shell.overlay 全帧浮层）───────────
-    // 终端停靠面板与文件预览面板在这里渲染（fixed 定位不受 composer 祖先
-    // stacking context 影响）；文件树的 sidebar.workspaces 动态注册、让位 body 类、
-    // 快捷键监听全部挂在这个常驻根组件里。
-    // ─────────── 面板宿主（shell.overlay 全帧浮层）───────────
     // 终端停靠在这里渲染（fixed 定位不受 composer 祖先
     // stacking context 影响）；知识库单实例挂载、文件树/索引的 sidebar.workspaces
     // 动态注册、几何 RO、快捷键监听全部挂在这个常驻根组件里。
@@ -11360,21 +10336,11 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // useSessions 透传给右栏任务 pane/开始页（在跑任务徽标）：inject 闭包
       // 从这里取最新值（槽位注册发生在 effect，渲染期的 props 用模块变量桥接）
       shellShare.current = props;
-      // 对话文件点击接管状态：面板门控（文件标签可用）与当前会话 cwd 每次渲染同步，
-      // 供模块级 capture 拦截器读取。ready=false 时拦截器完全不介入（三项门控
-      // chatOpenFilePreview / fileTreeEnabled / sourceControlEnabled 默认都是开）
+      // 对话文件点击的知识库路由状态：当前会话 cwd 与知识库开关每次渲染同步，
+      // 供模块级 capture 拦截器读取（vault 关闭时拦截器完全不介入）
       chatPreviewHook = {
-        ready: cfg.chatOpenFilePreview === true && (cfg.fileTreeEnabled || cfg.sourceControlEnabled),
         cwd,
-        openPreview: (p) => openFileAndDock(p, "chat", false),
-        // M4 会话→笔记：vault 内路径点击直达知识库标签（不受预览接管门控）
         vaultOn: cfg.vaultEnabled !== false,
-        openVaultPage: (p) => {
-          openVaultPageAndDock(p);
-          // 先落地再派发：知识库未挂载时 VaultRootView 未挂载，挂载后消费请求
-          vaultOpenRequest = p;
-          window.dispatchEvent(new CustomEvent("dshk-vault-open"));
-        },
       };
 
       // 卸载时清空模块级接管状态，避免拦截器持有失效闭包
@@ -11475,7 +10441,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
               return jsxRuntime.jsx(GitChangesPanel, { cwd, onOpenFile: (p, untracked, deleted, commit) => openFileAndDock(p, "scm", untracked === true, deleted === true, commit), ...owner });
             }
             if (ui.treeOpen) {
-              return jsxRuntime.jsx(FileTreePanel, { cwd, onOpenFile: (p) => openFileAndDock(p, "tree", false), ...owner });
+              return jsxRuntime.jsx(FileTreePanel, { cwd, onOpenFile: (p) => openTreeFile(p), ...owner });
             }
             return jsxRuntime.jsx(SidebarVaultIndex, { ...owner });
           });
@@ -11492,6 +10458,14 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           }
         };
       }, [ui.treeOpen, ui.gitOpen, ui.vaultIdxOpen, cwd]);
+
+      // 隐藏官方右栏「工作区文件」入口（hideOfficialFilesEntry）：那只是个目录
+      // 按钮，与文件树功能重复。body 标记 + CSS display:none，锚点
+      // data-sidebar-right-guide-entry 是官方胶囊的稳定属性（旧置灰方案同款）
+      react.useEffect(() => {
+        document.body.classList.toggle("dshk-hide-official-files", cfg.hideOfficialFilesEntry === true);
+        return () => document.body.classList.remove("dshk-hide-official-files");
+      }, [cfg.hideOfficialFilesEntry]);
 
       // 终端让位布局：坞可见时挂 body 类 + 设高度变量，样式规则顶起对话/详情列
       //（隐藏/无会话时不顶——后台会话继续跑但不占布局）
@@ -11575,7 +10549,7 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
           if (e.key === "Escape") {
             // 日程弹窗/知识库搜索浮层开着时让路：Esc 归它们自己（只关自己，不收标签页）
             if (schedModalOpen || vaultSearchOpen) return;
-            // Esc 关当前激活那张文档签（知识库关当前页那张、文件关当前文件
+            // Esc 关当前激活那张文档签（知识库关当前页那张、diff 关当前
             // 那张，各自与标签条的 ✕ 同语义）。功能签归官方 ✕，Esc 不收
             // 功能签（kitUi 收了 pane 还在，状态会对不上）
             const vaultPages = kitUi.vaultPages ?? [];
@@ -12034,9 +11008,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     const CFG_FIELDS = [
       { key: "terminalEnabled", kind: "bool" },
       { key: "fileTreeEnabled", kind: "bool" },
-      { key: "previewMaxTabs", kind: "number", max: 20 },
       { key: "sourceControlEnabled", kind: "bool" },
-      { key: "chatOpenFilePreview", kind: "bool" },
+      { key: "hideOfficialFilesEntry", kind: "bool" },
       { key: "chatOpenLinkInBrowser", kind: "bool" },
       { key: "skillsPageEnabled", kind: "bool" },
       { key: "searchEnabled", kind: "bool" },
@@ -12064,13 +11037,13 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
     // title 组头（侧边栏这类无单一开关的组）——其余组的功能开关行本身就是组头。
     // permRow = 该组末尾追加「通知权限」行（权限状态不在 settings 里，是浏览器
     // 侧事实，只能就地读/就地请求）。
-    // 组顺序：侧边栏（左右放一起）→ 文件树 → 源代码管理
-    // → 终端 → 知识库 → 后台任务 → 浏览器 → 会话监视 → 会话通知 → 对话文件预览
+    // 组顺序：侧边栏（左右键 + 官方「工作区文件」入口开关）→ 文件树 → 源代码管理
+    // → 终端 → 知识库 → 后台任务 → 浏览器 → 会话监视 → 会话通知
     // → 技能页 → 网页搜索 → 手机访问（放最下）。远程域名不在此卡——编辑入口在
     // 「手机访问」页内。
     const CFG_GROUPS = [
-      { title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut"] },
-      { switchKey: "fileTreeEnabled", fields: ["fileTreeShortcut", "previewMaxTabs"] },
+      { title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut", "hideOfficialFilesEntry"] },
+      { switchKey: "fileTreeEnabled", fields: ["fileTreeShortcut"] },
       { switchKey: "sourceControlEnabled", fields: ["scShortcut"] },
       { switchKey: "terminalEnabled", fields: ["terminalShortcut"] },
       { switchKey: "vaultEnabled", fields: ["vaultRoot", "vaultShortcut"] },
@@ -12078,7 +11051,6 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       { switchKey: "browserEnabled", fields: [] },
       { switchKey: "monitorEnabled", fields: ["monitorWaitMs", "monitorMaxAuto", "monitorRepeatThreshold"] },
       { switchKey: "notifyEnabled", fields: [], permRow: true },
-      { switchKey: "chatOpenFilePreview", fields: [] },
       { switchKey: "chatOpenLinkInBrowser", fields: [] },
       { switchKey: "skillsPageEnabled", fields: [] },
       { switchKey: "searchEnabled", fields: ["searchMaxResults"] },
@@ -12720,6 +11692,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       if (typeof ctx.inject === "function") {
         ctx.inject(["sidebarRightTabs"], registerRightbar);
         ctx.inject(["sidebarRight"], (srCtx) => { rightbarSr = srCtx.sidebarRight; });
+        // 官方 sessions 服务捕获：openOfficialFile 拼文件地址要当前会话 id 与 cwd
+        ctx.inject(["sessions"], (sctx) => { sessionsSvc = sctx.sessions; });
       } else {
         registerRightbar(ctx);
       }
@@ -12728,8 +11702,8 @@ body[data-ds-dark-theme] .dshk-cm-scope{--dshk-lp-bar:#30363d;--dshk-lp-tborder:
       // /dsh-kit/schedule/* 数据，与 session 无关。
       // 导航图标替换是点击驱动的轻量方案：打开设置/面板内切换都源于一次 click
       document.addEventListener("click", scheduleSkillIconSwap, true);
-      // 对话文件点击接管（设置卡 chatOpenFilePreview；默认开，且需文件树或源代码
-      // 管理至少开一个——门控见下方 chatPreviewHook.ready）
+      // 对话文件点击的知识库路由：vault 内路径改道知识库标签，其余放行官方
+      //（门控见 onChatOpenFileClick 与 chatPreviewHook）
       document.addEventListener("click", onChatOpenFileClick, true);
       // 对话链接改投内置浏览器（默认开：设置卡 chatOpenLinkInBrowser）
       document.addEventListener("click", onChatLinkClick, true);

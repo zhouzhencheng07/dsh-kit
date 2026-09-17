@@ -1,16 +1,13 @@
 // 原始字节端点（/dsh-kit/raw）辅助：content-type 白名单 + Range 请求头解析。
-// 白名单按扩展名收口——只放行明确支持的预览类型，避免把任意二进制按
-// octet-stream 喂给浏览器（触发下载）；新增预览格式时在此扩表。
+// 白名单按扩展名收口——只放行明确支持的 inline 渲染类型（现仅 vault 图片），
+// 避免把任意二进制按 octet-stream 喂给浏览器（触发下载）；新增 inline 渲染
+// 格式时在此扩表。
 //
 // 单独成模块：宿主侧 index.ts 消费，tests/test-raw-file.mjs 单测。
 
-/** 可原始预览的类型：扩展名 → content-type */
+/** 可 inline 渲染的类型：扩展名 → content-type（pdf/office 类型随预览通道退役移除，
+ *  下载模式不受此表限制） */
 const RAW_TYPES = new Map([
-  ['pdf', 'application/pdf'],
-  ['xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-  ['xlsm', 'application/vnd.ms-excel.sheet.macroEnabled.12'],
-  ['xls', 'application/vnd.ms-excel'],
-  ['docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
   // 图片（vault 笔记粘贴截图/插图走 /dsh-kit/raw 渲染）
   ['png', 'image/png'],
   ['jpg', 'image/jpeg'],
@@ -63,8 +60,8 @@ export function parseRangeHeader(header: unknown, size: number): { start: number
 
 /**
  * 下载模式（`?dl=1`）的 content-type：白名单是给「浏览器能不能渲染」收的口，
- * 下载不适用——未知类型按 octet-stream 发出去由浏览器落盘即可（文件签的
- * 「下载」按钮对任意类型都要能用）。
+ * 下载不适用——未知类型按 octet-stream 发出去由浏览器落盘即可（官方文件预览
+ * 头部的「下载到本机」按钮对任意类型都要能用）。
  */
 export function rawDownloadContentType(name: unknown): string {
   return rawContentType(name) ?? 'application/octet-stream'
