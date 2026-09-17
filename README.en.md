@@ -17,8 +17,10 @@ Index views (file tree, source control, vault directory) share a single left-sid
 slot; the conversation column stays put.
 
 - **Terminal** (composer-row toggle / **Ctrl+/**): a tabbed bottom terminal dock
-  bound to the session workspace at open time; hidden docks keep running; prefers
-  pwsh on Windows
+  bound to the session it was opened in (width follows the chat column); hidden
+  docks keep running; powered by the **official webTerminals service** (host-owned
+  PTY: system-user permissions, survives page refreshes, shell selection) —
+  requires DSH 0.1.6+
 - **File tree** (composer-row toggle / **Ctrl+,**): browse the session workspace;
   create/rename/delete (to Recycle Bin)/copy path / @-mention to chat; clicking a file
   opens it in the **official right-sidebar preview**, while md pages inside the vault
@@ -117,15 +119,14 @@ appear and the toggles have nothing to open — upgrade dsh first.
 
 ## How it works
 
-- `src/*.ts` → `dist/` (committed tsc output): host side — `/dsh-kit/terminal` WS
-  (node-pty), `/tree`, `/read`, `/stat`, `/raw` (Range/206), `/write` (cwd subtree +
-  mtime CAS), `/fs/op`, `/upload`, `/git/*`, `/browser` (built-in browser WS),
+- `src/*.ts` → `dist/` (committed tsc output): host side — `/tree`, `/read`, `/raw`
+  (Range/206), `/fs/op`, `/upload`, `/git/*`, `/browser` (built-in browser WS),
   `/jobs/*`, `/schedule/*`, `/vault/*`, `/skills`, `/phone/*` endpoints
 - `client/bundle.js`: browser side (hand-written ModuleLoader bundle, **no build**) —
   four toggles on `conversation.input.left`; five dock tab types registered on
   `sidebarRightTabs` with pane bodies served through `sidebar.right.pane.tab`; the
-  terminal dock and timer widgets are drawn by the plugin; settings page + card on the
-  settings slots
+  terminal dock renders over the official `webTerminals` engine; settings card on
+  the plugin manager's `plugins.bundle.config` slot
 - `client/vendor/*`: xterm / TipTap rich text / KaTeX / qrcode, all lazily loaded
   and served from `/dsh-kit/vendor/*`
 - `src/web-search.ts` + `src/engine-chain.ts` + `src/engines/*`: registers the
