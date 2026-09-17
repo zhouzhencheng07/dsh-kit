@@ -11547,8 +11547,9 @@ textarea.dshk-sched-input{resize:vertical}
     // ─────────── 官方右侧边栏注册（宿主 0.1.5+）───────────
     // 五个功能各注册一张 dock 页类型（id=正文槽 key，kind=openTab 类型名）+
     // pane 正文。开始页归官方 ShippedGuide（罗盘 + 胶囊条目，条目按 order 升序）：
-    // 我们只贡献 guide 条目（RB_GUIDE：日程→浏览器→后台任务，官方「文件」条目
-    // order 10 垫底）；文件/知识库是被动签，不给条目——入口在左侧边栏。
+    // 我们只贡献 guide 条目（RB_GUIDE：日程→浏览器→后台任务），order 取 100+ 垫在
+    // 全部官方条目之后（官方现值：文件 10 / 终端 20 / 浏览器 30）；
+    // 文件/知识库是被动签，不给条目——入口在左侧边栏。
     // 服务运行期探测（见 RB_FEATURES 处注释）。
     const RB_BODY = {
       file: FilePaneBody,
@@ -11561,9 +11562,9 @@ textarea.dshk-sched-input{resize:vertical}
       const tabs = rbCtx.sidebarRightTabs;
       if (!tabs || typeof tabs.register !== "function") return;
       const RB_GUIDE = {
-        schedule: { order: 7, icon: SchedIcon, descKey: "rbGuideSchedDesc" },
-        browser: { order: 8, icon: BrowserIcon, descKey: "rbGuideBrowserDesc" },
-        jobs: { order: 9, icon: JobsIcon, descKey: "rbGuideJobsDesc" },
+        schedule: { order: 100, icon: SchedIcon, descKey: "rbGuideSchedDesc" },
+        browser: { order: 110, icon: BrowserIcon, descKey: "rbGuideBrowserDesc" },
+        jobs: { order: 120, icon: JobsIcon, descKey: "rbGuideJobsDesc" },
       };
       for (const f of RB_FEATURES) {
         const Body = RB_BODY[f.feature];
