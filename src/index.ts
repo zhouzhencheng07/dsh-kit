@@ -56,6 +56,7 @@ import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from './sc
 import { VaultScanner, defaultVaultRoot } from './vault.ts'
 import { sameOrigin } from './web-guard.ts'
 import { recycleDelete } from './recycle.ts'
+import { registerUsageRoutes } from './usage.ts'
 
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在设置里改（phonePort，1-65535） */
 const PHONE_PORT = 3090
@@ -415,8 +416,7 @@ export async function apply(ctx: KitCtx): Promise<void> {
     // 库是普通 md 目录，插件不为 agent 注册检索工具。
     // vaultRoot = 知识库根目录（绝对路径；schema 默认值 = defaultVaultRoot()，字段恒有值）。
     // 宿主据此提供只读索引/搜索端点，数据契约见 src/vault.ts 头注释。
-    vaultEnabled: z.boolean().default(false),
-    // schema 默认值即默认根：设置面与运行时读到的都是实际路径（与其他配置项
+    vaultEnabled: z.boolean().default(false),    // schema 默认值即默认根：设置面与运行时读到的都是实际路径（与其他配置项
     // 同一口径——字段恒有值），用户显式清空保存为 '' 时由读取侧兜底回默认
     vaultRoot: z.string().default(defaultVaultRoot()),
     // 内置浏览器总开关（默认开）：关=不注册 browser_* 工具（重启生效）；浏览器
@@ -439,6 +439,10 @@ export async function apply(ctx: KitCtx): Promise<void> {
     // 若页面不在前台（或事件不属于当前打开的会话）弹桌面通知——浏览器 Notification
     // API，未授权时退标题闪烁。一个总开关管全部提醒，不分类配置。
     notifyEnabled: z.boolean().default(true),
+    // 用量与余额（宿主消费：端点门控 + 客户端消费：芯片入口）。默认关——key 不在本
+    // 插件配置里（复用模型配置 llm-pi-ai.providers 的凭证引用），开 = composer 下方
+    // 状态带出「当前会话所用 provider」的余额/配额芯片 + /dsh-kit/usage 聚合端点。
+    usageEnabled: z.boolean().default(false),
     sidebarShortcut: z.string().default('Ctrl+B'),
     rightbarShortcut: z.string().default('Ctrl+Alt+B'),
     terminalShortcut: z.string().default('Ctrl+/'),
@@ -2531,6 +2535,25 @@ export async function apply(ctx: KitCtx): Promise<void> {
           .catch((error) => vaultJson(res, 500, { error: error instanceof Error ? error.message : String(error) }))
       })
 
+      // ── 用量与余额（src/usage.ts）──
+      // 发现式 provider（llm-pi-ai.providers + DEEPSEEK_API_KEY 兜底），三家上游
+      // 聚合给 composer 下方状态带的芯片。provider 配置现读（settings.get 可能因
+      // 注入时序拿不到服务，缺了回 null = 无卡可用），端点侧 usageEnabled 门控。
+      const disposeUsage = registerUsageRoutes({
+        webServer: webCtx.webServer,
+        credentials: webCtx.credentials,
+        readSettings: () => readSettings(),
+        readProviderConfig: () => {
+          try {
+            const settings = ctx.get('settings') as { get?: (ns: string) => unknown } | undefined
+            const value = settings?.get?.('llm-pi-ai')
+            return value !== null && typeof value === 'object' ? (value as { providers?: unknown }) : null
+          } catch {
+            return null
+          }
+        },
+      })
+
       return () => {
         disposeVendor()
         disposeTree()
@@ -2551,10 +2574,11 @@ export async function apply(ctx: KitCtx): Promise<void> {
         disposeJobsKill()
         disposeJobsRelease()
         disposeJobsOutput()
+        disposeUsage()
         for (const dispose of disposeSchedule) dispose()
         for (const dispose of disposeVault) dispose()
         if (phoneGw) phoneGw.close()
       }
-    }, 'dsh-kit: vendor/tree/read/raw/fs-op/git/phone/vault endpoints')
+    }, 'dsh-kit: vendor/tree/read/raw/fs-op/git/phone/vault/usage endpoints')
   })
 }
