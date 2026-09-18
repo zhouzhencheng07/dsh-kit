@@ -1,10 +1,12 @@
-// vault 知识库宿主半边 —— 扫描索引 / wikilink 解析 / 内容搜索 / 建页与写回。
+// vault 知识库宿主半边 —— 扫描索引 / wikilink 解析 / 内容搜索。**只读**：
+// 插件面板不提供任何写入（建页/写回/改名/删除/上传全退役），页面由 agent 的
+// 文件工具或外部编辑器写——「文件即接口」，插件只管把这棵目录读出来。
 // 数据契约：vault 是设置卡配置的一个绝对目录（vaultRoot，留空用默认根
 // defaultVaultRoot()），其内一切皆 md 文件（attachments/ 与点前缀目录除外），
 // 插件不持有第二真源；索引由扫描派生、mtime 增量缓存，进程内存态，重启重扫。
+// 不建骨架目录、不碰 git：目录不存在就是未配置态，前端渲染引导。
 // 生命周期：跟随 webServer 注入段创建，随插件卸载丢弃（无外部资源）。降级路径：
-// 根不存在（含默认根首启未种出）→ 索引端点回 { root: null }，前端渲染引导；
-// 扫描/搜索失败按空结果+错误字段回。
+// 根不存在 → 索引端点回 { root: null }，前端渲染引导；扫描/搜索失败按空结果+错误字段回。
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -12,12 +14,10 @@ import path from 'node:path'
 export interface VaultPage {
   /** 绝对路径（realpath 归一后） */
   path: string
-  /** 相对 vault 根的正斜杠路径，去 .md 扩展名（wikilink 解析键） */
+  /** 相对 vault 根的正斜杠路径，去 .md 扩展名（wikilink 解析键；页面名 = 文件名） */
   rel: string
   /** 顶层目录（空间；根下单文件页 space 为 ''） */
   space: string
-  /** 首个 `# ` 标题，缺省用文件名 */
-  title: string
   /** 正文 wikilink 原始目标（未解析） */
   links: string[]
   mtimeMs: number
@@ -35,7 +35,7 @@ export interface VaultIndex {
 }
 
 const MD_EXTS = new Set(['.md', '.markdown'])
-/** 不进索引与树的目录名（attachments 约定放二进制；点前缀一律隐藏） */
+/** 不进索引与树的目录名（attachments 约定放二进制，由外部工具维护；点前缀一律隐藏） */
 const SKIP_DIRS = new Set(['attachments', '.git', '.trash', 'node_modules'])
 const SCAN_FILE_LIMIT = 5000
 
@@ -52,66 +52,8 @@ export function defaultVaultRoot(): string {
   return path.join(dshKitDataDir(), 'vault')
 }
 
-/**
- * vault 骨架目录补种（配置保存 vaultRoot 时调用）：root 本体随 recursive mkdir
- * 一并创建。根即 wiki 本体（不再有策展层嵌套），唯一约定目录是 attachments/
- * （二进制，SKIP_DIRS 已豁免索引）。幂等——已存在原样保留；失败静默（只读盘
- * 等场景不该挡住配置保存，骨架是便利设施不是前置条件）。
- */
-export async function ensureVaultSkeleton(root: string): Promise<void> {
-  for (const dir of ['attachments']) {
-    try {
-      await fs.promises.mkdir(path.join(root, dir), { recursive: true })
-    } catch {
-      return
-    }
-  }
-}
-
 export function isMdPath(p: string): boolean {
   return MD_EXTS.has(path.extname(p).toLowerCase())
-}
-
-/** wikilink 目标 → 可用文件名（Windows 非法字符与首尾点空格清洗） */
-export function sanitizePageTitle(raw: string): string {
-  const cleaned = String(raw ?? '')
-    .replace(/[\u0000-\u001f\\/:*?"<>|]/g, '-')
-    .replace(/^[.\s]+|[.\s]+$/g, '')
-    .slice(0, 120)
-  return cleaned
-}
-
-/** 建页相对路径净化：标题允许带 `/` 指子目录（建页时顺带递归建目录）。
- *  每段各自过 sanitizePageTitle（`..` 会被剥成空段，天然防穿越），空段丢弃，
- *  最多 8 段防路径爆炸；返回 `a/b/c` 形式，'' 表示无有效段 */
-export function sanitizePageRel(raw: string): string {
-  const segs = String(raw ?? '')
-    .split(/[\\/]+/)
-    .map((seg) => sanitizePageTitle(seg))
-    .filter((seg) => seg !== '')
-    .slice(0, 8)
-  return segs.join('/')
-}
-
-/** 首个 `# ` 标题行（前 60 行内找），找不到回退文件名 */
-export function extractTitle(content: string, fallbackName: string): string {
-  const lines = content.split(/\r?\n/, 60)
-  for (const line of lines) {
-    const m = /^#\s+(.+?)\s*#*\s*$/.exec(line)
-    if (m && m[1] !== undefined) return m[1].trim()
-  }
-  return fallbackName
-}
-
-/** 重命名页面时改写指向旧名的双链：`[[旧]]` / `[[旧#锚]]` / `[[旧|别名]]` → `[[新…]]`，
- *  锚点与别名原样保留。只认整名匹配（`[[旧x]]` 不动，names 里也含带目录的相对名形态）。
- *  wikilink 靠文件名解析（见本文件 rel/links），不改写等于重命名一次就把全库引用改碎。 */
-export function rewriteWikiLinks(content: string, names: string[], next: string): string {
-  const use = names.filter((n) => n !== '')
-  if (use.length === 0 || next === '') return content
-  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const re = new RegExp(`\\[\\[(?:${use.map(escape).join('|')})(?=[\\]#|])`, 'gi')
-  return content.replace(re, `[[${next}`)
 }
 
 /** 正文 wikilink 提取：[[目标]] / [[目标|别名]]，目标剥 #锚点；去重保序 */
@@ -223,7 +165,6 @@ export class VaultScanner {
           const page = {
             rel,
             space,
-            title: extractTitle(content, rel.split('/').pop() ?? dirent.name),
             links: extractWikiLinks(content),
           }
           this.cache.set(full, {
@@ -254,18 +195,19 @@ export class VaultScanner {
   }
 
   /** 全文搜索覆盖根下全部索引页（attachments 与点前缀目录本就不进索引）。
-   *  文件名/标题命中权重高于正文次数；小库逐文件读可接受，大库换索引是
-   *  后续阶段。返回带 snippet 的前 limit 条。 */
+   *  打分 = 多词 AND + 词面加权：路径 +8 > 文件名 +5 > 正文 +2——路径权重最高
+   *  意味着文件名就是检索键。小库逐文件读可接受，大库换索引是后续阶段。
+   *  返回带 snippet 的前 limit 条（显示名客户端取 rel 末段，不单独回标题）。 */
   async search(
     query: string,
     limit: number,
-  ): Promise<{ root: string; results: Array<{ path: string; rel: string; title: string; snippet: string; score: number }> } | null> {
+  ): Promise<{ root: string; results: Array<{ path: string; rel: string; snippet: string; score: number }> } | null> {
     const index = await this.scan()
     if (index === null) return null
     const q = query.trim().toLowerCase()
     if (q === '') return { root: index.root, results: [] }
     const terms = q.split(/\s+/).filter((t) => t !== '')
-    const results: Array<{ path: string; rel: string; title: string; snippet: string; score: number }> = []
+    const results: Array<{ path: string; rel: string; snippet: string; score: number }> = []
     for (const page of index.pages) {
       // 正文优先取 mtime 缓存（scan 刚刷新过，命中即免读盘）；超大页等未缓存者现读
       let content = this.cache.get(page.path)?.content ?? null
@@ -278,18 +220,18 @@ export class VaultScanner {
       }
       let score = 0
       const relLower = page.rel.toLowerCase()
-      const titleLower = page.title.toLowerCase()
+      const baseLower = relLower.split('/').pop() ?? ''
       let missing = false
       for (const term of terms) {
         const inRel = relLower.includes(term)
-        const inTitle = titleLower.includes(term)
+        const inBase = baseLower.includes(term)
         const inBody = content.includes(term)
-        if (!inRel && !inTitle && !inBody) {
+        if (!inRel && !inBase && !inBody) {
           missing = true
           break
         }
         if (inRel) score += 8
-        if (inTitle) score += 5
+        if (inBase) score += 5
         if (inBody) score += 2
       }
       if (missing) continue
@@ -297,7 +239,7 @@ export class VaultScanner {
       const first = terms[0]
       const at = first === undefined ? -1 : content.indexOf(first)
       const snippet = at < 0 ? '' : content.slice(Math.max(0, at - 60), at + 100).replace(/\s+/g, ' ').trim()
-      results.push({ path: page.path, rel: page.rel, title: page.title, snippet, score })
+      results.push({ path: page.path, rel: page.rel, snippet, score })
     }
     results.sort((a, b) => b.score - a.score || a.rel.localeCompare(b.rel))
     return { root: index.root ?? '', results: results.slice(0, limit) }

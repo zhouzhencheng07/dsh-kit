@@ -24,7 +24,7 @@ slot; the conversation column stays put.
 - **File tree** (composer-row toggle / **Ctrl+,**): browse the session workspace;
   create/rename/delete (to Recycle Bin)/copy path / @-mention to chat; clicking a file
   opens it in the **official right-sidebar preview**, while md pages inside the vault
-  go straight to the knowledge-base editor (WYSIWYG)
+  go to the read-only knowledge-base reader
 - **Source control** (composer-row toggle / **Ctrl+Alt+.**): an in-page git
   workbench — stage/unstage/discard/commit, click a file to see its diff in a
   right-dock diff tab (full-file coloring; pin any commit from the graph to diff
@@ -35,13 +35,14 @@ slot; the conversation column stays put.
   right; the agent gets read-only `schedule_query` and `schedule_create`; data is
   stored in `$DSH_HOME/dsh-kit/schedule.json`
 - **Knowledge base** (composer-row toggle / **Ctrl+Alt+K**, off by default): ready out
-  of the box (data-directory `dsh-kit\vault`, configurable absolute path) — pick pages
-  from the left tree, edit them as document tabs inside the right-dock **Knowledge base**
-  tab (multiple tabs, ✕ per tab); `[[wikilinks]]` with back/forward, backlinks,
-  broken-link page creation, full-text search over `wiki/`; TipTap WYSIWYG with 2s
-  autosave + mtime CAS; chat integration (vault paths in chat open the page, "cite to
-  chat" inserts page/selection); the vault is a plain md directory the agent reads and
-  writes with file tools; git archive on init / human save / delete
+  of the box (data-directory `dsh-kit\vault`, configurable absolute path) — a **read-only
+  reading surface**: pick pages from the left tree, read them as document tabs inside the
+  right-dock **Knowledge base** tab (multiple tabs, ✕ per tab); `[[wikilinks]]` with
+  back/forward (`[[page#heading]]` lands on the section), a sticky reading bar with
+  outline & backlinks menus, and full-text search (filename-weighted); chat integration
+  (vault paths in chat open the page, "@" on a tree row cites page/selection); the vault
+  is a plain md directory the plugin only reads (it creates no directories and never
+  touches git); writing belongs to the agent's file tools or your local editor
 - **Background tasks** (entry from the right-dock start page and auto-follow): lists the
   session's running background jobs, with output viewing and job termination
   (official `job_output`/`job_kill` semantics). Output stays visible per job inside a

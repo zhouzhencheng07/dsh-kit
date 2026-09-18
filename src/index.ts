@@ -50,14 +50,12 @@ import { teeRegistryJobs, panelReadJobOutput, releaseJobWindow } from './job-tee
 import type { PhoneGatewayHandle } from './phone-gateway.ts'
 import { decodePreviewText } from './text-decode.ts'
 import { rawContentType, rawDownloadContentType, rawDisposition, parseRangeHeader } from './raw-file.ts'
-import { multipartBoundary, parseMultipart, safeUploadName, dedupeName } from './upload.ts'
 import { BrowserService } from './browser.ts'
 import { loadToolsModule, buildBrowserTools } from './browser-tools.ts'
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from './schedule.ts'
-import { VaultScanner, sanitizePageTitle, sanitizePageRel, ensureVaultSkeleton, defaultVaultRoot, rewriteWikiLinks } from './vault.ts'
-import { commitVault, ensureVaultGit } from './vault-git.ts'
+import { VaultScanner, defaultVaultRoot } from './vault.ts'
 import { sameOrigin } from './web-guard.ts'
-import { recycleDelete, recycleDeleteBatch } from './recycle.ts'
+import { recycleDelete } from './recycle.ts'
 
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在设置里改（phonePort，1-65535） */
 const PHONE_PORT = 3090
@@ -346,7 +344,7 @@ const VENDOR_FILES = new Map([
   ['/dsh-kit/vendor/addon-fit.js', 'addon-fit.js'],
   ['/dsh-kit/vendor/xterm.css', 'xterm.css'],
   ['/dsh-kit/vendor/qrcode.js', 'qrcode.js'],
-  // vault 页面富文本编辑器（TipTap 引擎，md↔富文本往返；懒加载）
+  // vault 页面渲染器（TipTap 引擎只读态；懒加载）
   ['/dsh-kit/vendor/richeditor.bundle.js', 'richeditor.bundle.js'],
   // KaTeX 数学公式（vault 阅读态渲染 $...$ / $$...$$；懒加载）
   ['/dsh-kit/vendor/katex.min.js', 'katex.min.js'],
@@ -411,12 +409,12 @@ export async function apply(ctx: KitCtx): Promise<void> {
     phonePort: z.number().step(1).min(1).max(65535).default(3090),
     phoneKeepGatewayOn: z.boolean().default(false),
     jobsEnabled: z.boolean().default(true),
-    // 知识库（vault）：总开关，默认关——关 = 不开 vault 端点、不种骨架（默认根是
-    // $DSH_HOME 下的固定位置，没开功能就不该在盘上凭空出现目录）；开 = 右栏「知识库」
-    // 标签入口 + 索引/搜索/写回端点（改开关重启生效）。库是普通 md 目录，插件不为
-    // agent 注册检索工具。
+    // 知识库（vault）：总开关，默认关——关 = 不开 vault 端点（默认根是 $DSH_HOME 下
+    // 的固定位置，没开功能就不该在盘上凭空出现目录；插件也不建骨架目录，指向哪里
+    // 读哪里）；开 = 右栏「知识库」标签 + 只读索引/搜索端点（改开关重启生效）。
+    // 库是普通 md 目录，插件不为 agent 注册检索工具。
     // vaultRoot = 知识库根目录（绝对路径；schema 默认值 = defaultVaultRoot()，字段恒有值）。
-    // 宿主据此提供索引/搜索/建页/写回端点，数据契约见 src/vault.ts 头注释。
+    // 宿主据此提供只读索引/搜索端点，数据契约见 src/vault.ts 头注释。
     vaultEnabled: z.boolean().default(false),
     // schema 默认值即默认根：设置面与运行时读到的都是实际路径（与其他配置项
     // 同一口径——字段恒有值），用户显式清空保存为 '' 时由读取侧兜底回默认
@@ -460,30 +458,6 @@ export async function apply(ctx: KitCtx): Promise<void> {
   // 手机网关的设置联动钩子（端口变更热重启等），由 webServer 注入段回填
   let onSettingsReady = () => {}
   let onSettingsChanged = () => {}
-  // vaultRoot 上次已知值：onChange 对任意保存都触发，靠值比对识别「知识库位置
-  // 真的变了」，变了才补种骨架目录（null = 尚未见过值）
-  let lastVaultRoot: string | null = null
-  /** 知识库开着时，vaultRoot 变化（含首次就绪）补建骨架（root + attachments，
-   *  见 ensureVaultSkeleton）。留空 = 用默认根；总开关关着时直接返回、不记
-   *  lastVaultRoot——盘上不留痕，之后开启还会正常补种 */
-  function trackVaultRoot(): void {
-    let configured = ''
-    let enabled = false
-    try {
-      configured = String(readSettings().vaultRoot ?? '').trim()
-      enabled = readSettings().vaultEnabled === true
-    } catch {
-      return
-    }
-    if (!enabled) return
-    const root = configured === '' ? defaultVaultRoot() : configured
-    if (root === lastVaultRoot) return
-    lastVaultRoot = root
-    // 骨架补种后做 git 初始存档（无 git / 已是仓库自动跳过，见 vault-git.ts）
-    void ensureVaultSkeleton(root)
-      .catch(() => {})
-      .then(() => ensureVaultGit(root))
-  }
   /** setSource/onChange 钩子：settings 首次就绪时触发网关启用位检查（此时 readSettings
    *  才读到真实值）；注意 onSettingsReady 在 webServer 注入回填前是空函数——如果注入
    *  回调还未执行，调用无效果；注入回调已存在时触发首次评估（解决时序差） */
@@ -491,11 +465,9 @@ export async function apply(ctx: KitCtx): Promise<void> {
     setSource: (current: () => any) => {
       readSettings = current
       phoneSettingsReady = true
-      trackVaultRoot()
       onSettingsReady()
     },
     onChange: () => {
-      trackVaultRoot()
       onSettingsChanged()
     },
   }
@@ -609,8 +581,8 @@ export async function apply(ctx: KitCtx): Promise<void> {
   })
 
   // ── 知识库扫描器（src/vault.ts）：提到 apply 级——webServer 注入可能重进，
-  //   端点块与下方 fs intent 监听共享同一实例（mtime 缓存也就不用重建）。
-  //   vaultRoot 留空用默认根（即开即用，trackVaultRoot 会种骨架）
+  //   vault 端点块共享同一实例（mtime 缓存也就不用重建）。
+  //   vaultRoot 留空用默认根（即开即用）；只读——不建目录不碰 git
   const vaultScanner = new VaultScanner(() => {
     try {
       const configured = String(readSettings().vaultRoot ?? '').trim()
@@ -619,9 +591,6 @@ export async function apply(ctx: KitCtx): Promise<void> {
       return ''
     }
   })
-
-  // ── 知识库 git 存档（src/vault-git.ts）：三时机全不拦 agent ──
-  //   初始存档（建库时）+ 人工保存后（vault/write）+ 删除后（delete 端点）。
 
   // webServer 可能在本插件 apply 之后才挂载，用动态注入等它就绪
   ctx.inject(['webServer', 'credentials'], (webCtx: KitWebCtx) => {
@@ -889,96 +858,6 @@ export async function apply(ctx: KitCtx): Promise<void> {
             res.writeHead(200, { ...headers, 'content-length': String(file.size) })
           }
           stream.pipe(res)
-        },
-      })
-
-      // ── 上传端点：POST /dsh-kit/upload?dir=<绝对目录>（multipart 文件，落盘该目录）──
-      // 场景：手机访问 DSH 时用 <input type=file> 唤起手机自己的选择器（原生对话框
-      // 只会弹在运行它的机器上，手机够不到电脑的），选完经 HTTP 传回写入工作区。
-      // 校验链：sameOrigin → dir 走 validateCwd；文件名
-      // 只取 basename + 去非法字符，重名自动追加 " (n)" 序号不覆盖。整体缓冲有上限，
-      // 单文件另设上限（multipart 手工解析，见 src/upload.ts）。
-      const UPLOAD_TOTAL_LIMIT = 200 * 1024 * 1024
-      const UPLOAD_FILE_LIMIT = 100 * 1024 * 1024
-      const disposeUpload = webCtx.webServer.register({
-        kind: 'exact',
-        path: '/dsh-kit/upload',
-        handler: (req, res) => {
-          const json = (code: number, obj: unknown) => {
-            res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' })
-            res.end(JSON.stringify(obj))
-          }
-          if (req.method !== 'POST') {
-            json(405, { error: 'method not allowed' })
-            return
-          }
-          if (!sameOrigin(req)) {
-            json(403, { error: 'cross-origin denied' })
-            return
-          }
-          const url = new URL(req.url ?? '/', 'http://dsh-kit.local')
-          const dir = validateCwd(url.searchParams.get('dir') ?? '')
-          if (!dir.ok) {
-            json(400, { error: dir.message })
-            return
-          }
-          const boundary = multipartBoundary(req.headers['content-type'])
-          if (!boundary) {
-            json(415, { error: '需要 multipart/form-data' })
-            return
-          }
-          const chunks: Buffer[] = []
-          let total = 0
-          let aborted = false
-          req.on('data', (c) => {
-            if (aborted) return
-            total += c.length
-            if (total > UPLOAD_TOTAL_LIMIT) {
-              aborted = true
-              json(413, { error: `上传总大小超过 ${Math.round(UPLOAD_TOTAL_LIMIT / 1048576)}MB 上限` })
-              req.destroy()
-              return
-            }
-            chunks.push(c)
-          })
-          req.on('end', () => {
-            if (aborted) return
-            const parts = parseMultipart(Buffer.concat(chunks), boundary)
-            if (parts.length === 0) {
-              json(400, { error: '没有可解析的文件' })
-              return
-            }
-            const saved: Array<{ name: string; size: number }> = []
-            let warning: string | null = null
-            for (const part of parts) {
-              const name = safeUploadName(part.filename)
-              if (!name) {
-                warning = `跳过非法文件名：${part.filename}`
-                continue
-              }
-              if (part.data.length > UPLOAD_FILE_LIMIT) {
-                warning = `${name} 超过单文件 100MB 上限，已跳过`
-                continue
-              }
-              const final = dedupeName(dir.path, name, (p) => fs.existsSync(p))
-              if (!final) {
-                warning = `${name} 重名冲突无法命名，已跳过`
-                continue
-              }
-              try {
-                fs.writeFileSync(path.join(dir.path, final), part.data)
-                saved.push({ name: final, size: part.data.length })
-              } catch (error) {
-                warning = `写入失败：${error instanceof Error ? error.message : error}`
-              }
-            }
-            if (saved.length === 0) {
-              json(400, { error: warning ?? '没有可保存的文件' })
-              return
-            }
-            json(200, { saved, warning })
-          })
-          req.on('error', () => {})
         },
       })
 
@@ -2575,9 +2454,10 @@ export async function apply(ctx: KitCtx): Promise<void> {
         }),
       )
 
-      // ── 知识库（vault，src/vault.ts）──
-      // vaultRoot 是设置卡配置的绝对目录，在工作区外——read 端点本就通配绝对
-      // 路径可直接读页，但 write 强制 cwd 子树内，故 vault 的写回走自己的端点。
+      // ── 知识库（vault，src/vault.ts）——只读端点 ──
+      // vaultRoot 是设置卡配置的绝对目录，在工作区外；读走 read/raw 端点，
+      // 这里只出索引 / 单页 mtime / 全文搜索三个查询端点。写入全部退役：
+      // 页面由 agent 文件工具或外部编辑器写（文件即接口），插件面板纯只读。
       // 全部端点在 vaultRoot 未配置/不存在时回 400 vault-not-configured。
       const disposeVault: Array<() => void> = []
       const vaultRoute = (
@@ -2650,217 +2530,12 @@ export async function apply(ctx: KitCtx): Promise<void> {
           .then((result) => vaultJson(res, 200, result ?? { root, results: [] }))
           .catch((error) => vaultJson(res, 500, { error: error instanceof Error ? error.message : String(error) }))
       })
-      const vaultPost = (
-        path: string,
-        action: (body: Record<string, unknown>, root: string) => unknown,
-      ) => {
-        vaultRoute(path, (req, res) => {
-          if (req.method !== 'POST') return vaultJson(res, 405, { error: 'method not allowed' })
-          if (!sameOrigin(req)) return vaultJson(res, 403, { error: 'cross-origin denied' })
-          const root = vaultGuard(res)
-          if (root === null) return
-          void schedReadBody(req).then((body) => {
-            void Promise.resolve()
-              .then(() => action(body, root))
-              .then((result) => vaultJson(res, 200, result ?? { ok: true }))
-              .catch((error) => vaultJson(res, 400, { error: error instanceof Error ? error.message : String(error) }))
-          })
-        })
-      }
-      // 建页：title 清洗成文件名，space（顶层目录，已存在）可选；已存在回 409
-      vaultPost('/dsh-kit/vault/page', (body, root) => {
-        const space = sanitizePageTitle(String(body.space ?? ''))
-        const rel = sanitizePageRel(String(body.title ?? ''))
-        if (rel === '') throw new Error('缺少页面标题')
-        // 标题可带 `/` 指子目录，目录不存在则递归创建（碎链建页同走此路）
-        const segs = rel.split('/')
-        const dir = path.join(root, ...(space === '' ? [] : [space]), ...segs.slice(0, -1))
-        fs.mkdirSync(dir, { recursive: true })
-        const file = path.join(dir, `${segs[segs.length - 1] ?? ''}.md`)
-        if (fs.existsSync(file)) return { exists: true, path: file, mtimeMs: fs.statSync(file).mtimeMs }
-        // 建页写空文件（三端同款）：不种 frontmatter——创建/修改时间文件系统本身就有
-        // 属性，外部导入的 md 也没有该字段；也不写一行与文件名同名的标题：标题归正文，
-        // 想要就自己写一行 `#`，不写则索引显示名回退成文件名
-        fs.writeFileSync(file, '', 'utf8')
-        return { path: file, mtimeMs: fs.statSync(file).mtimeMs }
-      })
-      // 建目录：标题带 `/` 多级递归创建（树上「新建目录」用；已存在=幂等成功）
-      vaultPost('/dsh-kit/vault/mkdir', (body, root) => {
-        const space = sanitizePageTitle(String(body.space ?? ''))
-        const rel = sanitizePageRel(String(body.dir ?? ''))
-        if (rel === '') throw new Error('缺少目录名')
-        const dir = path.join(root, ...(space === '' ? [] : [space]), ...rel.split('/'))
-        fs.mkdirSync(dir, { recursive: true })
-        return { path: dir }
-      })
-      // 写回：路径必须落在 vault 根内且是 md；mtime CAS 冲突回 409 modified（附带当前 mtimeMs）
-      vaultPost('/dsh-kit/vault/write', async (body, root) => {
-        const rawPath = String(body.path ?? '')
-        const resolved = path.resolve(rawPath)
-        const rel = path.relative(root, resolved)
-        if (rel.startsWith('..') || path.isAbsolute(rel) || rel === '') throw new Error('页面不在 vault 内')
-        if (!/\.md$/i.test(resolved)) throw new Error('只允许写 md 文件')
-        const content = body.content
-        if (typeof content !== 'string') throw new Error('缺少 content')
-        if (Buffer.byteLength(content, 'utf8') > 512 * 1024) throw new Error('内容超过 512KB 上限')
-        const baseMtime = Number(body.baseMtime)
-        if (!Number.isFinite(baseMtime)) throw new Error('缺少 baseMtime')
-        let stat: fs.Stats
-        try {
-          stat = fs.statSync(resolved)
-        } catch (error) {
-          throw new Error(`读取文件失败：${error instanceof Error ? error.message : error}`)
-        }
-        // 自动保存按「最后写者赢」：调用方带 stash 就是
-        // 明确要求覆盖（客户端已经知道盘上被改过），**无条件**先把盘上那份提交存档再写——
-        // 不能挂在 mtime 比较里：客户端重试时传的就是盘上新 mtime，那样永远比不出差异、
-        // stash 一次都不会发生（实测踩到）。不带 stash 仍按 CAS 回冲突信息。
-        if (body.stash === true) {
-          await commitVault(root, `dsh-kit: 覆盖前存档 ${path.basename(resolved)}`)
-        } else if (stat.mtimeMs !== baseMtime) {
-          return { modified: true, mtimeMs: stat.mtimeMs }
-        }
-        // tmp+rename 原子落盘（日程落盘同款）：写一半崩溃/断电不会留下截断页
-        const tmp = `${resolved}.tmp`
-        fs.writeFileSync(tmp, content, 'utf8')
-        fs.renameSync(tmp, resolved)
-        // 人工保存后提交一次（Ctrl+S/工具栏保存同路）；await 保证响应返回时
-        // 存档已落——后续紧邻的 AI 编辑前存档不会把这次人工改动卷进"改动前"快照
-        await commitVault(root, `dsh-kit: 保存 ${path.basename(resolved)}`)
-        return { ok: true, mtimeMs: fs.statSync(resolved).mtimeMs }
-      })
-      // 删除（含孤儿级联，客户端算清单）：Windows 批量移入回收站（单 PS 进程逐项
-      // 对账），失败项不再退回永久删除而是原样保留并回传 failed 清单；其它平台直接
-      // 删，失败同样计 failed。deleted 只按「确实消失」的计数；若 vault 是 git 仓库
-      // 且确有删除，完成后 add+commit 单提交（一个提交即可整体撤回）。
-      // git 不可用（未装/未配置 user）不阻断删除本身。
-      vaultPost('/dsh-kit/vault/delete', async (body, root) => {
-        const paths = Array.isArray(body.paths) ? body.paths.map((p) => String(p)) : []
-        if (paths.length === 0) throw new Error('缺少 paths')
-        const resolvedSet = new Set<string>()
-        for (const rawPath of paths) {
-          const resolved = path.resolve(rawPath)
-          const rel = path.relative(root, resolved)
-          if (rel.startsWith('..') || path.isAbsolute(rel) || rel === '') throw new Error(`页面不在 vault 内：${rawPath}`)
-          resolvedSet.add(resolved)
-        }
-        // 只允许 md 文件与目录；目录由回收站 API 整棵递归删（vault 根上面已挡掉）
-        const targets: string[] = []
-        const targetIsDir: boolean[] = []
-        for (const resolved of resolvedSet) {
-          let stat: fs.Stats
-          try {
-            stat = fs.statSync(resolved)
-          } catch {
-            continue
-          }
-          if (!stat.isDirectory() && !/\.md$/i.test(resolved)) throw new Error(`只允许删 md 文件或目录：${resolved}`)
-          targets.push(resolved)
-          targetIsDir.push(stat.isDirectory())
-        }
-        let deleted = 0
-        let dirsDeleted = 0
-        const failed: string[] = []
-        if (process.platform === 'win32') {
-          const results = await recycleDeleteBatch(targets)
-          targets.forEach((p, i) => {
-            if (results[i] === true) {
-              deleted += 1
-              if (targetIsDir[i] === true) dirsDeleted += 1
-            } else failed.push(path.basename(p))
-          })
-        } else {
-          for (const [i, p] of targets.entries()) {
-            try {
-              await fs.promises.rm(p, { recursive: targetIsDir[i] === true, force: true })
-              deleted += 1
-              if (targetIsDir[i] === true) dirsDeleted += 1
-            } catch {
-              failed.push(path.basename(p))
-            }
-          }
-        }
-        let committed = false
-        if (deleted === 0) return { deleted, committed, ...(failed.length > 0 ? { failed } : {}) }
-        // 有删除即整体提交一次（一个提交即可整体撤回）；git 不可用
-        // 不阻断删除本身，提交失败静默
-        const pagesDeleted = deleted - dirsDeleted
-        committed = await commitVault(
-          root,
-          dirsDeleted > 0
-            ? pagesDeleted > 0
-              ? `dsh-kit: 删除 ${String(dirsDeleted)} 个目录 + ${String(pagesDeleted)} 页（含孤儿级联）`
-              : `dsh-kit: 删除 ${String(dirsDeleted)} 个目录（含孤儿级联）`
-            : `dsh-kit: 删除 ${String(pagesDeleted)} 页（含孤儿级联）`,
-        )
-        return { deleted, committed, ...(failed.length > 0 ? { failed } : {}) }
-      })
-
-      // 重命名页面或目录（左侧树上行内改名）：只改名字、留在原位置。
-      // 页面：双链按新名改写——wikilink 靠文件名解析，不改写等于重命名一次就把全库
-      // 指向它的引用改碎；改写顺序是先改名再扫索引（扫描结果里旧页已不在，引用页的
-      // links 仍是旧名）。目录：文件名不变，wikilink 解析不受影响，因此不改写双链。
-      vaultPost('/dsh-kit/vault/rename', async (body, root) => {
-        const resolved = path.resolve(String(body.path ?? ''))
-        const rel = path.relative(root, resolved)
-        if (rel.startsWith('..') || path.isAbsolute(rel) || rel === '') throw new Error('目标不在 vault 内')
-        const name = sanitizePageTitle(String(body.name ?? ''))
-        if (name === '') throw new Error('缺少新名字')
-        let stat: fs.Stats
-        try {
-          stat = fs.statSync(resolved)
-        } catch {
-          throw new Error('目标不存在')
-        }
-        if (stat.isDirectory()) {
-          const dirTarget = path.join(path.dirname(resolved), name)
-          if (dirTarget === resolved) return { ok: true, path: resolved, links: 0, committed: false }
-          if (fs.existsSync(dirTarget)) throw new Error('同名目录已存在')
-          const oldDirName = path.basename(resolved)
-          fs.renameSync(resolved, dirTarget)
-          const dirCommitted = await commitVault(root, `dsh-kit: 重命名目录 ${oldDirName} → ${name}`)
-          return { ok: true, path: dirTarget, links: 0, committed: dirCommitted }
-        }
-        if (!/\.md$/i.test(resolved)) throw new Error('只允许重命名 md 文件或目录')
-        const target = path.join(path.dirname(resolved), `${name}.md`)
-        if (target === resolved) return { ok: true, path: resolved, links: 0, committed: false }
-        if (fs.existsSync(target)) throw new Error('同名页面已存在')
-        const oldName = path.basename(resolved).replace(/\.md$/i, '')
-        const oldRel = path.relative(root, resolved).split(path.sep).join('/').replace(/\.md$/i, '')
-        fs.renameSync(resolved, target)
-        const scanned = await vaultScanner.scan()
-        let links = 0
-        for (const page of scanned?.pages ?? []) {
-          if (page.path === target) continue
-          if (!page.links.some((l) => l === oldName || l === oldRel)) continue
-          let text: string
-          try {
-            text = fs.readFileSync(page.path, 'utf8')
-          } catch {
-            continue
-          }
-          const next = rewriteWikiLinks(text, [oldName, oldRel], name)
-          if (next === text) continue
-          try {
-            fs.writeFileSync(page.path, next, 'utf8')
-            links += 1
-          } catch {
-            // 单页写不了就跳过，改名本身已成立
-          }
-        }
-        const committed = await commitVault(
-          root,
-          `dsh-kit: 重命名 ${oldName} → ${name}${links > 0 ? `（改写 ${String(links)} 页双链）` : ''}`,
-        )
-        return { ok: true, path: target, links, committed }
-      })
 
       return () => {
         disposeVendor()
         disposeTree()
         disposeRead()
         disposeRaw()
-        disposeUpload()
         disposeFsOp()
         disposeGitStatus()
         disposeGitDiff()
@@ -2880,6 +2555,6 @@ export async function apply(ctx: KitCtx): Promise<void> {
         for (const dispose of disposeVault) dispose()
         if (phoneGw) phoneGw.close()
       }
-    }, 'dsh-kit: terminal/vendor/tree/read/write/upload/fs-op/git/phone endpoints')
+    }, 'dsh-kit: vendor/tree/read/raw/fs-op/git/phone/vault endpoints')
   })
 }

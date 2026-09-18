@@ -1,18 +1,10 @@
-// vault 宿主半边单测：跑 dist/vault.js（先 pnpm build）。
+// vault 宿主半边单测（只读：扫描索引 / 搜索）：跑 dist/vault.js（先 pnpm build）。
 // 用法：node tests/test-vault.mjs
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import {
-  sanitizePageTitle,
-  sanitizePageRel,
-  extractTitle,
-  extractWikiLinks,
-  rewriteWikiLinks,
-  VaultScanner,
-  ensureVaultSkeleton,
-} from '../dist/vault.js'
+import { extractWikiLinks, VaultScanner } from '../dist/vault.js'
 
 const test = (name, fn) =>
   Promise.resolve()
@@ -24,27 +16,6 @@ const test = (name, fn) =>
         process.exitCode = 1
       },
     )
-
-// 纯函数
-await test('sanitizePageTitle 清洗 Windows 非法字符与首尾点空格', () => {
-  assert.equal(sanitizePageTitle(' a/b*c?d '), 'a-b-c-d')
-  assert.equal(sanitizePageTitle('..隐藏.'), '隐藏')
-  assert.equal(sanitizePageTitle(''), '')
-})
-
-await test('sanitizePageRel 分段净化，支持子目录且防穿越', () => {
-  assert.equal(sanitizePageRel('Python/基础 笔记'), 'Python/基础 笔记')
-  assert.equal(sanitizePageRel('日记\\2026\\九月'), '日记/2026/九月') // 反斜杠也当分隔
-  assert.equal(sanitizePageRel('a/../b'), 'a/b') // .. 段剥成空被丢弃，防穿越
-  assert.equal(sanitizePageRel('/头部斜杠//压缩/'), '头部斜杠/压缩')
-  assert.equal(sanitizePageRel('///..//'), '') // 无有效段 → 空（端点报缺标题）
-  assert.equal(sanitizePageRel('1/2/3/4/5/6/7/8/9/10').split('/').length <= 8, true) // 最多 8 段
-})
-
-await test('extractTitle 首个 # 标题，缺省回退文件名', () => {
-  assert.equal(extractTitle('前言\n# 标题一\n## 子题', 'fallback'), '标题一')
-  assert.equal(extractTitle('没有标题', 'page'), 'page')
-})
 
 await test('extractWikiLinks 提取目标/剥锚与别名/去重不分大小写', () => {
   const links = extractWikiLinks('[[A]] [[B|别名]] [[C#锚]] [[a]] [[D')
@@ -68,7 +39,7 @@ fs.writeFileSync(path.join(root, '.hidden', 'x.md'), '# 不进索引')
 let scanner = new VaultScanner(() => root)
 let index
 
-await test('scan：md 建页、跳过 attachments/点前缀、space 归属正确', async () => {
+await test('scan：md 建页、跳过 attachments/点前缀、space 归属正确、无 title 字段', async () => {
   index = await scanner.scan()
   assert.equal(index.root, fs.realpathSync(root))
   // folders = 全部目录（含各级），选择器据此可挑任意层级；空目录也在
@@ -76,22 +47,8 @@ await test('scan：md 建页、跳过 attachments/点前缀、space 归属正确
   assert.equal(index.pages.length, 4)
   const base = index.pages.find((p) => p.rel === 'Python/基础')
   assert.equal(base.space, 'Python')
-  assert.equal(base.title, 'Python 基础')
+  assert.equal(base.title, undefined)
   assert.deepEqual(base.links, ['工具链', 'AGENTS 常见问题'])
-})
-
-await test('rewriteWikiLinks：整名匹配改写，锚点/别名保留，近似名不动', () => {
-  const md = '见 [[基础]]、[[基础#小节]]、[[基础|别名]]、[[基础x]] 与 [[ Python/基础 ]]。'
-  const out = rewriteWikiLinks(md, ['基础'], 'Python 基础')
-  assert.ok(out.includes('[[Python 基础]]'), '裸链改写')
-  assert.ok(out.includes('[[Python 基础#小节]]'), '锚点保留')
-  assert.ok(out.includes('[[Python 基础|别名]]'), '别名保留')
-  assert.ok(out.includes('[[基础x]]'), '近似名不动')
-  assert.ok(out.includes('[[ Python/基础 ]]'), '带空格的目标不算整名匹配（不动）')
-  assert.equal(rewriteWikiLinks(md, [], 'X'), md, '同名列表为空原样返回')
-  // 带目录的相对名形态也要能改写（索引里 links 可能写成 Python/基础）
-  const rel = rewriteWikiLinks('见 [[Python/基础]]。', ['基础', 'Python/基础'], 'Python 基础')
-  assert.ok(rel.includes('[[Python 基础]]'), '相对路径形态改写')
 })
 
 await test('scan：mtime 缓存命中不重读（改缓存时间戳探测）', async () => {
@@ -105,12 +62,21 @@ await test('scan：mtime 缓存命中不重读（改缓存时间戳探测）', a
   assert.equal(after, before)
 })
 
-await test('search：多词 AND，文件名/标题加权，正文计次', async () => {
+await test('search：多词 AND，路径/文件名/正文三档加权', async () => {
   const hit = await scanner.search('uv ruff', 10)
   assert.equal(hit.results.length, 1)
   assert.equal(hit.results[0].rel, 'Python/工具链')
+  assert.ok(!('title' in hit.results[0]), '结果不带 title（显示名客户端取 rel 末段）')
   const none = await scanner.search('不存在的词组xyz', 10)
   assert.equal(none.results.length, 0)
+})
+
+await test('search：文件名命中(+5)排在仅正文命中(+2)之前', async () => {
+  const res = await scanner.search('工具链', 10)
+  // 「Python/工具链」rel 含词（+8 + 文件名 +5）；「Python/基础」只在正文 [[工具链]] 含词（+2）
+  assert.equal(res.results[0].rel, 'Python/工具链')
+  assert.equal(res.results[1].rel, 'Python/基础')
+  assert.ok(res.results[0].score > res.results[1].score)
 })
 
 await test('search：检索池 = 根下全部索引页（根级页可搜，attachments 不进）', async () => {
@@ -129,16 +95,3 @@ await test('root：未配置/不存在回 null', async () => {
 
 fs.rmSync(root, { recursive: true, force: true })
 console.log(process.exitCode ? 'FAIL' : 'ALL VAULT TESTS OK')
-
-await test('ensureVaultSkeleton 补种骨架目录且幂等', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshkit-vault-sk-'))
-  const root = path.join(dir, '新建库')
-  await ensureVaultSkeleton(root)
-  assert.ok(fs.statSync(path.join(root, 'attachments')).isDirectory())
-  assert.ok(!fs.existsSync(path.join(root, 'wiki')), '根即 wiki，不再种嵌套层')
-  // 已有内容不被覆盖
-  fs.writeFileSync(path.join(root, '已有.md'), '# x', 'utf8')
-  await ensureVaultSkeleton(root)
-  assert.ok(fs.existsSync(path.join(root, '已有.md')))
-  fs.rmSync(dir, { recursive: true, force: true })
-})
