@@ -79,7 +79,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, DiffPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, VaultFolderPicker, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, renameVaultPageTab, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultCascadeDelete, vaultCascadeDeleteMany, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, notifyDiffCore, notifyCompactionCore, notifyCompleteSettled, notifyState, readPosStore, recordReadPos, jobsOutputMerge, jobsAtBottom, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
+  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, DiffPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, VaultFolderPicker, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, ScheduleModal, FloatingTimerPill, timerElapsedStr, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, notifyDiffCore, notifyCompactionCore, notifyCompleteSettled, notifyState, readPosStore, recordReadPos, jobsOutputMerge, jobsAtBottom, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, HeaderTimer, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -93,7 +93,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "DiffPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "VaultFolderPicker", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "renameVaultPageTab", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultCascadeDelete", "vaultCascadeDeleteMany", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTickCore", "monitorCancelPlan", "notifyDiffCore", "notifyCompactionCore", "recordReadPos", "jobsOutputMerge", "jobsAtBottom", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["TreeNode", "FileTreePanel", "DiffPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "VaultFolderPicker", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "ScheduleModal", "FloatingTimerPill", "timerElapsedStr", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "MonitorLine", "monitorTailRepeatCount", "monitorTickCore", "monitorCancelPlan", "notifyDiffCore", "notifyCompactionCore", "recordReadPos", "jobsOutputMerge", "jobsAtBottom", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "HeaderTimer", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -555,7 +555,7 @@ const vaultPages = [
   { path: "D:/v/wiki/Python/基础.md", rel: "wiki/Python/基础", title: "Python 基础", links: [] },
   { path: "D:/v/wiki/git.md", rel: "wiki/git", title: "版本控制", links: [] },
 ];
-check("resolveVaultLink：标题命中", comps.resolveVaultLink(vaultPages, "Python 基础")?.path === "D:/v/wiki/Python/基础.md");
+check("resolveVaultLink：标题档已退役（页面名 = 文件名，按标题找不到）", comps.resolveVaultLink(vaultPages, "Python 基础") === null);
 check("resolveVaultLink：rel 全等优先", comps.resolveVaultLink(vaultPages, "wiki/git")?.path === "D:/v/wiki/git.md");
 check("resolveVaultLink：.md 后缀容忍", comps.resolveVaultLink(vaultPages, "git.md")?.path === "D:/v/wiki/git.md");
 check("resolveVaultLink：未命中回 null", comps.resolveVaultLink(vaultPages, "不存在") === null);
@@ -566,27 +566,14 @@ const backlinksHit = comps.vaultBacklinks([
 ], "D:/v/b.md");
 check("vaultBacklinks：links 解析命中当前页（1 条）", backlinksHit.length === 1 && backlinksHit[0].path === "D:/v/a.md");
 
-// 6.7) 知识库纯函数：标题 slug / 孤儿级联
+// 6.7) 知识库纯函数：标题 slug / 大纲
 check("vaultHeadingSlug：空白压成 -", comps.vaultHeadingSlug("  Some 标题 two  ") === "Some-标题-two");
 {
-  const pages = [
-    { path: "D:/v/index.md", rel: "index", title: "索引", links: ["入门"] },
-    { path: "D:/v/入门.md", rel: "入门", title: "入门", links: ["速记"] },
-    { path: "D:/v/速记.md", rel: "速记", title: "速记", links: [] },
-  ];
-  const doomed = comps.vaultCascadeDelete(pages, "D:/v/index.md");
-  // 删索引 → 入门失去唯一反链连坐 → 速记又失去入门连坐
-  check("孤儿级联：递归闭包", doomed.length === 3 && doomed.some((p) => p.rel === "入门") && doomed.some((p) => p.rel === "速记"));
-  const doomed2 = comps.vaultCascadeDelete(pages, "D:/v/速记.md");
-  check("孤儿级联：删叶子不连坐他人", doomed2.length === 1 && doomed2[0].rel === "速记");
-  // 目录删除走多种子版：种子 = 目录下全部页，外部页里因此变孤儿的一样连坐
-  const seeds = ["D:/v/index.md", "D:/v/入门.md"];
-  const many = comps.vaultCascadeDeleteMany(pages, seeds);
-  check(
-    "孤儿级联（多种子）：目录整棵 + 外部孤儿连坐、不动无关页",
-    many.length === 3 && ["index", "入门", "速记"].every((r) => many.some((p) => p.rel === r)),
-  );
-  check("孤儿级联（多种子）：空种子返回空", comps.vaultCascadeDeleteMany(pages, []).length === 0);
+  // vaultOutline：顶层标题一趟扫完（空标题不进、pos = 节点起点），无编辑器回空
+  const fakeDoc = { forEach(fn) { fn({ type: { name: "heading" }, attrs: { level: 1 }, textContent: " 一 " }, 0); fn({ type: { name: "paragraph" }, attrs: {}, textContent: "正文" }, 6); fn({ type: { name: "heading" }, attrs: { level: 2 }, textContent: "  " }, 12); } };
+  const items = comps.vaultOutline({ editor: { state: { doc: fakeDoc } } });
+  check("vaultOutline：顶层标题收集（空标题跳过）", items.length === 1 && items[0].text === "一" && items[0].pos === 0 && items[0].level === 1);
+  check("vaultOutline：无编辑器回空数组", comps.vaultOutline(null).length === 0);
 }
 
 // 6.8) M4 互通纯函数：vault 路径归属 + 引用到对话文本构造
@@ -647,9 +634,9 @@ let vaultFetchPrev = null;
   stateStore.set(2, ""); // space = 全部库
   stateStore.set(3, { "D:/v": [{ name: "wiki", path: "D:/v/wiki", dir: true }], "D:/v/wiki": [{ name: "a.md", path: "D:/v/wiki/a.md", dir: false }] }); // treeDirs
   stateStore.set(4, { "D:/v": true, "D:/v/wiki": true }); // expanded
-  // 行 ⋯ 菜单（state#8，见 VaultRootView 的 useState 次序）：预置成「某页的行菜单已打开」，
-  // 校验树上那套 actions 接线（重命名 + 删除）
-  stateStore.set(8, { entry: { dir: false, name: "a", path: "D:/v/wiki/a.md" }, rect: { left: 10, top: 100, bottom: 120, right: 30, width: 20, height: 20 } });
+  // 行 ⋯ 菜单（state#5，见 VaultRootView 的 useState 次序：建页/改名三个状态
+  // 随只读化退役后 rowMenu 前移）：预置成「某页的行菜单已打开」，校验 actions 接线
+  stateStore.set(5, { entry: { dir: false, name: "a", path: "D:/v/wiki/a.md" }, rect: { left: 10, top: 100, bottom: 120, right: 30, width: 20, height: 20 } });
   const fetched = vaultRefreshFetched;
   const prevFetch = global.fetch;
   vaultFetchPrev = prevFetch;
@@ -691,10 +678,10 @@ let vaultFetchPrev = null;
       }),
   );
   check(
-    "树行不再挂常驻 +（只剩左轨头部一枚，且没被 hover 挤位）",
+    "树行与左轨头部都不再挂常驻 +（只读库没有新建入口）",
     actSpans.every((sp) => actsOf(sp).every((b) => b.props.className !== "dshk-vault-treeplus")) &&
-      (src.match(/className: "dshk-vault-treeplus"/g) ?? []).length === 1 &&
-      !src.includes(".dshk-vault-treerow:hover .dshk-vault-treeplus"),
+      (src.match(/className: "dshk-vault-treeplus"/g) ?? []).length === 0 &&
+      !src.includes(".dshk-vault-treeplus"),
   );
   // 图标走文件树那套：自绘的页面/目录图标都不存在，行图标来自共用组件
   check(
@@ -710,26 +697,21 @@ let vaultFetchPrev = null;
       src.includes('names: ["IconRefreshOutline16", "IconRefreshOutline14"]') &&
       src.includes('jsxRuntime.jsx(ChevronIcon, { open: expanded[e.path] === true })'),
   );
-  // 行 ⋯ 的 actions：新建（目录行才出项）+ 重命名 + 删除（菜单项由 TreeRowMenu 按 actions 出）
+  // 行 ⋯ 的 actions：只读库只剩「复制相对路径」一项（建页/改名/删除全退役）
   const rowMenuEl = callLog.find((c) => c[1] === comps.TreeRowMenu);
   const rowMenuActs = rowMenuEl ? rowMenuEl[2].actions : null;
   check(
-    "知识库行 ⋯ 接线：新建 + 重命名 + 删除都挂上（删除不再只在页条）",
-    !!rowMenuActs && typeof rowMenuActs.onCreate === "function" && typeof rowMenuActs.onRename === "function" && typeof rowMenuActs.onDelete === "function",
+    "知识库行 ⋯ 接线：只剩复制相对路径（新建/重命名/删除退役）",
+    !!rowMenuActs && typeof rowMenuActs.onCopyPath === "function" &&
+      rowMenuActs.onCreate === undefined && rowMenuActs.onRename === undefined && rowMenuActs.onDelete === undefined,
   );
-  // 删除分流：目录行走目录版（整棵子树，确认文案带「目录」），页面行仍走单页级联
-  const confirmLog = [];
-  const prevConfirm = global.window.confirm;
-  global.window.confirm = (msg) => {
-    confirmLog.push(String(msg));
-    return false;
-  };
-  rowMenuActs.onDelete({ dir: true, name: "wiki", path: "D:/v/wiki" });
-  rowMenuActs.onDelete({ dir: false, name: "a", path: "D:/v/wiki/a.md" });
-  global.window.confirm = prevConfirm;
+  // 复制相对路径的取值逻辑（root 前缀剥掉 + 去 .md = 页面名）：走源码级哨兵
+  // （clipboard 在 Node 桩里没有可信通道，见 writeClipboard 的降级链）
+  // 复制相对路径的取值逻辑（root 前缀剥掉 + 去 .md = 页面名）走源码级哨兵：
+  // clipboard 在 Node 桩里没有可信通道（writeClipboard 有降级链），不直调
   check(
-    "行 ⋯ 删除分流：目录 = 整棵子树确认、页面 = 单页级联确认",
-    confirmLog.length === 2 && /folder|目录/i.test(confirmLog[0]) && !/folder|目录/i.test(confirmLog[1]),
+    "行 ⋯ 复制相对路径取 rel 去扩展名（源码哨兵）",
+    src.includes('entry.path.slice(root.length).replace(/^[\\\\/]+/, "").replace(/\\.(md|markdown)$/i, "")'),
   );
   // ⋯ 触发钮是开关：再点一次关掉自己。落在触发钮上的那次点击由按钮自己判（菜单的
   // 点外关闭会忽略它，否则先被关掉、再被 onClick 判成重新打开＝点了没反应）。
@@ -739,10 +721,10 @@ let vaultFetchPrev = null;
   const dirMenuBtn = actsOf(twoBtnSpans[0])[1];
   const pageMenuBtn = actsOf(twoBtnSpans[1])[1];
   dirMenuBtn.props.onClick(clickEv);
-  const dirOpened = stateStore.get(8);
+  const dirOpened = stateStore.get(5);
   dirMenuBtn.props.onClick(clickEv);
   pageMenuBtn.props.onClick(clickEv);
-  const menuOpened = stateStore.get(8);
+  const menuOpened = stateStore.get(5);
   pageMenuBtn.props.onClick(clickEv);
   check(
     "行 ⋯ 再点一次关掉 + 目录行认自己的条目（锚点认的是同一颗按钮）",
@@ -752,7 +734,7 @@ let vaultFetchPrev = null;
       !!menuOpened &&
       menuOpened.anchor === anchorEl &&
       menuOpened.entry.path === "D:/v/wiki/a.md" &&
-      stateStore.get(8) === null,
+      stateStore.get(5) === null,
   );
   if (refreshBtn) refreshBtn.props.onClick();
   // fetch 桩同步记账：loadIndex 的请求在 onClick 返回前就已发出；目录树重拉排在
@@ -831,15 +813,9 @@ let vaultFetchPrev = null;
     (src.match(/closest\("\.dshk-menu"\)/g) ?? []).length === 1,
   );
 }
-// 6.9a3) 页文件改名后页签路径搬家（否则 pane 还指着旧路径）
-{
-  const patched = comps.renameVaultPageTab({ vaultPages: ["D:/v/a.md", "D:/v/b.md"], activeVaultPage: "D:/v/a.md", vaultHist: { stack: ["D:/v/a.md"], idx: 0 } }, "D:/v/a.md", "D:/v/c.md");
-  check("页签路径搬家：标签表/激活位/访问序同步", patched.vaultPages[0] === "D:/v/c.md" && patched.activeVaultPage === "D:/v/c.md" && patched.vaultHist.stack[0] === "D:/v/c.md");
-  const none = comps.renameVaultPageTab({ vaultPages: [], activeVaultPage: null }, "D:/v/x.md", "D:/v/y.md");
-  check("不在标签表里的页改名返回空补丁", Object.keys(none).length === 0);
-}
-// 6.9b) VaultPagePane 直渲（一页一个实例的新组件）：预置 state#0（page 已加载）
-// 走完整编辑面，预置 state#2（冲突）走冲突条分支
+// 6.9b) VaultPagePane 直渲（只读阅读视图）：预置 state#0（page 已加载）走完整
+// 阅读面——sticky 阅读条（目录/反链按钮）+ RTE；写入类按钮（@/删除/撤销重做）
+// 与冲突条全部不得再出现
 {
   stateSeq = 0;
   stateStore.clear();
@@ -847,7 +823,7 @@ let vaultFetchPrev = null;
   callLog = [];
   let paneErr = null;
   try {
-    comps.VaultPagePane({ path: "D:/v/wiki/a.md", active: true, root: "D:/v", indexPages: [], onOpenPage: () => {}, onMissingLink: () => {}, onSaved: () => {}, toast: () => {} });
+    comps.VaultPagePane({ path: "D:/v/wiki/a.md", active: true, root: "D:/v", indexPages: [], onOpenPage: () => {}, onIndexRefresh: () => {}, toast: () => {} });
   } catch (e) {
     paneErr = e;
   }
@@ -856,25 +832,28 @@ let vaultFetchPrev = null;
   const citeBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["引用到对话", "Cite to chat"].includes(c[2].title));
   // 删除同理在树上行的 ⋯ 菜单：页条里不得再有「删除」按钮/文案
   const delBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["删除", "Delete"].includes(c[2].children));
+  // 写入半边退役：撤销/重做按钮不得回到阅读条
+  const undoBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["撤销", "Undo", "重做", "Redo"].includes(c[2].title));
   const rte = callLog.find((c) => c[1] === comps.RteEditor);
-  check("VaultPagePane 渲染无异常（页条 + RTE 就位，页条不再带 @）", paneErr === null && !!editbar && !citeBtn && !!rte);
+  // 阅读条两枚页面级入口：目录 / 反链（计数印在按钮上）
+  const tocBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["目录", "Outline"].includes(c[2].children));
+  const blBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("反链") || c[2].children.startsWith("Backlinks")));
+  check("VaultPagePane 渲染无异常（阅读条 + RTE 就位，页条不再带 @）", paneErr === null && !!editbar && !citeBtn && !!rte);
   check("页条不再带删除按钮（删除在左侧树的行 ⋯ 菜单）", !delBtn);
+  check("阅读条带 目录/反链 入口（只读导航），无撤销/重做（写入退役）", !!tocBtn && !!blBtn && !undoBtn);
   if (paneErr) console.log("  VaultPagePane error:", paneErr.message);
   stateSeq = 0;
   stateStore.clear();
   stateStore.set(0, { loading: false, body: "x", binary: false, gone: false });
-  stateStore.set(2, { diskMtime: 123 });
   callLog = [];
-  comps.VaultPagePane({ path: "D:/v/wiki/a.md", active: false, root: "D:/v", indexPages: [], onOpenPage: () => {}, onMissingLink: () => {}, onSaved: () => {}, toast: () => {} });
-  const conflictBar = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-vault-conflict");
+  comps.VaultPagePane({ path: "D:/v/wiki/a.md", active: false, root: "D:/v", indexPages: [], onOpenPage: () => {}, onIndexRefresh: () => {}, toast: () => {} });
   const paneRoot = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-vault-reader" && c[2].style);
-  check("VaultPagePane 冲突态渲染冲突条（覆盖/读取）", !!conflictBar);
   check("VaultPagePane 非激活标签保挂载但 display:none", !!paneRoot && paneRoot[2].style.display === "none");
+  check("冲突条已随写入半边退役（CSS 不存在）", !/\.dshk-vault-conflict\{/.test(src));
   stateSeq = 0;
   stateStore.clear();
 }
-// 6.9b2) 反链小节：来源页 chip 横排（一行一个太占高度）——
-// 渲染出容器 + 每个来源页一个可点 chip，chip 带全名 tooltip（超长省略后仍看得到全称）
+// 6.9b2) 阅读条「反链 N」：计数印在按钮上（来源页列表在浮层里，不再吊页尾）
 {
   stateSeq = 0;
   stateStore.clear();
@@ -885,22 +864,16 @@ let vaultFetchPrev = null;
     active: true,
     root: "D:/v",
     indexPages: [
-      { path: "D:/v/wiki/a.md", rel: "wiki/a", space: "wiki", title: "A", links: [] },
-      { path: "D:/v/wiki/b.md", rel: "wiki/b", space: "wiki", title: "B", links: ["a"] },
+      { path: "D:/v/wiki/a.md", rel: "wiki/a", space: "wiki", links: [] },
+      { path: "D:/v/wiki/b.md", rel: "wiki/b", space: "wiki", links: ["a"] },
     ],
     onOpenPage: () => {},
-    onMissingLink: () => {},
-    onSaved: () => {},
+    onIndexRefresh: () => {},
     toast: () => {},
   });
-  const blBox = callLog.find((c) => c[2] && c[2].className === "dshk-vault-backlinks");
-  const chips = callLog.filter((c) => c[2] && c[2].className === "dshk-vault-blrow");
-  const chipProps = chips.length > 0 ? chips[0][2] : null;
-  check(
-    "反链小节：标题 + 来源页 chip（带全名 tooltip、点击可跳）",
-    !!blBox && !!chipProps && chipProps.children === "B" && chipProps.title === "B" && typeof chipProps.onClick === "function",
-  );
-  check("反链小节 chip 横排换行（CSS 不再是 column）", /\.dshk-vault-backlinks\{[^}]*flex-wrap:wrap/.test(src) && !/\.dshk-vault-backlinks\{[^}]*flex-direction:column/.test(src));
+  const blBtn2 = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("反链") || c[2].children.startsWith("Backlinks")));
+  check("反链入口按钮带计数（反链 1）", !!blBtn2 && (blBtn2[2].children === "反链 1" || blBtn2[2].children === "Backlinks 1"));
+  check("页尾反链小节已退役（CSS 不存在）", !/\.dshk-vault-backlinks\{/.test(src));
   stateSeq = 0;
   stateStore.clear();
 }

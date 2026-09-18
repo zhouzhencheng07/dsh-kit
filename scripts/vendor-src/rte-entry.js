@@ -11,8 +11,9 @@
 //
 // DOM 约束：本文件不得在模块顶层触碰 document/window（node 测试直接 eval 产物
 // 做 md⇄doc 往返断言）；运行时库（window.katex）只在节点视图内部懒检查。
-import { Editor, Node, mergeAttributes, getSchema } from "@tiptap/core";
-import { TextSelection } from "@tiptap/pm/state";
+import { Editor, Extension, Node, mergeAttributes, getSchema } from "@tiptap/core";
+import { TextSelection, Plugin, PluginKey } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { Markdown, MarkdownManager } from "@tiptap/markdown";
 import { UndoRedo, Placeholder } from "@tiptap/extensions";
 import Document from "@tiptap/extension-document";
@@ -875,7 +876,123 @@ function buildExtensions(ctx = {}) {
     MathInline, MathBlock,
     Details, DetailsTitle, DetailsBody,
     RawBlock,
+    AnchorFlash,
   ];
+}
+
+// ─── 跳转落点（锚点跳转与目录共用）：摆到锚线 + 装饰闪烁 ────────────────────
+/** 落点在可视区里的固定高度：屏幕上方三分之一处。跳完目标停在这一线，
+ *  上面留一点上下文、下面留出最多正文（居中会让长文目标贴在半空） */
+const ANCHOR_RATIO = 1 / 3;
+/** 目标离锚线这么近就不滚：已在位子上还硬滚一下，读着好好的内容被推走反而碍事 */
+const NEAR_PX = 32;
+
+/** 位置 → 那个块级元素的 DOM。别只用 domAtPos：标题处拿到的是文本节点，
+ *  instanceof Element 不成立，摆位与闪烁会整段跳过（跳是跳到了但没落到锚线、没闪） */
+function blockElementAt(view, pos) {
+  const dom = view.nodeDOM(pos);
+  if (dom instanceof Element) return dom;
+  const at = view.domAtPos(pos + 1);
+  return at.node instanceof Element ? at.node : at.node.parentElement;
+}
+
+/** 元素所在滚动容器：最近的、真能滚的 overflowY auto/scroll 祖先。只看 overflow
+ *  不够——外层常见「overflow:auto 但高度跟着内容走」的假容器，scrollTop 赋多少弹回
+ *  多少，所以再加「有余量」判据；嵌套容器里一层滚不动就往外换（见 placeInScroller） */
+function scrollerOf(el) {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if (oy !== "auto" && oy !== "scroll") continue;
+    if (p.scrollHeight - p.clientHeight > 1) return p;
+  }
+  return null;
+}
+
+/** el 停到 scroller 锚线所需 scrollTop（夹在可滚范围内） */
+function anchorTopOf(el, scroller) {
+  const box = el.getBoundingClientRect();
+  const frame = scroller.getBoundingClientRect();
+  const want = scroller.scrollTop + (box.top - (frame.top + scroller.clientHeight * ANCHOR_RATIO));
+  return Math.max(0, Math.min(scroller.scrollHeight - scroller.clientHeight, want));
+}
+
+/** 把元素摆到滚动容器锚线（上方三分之一）。不用 scrollIntoView：它会横向滚偏、
+ *  「进视野」不等于落位，长文贴边等于没滚到，落点高低不一没有准头 */
+function placeInScroller(el) {
+  for (let s = scrollerOf(el); s; s = scrollerOf(s)) {
+    const top = anchorTopOf(el, s);
+    if (Math.abs(top - s.scrollTop) < NEAR_PX) return;
+    s.scrollTop = top;
+    // 赋值生效 = 就是这一层；没生效（假容器）继续往外找
+    if (Math.abs(s.scrollTop - top) <= 1) return;
+  }
+}
+
+// 落点「闪一下」走 ProseMirror 装饰，不直接改 DOM：编辑器 DOM 归 PM 管，它看见
+// 自己没做过的属性改动会把节点重画一遍、类名连同动画一起被抹掉。装饰是 PM 渲染的
+// 一部分，节点重建、选区变化都不丢。两个类名轮流用：连着跳同一条时靠「类名变了」
+// 重启动画，同一个类名挂两遍不会重播
+const FLASH_CLASSES = ["dshk-rte-anchorflash", "dshk-rte-anchorflash-b"];
+const FLASH_MS = 1600; // 动画 1.5s，摘装饰比动画稍晚一点
+const flashKey = new PluginKey("dshkAnchorFlash");
+const AnchorFlash = Extension.create({
+  name: "anchorFlash",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: flashKey,
+        state: {
+          init: () => null,
+          apply: (tr, prev) => {
+            const meta = tr.getMeta(flashKey);
+            return meta === undefined ? prev : meta;
+          },
+        },
+        props: {
+          decorations(state) {
+            const flash = flashKey.getState(state);
+            if (!flash) return null;
+            return DecorationSet.create(state.doc, [
+              Decoration.node(flash.from, flash.to, { class: FLASH_CLASSES[flash.nth % 2] }),
+            ]);
+          },
+        },
+      }),
+    ];
+  },
+});
+
+let flashSeq = 0;
+/** 让 pos 处的块级节点闪一下（pos = 节点起点） */
+function flashAnchor(view, pos) {
+  const node = view.state.doc.nodeAt(pos);
+  if (!node) return;
+  const flash = { from: pos, to: pos + node.nodeSize, nth: flashSeq++ };
+  view.dispatch(view.state.tr.setMeta(flashKey, flash));
+  setTimeout(() => {
+    // 这中间编辑器可能已销毁/换文档：只有装饰还挂在这一次上才摘
+    if (view.isDestroyed) return;
+    if (flashKey.getState(view.state) === flash) view.dispatch(view.state.tr.setMeta(flashKey, null));
+  }, FLASH_MS);
+}
+
+/** 滚到 pos（块级节点起点）并把光标落上去：锚线摆位 + 闪一下。落位前后有别家会动
+ *  滚动位置（focus 的防滚还原、滚动锚定），下一帧按元素现状重校一次，校量够大才动 */
+function scrollToPos(editor, pos) {
+  const view = editor.view;
+  view.focus();
+  view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(pos + 1))));
+  const el = blockElementAt(view, pos);
+  if (el) placeInScroller(el);
+  flashAnchor(view, pos);
+  requestAnimationFrame(() => {
+    const now = blockElementAt(view, pos);
+    if (!now) return;
+    const scroller = scrollerOf(now);
+    if (!scroller) return;
+    const want = anchorTopOf(now, scroller);
+    if (Math.abs(want - scroller.scrollTop) > 4) scroller.scrollTop = want;
+  });
 }
 
 // ─── 工厂（浏览器入口；node 测试用 buildExtensions + MarkdownManager） ──────
@@ -893,6 +1010,7 @@ function create(host, opts = {}) {
     content: opts.md ?? "",
     contentType: "markdown",
     autofocus: false,
+    editable: opts.editable !== false,
     editorProps: {
       attributes: { class: "dshk-rte-doc", spellcheck: "false" },
     },
@@ -966,30 +1084,22 @@ function create(host, opts = {}) {
         if (entry.editor === editor) entry.refresh();
       }
     },
-    /** [[页#锚]] 落点：按标题文本 slug 匹配，滚动 + 光标落标题行 */
+    /** [[页#锚]] 落点：按标题文本 slug 找位置（大小写不敏感），滚动+光标落标题行 */
     scrollToHeading(anchorRaw, slugify) {
       const want = String(slugify(anchorRaw ?? "")).toLowerCase();
       if (want === "") return false;
       let found = null;
       editor.state.doc.descendants((node, pos) => {
-        if (found || node.type.name !== "heading") return;
+        if (found !== null || node.type.name !== "heading") return;
         if (String(slugify(node.textContent)).toLowerCase() === want) found = pos;
       });
       if (found === null) return false;
-      const view = editor.view;
-      view.dispatch(
-        view.state.tr
-          .setSelection(TextSelection.near(view.state.doc.resolve(found + 1)))
-          .scrollIntoView(),
-      );
-      const dom = view.domAtPos(found + 1);
-      const el = dom.node instanceof Element ? (dom.node.childNodes[dom.offset] ?? dom.node) : dom.node;
-      if (el instanceof Element) {
-        el.scrollIntoView({ block: "center" });
-        el.classList.add("dshk-rte-anchorflash");
-        setTimeout(() => el.classList.remove("dshk-rte-anchorflash"), 1600);
-      }
+      scrollToPos(editor, found);
       return true;
+    },
+    /** 目录跳转：大纲里记好的块级节点起点直接落位（与锚点跳转同一套摆位/闪烁） */
+    scrollToPos(pos) {
+      scrollToPos(editor, pos);
     },
     destroy() {
       for (const entry of [...wikiViews]) {
