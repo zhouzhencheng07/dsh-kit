@@ -24,8 +24,11 @@
   历史版本对比）、分支切换与新建删除、↑↓ 同步（先拉后推）、提交图谱；
   非 git 目录可一键初始化
 - **日程**（入口在右栏开始页条目与待办卡；无 composer 钮、无专属快捷键）：
-  日程 pane 内左待办 + 右周网格 + 本周统计；agent 经 `schedule_query`/`schedule_create`
-  只读汇总、只建不改（人主导）；数据结构化落盘 `$DSH_HOME/dsh-kit/schedule.json`
+  日程 pane 内清单（近三日/近一周/全部范围档）+ 周网格 + 本周统计；块颜色只表达
+  状态（未到橙/进行中绿/已过蓝/逾期红），重复系列可「跳过这一次」；agent 经
+  `schedule_query`/`schedule_create`/`schedule_update`/`schedule_delete` 查、建、改、删；
+  数据结构化落盘 `$DSH_HOME/dsh-kit/schedule/`（一条一文件：`events/` + `entries/` +
+  `timer.json`）
 - **知识库**（工具行开关 / **Ctrl+Alt+K**，默认关）：默认地址开箱即用（数据目录下
   `dsh-kit\vault`，可在设置改绝对路径）——左栏一行式搜索 + 目录树选页，右栏「知识库」
   签里每页一个文档签（可多开、✕ 单关），`[[双链]]` 页内跳转（`[[页#标题]]` 落到对应
