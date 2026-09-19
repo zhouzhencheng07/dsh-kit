@@ -36,13 +36,18 @@ slot; the conversation column stays put.
   stored in `$DSH_HOME/dsh-kit/schedule.json`
 - **Knowledge base** (composer-row toggle / **Ctrl+Alt+K**, off by default): ready out
   of the box (data-directory `dsh-kit\vault`, configurable absolute path) — a **read-only
-  reading surface**: pick pages from the left tree, read them as document tabs inside the
-  right-dock **Knowledge base** tab (multiple tabs, ✕ per tab); `[[wikilinks]]` with
-  back/forward (`[[page#heading]]` lands on the section), a sticky reading bar with
-  outline & backlinks menus, and full-text search (filename-weighted); chat integration
-  (vault paths in chat open the page, "@" on a tree row cites page/selection); the vault
-  is a plain md directory the plugin only reads (it creates no directories and never
-  touches git); writing belongs to the agent's file tools or your local editor
+  reading surface**: a one-row search plus a tree on the left, pages read as document tabs
+  inside the right-dock **Knowledge base** tab (multiple tabs, ✕ per tab); `[[wikilinks]]`
+  jumping to sections (`[[page#heading]]`), a sticky reading bar with outline & backlinks
+  menus; one search covers both sides (full-text notes + note folders + files/folders under
+  the root `library/` matched by name), and library files open in the official right-dock
+  file tab (PDFs are not rendered inside the panel); the library row is always visible and
+  never re-roots the tree; "Open here" in a **note folder's** `⋯` menu (or Ctrl+click on a
+  note folder row) re-roots the tree, with ← at the tree head back to the vault root
+  (display only, settings untouched); `⋯` on a row copies the absolute path; chat
+  integration (vault paths in chat open the page, "@" on a tree row cites page/selection);
+  the vault is a plain md directory the plugin only reads (it creates no directories and
+  never touches git); writing belongs to the agent's file tools or your local editor
 - **Background tasks** (entry from the right-dock start page and auto-follow): lists the
   session's running background jobs, with output viewing and job termination
   (official `job_output`/`job_kill` semantics). Output stays visible per job inside a
