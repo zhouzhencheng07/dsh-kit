@@ -960,6 +960,84 @@ window.__ModuleLoader__.load({
       return hits.slice(0, 20);
     }
 
+    /** 知识库面板的文件管理请求：POST 端点 + sameOrigin 校验在宿主侧；错误串直接进 toast。
+     *  成功形状统一 {ok:true, ...}，跳过（撞名不覆盖）由 skipped 字段回执。 */
+    function vaultOp(path, payload) {
+      return kitPostJson(path, payload, (b) => b.ok === true);
+    }
+
+    /** 浏览器上传：File → base64（去 data URL 前缀）——宿主拿不到本机绝对路径，
+     *  这条是"选择文件"那条来源的过河桥 */
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = String(reader.result ?? "");
+          resolve(text.slice(text.indexOf(",") + 1));
+        };
+        reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    /** 绝对路径的父目录（两种分隔符都认；无分隔符时回落原值）——移动对话框的默认落点 */
+    function absParent(p) {
+      const s = String(p ?? "");
+      const i = Math.max(s.lastIndexOf("\\"), s.lastIndexOf("/"));
+      return i > 0 ? s.slice(0, i) : s;
+    }
+
+    /** 路径是否等于某前缀或落在其下（改名/移动/删除后同步树与页签用；两种分隔符都认） */
+    function pathUnder(p, prefix) {
+      return p === prefix || p.startsWith(`${prefix}\\`) || p.startsWith(`${prefix}/`);
+    }
+
+    /** 改名/移动后把已开的知识库页签一起搬（等路径或整棵前缀）；无变化回 null。
+     *  撞上已开页时并成一格（去重保序），激活页跟着搬。 */
+    function vaultTabsRetarget(ui, oldPath, newPath, isDir) {
+      const pages = ui.vaultPages ?? [];
+      const map = (p) => {
+        if (p === oldPath) return newPath;
+        return isDir && pathUnder(p, oldPath) ? newPath + p.slice(oldPath.length) : p;
+      };
+      const next = pages.map(map);
+      if (next.every((p, i) => p === pages[i])) return null;
+      const list = [];
+      for (const p of next) if (!list.includes(p)) list.push(p);
+      const patch = { vaultPages: list };
+      if (ui.activeVaultPage != null) patch.activeVaultPage = map(ui.activeVaultPage);
+      return patch;
+    }
+
+    /** 删除后关掉落在删除集里的页签（含整棵子路径）；没有受影响页签回 null */
+    function vaultTabsClose(ui, prefixes) {
+      const pages = ui.vaultPages ?? [];
+      const stale = (p) => prefixes.some((pre) => pathUnder(p, pre));
+      const rest = pages.filter((p) => !stale(p));
+      if (rest.length === pages.length) return null;
+      const patch = { vaultPages: rest };
+      if (ui.activeVaultPage != null && stale(ui.activeVaultPage)) {
+        patch.activeVaultPage = rest.length > 0 ? rest[rest.length - 1] : null;
+      }
+      return patch;
+    }
+
+    /** 移动/删除候选目标：库内目录（含根）。notes = 笔记侧（索引 folders + 库根），
+     *  否则资料库侧（库内清单目录 + 库根）。每项 {path: 绝对路径, label: 显示名}。 */
+    function vaultDirChoices(kind, root, folders, libRoot, libItems) {
+      const out = [];
+      if (kind === "lib") {
+        if (libRoot !== null) out.push({ path: libRoot, label: t("vaultLibrary") });
+        for (const it of libItems ?? []) {
+          if (it.dir) out.push({ path: it.path, label: it.rel.split("/").join(" / ") });
+        }
+        return out;
+      }
+      if (root !== null) out.push({ path: root, label: t("vaultTitle") });
+      for (const rel of folders ?? []) out.push({ path: joinRelPath(root, rel), label: rel.split("/").join(" / ") });
+      return out;
+    }
+
     /** 页内选区镜像（模块级、只由**当前激活**的页编辑器写）：左侧树的 @ 按钮在
      *  mousedown 时 preventDefault 保住选区，但点击本身仍会塌掉原生选区——所以引用
      *  时读这份镜像。多个页签同时挂载时只有激活那个能写，避免后台页清掉它。 */
@@ -1373,7 +1451,33 @@ window.__ModuleLoader__.load({
       vaultLibrary: "资料库",
       vaultParentRoot: "根目录",
       vaultBackRoot: "返回知识库",
-      vaultOpenHere: "在此打开",
+      vaultNew: "新建",
+      vaultNewPh: "名称；\\ 开头建目录，可含 / 多级",
+      vaultExists: "同名已存在，未改动",
+      vaultLinks: "（改写 {n} 页双链）",
+      vaultMoveTo: "移动到…",
+      vaultMoveTitle: "移动「{name}」",
+      vaultMoveLabel: "移动到",
+      vaultMoveSkipped: "目标已有同名，按「跳过」处理",
+      vaultImportMd: "导入 md 文件…",
+      vaultImportFiles: "导入文件…",
+      vaultImportTitle: "导入",
+      vaultImportTo: "导入到：{dest}",
+      vaultImportPick: "选择文件…",
+      vaultImportPathPh: "或粘贴本机绝对路径",
+      vaultImportName: "名称",
+      vaultImportNeedSrc: "先选择文件，或填一个本机绝对路径",
+      vaultLibAutoName: "同名自动加序号，不覆盖",
+      vaultImportImgs: "（{n} 张图片进附件）",
+      vaultConflict: "目标已有同名，怎么处理？",
+      vaultConflictSkip: "跳过（什么都不做）",
+      vaultConflictOverwrite: "覆盖（旧的送回收站）",
+      vaultConflictRename: "自动加序号",
+      vaultConfirmDeleteDir: "删除文件夹「{name}」及其 {n} 项？",
+      vaultRecycleHint: "移入回收站",
+      moved: "已移动",
+      imported: "已导入",
+      cancel: "取消",
       vaultRefresh: "刷新索引与目录树",
       vaultRefreshed: "已刷新",
       vaultBinaryHint: "二进制文件，知识库不渲染",
@@ -1775,7 +1879,33 @@ window.__ModuleLoader__.load({
       vaultLibrary: "Library",
       vaultParentRoot: "root",
       vaultBackRoot: "Back to knowledge base",
-      vaultOpenHere: "Open here",
+      vaultNew: "New",
+      vaultNewPh: "Name; \\ prefix makes a folder, / for nested",
+      vaultExists: "Already exists — nothing changed",
+      vaultLinks: " (rewrote {n} page links)",
+      vaultMoveTo: "Move to…",
+      vaultMoveTitle: "Move “{name}”",
+      vaultMoveLabel: "Move to",
+      vaultMoveSkipped: "Same name exists in the target — skipped",
+      vaultImportMd: "Import markdown…",
+      vaultImportFiles: "Import files…",
+      vaultImportTitle: "Import",
+      vaultImportTo: "Into: {dest}",
+      vaultImportPick: "Choose files…",
+      vaultImportPathPh: "or paste an absolute path on this machine",
+      vaultImportName: "Name",
+      vaultImportNeedSrc: "Choose files or paste an absolute path first",
+      vaultLibAutoName: "Same name → auto-numbered, never overwritten",
+      vaultImportImgs: " ({n} images copied to attachments)",
+      vaultConflict: "A same-named item already exists in the target:",
+      vaultConflictSkip: "Skip (do nothing)",
+      vaultConflictOverwrite: "Overwrite (old one to the Recycle Bin)",
+      vaultConflictRename: "Auto-number",
+      vaultConfirmDeleteDir: "Delete folder “{name}” and its {n} items?",
+      vaultRecycleHint: "moved to the Recycle Bin",
+      moved: "Moved",
+      imported: "Imported",
+      cancel: "Cancel",
       vaultRefresh: "Refresh index and tree",
       vaultRefreshed: "Refreshed",
       vaultBinaryHint: "Binary file — not rendered in the vault",
@@ -2193,6 +2323,25 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-vault-tbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-vault-tbtn.is-empty{opacity:.45;cursor:default}
 .dshk-vault-tbtn.is-empty:hover{background:none;color:var(--dsw-alias-label-secondary)}
+/* 树行「新建」小按钮：只悬停显形（与文件树那枚同形态，但常驻宽度不占） */
+.dshk-vault-treeplus{display:none;flex:none;appearance:none;border:0;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:1;width:18px;height:18px;border-radius:4px;cursor:pointer;padding:0}
+.dshk-vault-treeplus:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-vault-treerow:hover .dshk-vault-treeplus{display:inline-flex;align-items:center;justify-content:center}
+/* 树头那两枚（新建 / 更多操作）常驻可见：树头不是行，没有悬停显形的落点 */
+.dshk-vault-railhead .dshk-vault-treeplus{display:inline-flex;align-items:center;justify-content:center}
+/* 面板对话框（移动到…/导入/删除确认共用）：fixed 遮罩 + 居中卡片；窄侧栏下也放得开 */
+.dshk-vault-modalwrap{position:fixed;inset:0;z-index:1300;background:rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center}
+.dshk-vault-modal{width:min(92vw,340px);max-height:min(84vh,560px);overflow:auto;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.24);padding:12px 14px}
+.dshk-vault-modaltitle{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary);margin-bottom:8px}
+.dshk-vault-modalline{font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary);margin:4px 0;word-break:break-all}
+.dshk-vault-modalfoot{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.dshk-vault-dirlist{max-height:190px;overflow:auto;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;margin-top:4px}
+.dshk-vault-diritem{display:block;width:100%;text-align:left;appearance:none;border:0;background:none;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;padding:7px 9px;border-radius:6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dshk-vault-diritem:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-vault-diritem.is-cur{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-brand-primary)}
+.dshk-vault-radio{display:flex;align-items:center;gap:6px;font-size:12px;line-height:1.4;color:var(--dsw-alias-label-primary);margin-top:4px}
+.dshk-vault-srcline{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
+.dshk-vault-modalinput{width:100%;box-sizing:border-box;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:6px 8px;border-radius:6px;margin-top:4px}
 /* 日程模块：中心区第三 tab——周时间网格 + 待办/统计侧栏；计时芯片挂输入区 dock。
    --dshk-sched-toprow = 顶部一条里统计卡的自然高度（单列四格：标题 17 + 四格各
    「值 21 + 标签 15 + 格内缝 2」+ 格间距 8×3 + 标题与格 8 + 内边距 20 ≈ 218）；
@@ -3997,9 +4146,10 @@ textarea.dshk-sched-input{resize:vertical}
       }
       // copyMode = "abs" 的宿主（知识库）拿绝对路径，标签一并对齐；缺省仍是相对路径
       const copyAbs = actions.copyMode === "abs";
-      if (actions.onCopyPath) items.push({ key: "cr", label: copyAbs ? t("treeCopyAbs") : t("treeCopyRel"), run: () => actions.onCopyPath(entry, !copyAbs) });
-      if (entry.dir && actions.onOpenHere) items.push({ key: "oh", label: t("vaultOpenHere"), run: () => actions.onOpenHere(entry) });
       if (actions.onRename) items.push({ key: "rn", label: t("treeRename"), run: () => actions.onRename(entry) });
+      // 宿主自定义项（知识库的「移动到…」「导入…」等）：顺序夹在重命名与复制之间
+      for (const extra of actions.extraItems ?? []) items.push(extra);
+      if (actions.onCopyPath) items.push({ key: "cr", label: copyAbs ? t("treeCopyAbs") : t("treeCopyRel"), run: () => actions.onCopyPath(entry, !copyAbs) });
       if (actions.onDelete) items.push({ key: "dl", label: t("treeDelete"), run: () => actions.onDelete(entry) });
       const height = items.length * 32 + 8;
       const MENU_W = 160; // min-width 152 + padding 8
@@ -4026,6 +4176,35 @@ textarea.dshk-sched-input{resize:vertical}
             item.key,
           ),
         ),
+      });
+    }
+
+    /** 知识库面板的对话框（移动到…/导入/删除确认共用）：fixed 遮罩 + 居中卡片。
+     *  关闭手势长在自己身上（Esc / 点遮罩）——与菜单同一条约定：宿主各写一份必漏。
+     *  内容与按钮归调用方，这里只管壳与关闭。 */
+    function VaultDialog({ title, onClose, children }) {
+      react.useEffect(() => {
+        const onKey = (e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            onClose();
+          }
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      }, [onClose]);
+      return jsxRuntime.jsx("div", {
+        className: "dshk-vault-modalwrap",
+        onMouseDown: (e) => {
+          if (e.target === e.currentTarget) onClose();
+        },
+        children: jsxRuntime.jsxs("div", {
+          className: "dshk-vault-modal",
+          children: [
+            jsxRuntime.jsx("div", { className: "dshk-vault-modaltitle", children: title }),
+            children,
+          ],
+        }),
       });
     }
 
@@ -8674,13 +8853,13 @@ textarea.dshk-sched-input{resize:vertical}
       const paneHost = useHostSlot(vaultPaneSlot);
       const [index, setIndex] = react.useState(null);
       const [indexErr, setIndexErr] = react.useState("");
-      // 面板的树根：null = 库根（vaultRoot）；非 null = 「在此打开」换到的绝对目录
-      // （只影响本组件显示，不写设置卡）
+      // 面板的树根：null = 库根（vaultRoot）；非 null = 进入的绝对目录
+      // （Ctrl+点击目录行 / 搜索结果点笔记目录；只影响本组件显示，不写设置卡）
       const [rootHere, setRootHere] = react.useState(null);
       // 目录树：path → entries|null(加载中)；expanded: path → bool
       const [treeDirs, setTreeDirs] = react.useState({});
       const [expanded, setExpanded] = react.useState({});
-      // 树行 ⋯ 菜单（条目 + 锚点矩形）：复制绝对路径 / 在此打开
+      // 树行/树头 ⋯ 菜单（条目 + 锚点矩形）：重命名 / 移动到… / 导入… / 复制绝对路径 / 删除
       const [rowMenu, setRowMenu] = react.useState(null);
       const [searchQ, setSearchQ] = react.useState("");
       const [searchRes, setSearchRes] = react.useState(null);
@@ -8777,6 +8956,14 @@ textarea.dshk-sched-input{resize:vertical}
       const [refreshing, setRefreshing] = react.useState(false);
       // 搜索点到资料库目录后要滚到的那一行（见 revealLibDir / 下面的 effect）
       const [revealPath, setRevealPath] = react.useState(null);
+      // 行内改名中的条目（绝对路径）；行内新建（createAt = 目标目录绝对路径 + 草稿）
+      const [renamingPath, setRenamingPath] = react.useState(null);
+      const [createAt, setCreateAt] = react.useState(null);
+      const [createName, setCreateName] = react.useState("");
+      // 对话框（移动到…/导入/删除确认共用一份 state）：{kind, ...}；null = 没开
+      const [dialog, setDialog] = react.useState(null);
+      // 有盘上操作在跑（对话框按钮置灰防连点）
+      const [busy, setBusy] = react.useState(false);
       const railRef = react.useRef(null);
       const manualRefresh = react.useCallback(async () => {
         setRefreshing(true);
@@ -8788,7 +8975,7 @@ textarea.dshk-sched-input{resize:vertical}
         }
       }, [reloadData]);
 
-      // 换根（首挂/「在此打开」/树头 ←）：树状态清空并展开根层（root 未就绪时只清空）
+      // 换根（首挂/Ctrl+点击目录行/搜索结果点目录/树头 ←）：树状态清空并展开根层
       react.useEffect(() => {
         setTreeDirs({});
         if (treeRoot === null) return;
@@ -8901,13 +9088,25 @@ textarea.dshk-sched-input{resize:vertical}
         setRevealPath(null);
       }, [revealPath, treeDirs]);
 
+      // 区域外点击 = 取消行内新建（丢弃草稿，不弹窗不代建）：误点代建会产生
+      // 意外条目，弹窗又比一行输入的损失重；Enter 始终是显式创建
+      react.useEffect(() => {
+        if (createAt === null) return undefined;
+        const onDown = (e) => {
+          if (e.target instanceof Element && !e.target.closest(".dshk-createrow")) setCreateAt(null);
+        };
+        document.addEventListener("pointerdown", onDown, true);
+        return () => document.removeEventListener("pointerdown", onDown, true);
+      }, [createAt]);
+
       const indexPages = index?.pages ?? [];
-      /** 行 ⋯ 开关：同一颗触发钮再点一次关掉（菜单的关闭手势会跳过落在它上面的点击） */
-      const openRowMenu = (anchor, entry) => {
-        setRowMenu((prev) => (prev && prev.anchor === anchor ? null : { entry, rect: anchor.getBoundingClientRect(), anchor }));
+      /** 行 ⋯ / 树头 ⋯ 开关：同一颗触发钮再点一次关掉（菜单的关闭手势会跳过落在它上面的点击） */
+      const openRowMenu = (anchor, entry, head) => {
+        setRowMenu((prev) => (prev && prev.anchor === anchor ? null : { entry, head: head === true, rect: anchor.getBoundingClientRect(), anchor }));
       };
-      /** 「在此打开」（行 ⋯ 菜单 / Ctrl+点击目录行 / 搜索点到笔记目录）：树根换成该目录；
-       *  换回库根本身即清掉覆盖。资料库那一支没有这个动作——它是文献面，不参与换根 */
+      /** 进入目录（Ctrl（⌘）+点击目录行 / 搜索结果点笔记目录）：树根换成该目录，
+       *  树头 ← 回库根。换根只影响面板显示，不动设置卡的 vaultRoot。
+       *  资料库那一支不参与换根（它是文献面，见 dirRow） */
       const openHere = (dir) => {
         setRootHere(dir === root ? null : dir);
         setRowMenu(null);
@@ -8954,9 +9153,262 @@ textarea.dshk-sched-input{resize:vertical}
         setExpanded((e) => ({ ...e, [dir]: opening }));
         if (opening) void fetchDir(dir);
       };
-      /** 树行 hover 的 `@` + `⋯`（目录行与文件行同形状；只读库没有别的写操作）。canHere
-       *  = 这一行给不给「在此打开」（只有笔记目录给，见 dirRow） */
-      const rowActs = (entry, label, canHere) =>
+      /** 这一行是不是资料库那一支（含库根那一行本身）：那支只浏览不换根，
+       *  新建只建文件夹（库里放的是文献，空 md 页没有意义） */
+      const isLibPath = (p) => libRoot !== null && p !== undefined && relUnder(libRoot, p) !== null;
+
+      // ── 文件管理（建 / 改名 / 移动 / 导入 / 删除）────────────────────────────
+      // 全部走宿主端点落盘，前端只管交互与刷新：目录树是懒加载缓存 + 索引派生，
+      // 写完不重拉就等于没写（外部增删可见性靠的也是同一条重拉）
+      /** 统一收尾：成功 toast + 回执，失败只 toast 并保留对话框/草稿（可改可重试） */
+      const runVaultOp = async (job, describe) => {
+        setBusy(true);
+        try {
+          const res = await job();
+          setToast(describe(res));
+          return res;
+        } catch (error) {
+          setToast(`${t("skOpFail")}：${error?.message ?? error}`);
+          return null;
+        } finally {
+          setBusy(false);
+        }
+      };
+      /** 改名/移动后把树的缓存键与展开态一起搬——不搬的话旧键全成了孤儿，
+       *  整棵已展开的树会凭空消失（重拉也回不来：键不在了就不会去拉） */
+      const retargetTree = (oldPath, newPath, isDir) => {
+        const mapKey = (k) => (k === oldPath ? newPath : isDir && pathUnder(k, oldPath) ? newPath + k.slice(oldPath.length) : k);
+        setTreeDirs((d) => {
+          const next = {};
+          for (const k of Object.keys(d)) next[mapKey(k)] = d[k];
+          return next;
+        });
+        setExpanded((e) => {
+          const next = {};
+          for (const k of Object.keys(e)) next[mapKey(k)] = e[k];
+          return next;
+        });
+      };
+      /** 删除后丢掉落在删除集里的缓存键与展开态 */
+      const forgetTree = (prefixes) => {
+        const gone = (k) => prefixes.some((p) => pathUnder(k, p));
+        setTreeDirs((d) => {
+          const next = {};
+          for (const k of Object.keys(d)) if (!gone(k)) next[k] = d[k];
+          return next;
+        });
+        setExpanded((e) => {
+          const next = {};
+          for (const k of Object.keys(e)) if (!gone(k)) next[k] = e[k];
+          return next;
+        });
+      };
+      /** 新建入口（树头 + / 目录行 +）：展开目标目录并在它下面挂行内输入 */
+      const startCreate = (dirPath) => {
+        setRowMenu(null);
+        setDialog(null);
+        setCreateAt(dirPath);
+        setCreateName("");
+        if (expanded[dirPath] !== true) {
+          setExpanded((e) => ({ ...e, [dirPath]: true }));
+          void fetchDir(dirPath);
+        }
+      };
+      /** 行内新建提交：`\` 前缀 = 建目录（资料库那一支一律目录），可含 `/` 多级；
+       *  新页建好直接打开（与单击同语义），失败保留草稿 */
+      const submitCreate = async () => {
+        if (createAt === null) return;
+        const raw = createName.trim();
+        if (raw === "") return;
+        const wantDir = raw.startsWith("\\") || isLibPath(createAt);
+        const name = (wantDir ? raw.replace(/^\\+/, "") : raw).replace(/^[\\/]+|[\\/]+$/g, "");
+        if (name === "") return;
+        const dir = createAt;
+        const res = await runVaultOp(
+          () => vaultOp("/dsh-kit/vault/create", { dir, name, kind: wantDir ? "dir" : "page" }),
+          (r) => (r.exists === true ? t("vaultExists") : t("created")),
+        );
+        if (res === null) return;
+        setCreateAt(null);
+        setCreateName("");
+        if (wantDir) setExpanded((e) => ({ ...e, [res.path]: true }));
+        else openPath(res.path);
+        void fetchDir(dir);
+        void loadIndex();
+      };
+      /** 行内改名提交（只换名字留原位置）：页的双链由宿主按解析改写，回执带页数；
+       *  成功后树键、已开页签一起搬 */
+      const submitRename = async (entry, currentLabel, rawValue) => {
+        setRenamingPath(null);
+        const name = String(rawValue ?? "").trim();
+        if (name === "" || name === currentLabel) return;
+        const res = await runVaultOp(
+          () => vaultOp("/dsh-kit/vault/rename", { path: entry.path, name }),
+          (r) => `${t("renamed")}${r.links > 0 ? t("vaultLinks").replace("{n}", String(r.links)) : ""}`,
+        );
+        if (res === null) return;
+        retargetTree(entry.path, res.path, entry.dir === true);
+        const patch = vaultTabsRetarget(kitUi, entry.path, res.path, entry.dir === true);
+        if (patch) setKitUi(patch);
+        await reloadData();
+      };
+      /** 移动到…：候选目录 = 同侧全部分支（笔记侧走索引，资料库侧走库内清单） */
+      const openMove = (entry) => {
+        setRowMenu(null);
+        setDialog({ kind: "move", entry, lib: isLibPath(entry.path), dest: absParent(entry.path), conflict: "skip" });
+      };
+      const submitMove = async () => {
+        const d = dialog;
+        if (d === null || d.kind !== "move") return;
+        const res = await runVaultOp(
+          () => vaultOp("/dsh-kit/vault/move", { path: d.entry.path, dest: d.dest, conflict: d.conflict }),
+          (r) => (r.skipped ? t("vaultMoveSkipped") : `${t("moved")}${r.links > 0 ? t("vaultLinks").replace("{n}", String(r.links)) : ""}`),
+        );
+        if (res === null) return;
+        setDialog(null);
+        if (res.skipped === true) return;
+        retargetTree(d.entry.path, res.path, d.entry.dir === true);
+        const patch = vaultTabsRetarget(kitUi, d.entry.path, res.path, d.entry.dir === true);
+        if (patch) setKitUi(patch);
+        setExpanded((e) => ({ ...e, [d.dest]: true }));
+        void fetchDir(d.dest);
+        await reloadData();
+      };
+      /** 导入：来源两条——浏览器选的文件（远端也能用）或本机绝对路径（宿主直拷，
+       *  笔记页连带把页内引用的本地图片收进 attachments/）。落点 = 点开入口的那个目录 */
+      const openImport = (dirPath, lib) => {
+        setRowMenu(null);
+        setDialog({ kind: "import", dest: dirPath, lib: lib === true, files: [], src: "", name: "", conflict: "skip" });
+      };
+      const submitImport = async () => {
+        const d = dialog;
+        if (d === null || d.kind !== "import") return;
+        if (d.files.length === 0 && String(d.src ?? "").trim() === "") {
+          setToast(t("vaultImportNeedSrc"));
+          return;
+        }
+        const jobs = d.files.length > 0
+          ? d.files.map((file) => ({ file, payload: null }))
+          : [{ file: null, payload: { dest: d.dest, name: d.name, src: String(d.src).trim(), conflict: d.conflict } }];
+        setBusy(true);
+        let imported = 0;
+        let skipped = 0;
+        let images = 0;
+        const fails = [];
+        try {
+          for (const job of jobs) {
+            try {
+              const payload = job.payload ?? {
+                dest: d.dest,
+                name: job.file.name,
+                fileName: job.file.name,
+                dataBase64: await fileToBase64(job.file),
+                conflict: d.conflict,
+              };
+              const r = await vaultOp("/dsh-kit/vault/import", payload);
+              if (r.skipped === true) skipped += 1;
+              else imported += 1;
+              images += r.images ?? 0;
+            } catch (error) {
+              fails.push(`${job.file ? job.file.name : String(d.src).trim()}：${error?.message ?? error}`);
+            }
+          }
+        } finally {
+          setBusy(false);
+        }
+        if (fails.length > 0) setToast(`${t("skOpFail")}：${fails[0]}`);
+        else {
+          setDialog(null);
+          const extra = [skipped > 0 ? t("vaultMoveSkipped") : "", images > 0 ? t("vaultImportImgs").replace("{n}", String(images)) : ""].join("");
+          setToast(`${t("imported")} ${imported}${extra}`);
+        }
+        await reloadData();
+        void fetchDir(d.dest);
+        setExpanded((e) => ({ ...e, [d.dest]: true }));
+      };
+      /** 删除：确认后整单送宿主（Windows 进回收站），页签与树缓存同步收掉 */
+      const openDelete = (entry) => {
+        setRowMenu(null);
+        setDialog({ kind: "delete", entry });
+      };
+      const submitDelete = async () => {
+        const d = dialog;
+        if (d === null || d.kind !== "delete") return;
+        const res = await runVaultOp(
+          () => vaultOp("/dsh-kit/vault/delete", { paths: [d.entry.path] }),
+          (r) => (r.failed && r.failed.length > 0 ? `${t("deleted")} ${r.deleted}／${t("skOpFail")}：${r.failed.join("、")}` : `${t("deleted")} ${r.deleted}`),
+        );
+        if (res === null) return;
+        setDialog(null);
+        const patch = vaultTabsClose(kitUi, [d.entry.path]);
+        if (patch) setKitUi(patch);
+        forgetTree([d.entry.path]);
+        await reloadData();
+      };
+      /** 行 ⋯ 接线：重命名 / 移动到… / 导入… / 复制绝对路径 / 删除。
+       *  资料库根那一行只给导入（根目录名是写死的约定，宿主也硬拦改名/移动/删除） */
+      const importItem = (entry, lib) => ({
+        key: "im",
+        label: lib ? t("vaultImportFiles") : t("vaultImportMd"),
+        run: () => openImport(entry.path, lib),
+      });
+      const menuActionsFor = (row) => {
+        // 树头 ⋯：落点 = 当前树根，只有导入（新建走旁边的 +）
+        if (row.head === true) return { extraItems: [importItem(row.entry, isLibPath(row.entry.path))] };
+        const entry = row.entry;
+        const lib = isLibPath(entry.path);
+        const atLibRoot = libRoot !== null && entry.path === libRoot;
+        // 资料库那一行（库根本身）只有导入：改名 / 移动 / 删除对它都无从谈起，宿主也硬拦
+        const extraItems = atLibRoot ? [] : [{ key: "mv", label: t("vaultMoveTo"), run: () => openMove(entry) }];
+        if (entry.dir === true) extraItems.push(importItem(entry, lib));
+        return {
+          extraItems,
+          onRename: atLibRoot ? undefined : (target) => setRenamingPath(target.path),
+          onCopyPath: copyVaultPath,
+          copyMode: "abs",
+          onDelete: atLibRoot ? undefined : (target) => openDelete(target),
+        };
+      };
+      /** 树头 ⋯ 的锚点条目：当前树根（路径即落点；head 标记让菜单只出导入） */
+      const openHeadMenu = (anchor) => {
+        if (treeRoot === null) return;
+        const label = rootHere === null ? t("vaultTitle") : relUnder(root, rootHere) || rootHere;
+        openRowMenu(anchor, { dir: true, name: label, path: treeRoot, head: true }, true);
+      };
+      /** 移动的目标里是不是已有同名（原地不动不算）——有才把冲突策略摆出来给用户选 */
+      const moveClash = (d) => {
+        if (d === null || d.kind !== "move" || absParent(d.entry.path) === d.dest) return false;
+        if (d.lib) {
+          const rel = relUnder(libRoot, d.dest);
+          if (rel === null) return false;
+          const want = `${rel === "" ? "" : `${rel}/`}${d.entry.name}`.toLowerCase();
+          return libItems.some((it) => it.rel.toLowerCase() === want);
+        }
+        const rel = relUnder(root, d.dest);
+        if (rel === null) return false;
+        const want = `${rel === "" ? "" : `${rel}/`}${d.entry.name}`.toLowerCase();
+        return (index?.folders ?? []).some((f) => f.toLowerCase() === want) || indexPages.some((p) => p.rel.toLowerCase() === want);
+      };
+      /** 撞名策略三选一（移动与导入共用）：跳过 / 覆盖（旧的送回收站）/ 自动加序号 */
+      const conflictRadios = (value, onChange) =>
+        [["skip", "vaultConflictSkip"], ["overwrite", "vaultConflictOverwrite"], ["rename", "vaultConflictRename"]].map(([v, key]) =>
+          jsxRuntime.jsxs("label", { className: "dshk-vault-radio", children: [
+            jsxRuntime.jsx("input", { type: "radio", name: "dshk-vault-conflict", checked: value === v, onChange: () => onChange(v) }),
+            t(key),
+          ] }, v),
+        );
+      /** 删目录的确认数量：笔记侧数页，资料库侧数库内清单条目 */
+      const doomedCount = (entry) => {
+        if (entry.dir !== true) return 0;
+        if (isLibPath(entry.path)) {
+          const rel = relUnder(libRoot, entry.path) ?? "";
+          const prefix = rel === "" ? "" : `${rel}/`;
+          return libItems.filter((it) => it.rel.startsWith(prefix) && it.rel !== rel).length;
+        }
+        return indexPages.filter((p) => pathUnder(p.path, entry.path)).length;
+      };
+      /** 树行 hover 的 `@` + `⋯`（目录行与文件行同形状）；行尾那枚 `+` 只在目录行 */
+      const rowActs = (entry, label) =>
         jsxRuntime.jsxs("span", {
           className: "dshk-rowact",
           children: [
@@ -8967,15 +9419,66 @@ textarea.dshk-sched-input{resize:vertical}
               title: t("treeMenu"),
               onClick: (ev) => {
                 ev.stopPropagation();
-                openRowMenu(ev.currentTarget, { dir: entry.dir === true, name: label, path: entry.path, here: canHere === true });
+                openRowMenu(ev.currentTarget, { dir: entry.dir === true, name: label, path: entry.path });
               },
               children: "⋯",
             }),
           ],
         });
-      /** 目录行：点击折叠/展开；笔记目录另给 Ctrl（⌘）+点击 = 在此打开；空目录不给展开钮
-       *  （没东西可展开，行本身保留——空目录有看得见的必要）。lib = 资料库那一支（含
-       *  「资料库」那一行本身）：那支只浏览不换根 */
+      /** 行内改名输入（与文件树同款交互）：Enter 提交、Esc / 失焦取消；打开时只选中
+       *  主名（页与资料保留扩展名，目录选全名） */
+      const renameInput = (entry, label, isDir) =>
+        jsxRuntime.jsx("input", {
+          className: "dshk-rename",
+          defaultValue: label,
+          spellCheck: false,
+          autoFocus: true,
+          "aria-label": t("treeRename"),
+          onClick: (ev) => ev.stopPropagation(),
+          onFocus: (ev) => {
+            const v = ev.currentTarget.value;
+            const i = v.lastIndexOf(".");
+            ev.currentTarget.setSelectionRange(0, !isDir && i > 0 ? i : v.length);
+          },
+          onKeyDown: (ev) => {
+            ev.stopPropagation();
+            if (ev.key === "Enter") {
+              ev.preventDefault();
+              void submitRename(entry, label, ev.currentTarget.value);
+            } else if (ev.key === "Escape") {
+              ev.preventDefault();
+              setRenamingPath(null);
+            }
+          },
+          onBlur: () => {
+            if (renamingPath === entry.path) setRenamingPath(null);
+          },
+        }, "rename");
+      /** 行内新建输入（挂在目标目录行下 / 树头上）：Enter 建、Esc 与空内容退格取消；
+       *  区域外点击也取消（误点代建会留下意外条目） */
+      const createRow = () =>
+        jsxRuntime.jsxs("div", { className: "dshk-createrow", title: createAt ?? "", children: [
+          jsxRuntime.jsx("input", {
+            autoFocus: true,
+            value: createName,
+            spellCheck: false,
+            placeholder: t("vaultNewPh"),
+            onChange: (ev) => setCreateName(ev.target.value),
+            onKeyDown: (ev) => {
+              ev.stopPropagation();
+              if (ev.key === "Enter") {
+                ev.preventDefault();
+                void submitCreate();
+              } else if (ev.key === "Escape") {
+                ev.preventDefault();
+                setCreateAt(null);
+              } else if (ev.key === "Backspace" && createName === "") setCreateAt(null);
+            },
+          }),
+        ] });
+      /** 目录行：点击折叠/展开；笔记目录另给 Ctrl（⌘）+点击 = 进入该目录（树头 ← 回库根）；
+       *  空目录不给展开钮（没东西可展开，行本身保留——空目录有看得见的必要）。
+       *  lib = 资料库那一支（含「资料库」那一行本身）：只浏览不换根 */
       const dirRow = (e, depth, hasChildren, lib) =>
         jsxRuntime.jsxs(
           "div",
@@ -8986,6 +9489,7 @@ textarea.dshk-sched-input{resize:vertical}
                 style: { paddingLeft: 10 + depth * 14 },
                 title: e.path,
                 onClick: (ev) => {
+                  if (renamingPath === e.path) return; // 改名中：点击不触发展开/进目录
                   if (!lib && (ev.ctrlKey || ev.metaKey)) {
                     openHere(e.path);
                     return;
@@ -8996,10 +9500,23 @@ textarea.dshk-sched-input{resize:vertical}
                   // 展开箭头与文件树同一枚（官方 IconTriangleRightFill14）
                   jsxRuntime.jsx("span", { className: "dshk-vault-twist", children: hasChildren ? jsxRuntime.jsx(ChevronIcon, { open: expanded[e.path] === true }) : null }),
                   jsxRuntime.jsx(TreeFolderIcon, {}),
-                  jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
-                  rowActs(e, e.name, !lib),
+                  renamingPath === e.path ? renameInput(e, e.name, true) : jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
+                  // 行尾「新建」（悬停显形）：落点 = 这个目录
+                  jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-vault-treeplus",
+                    title: t("vaultNew"),
+                    onMouseDown: (ev) => ev.preventDefault(),
+                    onClick: (ev) => {
+                      ev.stopPropagation();
+                      startCreate(e.path);
+                    },
+                    children: "+",
+                  }),
+                  rowActs(e, e.name),
                 ],
               }),
+              createAt === e.path ? createRow() : null,
               renderDir(e.path, depth + 1),
             ],
           },
@@ -9014,14 +9531,15 @@ textarea.dshk-sched-input{resize:vertical}
             className: `dshk-vault-treerow${!lib && e.path === current ? " is-active" : ""}`,
             style: { paddingLeft: 10 + (depth + 1) * 14 },
             onClick: () => {
+              if (renamingPath === e.path) return;
               if (lib) openOfficialFile(e.path);
               else openPath(e.path);
             },
             title: e.path,
             children: [
               jsxRuntime.jsx(FileTypeIcon16, { name: e.name }),
-              jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: label }),
-              rowActs(e, label, false),
+              renamingPath === e.path ? renameInput(e, label, false) : jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: label }),
+              rowActs(e, label),
             ],
           },
           e.path,
@@ -9062,7 +9580,7 @@ textarea.dshk-sched-input{resize:vertical}
 
       // 工具条 + 搜索结果 + 目录树 → 侧栏索引宿主；页编辑器 → 右栏 pane 宿主。
       // 单实例双 portal：两侧各自在场才投递（侧栏关闭/右栏关签互不影响）。
-      // 工具条一行：搜索框占满 + 刷新收尾（换根改在树上「在此打开」/Ctrl+点击，
+      // 工具条一行：搜索框占满 + 刷新收尾（换根改在树上 Ctrl+点击目录行，树头 ← 回库根，
       // 前进后退已随访问序退役）
       const sideContent = jsxRuntime.jsxs("div", { className: "dshk-vault-sidewrap", children: [
         jsxRuntime.jsxs("div", { className: "dshk-vault-toolbar", children: [
@@ -9134,8 +9652,8 @@ textarea.dshk-sched-input{resize:vertical}
         indexErr !== ""
           ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: indexErr === "vault-not-configured" ? t("vaultNotConfiguredHint") : `${t("vaultIndexFail")} ${indexErr}` })
           : null,
-        // 树头：当前根（库根 = 知识库；换了根就显示库内相对路径）+ 回库根的 ←
-        // （换根只在树上做，筛选框已退役）
+        // 树头：当前根（库根 = 知识库；进了子目录就显示库内相对路径）+ ← 回库根
+        // + 新建 / 导入两个入口（树头没有自己的「行」，根级的建与导就落在这里）
         jsxRuntime.jsxs("div", { className: "dshk-vault-rail", ref: railRef, children: [
           jsxRuntime.jsxs("div", { className: "dshk-vault-railhead", children: [
             rootHere === null
@@ -9146,7 +9664,22 @@ textarea.dshk-sched-input{resize:vertical}
               title: treeRoot ?? "",
               children: rootHere === null ? t("vaultTitle") : relUnder(root, rootHere) || rootHere,
             }),
+            jsxRuntime.jsx("button", {
+              type: "button",
+              className: "dshk-vault-treeplus",
+              title: t("vaultNew"),
+              onClick: () => treeRoot !== null && startCreate(treeRoot),
+              children: "+",
+            }),
+            jsxRuntime.jsx("button", {
+              type: "button",
+              className: "dshk-vault-treeplus",
+              title: t("treeMenu"),
+              onClick: (ev) => openHeadMenu(ev.currentTarget),
+              children: "⋯",
+            }),
           ] }),
+          createAt === treeRoot ? createRow() : null,
           libRow(),
           renderDir(treeRoot, 0),
         ] }),
@@ -9155,13 +9688,117 @@ textarea.dshk-sched-input{resize:vertical}
               entry: rowMenu.entry,
               rect: rowMenu.rect,
               anchor: rowMenu.anchor,
-              // 行 ⋯：复制绝对路径；笔记目录多一项「在此打开」（= 换树根；资料库那支不给）
-              actions: {
-                onCopyPath: copyVaultPath,
-                copyMode: "abs",
-                onOpenHere: rowMenu.entry.here === true ? (entry) => openHere(entry.path) : undefined,
-              },
+              // 行 ⋯ / 树头 ⋯：重命名 / 移动到… / 导入… / 复制绝对路径 / 删除
+              // （按行所属的那一支接线，资料库根只给导入）
+              actions: menuActionsFor(rowMenu),
               onClose: () => setRowMenu(null),
+            })
+          : null,
+        dialog !== null && dialog.kind === "move"
+          ? jsxRuntime.jsxs(VaultDialog, {
+              title: t("vaultMoveTitle").replace("{name}", dialog.entry.name),
+              onClose: () => setDialog(null),
+              children: [
+                jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("vaultMoveLabel") }),
+                jsxRuntime.jsx("div", { className: "dshk-vault-dirlist", children:
+                  vaultDirChoices(dialog.lib ? "lib" : "notes", root, index?.folders ?? [], libRoot, libItems)
+                    .filter((c) => c.path !== dialog.entry.path && !(dialog.entry.dir === true && pathUnder(c.path, dialog.entry.path)))
+                    .map((c) =>
+                      jsxRuntime.jsx("button", {
+                        type: "button",
+                        className: `dshk-vault-diritem${c.path === dialog.dest ? " is-cur" : ""}`,
+                        title: c.path,
+                        onClick: () => setDialog((d) => ({ ...d, dest: c.path })),
+                        children: c.label,
+                      }, c.path),
+                    ),
+                }),
+                moveClash(dialog)
+                  ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                      jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("vaultConflict") }),
+                      ...conflictRadios(dialog.conflict, (v) => setDialog((d) => ({ ...d, conflict: v }))),
+                    ] })
+                  : null,
+                jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setDialog(null), children: t("cancel") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-save", disabled: busy, onClick: () => void submitMove(), children: t("vaultMoveTo").replace("…", "") }),
+                ] }),
+              ],
+            })
+          : null,
+        dialog !== null && dialog.kind === "import"
+          ? jsxRuntime.jsxs(VaultDialog, {
+              title: `${t("vaultImportTitle")} · ${dialog.lib ? t("vaultLibrary") : t("vaultTitle")}`,
+              onClose: () => setDialog(null),
+              children: [
+                jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("vaultImportTo").replace("{dest}", relUnder(root, dialog.dest) || dialog.dest) }),
+                jsxRuntime.jsxs("div", { className: "dshk-vault-srcline", children: [
+                  // 浏览器选文件（远端/手机也能用）：选中的文件按字节传给宿主落盘
+                  jsxRuntime.jsx("label", { className: "dshk-btn-cancel", children: [
+                    t("vaultImportPick"),
+                    jsxRuntime.jsx("input", {
+                      type: "file",
+                      multiple: true,
+                      style: { display: "none" },
+                      accept: dialog.lib ? undefined : ".md,.markdown",
+                      onChange: (ev) => {
+                        const files = Array.from(ev.target.files ?? []);
+                        setDialog((d) => ({ ...d, files, src: "" }));
+                      },
+                    }),
+                  ] }),
+                  dialog.files.length > 0
+                    ? jsxRuntime.jsx("span", { className: "dshk-vault-modalline", children: dialog.files.map((f) => f.name).join("、") })
+                    : null,
+                ] }),
+                dialog.files.length === 0
+                  ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                      // 本机绝对路径直拷：宿主读盘，笔记页连带把页内引用的本地图片收进附件
+                      jsxRuntime.jsx("input", {
+                        className: "dshk-vault-modalinput",
+                        value: dialog.src,
+                        spellCheck: false,
+                        placeholder: t("vaultImportPathPh"),
+                        onChange: (ev) => setDialog((d) => ({ ...d, src: ev.target.value, name: "" })),
+                      }),
+                      jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("vaultImportName") }),
+                      jsxRuntime.jsx("input", {
+                        className: "dshk-vault-modalinput",
+                        value: dialog.name,
+                        spellCheck: false,
+                        placeholder: t("vaultImportName"),
+                        onChange: (ev) => setDialog((d) => ({ ...d, name: ev.target.value })),
+                      }),
+                    ] })
+                  : null,
+                // 资料库那一支撞名一律自动加序号（文献没有"覆盖"语义）——策略项只给笔记页
+                dialog.lib
+                  ? jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("vaultLibAutoName") })
+                  : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                      jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("vaultConflict") }),
+                      ...conflictRadios(dialog.conflict, (v) => setDialog((d) => ({ ...d, conflict: v }))),
+                    ] }),
+                jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setDialog(null), children: t("cancel") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-save", disabled: busy, onClick: () => void submitImport(), children: t("vaultImportTitle") }),
+                ] }),
+              ],
+            })
+          : null,
+        dialog !== null && dialog.kind === "delete"
+          ? jsxRuntime.jsxs(VaultDialog, {
+              title: dialog.entry.dir === true
+                ? t("vaultConfirmDeleteDir").replace("{name}", dialog.entry.name).replace("{n}", String(doomedCount(dialog.entry)))
+                : t("confirmDelete").replace("{name}", dialog.entry.name),
+              onClose: () => setDialog(null),
+              children: [
+                jsxRuntime.jsx("div", { className: "dshk-vault-modalline", title: dialog.entry.path, children: dialog.entry.path }),
+                jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("vaultRecycleHint") }),
+                jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setDialog(null), children: t("cancel") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-save", disabled: busy, onClick: () => void submitDelete(), children: t("treeDelete") }),
+                ] }),
+              ],
             })
           : null,
         toast !== "" ? jsxRuntime.jsx("div", { className: "dshk-vault-toast", role: "status", children: toast }) : null,

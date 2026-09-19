@@ -54,6 +54,7 @@ import { BrowserService } from './browser.ts'
 import { loadToolsModule, buildBrowserTools } from './browser-tools.ts'
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from './schedule.ts'
 import { VaultScanner, defaultVaultRoot } from './vault.ts'
+import { createEntry, renameEntry, moveEntry, importEntry, deleteEntries, parseConflict } from './vault-fs.ts'
 import { sameOrigin } from './web-guard.ts'
 import { recycleDelete } from './recycle.ts'
 import { registerUsageRoutes } from './usage.ts'
@@ -2458,10 +2459,10 @@ export async function apply(ctx: KitCtx): Promise<void> {
         }),
       )
 
-      // ── 知识库（vault，src/vault.ts）——只读端点 ──
-      // vaultRoot 是设置卡配置的绝对目录，在工作区外；读走 read/raw 端点，
-      // 这里只出索引 / 单页 mtime / 全文搜索三个查询端点。写入全部退役：
-      // 页面由 agent 文件工具或外部编辑器写（文件即接口），插件面板纯只读。
+      // ── 知识库（vault，src/vault.ts + src/vault-fs.ts）──
+      // vaultRoot 是设置卡配置的绝对目录，在工作区外；读端点出索引 / 单页 mtime /
+      // 全文搜索，写端点（src/vault-fs.ts）只管目录级文件管理：新建 / 重命名 /
+      // 移动 / 导入 / 删除。页面正文的写入仍归 agent 文件工具与外部编辑器。
       // 全部端点在 vaultRoot 未配置/不存在时回 400 vault-not-configured。
       const disposeVault: Array<() => void> = []
       const vaultRoute = (
@@ -2533,6 +2534,83 @@ export async function apply(ctx: KitCtx): Promise<void> {
           .search(q, 20)
           .then((result) => vaultJson(res, 200, result ?? { root, results: [] }))
           .catch((error) => vaultJson(res, 500, { error: error instanceof Error ? error.message : String(error) }))
+      })
+
+      // ── 文件管理端点（src/vault-fs.ts）──
+      // 面板树上的目录级管理：create / rename / move / import / delete。路径一律
+      // 绝对路径且必须落在 vault 根内（resolveInside 拒 `..` 段并 realpath 比包含，
+      // 挡软链与短名绕行）；撞名策略由前端选（skip/overwrite/rename），资料库那一支
+      // 固定自动加序号。笔记页改名 / 移动会顺带改写指向它的双链（目录整体搬移不改，
+      // 文件名没变解析结果就不变）；删除走回收站。导入两条来源：本机绝对路径直拷
+      // （md 页连带把页内引用的本地图片收进 attachments/）与浏览器上传的字节。
+      const vaultReadBody = (req: http.IncomingMessage, limit: number): Promise<Record<string, unknown>> =>
+        new Promise((resolve) => {
+          let raw = ''
+          req.on('data', (c) => {
+            raw += c
+            if (raw.length > limit) req.destroy()
+          })
+          req.on('end', () => {
+            try {
+              const body: unknown = JSON.parse(raw === '' ? '{}' : raw)
+              resolve(body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : {})
+            } catch {
+              resolve({})
+            }
+          })
+          req.on('error', () => resolve({}))
+        })
+      const VAULT_BODY_LIMIT = 1024 * 1024
+      /** 导入上限：base64 文本长度（≈32MB 原始字节），PDF 这类文献够用 */
+      const VAULT_IMPORT_LIMIT = 48 * 1024 * 1024
+      const vaultPost = (
+        path: string,
+        action: (body: Record<string, unknown>, root: string) => unknown,
+        limit: number = VAULT_BODY_LIMIT,
+      ) => {
+        vaultRoute(path, (req, res) => {
+          if (req.method !== 'POST') return vaultJson(res, 405, { error: 'method not allowed' })
+          if (!sameOrigin(req)) return vaultJson(res, 403, { error: 'cross-origin denied' })
+          const root = vaultGuard(res)
+          if (root === null) return
+          void vaultReadBody(req, limit).then((body) => {
+            void Promise.resolve()
+              .then(() => action(body, root))
+              .then((result) => vaultJson(res, 200, { ok: true, ...(result as object) }))
+              .catch((error) => vaultJson(res, 400, { error: error instanceof Error ? error.message : String(error) }))
+          })
+        })
+      }
+      vaultPost('/dsh-kit/vault/create', (body, root) =>
+        createEntry(root, String(body.dir ?? ''), body.name, body.kind === 'dir' ? 'dir' : 'page'),
+      )
+      vaultPost('/dsh-kit/vault/rename', async (body, root) => {
+        // 双链改写要用**操作前**的页面集合（改完名字旧页已不在索引里，判重名会走偏）
+        const index = await vaultScanner.scan()
+        return renameEntry(root, String(body.path ?? ''), body.name, index?.pages ?? [])
+      })
+      vaultPost('/dsh-kit/vault/move', async (body, root) => {
+        const index = await vaultScanner.scan()
+        return moveEntry(root, String(body.path ?? ''), String(body.dest ?? ''), parseConflict(body.conflict), index?.pages ?? [])
+      })
+      vaultPost(
+        '/dsh-kit/vault/import',
+        async (body, root) => {
+          const data = typeof body.dataBase64 === 'string' && body.dataBase64 !== '' ? Buffer.from(body.dataBase64, 'base64') : undefined
+          return importEntry(root, {
+            destAbs: String(body.dest ?? ''),
+            name: body.name,
+            fileName: typeof body.fileName === 'string' ? body.fileName : undefined,
+            srcPath: typeof body.src === 'string' ? body.src : undefined,
+            data,
+            conflict: parseConflict(body.conflict),
+          })
+        },
+        VAULT_IMPORT_LIMIT,
+      )
+      vaultPost('/dsh-kit/vault/delete', async (body, root) => {
+        const paths = Array.isArray(body.paths) ? body.paths : []
+        return deleteEntries(root, paths)
       })
 
       // ── 用量与余额（src/usage.ts）──
