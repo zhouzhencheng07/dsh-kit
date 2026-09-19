@@ -1177,6 +1177,8 @@ window.__ModuleLoader__.load({
       scPushAhead: "推送 {n} 个提交到远程",
       scPushDone: "已推送",
       scPushFail: "推送失败",
+      scPushConfirm: "推送到远程仓库？",
+      scPushForceConfirm: "推送被拒绝：远程有本地没有的新提交。以本地为准强制推送？远程上本地没有的提交将丢失！",
       scPushNoUpstream: "当前分支没有上游，首次推送前需先设置",
       scPushSetUpstream: "设置上游并推送",
       scGraph: "提交图谱",
@@ -1585,6 +1587,8 @@ window.__ModuleLoader__.load({
       scPushAhead: "Push {n} commit(s) to remote",
       scPushDone: "Pushed",
       scPushFail: "Push failed",
+      scPushConfirm: "Push to the remote repository?",
+      scPushForceConfirm: "Push rejected — the remote has commits not in local. Force push (local wins)? Commits only on the remote will be LOST!",
       scPushNoUpstream: "This branch has no upstream; set one before the first push",
       scPushSetUpstream: "Set upstream & push",
       scGraph: "Commit graph",
@@ -4323,7 +4327,8 @@ textarea.dshk-sched-input{resize:vertical}
     // 分支列表自带滚动；新建分支输入打开即聚焦，仅新建不切换时浮层保留、新分支
     // 打「新建」标记）。非 git 目录给「初始化仓库」按钮（POST /git/init，幂等）。
     // 图谱视图（⧉ 切换）见 GitGraphPanel；同步钮 = 拉取+推送（有上游）/
-    // 发布分支（无上游，push -u），失败且无上游时给「设置上游并推送」提示。
+    // 发布分支（无上游，push -u），失败且无上游时给「设置上游并推送」提示；
+    // 推送入口先 confirm 防误触，被远程 reject 后可 confirm 以本地为准 --force 覆盖。
     function GitChangesPanel({ cwd, onOpenFile }) {
       const [data, setData] = react.useState(null); // null=加载中；{available, root?, entries?}
       const [initializing, setInitializing] = react.useState(false);
@@ -4412,22 +4417,32 @@ textarea.dshk-sched-input{resize:vertical}
         if (branchOpen && branchRef.current) branchRef.current();
       }, [branchOpen, cwd]);
 
-      /** 推送（upstream=true 时设置上游再推，即首次推送）：失败按无上游给提示 */
+      /** 推送（upstream=true 时设置上游再推，即首次推送）：入口先确认防误触；
+          失败若为远程拒绝（non-fast-forward）→ 询问「以本地为准」强制重推 */
       const doPush = async (withUpstream) => {
         if (pushing || !cwd || !available) return false;
+        if (!window.confirm(t("scPushConfirm"))) return false;
         setPushing(true);
         try {
-          await kitPostJson("/dsh-kit/git/op", { cwd, op: "push", upstream: withUpstream === true });
+          const payload = { cwd, op: "push", upstream: withUpstream === true };
+          try {
+            await kitPostJson("/dsh-kit/git/op", payload);
+          } catch (error) {
+            const message = String(error?.message ?? error);
+            const rejected = /\!\s*\[rejected\]|non-fast-forward|failed to push some refs|fetch first/i.test(message);
+            const hintable = /no upstream/i.test(message) || /no configured push destination/i.test(message) || /couldn't find remote ref/i.test(message);
+            setPushHint(hintable);
+            // 远程有新提交被拒：确认后以本地为准覆盖（远程上本地没有的提交丢失）
+            if (!rejected || !window.confirm(t("scPushForceConfirm"))) {
+              flashToast(`${t("scPushFail")}：${message}`);
+              return false;
+            }
+            await kitPostJson("/dsh-kit/git/op", { ...payload, force: true });
+          }
           flashToast(t("scPushDone"));
           setPushHint(false);
           if (fetchRef.current) fetchRef.current();
           return true;
-        } catch (error) {
-          const message = String(error?.message ?? error);
-          flashToast(`${t("scPushFail")}：${message}`);
-          const hintable = /no upstream/i.test(message) || /no configured push destination/i.test(message) || /couldn't find remote ref/i.test(message);
-          setPushHint(hintable);
-          return false;
         } finally {
           setPushing(false);
         }

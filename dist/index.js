@@ -1300,7 +1300,8 @@ export async function apply(ctx) {
             //   discard(path)    = git restore -- <rel>（放弃未暂存改动，破坏性；前端已二次确认）
             //   stageAll         = git add -A
             //   commit(message, all?) = 可选先 add -A（暂存区为空时的"提交全部"），再 commit -m
-            //   push(upstream?, remote?) = git push（upstream:true → push -u <remote> <当前分支>）
+            //   push(upstream?, remote?, force?) = git push（upstream:true → push -u <remote> <当前分支>；
+            //     force:true → --force，前端在 push 被 reject 询问「以本地为准」后重推用）
             //   pull = git pull（网络操作，PUSH_TIMEOUT 长超时）
             //   branchCreate(name, switch?) = git branch <name> 或 git switch -c <name>
             //   branchSwitch(name) = git switch <name>
@@ -1388,7 +1389,9 @@ export async function apply(ctx) {
                         }
                         else if (op === 'push') {
                             // 默认沿用分支已有上游（git push）；upstream:true 显式设置上游，
-                            // remote 缺省 origin 且必须在 git remote 列表内（防乱传参）
+                            // remote 缺省 origin 且必须在 git remote 列表内（防乱传参）；
+                            // force:true → --force 无条件覆盖远程（只由前端冲突确认触发，接口本身不校验）
+                            const force = body.force === true;
                             if (body.upstream === true) {
                                 const remote = String(body?.remote ?? 'origin').trim();
                                 if (remote === '' || /[/\\]/.test(remote) || remote.includes('..')) {
@@ -1406,10 +1409,10 @@ export async function apply(ctx) {
                                     json(400, { error: '当前不在任何分支上（分离头无法设置上游）' });
                                     return;
                                 }
-                                r = await runGit(['push', '-u', remote, branch], root, PUSH_TIMEOUT);
+                                r = await runGit(force ? ['push', '--force', '-u', remote, branch] : ['push', '-u', remote, branch], root, PUSH_TIMEOUT);
                             }
                             else {
-                                r = await runGit(['push'], root, PUSH_TIMEOUT);
+                                r = await runGit(force ? ['push', '--force'] : ['push'], root, PUSH_TIMEOUT);
                             }
                         }
                         else if (op === 'pull') {
