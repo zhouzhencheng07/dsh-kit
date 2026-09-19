@@ -2453,7 +2453,7 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-sched-primary:disabled{opacity:.5;cursor:default}
 .dshk-sched-danger{appearance:none;border:1px solid color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);background:none;color:var(--dsw-alias-danger,#cd3131);font:inherit;font-size:12px;line-height:1;padding:7px 12px;border-radius:8px;cursor:pointer}
 /* 计时：悬浮小窗（运行中且不在计时页时漂浮内容区右下，坞展开自动让位）+
-   计时标签页视图 + 周网格橙色计时段（#fd7e14） */
+   计时标签页视图 */
 .dshk-sched-timerdot{width:7px;height:7px;border-radius:999px;background:var(--dsw-alias-danger,#cd3131);animation:dshk-sched-pulse 1.2s ease-in-out infinite}
 @keyframes dshk-sched-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .dshk-timer-pill{position:fixed;right:12px;bottom:14px;z-index:700;display:inline-flex;align-items:center;gap:8px;padding:7px 9px 7px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-base);box-shadow:0 6px 20px color-mix(in srgb,#000 22%,transparent);cursor:pointer;user-select:none}
@@ -2507,7 +2507,6 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-timer-picktask:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-timer-picktask .dshk-sched-tasktitle{flex:1;min-width:0}
 .dshk-timer-pickrow{display:flex;gap:6px;align-items:center;margin-top:2px}
-.dshk-sched-event.is-timed{background:color-mix(in srgb,#fd7e14 16%,transparent);color:var(--dsw-alias-label-primary);box-shadow:none;border-left:3px solid #fd7e14}
 /* 内置浏览器面板：URL 栏 + 实时画面 canvas（人机共驾） */
 /* 右侧标签页容器：内容视图占满（非激活标签 display:none 保挂载） */
 .dshk-pane-view{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
@@ -6397,14 +6396,15 @@ textarea.dshk-sched-input{resize:vertical}
 
       // 计时段上网格：事件 timeEntries 与独立计时段（orphans，
       // note=自由标题）合成显示块——停了的才显示（进行中的没形状），按 start 日
-      // 归属（与 timedMsInRange 统计口径一致）。独立段不可编辑（无 base 条目）
+      // 归属（与 timedMsInRange 统计口径一致）。与事件块同一画法：同为一条时间
+      // 记录，不另配色不另标记，散列取色按块内标题走
       const timedOcc = react.useMemo(() => {
         const segs = [];
         for (const ev of data.events) {
           (Array.isArray(ev.timeEntries) ? ev.timeEntries : []).forEach((t, i) => {
             if (t.end === undefined) return;
             // owner/index/rawStart/rawEnd/note 供段编辑弹窗寻址（entry-update/delete 同一套下标）
-            segs.push({ baseId: `${ev.id}#timed${i}`, date: t.start.slice(0, 10), startMins: timerMinsOfDT(t.start), endMins: timerMinsOfDT(t.end), allDay: false, title: ev.title, virtual: false, isTimed: true, owner: ev.id, index: i, rawStart: t.start, rawEnd: t.end, note: t.note });
+            segs.push({ baseId: `${ev.id}#timed${i}`, date: t.start.slice(0, 10), startMins: timerMinsOfDT(t.start), endMins: timerMinsOfDT(t.end), allDay: false, title: t.note || ev.title, virtual: false, isTimed: true, owner: ev.id, index: i, rawStart: t.start, rawEnd: t.end, note: t.note });
           });
         }
         (Array.isArray(data.orphans) ? data.orphans : []).forEach((o, i) => {
@@ -6526,7 +6526,7 @@ textarea.dshk-sched-input{resize:vertical}
                   ...(o.description ? [o.description] : []),
                 ];
                 return jsxRuntime.jsxs("div", {
-                  className: `dshk-sched-event${o.isTimed ? " is-timed" : ""}${o.height >= 48 ? " is-tall" : ""}${o.thin ? " is-thin" : ""}`,
+                  className: `dshk-sched-event${o.height >= 48 ? " is-tall" : ""}${o.thin ? " is-thin" : ""}`,
                   style: {
                     top: o.top,
                     height: o.height,
@@ -6537,7 +6537,7 @@ textarea.dshk-sched-input{resize:vertical}
                     // 深色主题近白），块内文字固定白，深色下就是白底白字——字体颜色不随深暗色变。
                     // 所以无 color 时按标题派一个
                     // 六色盘里的稳定色：同一门课每周同色，两个主题都压得住白字
-                    ...(!o.isTimed ? { background: o.color ?? schedFallbackColor(o.title || o.baseId) } : {}),
+                    background: o.color ?? schedFallbackColor(o.title || o.baseId),
                   },
                   title: tipParts.filter(Boolean).join("\n"),
                   onClick: (e) => {
@@ -6546,7 +6546,7 @@ textarea.dshk-sched-input{resize:vertical}
                     else openEdit(o);
                   },
                   children: [
-                    jsxRuntime.jsx("span", { className: "dshk-sched-evtitle", children: o.isTimed ? `⏱ ${o.title}` : o.title }),
+                    jsxRuntime.jsx("span", { className: "dshk-sched-evtitle", children: o.title }),
                   ],
                 }, `${o.baseId}@${o.date}`);
               }),
