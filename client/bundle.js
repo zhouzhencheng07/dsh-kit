@@ -18,7 +18,7 @@
 //   终端：底部停靠面板（快捷键亦可切换），0.1.6 起引擎为官方 webTerminals
 //   服务（PTY 归宿主），本插件只做 xterm 胶水。
 //   功能存在性（kitUi）：files/activeFile（diff 签）与
-//     vaultPages/activeVaultPage+vaultHist 是文档签与访问序；jobsOpen/schedOpen/browserOpen/vaultOpen 是功能签在场
+//     vaultPages/activeVaultPage 是文档签；jobsOpen/schedOpen/browserOpen/vaultOpen 是功能签在场
 //     （入口按钮选中态与角标读它）；activeFeature 是当前激活的功能（Esc 关哪张
 //     文档签、浏览器自动跟随的判据）。索引类视图（知识库目录树）住侧栏
 //     sidebar.workspaces 单槽，点条目开对应右栏签。
@@ -78,9 +78,8 @@ window.__ModuleLoader__.load({
     // 下面若干内容页）——一页一标签、点击切换、✕ 单关；源代码管理/提交图谱点开
     // 都往 files 标签条里加标签，同路径复用一个（重开刷新 diff/未跟踪状态）。
     // 文件树与对话区点击已改投官方右栏文件签，不进这里。diff 签非激活仍挂载
-    // （display:none）保住滚动位置，超内部上限（3）自动关最久没看的那张；
-    // vaultHist 是知识库 ← → 的访问序（与标签存在性解耦）。
-    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 }, activeFeature: null };
+    // （display:none）保住滚动位置，超内部上限（3）自动关最久没看的那张。
+    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, activeFeature: null };
     const kitUiListeners = new Set();
     function setKitUi(patch) {
       kitUi = { ...kitUi, ...patch };
@@ -159,35 +158,22 @@ window.__ModuleLoader__.load({
     // ── 知识库页标签（多开：与文件标签同款交互）──
     // 一页一标签、点击切换、✕ 单关；vaultOpen 是「知识库这一片有没有」，
     // 没有任何页标签时它承载一张「请选择页面」空签（入口点开即见右栏签，打开时
-    // 中间页面也要相应打开）。vaultHist 是 ← → 的访问序，与标签
-    // 存在性解耦：标签被关掉的历史项在关闭时剪掉。
+    // 中间页面也要相应打开）。
     /** 路径尾名（标签名用）：文件保留后缀，知识库页去掉 .md（与索引树的页名一致） */
     const baseName = (p) => String(p ?? "").split(/[\\/]/).pop() ?? "";
     const pageBasename = (p) => baseName(p).replace(/\.(md|markdown)$/i, "");
-    function vaultHistPush(h, path) {
-      const stack = (h?.stack ?? []).slice(0, (h?.idx ?? -1) + 1);
-      if (stack[stack.length - 1] !== path) stack.push(path);
-      return { stack, idx: stack.length - 1 };
-    }
-    /** 剪掉已关闭页的历史项；激活位按剪后的长度夹紧 */
-    function vaultHistPrune(h, gone) {
-      const stack = (h?.stack ?? []).filter((p) => !gone.has(p));
-      return { stack, idx: Math.max(-1, Math.min(h?.idx ?? -1, stack.length - 1)) };
-    }
-    /** 开/激活一个知识库页标签（树/搜索/反链/闲聊路径/wikilink 点击都走这里，
-     *  顺带记一条访问序） */
-    function openVaultPageTab(ui, path, hist = true) {
+    /** 开/激活一个知识库页标签（树/搜索/反链/闲聊路径/wikilink 点击都走这里） */
+    function openVaultPageTab(ui, path) {
       const pages = ui.vaultPages ?? [];
       const list = pages.includes(path) ? pages : [...pages, path];
       return {
         vaultPages: list,
         activeVaultPage: path,
         vaultOpen: true,
-        vaultHist: hist ? vaultHistPush(ui.vaultHist ?? { stack: [], idx: -1 }, path) : (ui.vaultHist ?? { stack: [], idx: -1 }),
         activeFeature: "vault",
       };
     }
-    /** 只激活（标签条点击/← → 走这里，不动访问序） */
+    /** 只激活（标签条点击走这里） */
     function activateVaultPage(ui, path) {
       if (!(ui.vaultPages ?? []).includes(path)) return {};
       return { vaultPages: ui.vaultPages, activeVaultPage: path, vaultOpen: true, activeFeature: "vault" };
@@ -201,9 +187,9 @@ window.__ModuleLoader__.load({
       const rest = pages.filter((p) => p !== path);
       // 关光了走 closeFeatureTab：清 vaultOpen 的同时把激活位顺延到别的标签
       if (rest.length === 0) {
-        return { ...closeFeatureTab(ui, "vault"), vaultPages: [], activeVaultPage: null, vaultHist: { stack: [], idx: -1 } };
+        return { ...closeFeatureTab(ui, "vault"), vaultPages: [], activeVaultPage: null };
       }
-      const patch = { vaultPages: rest, vaultHist: vaultHistPrune(ui.vaultHist ?? { stack: [], idx: -1 }, new Set([path])) };
+      const patch = { vaultPages: rest };
       if (ui.activeVaultPage === path) patch.activeVaultPage = rest[Math.min(idx, rest.length - 1)];
       return patch;
     }
@@ -219,7 +205,6 @@ window.__ModuleLoader__.load({
         patch.vaultOpen = false;
         patch.vaultPages = [];
         patch.activeVaultPage = null;
-        patch.vaultHist = { stack: [], idx: -1 };
       } else patch.browserOpen = false;
       if (ui.activeFeature === tab) {
         const remaining = [];
@@ -889,25 +874,90 @@ window.__ModuleLoader__.load({
       return /\s/u.test(relPath) ? `@"${relPath}"` : `@${relPath}`;
     }
 
-    /** M4 路由判据：path 是否落在 vault root 内。分隔符归一 + 解 ..；Windows 形
-     *  根（盘符/UNC）大小写不敏感，POSIX 根大小写敏感。path 等于根本身不算内。 */
-    function isPathInsideVaultRoot(root, path) {
-      if (typeof root !== "string" || typeof path !== "string" || root === "" || path === "") return false;
-      const norm = (p) => {
-        const out = [];
-        for (const s of p.split(/[\\/]+/)) {
-          if (s === "" || s === ".") continue;
-          if (s === "..") out.pop();
-          else out.push(s);
-        }
-        return out;
-      };
-      const win = /^[A-Za-z]:[\\/]/.test(root) || root.startsWith("\\\\");
+    /** 路径 → 分段（分隔符归一 + 解 ..）：同盘比较与取相对路径共用一处口径 */
+    function pathSegs(p) {
+      const out = [];
+      for (const s of String(p).split(/[\\/]+/)) {
+        if (s === "" || s === ".") continue;
+        if (s === "..") out.pop();
+        else out.push(s);
+      }
+      return out;
+    }
+
+    /** base 内的相对路径（`/` 分隔、无前导分隔符；base 本身回 ""）：不在 base 内回 null。
+     *  Windows 形根（盘符/UNC）大小写不敏感，POSIX 根大小写敏感。 */
+    function relUnder(base, p) {
+      if (typeof base !== "string" || typeof p !== "string" || base === "" || p === "") return null;
+      const win = /^[A-Za-z]:[\\/]/.test(base) || base.startsWith("\\\\");
       const lc = (arr) => (win ? arr.map((s) => s.toLowerCase()) : arr);
-      const r = lc(norm(root));
-      const t = lc(norm(path));
-      if (t.length <= r.length) return false;
-      return r.every((seg, i) => t[i] === seg);
+      const r = lc(pathSegs(base));
+      const t = lc(pathSegs(p));
+      if (t.length < r.length) return null;
+      if (!r.every((seg, i) => t[i] === seg)) return null;
+      return t.slice(r.length).join("/");
+    }
+
+    /** M4 路由判据：path 是否落在 vault root 内（根本身不算内） */
+    function isPathInsideVaultRoot(root, path) {
+      const rel = relUnder(root, path);
+      return rel !== null && rel !== "";
+    }
+
+    /** root 下 rel（`/` 分隔的相对路径）的绝对路径：正斜杠在 Node 侧照收，只用于
+     *  比对与请求参数（不落盘打印） */
+    function joinRelPath(root, rel) {
+      const base = String(root).replace(/[\\/]+$/, "");
+      return rel === "" ? base : `${base}/${rel}`;
+    }
+
+    /** 侧栏搜索的命中集合：宿主全文搜索给笔记页，笔记目录 / 资料库
+     *  文件 / 资料库目录只按名字匹配（PDF 没有正文索引），四类合成一张表。一把尺子：
+     *  路径命中 +8、末段名命中 +5，多词 AND；同分则按类型（能直接打开的在前）与名字排。
+     *  命中行 = {kind, path, rel, label, sub, score}——kind 决定点击动作（页开阅读面、
+     *  文件开官方文件右栏、目录换树根）。 */
+    function vaultSearchHits(query, root, pages, folders, libItems) {
+      const terms = String(query ?? "")
+        .trim()
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((s) => s !== "");
+      if (terms.length === 0) return [];
+      const nameOf = (rel) => rel.slice(rel.lastIndexOf("/") + 1);
+      const parentOf = (rel) => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "");
+      /** 名字打分：路径 +8、末段 +5；有词一个都没中回 null */
+      const scoreName = (rel) => {
+        const lower = String(rel).toLowerCase();
+        const name = nameOf(lower);
+        let score = 0;
+        for (const term of terms) {
+          const inRel = lower.includes(term);
+          const inName = name.includes(term);
+          if (!inRel && !inName) return null;
+          if (inRel) score += 8;
+          if (inName) score += 5;
+        }
+        return score;
+      };
+      const parentLabel = (rel) => parentOf(rel) || t("vaultParentRoot");
+      const rank = { page: 0, libfile: 1, dir: 2, libdir: 3 };
+      const hits = [];
+      for (const p of pages ?? []) {
+        hits.push({ kind: "page", path: p.path, rel: p.rel, label: pageBasename(p.rel), sub: p.snippet ?? "", score: p.score ?? 0 });
+      }
+      for (const rel of folders ?? []) {
+        const score = scoreName(rel);
+        if (score !== null) {
+          hits.push({ kind: "dir", path: joinRelPath(root, rel), rel, label: nameOf(rel), sub: `${t("vaultHitNote")} · ${parentLabel(rel)}`, score });
+        }
+      }
+      for (const it of libItems ?? []) {
+        const score = scoreName(it.rel);
+        if (score === null) continue;
+        hits.push({ kind: it.dir ? "libdir" : "libfile", path: it.path, rel: it.rel, label: nameOf(it.rel), sub: `${t("vaultLibrary")} · ${parentLabel(it.rel)}`, score });
+      }
+      hits.sort((a, b) => b.score - a.score || rank[a.kind] - rank[b.kind] || a.label.localeCompare(b.label, "zh"));
+      return hits.slice(0, 20);
     }
 
     /** 页内选区镜像（模块级、只由**当前激活**的页编辑器写）：左侧树的 @ 按钮在
@@ -1316,12 +1366,14 @@ window.__ModuleLoader__.load({
       vaultNotConfigured: "未配置知识库目录",
       vaultNotConfiguredHint: "在 设置 → 插件 → dsh-kit 里填写「知识库目录」后即可使用：目录内一切 md 文件即页面，支持双链跳转与全文搜索",
       vaultIndexFail: "索引失败：{error}",
-      vaultHistBack: "后退",
-      vaultHistFwd: "前进",
-      vaultSpaceAll: "全部",
-      vaultSearchPh: "搜索 wiki 笔记",
+      vaultSearchPh: "搜索笔记 / 资料库",
       vaultSearchEmpty: "无结果",
       vaultSearchFail: "搜索失败：{error}",
+      vaultHitNote: "笔记",
+      vaultLibrary: "资料库",
+      vaultParentRoot: "根目录",
+      vaultBackRoot: "返回知识库",
+      vaultOpenHere: "在此打开",
       vaultRefresh: "刷新索引与目录树",
       vaultRefreshed: "已刷新",
       vaultBinaryHint: "二进制文件，知识库不渲染",
@@ -1335,8 +1387,6 @@ window.__ModuleLoader__.load({
       vaultPickPage: "从左侧选择一页开始",
       vaultPageGone: "页面不存在（可能已被移动或删除）",
       vaultCiteUnavailable: "对话输入框未就绪（无会话或不可用）",
-      vaultFolderSearch: "搜索文件夹…",
-      vaultFolderEmpty: "没有匹配的文件夹",
       cfgTerminalShortcut: "终端快捷键",
       cfgFileTreeShortcut: "文件树快捷键",
       cfgSidebarShortcut: "左栏开合快捷键",
@@ -1718,12 +1768,14 @@ window.__ModuleLoader__.load({
       vaultNotConfigured: "Knowledge base directory not configured",
       vaultNotConfiguredHint: "Set the knowledge base directory in Settings → Plugins → dsh-kit: every md file inside becomes a page, with wiki-links and full-text search",
       vaultIndexFail: "Index failed: {error}",
-      vaultHistBack: "Back",
-      vaultHistFwd: "Forward",
-      vaultSpaceAll: "All",
-      vaultSearchPh: "Search wiki notes",
+      vaultSearchPh: "Search notes / library",
       vaultSearchEmpty: "No results",
       vaultSearchFail: "Search failed: {error}",
+      vaultHitNote: "Note",
+      vaultLibrary: "Library",
+      vaultParentRoot: "root",
+      vaultBackRoot: "Back to knowledge base",
+      vaultOpenHere: "Open here",
       vaultRefresh: "Refresh index and tree",
       vaultRefreshed: "Refreshed",
       vaultBinaryHint: "Binary file — not rendered in the vault",
@@ -1737,8 +1789,6 @@ window.__ModuleLoader__.load({
       vaultPickPage: "Pick a page on the left to start",
       vaultPageGone: "Page not found (it may have been moved or deleted)",
       vaultCiteUnavailable: "Composer is not ready (no active session)",
-      vaultFolderSearch: "Search folders…",
-      vaultFolderEmpty: "No matching folder",
     };
     /** 语言判定：只认 DSH 的 locale 权威 —— <html lang> 由 dsh-client-locale 的
      *  syncDocumentLanguage 在启动与每次切换时同步（设置→通用→语言），页面内
@@ -2043,21 +2093,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-vault-toolbar{flex:none;display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dshk-vault-tbarrow{display:flex;align-items:center;gap:6px;min-width:0}
 .dshk-vault-tbpush{margin-left:auto}
-/* 文件夹选择器（工具条那格）：搜索式自绘下拉——要能挑根目录下任意层级的文件夹，
-   原生 select 在几十上百个选项里翻不动。弹层 fixed 定位（与树行 ⋯ 菜单同款，
-   侧栏滚动裁切不影响） */
-.dshk-vault-fpickbtn{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:4px;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;padding:5px 6px;border-radius:6px;cursor:pointer}
-.dshk-vault-fpickbtn:hover{border-color:var(--dsw-alias-label-dimmed)}
-.dshk-vault-fpicklabel{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
-.dshk-vault-fpickcaret{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)}
-.dshk-vault-fpick{position:fixed;z-index:1200;display:flex;flex-direction:column;max-height:min(60vh,320px);background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18));overflow:hidden}
-.dshk-vault-fpickq{margin:6px;padding:5px 8px;font:inherit;font-size:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
-.dshk-vault-fpickq:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
-.dshk-vault-fpicklist{flex:1 1 auto;min-height:0;overflow:auto;padding:0 4px 4px;display:flex;flex-direction:column;gap:1px}
-.dshk-vault-fpickrow{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;cursor:pointer}
-.dshk-vault-fpickrow.is-cur{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-vault-fpickrow.is-on{font-weight:600;color:var(--dsw-alias-brand-primary)}
-.dshk-vault-fpickempty{padding:8px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
 .dshk-vault-search{flex:1 1 auto;min-width:0;width:100%;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 8px;border-radius:6px}
 .dshk-vault-vsearch{position:fixed;z-index:1200;max-height:min(50vh,300px);overflow:auto;padding:4px 6px;display:flex;flex-direction:column;gap:2px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18))}
 .dshk-vault-hitrow{display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:6px;cursor:pointer}
@@ -3960,7 +3995,10 @@ textarea.dshk-sched-input{resize:vertical}
       if (entry.dir && actions.onCreate) {
         items.push({ key: "nany", label: typeof actions.newLabel === "string" ? actions.newLabel : t("treeNewAny"), run: () => actions.onCreate(entry.path) });
       }
-      if (actions.onCopyPath) items.push({ key: "cr", label: t("treeCopyRel"), run: () => actions.onCopyPath(entry, true) });
+      // copyMode = "abs" 的宿主（知识库）拿绝对路径，标签一并对齐；缺省仍是相对路径
+      const copyAbs = actions.copyMode === "abs";
+      if (actions.onCopyPath) items.push({ key: "cr", label: copyAbs ? t("treeCopyAbs") : t("treeCopyRel"), run: () => actions.onCopyPath(entry, !copyAbs) });
+      if (entry.dir && actions.onOpenHere) items.push({ key: "oh", label: t("vaultOpenHere"), run: () => actions.onOpenHere(entry) });
       if (actions.onRename) items.push({ key: "rn", label: t("treeRename"), run: () => actions.onRename(entry) });
       if (actions.onDelete) items.push({ key: "dl", label: t("treeDelete"), run: () => actions.onDelete(entry) });
       const height = items.length * 32 + 8;
@@ -8625,129 +8663,24 @@ textarea.dshk-sched-input{resize:vertical}
       });
     }
 
-    /** 知识库索引半边（单实例，portal 进侧栏索引宿主）：空间/目录树/搜索/建页 +
-     *  页标签编排（打开、关闭、← → 访问序）。页编辑器不在本组件——每开一页一个
-     *  VaultPagePane 经 portal 投进右栏 pane 宿主，一页一标签（多开）。 */
-    /** 知识库文件夹选择器：搜索式自绘下拉，可挑根目录下**任意层级**的文件夹
-     *  （原来那格是原生 `<select>`，只能选顶层 space，几十个目录就翻不动了）。
-     *  选项 = 全部 + index.folders（宿主扫描时收集的全部目录）；输入即过滤（按相对
-     *  路径子串，大小写不敏感），↑↓ 移动、回车选中、Esc/点外关闭。弹层 fixed 定位，
-     *  与树行 ⋯ 菜单同款（侧栏滚动裁切不影响）。 */
-    function VaultFolderPicker({ value, folders, allLabel, searchLabel, emptyLabel, onPick }) {
-      const [open, setOpen] = react.useState(false);
-      const [q, setQ] = react.useState("");
-      const [idx, setIdx] = react.useState(0);
-      const [rect, setRect] = react.useState(null);
-      const btnRef = react.useRef(null);
-      const rows = react.useMemo(() => {
-        const all = [{ rel: "", label: allLabel }].concat((folders ?? []).map((f) => ({ rel: f, label: f })));
-        const needle = q.trim().toLowerCase();
-        return needle === "" ? all : all.filter((r) => r.label.toLowerCase().includes(needle));
-      }, [q, folders, allLabel]);
-      const rowCount = rows.length;
-      const cur = Math.min(idx, Math.max(0, rowCount - 1));
-      react.useEffect(() => {
-        if (!open) return undefined;
-        const onDown = (e) => {
-          if (e.target instanceof Element && !e.target.closest(".dshk-vault-fpick") && !e.target.closest(".dshk-vault-fpickbtn")) setOpen(false);
-        };
-        document.addEventListener("pointerdown", onDown, true);
-        return () => document.removeEventListener("pointerdown", onDown, true);
-      }, [open]);
-      const pick = (rel) => {
-        setOpen(false);
-        setQ("");
-        if (rel !== value) onPick(rel);
-      };
-      return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-        jsxRuntime.jsxs("button", {
-          type: "button",
-          ref: btnRef,
-          className: "dshk-vault-fpickbtn",
-          title: value === "" ? allLabel : value,
-          onClick: () => {
-            const r = btnRef.current ? btnRef.current.getBoundingClientRect() : null;
-            setRect(r);
-            setQ("");
-            setIdx(0);
-            setOpen((v) => !v);
-          },
-          children: [
-            jsxRuntime.jsx("span", { className: "dshk-vault-fpicklabel", children: value === "" ? allLabel : value.split("/").pop() }),
-            jsxRuntime.jsx(OfficialIcon, { names: ["IconChevronDownOutline14"], glyph: "▾", className: "dshk-vault-fpickcaret" }),
-          ],
-        }),
-        open && rect
-          ? jsxRuntime.jsxs("div", {
-              className: "dshk-vault-fpick",
-              style: { left: Math.max(8, Math.min(rect.left, (window.innerWidth || 1200) - 248)), top: rect.bottom + 4, width: Math.max(rect.width, 230) },
-              children: [
-                jsxRuntime.jsx("input", {
-                  className: "dshk-vault-fpickq",
-                  value: q,
-                  autoFocus: true,
-                  spellCheck: false,
-                  placeholder: searchLabel,
-                  onChange: (e) => {
-                    setQ(e.target.value);
-                    setIdx(0);
-                  },
-                  onKeyDown: (e) => {
-                    if (e.key === "Escape") {
-                      e.preventDefault();
-                      setOpen(false);
-                    } else if (e.key === "ArrowDown") {
-                      e.preventDefault();
-                      setIdx((i) => Math.min(i + 1, Math.max(0, rowCount - 1)));
-                    } else if (e.key === "ArrowUp") {
-                      e.preventDefault();
-                      setIdx((i) => Math.max(i - 1, 0));
-                    } else if (e.key === "Enter") {
-                      e.preventDefault();
-                      const row = rows[cur];
-                      if (row) pick(row.rel);
-                    }
-                  },
-                }),
-                jsxRuntime.jsx("div", {
-                  className: "dshk-vault-fpicklist",
-                  children:
-                    rowCount === 0
-                      ? jsxRuntime.jsx("div", { className: "dshk-vault-fpickempty", children: emptyLabel })
-                      : rows.map((r, i) =>
-                          jsxRuntime.jsxs(
-                            "div",
-                            {
-                              className: `dshk-vault-fpickrow${i === cur ? " is-cur" : ""}${r.rel === value ? " is-on" : ""}`,
-                              style: { paddingLeft: 8 + (r.rel === "" ? 0 : (r.rel.split("/").length - 1) * 12) },
-                              title: r.rel === "" ? allLabel : r.rel,
-                              onMouseEnter: () => setIdx(i),
-                              // mousedown 别抢输入框焦点（否则 blur 之类会把列表关掉/打字中断）
-                              onMouseDown: (e) => e.preventDefault(),
-                              onClick: () => pick(r.rel),
-                              children: [jsxRuntime.jsx(TreeFolderIcon, {}), jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: r.label })],
-                            },
-                            r.rel === "" ? "#all" : r.rel,
-                          ),
-                        ),
-                }),
-              ],
-            })
-          : null,
-      ] });
-    }
-
+    /** 知识库索引半边（单实例，portal 进侧栏索引宿主）：工具条/目录树/搜索 +
+     *  页标签编排（打开、关闭）。页编辑器不在本组件——每开一页一个
+     *  VaultPagePane 经 portal 投进右栏 pane 宿主，一页一标签（多开）。
+     *  树根默认 = 库根（vaultRoot），可在任意目录行上「在此打开」（或 Ctrl+点击）
+     *  换到该目录，树头 ← 回库根——这就是原来的空间/文件夹筛选框的替身。 */
     function VaultRootView() {
       const ui = useKitUi();
       const sideHost = useHostSlot(vaultSideSlot);
       const paneHost = useHostSlot(vaultPaneSlot);
       const [index, setIndex] = react.useState(null);
       const [indexErr, setIndexErr] = react.useState("");
-      const [space, setSpace] = react.useState(""); // '' = 全部库
+      // 面板的树根：null = 库根（vaultRoot）；非 null = 「在此打开」换到的绝对目录
+      // （只影响本组件显示，不写设置卡）
+      const [rootHere, setRootHere] = react.useState(null);
       // 目录树：path → entries|null(加载中)；expanded: path → bool
       const [treeDirs, setTreeDirs] = react.useState({});
       const [expanded, setExpanded] = react.useState({});
-      // 树行 ⋯ 菜单（条目 + 锚点矩形）——只读库只剩「复制相对路径」一项
+      // 树行 ⋯ 菜单（条目 + 锚点矩形）：复制绝对路径 / 在此打开
       const [rowMenu, setRowMenu] = react.useState(null);
       const [searchQ, setSearchQ] = react.useState("");
       const [searchRes, setSearchRes] = react.useState(null);
@@ -8764,7 +8697,10 @@ textarea.dshk-sched-input{resize:vertical}
       // root 从 index 响应取而非入参；null = 索引未就绪（加载中/未配置/失败），
       // 整页态由下方早退分支承担
       const root = index !== null && typeof index.root === "string" && index.root !== "" ? index.root : null;
-      const treeRoot = root === null ? null : root + (space === "" ? "" : "/" + space);
+      const treeRoot = rootHere ?? root;
+      // 资料库（根下 library/）：宿主给的清单只为计数与检索，树仍逐层现拉
+      const libRoot = index !== null && index.library && typeof index.library.root === "string" ? index.library.root : null;
+      const libItems = (index !== null && index.library && Array.isArray(index.library.items) ? index.library.items : []);
 
       const loadIndex = react.useCallback(async () => {
         try {
@@ -8782,14 +8718,20 @@ textarea.dshk-sched-input{resize:vertical}
       }, [loadIndex]);
       /** 单层目录重取。silent = 背景重拉：不先清空成「加载中」，失败也保留旧条目
        *  （目录被删时父层的新条目已不含它，旧条目自然够不着，不必靠清空兜底）。
-       *  非 silent = 交互路径（展开/建页后），要的就是「正在加载」与失败即空。 */
+       *  非 silent = 交互路径（展开/换根后），要的就是「正在加载」与失败即空。
+       *  资料库子树里不过滤扩展名（PDF 等文献也要看得见），笔记树只留 md。 */
       const fetchDir = react.useCallback(async (dir, silent = false) => {
         if (!silent) setTreeDirs((d) => ({ ...d, [dir]: null }));
+        const lib = libRootRef.current;
+        const all = lib !== null && relUnder(lib, dir) !== null;
         try {
           const body = await kitJson(`/dsh-kit/tree?path=${encodeURIComponent(dir)}`);
           const usable = (body.entries ?? []).filter((e) => {
-            if (e.dir) return !e.name.startsWith(".") && !["attachments", "node_modules"].includes(e.name);
-            return /\.md$/i.test(e.name);
+            if (e.name.startsWith(".")) return false;
+            // 笔记树里不再单列 library 那一格——库根下它由「资料库」那一行代表
+            if (!all && lib !== null && e.path === lib) return false;
+            if (e.dir) return all || !["attachments", "node_modules"].includes(e.name);
+            return all || /\.md$/i.test(e.name);
           });
           setTreeDirs((d) => ({ ...d, [dir]: usable }));
         } catch {
@@ -8803,6 +8745,10 @@ textarea.dshk-sched-input{resize:vertical}
       // 展开态走 ref 读：免得这个回调跟着每次展开动作重建、把背景定时器重置
       const expandedRef = react.useRef(expanded);
       expandedRef.current = expanded;
+      // 资料库根走 ref 读：fetchDir 按「这一层在不在资料库里」决定收不收非 md 文件，
+      // 但索引每次重拉都会换对象——挂进依赖会让整棵树在每次刷新后重建
+      const libRootRef = react.useRef(null);
+      libRootRef.current = libRoot;
       const reloadData = react.useCallback(async () => {
         const dirs = Object.keys(expandedRef.current).filter((d) => expandedRef.current[d] === true);
         await loadIndex();
@@ -8829,6 +8775,9 @@ textarea.dshk-sched-input{resize:vertical}
 
       // 工具条 ↻：手动刷新要看得见结果，给 toast 回执；刷新中禁用按钮防连点
       const [refreshing, setRefreshing] = react.useState(false);
+      // 搜索点到资料库目录后要滚到的那一行（见 revealLibDir / 下面的 effect）
+      const [revealPath, setRevealPath] = react.useState(null);
+      const railRef = react.useRef(null);
       const manualRefresh = react.useCallback(async () => {
         setRefreshing(true);
         try {
@@ -8839,7 +8788,7 @@ textarea.dshk-sched-input{resize:vertical}
         }
       }, [reloadData]);
 
-      // 空间切换：树状态清空并展开根层（root 未就绪时只清空，不拉树）
+      // 换根（首挂/「在此打开」/树头 ←）：树状态清空并展开根层（root 未就绪时只清空）
       react.useEffect(() => {
         setTreeDirs({});
         if (treeRoot === null) return;
@@ -8874,12 +8823,10 @@ textarea.dshk-sched-input{resize:vertical}
       const citeFromTree = (pagePath) => {
         citeVaultPageToChat(pagePath, pagePath === current ? vaultSelMirror : "", (key) => flashToast(t(key)));
       };
-      /** 树行 ⋯「复制相对路径」：库内相对路径去扩展名（= 页面名，wikilink 解析键） */
-      const copyVaultRelPath = (entry) => {
-        const rel = root !== null && entry.path.startsWith(root)
-          ? entry.path.slice(root.length).replace(/^[\\/]+/, "").replace(/\.(md|markdown)$/i, "").split("\\").join("/")
-          : entry.name;
-        void writeClipboard(rel).then((ok) => {
+      /** 树行 ⋯「复制绝对路径」：笔记页与资料库文件一律给盘上绝对路径（相对路径
+       *  的去扩展名形态是 wikilink 键，只在页面里用得上，面板不再发） */
+      const copyVaultPath = (entry) => {
+        void writeClipboard(entry.path).then((ok) => {
           if (ok) flashToast(t("treeCopied"));
         });
       };
@@ -8898,7 +8845,8 @@ textarea.dshk-sched-input{resize:vertical}
         setSearching(true);
         try {
           const body = await kitJson(`/dsh-kit/vault/search?q=${encodeURIComponent(q)}`);
-          if (seq === searchSeq.current) setSearchRes(body.results ?? []);
+          // 笔记命中来自宿主全文搜索；目录与资料库按名字匹配在本地合成（同一张表）
+          if (seq === searchSeq.current) setSearchRes(vaultSearchHits(q, root, body.results ?? [], index?.folders ?? [], libItems));
         } catch (error) {
           if (seq === searchSeq.current) setToast(`${t("vaultSearchFail")} ${String(error?.message ?? error)}`);
         }
@@ -8920,7 +8868,7 @@ textarea.dshk-sched-input{resize:vertical}
         if (searchTimer.current !== null) clearTimeout(searchTimer.current);
       }, []);
 
-      // 关闭手势长在浮层自己身上（同文件夹选择器/TreeRowMenu 契约）：点浮层与搜索框之外才关；
+      // 关闭手势长在浮层自己身上（同 TreeRowMenu 契约）：点浮层与搜索框之外才关；
       // 开着期间挂 vaultSearchOpen，KitSurfaces 的全局 Esc 让路——Esc 只关浮层，不收页签/侧栏
       react.useEffect(() => {
         if (searchRes === null) return undefined;
@@ -8942,107 +8890,157 @@ textarea.dshk-sched-input{resize:vertical}
         return () => clearTimeout(timer);
       }, [toast]);
 
+      // 树上定位：目标行要等它那层目录拉回来才在 DOM 里（treeDirs 变一次重试一次）；
+      // 找到了就滚进视野并收工
+      react.useEffect(() => {
+        if (revealPath === null) return;
+        const rail = railRef.current;
+        const row = rail === null ? null : Array.from(rail.querySelectorAll(".dshk-vault-treerow")).find((el) => el.getAttribute("title") === revealPath);
+        if (!row) return;
+        row.scrollIntoView({ block: "nearest" });
+        setRevealPath(null);
+      }, [revealPath, treeDirs]);
+
       const indexPages = index?.pages ?? [];
       /** 行 ⋯ 开关：同一颗触发钮再点一次关掉（菜单的关闭手势会跳过落在它上面的点击） */
       const openRowMenu = (anchor, entry) => {
         setRowMenu((prev) => (prev && prev.anchor === anchor ? null : { entry, rect: anchor.getBoundingClientRect(), anchor }));
       };
-      // 历史前进/后退 = 在访问序里挪位并激活对应页标签（标签还在才挪得动，
-      // 被关掉的历史项在关闭时已剪掉）
-      const hist = ui.vaultHist ?? { stack: [], idx: -1 };
-      const histGo = (toIdx) => {
-        const path = hist.stack[toIdx];
-        if (path === undefined) return;
-        setKitUi({ ...activateVaultPage(kitUi, path), vaultHist: { stack: hist.stack, idx: toIdx } });
+      /** 「在此打开」（行 ⋯ 菜单 / Ctrl+点击目录行 / 搜索点到笔记目录）：树根换成该目录；
+       *  换回库根本身即清掉覆盖。资料库那一支没有这个动作——它是文献面，不参与换根 */
+      const openHere = (dir) => {
+        setRootHere(dir === root ? null : dir);
+        setRowMenu(null);
+        setSearchRes(null);
       };
-      const histBack = () => histGo(Math.max(0, hist.idx - 1));
-      const histFwd = () => histGo(Math.min(hist.stack.length - 1, hist.idx + 1));
+      /** 搜索点到资料库目录：在树上定位——库根到父层全部展开，滚到那一行。
+       *  展开是异步拉目录，行要等 treeDirs 落地才在，所以 revealPath 由渲染后的
+       *  effect 消费（找不到就留着，下一次 treeDirs 变化再试） */
+      const revealLibDir = (dirPath) => {
+        const lib = libRootRef.current;
+        if (lib === null) return;
+        const rel = relUnder(lib, dirPath);
+        if (rel === null) return;
+        const open = { [lib]: true };
+        let cur = lib;
+        for (const seg of rel === "" ? [] : rel.split("/")) {
+          cur = `${cur}/${seg}`;
+          open[cur] = true;
+          void fetchDir(cur);
+        }
+        setExpanded((e) => ({ ...e, ...open }));
+        setRevealPath(dirPath);
+      };
+      /** 搜索结果点击：页开阅读面、资料库文件开官方文件右栏、笔记目录换树根、
+       *  资料库目录在树上定位 */
+      const openHit = (hit) => {
+        setSearchRes(null);
+        if (hit.kind === "page") openPath(hit.path);
+        else if (hit.kind === "libfile") openOfficialFile(hit.path);
+        else if (hit.kind === "libdir") revealLibDir(hit.path);
+        else openHere(hit.path);
+      };
+      /** 目录行是否有可展开的后代：笔记树看索引页前缀，资料库子树看库内清单 */
+      const dirHasChildren = (dirPath) => {
+        const lib = libRootRef.current;
+        const libRel = lib === null ? null : relUnder(lib, dirPath);
+        if (libRel !== null) return libItems.some((it) => it.rel.startsWith(libRel === "" ? "" : `${libRel}/`) && it.rel !== libRel);
+        const rel = root === null ? null : relUnder(root, dirPath);
+        if (rel === null || rel === "") return false;
+        return indexPages.some((p) => p.rel.startsWith(`${rel}/`));
+      };
       const toggleDir = (dir) => {
         const opening = expanded[dir] !== true;
         setExpanded((e) => ({ ...e, [dir]: opening }));
         if (opening) void fetchDir(dir);
       };
+      /** 树行 hover 的 `@` + `⋯`（目录行与文件行同形状；只读库没有别的写操作）。canHere
+       *  = 这一行给不给「在此打开」（只有笔记目录给，见 dirRow） */
+      const rowActs = (entry, label, canHere) =>
+        jsxRuntime.jsxs("span", {
+          className: "dshk-rowact",
+          children: [
+            // 保住选区：mousedown 默认行为会先塌掉编辑器里的选区
+            jsxRuntime.jsx("button", { type: "button", title: t("treeAt"), onMouseDown: (ev) => ev.preventDefault(), onClick: (ev) => { ev.stopPropagation(); citeFromTree(entry.path); }, children: "@" }),
+            jsxRuntime.jsx("button", {
+              type: "button",
+              title: t("treeMenu"),
+              onClick: (ev) => {
+                ev.stopPropagation();
+                openRowMenu(ev.currentTarget, { dir: entry.dir === true, name: label, path: entry.path, here: canHere === true });
+              },
+              children: "⋯",
+            }),
+          ],
+        });
+      /** 目录行：点击折叠/展开；笔记目录另给 Ctrl（⌘）+点击 = 在此打开；空目录不给展开钮
+       *  （没东西可展开，行本身保留——空目录有看得见的必要）。lib = 资料库那一支（含
+       *  「资料库」那一行本身）：那支只浏览不换根 */
+      const dirRow = (e, depth, hasChildren, lib) =>
+        jsxRuntime.jsxs(
+          "div",
+          {
+            children: [
+              jsxRuntime.jsxs("div", {
+                className: "dshk-vault-treerow",
+                style: { paddingLeft: 10 + depth * 14 },
+                title: e.path,
+                onClick: (ev) => {
+                  if (!lib && (ev.ctrlKey || ev.metaKey)) {
+                    openHere(e.path);
+                    return;
+                  }
+                  if (hasChildren) toggleDir(e.path);
+                },
+                children: [
+                  // 展开箭头与文件树同一枚（官方 IconTriangleRightFill14）
+                  jsxRuntime.jsx("span", { className: "dshk-vault-twist", children: hasChildren ? jsxRuntime.jsx(ChevronIcon, { open: expanded[e.path] === true }) : null }),
+                  jsxRuntime.jsx(TreeFolderIcon, {}),
+                  jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
+                  rowActs(e, e.name, !lib),
+                ],
+              }),
+              renderDir(e.path, depth + 1),
+            ],
+          },
+          e.path,
+        );
+      /** 文件行：笔记页进知识库阅读面；资料库文件进官方文件右栏（面板不渲染 PDF） */
+      const fileRow = (e, depth, lib) => {
+        const label = lib ? e.name : pageBasename(e.name);
+        return jsxRuntime.jsxs(
+          "div",
+          {
+            className: `dshk-vault-treerow${!lib && e.path === current ? " is-active" : ""}`,
+            style: { paddingLeft: 10 + (depth + 1) * 14 },
+            onClick: () => {
+              if (lib) openOfficialFile(e.path);
+              else openPath(e.path);
+            },
+            title: e.path,
+            children: [
+              jsxRuntime.jsx(FileTypeIcon16, { name: e.name }),
+              jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: label }),
+              rowActs(e, label, false),
+            ],
+          },
+          e.path,
+        );
+      };
       const renderDir = (dirPath, depth) => {
         if (expanded[dirPath] !== true) return null;
         const entries = treeDirs[dirPath];
         if (!entries) return jsxRuntime.jsx("div", { className: "dshk-vault-treeload", style: { paddingLeft: 10 + depth * 14 }, children: "…" }, `${dirPath}#load`);
-        return entries.map((e) => {
-          if (e.dir) {
-            // 空目录判定：vault 语义下没有后代的目录
-            // 就是空的——索引页（root 相对 rel）无一落在该目录前缀下即空，
-            // 去掉展开钮（没东西可展开），行保留（有看到空目录的必要）
-            const rel = e.path.slice(treeRoot.length).split(/[\\/]+/).filter(Boolean).join("/");
-            const prefix = space === "" ? `${rel}/` : `${space}/${rel}/`;
-            const hasPage = indexPages.some((p) => p.rel.startsWith(prefix));
-            // 目录行与页行同形状：`@` + `⋯`（复制相对路径）——只读库行上
-            // 没有别的写操作
-            return jsxRuntime.jsxs(
-              "div",
-              {
-                children: [
-                  jsxRuntime.jsxs("div", {
-                    className: "dshk-vault-treerow",
-                    style: { paddingLeft: 10 + depth * 14 },
-                    title: e.path,
-                    onClick: () => {
-                      if (hasPage) toggleDir(e.path);
-                    },
-                    children: [
-                      // 展开箭头与文件树同一枚（官方 IconTriangleRightFill14）；
-                      // 空目录没有可展开内容：只留占位，保证同层名字左缘对齐
-                      jsxRuntime.jsx("span", { className: "dshk-vault-twist", children: hasPage ? jsxRuntime.jsx(ChevronIcon, { open: expanded[e.path] === true }) : null }),
-                      jsxRuntime.jsx(TreeFolderIcon, {}),
-                      jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
-                      jsxRuntime.jsxs("span", {
-                        className: "dshk-rowact",
-                        children: [
-                          // 保住选区：mousedown 默认行为会先塌掉编辑器里的选区
-                          jsxRuntime.jsx("button", { type: "button", title: t("treeAt"), onMouseDown: (ev) => ev.preventDefault(), onClick: (ev) => { ev.stopPropagation(); citeFromTree(e.path); }, children: "@" }),
-                          jsxRuntime.jsx("button", { type: "button", title: t("treeMenu"), onClick: (ev) => { ev.stopPropagation(); openRowMenu(ev.currentTarget, { dir: true, name: e.name, path: e.path }); }, children: "⋯" }),
-                        ],
-                      }),
-                    ],
-                  }),
-                  renderDir(e.path, depth + 1),
-                ],
-              },
-              e.path,
-            );
-          }
-          // 文件行：hover 出 `@`（引用到对话）与 `⋯`（复制相对路径）——与文件树同形状
-          const label = e.name.replace(/\.(md|markdown)$/i, "");
-          return jsxRuntime.jsxs(
-            "div",
-            {
-              className: `dshk-vault-treerow${e.path === current ? " is-active" : ""}`,
-              style: { paddingLeft: 10 + (depth + 1) * 14 },
-              // 点目录条目 = 开右栏知识库签看页（索引即入口）
-              onClick: () => openPath(e.path),
-              title: e.path,
-              children: [
-                jsxRuntime.jsx(FileTypeIcon16, { name: e.name }),
-                jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: label }),
-                jsxRuntime.jsxs("span", {
-                  className: "dshk-rowact",
-                  children: [
-                    // 保住选区：mousedown 默认行为会先塌掉编辑器里的选区
-                    jsxRuntime.jsx("button", { type: "button", title: t("treeAt"), onMouseDown: (ev) => ev.preventDefault(), onClick: (ev) => { ev.stopPropagation(); citeFromTree(e.path); }, children: "@" }),
-                    jsxRuntime.jsx("button", {
-                      type: "button",
-                      title: t("treeMenu"),
-                      onClick: (ev) => {
-                        ev.stopPropagation();
-                        openRowMenu(ev.currentTarget, { dir: false, name: label, path: e.path });
-                      },
-                      children: "⋯",
-                    }),
-                  ],
-                }),
-              ],
-            },
-            e.path,
-          );
-        });
+        // 资料库子树里不过滤扩展名（文献照列，点开走官方文件右栏）
+        const lib = libRootRef.current !== null && relUnder(libRootRef.current, dirPath) !== null;
+        return entries.map((e) => (e.dir ? dirRow(e, depth, dirHasChildren(e.path), lib) : fileRow(e, depth, lib)));
+      };
+      /** 资料库那一行：库根的入口，**任何根下都在**（它挂在树体上，与当前根无关），
+       *  计数取宿主清单里的文件数，展开后才现拉每一层 */
+      const libRow = () => {
+        if (libRoot === null) return null;
+        const count = libItems.filter((it) => it.dir !== true).length;
+        return dirRow({ dir: true, name: `${t("vaultLibrary")}${count > 0 ? ` (${count})` : ""}`, path: libRoot }, 0, libItems.length > 0, true);
       };
 
       // root 未就绪的整页态：加载中 / 未配置 / 索引失败（root 就绪后的瞬时错误
@@ -9064,23 +9062,10 @@ textarea.dshk-sched-input{resize:vertical}
 
       // 工具条 + 搜索结果 + 目录树 → 侧栏索引宿主；页编辑器 → 右栏 pane 宿主。
       // 单实例双 portal：两侧各自在场才投递（侧栏关闭/右栏关签互不影响）。
-      // 工具条两行：上行导航/空间/刷新，下行搜索独占——
-      // 挤在一行时搜索框只剩半截宽，占位提示都被截掉
+      // 工具条一行：搜索框占满 + 刷新收尾（换根改在树上「在此打开」/Ctrl+点击，
+      // 前进后退已随访问序退役）
       const sideContent = jsxRuntime.jsxs("div", { className: "dshk-vault-sidewrap", children: [
         jsxRuntime.jsxs("div", { className: "dshk-vault-toolbar", children: [
-          jsxRuntime.jsxs("div", { className: "dshk-vault-tbarrow", children: [
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistBack"), title: t("vaultHistBack"), disabled: hist.idx <= 0, onClick: histBack, children: jsxRuntime.jsx(OfficialIcon, { names: ["IconChevronLeftOutline14"], glyph: "←" }) }),
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultHistFwd"), title: t("vaultHistFwd"), disabled: hist.idx >= hist.stack.length - 1, onClick: histFwd, children: jsxRuntime.jsx(OfficialIcon, { names: ["IconChevronRightOutline14"], glyph: "→" }) }),
-            jsxRuntime.jsx(VaultFolderPicker, {
-              value: space,
-              folders: index?.folders ?? [],
-              allLabel: t("vaultSpaceAll"),
-              searchLabel: t("vaultFolderSearch"),
-              emptyLabel: t("vaultFolderEmpty"),
-              onPick: setSpace,
-            }),
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn dshk-vault-tbpush", "aria-label": t("vaultRefresh"), title: t("vaultRefresh"), disabled: refreshing, onClick: () => void manualRefresh(), children: jsxRuntime.jsx(OfficialIcon, { names: ["IconRefreshOutline16", "IconRefreshOutline14"], glyph: "↻" }) }),
-          ] }),
           jsxRuntime.jsxs("div", { className: "dshk-vault-tbarrow", children: [
             jsxRuntime.jsx("input", {
               ref: searchRef,
@@ -9099,10 +9084,7 @@ textarea.dshk-sched-input{resize:vertical}
                   e.preventDefault();
                   if (searchRes !== null) {
                     const hit = searchRes[Math.min(searchIdx, Math.max(0, searchRes.length - 1))];
-                    if (hit) {
-                      setSearchRes(null);
-                      openPath(hit.path);
-                    }
+                    if (hit) openHit(hit);
                   } else if (searchQ.trim() !== "") {
                     void runSearch(searchQ);
                   }
@@ -9119,6 +9101,7 @@ textarea.dshk-sched-input{resize:vertical}
                 }
               },
             }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultRefresh"), title: t("vaultRefresh"), disabled: refreshing, onClick: () => void manualRefresh(), children: jsxRuntime.jsx(OfficialIcon, { names: ["IconRefreshOutline16", "IconRefreshOutline14"], glyph: "↻" }) }),
           ] }),
         ] }),
         searchRes !== null && searchRect
@@ -9135,15 +9118,15 @@ textarea.dshk-sched-input{resize:vertical}
                   jsxRuntime.jsxs("div", {
                     className: `dshk-vault-hitrow${i === Math.min(searchIdx, Math.max(0, searchRes.length - 1)) ? " is-cur" : ""}`,
                     onMouseEnter: () => setSearchIdx(i),
-                    // mousedown 别抢搜索框焦点（与文件夹选择器同因）
+                    // mousedown 别抢搜索框焦点（失焦会打断打字与浮层刷新）
                     onMouseDown: (e) => e.preventDefault(),
-                    onClick: () => { setSearchRes(null); openPath(r.path); },
+                    onClick: () => openHit(r),
                     children: [
-                      // 显示名 = rel 末段（页面名 = 文件名口径）；title 给完整 rel
-                      jsxRuntime.jsx("span", { className: "dshk-vault-hittitle", title: r.rel, children: pageBasename(r.rel) }),
-                      jsxRuntime.jsx("span", { className: "dshk-vault-hitsnippet", children: r.snippet }),
+                      // 显示名 = 末段（笔记页去 .md）；title 给完整 rel，点开按 kind 分流
+                      jsxRuntime.jsx("span", { className: "dshk-vault-hittitle", title: r.rel, children: r.label }),
+                      r.sub === "" ? null : jsxRuntime.jsx("span", { className: "dshk-vault-hitsnippet", children: r.sub }),
                     ],
-                  }, r.path),
+                  }, `${r.kind}:${r.path}`),
                 ),
               ],
             })
@@ -9151,10 +9134,20 @@ textarea.dshk-sched-input{resize:vertical}
         indexErr !== ""
           ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: indexErr === "vault-not-configured" ? t("vaultNotConfiguredHint") : `${t("vaultIndexFail")} ${indexErr}` })
           : null,
-        jsxRuntime.jsxs("div", { className: "dshk-vault-rail", children: [
-          jsxRuntime.jsx("div", { className: "dshk-vault-railhead", children:
-            jsxRuntime.jsx("span", { className: "dshk-vault-railtitle", title: treeRoot, children: space === "" ? t("vaultSpaceAll") : space }),
-          }),
+        // 树头：当前根（库根 = 知识库；换了根就显示库内相对路径）+ 回库根的 ←
+        // （换根只在树上做，筛选框已退役）
+        jsxRuntime.jsxs("div", { className: "dshk-vault-rail", ref: railRef, children: [
+          jsxRuntime.jsxs("div", { className: "dshk-vault-railhead", children: [
+            rootHere === null
+              ? null
+              : jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultBackRoot"), title: t("vaultBackRoot"), onClick: () => setRootHere(null), children: jsxRuntime.jsx(OfficialIcon, { names: ["IconChevronLeftOutline14"], glyph: "←" }) }),
+            jsxRuntime.jsx("span", {
+              className: "dshk-vault-railtitle",
+              title: treeRoot ?? "",
+              children: rootHere === null ? t("vaultTitle") : relUnder(root, rootHere) || rootHere,
+            }),
+          ] }),
+          libRow(),
           renderDir(treeRoot, 0),
         ] }),
         rowMenu
@@ -9162,9 +9155,11 @@ textarea.dshk-sched-input{resize:vertical}
               entry: rowMenu.entry,
               rect: rowMenu.rect,
               anchor: rowMenu.anchor,
-              // 行 ⋯ 只剩「复制相对路径」：只读库没有建页/改名/删除
+              // 行 ⋯：复制绝对路径；笔记目录多一项「在此打开」（= 换树根；资料库那支不给）
               actions: {
-                onCopyPath: copyVaultRelPath,
+                onCopyPath: copyVaultPath,
+                copyMode: "abs",
+                onOpenHere: rowMenu.entry.here === true ? (entry) => openHere(entry.path) : undefined,
               },
               onClose: () => setRowMenu(null),
             })

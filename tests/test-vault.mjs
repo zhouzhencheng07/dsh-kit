@@ -36,19 +36,49 @@ fs.writeFileSync(path.join(root, 'git.md'), '# git\n忽略 [[ disappeared ]]')
 fs.writeFileSync(path.join(root, '根级页.md'), '# 根级页\n\nuv 也在检索池里')
 fs.writeFileSync(path.join(root, 'attachments', '忽略.md'), '# 不进索引')
 fs.writeFileSync(path.join(root, '.hidden', 'x.md'), '# 不进索引')
+// 资料库：根下 library/ 整棵子树归它（任意格式，连 md 也只当文献）
+fs.mkdirSync(path.join(root, 'library', '大学', '大三上'), { recursive: true })
+fs.writeFileSync(path.join(root, 'library', '大学', '讲义.pdf'), '%PDF-1.4 假内容')
+fs.writeFileSync(path.join(root, 'library', '笔记.md'), '# 库里的 md 也算文献')
 let scanner = new VaultScanner(() => root)
 let index
 
 await test('scan：md 建页、跳过 attachments/点前缀、space 归属正确、无 title 字段', async () => {
   index = await scanner.scan()
   assert.equal(index.root, fs.realpathSync(root))
-  // folders = 全部目录（含各级），选择器据此可挑任意层级；空目录也在
+  // folders = 笔记目录（含各级）；资料库子树不算笔记目录
   assert.deepEqual(index.folders, ['Python'])
   assert.equal(index.pages.length, 4)
   const base = index.pages.find((p) => p.rel === 'Python/基础')
   assert.equal(base.space, 'Python')
   assert.equal(base.title, undefined)
   assert.deepEqual(base.links, ['工具链', 'AGENTS 常见问题'])
+})
+
+await test('scan：根下 library/ 归资料库（目录 + 任意格式文件都进清单）', async () => {
+  const lib = index.library
+  assert.ok(lib, 'library/ 存在时清单不为 null')
+  assert.equal(lib.root, path.join(fs.realpathSync(root), 'library'))
+  assert.deepEqual(
+    lib.items.map((it) => `${it.dir ? 'd' : 'f'}:${it.rel}`).sort(),
+    ['d:大学', 'd:大学/大三上', 'f:大学/讲义.pdf', 'f:笔记.md'],
+  )
+  assert.ok(lib.items.every((it) => path.isAbsolute(it.path)))
+})
+
+await test('scan：资料库不进页面索引与检索池（文献由面板按名字匹配）', async () => {
+  assert.ok(index.pages.every((p) => !p.rel.startsWith('library')))
+  assert.ok(!index.folders.includes('library'))
+  const hit = await scanner.search('讲义', 10)
+  assert.equal(hit.results.length, 0)
+})
+
+await test('scan：没有 library/ 时清单为 null（前端据此决定资料库那一行在不在）', async () => {
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'dshk-vault-bare-'))
+  fs.writeFileSync(path.join(bare, 'a.md'), '# a')
+  const idx = await new VaultScanner(() => bare).scan()
+  assert.equal(idx.library, null)
+  fs.rmSync(bare, { recursive: true, force: true })
 })
 
 await test('scan：mtime 缓存命中不重读（改缓存时间戳探测）', async () => {
