@@ -559,10 +559,10 @@ export async function apply(ctx: KitCtx): Promise<void> {
   })
 
   // ── 日程模块（src/schedule.ts）：结构化日程/待办/计时 ──
-  //   agent 工具恒开（schedule_query 只给日/周/月汇总；schedule_create 只建、
-  //   schedule_delete 按 id 删，不给 update）——工具面锁死；舞台日程签、侧栏
-  //   待办索引与输入区计时芯片在 client/bundle.js 挂各自槽位；
-  //   HTTP 端点在下方 webServer 注入块注册。
+  //   agent 工具恒开（schedule_query 日/周/月汇总、schedule_create 建、
+  //   schedule_update 三态改（null=清空、skip 跳过重复系列的一次）、
+  //   schedule_delete 按 id 删整个系列）；日程签与输入区计时芯片在
+  //   client/bundle.js 挂各自槽位；HTTP 端点在下方 webServer 注入块注册。
   // 日程存储固定 $DSH_HOME/dsh-kit/schedule/（一条一文件），与知识库（vaultRoot）无关，
   // 无配置门槛
   const scheduleStore = syncScheduleStore()
@@ -2331,10 +2331,12 @@ export async function apply(ctx: KitCtx): Promise<void> {
       })
 
       // ── 日程端点：/dsh-kit/schedule/*（src/schedule.ts 单例 store）──
-      //   GET  data?from&to → { events(raw 全量), occurrences(区间展开), runningTimer }
+      //   GET  data?from&to → { events(raw 全量), occurrences(区间展开,带 endDate/state), runningTimer }
       //   GET  timer → { runningTimer }；GET stats?scope&date → 统计
       //   POST create / update / delete / done / timer-start / timer-stop /
       //        entry-update / entry-delete（计时段改/删，owner 缺省=独立段）
+      //   update 是三态 patch：字段传 null = 清空（due→无期限、location/description→清、
+      //   start/end→改待办、completedAt→取消完成），skip:[日期] = 跳过重复系列的一次；
       //   重复展开只在宿主做（客户端只渲染 occurrence）；个人规模 raw 全量直发。
       //   变更类端点 sameOrigin 门控同 upload。
       const schedJson = (res: http.ServerResponse, code: number, obj: unknown) => {

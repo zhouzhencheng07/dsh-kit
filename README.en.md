@@ -31,9 +31,12 @@ slot; the conversation column stays put.
   against it), branch switch/create/delete, ↑↓ sync (pull then push), commit graph;
   one-click repo init for non-git directories
 - **Schedule** (entry from the right-dock start page and the task card; no composer
-  toggle and no dedicated shortcut): todos on the left, weekly grid + stats on the
-  right; the agent gets read-only `schedule_query` and `schedule_create`; data is
-  stored in `$DSH_HOME/dsh-kit/schedule.json`
+  toggle and no dedicated shortcut): a task list (3-day / week / all scopes)
+  on the left, weekly grid + stats on the right; block colors encode state only
+  (upcoming orange / running green / past blue / overdue red); recurring series
+  support "skip this one"; the agent gets `schedule_query`, `schedule_create`,
+  `schedule_update` and `schedule_delete`; data is stored one-entry-per-file under
+  `$DSH_HOME/dsh-kit/schedule/` (`events/` + `entries/` + `timer.json`)
 - **Knowledge base** (composer-row toggle / **Ctrl+Alt+K**, off by default): ready out
   of the box (data-directory `dsh-kit\vault`, configurable absolute path) — a one-row search
   plus a tree on the left, pages read as document tabs inside the right-dock **Knowledge

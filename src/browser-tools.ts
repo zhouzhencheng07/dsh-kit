@@ -57,6 +57,8 @@ export interface DefineToolOptions {
     render: (args: unknown, value: any) => Array<Record<string, unknown>>
   }
   timeoutMs?: number
+  /** 原生呈现卡（宿主 dsh-tools 同名约定）：工具调用行的标题/类别，纯函数只读 args */
+  presentCall?: (args: any) => { card: 'generic'; title: string; kind?: string; rawInput?: unknown } | undefined
   execute: (args: any, exec?: ToolExec) => Promise<unknown>
 }
 
