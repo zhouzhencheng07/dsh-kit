@@ -2,15 +2,20 @@
 //
 // 职责：vendored playwright-core（host-vendor/，钉 1.62.1）驱动系统 Edge（channel
 // 方式，失败退 executablePath 探测链），管理持久化上下文（专用 profile，登录态跨
-// 会话保留）、页面集（agent 活动页 / 面板观察页双指针，见 _viewId 注释）、帧流中继；
-// 对工具层（browser-tools.ts）与面板 ws（index.ts）提供同一套操作面。TS 源码（tsc
-// 构建出 dist 运行）、零运行时依赖声明；ws 服务器与 node-pty 同款多锚点解析在
-// index.ts 完成，这里不重复。
+// 会话保留）、**按分区（scope）隔离的页面集**（每分区一套 agent 活动页 / 面板观察页
+// 双指针，见 _s() 注释）、帧流中继；对工具层（browser-tools.ts）与面板 ws（index.ts）
+// 提供同一套操作面。TS 源码（tsc 构建出 dist 运行）、零运行时依赖声明；ws 服务器与
+// node-pty 同款多锚点解析在 index.ts 完成，这里不重复。
 //
+// 分区语义（scope = 调用方会话 id，见 normalizeScope）：
+//   浏览器实例与 profile **全局共享**（cookie/localStorage/登录态就一份），页集与指针
+//   按分区各一份——不同对话各用各的标签页，互不抢页。分区空闲（无观察者 + 10 分钟无
+//   操作）只收该分区的页；全局无页无观察者且空闲才关整个实例（登录态在 profile 里，
+//   重开无损）。
 // 生命周期语义：
 //   懒启动（首次工具调用/面板 watch 时 launchPersistentContext）；
-//   引用计数 + 空闲 10 分钟自动 close（登录态在专用 profile 里，重开无损）；
-//   插件 dispose 兜底 close；启动时按 pidfile 清理上次异常退出的孤儿实例。
+//   引用计数 + 空闲 10 分钟自动 close；插件 dispose 兜底 close；启动时按 pidfile
+//   清理上次异常退出的孤儿实例。
 // 安全边界：
 //   专用 profile 目录（$DSH_HOME/dsh-kit/browser-profile），绝不指向用户日常配置；
 //   URL 白名单 http/https（file:// 拒绝）；snapshot 8KB / eval 64KB / 帧 1600px 限长。
@@ -71,6 +76,10 @@ type PwPage = {
   on(event: 'dialog', cb: (dialog: PwDialog) => void): void
   viewportSize(): { width: number; height: number }
   setViewportSize(size: { width: number; height: number }): Promise<void>
+  /** 弹出这页的打开者（target=_blank 弹窗有；newPage 建的页没有）——弹窗按打开者归
+   *  分区。**客户端实现是 async 的**（coreBundle Page.opener），必须 await。 */
+  opener?(): Promise<PwPage | null> | PwPage | null
+  isClosed(): boolean
   keyboard: { press(key: string): Promise<void>; insertText(text: string): Promise<void> }
   mouse: {
     move(x: number, y: number): Promise<void>
@@ -79,6 +88,8 @@ type PwPage = {
     wheel(dx: number, dy: number): Promise<void>
   }
   __dshTabId?: number
+  /** 归属分区（会话 id）：弹窗靠打开者这枚标记归到同一分区 */
+  __dshScope?: string
 }
 
 interface PwCdpFramePayload {
@@ -113,12 +124,16 @@ interface PwModule {
   }
 }
 
-/** 事件总线负载（index.ts 的 ws state/event 转发据此成型） */
+/** 事件总线负载（index.ts 的 ws state/event 转发据此成型）。
+ *  'state' = 全局（可用性/启动中）——每条连接据此刷新自己分区的 state；
+ *  'scope' = 某分区的页集/指针变了——只发给该分区的连接；
+ *  'closed' = 整个上下文收摊（所有分区）。 */
 export type BrowserEvent =
   | { kind: 'state' }
+  | { kind: 'scope'; scope: string }
   | { kind: 'closed' }
-  | { kind: 'navigated'; tabId: number; url: string; title: string }
-  | { kind: 'crashed'; tabId: number }
+  | { kind: 'navigated'; scope: string; tabId: number; url: string; title: string }
+  | { kind: 'crashed'; scope: string; tabId: number }
 
 /** act 工具参数的宿主侧契约（browser-tools 校验后原样传入）。
  *  ref=快照 [ref=eN] 回填（aria-ref 引擎解析，可穿透 iframe）；dx/dy=scroll 无
@@ -162,6 +177,33 @@ const SNAPSHOT_MIN = 200
 const SNAPSHOT_MAX = 32 * 1024
 const EVAL_CAP = 64 * 1024
 const LAUNCH_TIMEOUT = 30000
+
+/** 认不出调用方会话时的分区（无 agent 的工具调用、面板还没拿到会话 id） */
+export const DEFAULT_SCOPE = 'default'
+
+/** 分区键归一：非空字符串原样，其它（undefined/null/空串）落 DEFAULT_SCOPE */
+export function normalizeScope(raw: unknown): string {
+  const s = typeof raw === 'string' ? raw.trim() : ''
+  return s === '' ? DEFAULT_SCOPE : s
+}
+
+/** 一个分区的全部可变状态（浏览器实例与 profile 不在这里——那是全局共享的） */
+interface ScopeState {
+  pages: Map<number, PwPage>
+  titles: Map<number, string>
+  dialogs: Map<number, Array<{ type: string; message: string; at: number }>>
+  /** agent 默认目标页 */
+  activeId: number | null
+  /** 面板观察页：帧流、人机共驾输入、面板 URL 栏都作用于它 */
+  viewId: number | null
+  /** 面板帧流订阅数（保活） */
+  watchers: number
+  stream: { cdp: PwCdpSession; tabId: number } | null
+  onFrame: ((data: string, metadata: unknown) => void) | undefined
+  lastActivity: number
+  /** 人手高频输入与 agent 工具动作共用一页，必须顺序派发 */
+  inputQueue: Promise<void>
+}
 
 /** 载入 vendored playwright-core（CJS 入口 index.js）。失败返回 null（能力整体不可用）。 */
 function loadPlaywright(): PwModule | null {
@@ -280,26 +322,17 @@ export class BrowserService {
   private _context: PwContext | null
   private _launchError: string | null
   private _launching: Promise<{ ok: true } | { ok: false; error: string }> | null
-  private _pages: Map<number, PwPage>
-  private _titles: Map<number, string>
-  /** 每页 JS 对话框环形缓冲（cap 5）：act/navigate 结果 drain 带回，未 drain 的
-   *  靠 cap 兜底不泄漏 */
-  private _dialogs: Map<number, Array<{ type: string; message: string; at: number }>>
+  /** 分区表：会话 id → 页集与指针。空的（无页无观察者）分区随手删，不长期占位 */
+  private _scopes: Map<string, ScopeState>
+  /** 启动时上下文里已有的页：不预设分区，谁第一个要页谁认领（见 _claimIdlePage） */
+  private _unclaimed: PwPage[]
+  /** newPage 与 'page' 事件之间的分区交接（事件先于 resolve 到达时靠它认领归属） */
+  private _pendingScope: string | null
   private _nextId: number
-  private _activeId: number | null
-  /** 面板观察页：帧流、人机共驾输入、面板 URL 栏都作用于它；agent 的默认目标页是
-   *  _activeId。两者分离（人看 A 页、agent 干 B 页互不干扰）。观察页跟随 agent 是
-   *  恒定语义（浏览器就该与 agent 同步），保守跟随：只有"状态改变"类
-   *  agent 操作（navigate/act/新页）才拽画面，snapshot/截图/eval 等观察类不打扰。 */
-  private _viewId: number | null
   private _listeners: Set<(evt: BrowserEvent) => void>
   private _lastActivity: number
   private _idleTimer: NodeJS.Timeout | null
-  private _watchers: number
-  private _stream: { cdp: PwCdpSession; tabId: number } | null
   private _disposed: boolean
-  private _inputQueue: Promise<void>
-  private _onFrame: ((data: string, metadata: unknown) => void) | undefined
 
   constructor({ log = () => {} }: { log?: (msg: string) => void } = {}) {
     this._log = log
@@ -307,19 +340,14 @@ export class BrowserService {
     this._context = null
     this._launchError = null
     this._launching = null
-    this._pages = new Map() // tabId → Page
-    this._titles = new Map() // tabId → title
-    this._dialogs = new Map() // tabId → 对话框记录环形缓冲
+    this._scopes = new Map()
+    this._unclaimed = []
+    this._pendingScope = null
     this._nextId = 1
-    this._activeId = null
-    this._viewId = null
     this._listeners = new Set()
     this._lastActivity = Date.now()
     this._idleTimer = null
-    this._watchers = 0 // 面板帧流订阅数（保活）
-    this._stream = null // { cdp, tabId }
     this._disposed = false
-    this._inputQueue = Promise.resolve()
     if (this._pw) this._startIdleTimer()
   }
 
@@ -347,21 +375,82 @@ export class BrowserService {
     }
   }
 
-  private _touch(): void {
-    this._lastActivity = Date.now()
+  /** 取（必要时建）分区状态。分区键由调用方给（工具 = 会话 id，面板 = 连接声明的会话）。 */
+  private _s(scope: string): ScopeState {
+    const key = normalizeScope(scope)
+    let s = this._scopes.get(key)
+    if (!s) {
+      s = {
+        pages: new Map(),
+        titles: new Map(),
+        dialogs: new Map(),
+        activeId: null,
+        viewId: null,
+        watchers: 0,
+        stream: null,
+        onFrame: undefined,
+        lastActivity: Date.now(),
+        inputQueue: Promise.resolve(),
+      }
+      this._scopes.set(key, s)
+    }
+    return s
+  }
+
+  /** 分区没页、没观察者、没帧流就删掉它的记录（分区表不长期堆空壳） */
+  private _dropIdleScope(scope: string): void {
+    const s = this._scopes.get(scope)
+    if (s && s.pages.size === 0 && s.watchers === 0 && s.stream === null) this._scopes.delete(scope)
+  }
+
+  private _touch(scope?: string): void {
+    const now = Date.now()
+    this._lastActivity = now
+    if (scope !== undefined) this._s(scope).lastActivity = now
+  }
+
+  private _watchersTotal(): number {
+    let n = 0
+    for (const s of this._scopes.values()) n += s.watchers
+    return n
+  }
+
+  private _pagesTotal(): number {
+    let n = 0
+    for (const s of this._scopes.values()) n += s.pages.size
+    return n
   }
 
   private _startIdleTimer(): void {
     if (this._idleTimer) return
     this._idleTimer = setInterval(() => {
       if (this._disposed) return
-      const idleFor = Date.now() - this._lastActivity
-      if (this._context && this._watchers === 0 && idleFor > IDLE_CLOSE_MS) {
+      const now = Date.now()
+      // 分区级回收：没人看且十分钟没动过的对话，只收它自己的页（别的对话不受影响）
+      for (const [key, s] of [...this._scopes]) {
+        if (s.watchers > 0 || s.pages.size === 0 || now - s.lastActivity <= IDLE_CLOSE_MS) continue
+        this._log(`browser: 分区空闲超时，收起该对话的 ${s.pages.size} 页`)
+        void this._closeScopePages(key, s)
+      }
+      if (this._context && this._watchersTotal() === 0 && this._pagesTotal() === 0 && now - this._lastActivity > IDLE_CLOSE_MS) {
         this._log('browser: 空闲超时，自动关闭（登录态保留在专用 profile）')
         void this._closeContext()
       }
     }, IDLE_TICK_MS)
     this._idleTimer.unref?.()
+  }
+
+  /** 收掉一个分区的全部页（空闲回收；不碰其它分区，也不关实例——实例的关由空闲 tick 判） */
+  private async _closeScopePages(scope: string, s: ScopeState): Promise<void> {
+    for (const page of [...s.pages.values()]) {
+      try {
+        await page.close()
+      } catch {
+        // 已关/崩：后面的清理照走
+      }
+    }
+    this._dropIdleScope(scope)
+    this._emit({ kind: 'scope', scope })
   }
 
   /** 启动前清理上次异常留下的孤儿实例（pidfile 信任 + 进程名核验） */
@@ -479,11 +568,8 @@ export class BrowserService {
     this._launchError = null
     context.on('close', () => {
       this._context = null
-      this._pages.clear()
-      this._titles.clear()
-      this._dialogs.clear()
-      this._activeId = null
-      this._stream = null
+      this._scopes.clear()
+      this._unclaimed = []
       this._emit({ kind: 'closed' })
     })
     // pidfile（孤儿防护，尽力而为）
@@ -492,50 +578,100 @@ export class BrowserService {
       const pid = browser && typeof browser.process === 'function' ? browser.process()?.pid : null
       if (pid) fs.writeFileSync(path.join(userDataDir, '.pid'), String(pid))
     } catch {}
-    // 既有页纳入管理（persistent context 可能带回上次会话的页）
-    for (const page of context.pages()) this._adopt(page)
-    context.on('page', (page) => this._adopt(page))
-    await this.ensurePage()
+    // 上下文自带的页（persistent context 起来就有一页 about:blank，硬杀残留还会带回旧页）
+    // 不预设分区，谁第一个要页谁认领；不认领就一直挂着，实例收摊时一起没
+    this._unclaimed = context.pages().slice()
+    context.on('page', (page) => {
+      // 弹窗（target=_blank）按打开者归分区；newPage 建的页靠 _pendingScope 交接。
+      // opener() 是 async（coreBundle 客户端实现），只能异步读——已被显式路径纳管的页
+      // 直接跳过（_adopt 认 page 上的分区标记，晚到的异步分支不会把它搬到别处）
+      const registered = page.__dshScope
+      if (registered !== undefined) {
+        this._adopt(page, registered)
+        return
+      }
+      const pending = this._pendingScope
+      void (async () => {
+        let openerScope: string | null = null
+        try {
+          const opener = page.opener ? await page.opener() : null
+          openerScope = opener?.__dshScope ?? null
+        } catch {
+          // opener 读取失败按无打开者处理（落 pending/兜底分区）
+        }
+        if (page.__dshTabId !== undefined) return
+        const scope = openerScope ?? pending ?? DEFAULT_SCOPE
+        if (openerScope === null && pending !== null && this._pendingScope === pending) this._pendingScope = null
+        this._adopt(page, scope)
+      })()
+    })
     this._log('browser: 已启动（headless，专用 profile）')
     return { ok: true }
   }
 
-  /** 纳管一页（幂等）：缓存标题、监听导航与崩溃；返回 tabId */
-  private _adopt(page: PwPage): number {
+  /** 认领上下文自带的一页（首个要页的分区拿到它，省掉一个空白页签） */
+  private _claimIdlePage(scope: string): PwPage | null {
+    while (this._unclaimed.length > 0) {
+      const page = this._unclaimed.shift()!
+      if (page.isClosed?.() === true) continue
+      this._adopt(page, scope)
+      return page
+    }
+    return null
+  }
+
+  /** 给分区开一页（优先认领自带页，否则 newPage）——调用后该页是本分区活动页 */
+  private async _openPage(scope: string): Promise<PwPage> {
+    const claimed = this._claimIdlePage(scope)
+    if (claimed) return claimed
+    // 'page' 事件通常先于 newPage 的 resolve 到达并据此认领；没到就这里兜底
+    this._pendingScope = scope
+    const page = await this._context!.newPage()
+    if (this._pendingScope === scope) this._pendingScope = null
+    if (page.__dshTabId === undefined) this._adopt(page, scope)
+    return page
+  }
+
+  /** 纳管一页（幂等）：归属分区、缓存标题、监听导航与崩溃；返回 tabId。
+   *  分区以 page 上的标记为准（晚到的 'page' 事件分支带错 scope 也不会把页搬走）。 */
+  private _adopt(page: PwPage, scope: string): number {
+    const key = normalizeScope(page.__dshScope ?? scope)
+    const s = this._s(key)
+    page.__dshScope = key
     if (page.__dshTabId !== undefined) {
-      // 已纳管（newPage 与 'page' 事件都会走到这里）：提升为 agent 活动页，
+      // 已纳管（newPage 与 'page' 事件都会走到这里）：提升为本分区活动页，
       // 观察页恒跟随（浏览器与 agent 同步）
-      this._activeId = page.__dshTabId
-      this._setView(page.__dshTabId)
+      s.activeId = page.__dshTabId
+      this._setView(key, page.__dshTabId)
       return page.__dshTabId
     }
     const tabId = this._nextId++
-    this._pages.set(tabId, page)
-    this._activeId = tabId
+    s.pages.set(tabId, page)
+    s.activeId = tabId
     page.__dshTabId = tabId
-    this._setView(tabId)
+    this._setView(key, tabId)
     page.title().then((t) => {
-      this._titles.set(tabId, t)
-      this._emit({ kind: 'navigated', tabId, url: page.url(), title: t })
+      s.titles.set(tabId, t)
+      this._emit({ kind: 'navigated', scope: key, tabId, url: page.url(), title: t })
     }).catch(() => {})
     page.on('framenavigated', (frame) => {
       if (frame !== page.mainFrame()) return
       const id = page.__dshTabId
       if (id === undefined) return
       page.title().then((t) => {
-        this._titles.set(id, t)
+        s.titles.set(id, t)
       }).catch(() => {})
-      this._touch()
-      this._emit({ kind: 'navigated', tabId: id, url: page.url(), title: this._titles.get(id) ?? '' })
-      this._resyncStream(id)
+      this._touch(key)
+      this._emit({ kind: 'navigated', scope: key, tabId: id, url: page.url(), title: s.titles.get(id) ?? '' })
+      this._resyncStream(key, id)
     })
     page.on('dialog', (dialog) => {
       const id = page.__dshTabId
       if (id === undefined) return
-      const list = this._dialogs.get(id) ?? []
+      const list = s.dialogs.get(id) ?? []
       list.push({ type: dialog.type(), message: dialog.message().slice(0, 120), at: Date.now() })
       if (list.length > 5) list.shift()
-      this._dialogs.set(id, list)
+      s.dialogs.set(id, list)
       // 挂了监听器后 playwright 不再自动关对话框，必须显式 dismiss（否则页面冻结
       // 等输入、后续动作全部超时）。dismiss=取消，与 playwright 无监听时的默认（自动关闭）一致，
       // 差别只在弹出事实被记录并回传
@@ -544,87 +680,95 @@ export class BrowserService {
     page.on('crash', () => {
       const id = page.__dshTabId
       if (id === undefined) return
-      this._emit({ kind: 'crashed', tabId: id })
-      this._pages.delete(id)
-      this._titles.delete(id)
-      this._pageGone(id)
+      this._emit({ kind: 'crashed', scope: key, tabId: id })
+      s.pages.delete(id)
+      s.titles.delete(id)
+      this._pageGone(key, id)
     })
     page.on('close', () => {
       const id = page.__dshTabId
       if (id === undefined) return
-      this._pages.delete(id)
-      this._titles.delete(id)
-      this._pageGone(id)
-      this._emit({ kind: 'state' })
+      s.pages.delete(id)
+      s.titles.delete(id)
+      this._pageGone(key, id)
+      this._emit({ kind: 'scope', scope: key })
     })
-    this._emit({ kind: 'state' })
+    this._emit({ kind: 'scope', scope: key })
     return tabId
   }
 
-  /** 切观察页（幂等）：帧流重挂到新页；每次都广播 state（面板页签条高亮要跟随） */
-  private _setView(tabId: number): void {
-    if (this._viewId === tabId) return
-    this._viewId = tabId
-    this._emit({ kind: 'state' })
-    void this._resyncStream(tabId)
+  /** 切本分区观察页（幂等）：帧流重挂到新页；每次都广播（面板页签条高亮要跟随） */
+  private _setView(scope: string, tabId: number): void {
+    const s = this._s(scope)
+    if (s.viewId === tabId) return
+    const prevStreamTab = s.stream?.tabId ?? null
+    s.viewId = tabId
+    this._emit({ kind: 'scope', scope })
+    if (prevStreamTab !== tabId) void this._resyncStream(scope, tabId)
   }
 
-  /** 页面消失（关闭/崩溃）后两个指针的回退：agent 活动页取剩余首页；观察页优先跟随活动页 */
-  private _pageGone(id: number): void {
-    this._dialogs.delete(id)
-    if (this._activeId === id) this._activeId = this._pages.keys().next().value ?? null
-    if (this._viewId === id) {
-      this._viewId = this._activeId ?? this._pages.keys().next().value ?? null
-      if (this._viewId !== null) void this._resyncStream(this._viewId)
+  /** 页面消失（关闭/崩溃）后本分区两个指针的回退：活动页取剩余首页；观察页优先跟随活动页 */
+  private _pageGone(scope: string, id: number): void {
+    const s = this._s(scope)
+    s.dialogs.delete(id)
+    if (s.activeId === id) s.activeId = s.pages.keys().next().value ?? null
+    if (s.viewId === id) {
+      s.viewId = s.activeId ?? s.pages.keys().next().value ?? null
+      if (s.viewId !== null) void this._resyncStream(scope, s.viewId)
     }
     // 流的宿主页没了就拆掉：CDP 会话已死，留着会让面板把最后一帧当成活画面
     // （关最后一页后面板冻结在旧视图，看起来像还在直播，误导人以为页面还在）
-    if (this._stream && this._stream.tabId === id) void this._detachStream()
+    if (s.stream && s.stream.tabId === id) void this._detachStream(scope)
+    if (s.pages.size === 0) this._dropIdleScope(scope)
   }
 
-  /** 无页则建一页（about:blank） */
-  async ensurePage(): Promise<{ ok: true; tabId?: number } | { ok: false; error: string }> {
+  /** 本分区无页则开一页（about:blank） */
+  async ensurePage(scope: string = DEFAULT_SCOPE): Promise<{ ok: true; tabId?: number } | { ok: false; error: string }> {
     const ensureResult = await this.ensure()
     if (!ensureResult.ok) return ensureResult
-    if (this._activeId === null || !this._pages.has(this._activeId)) {
-      await this._context!.newPage()
-      // newPage 触发 'page' 事件 → _adopt 设为活动页
-      if (this._activeId === null) return { ok: false, error: '页面创建失败' }
+    if (!this._context) return { ok: false, error: '浏览器未运行' }
+    const s = this._s(scope)
+    if (s.activeId === null || !s.pages.has(s.activeId)) {
+      await this._openPage(scope)
+      if (s.activeId === null) return { ok: false, error: '页面创建失败' }
     }
-    return { ok: true, tabId: this._activeId }
+    return { ok: true, tabId: s.activeId }
   }
 
-  private _page(tabId?: number | null): PwPage | null {
+  private _page(scope: string, tabId?: number | null): PwPage | null {
+    const s = this._s(scope)
     if (tabId === undefined || tabId === null) {
-      if (this._activeId === null) return null
-      return this._pages.get(this._activeId) ?? null
+      if (s.activeId === null) return null
+      return s.pages.get(s.activeId) ?? null
     }
-    return this._pages.get(Number(tabId)) ?? null
+    return s.pages.get(Number(tabId)) ?? null
   }
 
-  /** 取走 tabId 自 since 起弹出的对话框记录（取走即清，下一次动作不重复报告） */
-  private _drainDialogs(tabId: number, since: number): Array<{ type: string; message: string }> {
-    const list = this._dialogs.get(tabId)
+  /** 取走本分区 tabId 自 since 起弹出的对话框记录（取走即清，下一次动作不重复报告） */
+  private _drainDialogs(scope: string, tabId: number, since: number): Array<{ type: string; message: string }> {
+    const s = this._s(scope)
+    const list = s.dialogs.get(tabId)
     if (!list || list.length === 0) return []
     const fresh = list.filter((d) => d.at >= since).map((d) => ({ type: d.type, message: d.message }))
-    this._dialogs.set(tabId, [])
+    s.dialogs.set(tabId, [])
     return fresh
   }
 
-  async listPages(): Promise<{ ok: true; pages: Array<{ tabId: number; url: string; title: string; active: boolean; viewed: boolean }>; activeId: number | null; viewId: number | null } | { ok: false; error: string }> {
+  async listPages(scope: string = DEFAULT_SCOPE): Promise<{ ok: true; pages: Array<{ tabId: number; url: string; title: string; active: boolean; viewed: boolean }>; activeId: number | null; viewId: number | null } | { ok: false; error: string }> {
     const ensureResult = await this.ensure()
     if (!ensureResult.ok) return { ok: false, error: ensureResult.error }
+    const s = this._s(scope)
     const pages: Array<{ tabId: number; url: string; title: string; active: boolean; viewed: boolean }> = []
-    for (const [tabId, page] of this._pages) {
-      pages.push({ tabId, url: page.url(), title: this._titles.get(tabId) ?? '', active: tabId === this._activeId, viewed: tabId === this._viewId })
+    for (const [tabId, page] of s.pages) {
+      pages.push({ tabId, url: page.url(), title: s.titles.get(tabId) ?? '', active: tabId === s.activeId, viewed: tabId === s.viewId })
     }
-    return { ok: true, pages, activeId: this._activeId, viewId: this._viewId }
+    return { ok: true, pages, activeId: s.activeId, viewId: s.viewId }
   }
 
-  async state(): Promise<{ available: false; error: string } | { available: true; running: false; launching: boolean; error: string | null } | { available: true; running: true; launching: false; pages: Array<{ tabId: number; url: string; title: string; active: boolean; viewed: boolean }>; activeId: number | null; viewId: number | null }> {
+  async state(scope: string = DEFAULT_SCOPE): Promise<{ available: false; error: string } | { available: true; running: false; launching: boolean; error: string | null } | { available: true; running: true; launching: false; pages: Array<{ tabId: number; url: string; title: string; active: boolean; viewed: boolean }>; activeId: number | null; viewId: number | null }> {
     if (!this._pw) return { available: false, error: this._launchError ?? 'playwright-core vendor 不可用' }
     if (!this._context) return { available: true, running: false, launching: this._launching !== null, error: this._launchError }
-    const listed = await this.listPages()
+    const listed = await this.listPages(scope)
     if (!listed.ok) return { available: true, running: true, launching: false, pages: [], activeId: null, viewId: null }
     return {
       available: true,
@@ -637,82 +781,84 @@ export class BrowserService {
   }
 
   /** 导航（工具与面板共用）：返回 { tabId, title, url, snapshot? }。
-   *  agent 路径作用于 agent 活动页（成功后按 follow 开关把观察页拽过去）；
-   *  forHuman（面板 URL 栏）作用于观察页、不动 agent 活动页。 */
-  async navigate(url: string, { newTab = false, snapshot = true, forHuman = false }: { newTab?: boolean; snapshot?: boolean; forHuman?: boolean } = {}): Promise<{ ok: true; tabId: number; url: string; title: string; snapshot?: string; warning?: string } | { ok: false; error: string }> {
+   *  agent 路径作用于本分区 agent 活动页；forHuman（面板 URL 栏）作用于本分区观察页、
+   *  不动 agent 活动页。两者都只落在本分区，别的对话的页不受影响。 */
+  async navigate(scope: string, url: string, { newTab = false, snapshot = true, forHuman = false }: { newTab?: boolean; snapshot?: boolean; forHuman?: boolean } = {}): Promise<{ ok: true; tabId: number; url: string; title: string; snapshot?: string; warning?: string } | { ok: false; error: string }> {
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url.trim())) {
       return { ok: false, error: '仅支持 http/https URL' }
     }
     const ensured = await this.ensure()
     if (!ensured.ok) return ensured
-    const anchorId = forHuman ? this._viewId : this._activeId
-    let page: PwPage | undefined
-    if (newTab || anchorId === null || !this._pages.has(anchorId)) {
-      page = await this._context!.newPage()
-      // newPage 与 'page' 事件都会走 _adopt（幂等），显式 adopt 一次拿稳 tabId
-      this._adopt(page)
-      page = this._pages.get(this._activeId!)
+    const s = this._s(scope)
+    const anchorId = forHuman ? s.viewId : s.activeId
+    let page: PwPage
+    if (newTab || anchorId === null || !s.pages.has(anchorId)) {
+      // 新页或本分区还没有页：开一页（认领自带页或 newPage）并纳管
+      await this._openPage(scope)
+      page = s.pages.get(s.activeId!)!
     } else {
-      page = this._pages.get(anchorId)!
+      page = s.pages.get(anchorId)!
     }
-    const tabId = page!.__dshTabId!
+    const tabId = page.__dshTabId!
     const t0 = Date.now()
     try {
-      await page!.goto(url.trim(), { waitUntil: 'domcontentloaded', timeout: GOTO_TIMEOUT })
+      await page.goto(url.trim(), { waitUntil: 'domcontentloaded', timeout: GOTO_TIMEOUT })
     } catch (error) {
       return { ok: false, error: `导航失败：${error instanceof Error ? error.message : error}（页面可能仍在加载，可重试或改用 snapshot 观察）` }
     }
-    this._touch()
-    const title = await page!.title().catch(() => '')
-    this._titles.set(tabId, title)
-    const result: { ok: true; tabId: number; url: string; title: string; snapshot?: string; warning?: string } = { ok: true, tabId, url: page!.url(), title }
-    if (snapshot) result.snapshot = capText(await this._snapshotOf(page!))
+    this._touch(scope)
+    const title = await page.title().catch(() => '')
+    s.titles.set(tabId, title)
+    const result: { ok: true; tabId: number; url: string; title: string; snapshot?: string; warning?: string } = { ok: true, tabId, url: page.url(), title }
+    if (snapshot) result.snapshot = capText(await this._snapshotOf(page))
     // 加载期弹出的对话框（部分页面 onload alert）随结果带回
-    const dlgWarn = dialogWarning(this._drainDialogs(tabId, t0))
+    const dlgWarn = dialogWarning(this._drainDialogs(scope, tabId, t0))
     if (dlgWarn) result.warning = dlgWarn
-    // 观察页跟随（恒定语义）：agent 导航与人的 URL 栏导航都作用于观察页
-    this._setView(tabId)
-    this._emit({ kind: 'navigated', tabId, url: result.url, title })
+    // 观察页跟随（恒定语义）：agent 导航与人的 URL 栏导航都作用于本分区观察页
+    this._setView(scope, tabId)
+    this._emit({ kind: 'navigated', scope: normalizeScope(scope), tabId, url: result.url, title })
     return result
   }
 
-  private async _snapshotOf(page: PwPage, scope?: string): Promise<string> {
+  /** 取某页快照（selector 给定时只看该子树） */
+  private async _snapshotOf(page: PwPage, selector?: string): Promise<string> {
     try {
-      return await (scope ? page.locator(scope) : page.locator('body')).ariaSnapshot({ mode: 'ai' })
+      return await (selector ? page.locator(selector) : page.locator('body')).ariaSnapshot({ mode: 'ai' })
     } catch (error) {
       return `（快照失败：${error instanceof Error ? error.message : error}）`
     }
   }
 
-  /** 紧凑树观察。scope = 只看该选择器命中的子树（大页面按块看，省 token）；
+  /** 紧凑树观察。selector = 只看该选择器命中的子树（大页面按块看，省 token）；
    *  maxChars = 覆盖默认 8KB 上限（越界夹到 SNAPSHOT_MIN..SNAPSHOT_MAX） */
-  async snapshot(tabId?: number | null, opts: { scope?: string; maxChars?: number } = {}): Promise<{ ok: true; tabId: number; url: string; title: string; snapshot: string } | { ok: false; error: string }> {
+  async snapshot(scope: string, tabId?: number | null, opts: { selector?: string; maxChars?: number } = {}): Promise<{ ok: true; tabId: number; url: string; title: string; snapshot: string } | { ok: false; error: string }> {
     const ensured = await this.ensure()
     if (!ensured.ok) return { ok: false, error: ensured.error }
-    const page = this._page(tabId)
+    const page = this._page(scope, tabId)
     if (!page) return { ok: false, error: `页不存在：${tabId ?? '(缺省)'}（用 browser_navigate 或先开一页）` }
-    const scope = typeof opts.scope === 'string' ? opts.scope.trim() : ''
-    if (scope !== '') {
+    const selector = typeof opts.selector === 'string' ? opts.selector.trim() : ''
+    if (selector !== '') {
       // 先数匹配数：ariaSnapshot 的定位等待是 30s 级，无匹配时不该让调用方干等
-      const hit = await page.locator(scope).count().catch(() => 0)
-      if (hit === 0) return { ok: false, error: `范围无匹配：selector=${scope}（先整页快照或 browser_eval 核对选择器，不要原样重试）` }
+      const hit = await page.locator(selector).count().catch(() => 0)
+      if (hit === 0) return { ok: false, error: `范围无匹配：selector=${selector}（先整页快照或 browser_eval 核对选择器，不要原样重试）` }
     }
     const cap =
       typeof opts.maxChars === 'number' && Number.isFinite(opts.maxChars)
         ? Math.min(Math.max(Math.trunc(opts.maxChars), SNAPSHOT_MIN), SNAPSHOT_MAX)
         : SNAPSHOT_CAP
-    this._touch()
+    this._touch(scope)
     const id = page.__dshTabId!
-    return { ok: true, tabId: id, url: page.url(), title: this._titles.get(id) ?? '', snapshot: capText(await this._snapshotOf(page, scope || undefined), cap) }
+    const scopeState = this._s(scope)
+    return { ok: true, tabId: id, url: page.url(), title: scopeState.titles.get(id) ?? '', snapshot: capText(await this._snapshotOf(page, selector || undefined), cap) }
   }
 
   /** 统一动作：click/type/press/check/uncheck/select/hover/scroll/upload；默认返回
    *  新快照（动作即观察）。ref 定位走 aria-ref 引擎（可穿透 iframe）；scroll 有定位
    *  目标=滚动到元素可见，无定位=按 dx/dy 真实滚轮；upload 的 value 为本地绝对路径 */
-  async act(args: ActArgs): Promise<{ ok: true; tabId: number; url: string; title: string; matched: number | null; warning?: string; snapshot?: string } | { ok: false; error: string }> {
+  async act(scope: string, args: ActArgs): Promise<{ ok: true; tabId: number; url: string; title: string; matched: number | null; warning?: string; snapshot?: string } | { ok: false; error: string }> {
     const ensured = await this.ensure()
     if (!ensured.ok) return ensured
-    const page = this._page(args.tabId)
+    const page = this._page(scope, args.tabId)
     if (!page) return { ok: false, error: `页不存在：${args.tabId}` }
     const act = normalizeActArgs(args)
     if ('error' in act) return { ok: false, error: act.error }
@@ -785,7 +931,7 @@ export class BrowserService {
       }
       const target = locator.first()
       try {
-        this._touch()
+        this._touch(scope)
         switch (act.action) {
           case 'click':
             await target.click({ timeout })
@@ -827,25 +973,25 @@ export class BrowserService {
       matched,
     }
     // act 是 agent 的状态改变操作：观察页恒跟随（与 navigate 同规则）
-    this._setView(page.__dshTabId!)
+    this._setView(scope, page.__dshTabId!)
     if (matched !== null && matched > 1) result.warning = `目标不唯一（${matched} 个匹配），已作用于第一个——可加 name/text 收窄`
     // 动作期间弹出的对话框（如 confirm）带回——点击"没反应"多半是它
-    const dlgWarn = dialogWarning(this._drainDialogs(page.__dshTabId!, t0))
+    const dlgWarn = dialogWarning(this._drainDialogs(scope, page.__dshTabId!, t0))
     if (dlgWarn) result.warning = result.warning ? `${result.warning}；${dlgWarn}` : dlgWarn
     if (args.snapshot !== false) result.snapshot = capText(await this._snapshotOf(page))
     return result
   }
 
   /** 页面内 JS（返回 JSON 值，限长） */
-  async evaluate(expression: string, tabId?: number | null): Promise<{ ok: true; tabId: number; value: string } | { ok: false; error: string }> {
+  async evaluate(scope: string, expression: string, tabId?: number | null): Promise<{ ok: true; tabId: number; value: string } | { ok: false; error: string }> {
     const ensured = await this.ensure()
     if (!ensured.ok) return ensured
-    const page = this._page(tabId)
+    const page = this._page(scope, tabId)
     if (!page) return { ok: false, error: `页不存在：${tabId}` }
     if (typeof expression !== 'string' || expression.trim() === '') {
       return { ok: false, error: '缺少 expression（页面上下文中可执行的 JS 表达式）' }
     }
-    this._touch()
+    this._touch(scope)
     try {
       const value = await page.evaluate(expression)
       let json: string
@@ -862,12 +1008,12 @@ export class BrowserService {
   }
 
   /** 截图：返回 buffer + 尺寸（image 附件化在 browser-tools 里做，需 exec/ctx） */
-  async screenshot({ fullPage = false, tabId }: { fullPage?: boolean; tabId?: number | null } = {}): Promise<{ ok: true; tabId: number; url: string; buffer: Buffer; size: { width: number; height: number } | null } | { ok: false; error: string }> {
+  async screenshot(scope: string, { fullPage = false, tabId }: { fullPage?: boolean; tabId?: number | null } = {}): Promise<{ ok: true; tabId: number; url: string; buffer: Buffer; size: { width: number; height: number } | null } | { ok: false; error: string }> {
     const ensured = await this.ensure()
     if (!ensured.ok) return ensured
-    const page = this._page(tabId)
+    const page = this._page(scope, tabId)
     if (!page) return { ok: false, error: `页不存在：${tabId}` }
-    this._touch()
+    this._touch(scope)
     try {
       const buffer = await page.screenshot({ fullPage: fullPage === true, type: 'png' })
       return { ok: true, tabId: page.__dshTabId!, url: page.url(), buffer, size: pngSize(buffer) }
@@ -880,7 +1026,7 @@ export class BrowserService {
    *  范围 320–3840 × 320–2160，越界报错不静默 clamp；新页签仍以启动默认 1280×800
    *  打开（launchPersistentContext 的 viewport 选项），面板帧流坐标按帧原始尺寸
    *  换算，视口变化天然跟随。 */
-  async setViewport({ width, height, tabId }: { width: number; height: number; tabId?: number | null } = { width: 1280, height: 800 }): Promise<{ ok: true; tabId: number; url: string; viewport: { width: number; height: number } } | { ok: false; error: string }> {
+  async setViewport(scope: string, { width, height, tabId }: { width: number; height: number; tabId?: number | null } = { width: 1280, height: 800 }): Promise<{ ok: true; tabId: number; url: string; viewport: { width: number; height: number } } | { ok: false; error: string }> {
     const w = Number(width)
     const h = Number(height)
     if (!Number.isInteger(w) || !Number.isInteger(h) || w < 320 || w > 3840 || h < 320 || h > 2160) {
@@ -888,9 +1034,9 @@ export class BrowserService {
     }
     const ensured = await this.ensure()
     if (!ensured.ok) return ensured
-    const page = this._page(tabId)
+    const page = this._page(scope, tabId)
     if (!page) return { ok: false, error: `页不存在：${tabId ?? '(缺省)'}` }
-    this._touch()
+    this._touch(scope)
     try {
       await page.setViewportSize({ width: w, height: h })
     } catch (error) {
@@ -899,48 +1045,50 @@ export class BrowserService {
     return { ok: true, tabId: page.__dshTabId!, url: page.url(), viewport: { width: w, height: h } }
   }
 
-  /** 关一页 */
-  async closePage(tabId: number): Promise<{ ok: true } | { ok: false; error: string }> {
-    const page = this._pages.get(Number(tabId))
+  /** 关本分区一页 */
+  async closePage(scope: string, tabId: number): Promise<{ ok: true } | { ok: false; error: string }> {
+    const page = this._s(scope).pages.get(Number(tabId))
     if (!page) return { ok: false, error: `页不存在：${tabId}` }
     try {
       await page.close()
     } catch (error) {
       return { ok: false, error: `关闭失败：${error instanceof Error ? error.message : error}` }
     }
-    // 关掉最后一个页签 = 整个浏览器收摊（正常浏览器语义：0 页即关窗，不留空转
-    // 实例）；优雅关闭落盘 cookie，agent 下次使用懒启动重来。崩溃路径不走这里
-    // （页面崩 ≠ 用户要停），空态交给面板提示兜底
-    if (this._pages.size === 0 && this._context !== null) await this.closeNow()
+    // 关光所有分区的页 = 整个浏览器收摊（正常浏览器语义：0 页即关窗，不留空转
+    // 实例）；优雅关闭落盘 cookie，agent 下次使用懒启动重来。别的分区还有页就只收本分区。
+    // 崩溃路径不走这里（页面崩 ≠ 用户要停），空态交给面板提示兜底
+    if (this._pagesTotal() === 0 && this._context !== null) await this.closeNow()
     return { ok: true }
   }
 
-  /** 人切观察页（面板页签条）：只动观察指针，agent 的默认目标页不受影响 */
-  async activatePage(tabId: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  /** 人切本分区观察页（面板页签条）：只动观察指针，agent 的默认目标页不受影响 */
+  async activatePage(scope: string, tabId: number): Promise<{ ok: true } | { ok: false; error: string }> {
     const id = Number(tabId)
-    if (!this._pages.has(id)) return { ok: false, error: `页不存在：${tabId}` }
-    this._touch()
-    this._setView(id)
+    if (!this._s(scope).pages.has(id)) return { ok: false, error: `页不存在：${tabId}` }
+    this._touch(scope)
+    this._setView(scope, id)
     return { ok: true }
   }
 
-  /** 面板「＋」新建页签：新页即观察页（adopt 会把它提为 agent 活动页，保持既有
-   *  语义）；无页时的首建走 ensurePage 兜底 */
-  async humanNewTab(): Promise<{ ok: true; tabId?: number } | { ok: false; error: string }> {
+  /** 面板「＋」新建页签：新页即观察页（adopt 会把它提为本分区 agent 活动页，保持既有
+   *  语义）；本分区无页时的首建走 ensurePage 兜底 */
+  async humanNewTab(scope: string): Promise<{ ok: true; tabId?: number } | { ok: false; error: string }> {
     const ensureResult = await this.ensure()
     if (!ensureResult.ok) return ensureResult
-    if (this._activeId === null || !this._pages.has(this._activeId)) return this.ensurePage()
-    await this._context!.newPage()
-    // newPage 触发 'page' 事件 → _adopt（活动页 + follow 观察页）
-    return { ok: true, tabId: this._viewId ?? undefined }
+    const s = this._s(scope)
+    if (s.activeId === null || !s.pages.has(s.activeId)) return this.ensurePage(scope)
+    this._touch(scope)
+    await this._openPage(scope)
+    return { ok: true, tabId: s.viewId ?? undefined }
   }
 
-  /** 面板历史按钮（作用于观察页）：back/forward/reload。无历史可退/超时不视为
+  /** 面板历史按钮（作用于本分区观察页）：back/forward/reload。无历史可退/超时不视为
    *  故障（页面维持原状），仍回报当前位置 */
-  async history(op: 'back' | 'forward' | 'reload'): Promise<{ ok: true; tabId: number; url: string; title: string } | { ok: false; error: string }> {
-    const page = this._viewId !== null ? this._pages.get(this._viewId) ?? null : null
+  async history(scope: string, op: 'back' | 'forward' | 'reload'): Promise<{ ok: true; tabId: number; url: string; title: string } | { ok: false; error: string }> {
+    const s = this._s(scope)
+    const page = s.viewId !== null ? s.pages.get(s.viewId) ?? null : null
     if (!page) return { ok: false, error: '无观察页（浏览器未运行或页签已关）' }
-    this._touch()
+    this._touch(scope)
     try {
       if (op === 'back') await page.goBack({ timeout: GOTO_TIMEOUT })
       else if (op === 'forward') await page.goForward({ timeout: GOTO_TIMEOUT })
@@ -950,39 +1098,50 @@ export class BrowserService {
     }
     const tabId = page.__dshTabId!
     const title = await page.title().catch(() => '')
-    this._titles.set(tabId, title)
-    this._emit({ kind: 'navigated', tabId, url: page.url(), title })
+    s.titles.set(tabId, title)
+    this._emit({ kind: 'navigated', scope: normalizeScope(scope), tabId, url: page.url(), title })
     return { ok: true, tabId, url: page.url(), title }
   }
 
-  // ── 面板帧流 ──
+  // ── 面板帧流（按分区各一条；同一分区的多个观察者复路到同一条 CDP 会话）──
 
-  /** 面板订阅帧流（引用计数；复路：同一活动页只挂一条 CDP 会话） */
-  async watcherOpen(onFrame: (data: string, metadata: unknown) => void): Promise<{ ok: true } | { ok: false; error: string }> {
+  /** 面板订阅本分区帧流（引用计数；复路：同一观察页只挂一条 CDP 会话） */
+  async watcherOpen(scope: string, onFrame: (data: string, metadata: unknown) => void): Promise<{ ok: true } | { ok: false; error: string }> {
     const ensured = await this.ensure()
     if (!ensured.ok) return ensured
-    this._watchers++
-    this._touch()
-    this._onFrame = onFrame
-    if (!this._stream) await this._attachStream()
+    const s = this._s(scope)
+    s.watchers++
+    this._touch(scope)
+    s.onFrame = onFrame
+    if (!s.stream) await this._attachStream(scope)
     return { ok: true }
   }
 
-  watcherClose(): void {
-    this._watchers = Math.max(0, this._watchers - 1)
-    if (this._watchers === 0 && this._stream) {
-      void this._detachStream()
+  watcherClose(scope: string): void {
+    const s = this._s(scope)
+    s.watchers = Math.max(0, s.watchers - 1)
+    if (s.watchers === 0 && s.stream) {
+      void this._detachStream(scope)
     }
+    this._dropIdleScope(normalizeScope(scope))
   }
 
-  private async _attachStream(): Promise<void> {
-    const page = this._viewId !== null ? this._pages.get(this._viewId) ?? null : null
+  /** 挂本分区观察页的 CDP 帧流（每分区一条；同分区多观察者复用它） */
+  private async _attachStream(scope: string): Promise<void> {
+    const s = this._s(scope)
+    if (s.stream) return
+    const page = s.viewId !== null ? s.pages.get(s.viewId) ?? null : null
     if (!page || !this._context) return
     try {
       const cdp = await this._context.newCDPSession(page)
+      // 并发进来（watcherOpen 与页就绪重挂）时只留先到的这条
+      if (s.stream) {
+        await cdp.detach().catch(() => {})
+        return
+      }
       cdp.on('Page.screencastFrame', (f) => {
         try {
-          if (this._onFrame) this._onFrame(f.data, f.metadata)
+          if (s.onFrame) s.onFrame(f.data, f.metadata)
         } catch {}
         cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {})
       })
@@ -996,22 +1155,23 @@ export class BrowserService {
         maxHeight: 1200,
         everyNthFrame: 2,
       })
-      this._stream = { cdp, tabId: page.__dshTabId! }
+      s.stream = { cdp, tabId: page.__dshTabId! }
       // 首帧兜底：screencast 只在重绘时推帧，静态页面可能长时间没有首帧（面板
       // 空白）。attach 后立即抓一帧推给面板，之后帧流自然接管。
       try {
         const shot = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 60 })
         const data = (shot as { data?: string })?.data
-        if (data && this._onFrame) this._onFrame(data, null)
+        if (data && s.onFrame) s.onFrame(data, null)
       } catch {}
     } catch (error) {
       this._log(`browser: 帧流启动失败：${error instanceof Error ? error.message : error}`)
     }
   }
 
-  private async _detachStream(): Promise<void> {
-    const stream = this._stream
-    this._stream = null
+  private async _detachStream(scope: string): Promise<void> {
+    const s = this._s(scope)
+    const stream = s.stream
+    s.stream = null
     if (!stream) return
     try {
       await stream.cdp.send('Page.stopScreencast')
@@ -1021,25 +1181,19 @@ export class BrowserService {
     } catch {}
   }
 
-  /** 页面切换/崩溃后若在流式中则重挂 */
-  private async _resyncStream(tabId: number): Promise<void> {
-    if (!this._stream || this._stream.tabId === tabId) return
-    await this._detachStream()
-    if (this._watchers > 0) await this._attachStream()
+  /** 本分区观察页换了/页没了，按「有观察者就有流」重挂。
+   *  关键：观察者先于页到来时（面板点开即 watch，浏览器冷启动几秒后才认领到页）
+   *  这里必须补挂——否则流永远不建，面板一直空白 */
+  private async _resyncStream(scope: string, tabId: number): Promise<void> {
+    const s = this._s(scope)
+    if (s.stream && s.stream.tabId === tabId) return
+    if (s.stream) await this._detachStream(scope)
+    if (s.watchers > 0) await this._attachStream(scope)
   }
 
-  /** 面板 URL 栏手动导航（作用于观察页，不动 agent 活动页；不取快照） */
-  async humanOpen(url: string): Promise<{ ok: true; tabId: number; url: string; title: string } | { ok: false; error: string }> {
-    return this.navigate(url, { snapshot: false, forHuman: true })
-  }
-
-  /** 观察页切换后的帧流重挂（index.ts 在收到 state 事件时调用；幂等兜底——
-   *  _setView 内部已重挂，这里覆盖事件驱动的路径） */
-  async resyncStream(): Promise<void> {
-    if (this._stream && this._viewId !== null && this._stream.tabId !== this._viewId) {
-      await this._detachStream()
-      if (this._watchers > 0) await this._attachStream()
-    }
+  /** 面板 URL 栏手动导航（作用于本分区观察页，不动 agent 活动页；不取快照） */
+  async humanOpen(scope: string, url: string): Promise<{ ok: true; tabId: number; url: string; title: string } | { ok: false; error: string }> {
+    return this.navigate(scope, url, { snapshot: false, forHuman: true })
   }
 
   /** 优雅关闭（面板/协议可调）：context.close() 落盘 cookie 后再走，下次启动免登录 */
@@ -1050,13 +1204,14 @@ export class BrowserService {
   }
 
   /**
-   * 人机共驾输入派发：面板画布的鼠标/滚轮/键盘 → 观察页。
+   * 人机共驾输入派发：面板画布的鼠标/滚轮/键盘 → 本分区观察页。
    * 设计约束：不自动拉起浏览器（未运行即拒绝，避免悬停误启动）；事件进顺序队列
    * 串行派发（鼠标移动高频，乱序会拖拽断裂）；坐标由面板按帧原始尺寸换算好。
    */
-  async humanInput(msg: HumanInputMsg): Promise<{ ok: true } | { ok: false; error: string }> {
+  async humanInput(scope: string, msg: HumanInputMsg): Promise<{ ok: true } | { ok: false; error: string }> {
     if (!this._context) return { ok: false, error: '浏览器未运行' }
-    const page = this._viewId !== null ? this._pages.get(this._viewId) ?? null : null
+    const s = this._s(scope)
+    const page = s.viewId !== null ? s.pages.get(s.viewId) ?? null : null
     if (!page) return { ok: false, error: '无观察页面' }
     const buttonName = (b: number | undefined) => (b === 1 ? 'middle' : b === 2 ? 'right' : 'left')
     const coord = (v: number) => {
@@ -1095,23 +1250,21 @@ export class BrowserService {
           return
       }
     }
-    this._touch()
+    this._touch(scope)
     // 顺序队列：人手高频输入与 agent 工具动作都走同一 page，乱序会拖拽断裂
-    this._inputQueue = this._inputQueue.then(dispatch).catch(() => {})
+    s.inputQueue = s.inputQueue.then(dispatch).catch(() => {})
     return { ok: true }
   }
 
-  /** 关闭浏览器上下文（保 profile） */
+  /** 关闭浏览器上下文（保 profile）：所有分区一起收 */
   private async _closeContext(): Promise<void> {
     const context = this._context
     if (!context) return
     this._context = null
-    this._pages.clear()
-    this._titles.clear()
-    this._dialogs.clear()
-    this._activeId = null
-    this._viewId = null
-    await this._detachStream()
+    const streams = [...this._scopes.entries()]
+    this._scopes.clear()
+    this._unclaimed = []
+    for (const [key] of streams) await this._detachStream(key)
     try {
       await context.close()
     } catch {}
@@ -1126,7 +1279,6 @@ export class BrowserService {
       clearInterval(this._idleTimer)
       this._idleTimer = null
     }
-    this._watchers = 0
     await this._closeContext()
     try {
       fs.unlinkSync(path.join(dshHomeDir(), 'dsh-kit', 'browser-profile', '.pid'))

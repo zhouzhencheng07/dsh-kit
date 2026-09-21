@@ -1,7 +1,7 @@
 // dsh-kit 浏览器服务端到端测试：合成 todo 页上跑完整 agent 循环
 // navigate → snapshot → type/click → 断言快照 → check → 负路径 → screenshot →
 // ref 回填/hover/scroll/upload/dialog 可见性/viewport → 双指针（agent 活动页/
-// 观察页）切换隔离 → history → dispose
+// 观察页）切换隔离 → 分区隔离（两个会话各一套页签、共享同一 profile）→ history → dispose
 // 无 Edge/Chrome 环境自动 skip；DSH_HOME 重定向到临时目录（不碰真实 profile）。
 // 运行：node tests/test-browser-e2e.mjs
 import assert from 'node:assert/strict'
@@ -72,34 +72,56 @@ const ok = (name) => {
 
 const service = new BrowserService({ log: () => {} })
 const off = service.on((evt) => events.push(evt.kind))
+// 本用例的分区（会话 id）；分区化后每个调用都要报调用方是谁
+const S = 'sess-a'
+const svc = {
+  navigate: (url, opts) => service.navigate(S, url, opts),
+  snapshot: (tabId, opts) => service.snapshot(S, tabId, opts),
+  act: (args) => service.act(S, args),
+  evaluate: (expression, tabId) => service.evaluate(S, expression, tabId),
+  screenshot: (opts) => service.screenshot(S, opts),
+  setViewport: (opts) => service.setViewport(S, opts),
+  listPages: () => service.listPages(S),
+  state: () => service.state(S),
+  closePage: (tabId) => service.closePage(S, tabId),
+  activatePage: (tabId) => service.activatePage(S, tabId),
+  humanOpen: (url) => service.humanOpen(S, url),
+  humanNewTab: () => service.humanNewTab(S),
+  history: (op) => service.history(S, op),
+  humanInput: (msg) => service.humanInput(S, msg),
+  watcherOpen: (cb) => service.watcherOpen(S, cb),
+  watcherClose: () => service.watcherClose(S),
+  ensurePage: () => service.ensurePage(S),
+  dispose: () => service.dispose(),
+}
 try {
-  const nav = await service.navigate(base, { snapshot: true })
+  const nav = await svc.navigate(base, { snapshot: true })
   assert.equal(nav.ok, true, `navigate 失败：${nav.error}`)
   assert.match(nav.snapshot, /textbox "新待办"/)
   assert.match(nav.snapshot, /button "添加"/)
   ok(`navigate 返回内嵌快照（title=${nav.title}）`)
 
-  const typed = await service.act({ action: 'type', role: 'textbox', name: '新待办', value: '买牛奶' })
+  const typed = await svc.act({ action: 'type', role: 'textbox', name: '新待办', value: '买牛奶' })
   assert.equal(typed.ok, true, `type 失败：${typed.error}`)
   ok('act type 填输入框')
 
-  const added = await service.act({ action: 'click', role: 'button', name: '添加' })
+  const added = await svc.act({ action: 'click', role: 'button', name: '添加' })
   assert.equal(added.ok, true, `click 失败：${added.error}`)
   assert.match(added.snapshot, /买牛奶/)
   assert.match(added.snapshot, /共 1 项/)
   ok('act click 提交且快照断言新条目')
 
-  const checked = await service.act({ action: 'check', role: 'checkbox', name: '完成: 买牛奶' })
+  const checked = await svc.act({ action: 'check', role: 'checkbox', name: '完成: 买牛奶' })
   assert.equal(checked.ok, true, `check 失败：${checked.error}`)
   assert.match(checked.snapshot, /\[checked\]/)
   ok('act check 勾选且快照断言 [checked]')
 
-  const negative = await service.act({ action: 'click', role: 'button', name: '添加' })
+  const negative = await svc.act({ action: 'click', role: 'button', name: '添加' })
   assert.equal(negative.ok, true)
   assert.match(negative.snapshot, /内容不能为空/)
   ok('负路径：空输入错误提示可见')
 
-  const notFound = await service.act({ action: 'click', role: 'button', name: '不存在的按钮' })
+  const notFound = await svc.act({ action: 'click', role: 'button', name: '不存在的按钮' })
   assert.equal(notFound.ok, false)
   assert.match(notFound.error, /目标未找到/)
   ok('act 目标未找到给出可恢复错误')
@@ -108,41 +130,41 @@ try {
   // 返回值已是 JSON 字符串——表达式里再包一层 JSON.stringify 会双重序列化，
   // rect 字段全变 undefined、坐标 NaN 点到 (0,0)，断言会被输入框旧文本 vacuous
   // 满足（本用例曾假通过）。断言用「提交后状态行」这种点击后才可能出现的字样。
-  const typed2 = await service.act({ action: 'type', role: 'textbox', name: '新待办', value: '人机共驾' })
+  const typed2 = await svc.act({ action: 'type', role: 'textbox', name: '新待办', value: '人机共驾' })
   assert.equal(typed2.ok, true)
-  const rectJson = await service.evaluate(`document.querySelector('#add').getBoundingClientRect()`)
+  const rectJson = await svc.evaluate(`document.querySelector('#add').getBoundingClientRect()`)
   assert.equal(rectJson.ok, true)
   const rect = JSON.parse(rectJson.value)
   const cx = Math.round(rect.x + rect.width / 2)
   const cy = Math.round(rect.y + rect.height / 2)
   assert.ok(Number.isFinite(cx) && cx > 0, `坐标非法：${cx},${cy}`)
-  const moved = await service.humanInput({ kind: 'mousemove', x: cx, y: cy })
+  const moved = await svc.humanInput({ kind: 'mousemove', x: cx, y: cy })
   assert.equal(moved.ok, true)
-  await service.humanInput({ kind: 'mousedown', x: cx, y: cy, button: 0, clicks: 1 })
-  await service.humanInput({ kind: 'mouseup', x: cx, y: cy, button: 0, clicks: 1 })
+  await svc.humanInput({ kind: 'mousedown', x: cx, y: cy, button: 0, clicks: 1 })
+  await svc.humanInput({ kind: 'mouseup', x: cx, y: cy, button: 0, clicks: 1 })
   await new Promise((r) => setTimeout(r, 300))
-  const afterInput = await service.snapshot()
+  const afterInput = await svc.snapshot()
   // 此时已由 act 提交过 买牛奶（共 1 项），本次坐标点击提交 人机共驾 → 共 2 项
   assert.match(afterInput.snapshot, /共 2 项/, `提交后状态行未出现（点击未生效）：\n${afterInput.snapshot}`)
   ok('humanInput 坐标点击与工具层同页生效')
 
   // 键盘键入路径：点击聚焦远程输入框后，humanInput key 组合逐键入文
-  const addRectJson = await service.evaluate(`document.querySelector('#inp').getBoundingClientRect()`)
+  const addRectJson = await svc.evaluate(`document.querySelector('#inp').getBoundingClientRect()`)
   assert.equal(addRectJson.ok, true)
   const addRect = JSON.parse(addRectJson.value)
   const ix = Math.round(addRect.x + addRect.width / 2)
   const iy = Math.round(addRect.y + addRect.height / 2)
   assert.ok(Number.isFinite(ix) && ix > 0, `坐标非法：${ix},${iy}`)
-  await service.humanInput({ kind: 'mousedown', x: ix, y: iy, button: 0, clicks: 1 })
-  await service.humanInput({ kind: 'mouseup', x: ix, y: iy, button: 0, clicks: 1 })
+  await svc.humanInput({ kind: 'mousedown', x: ix, y: iy, button: 0, clicks: 1 })
+  await svc.humanInput({ kind: 'mouseup', x: ix, y: iy, button: 0, clicks: 1 })
   await new Promise((r) => setTimeout(r, 200))
-  const focusedInp = await service.evaluate(`document.activeElement && document.activeElement.id`)
+  const focusedInp = await svc.evaluate(`document.activeElement && document.activeElement.id`)
   assert.equal(focusedInp.value, '"inp"', `点击后焦点应在输入框：${focusedInp.value}`)
-  for (const ch of 'kb') await service.humanInput({ kind: 'key', combo: ch })
+  for (const ch of 'kb') await svc.humanInput({ kind: 'key', combo: ch })
   // 文本块路径（IME 组合提交的宿主形态）：一次性插入中文
-  await service.humanInput({ kind: 'text', text: '键盘输入' })
+  await svc.humanInput({ kind: 'text', text: '键盘输入' })
   await new Promise((r) => setTimeout(r, 300))
-  const afterKeys = await service.evaluate(`document.querySelector('#inp').value`)
+  const afterKeys = await svc.evaluate(`document.querySelector('#inp').value`)
   assert.equal(JSON.parse(afterKeys.value), 'kb键盘输入', `键入值不符：${afterKeys.value}`)
   ok('humanInput key 组合逐键入文 + text 块插入（IME 形态）')
 
@@ -158,123 +180,123 @@ try {
   ok('humanInput 未运行时拒绝（不误拉起）+ state 带 launching 字段')
 
   // ── 双指针（agent 活动页 / 面板观察页）与页签条操作 ──
-  const st0 = await service.state()
+  const st0 = await svc.state()
   assert.equal(st0.running, true)
   assert.ok(typeof st0.viewId === 'number' && st0.viewId !== null, 'state 应带 viewId')
   assert.ok(st0.pages.every((p) => typeof p.viewed === 'boolean'), 'pages 应带 viewed 标记')
   ok('state 带 viewId/viewed 字段')
 
-  const t1 = (await service.listPages()).pages[0].tabId
-  const navTab = await service.navigate(`${base}?tab=2`, { newTab: true, snapshot: false })
+  const t1 = (await svc.listPages()).pages[0].tabId
+  const navTab = await svc.navigate(`${base}?tab=2`, { newTab: true, snapshot: false })
   assert.equal(navTab.ok, true, `开新页签失败：${navTab.error}`)
-  const st1 = await service.state()
+  const st1 = await svc.state()
   assert.equal(st1.activeId, navTab.tabId, '新页签成为 agent 活动页')
   assert.equal(st1.viewId, navTab.tabId, 'follow 开启时观察页跟随新页签')
   ok('agent 开新页签：活动页+观察页到位')
 
   // 人切观察页 → 只动观察指针，agent 活动页不动
-  await service.activatePage(t1)
-  const st2 = await service.state()
+  await svc.activatePage(t1)
+  const st2 = await svc.state()
   assert.equal(st2.viewId, t1, '观察页切回第一页')
   assert.equal(st2.activeId, navTab.tabId, 'agent 活动页不受人切换影响')
   ok('activatePage 只切观察页（agent 隔离）')
 
   // 面板 URL 栏 / 历史按钮作用于观察页
-  const open2 = await service.humanOpen(`${base}?from=panel`)
+  const open2 = await svc.humanOpen(`${base}?from=panel`)
   assert.equal(open2.ok, true)
   assert.equal(open2.tabId, t1, 'humanOpen 作用于观察页')
-  const back = await service.history('back')
+  const back = await svc.history('back')
   assert.equal(back.ok, true)
   assert.ok(!back.url.includes('from=panel'), 'back 回到上一地址')
-  const fwd = await service.history('forward')
+  const fwd = await svc.history('forward')
   assert.equal(fwd.ok, true)
   assert.ok(fwd.url.includes('from=panel'), 'forward 回到面板导航地址')
-  const reload = await service.history('reload')
+  const reload = await svc.history('reload')
   assert.equal(reload.ok, true)
   ok('history back/forward/reload 作用于观察页')
-  const st3 = await service.state()
+  const st3 = await svc.state()
   assert.equal(st3.activeId, navTab.tabId, '历史操作不动 agent 活动页')
   ok('history back/forward/reload 作用于观察页（不动 agent 活动页）')
 
-  const shot = await service.screenshot({})
+  const shot = await svc.screenshot({})
   assert.equal(shot.ok, true, `screenshot 失败：${shot.error}`)
   assert.ok(shot.size.width > 0 && shot.size.height > 0 && shot.buffer.length > 1000)
   ok(`screenshot 返回 PNG（${shot.size.width}×${shot.size.height}，${shot.buffer.length}B）`)
 
-  const listed = await service.listPages()
+  const listed = await svc.listPages()
   assert.equal(listed.ok, true)
   assert.ok(listed.pages.length >= 1)
   ok(`listPages 列出 ${listed.pages.length} 页`)
 
   // ── act 升级面：ref 回填 / hover / scroll / upload / dialog 可见性 / viewport ──
-  const snapForRef = await service.snapshot()
+  const snapForRef = await svc.snapshot()
   assert.equal(snapForRef.ok, true)
   const refLine = snapForRef.snapshot.split('\n').find((l) => l.includes('添加'))
   const refMatch = refLine && refLine.match(/\[ref=(e\d+)\]/)
   assert.ok(refMatch, `快照应含 [ref=eN]：${refLine}`)
-  const refClick = await service.act({ action: 'click', ref: refMatch[1] })
+  const refClick = await svc.act({ action: 'click', ref: refMatch[1] })
   assert.equal(refClick.ok, true, `ref 点击失败：${refClick.error}`)
   assert.match(refClick.snapshot, /内容不能为空/)
   ok(`act ref 回填点击（${refMatch[1]}）一次到位`)
 
   // ── 快照范围与上限：大页面只看一块 ──
-  const scoped = await service.snapshot(null, { scope: '#hov' })
+  const scoped = await svc.snapshot(null, { selector: '#hov' })
   assert.equal(scoped.ok, true, `范围快照失败：${scoped.error}`)
   assert.match(scoped.snapshot, /悬停区/)
   assert.ok(!scoped.snapshot.includes('待办清单'), `范围外内容不该出现：${scoped.snapshot}`)
-  const smallCap = await service.snapshot(null, { maxChars: 60 })
+  const smallCap = await svc.snapshot(null, { maxChars: 60 })
   assert.ok(smallCap.snapshot.length < 400 && smallCap.snapshot.includes('已截断'), `小上限应截断：${smallCap.snapshot.length}`)
-  const badScope = await service.snapshot(null, { scope: '#nope-not-here' })
+  const badScope = await svc.snapshot(null, { selector: '#nope-not-here' })
   assert.equal(badScope.ok, false)
   assert.match(badScope.error, /范围无匹配/)
-  ok('快照 scope/maxChars 生效、坏选择器给可恢复错误')
+  ok('快照 selector/maxChars 生效、坏选择器给可恢复错误')
 
-  const hov = await service.act({ action: 'hover', text: '悬停区' })
+  const hov = await svc.act({ action: 'hover', text: '悬停区' })
   assert.equal(hov.ok, true, `hover 失败：${hov.error}`)
-  const hovStatus = await service.evaluate(`document.getElementById('status').textContent`)
+  const hovStatus = await svc.evaluate(`document.getElementById('status').textContent`)
   assert.equal(JSON.parse(hovStatus.value), 'hovered')
   ok('act hover 触发悬停副作用')
 
-  const scDown = await service.act({ action: 'scroll', dy: 800 })
+  const scDown = await svc.act({ action: 'scroll', dy: 800 })
   assert.equal(scDown.ok, true, `scroll 失败：${scDown.error}`)
   // mouse.wheel 不等待滚动落定（Chromium 逐帧应用），读取前留出落定时间
   await new Promise((r) => setTimeout(r, 300))
-  const sy1 = JSON.parse((await service.evaluate(`window.scrollY`)).value)
+  const sy1 = JSON.parse((await svc.evaluate(`window.scrollY`)).value)
   assert.ok(sy1 > 0, `scroll 后 scrollY 应 >0：${sy1}`)
-  const scUp = await service.act({ action: 'scroll', dy: -2000 })
+  const scUp = await svc.act({ action: 'scroll', dy: -2000 })
   assert.equal(scUp.ok, true)
   await new Promise((r) => setTimeout(r, 300))
-  const sy2 = JSON.parse((await service.evaluate(`window.scrollY`)).value)
+  const sy2 = JSON.parse((await svc.evaluate(`window.scrollY`)).value)
   assert.equal(sy2, 0, `scroll 回顶失败：${sy2}`)
-  const scView = await service.act({ action: 'scroll', text: '悬停区' })
+  const scView = await svc.act({ action: 'scroll', text: '悬停区' })
   assert.equal(scView.ok, true, `scrollIntoView 失败：${scView.error}`)
   ok('act scroll 真实滚轮下滚/回滚/定位滚到元素')
-  const scBad = await service.act({ action: 'scroll' })
+  const scBad = await svc.act({ action: 'scroll' })
   assert.equal(scBad.ok, false)
   assert.match(scBad.error, /dx\/dy/)
   ok('scroll 无定位无增量给出可恢复错误')
 
   const upFile = path.join(tmpHome, 'upload-me.txt')
   fs.writeFileSync(upFile, 'upload-payload')
-  const up = await service.act({ action: 'upload', selector: '#f', value: upFile })
+  const up = await svc.act({ action: 'upload', selector: '#f', value: upFile })
   assert.equal(up.ok, true, `upload 失败：${up.error}`)
-  const fCount = JSON.parse((await service.evaluate(`document.getElementById('f').files.length`)).value)
+  const fCount = JSON.parse((await svc.evaluate(`document.getElementById('f').files.length`)).value)
   assert.equal(fCount, 1, `文件未进入 input：${fCount}`)
   ok('act upload setInputFiles 落进文件选择框')
 
-  const dlg = await service.act({ action: 'click', role: 'button', name: '删除' })
+  const dlg = await svc.act({ action: 'click', role: 'button', name: '删除' })
   assert.equal(dlg.ok, true, `dialog 路径点击失败（页面若冻结=未 dismiss）：${dlg.error}`)
   assert.ok(dlg.warning && /confirm/.test(dlg.warning) && /确认删除/.test(dlg.warning), `应带回对话框 warning：${dlg.warning}`)
-  const dlgStatus = JSON.parse((await service.evaluate(`document.getElementById('status').textContent`)).value)
+  const dlgStatus = JSON.parse((await svc.evaluate(`document.getElementById('status').textContent`)).value)
   assert.equal(dlgStatus, '已取消')
   ok('act 触发 confirm：自动关闭且弹出事实带回 warning')
 
-  const vp = await service.setViewport({ width: 375, height: 812 })
+  const vp = await svc.setViewport({ width: 375, height: 812 })
   assert.equal(vp.ok, true, `viewport 失败：${vp.error}`)
   assert.deepEqual(vp.viewport, { width: 375, height: 812 })
-  const iw = JSON.parse((await service.evaluate(`window.innerWidth`)).value)
+  const iw = JSON.parse((await svc.evaluate(`window.innerWidth`)).value)
   assert.equal(iw, 375, `innerWidth 应为 375：${iw}`)
-  const vpBad = await service.setViewport({ width: 100, height: 100 })
+  const vpBad = await svc.setViewport({ width: 100, height: 100 })
   assert.equal(vpBad.ok, false)
   assert.match(vpBad.error, /320/)
   ok('viewport 设置生效 + 越界拒绝')
@@ -282,37 +304,91 @@ try {
   // ── 帧内元素 ref：playwright 只给主帧元素印裸 eN，iframe 里的印 f<帧序>e<m>，由
   // aria-ref 引擎按帧序跳帧解析。校验层只放行裸 eN 时，这类页面的快照看得见却点不动
   // （DSH 自己的 GUI 整页都是 f 形态）──
-  const framed = await service.navigate(`${base}host`, { snapshot: true, newTab: true })
+  const framed = await svc.navigate(`${base}host`, { snapshot: true, newTab: true })
   assert.equal(framed.ok, true, `iframe 页 navigate 失败：${framed.error}`)
   const frameLine = framed.snapshot.split('\n').find((l) => l.includes('添加'))
   const frameRef = frameLine && frameLine.match(/\[ref=(f\d+e\d+)\]/)
   assert.ok(frameRef, `iframe 内元素应带帧序 ref（f<n>e<m>）：${frameLine}`)
-  const frameClick = await service.act({ action: 'click', ref: frameRef[1] })
+  const frameClick = await svc.act({ action: 'click', ref: frameRef[1] })
   assert.equal(frameClick.ok, true, `帧内 ref 点击失败：${frameClick.error}`)
   assert.match(frameClick.snapshot, /内容不能为空/)
   ok(`act 帧内 ref（${frameRef[1]}）点击一次到位`)
 
-  // ── 关掉最后一页 = 整个浏览器优雅关闭；下次导航必须能重新拉起。回归：
+  // ── 分区隔离：第二个会话（sess-b）有自己的页集，与 sess-a 互不干扰；浏览器实例与
+  // profile 仍全局共享（登录态一份）──
+  const B = 'sess-b'
+  const aBefore = (await svc.listPages()).pages.map((p) => p.tabId).sort((x, y) => x - y)
+  const bPages0 = await service.listPages(B)
+  assert.equal(bPages0.ok, true)
+  assert.equal(bPages0.pages.length, 0, '新分区不该看见别区的页')
+  assert.equal((await service.state(B)).running, true, '共享同一浏览器实例（已启动）')
+  const bNav = await service.navigate(B, `${base}?scope=b`, { snapshot: false })
+  assert.equal(bNav.ok, true, `B 分区导航失败：${bNav.error}`)
+  const bPages1 = await service.listPages(B)
+  assert.equal(bPages1.pages.length, 1)
+  assert.equal(bPages1.pages[0].tabId, bNav.tabId)
+  const aAfter = (await svc.listPages()).pages.map((p) => p.tabId).sort((x, y) => x - y)
+  assert.deepEqual(aAfter, aBefore, 'A 分区页集不受 B 影响')
+  assert.notEqual((await svc.state()).viewId, bNav.tabId, 'A 的观察页不被 B 的导航拽走')
+  ok('分区隔离：页集与观察页各归各的（同一实例，登录态共享）')
+
+  // 弹窗（target=_blank）按打开者归分区：A 里点开的页只进 A
+  await service.evaluate(
+    S,
+    `(() => { const a = document.createElement('a'); a.id = 'dshk-pop'; a.target = '_blank'; a.href = '${base}?popup'; a.textContent = '弹窗'; document.body.append(a); return true })()`,
+  )
+  const popClick = await svc.act({ action: 'click', selector: '#dshk-pop', snapshot: false })
+  assert.equal(popClick.ok, true, `弹窗链接点击失败：${popClick.error}`)
+  await new Promise((r) => setTimeout(r, 800))
+  const aCount = (await svc.listPages()).pages.length
+  const bCount = (await service.listPages(B)).pages.length
+  assert.equal(aCount, aBefore.length + 1, `弹窗应归打开者分区（A=${aCount}，期望 ${aBefore.length + 1}）`)
+  assert.equal(bCount, 1, 'B 分区不该收到别区的弹窗')
+  ok('target=_blank 弹窗按打开者归分区')
+
+  // 关光一个分区的页：实例留着（别的分区还有页）；只有关光所有分区才收摊
+  for (const p of (await service.listPages(B)).pages) await service.closePage(B, p.tabId)
+  await new Promise((r) => setTimeout(r, 300))
+  assert.equal((await service.state(B)).running, true, '只剩 A 的页时实例不该收摊')
+  assert.equal((await service.listPages(B)).pages.length, 0)
+  assert.ok((await svc.listPages()).pages.length >= 1, 'A 的页不受 B 关页影响')
+  ok('关闭分区页只收本分区的（别的分区还有页就不收实例）')
+
+  // ── 关光所有分区的页 = 整个浏览器优雅关闭；下次导航必须能重新拉起。回归：
   // _launching 落定后若不清，context 事后关闭会让 ensure 误报 ok，
   // 调用方拿 null context 去 newPage 崩掉（正式环境 0.4.3 踩中过）──
-  const remaining = (await service.listPages()).pages
+  const remaining = (await svc.listPages()).pages
   assert.ok(remaining.length >= 1)
-  for (const p of remaining) await service.closePage(p.tabId)
+  for (const p of remaining) await svc.closePage(p.tabId)
   await new Promise((r) => setTimeout(r, 500))
-  const closedState = await service.state()
-  assert.equal(closedState.running, false, '关掉最后一页后浏览器应已收摊')
+  const closedState = await svc.state()
+  assert.equal(closedState.running, false, '关光所有分区的页后浏览器应已收摊')
   assert.ok(events.includes('closed'), '应广播 closed 事件（面板收标签联动源）')
-  const renavigated = await service.navigate(`${base}?relaunch`, { snapshot: false })
+  const renavigated = await svc.navigate(`${base}?relaunch`, { snapshot: false })
   assert.equal(renavigated.ok, true, `收摊后重新导航失败：${renavigated.error}`)
-  const restate = await service.state()
+  const restate = await svc.state()
   assert.equal(restate.running, true, '重新导航后浏览器应已重新拉起')
   ok('close-on-last 收摊 → 再次导航重新拉起（_launching 落定即清）')
 
   assert.ok(events.includes('navigated'), '应收到 navigated 事件（面板联动源）')
   ok('事件流包含 navigated（面板联动）')
+
+  // ── 观察者先到、页后到：面板点开即 watch（浏览器还在冷启动），页认领后必须补挂流。
+  // 少了这一步，面板收到 state 却永远等不到帧（canvas 恒空白）──
+  const C = 'sess-c'
+  const frames = []
+  const opened = await service.watcherOpen(C, (data) => frames.push(data))
+  assert.equal(opened.ok, true, `watcherOpen 失败：${opened.error}`)
+  assert.equal((await service.listPages(C)).pages.length, 0, '此分区此刻还没有页')
+  const ensuredC = await service.ensurePage(C)
+  assert.equal(ensuredC.ok, true, `ensurePage 失败：${ensuredC.error}`)
+  await new Promise((r) => setTimeout(r, 800))
+  assert.ok(frames.length > 0, '观察者先到、页后到时也要有帧（流按「有观察者就有流」补挂）')
+  service.watcherClose(C)
+  ok(`观察者先到页后到：页认领后帧流补挂（收到 ${frames.length} 帧）`)
 } finally {
   off()
-  await service.dispose()
+  await svc.dispose()
   server.close()
   fs.rmSync(tmpHome, { recursive: true, force: true })
 }

@@ -55,7 +55,7 @@ import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, sa
 import { teeRegistryJobs, panelReadJobOutput, releaseJobWindow } from "./job-tee.js";
 import { decodePreviewText } from "./text-decode.js";
 import { rawContentType, rawDownloadContentType, rawDisposition, parseRangeHeader } from "./raw-file.js";
-import { BrowserService } from "./browser.js";
+import { BrowserService, normalizeScope, DEFAULT_SCOPE } from "./browser.js";
 import { loadToolsModule, buildBrowserTools } from "./browser-tools.js";
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from "./schedule.js";
 import { VaultScanner, defaultVaultRoot } from "./vault.js";
@@ -496,11 +496,30 @@ export async function apply(ctx) {
         });
     }
     const browserToolsMod = browserService.available ? await loadToolsModule((m) => console.warn(`dsh-kit: ${m}`)) : null;
+    // 浏览器分区解析（工具侧）：调用方会话 id；子代理沿 durable parentSession 上溯到仍存活的
+    // 最顶层会话——子代理的浏览归它所属的主对话，主对话面板里看得见，不另开隐身页签。
+    // 认不出调用方会话（宿主辅助调用 / 注册表未挂）就落 DEFAULT_SCOPE，与面板的兜底同一格。
+    const browserScopeOf = (exec) => {
+        const agent = exec?.agent;
+        const id = typeof agent?.id === 'string' ? agent.id : '';
+        if (id === '')
+            return DEFAULT_SCOPE;
+        let root = id;
+        let parent = agent?.session?.header?.parentSession;
+        for (let i = 0; i < 16 && typeof parent === 'string' && parent !== ''; i++) {
+            const up = agentsRegistry?.get?.(parent);
+            if (!up)
+                break;
+            root = parent;
+            parent = up?.session?.header?.parentSession;
+        }
+        return root;
+    };
     let browserDefs = null;
     try {
         browserDefs =
             browserToolsMod && typeof browserToolsMod.defineTool === 'function'
-                ? buildBrowserTools({ defineTool: browserToolsMod.defineTool, service: browserService, ctx, isDisabled: () => readSettings().browserEnabled === false })
+                ? buildBrowserTools({ defineTool: browserToolsMod.defineTool, service: browserService, ctx, isDisabled: () => readSettings().browserEnabled === false, scopeOf: browserScopeOf })
                 : null;
     }
     catch (error) {
@@ -1674,14 +1693,14 @@ export async function apply(ctx) {
             // 协议：hello（连接即回 state）→ 浏览器端；watch {on}（帧流订阅引用计数，
             // 0 时停流）/ open {url}（URL 栏导航）/ activate {tabId}（切观察页）/
             // closeTab {tabId}（关页）/ nav {op}（back/forward/reload）/ newTab（＋）
-            // → 宿主。服务事件（state/navigated/crashed/closed）广播给所有连接，
-            // 帧 {t:'frame', data(jpeg base64)} 同通道。面板挂舞台「浏览器」功能签，
-            // 关闭标签即断 WS。同源校验同终端；开关关闭时面板入口在浏览器端已隐藏，
-            // 此处不再重复门控。
+            // → 宿主。每条消息可带 scope（会话 id，见 normalizeScope）：连接按它认领分区，
+            // state/event/frame 都按分区投递——不同对话各看各的页签与画面，浏览器实例与
+            // profile 仍是全局共享的。面板挂舞台「浏览器」功能签，关闭标签即断 WS。
+            // 同源校验同终端；开关关闭时面板入口在浏览器端已隐藏，此处不再重复门控。
             // 另有 HTTP 侧的 /dsh-kit/browser/open（见下）：对话链接点击改投内置浏览器，
             // 走它而不是 WS——点击发生时面板未必已挂载/已连上，HTTP 不依赖任一状态。
             if (browserService.available) {
-                const browserSockets = new Set();
+                const browserSockets = new Map();
                 const sendTo = (ws, obj) => {
                     try {
                         if (ws.readyState === 1)
@@ -1691,14 +1710,20 @@ export async function apply(ctx) {
                         // 连接正在断开
                     }
                 };
-                const broadcast = (obj) => {
-                    for (const ws of browserSockets)
+                /** 按分区投递：scope 为 undefined = 全局事件（实例级），发给每条连接 */
+                const broadcast = (obj, scope) => {
+                    for (const [ws, key] of browserSockets) {
+                        if (scope !== undefined && key !== scope)
+                            continue;
                         sendTo(ws, obj);
+                    }
                 };
                 /** 预序列化广播：帧体是几百 KB 的 base64 字符串，逐连接 JSON.stringify 会把
-                 *  同一份大字符串重复编码 N 次——一次编好，所有连接复用同一个串 */
-                const broadcastJson = (json) => {
-                    for (const ws of browserSockets) {
+                 *  同一份大字符串重复编码 N 次——一次编好，同分区的连接复用同一个串 */
+                const broadcastJson = (json, scope) => {
+                    for (const [ws, key] of browserSockets) {
+                        if (key !== scope)
+                            continue;
                         try {
                             if (ws.readyState === 1)
                                 ws.send(json);
@@ -1708,20 +1733,55 @@ export async function apply(ctx) {
                         }
                     }
                 };
+                /** 回发某条连接自己分区的 state（连接认领分区、分区事件、全局事件都走它） */
+                const sendState = (ws) => {
+                    const scope = browserSockets.get(ws);
+                    if (scope === undefined)
+                        return;
+                    void browserService.state(scope).then((s) => sendTo(ws, { t: 'state', ...s }));
+                };
+                const sendStateAll = () => {
+                    for (const ws of browserSockets.keys())
+                        sendState(ws);
+                };
+                const sendStateScope = (scope) => {
+                    for (const [ws, key] of browserSockets) {
+                        if (key === scope)
+                            sendState(ws);
+                    }
+                };
                 const offBrowserEvent = browserService.on((evt) => {
                     // ws 投影统一字段形状：state/closed 无 tabId/url/title（投影为 undefined，JSON 序列化时丢弃）
                     const flat = evt;
-                    broadcast({ t: 'event', kind: flat.kind, tabId: flat.tabId, url: flat.url, title: flat.title });
-                    if (evt.kind === 'closed' || evt.kind === 'crashed' || evt.kind === 'state') {
-                        void browserService.state().then((s) => broadcast({ t: 'state', ...s }));
-                    }
+                    const scoped = evt.kind === 'scope' || evt.kind === 'navigated' || evt.kind === 'crashed';
+                    broadcast({ t: 'event', kind: flat.kind, scope: flat.scope, tabId: flat.tabId, url: flat.url, title: flat.title }, scoped ? flat.scope : undefined);
+                    // 页集/指针变了要重发 state（closed/state 是实例级的，各连接按自己分区取）
+                    if (scoped)
+                        sendStateScope(flat.scope);
+                    else
+                        sendStateAll();
                 });
                 void offBrowserEvent;
                 const bwss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
                 bwss.on('connection', (ws) => {
-                    browserSockets.add(ws);
-                    let watched = false;
-                    void browserService.state().then((s) => sendTo(ws, { t: 'state', ...s }));
+                    browserSockets.set(ws, DEFAULT_SCOPE);
+                    /** 本连接当前订着的分区（null = 没订流）；换分区时先退订旧分区 */
+                    let watchedScope = null;
+                    const scopeOf = () => browserSockets.get(ws) ?? DEFAULT_SCOPE;
+                    const openWatch = (scope) => {
+                        // 分区内单回调（同分区多连接扇出同一份帧）
+                        void browserService.watcherOpen(scope, (data) => broadcastJson(JSON.stringify({ t: 'frame', data }), scope));
+                        // 点开浏览器面板就该是「浏览器在、有页签」：本分区没有页就开一页
+                        // （懒启动 + 空白页签；运行中 ensure 是幂等 no-op）
+                        void browserService.ensurePage(scope);
+                    };
+                    const closeWatch = () => {
+                        if (watchedScope === null)
+                            return;
+                        browserService.watcherClose(watchedScope);
+                        watchedScope = null;
+                    };
+                    sendState(ws);
                     ws.on('message', (raw) => {
                         let msg;
                         try {
@@ -1732,21 +1792,32 @@ export async function apply(ctx) {
                         }
                         if (!msg || typeof msg !== 'object')
                             return;
+                        // 面板每条消息都带 scope（会话 id）：认领/切换分区，换分区时帧流跟着换
+                        if (typeof msg.scope === 'string') {
+                            const next = normalizeScope(msg.scope);
+                            if (next !== scopeOf()) {
+                                browserSockets.set(ws, next);
+                                if (watchedScope !== null) {
+                                    closeWatch();
+                                    openWatch(next);
+                                }
+                                sendState(ws);
+                            }
+                        }
+                        const scope = scopeOf();
                         if (msg.t === 'watch') {
-                            if (msg.on === true && !watched) {
-                                watched = true;
-                                // onFrame 只保留一份（服务内单回调），帧经 broadcast 扇出到全部连接
-                                void browserService.watcherOpen((data) => broadcastJson(JSON.stringify({ t: 'frame', data })));
+                            if (msg.on === true && watchedScope !== scope) {
+                                closeWatch();
+                                watchedScope = scope;
+                                openWatch(scope);
                             }
                             else if (msg.on === true) {
                                 // 已订阅的连接重发 watch = 面板重新激活：浏览器若已收摊（关最后一页/
-                                // 空闲关闭），懒启动拉回并自带空白页签——点开浏览器面板就该是
-                                // 「浏览器在、有页签」；运行中 ensure 是幂等 no-op
-                                void browserService.ensure();
+                                // 空闲关闭），懒启动拉回并自带空白页签（同 openWatch 语义）
+                                void browserService.ensurePage(scope);
                             }
-                            else if (msg.on === false && watched) {
-                                watched = false;
-                                browserService.watcherClose();
+                            else if (msg.on === false && watchedScope !== null) {
+                                closeWatch();
                             }
                             return;
                         }
@@ -1754,54 +1825,51 @@ export async function apply(ctx) {
                             // 失败不发 error 事件：面板已经切到浏览器签，网址打不开时浏览器自己的错误页
                             // 就是反馈（普通浏览器也这样），起不来时面板按 state.error 显示原因。
                             // 别的操作（切页/关页/新页）失败仍要报——那些没有"页面上看得见"的等价物
-                            void browserService.humanOpen(msg.url);
+                            void browserService.humanOpen(scope, msg.url);
                             return;
                         }
                         if (msg.t === 'activate' && msg.tabId !== undefined) {
-                            void browserService.activatePage(Number(msg.tabId)).then((r) => {
+                            void browserService.activatePage(scope, Number(msg.tabId)).then((r) => {
                                 if (!r.ok)
                                     sendTo(ws, { t: 'event', kind: 'error', message: r.error });
                             });
                             return;
                         }
                         if (msg.t === 'closeTab' && msg.tabId !== undefined) {
-                            void browserService.closePage(Number(msg.tabId)).then((r) => {
+                            void browserService.closePage(scope, Number(msg.tabId)).then((r) => {
                                 if (!r.ok)
                                     sendTo(ws, { t: 'event', kind: 'error', message: r.error });
                             });
                             return;
                         }
                         if (msg.t === 'newTab') {
-                            void browserService.humanNewTab().then((r) => {
+                            void browserService.humanNewTab(scope).then((r) => {
                                 if (!r.ok)
                                     sendTo(ws, { t: 'event', kind: 'error', message: r.error });
                             });
                             return;
                         }
                         if (msg.t === 'nav' && (msg.op === 'back' || msg.op === 'forward' || msg.op === 'reload')) {
-                            void browserService.history(msg.op).then((r) => {
+                            void browserService.history(scope, msg.op).then((r) => {
                                 if (!r.ok)
                                     sendTo(ws, { t: 'event', kind: 'error', message: r.error });
                             });
                             return;
                         }
                         if (msg.t === 'close') {
-                            // 优雅关闭（cookie 落盘；下次打开免重新登录）
+                            // 优雅关闭（cookie 落盘；下次打开免重新登录）——实例级，所有对话一起收
                             void browserService.closeNow();
                             return;
                         }
                         if (msg.t === 'input') {
-                            // 人机共驾：面板输入回传（未运行时宿主拒绝，不误拉起）
-                            void browserService.humanInput(msg);
+                            // 人机共驾：面板输入回传本分区观察页（未运行时宿主拒绝，不误拉起）
+                            void browserService.humanInput(scope, msg);
                             return;
                         }
                     });
                     ws.on('close', () => {
                         browserSockets.delete(ws);
-                        if (watched) {
-                            watched = false;
-                            browserService.watcherClose();
-                        }
+                        closeWatch();
                     });
                     ws.on('error', () => {
                         // close 会跟着来
@@ -1867,7 +1935,8 @@ export async function apply(ctx) {
                                 json(400, { error: '仅支持 http/https URL' });
                                 return;
                             }
-                            void browserService.humanOpen(url).then((r) => {
+                            // 分区 = 点链接时的会话（客户端带 sessionId）：链接落在该对话自己的观察页
+                            void browserService.humanOpen(normalizeScope(body?.sessionId), url).then((r) => {
                                 if (r.ok)
                                     json(200, { ok: true, tabId: r.tabId, url: r.url });
                                 else

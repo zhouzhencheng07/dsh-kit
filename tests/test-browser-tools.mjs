@@ -86,39 +86,45 @@ const ok = (name) => {
   }
   const calls = []
   const service = {
-    navigate: async (url, opts) => {
-      calls.push(['navigate', url, opts])
+    navigate: async (scope, url, opts) => {
+      calls.push(['navigate', scope, url, opts])
       return { ok: true, tabId: 1, url, title: 'T', snapshot: '- heading "T"' }
     },
-    snapshot: async (tabId, opts) => {
-      calls.push(['snapshot', tabId, opts])
+    snapshot: async (scope, tabId, opts) => {
+      calls.push(['snapshot', scope, tabId, opts])
       return { ok: true, tabId: 1, url: 'u', title: 'T', snapshot: '- s' }
     },
-    act: async (args) => {
-      calls.push(['act', args])
+    act: async (scope, args) => {
+      calls.push(['act', scope, args])
       return { ok: true, tabId: 1, url: 'u', title: 'T', matched: 1, snapshot: '- after' }
     },
-    evaluate: async (expression) => {
-      calls.push(['eval', expression])
+    evaluate: async (scope, expression) => {
+      calls.push(['eval', scope, expression])
       return { ok: true, tabId: 1, url: 'u', value: '"v"' }
     },
-    screenshot: async () => ({ ok: true, tabId: 1, url: 'u', buffer: Buffer.from('png'), size: { width: 2, height: 3 } }),
-    setViewport: async (p) => {
-      calls.push(['setViewport', p])
+    screenshot: async (scope) => {
+      calls.push(['screenshot', scope])
+      return { ok: true, tabId: 1, url: 'u', buffer: Buffer.from('png'), size: { width: 2, height: 3 } }
+    },
+    setViewport: async (scope, p) => {
+      calls.push(['setViewport', scope, p])
       return { ok: true, tabId: 1, url: 'u', viewport: { width: p.width, height: p.height } }
     },
-    listPages: async () => ({
-      ok: true,
-      pages: [{ tabId: 1, url: 'u', title: 'T', active: true, viewed: true }],
-      activeId: 1,
-      viewId: 1,
-    }),
-    activatePage: async (tabId) => {
-      calls.push(['activatePage', tabId])
+    listPages: async (scope) => {
+      calls.push(['listPages', scope])
+      return {
+        ok: true,
+        pages: [{ tabId: 1, url: 'u', title: 'T', active: true, viewed: true }],
+        activeId: 1,
+        viewId: 1,
+      }
+    },
+    activatePage: async (scope, tabId) => {
+      calls.push(['activatePage', scope, tabId])
       return { ok: true }
     },
-    closePage: async (tabId) => {
-      calls.push(['closePage', tabId])
+    closePage: async (scope, tabId) => {
+      calls.push(['closePage', scope, tabId])
       return { ok: true }
     },
   }
@@ -132,17 +138,27 @@ const ok = (name) => {
 
   // act：ref 定位透传 service；无定位且非 press/scroll → 报错；scroll 无定位放行
   await defs[2].execute({ action: 'click', ref: 'e12' })
-  assert.equal(calls.at(-1)[1].ref, 'e12')
+  assert.equal(calls.at(-1)[1], 'default') // 无 exec.agent → 兜底分区
+  assert.equal(calls.at(-1)[2].ref, 'e12')
   await defs[2].execute({ action: 'scroll', dy: -600 })
-  assert.equal(calls.at(-1)[1].dy, -600)
+  assert.equal(calls.at(-1)[2].dy, -600)
   await assert.rejects(() => defs[2].execute({ action: 'click' }), /缺少定位参数/)
   const pressValue = await defs[2].execute({ action: 'press', key: 'Enter' })
   assert.equal(pressValue.ok, true)
   ok('act ref/scroll 无定位放行与定位校验')
 
-  // snapshot：scope/maxChars 透传给 service
+  // 分区：exec.agent.id 即 scope；scopeOf 注入（宿主解析子代理归属）优先
+  await defs[2].execute({ action: 'click', ref: 'e1' }, { agent: { id: 'sess-a' } })
+  assert.equal(calls.at(-1)[1], 'sess-a')
+  const defsScoped = buildBrowserTools({ defineTool, service, ctx: { get: () => undefined }, isDisabled: () => false, scopeOf: () => 'root-sess' })
+  await defsScoped[2].execute({ action: 'click', ref: 'e1' }, { agent: { id: 'sub-sess' } })
+  assert.equal(calls.at(-1)[1], 'root-sess')
+  assert.equal(defsScoped.length, 7)
+  ok('工具分区：agent.id 兜底 + scopeOf 注入优先（子代理归主对话）')
+
+  // snapshot：tabId/selector/maxChars 透传给 service
   await defs[1].execute({ tabId: 2, selector: '#x', maxChars: 500 })
-  assert.deepEqual(calls.at(-1), ['snapshot', 2, { scope: '#x', maxChars: 500 }])
+  assert.deepEqual(calls.at(-1), ['snapshot', 'default', 2, { selector: '#x', maxChars: 500 }])
   ok('snapshot selector/maxChars 透传')
 
   // viewport：execute → 返回值 + render 文本投影
