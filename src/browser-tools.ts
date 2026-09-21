@@ -26,7 +26,7 @@ import os from 'node:os'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 
-import { pngSize, normalizeLocatorArgs, normalizeActArgs } from './browser.ts'
+import { pngSize, normalizeLocatorArgs, normalizeActArgs, normalizeScope } from './browser.ts'
 import type { BrowserService } from './browser.ts'
 
 /** 工具定义的结构契约（dsh-tools 的 defineTool 产物按名字注入注册表） */
@@ -39,7 +39,13 @@ export interface ToolDefinition {
 interface ToolExec {
   signal?: AbortSignal
   agent?: {
-    session?: { requestHeader?: () => { config?: { provider?: string; model?: string } } | null }
+    /** 会话 id（分区键） */
+    id?: string
+    session?: {
+      requestHeader?: () => { config?: { provider?: string; model?: string } } | null
+      /** durable 会话头（子代理归属上溯用 parentSession） */
+      header?: { cwd?: string; parentSession?: string }
+    }
     options?: { provider?: string; model?: string }
   } | null
 }
@@ -129,29 +135,34 @@ function renderPageState(value: { tabId: unknown; url: unknown; title?: string; 
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
-/** 组装 5 个工具定义（defineTool 来自 dsh-tools，由调用方传入） */
-export function buildBrowserTools({ defineTool, service, ctx, isDisabled }: { defineTool: DefineTool; service: BrowserService; ctx: HostCtx; isDisabled?: () => boolean }): ToolDefinition[] {
+/** 组装 5 个工具定义（defineTool 来自 dsh-tools，由调用方传入）。
+ *  scopeOf = 调用方分区解析（宿主注入：会话 id，子代理上溯到所属主对话）；缺省只认
+ *  exec.agent.id，认不出落 DEFAULT_SCOPE。 */
+export function buildBrowserTools({ defineTool, service, ctx, isDisabled, scopeOf }: { defineTool: DefineTool; service: BrowserService; ctx: HostCtx; isDisabled?: () => boolean; scopeOf?: (exec?: ToolExec) => string }): ToolDefinition[] {
   const guard = () => {
     if (typeof isDisabled === 'function' && isDisabled()) {
       throw new Error('浏览器能力已在 dsh-kit 设置中停用（重启后工具将从列表消失）')
     }
   }
+  /** 本次调用的分区：认不出调用方会话（无 agent 的辅助调用）就落 DEFAULT_SCOPE */
+  const scopeFor = (exec?: ToolExec): string => normalizeScope(scopeOf ? scopeOf(exec) : exec?.agent?.id)
   const commonHint =
     '规则：一次调用只做一个状态改变动作；动作效果以返回的 snapshot 判断（URL 未变不代表失败）；' +
-    '定位必须来自最近的快照，禁止凭记忆猜选择器；失败时先 browser_snapshot 重建观察再试。'
+    '定位必须来自最近的快照，禁止凭记忆猜选择器；失败时先 browser_snapshot 重建观察再试。' +
+    '页签按对话隔离（登录态/cookie 全局共享）：tabId 与「默认当前页」都只在本对话内有效，别处的页签不在这份列表里。'
 
   const navigate = defineTool({
     name: 'browser_navigate',
     description: `用内置浏览器打开 URL（http/https），返回页面状态与紧凑 ARIA 快照（含 [ref=…] 元素引用）。${commonHint}`,
     parameters: {
       url: { type: 'string', required: true, description: '要打开的完整 URL（http/https）' },
-      newTab: { type: 'boolean', description: '开新页签（默认在当前页导航）' },
+      newTab: { type: 'boolean', description: '开新页签（默认在本对话当前页导航）' },
     },
     output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => renderPageState(value) },
     timeoutMs: 20000,
-    async execute(args) {
+    async execute(args, exec) {
       guard()
-      const r = await service.navigate(args.url, { newTab: args.newTab === true, snapshot: true })
+      const r = await service.navigate(scopeFor(exec), args.url, { newTab: args.newTab === true, snapshot: true })
       if (!r.ok) throw new Error(r.error)
       return r
     },
@@ -169,9 +180,9 @@ export function buildBrowserTools({ defineTool, service, ctx, isDisabled }: { de
     },
     output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => renderPageState(value) },
     timeoutMs: 15000,
-    async execute(args) {
+    async execute(args, exec) {
       guard()
-      const r = await service.snapshot(args.tabId, { scope: args.selector, maxChars: args.maxChars })
+      const r = await service.snapshot(scopeFor(exec), args.tabId, { selector: args.selector, maxChars: args.maxChars })
       if (!r.ok) throw new Error(r.error)
       return r
     },
@@ -205,7 +216,7 @@ export function buildBrowserTools({ defineTool, service, ctx, isDisabled }: { de
     },
     output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => renderPageState(value) },
     timeoutMs: 20000,
-    async execute(args) {
+    async execute(args, exec) {
       guard()
       const loc = normalizeLocatorArgs(args)
       const actArgs = normalizeActArgs(args)
@@ -217,7 +228,7 @@ export function buildBrowserTools({ defineTool, service, ctx, isDisabled }: { de
       if (!hasLocator && actArgs.action !== 'press' && actArgs.action !== 'scroll') {
         throw new Error(('error' in loc ? loc.error : '') || '缺少定位参数')
       }
-      const r = await service.act(args)
+      const r = await service.act(scopeFor(exec), args)
       if (!r.ok) throw new Error(r.error)
       return r
     },
@@ -237,9 +248,9 @@ export function buildBrowserTools({ defineTool, service, ctx, isDisabled }: { de
       render: (_args, value) => [{ type: 'text', text: `tab=${value.tabId} ${value.url}\n${value.value}` }],
     },
     timeoutMs: 15000,
-    async execute(args) {
+    async execute(args, exec) {
       guard()
-      const r = await service.evaluate(args.expression, args.tabId)
+      const r = await service.evaluate(scopeFor(exec), args.expression, args.tabId)
       if (!r.ok) throw new Error(r.error)
       return r
     },
@@ -266,7 +277,7 @@ export function buildBrowserTools({ defineTool, service, ctx, isDisabled }: { de
     timeoutMs: 20000,
     async execute(args, exec) {
       guard()
-      const r = await service.screenshot({ fullPage: args.fullPage === true, tabId: args.tabId })
+      const r = await service.screenshot(scopeFor(exec), { fullPage: args.fullPage === true, tabId: args.tabId })
       if (!r.ok) throw new Error(r.error)
       // 落盘（人随时可看；非多模态模型下的唯一留存）
       const dir = path.join(dshHomeDir(), 'dsh-kit', 'screenshots')
@@ -301,9 +312,9 @@ export function buildBrowserTools({ defineTool, service, ctx, isDisabled }: { de
       render: (_args, value) => [{ type: 'text', text: `视口已设为 ${value.viewport.width}×${value.viewport.height}（tab=${value.tabId} ${value.url}）` }],
     },
     timeoutMs: 10000,
-    async execute(args) {
+    async execute(args, exec) {
       guard()
-      const r = await service.setViewport({ width: args.width, height: args.height, tabId: args.tabId })
+      const r = await service.setViewport(scopeFor(exec), { width: args.width, height: args.height, tabId: args.tabId })
       if (!r.ok) throw new Error(r.error)
       return r
     },
@@ -312,8 +323,8 @@ export function buildBrowserTools({ defineTool, service, ctx, isDisabled }: { de
   const tabs = defineTool({
     name: 'browser_tabs',
     description:
-      '管理内置浏览器页签（navigate 只增不减，这里是唯一的收尾口）。action：list（默认）列出全部页签与 id（[活动]=agent 活动页、[观察]=面板正在看的那页、[当前]两者同一页）/ ' +
-      'activate（切到 tabId：帧流与共驾输入随之切换，agent 活动指针不动，与人在面板点页签同语义）/ close（关闭 tabId；关掉最后一页即整个浏览器收摊）。',
+      '管理本对话的内置浏览器页签（navigate 只增不减，这里是唯一的收尾口）。action：list（默认）列出本对话全部页签与 id（[活动]=agent 活动页、[观察]=面板正在看的那页、[当前]两者同一页）/ ' +
+      'activate（切到 tabId：帧流与共驾输入随之切换，agent 活动指针不动，与人在面板点页签同语义）/ close（关闭 tabId；关光所有对话的页即整个浏览器收摊）。',
     parameters: {
       action: { type: 'string', enum: ['list', 'activate', 'close'], description: '要做的操作（默认 list）' },
       tabId: { type: 'number', description: '目标页签 id（activate / close 必填）' },
@@ -333,20 +344,21 @@ export function buildBrowserTools({ defineTool, service, ctx, isDisabled }: { de
       },
     },
     timeoutMs: 10000,
-    async execute(args) {
+    async execute(args, exec) {
       guard()
+      const scope = scopeFor(exec)
       const action = args.action === 'activate' || args.action === 'close' ? args.action : 'list'
       if (action === 'list') {
-        const r = await service.listPages()
+        const r = await service.listPages(scope)
         if (!r.ok) throw new Error(r.error)
         return { action, pages: r.pages, activeId: r.activeId, viewId: r.viewId }
       }
       const tabId = Number(args.tabId)
       if (!Number.isInteger(tabId) || tabId <= 0) throw new Error('activate / close 需要 tabId（整数页签 id，先 action:list 看）')
-      const r = action === 'close' ? await service.closePage(tabId) : await service.activatePage(tabId)
+      const r = action === 'close' ? await service.closePage(scope, tabId) : await service.activatePage(scope, tabId)
       if (!r.ok) throw new Error(r.error)
       // 回读一次拿 url/title：调用方多半紧接着要在这页上做动作
-      const listed = await service.listPages()
+      const listed = await service.listPages(scope)
       const hit = listed.ok ? listed.pages.find((p) => p.tabId === tabId) : undefined
       return { action, tabId, url: hit?.url ?? '', title: hit?.title ?? '' }
     },

@@ -766,10 +766,11 @@ window.__ModuleLoader__.load({
       // 失败不提示（吞掉 rejection 免成 unhandled）：面板上一步已切到浏览器签——
       // 网址打不开时浏览器自己的错误页就是反馈（同普通浏览器），浏览器起不来时
       // 面板的未启动提示会带上宿主报的原因。再弹 toast 只是重复的噪音。
+      // sessionId = 点击时所在会话：宿主按它把链接落进该对话自己的浏览器分区
       kitJson("/dsh-kit/browser/open", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url: href }),
+        body: JSON.stringify({ url: href, sessionId: currentSessionId() }),
       }).catch(() => {});
     }
 
@@ -2818,6 +2819,15 @@ textarea.dshk-sched-input{resize:vertical}
         if ((row?.retainedBy?.mainView ?? 0) > 0) return row;
       }
       return null;
+    }
+    /** 当前主视图会话 id（点击类一次性动作用：浏览器分区、文件地址等）；拿不到给空串 */
+    function currentSessionId() {
+      try {
+        const list = sessionsSvc && typeof sessionsSvc.list?.getSnapshot === "function" ? sessionsSvc.list.getSnapshot() : null;
+        return mainRowOf(list)?.id ?? "";
+      } catch {
+        return "";
+      }
     }
     function useCurrentRow(props) {
       const useSessions = props && typeof props.useSessions === "function" ? props.useSessions : null;
@@ -7178,18 +7188,21 @@ textarea.dshk-sched-input{resize:vertical}
     // ─────────── 内置浏览器面板（右栏浏览器签）───────────
     // 数据走宿主半边 /dsh-kit/browser WS：state/event 广播 + frame 帧流（jpeg）+
     // watch 引用计数 + open/activate/closeTab/nav/newTab（人操作）+ input（人机共驾）。
-    // 设计定位：面板是 agent 隔离浏览器的「现场直播 + 遥控」——canvas 绘观察页实时
+    // 分区（scope = 本 pane 所属会话 id）：页签按对话隔离，浏览器实例与 profile
+    // 全局共享（登录态一份）——连接先报 scope，宿主只回本分区的 state/帧/事件，
+    // 换会话即重连换分区。
+    // 设计定位：面板是 agent 浏览器的「现场直播 + 遥控」——canvas 绘观察页实时
     // 画面；人的点击/滚轮/键入经画布坐标换算回传宿主，派发到观察页（人与 agent 可
     // 各看各页，画面是否跟随 agent 由宿主侧 follow 开关决定）。面板常驻挂在右侧
     // 标签页容器：WS 管帧流与共驾输入；「agent 导航自动切到浏览器标签」的事件源
     // 已升级为壳层常驻（ShellBrowserEvents），标签被收掉（0 页自动收/人为关）也能弹回。
-    // 生命周期：关标签仅停流不关浏览器（空闲 10 分钟自动优雅关，登录态保留在
-    // 专用 profile，重开无损）。
+    // 生命周期：关标签仅停流不关浏览器（分区空闲 10 分钟自动收该对话的页、全局无页
+    // 无观察者时空闲关实例，登录态保留在专用 profile，重开无损）。
 
     // 关页签即关（无确认）：「agent 活动页」的宿主识别与实际操作页常对
     // 不上，据此弹「agent 在用」确认只会误拦；agent 被关页后按 URL 重走即可
 
-    function BrowserPanel({ active }) {
+    function BrowserPanel({ active, scope }) {
       const [state, setState] = react.useState({ running: false, launching: false, pages: [], activeId: null, viewId: null });
       const [draft, setDraft] = react.useState("");
       const [visible, setVisible] = react.useState(document.visibilityState === "visible");
@@ -7201,6 +7214,10 @@ textarea.dshk-sched-input{resize:vertical}
       const rafRef = react.useRef(0);
       const moveRef = react.useRef(0); // 输入节流（~30/s）
       const downRef = react.useRef(null); // 双击判定（时间+距离窗）
+      // 分区（本 pane 所属会话 id）：连接按它认领分区，消息都带它——换会话时 WS 重连
+      // 到新分区（effect 依赖 scope），宿主只回本分区的 state/frame/event
+      const scopeRef = react.useRef(scope);
+      scopeRef.current = scope;
       // watch 门控与事件回调里要读「最新」的激活/可见态，走 ref（闭包会停在创建帧）
       const activeRef = react.useRef(active);
       activeRef.current = active;
@@ -7240,7 +7257,9 @@ textarea.dshk-sched-input{resize:vertical}
         img.src = `data:image/jpeg;base64,${data}`;
       }, []);
 
-      // WS 生命周期：挂载连接 + 断线重连（2.5s）；watch 跟随「实时画面模式 + 页面可见」
+      // WS 生命周期：挂载连接 + 断线重连（2.5s）+ 换分区重连；watch 跟随「实时画面
+      // 模式 + 页面可见」。握手后先报分区（scope），再发 watch——宿主按连接分区回
+      // state/帧/事件，别的对话的页签与画面不会串进来。
       react.useEffect(() => {
         let disposed = false;
         let retry = null;
@@ -7250,6 +7269,7 @@ textarea.dshk-sched-input{resize:vertical}
           ws.onopen = () => {
             if (disposed) return;
             setConnLost(false);
+            sendScope(); // 认领分区（换会话重连时也靠它）
             sendWatch(); // 首连补发：effect 里那次检查时握手未完成，会被 readyState 挡掉
           };
           ws.onmessage = (e) => {
@@ -7319,16 +7339,25 @@ textarea.dshk-sched-input{resize:vertical}
             // 已断
           }
         };
-      }, [drawFrame]);
+      }, [drawFrame, scope]);
 
       // watch 开关：「浏览器标签激活 + 页面可见」才要帧（切走/隐藏即停流，回来自动
       // 续）；WS 本身保持连接（自动打开的事件源）。onopen 另有补发——首次连接建立
       // 时本 effect 已跑过（握手未完成被 readyState 挡掉），不补发首连收不到帧。
+      const sendScope = () => {
+        const ws = wsRef.current;
+        if (!ws || ws.readyState !== 1) return;
+        try {
+          ws.send(JSON.stringify({ t: "scope", scope: scopeRef.current ?? "" }));
+        } catch {
+          // 已断
+        }
+      };
       const sendWatch = () => {
         const ws = wsRef.current;
         if (!ws || ws.readyState !== 1) return;
         try {
-          ws.send(JSON.stringify({ t: "watch", on: visibleRef.current === true && activeRef.current === true }));
+          ws.send(JSON.stringify({ t: "watch", on: visibleRef.current === true && activeRef.current === true, scope: scopeRef.current ?? "" }));
         } catch {
           // 已断
         }
@@ -7349,9 +7378,10 @@ textarea.dshk-sched-input{resize:vertical}
       }, []);
 
       // ── 人机共驾：画布输入 → 页面坐标 → 宿主派发（仅运行中；未运行不误拉起）──
+      // 所有面板消息都带上本 pane 的分区（scope）：宿主按连接分区派发到该对话的观察页
       const sendInput = (obj) => {
         try {
-          wsRef.current?.send(JSON.stringify(obj));
+          wsRef.current?.send(JSON.stringify({ ...obj, scope: scopeRef.current ?? "" }));
         } catch {
           // 已断：丢帧无害（下一帧画面自校正）
         }
@@ -7446,7 +7476,7 @@ textarea.dshk-sched-input{resize:vertical}
           pages: (prev.pages ?? []).map((p) => (p.viewed ? { ...p, url: withScheme, title: "" } : p)),
         }));
         try {
-          wsRef.current?.send(JSON.stringify({ t: "open", url: withScheme }));
+          wsRef.current?.send(JSON.stringify({ t: "open", url: withScheme, scope: scopeRef.current ?? "" }));
         } catch {
           // 连接断开时忽略（重连后用户可再按）
         }
@@ -10640,14 +10670,16 @@ textarea.dshk-sched-input{resize:vertical}
           : jsxRuntime.jsx(JobsPanel, { ...props }),
       ] });
     }
-    /** 浏览器 pane（agent 驱动 + 人机共驾 + 自动跟随；与独立面板同构，不加功能） */
-    function BrowserPaneBody() {
+    /** 浏览器 pane（agent 驱动 + 人机共驾 + 自动跟随；与独立面板同构，不加功能）。
+     *  分区 = 本 pane 所属会话 id——页签按对话隔离，同一浏览器实例/profile 共享登录态 */
+    function BrowserPaneBody(props) {
       useFeaturePresence("browser");
       const cfg = cfgFromSnapshot(getCfgSnapshot());
+      const scope = useCurrentRow(props)?.id ?? "";
       return jsxRuntime.jsx("div", { className: "dshk-rbpane", children:
         cfg.browserEnabled === false
           ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("rbFeatureDisabled") })
-          : jsxRuntime.jsx(BrowserPanel, { active: true }),
+          : jsxRuntime.jsx(BrowserPanel, { active: true, scope }),
       });
     }
     /** 计时芯片（会话 header 工具区）：空闲=开始钮（弹起表
@@ -11010,15 +11042,26 @@ textarea.dshk-sched-input{resize:vertical}
       // ShellBrowserEvents：壳层常驻浏览器事件源（与面板 WS 并存，不订阅帧流）。
       // 面板标签会被收掉（0 页自动收/人为关闭），「agent 开页切到浏览器」不能依赖
       // 面板自己活着——壳层恒听宿主广播：navigated → 拽出右栏浏览器签（无抑制，
-      // agent 操作浏览器必须可见）；浏览器收摊 → 顺手收掉
-      // 标签。两者兼得：正常浏览器的「没了就没了」+ agent 干活时画面自动回眼前
+      // agent 操作浏览器必须可见）；浏览器收摊 → 顺手收掉标签。两者兼得：正常浏览器的
+      // 「没了就没了」+ agent 干活时画面自动回眼前。
+      // 分区 = 当前会话：连接先报 scope（宿主只回本会话的 navigated），换会话即重连；
+      // 0 页收签只在「曾经有页又变 0」时触发——本会话刚开面板（页还没建）不该被收掉。
       react.useEffect(() => {
         if (cfg.browserEnabled === false) return undefined;
         let disposed = false;
         let retry = null;
         let ws = null;
+        let hadPages = false;
         const connect = () => {
           ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/dsh-kit/browser`);
+          ws.onopen = () => {
+            if (disposed) return;
+            try {
+              ws.send(JSON.stringify({ t: "scope", scope: sessionId ?? "" }));
+            } catch {
+              // 已断
+            }
+          };
           ws.onmessage = (e) => {
             let msg;
             try {
@@ -11029,14 +11072,22 @@ textarea.dshk-sched-input{resize:vertical}
             if (!msg || typeof msg !== "object") return;
             if (msg.t === "event") {
               if (msg.kind === "navigated") maybeAutoOpenBrowser();
-              else if (msg.kind === "closed") closeBrowserDockForGone();
+              else if (msg.kind === "closed") {
+                hadPages = false;
+                closeBrowserDockForGone();
+              }
               return;
             }
-            if (msg.t === "state" && msg.launching !== true && msg.running === true && (msg.pages ?? []).length === 0) {
+            if (msg.t === "state" && msg.launching !== true && msg.running === true) {
               // 页崩光残留（running 但 0 页）= 浏览器实质没了，收掉标签。
               // running:false 不作依据——快照无历史，启动失败也会落到这个形状，
-              // 收掉标签会让用户连错误线索都看不到；「曾活着→没了」由 closed 事件负责
-              closeBrowserDockForGone();
+              // 收掉标签会让用户连错误线索都看不到；「曾活着→没了」由 closed 事件负责。
+              // 本会话刚开、页还没建（hadPages 为假）时不动它
+              if ((msg.pages ?? []).length > 0) hadPages = true;
+              else if (hadPages) {
+                hadPages = false;
+                closeBrowserDockForGone();
+              }
             }
           };
           ws.onclose = () => {
@@ -11055,7 +11106,7 @@ textarea.dshk-sched-input{resize:vertical}
             // 已断
           }
         };
-      }, [cfg.browserEnabled]);
+      }, [cfg.browserEnabled, sessionId]);
 
       return jsxRuntime.jsxs(jsxRuntime.Fragment, {
         children: [
