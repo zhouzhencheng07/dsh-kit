@@ -1328,22 +1328,23 @@ window.__ModuleLoader__.load({
       notifyPlanTitle: "{title} · 等你批准计划",
       notifyPlanBody: "agent 提交了计划等你批准",
       notifyToolFallback: "工具调用",
-      browserUrlPh: "输入网址，回车打开",
-      browserGo: "打开",
+      browserUrlPh: "输入 HTTP(S) 地址",
+      browserGo: "前往",
       browserBack: "后退",
       browserForward: "前进",
       browserReload: "刷新",
+      browserExternal: "在系统浏览器中打开",
       browserNewTab: "新建页签",
       browserCloseTab: "关闭页签",
       browserReconnect: "连接断开，重连中…",
       browserNotRunning: "浏览器未启动——在上方输入网址回车，或等 agent 首次使用时自动拉起",
       browserNoPages: "没有打开的页面——在上方输入网址回车，或等 agent 下次导航自动出现在这里",
       dockJobs: "后台任务",
-      dockBrowser: "浏览器",
+      dockBrowser: "内置浏览器",
       pvCloseTab: "关闭此标签",
       pvDeletedNote: "文件已删除——此标签仅展示删除 diff；可在源代码管理里 ↩ 恢复文件",
       rbGuideSchedDesc: "周网格、待办与计时",
-      rbGuideBrowserDesc: "agent 驱动的内置浏览器",
+      rbGuideBrowserDesc: "agent 驱动的真实浏览器，可实时观看与接管",
       rbGuideJobsDesc: "后台任务的输出与停止",
       rbFeatureDisabled: "该功能已在设置中停用",
       fileTabLabel: "文件",
@@ -1748,22 +1749,23 @@ window.__ModuleLoader__.load({
       notifyPlanTitle: "{title} · plan awaiting approval",
       notifyPlanBody: "The agent submitted a plan for your approval",
       notifyToolFallback: "A tool call",
-      browserUrlPh: "Type a URL and press Enter",
+      browserUrlPh: "Enter an HTTP(S) address",
       browserGo: "Go",
       browserBack: "Back",
       browserForward: "Forward",
       browserReload: "Reload",
+      browserExternal: "Open in system browser",
       browserNewTab: "New tab",
       browserCloseTab: "Close tab",
       browserReconnect: "Reconnecting…",
       browserNotRunning: "Browser not started — type a URL above or wait for the agent's first use",
       browserNoPages: "No open pages — type a URL above, or the agent's next navigation will appear here",
       dockJobs: "Background tasks",
-      dockBrowser: "Browser",
+      dockBrowser: "Built-in browser",
       pvCloseTab: "Close this tab",
       pvDeletedNote: "File deleted — this tab shows the deletion diff only; restore it via ↩ in source control",
       rbGuideSchedDesc: "Weekly grid, todos, and a timer",
-      rbGuideBrowserDesc: "Built-in browser driven by the agent",
+      rbGuideBrowserDesc: "Agent-driven real browser you can watch live and take over",
       rbGuideJobsDesc: "Output and controls for background tasks",
       rbFeatureDisabled: "This feature is disabled in settings",
       fileTabLabel: "Files",
@@ -2110,6 +2112,8 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
    :hover 一并声明避免 hover 规则在选中态下把底色洗掉 */
 .dshk-enbtn[aria-pressed="true"],.dshk-enbtn[aria-pressed="true"]:hover{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-brand-primary)}
 .dshk-pane-body{flex:1 1 auto;min-height:0;overflow:auto;padding:4px 10px 12px}
+/* pane 内联提示（文件已删除等）：弱化小字说明，不抢内容 */
+.dshk-note{flex:none;padding:8px 12px;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}
 /* 官方右栏 dock pane 正文（sidebar.right.pane.tab）：pane 内是普通文档流，
    外壳占满 100%×100%、内容区自己滚；这里只有普通文档流 */
 .dshk-rbpane{width:100%;height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base)}
@@ -2550,17 +2554,29 @@ textarea.dshk-sched-input{resize:vertical}
    （滚动条隐藏），标签多了滑过去点，不被裁掉 */
 .dshk-subtabs{flex:none;display:flex;align-items:center;gap:2px;min-width:0;padding:6px 8px 4px;border-bottom:1px solid var(--dsw-alias-border-l1);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .dshk-subtabs::-webkit-scrollbar{display:none}
-.dshk-brw-tabrow{flex:none;display:flex;align-items:center;gap:4px;padding:8px 10px 2px;min-width:0;overflow:hidden}
+/* 工具栏/地址框/提示条/空状态规格照抄官方右栏浏览器签
+   （@deepseek-ai/dsh-client-ui-sidebar-browser 的 Browser.module.css：38px 工具栏、
+   28px 图标钮、0.5px 分隔线、dsw 令牌与字号；哈希类名不跨包复用，仅搬规格）。
+   页签条与画布（多页切换 + 人机共驾）是本插件特有，官方无对应物 */
+.dshk-brw-tabrow{flex:none;display:flex;align-items:center;gap:4px;height:32px;padding:0 6px;min-width:0;overflow:hidden}
 .dshk-brw-newtab{padding:0 7px;font-size:13px}
-.dshk-brw-nav{flex:none;min-width:26px}
-.dshk-jobs-btn:disabled{opacity:.4;cursor:default}
-.dshk-brw-bar{display:flex;gap:6px;padding:0 12px 8px}
-.dshk-brw-url{flex:1;min-width:0;font-size:12px;font-family:ui-monospace,Consolas,monospace;padding:6px 9px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary)}
-.dshk-brw-url:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
-.dshk-brw-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:0 10px 10px;overflow:hidden}
-.dshk-brw-canvas{max-width:100%;height:auto;margin:auto 0;display:block;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);outline:none}
-.dshk-brw-canvas:focus-visible{border-color:var(--dsw-alias-brand-primary)}
-.dshk-brw-note{padding:8px 12px;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}
+.dshk-brw-bar{box-sizing:border-box;flex:none;display:flex;align-items:center;gap:4px;height:38px;padding:5px 6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.dshk-brw-tool{width:28px;height:28px;flex:none;display:inline-flex;align-items:center;justify-content:center;padding:0;border:0;border-radius:6px;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.dshk-brw-tool:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+/* label-quaternary 官方有引用但本宿主主题未定义——带回退链，将来补上即自动对齐 */
+.dshk-brw-tool:disabled{color:var(--dsw-alias-label-quaternary,var(--dsw-alias-label-tertiary));cursor:default}
+.dshk-brw-addrbox{position:relative;flex:auto;min-width:0}
+.dshk-brw-url{box-sizing:border-box;width:100%;height:28px;padding:0 34px 0 9px;border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12)}
+.dshk-brw-url:focus{outline:1px solid var(--dsw-alias-brand-primary-new-colorprimary-new-color,var(--dsw-alias-brand-primary));outline-offset:-1px}
+/* 「前往」贴地址框右缘，聚焦时才现形（官方 addressGo 同款） */
+.dshk-brw-go{position:absolute;top:0;right:0;visibility:hidden;opacity:0}
+.dshk-brw-addrbox:focus-within .dshk-brw-go{visibility:visible;opacity:1}
+.dshk-brw-warn{flex:none;padding:6px 12px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warning-primary,var(--dsw-alias-state-business-primary));background:color-mix(in srgb,var(--dsw-alias-state-warning-primary,var(--dsw-alias-state-business-primary)) 8%,transparent)}
+.dshk-brw-fail{flex:none;padding:6px 12px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 8%,transparent)}
+.dshk-brw-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:var(--dsw-alias-bg-base)}
+.dshk-brw-canvas{max-width:100%;max-height:100%;margin:auto;display:block;outline:none}
+.dshk-brw-canvas-off{display:none}
+.dshk-brw-start{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:24px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xs-13);text-align:center}
 /* 透明 IME 输入：只做组合事件宿主，视觉隐形、不拦截点击 */
 .dshk-brw-ime{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;border:0;padding:0;margin:0;outline:none;pointer-events:none;z-index:-1;background:transparent}
 /* 手机触控增强：斜杠菜单（input-trigger）在触屏上滚不动/悬停粘滞的兜底。
@@ -5474,7 +5490,7 @@ textarea.dshk-sched-input{resize:vertical}
           deleted === true
             ? jsxRuntime.jsxs(jsxRuntime.Fragment, {
                 children: [
-                  jsxRuntime.jsx("div", { className: "dshk-brw-note", children: t("pvDeletedNote") }),
+                  jsxRuntime.jsx("div", { className: "dshk-note", children: t("pvDeletedNote") }),
                   jsxRuntime.jsx("div", { className: "dshk-pane-body", children: renderDiffView() }),
                 ],
               })
@@ -7202,6 +7218,40 @@ textarea.dshk-sched-input{resize:vertical}
     // 关页签即关（无确认）：「agent 活动页」的宿主识别与实际操作页常对
     // 不上，据此弹「agent 在用」确认只会误拦；agent 被关页后按 URL 重走即可
 
+    // 工具栏图标 = 官方浏览器签同一套 primitives（后退/前进 Chevron14、刷新
+    // Refresh14、前往 Link14、外部打开 RightUp16 传 size 14）；取不到（老宿主）
+    // 时回退同尺寸自绘，不挡渲染
+    const BRW_ICON_NAME = {
+      back: "IconChevronLeftOutline14",
+      forward: "IconChevronRightOutline14",
+      reload: "IconRefreshOutline14",
+      go: "IconLinkOutline14",
+      external: "IconRightUpOutline16",
+    };
+    const BRW_ICON_FALLBACK = {
+      back: ["M10 3.2L5.6 8L10 12.8"],
+      forward: ["M6 3.2L10.4 8L6 12.8"],
+      reload: ["M12.6 6.1A4.8 4.8 0 1 0 12.9 9.4", "M12.7 2.9V6.3H9.3"],
+      go: ["M2.8 8h9.6", "M9.2 4.4L12.8 8l-3.6 3.6"],
+      external: ["M6.6 3.2h6.2v6.2", "M12.8 3.2L6.4 9.6", "M12.4 9.4v2.8a1.6 1.6 0 0 1-1.6 1.6H4.4a1.6 1.6 0 0 1-1.6-1.6V4.8a1.6 1.6 0 0 1 1.6-1.6h2.4"],
+    };
+    function BrwToolIcon({ name }) {
+      const Official = dswIcon(BRW_ICON_NAME[name]);
+      if (Official) return jsxRuntime.jsx(Official, name === "external" ? { size: 14 } : {});
+      return jsxRuntime.jsx("svg", {
+        width: 14,
+        height: 14,
+        viewBox: "0 0 16 16",
+        fill: "none",
+        "aria-hidden": true,
+        stroke: "currentColor",
+        strokeWidth: 1.2,
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+        children: (BRW_ICON_FALLBACK[name] ?? []).map((d) => jsxRuntime.jsx("path", { d }, d)),
+      });
+    }
+
     function BrowserPanel({ active, scope }) {
       const [state, setState] = react.useState({ running: false, launching: false, pages: [], activeId: null, viewId: null });
       const [draft, setDraft] = react.useState("");
@@ -7496,6 +7546,30 @@ textarea.dshk-sched-input{resize:vertical}
         }
       };
 
+      // 在系统浏览器打开（官方工具栏同款）：web 端 = 你自己浏览器的新标签页，
+      // 桌面壳里 = 系统浏览器。地址取观察页——没有观察页就没得开
+      const openExternal = () => {
+        const url = String(viewUrl ?? "").trim();
+        if (url === "") return;
+        try {
+          window.open(url, "_blank", "noopener,noreferrer");
+        } catch {
+          // 弹窗被拦：无副作用
+        }
+      };
+
+      // 画面占位（官方空状态同款居中提示）：没帧可看的三种情形；断线/启动失败
+      // 另走顶部提示条，不占画面（定格帧保留，重连回来自动续上）
+      const start = connLost
+        ? null
+        : !live && state.launching === true
+          ? t("browserStarting")
+          : !live && viewUrl === ""
+            ? t("browserNotRunning")
+            : (state.pages ?? []).length === 0
+              ? t("browserNoPages")
+              : null;
+
       return jsxRuntime.jsxs(jsxRuntime.Fragment, {
         children: [
           // 页签条：高亮=观察页；× 关页签（直关无确认）；＋ 新页签
@@ -7536,7 +7610,8 @@ textarea.dshk-sched-input{resize:vertical}
               ],
             }),
           }),
-          // URL 栏 + 前进/后退/刷新（都作用于观察页）
+          // 工具栏（规格同官方浏览器签）：后退/前进/刷新 + 地址框（「前往」聚焦才现形）
+          // + 在系统浏览器中打开；都作用于观察页
           jsxRuntime.jsxs("form", {
             className: "dshk-brw-bar",
             onSubmit: (e) => {
@@ -7544,32 +7619,46 @@ textarea.dshk-sched-input{resize:vertical}
               go(draft);
             },
             children: [
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-jobs-btn dshk-brw-nav", title: t("browserBack"), "aria-label": t("browserBack"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "back" }), children: "◀" }),
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-jobs-btn dshk-brw-nav", title: t("browserForward"), "aria-label": t("browserForward"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "forward" }), children: "▶" }),
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-jobs-btn dshk-brw-nav", title: t("browserReload"), "aria-label": t("browserReload"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "reload" }), children: "⟳" }),
-              jsxRuntime.jsx("input", {
-                className: "dshk-brw-url",
-                value: draft,
-                placeholder: t("browserUrlPh"),
-                onChange: (e) => setDraft(e.target.value),
-                spellCheck: false,
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", title: t("browserBack"), "aria-label": t("browserBack"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "back" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "back" }) }),
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", title: t("browserForward"), "aria-label": t("browserForward"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "forward" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "forward" }) }),
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", title: t("browserReload"), "aria-label": t("browserReload"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "reload" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "reload" }) }),
+              jsxRuntime.jsxs("div", {
+                className: "dshk-brw-addrbox",
+                children: [
+                  jsxRuntime.jsx("input", {
+                    className: "dshk-brw-url",
+                    value: draft,
+                    placeholder: t("browserUrlPh"),
+                    "aria-label": t("browserUrlPh"),
+                    spellCheck: false,
+                    onChange: (e) => setDraft(e.target.value),
+                  }),
+                  jsxRuntime.jsx("button", { type: "submit", className: "dshk-brw-tool dshk-brw-go", title: t("browserGo"), "aria-label": t("browserGo"), children: jsxRuntime.jsx(BrwToolIcon, { name: "go" }) }),
+                ],
               }),
-              jsxRuntime.jsx("button", { type: "submit", className: "dshk-jobs-btn", children: t("browserGo") }),
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", title: t("browserExternal"), "aria-label": t("browserExternal"), disabled: viewUrl === "", onClick: openExternal, children: jsxRuntime.jsx(BrwToolIcon, { name: "external" }) }),
             ],
           }),
+          // 顶部提示条（官方 failure / sandboxWarning 同款）：断线取警示色、启动失败取
+          // 错误色；压在画面上方，定格帧不动（重连回来自动续流）
+          connLost ? jsxRuntime.jsx("div", { className: "dshk-brw-warn", role: "status", children: t("browserReconnect") }) : null,
+          !connLost && !live && state.error ? jsxRuntime.jsx("div", { className: "dshk-brw-fail", role: "alert", children: state.error }) : null,
           jsxRuntime.jsx("div", {
             className: "dshk-brw-body",
-            children: jsxRuntime.jsx("canvas", {
-              className: "dshk-brw-canvas",
-              ref: canvasRef,
-              tabIndex: 0,
-              onPointerDown: onCanvasPointerDown,
-              onPointerMove: onCanvasPointerMove,
-              onPointerUp: onCanvasPointerUp,
-              onWheel: onCanvasWheel,
-              onKeyDown: onCanvasKeyDown,
-              onContextMenu: (e) => e.preventDefault(), // 右键菜单交给远端页面
-            }),
+            children: [
+              jsxRuntime.jsx("canvas", {
+                className: `dshk-brw-canvas${start === null ? "" : " dshk-brw-canvas-off"}`,
+                ref: canvasRef,
+                tabIndex: 0,
+                onPointerDown: onCanvasPointerDown,
+                onPointerMove: onCanvasPointerMove,
+                onPointerUp: onCanvasPointerUp,
+                onWheel: onCanvasWheel,
+                onKeyDown: onCanvasKeyDown,
+                onContextMenu: (e) => e.preventDefault(), // 右键菜单交给远端页面
+              }),
+              start === null ? null : jsxRuntime.jsx("div", { className: "dshk-brw-start", role: "status", children: start }),
+            ],
           }),
           // 透明输入：IME 组合事件宿主（画布不可编辑，中文组合事件起不来）。
           // 点击画布后焦点在此（见 onCanvasPointerDown）——keydown 必须也挂它，
@@ -7600,16 +7689,6 @@ textarea.dshk-sched-input{resize:vertical}
               if (text !== "") sendInput({ t: "input", kind: "text", text });
             },
           }),
-          connLost
-            ? jsxRuntime.jsx("div", { className: "dshk-brw-note", children: t("browserReconnect") })
-            : state.running === false && state.launching === true
-              ? jsxRuntime.jsx("div", { className: "dshk-brw-note", children: t("browserStarting") })
-              : state.running === false && viewUrl === ""
-                // 宿主报的启动失败原因优先（vendor 缺失 / Edge 拉不起来），没有才用泛泛那句
-                ? jsxRuntime.jsx("div", { className: "dshk-brw-note", children: state.error || t("browserNotRunning") })
-                : (state.pages ?? []).length === 0
-                  ? jsxRuntime.jsx("div", { className: "dshk-brw-note", children: t("browserNoPages") })
-                  : null,
         ],
       });
     }

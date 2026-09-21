@@ -434,15 +434,25 @@ try { tabXs[0][2].onClick(fakeEvent); tabXs[1][2].onClick(fakeEvent); } catch (e
 global.window.confirm = undefined;
 check("页签 ✕ 直关不弹确认", threw === null);
 
-// 7.2.6) 全部页签关闭后的空态：运行中 0 页显示「没有打开的页面」提示，
-// 不再留无提示的僵尸画面；预置 running + 空 pages
+// 7.2.55) 工具栏对齐官方浏览器签：5 枚 28px 图标钮（后退/前进/刷新 + 地址框内
+// 「前往」+ 在系统浏览器中打开）；外部打开拿观察页 URL，有页才可用
+const toolBtns = callLog.filter((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.split(" ").includes("dshk-brw-tool"));
+check("BrowserPanel 工具栏为官方同款图标钮（5 枚）", toolBtns.length === 5);
+const externalBtn = toolBtns.find((c) => ["在系统浏览器中打开", "Open in system browser"].includes(c[2].title));
+check("在系统浏览器中打开：观察页 URL 就位时可用", !!externalBtn && externalBtn[2].disabled === false && typeof externalBtn[2].onClick === "function");
+check("「前往」是地址框内提交钮（官方同款）", toolBtns.some((c) => c[2].type === "submit" && c[2].className.includes("dshk-brw-go")));
+
+// 7.2.6) 全部页签关闭后的空态：运行中 0 页显示「没有打开的页面」提示（官方同款
+// 居中占位），且画布隐去——不留无提示的僵尸画面；预置 running + 空 pages
 stateStore.clear();
 stateSeq = 0;
 stateStore.set(0, { running: true, launching: false, pages: [], activeId: null, viewId: null });
 callLog = [];
 out = comps.BrowserPanel({ active: true });
-const noPagesNote = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-brw-note" && typeof c[2].children === "string" && ["没有打开的页面", "No open pages"].some((s) => c[2].children.includes(s)));
+const noPagesNote = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-brw-start" && typeof c[2].children === "string" && ["没有打开的页面", "No open pages"].some((s) => c[2].children.includes(s)));
 check("BrowserPanel 运行中 0 页渲染空态提示", !!noPagesNote);
+const canvasHidden = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-brw-canvas-off"));
+check("空态时画布隐去（不留定格帧）", !!canvasHidden);
 
 // 7.2.7) 壳层事件源语义（模块函数直调，getKitUi 读回）：navigated → 弹回浏览器
 // 标签；浏览器没了 → 收掉面板标签且不置抑制（agent 下次导航照常弹回——抑制的
