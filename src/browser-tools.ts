@@ -11,7 +11,7 @@
 // 响应式/移动布局验证；browser_tabs 是页签收尾口（navigate 只增不减）。全部串行
 // （isConcurrencySafe 省略 = 独占），单页面状态机不允许并发派发。
 //
-// dsh-tools 是 ESM（type: module），加载走 loadSettingsDep 同款两锚点：裸 import →
+// dsh-tools 是 ESM（type: module），加载走两锚点：裸 import →
 // dsh 本体锚点 resolve+import（profile/全局安装都命中）；monorepo 源码形态跳过
 // （dev 环境是 npm 全局布局，bin 锚点已覆盖）。
 //

@@ -1,6 +1,6 @@
 // 渲染级验证：桩掉 react hooks，直接函数调用 dsh-kit 的组件
 // （TreeNode/FileTreePanel/DiffPane/TerminalEntry/FileTreeEntry/KitSurfaces/
-// KitConfigCard/GitChangesPanel/SkillsManager/TerminalDock/TerminalPane），跑完整渲染体。
+// GitChangesPanel/SkillsManager/TerminalDock/TerminalPane），跑完整渲染体。
 // TerminalDock/TerminalPane 通过 setKitUi 预置会话后渲染（防"有状态后才走到的分支"逃逸）。
 // ⚠️ 盲区：桩不会重渲染（effect 不执行、state 不更新），依赖 effect 产出后才走到的
 // 渲染分支（如 FileTreePanel 的 entries.map 行）覆盖不到——残留变量藏在那种行里会
@@ -79,7 +79,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, DiffPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, KitConfigCard, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, cfgFormat, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, notifyDiffCore, notifyCompactionCore, notifyCompleteSettled, notifyState, readPosStore, recordReadPos, jobsOutputMerge, jobsAtBottom, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
+  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, DiffPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, notifyDiffCore, notifyCompactionCore, notifyCompleteSettled, notifyState, readPosStore, recordReadPos, jobsOutputMerge, jobsAtBottom, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -93,7 +93,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "DiffPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "KitConfigCard", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "MonitorLine", "monitorTailRepeatCount", "monitorTickCore", "monitorCancelPlan", "notifyDiffCore", "notifyCompactionCore", "recordReadPos", "jobsOutputMerge", "jobsAtBottom", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["TreeNode", "FileTreePanel", "DiffPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "MonitorLine", "monitorTailRepeatCount", "monitorTickCore", "monitorCancelPlan", "notifyDiffCore", "notifyCompactionCore", "recordReadPos", "jobsOutputMerge", "jobsAtBottom", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -1226,7 +1226,6 @@ check("SkillsManager 带cwd渲染无异常", !!out && typeof out === "object");
 
 // 10) MonitorLine（会话监视条）：空闲无 turn-error 时渲染 null（占位不占视觉）；
 //     桩 useEffect 不执行 → 检测逻辑不跑，只验证渲染体不抛异常。
-//     置于 KitConfigCard 之前：末位断言「实际产出元素」要求最后一个渲染非 null
 callLog = [];
 const fakeSnap = {
   legacy: {
@@ -1816,52 +1815,16 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
   check("C 规模未知时只报完成", out5.length === 1 && /压缩完成|compaction finished/i.test(out5[0].body));
 }
 
-// 9) KitConfigCard（插件设置卡）：ready 快照 + 覆盖态
-callLog = [];
-const fakeScope = {
-  getSnapshot: () => ({
-    status: "ready",
-    writable: true,
-    value: { terminalEnabled: true, fileTreeEnabled: false, skillsPageEnabled: true, terminalShortcut: "Ctrl+Alt+T", fileTreeShortcut: "Ctrl+E" },
-    user: { fileTreeEnabled: false, terminalShortcut: "Ctrl+Alt+T" },
-    base: {},
-  }),
-  subscribe: () => () => {},
-  set: async () => {},
-  unset: async () => {},
-};
-out = comps.KitConfigCard({ scope: fakeScope });
-check("KitConfigCard 渲染无异常", !!out && typeof out === "object");
-// 展开态（预置第 5 个 useState = open）跑一遍组渲染体：通知组的权限行在这里。
-// 权限只读浏览器侧事实，Node 无 Notification → 走「不支持」分支且按钮禁用
-stateSeq = 0;
-stateStore.clear();
-stateStore.set(4, true);
-callLog = [];
-out = comps.KitConfigCard({ scope: fakeScope });
-const permHit = callLog.find(([, , p]) => p && typeof p === "object" && p.className === "dshk-cfg-combo" && p.disabled === true);
-const permBtn = permHit ? permHit[2] : null;
-check(
-  "设置卡展开：通知组渲染出权限行（无 Notification 时按钮禁用）",
-  !!out && !!permBtn && permBtn.children === "Unsupported" && callLog.some(([, , p]) => p && p.className === "dshk-cfg-field dshk-cfg-sub" && p.children),
-);
-stateSeq = 0;
-stateStore.clear();
-// 设置卡布局：左右两键 + 官方「工作区文件」入口开关在「侧边栏」组（组头，无启用
-// 开关——Ctrl+B 恒生效），字段行走官方通用设置模型（标题+说明左列、控件右置）
-check(
-  "侧边栏组含左右两键与官方工作区文件入口开关、带组头、无启用位",
-  src.includes('{ title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut", "hideOfficialFilesEntry", "hideOfficialBrowserEntry"] }') && src.includes('cfgGroupSidebar: "侧边栏"') && !src.includes("sidebarShortcutEnabled") && !src.includes("chatOpenFilePreview"),
-);
-// 默认值与宿主 Config schema（src/index.ts）逐项同值：恢复默认拿的是宿主组合基座
-// （base 只带 vaultRoot 一项），其余键由 cfgFormat 回落
-// 客户端内置默认——两处漂移就会出现「恢复默认后跳到别的值」
+// 9) 插件配置（0.1.7 声明式模型）：设置卡已退役，编辑走宿主按 Config schema
+//    自动生成的原生设置页；client 只保留门控用的内置默认表
+// 内置默认与宿主 Config schema（src/index.ts）逐项同值：client 拉 /dsh-kit/config
+// 前后的门控取值不能漂移——两处不同步就会出现「默认关的功能被当开处理」
 {
   const hostSrc = fs.readFileSync(__dirname + "/../src/index.ts", "utf8");
   const drift = [];
   const missing = [];
   let compared = 0;
-  for (const m of hostSrc.matchAll(/^ {4}(\w+): z\.(?:boolean|number|string)\(\)[^,\n]*\.default\(([^)]*)\),?$/gm)) {
+  for (const m of hostSrc.matchAll(/^ {8}(\w+): z\.(?:boolean|number|string)\(\)[^,\n]*\.default\(([^)]*)\),?$/gm)) {
     const key = m[1];
     if (!Object.prototype.hasOwnProperty.call(comps.CFG_DEFAULTS, key)) { missing.push(key); continue; }
     const raw = m[2].trim();
@@ -1871,27 +1834,17 @@ check(
     compared++;
     if (comps.CFG_DEFAULTS[key] !== expected) drift.push(key + "(bundle=" + comps.CFG_DEFAULTS[key] + ",host=" + expected + ")");
   }
-  check("设置卡内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 20);
+  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 20);
 }
-// 开关类字段的「恢复默认」显示：基座缺该项时按内置默认渲染。默认关的
-// phoneKeepGatewayOn 不能被 cfgFormat 的 undefined → "true" 兜底成勾选态——
-// 界面显示已恢复默认、实际保存后是关，两边对不上
-check(
-  "恢复默认：bool 字段缺基座项回落内置默认（phoneKeepGatewayOn 默认 false）",
-  comps.cfgFormat("phoneKeepGatewayOn", undefined) === "false" &&
-    comps.cfgFormat("terminalEnabled", undefined) === "true" &&
-    comps.cfgFormat("phoneKeepGatewayOn", true) === "true" &&
-    comps.cfgFormat("phoneKeepGatewayOn", false) === "false",
-);
 // 过时文案清理：现行说明不得出现「侧栏底部『任务』钮」、日程索引标题键、搜索默认 5
 check(
-  "设置卡过时文案已更新（无侧栏底部钮现行说法/默认 5/schedIdxTitle）",
+  "过时文案已更新（无侧栏底部钮现行说法/默认 5/schedIdxTitle）",
   !src.includes("侧栏底部「") && !src.includes("默认 5") && !src.includes("schedIdxTitle"),
 );
 // OpenCode Go 会话头是内置行为、不是配置项：i18n 键与写入端点都必须不存在；
 // 注入机制本身由 test-opencode-session.mjs 覆盖
 check(
-  "OpenCode Go 会话头不在设置卡里（i18n 键与端点均移除）",
+  "OpenCode Go 会话头不在配置里（i18n 键与端点均移除）",
   !src.includes("cfgOpenCodeSession") && !src.includes('"/dsh-kit/opencode-session"'),
 );
 

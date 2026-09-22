@@ -53,8 +53,9 @@ const exportedNames = new Set(
 if (exportAt >= 0 && exportedNames.size < 40) die('render-check 导出表只解析出 ' + exportedNames.size + ' 个名字，锚点可能失效')
 
 // ── 1) i18n 词条 ──
-// 动态拼的键（cfg 加字段名）本来就只有字典两处，按前缀豁免
-const dynamicKeyPrefixes = ['cfg']
+// 动态拼的键（cfg 加字段名，插件设置卡时代）随设置卡退役清零；新前缀出现时
+// 加回这张表
+const dynamicKeyPrefixes = []
 const TEMPLATE_START = '\`' + '$' + '{'
 for (const p of dynamicKeyPrefixes) {
   if (!src.includes('\`' + p + '$' + '{')) notes.push('动态键前缀 ' + p + ' 在源码里已找不到拼接处，确认后从哨兵豁免表删掉')

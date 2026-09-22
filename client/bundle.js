@@ -520,17 +520,6 @@ window.__ModuleLoader__.load({
         normComboKey(e.key) === combo.key
       );
     }
-    /** keydown 转规范串（纯修饰键返回 null，调用方继续等待）；修饰键固定顺序 */
-    function comboFromEvent(e) {
-      if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return null;
-      const parts = [];
-      if (e.ctrlKey) parts.push("Ctrl");
-      if (e.altKey) parts.push("Alt");
-      if (e.shiftKey) parts.push("Shift");
-      if (e.metaKey) parts.push("Meta");
-      parts.push(normComboKey(e.key));
-      return parts.join("+");
-    }
     /** 从官方 scope 快照提取生效配置（字段缺失/非法逐项回退默认） */
     function cfgFromSnapshot(snap) {
       if (!snap || snap.status !== "ready" || !snap.value || typeof snap.value !== "object") return { ...CFG_DEFAULTS };
@@ -592,12 +581,24 @@ window.__ModuleLoader__.load({
       };
     }
     // 模块级通道（apply 注入 / KitSurfaces 订阅 / 设置卡捕获互斥）
-    let cfgScope = null;
-    let shortcutCapture = null; // 正在录制快捷键的字段名；非 null 时面板快捷键监听让路
+    // ── 插件配置快照（0.1.7：宿主客户端已无 settingsScope 服务）──
+    // 配置真源 = 宿主 Config schema + profile 补丁（原生设置页编辑）。client 启动
+    // 拉 GET /dsh-kit/config 喂快照，全部功能门控照旧走 cfgFromSnapshot；快照
+    // 形状保持 { status:'ready', value } 与旧 scope 相同。配置变更伴随宿主 entry
+    // 重启，浏览器端刷新页面即取到新值（拉取失败保持 null → 功能按内置默认）。
+    let cfgSnapshot = null;
+    const cfgListeners = new Set();
+    const subscribeCfg = (listener) => {
+      cfgListeners.add(listener);
+      return () => cfgListeners.delete(listener);
+    };
+    const getCfgSnapshot = () => cfgSnapshot;
+    function applyConfigSnapshot(value) {
+      cfgSnapshot = value && typeof value === "object" ? { status: "ready", value } : null;
+      for (const listener of [...cfgListeners]) listener();
+    }
     let vaultSearchOpen = false; // 知识库搜索浮层开着：同上让路——Esc 归浮层自关，不收页签/不收侧栏
     let inlineEditCapture = false; // 树行内改名输入激活：面板快捷键（含 Esc 分层关闭）让路
-    const subscribeCfg = (listener) => (cfgScope ? cfgScope.subscribe(listener) : () => {});
-    const getCfgSnapshot = () => (cfgScope ? cfgScope.getSnapshot() : null);
 
     // ─────────── 对话文件点击的知识库路由 ───────────
     // 官方对话中的文件点击（chips / markdown 内联代码 / 工具行 / 交付卡）原生
@@ -1239,27 +1240,6 @@ window.__ModuleLoader__.load({
       skOpFail: "操作失败",
       skDone: "完成",
       skDeleted: "已删除",
-      cfgTitle: "套件（dsh-kit）",
-      cfgDesc: "功能开关、快捷键与套件配置。",
-      cfgGroupSidebar: "侧边栏",
-      cfgTerminalEnabled: "启用终端",
-      cfgTerminalEnabledHint: "隐藏入口与快捷键",
-      cfgFileTreeEnabled: "启用文件树",
-      cfgFileTreeEnabledHint: "隐藏入口与快捷键",
-      cfgHideOfficialFilesEntry: "隐藏官方「工作区文件」入口",
-      cfgHideOfficialFilesEntryHint: "官方右栏的目录按钮；隐藏后文件从对话、文件树、搜索进",
-      cfgHideOfficialBrowserEntry: "隐藏官方「浏览器」入口",
-      cfgHideOfficialBrowserEntryHint: "官方右栏的 iframe 网页预览框；套件浏览器与对话链接改投不受影响",
-      cfgChatOpenLinkInBrowser: "对话中的网址用内置浏览器打开",
-      cfgChatOpenLinkInBrowserHint: "关 = 交回系统浏览器新标签",
-      cfgSkillsPageEnabled: "启用技能页",
-      cfgSkillsPageEnabledHint: "关 = 不显示「技能」页",
-      cfgSearchEnabled: "启用网页搜索",
-      cfgSearchEnabledHint: "关 = 走官方搜索（重启生效）",
-      cfgSearchMaxResults: "搜索结果条数",
-      cfgSearchMaxResultsHint: "1-8，默认 2",
-      cfgUsageEnabled: "启用余额与用量",
-      cfgUsageEnabledHint: "状态带显示当前模型 provider 的余额/配额芯片，仅支持 DeepSeek / OpenCode Go / GLM（key 复用模型配置，默认关）",
       usageRefresh: "刷新",
       usageUpdatedAt: "更新于",
       usageDeepseek: "DeepSeek 余额",
@@ -1277,20 +1257,6 @@ window.__ModuleLoader__.load({
       usageLevel: "套餐",
       usageNoCard: "模型配置未提供此服务的用量数据",
       usageOfficialPage: "官方用量页",
-      cfgPhoneEnabled: "显示「手机访问」页",
-      cfgPhoneEnabledHint: "设置里的「手机访问」页入口",
-      cfgJobsEnabled: "启用后台任务面板",
-      cfgJobsEnabledHint: "查看并结束后台任务",
-      cfgBrowserEnabled: "启用内置浏览器",
-      cfgBrowserEnabledHint: "实时查看并操作 agent 的浏览器（重启生效）",
-      cfgMonitorEnabled: "启用会话监视",
-      cfgMonitorEnabledHint: "会话因 429 中断自动续跑（所有会话）、死循环自动打断",
-      cfgMonitorWaitMs: "失败后等待(毫秒)",
-      cfgMonitorWaitMsHint: "等多久自动发「继续」（5000-600000）",
-      cfgMonitorMaxAuto: "自动继续上限(次)",
-      cfgMonitorMaxAutoHint: "连续续跑达到即暂停（1-10）",
-      cfgMonitorRepeatThreshold: "重复判定(次)",
-      cfgMonitorRepeatThresholdHint: "重复片段达此次数判死循环（2-10）",
       monitorContinueText: "继续",
       monitorLoopBreakText: "检测到你的输出在重复相同内容，可能陷入了死循环。请立即停止重复，简要说明当前状态，换一种方式继续完成任务。",
       monitorCancel: "取消",
@@ -1302,17 +1268,6 @@ window.__ModuleLoader__.load({
       monitorBgTitle: "429 自动续跑",
       monitorBgItem: "{title}：{sec} 秒后自动继续（第 {n}/{max} 次）",
       monitorBgCapped: "{title}：已连续自动继续 {max} 次，暂停（正常完成一轮后恢复）",
-      cfgNotifyEnabled: "会话通知",
-      cfgNotifyEnabledHint: "页面不在前台（或事件不属于当前会话）时弹桌面通知：回合完成 / 上下文压缩 / 提问待批",
-      cfgNotifyPerm: "通知权限",
-      cfgNotifyPermHintDefault: "浏览器还没授权：点右侧按钮并选「允许」（手机走局域网 http 时无桌面通知）",
-      cfgNotifyPermHintGranted: "已授权：页面不在前台时弹系统通知，点击回到对应会话",
-      cfgNotifyPermHintDenied: "已被浏览器拒绝：在地址栏站点设置里改回「允许」后刷新页面",
-      cfgNotifyPermHintUnsupported: "此环境不支持桌面通知（非安全上下文或无 Notification API），退化为标签标题上的未读计数",
-      cfgNotifyPermAsk: "请求授权",
-      cfgNotifyPermGranted: "已授权",
-      cfgNotifyPermDenied: "已拒绝",
-      cfgNotifyPermUnsupported: "不支持",
       notifyCompleteTitle: "{title} · 回合完成",
       notifyCompleteBody: "点击回到该会话",
       notifyCompactTitle: "{title} · 上下文压缩完成",
@@ -1351,12 +1306,6 @@ window.__ModuleLoader__.load({
       phoneGateStart: "启动网关",
       phoneGateStop: "关闭网关",
       phoneStoppedHint: "网关未启动。开启后可用「刷新链接」作废旧链接。",
-      cfgRemoteHint: "非本机访问：上游把设置镜像钉在本机浏览器，配置在手机/远程只读——请在电脑端查看与修改。",
-      cfgPhoneRemoteDomain: "远程域名",
-      cfgPhonePort: "网关端口",
-      cfgPhonePortHint: "网关端口，1-65535；保存即重启网关",
-      cfgPhoneKeepGatewayOn: "重启后保留开启",
-      cfgPhoneKeepGatewayOnHint: "重启后恢复上次开启状态",
       phoneTitle: "手机访问",
       phoneStatusOn: "网关运行中 · 端口 {port}",
       phoneStatusErr: "网关未运行：{error}",
@@ -1368,7 +1317,6 @@ window.__ModuleLoader__.load({
       phoneCopy: "复制链接",
       phoneCopied: "已复制",
       phoneRemoteCaution: "远程链接含访问令牌，二维码谨防被他人扫码。",
-      phonePortInvalid: "端口需为 1-65535 的整数",
       phoneRotate: "刷新链接",
       phoneRotateHint: "作废当前链接并生成新链接，已授权设备将全部失效。",
       phoneRotated: "链接已刷新，旧链接已失效",
@@ -1408,10 +1356,6 @@ window.__ModuleLoader__.load({
       schedStatsTitle: "本周统计",
       schedTimerStandalone: "独立计时（不挂待办）",
       schedWeekdays: "一,二,三,四,五,六,日",
-      cfgVaultEnabled: "启用知识库",
-      cfgVaultEnabledHint: "输入行入口 + 右栏只读浏览（默认关；改开关重启生效）",
-      cfgVaultRoot: "知识库目录",
-      cfgVaultRootHint: "vault 根目录绝对路径；空 = 数据目录下 dsh-kit\\knowledge",
       vaultTitle: "知识库",
       vaultNotConfigured: "未配置知识库目录",
       vaultNotConfiguredHint: "在 设置 → 插件 → dsh-kit 里填写「知识库目录」后即可使用：目录内一切 md 文件即页面，支持双链跳转与全文搜索",
@@ -1463,26 +1407,9 @@ window.__ModuleLoader__.load({
       vaultPickPage: "从左侧选择一页开始",
       vaultPageGone: "页面不存在（可能已被移动或删除）",
       vaultCiteUnavailable: "对话输入框未就绪（无会话或不可用）",
-      cfgTerminalShortcut: "终端快捷键",
-      cfgFileTreeShortcut: "文件树快捷键",
-      cfgSidebarShortcut: "左栏开合快捷键",
-      cfgSourceControlEnabled: "启用源代码管理",
-      cfgSourceControlEnabledHint: "隐藏入口与快捷键",
-      cfgScShortcut: "源代码管理快捷键",
-      cfgVaultShortcut: "知识库快捷键",
-      cfgRightbarShortcut: "右栏开合快捷键",
-      cfgCapturing: "按下组合键…（Esc 取消）",
-      overridden: "已覆盖",
-      resetDefault: "恢复默认",
       save: "保存",
       saving: "保存中…",
       discard: "放弃修改",
-      unsaved: "未保存",
-      readOnly: "本部署的设置为只读。",
-      loadingCfg: "正在读取配置…",
-      saveFailed: "本部署没有接受这些值，已保留供你修改。",
-      invalidCombo: "需一个主键 + 至少一个修饰键。",
-      invalidNumber: "超出允许范围。",
     };
     const en = {
       label: "Terminal",
@@ -1619,27 +1546,6 @@ window.__ModuleLoader__.load({
       skOpFail: "Operation failed",
       skDone: "Done",
       skDeleted: "Deleted",
-      cfgTitle: "Kit (dsh-kit)",
-      cfgDesc: "Feature switches, shortcuts and kit settings.",
-      cfgGroupSidebar: "Sidebars",
-      cfgTerminalEnabled: "Enable terminal",
-      cfgTerminalEnabledHint: "Hides entry and shortcut",
-      cfgFileTreeEnabled: "Enable file tree",
-      cfgFileTreeEnabledHint: "Hides entry and shortcut",
-      cfgHideOfficialFilesEntry: "Hide the official Workspace Files entry",
-      cfgHideOfficialFilesEntryHint: "The directory button on the right bar; files remain reachable via chat, tree and search",
-      cfgHideOfficialBrowserEntry: "Hide the official Browser entry",
-      cfgHideOfficialBrowserEntryHint: "The iframe web preview on the right bar; the kit browser and chat-link routing are unaffected",
-      cfgChatOpenLinkInBrowser: "Open chat links in the built-in browser",
-      cfgChatOpenLinkInBrowserHint: "Off = system browser new tab",
-      cfgSkillsPageEnabled: "Enable skills page",
-      cfgSkillsPageEnabledHint: "Off = no Skills page in Settings",
-      cfgSearchEnabled: "Enable web search",
-      cfgSearchEnabledHint: "Off = official search (restart to apply)",
-      cfgSearchMaxResults: "Search result count",
-      cfgSearchMaxResultsHint: "1-8, default 2",
-      cfgUsageEnabled: "Show balance & usage",
-      cfgUsageEnabledHint: "Status chip for the current model provider; DeepSeek / OpenCode Go / GLM only (reuses model-config keys; off by default)",
       usageRefresh: "Refresh",
       usageUpdatedAt: "Updated",
       usageDeepseek: "DeepSeek balance",
@@ -1657,20 +1563,6 @@ window.__ModuleLoader__.load({
       usageLevel: "Plan",
       usageNoCard: "No usage data for this service in the model config",
       usageOfficialPage: "Usage dashboard",
-      cfgPhoneEnabled: "Show phone access page",
-      cfgPhoneEnabledHint: "Entry for the \"Phone access\" page",
-      cfgJobsEnabled: "Enable background jobs panel",
-      cfgJobsEnabledHint: "Watch and stop background jobs",
-      cfgBrowserEnabled: "Enable built-in browser",
-      cfgBrowserEnabledHint: "Watch and operate the agent's browser (restart to apply)",
-      cfgMonitorEnabled: "Enable session monitor",
-      cfgMonitorEnabledHint: "Auto-continue 429-interrupted sessions (all sessions), break output dead-loops",
-      cfgMonitorWaitMs: "Wait after failure (ms)",
-      cfgMonitorWaitMsHint: "Wait before auto-\"Continue\" (5000-600000)",
-      cfgMonitorMaxAuto: "Auto-continue limit",
-      cfgMonitorMaxAutoHint: "Pause after this many consecutive resumes (1-10)",
-      cfgMonitorRepeatThreshold: "Repeat threshold",
-      cfgMonitorRepeatThresholdHint: "Repeated blocks counted as dead-loop (2-10)",
       monitorContinueText: "Continue",
       monitorLoopBreakText: "Your output appears to be repeating itself, which suggests an infinite loop. Stop repeating immediately, briefly state the current status, and continue the task in a different way.",
       monitorCancel: "Cancel",
@@ -1682,17 +1574,6 @@ window.__ModuleLoader__.load({
       monitorBgTitle: "429 auto-continue",
       monitorBgItem: "{title}: auto-continue in {sec}s (attempt {n}/{max})",
       monitorBgCapped: "{title}: paused after {max} consecutive continues (resumes after one clean round)",
-      cfgNotifyEnabled: "Session notifications",
-      cfgNotifyEnabledHint: "Desktop notification while the page is in the background: turn finished, context compacted, agent asking",
-      cfgNotifyPerm: "Notification permission",
-      cfgNotifyPermHintDefault: "Not granted yet: click the button and choose Allow (no desktop notifications over plain http on phones)",
-      cfgNotifyPermHintGranted: "Granted: a system notification pops up while the page is in the background; click it to return to that session",
-      cfgNotifyPermHintDenied: "Denied by the browser: switch the site setting back to Allow, then reload",
-      cfgNotifyPermHintUnsupported: "Desktop notifications unavailable here (insecure context or no Notification API); falls back to an unread count in the tab title",
-      cfgNotifyPermAsk: "Request",
-      cfgNotifyPermGranted: "Granted",
-      cfgNotifyPermDenied: "Denied",
-      cfgNotifyPermUnsupported: "Unsupported",
       notifyCompleteTitle: "{title} · turn finished",
       notifyCompleteBody: "Click to return to this session",
       notifyCompactTitle: "{title} · context compacted",
@@ -1731,32 +1612,9 @@ window.__ModuleLoader__.load({
       phoneGateStart: "Start gateway",
       phoneGateStop: "Stop gateway",
       phoneStoppedHint: "Gateway is off. Use \"New link\" after starting to invalidate old links.",
-      cfgRemoteHint: "Non-local access: upstream pins the settings mirror to the local machine, so config stays read-only here — please view and edit it on the computer.",
-      cfgPhoneRemoteDomain: "Remote domain",
-      cfgPhonePort: "Gateway port",
-      cfgPhonePortHint: "Gateway port, 1-65535; gateway restarts on save",
-      cfgPhoneKeepGatewayOn: "Keep enabled across restarts",
-      cfgPhoneKeepGatewayOnHint: "Restores last enabled state on restart",
-      cfgTerminalShortcut: "Terminal shortcut",
-      cfgFileTreeShortcut: "File tree shortcut",
-      cfgSidebarShortcut: "Left sidebar toggle",
-      cfgSourceControlEnabled: "Enable source control",
-      cfgSourceControlEnabledHint: "Hides entry and shortcut",
-      cfgScShortcut: "Source control shortcut",
-      cfgVaultShortcut: "Knowledge base shortcut",
-      cfgRightbarShortcut: "Right sidebar toggle",
-      cfgCapturing: "Press a combo… (Esc to cancel)",
-      overridden: "Overridden",
-      resetDefault: "Reset to default",
       save: "Save",
       saving: "Saving…",
       discard: "Discard",
-      unsaved: "Unsaved",
-      readOnly: "This deployment stores settings read-only.",
-      loadingCfg: "Reading configuration…",
-      saveFailed: "The deployment did not accept these values; they were left for you to correct.",
-      invalidCombo: "One main key plus at least one modifier.",
-      invalidNumber: "Out of the allowed range.",
       phoneTitle: "Phone access",
       phoneStatusOn: "Gateway running · port {port}",
       phoneStatusErr: "Gateway not running: {error}",
@@ -1768,7 +1626,6 @@ window.__ModuleLoader__.load({
       phoneCopy: "Copy link",
       phoneCopied: "Copied",
       phoneRemoteCaution: "The remote link carries an access token; keep the QR code from being scanned by others.",
-      phonePortInvalid: "Port must be an integer from 1-65535",
       phoneRotate: "New link",
       phoneRotateHint: "Invalidate the current link and issue a new one; all authorized devices are signed out.",
       phoneRotated: "Link rotated; the old one is dead",
@@ -1808,10 +1665,6 @@ window.__ModuleLoader__.load({
       schedStatsTitle: "This week",
       schedTimerStandalone: "Standalone timer (no task)",
       schedWeekdays: "Mo,Tu,We,Th,Fr,Sa,Su",
-      cfgVaultEnabled: "Enable knowledge base",
-      cfgVaultEnabledHint: "Composer entry + read-only browsing in the right dock (off by default; restart to apply)",
-      cfgVaultRoot: "Knowledge base directory",
-      cfgVaultRootHint: "Vault root absolute path; empty = dsh-kit\\knowledge in the data directory",
       vaultTitle: "Knowledge base",
       vaultNotConfigured: "Knowledge base directory not configured",
       vaultNotConfiguredHint: "Set the knowledge base directory in Settings → Plugins → dsh-kit: every md file inside becomes a page, with wiki-links and full-text search",
@@ -2066,45 +1919,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-sk-detail{padding:2px 12px 10px}
 .dshk-sk-pre{margin:0;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
 /* 插件设置卡（settings.plugin.item）：对齐官方 CardForm 观感 */
-.dshk-cfg-card{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);border-radius:12px;list-style:none;margin:0}
-.dshk-cfg-card[data-open]{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-label-dimmed)}
-.dshk-cfg-head{appearance:none;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;background:none;border:0;border-radius:12px;display:flex;align-items:center;gap:12px;padding:14px 16px}
-.dshk-cfg-headtext{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
-.dshk-cfg-name{font-size:15px;font-weight:600;line-height:1.4;color:var(--dsw-alias-label-primary)}
-.dshk-cfg-desc{font-size:13px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}
-.dshk-cfg-pill{flex:none;white-space:nowrap;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:500;line-height:17px}
-.dshk-cfg-chev{flex:none;color:var(--dsw-alias-label-tertiary);transition:transform .16s var(--ds-ease-in-out);display:block}
-.dshk-cfg-chev[data-open]{transform:rotate(180deg)}
-.dshk-cfg-body{border-top:1px solid var(--dsw-alias-border-l2);margin:0 16px;padding-bottom:8px}
-.dshk-cfg-field{display:flex;align-items:center;gap:8px;padding:12px 0;border-bottom:.8px solid var(--dsw-alias-border-l1)}
-.dshk-cfg-group ~ .dshk-cfg-group{margin-top:10px}
-.dshk-cfg-grouptitle{font-size:12px;font-weight:500;line-height:18px;color:var(--dsw-alias-label-secondary);padding:6px 0 2px}
-.dshk-cfg-field:last-child{border-bottom:none}
-.dshk-cfg-sub{margin-left:14px}
-.dshk-cfg-fieldtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.dshk-cfg-label{font-size:14px;font-weight:400;line-height:22px;color:var(--dsw-alias-label-primary)}
-.dshk-cfg-badges{display:inline-flex;align-items:center;gap:8px;flex:none;height:19px}
-.dshk-cfg-badge{display:inline-flex;align-items:center;height:19px;box-sizing:border-box;padding:0 8px;border-radius:999px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary);font-size:11px;font-weight:500;line-height:17px;white-space:nowrap}
-.dshk-cfg-reset{font:inherit;background:none;border:0;padding:0;height:18px;display:inline-flex;align-items:center;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5}
-.dshk-cfg-reset:hover:not(:disabled){color:var(--dsw-alias-label-primary)}
-.dshk-cfg-check{flex:none;width:16px;height:16px;accent-color:var(--dsw-alias-brand-primary)}
-.dshk-cfg-hint{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
-.dshk-cfg-invalid{font-size:12px;line-height:18px;color:var(--dsw-alias-state-error-primary)}
-.dshk-cfg-status{padding:6px 0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5;margin:0}
-.dshk-cfg-combo{appearance:none;flex:1;min-width:0;font:inherit;font-family:ui-monospace,Consolas,monospace;font-size:12px;cursor:pointer;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);border-radius:8px;padding:6px 12px;line-height:1.5}
-.dshk-cfg-combo:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-cfg-combo:focus-visible{border-color:var(--dsw-alias-brand-primary);outline:none}
-.dshk-cfg-combo[data-capturing]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-secondary)}
-.dshk-cfg-text{flex:1;min-width:0;width:200px;font:inherit;font-size:12px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);border-radius:8px;padding:6px 10px;line-height:1.5}
-.dshk-cfg-num{flex:none;width:64px}
-.dshk-phone-port{flex:none;width:5.5em;font-size:11px;padding:5px 8px}
-.dshk-cfg-text:focus-visible{border-color:var(--dsw-alias-brand-primary);outline:none}
-.dshk-cfg-footer{display:flex;justify-content:flex-end;align-items:center;gap:8px;border-top:1px solid var(--dsw-alias-border-l2);padding:12px 0 4px}
-.dshk-cfg-err{flex:1;min-width:0;margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-state-error-primary)}
-.dshk-cfg-btn{appearance:none;font:inherit;cursor:pointer;font-size:13px;line-height:1.5;border-radius:8px;padding:5px 14px}
-.dshk-cfg-btn-discard{background:none;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
-.dshk-cfg-btn-save{border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
-.dshk-cfg-btn[disabled]{opacity:.5;cursor:default}
 /* 手机访问页（settings.section 内联区块，与技能页同级） */
 .dshk-phone{width:100%;max-width:460px}
 .dshk-phone-head{display:flex;align-items:center;gap:8px;margin:2px 0 10px}
@@ -2121,9 +1935,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-phone-copybtn:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-phone-copybtn[disabled]{opacity:.5;cursor:default}
 .dshk-phone-hint{margin:0;font-size:11px;line-height:1.55;color:var(--dsw-alias-label-tertiary)}
-.dshk-phone-domain{display:flex;align-items:center;gap:6px;width:100%;margin-bottom:10px}
-.dshk-phone-domain-label{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary)}
-.dshk-phone-domain-input{flex:1;min-width:0;font-size:11px;padding:5px 8px}
 .dshk-phone-gatebtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;padding:9px 10px;border-radius:8px;cursor:pointer;width:100%;margin-bottom:10px}
 .dshk-phone-rotate{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap}
 .dshk-phone-rotate:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
@@ -5527,14 +5338,8 @@ ellipsis，窄列只截字不破版 */
       const [copied, setCopied] = react.useState(false);
       const [notice, setNotice] = react.useState("");
       const canvasRef = react.useRef(null);
-      // 远程域名的页内编辑（配置卡不再承载）：草稿态 + 保存即写 settings 并刷新链接
-      const [domainValue, setDomainValue] = react.useState("");
-      const [domainTouched, setDomainTouched] = react.useState(false);
-      const [domainSaving, setDomainSaving] = react.useState(false);
-      // 网关端口页内编辑：与远程域名同一条保存链（保存后宿主按新端口重启网关）
-      const [portValue, setPortValue] = react.useState("");
-      const [portTouched, setPortTouched] = react.useState(false);
-      // 网关启停开关（POST /dsh-kit/phone/gateway；状态文件直管，不经 settings）
+      // 网关启停开关（POST /dsh-kit/phone/gateway；状态文件直管，不经 settings）。
+      // 远程域名/端口属插件配置，编辑入口在原生设置页（0.1.7 起 Config schema 自动生成）
       const [gateBusy, setGateBusy] = react.useState(false);
       const toggleGateway = async (next) => {
         if (gateBusy) return;
@@ -5571,60 +5376,6 @@ ellipsis，窄列只截字不破版 */
           setTimeout(() => setNotice(""), 3000);
         }
         setGateBusy(false);
-      };
-      const shownDomain = domainTouched
-        ? domainValue
-        : info && typeof info.remoteDomain === "string"
-          ? info.remoteDomain
-          : "";
-      const shownPort = portTouched
-        ? portValue
-        : info && Number.isFinite(info.port)
-          ? String(info.port)
-          : "3090";
-      const savePhoneNet = async () => {
-        if (domainSaving || !cfgScope) return;
-        // 端口草稿非法：阻断保存并提示（不落盘、不清草稿）
-        let nextPort = null;
-        if (portTouched) {
-          const n = Number(String(portValue).trim());
-          if (!Number.isInteger(n) || n < 1 || n > 65535) {
-            setNotice(t("phonePortInvalid"));
-            setTimeout(() => setNotice(""), 3000);
-            return;
-          }
-          nextPort = n;
-        }
-        setDomainSaving(true);
-        try {
-          if (domainTouched) await cfgScope.set("phoneRemoteDomain", shownDomain.trim());
-          if (nextPort !== null) await cfgScope.set("phonePort", nextPort);
-          setDomainTouched(false);
-          setPortTouched(false);
-          setNotice(t("save") + " ✓");
-          if (info !== null && info.gatewayOn && info.running) {
-            fetchPhoneLinks(new AbortController().signal).then(setLinkData).catch(() => {});
-          }
-          // 端口变更时宿主侧重启网关是异步的：延迟刷新状态与链接跟进新端口
-          if (nextPort !== null) {
-            setTimeout(() => {
-              fetchPhoneInfo(new AbortController().signal)
-                .then((body) => {
-                  setInfo(body);
-                  if (body.gatewayOn && body.running) {
-                    return fetchPhoneLinks(new AbortController().signal).then(setLinkData).catch(() => {});
-                  }
-                  return undefined;
-                })
-                .catch(() => {});
-            }, 1200);
-          }
-        } catch {
-          // 保存失败保持草稿供修改
-        } finally {
-          setDomainSaving(false);
-          setTimeout(() => setNotice(""), 3000);
-        }
       };
 
       // 打开即取状态与链接；网关未跑时只显示原因
@@ -5701,62 +5452,16 @@ ellipsis，窄列只截字不破版 */
                 : null,
             ],
           }),
-          cfgScope
-            ? jsxRuntime.jsx("button", {
-                type: "button",
-                className: gatewayOn ? "dshk-phone-gatebtn dshk-phone-gatebtn-stop" : "dshk-phone-gatebtn",
-                disabled: gateBusy,
-                onClick: () => {
-                  toggleGateway(!gatewayOn);
-                },
-                children: t(gatewayOn ? "phoneGateStop" : "phoneGateStart"),
-              })
-            : null,
+          jsxRuntime.jsx("button", {
+            type: "button",
+            className: gatewayOn ? "dshk-phone-gatebtn dshk-phone-gatebtn-stop" : "dshk-phone-gatebtn",
+            disabled: gateBusy,
+            onClick: () => {
+              toggleGateway(!gatewayOn);
+            },
+            children: t(gatewayOn ? "phoneGateStop" : "phoneGateStart"),
+          }),
           statusNode,
-          cfgScope
-            ? jsxRuntime.jsxs("div", {
-                className: "dshk-phone-domain",
-                children: [
-                  jsxRuntime.jsx("span", { className: "dshk-phone-domain-label", children: t("cfgPhoneRemoteDomain") }),
-                  jsxRuntime.jsx("input", {
-                    type: "text",
-                    className: "dshk-cfg-text dshk-phone-domain-input",
-                    value: shownDomain,
-                    placeholder: "dsh.example.com",
-                    spellCheck: false,
-                    disabled: domainSaving,
-                    onChange: (e) => {
-                      setDomainValue(e.target.value);
-                      setDomainTouched(true);
-                    },
-                  }),
-                  jsxRuntime.jsx("span", { className: "dshk-phone-domain-label", children: t("cfgPhonePort") }),
-                  jsxRuntime.jsx("input", {
-                    type: "number",
-                    className: "dshk-cfg-text dshk-phone-port",
-                    min: 1,
-                    max: 65535,
-                    step: 1,
-                    value: shownPort,
-                    title: t("cfgPhonePortHint"),
-                    disabled: domainSaving,
-                    onChange: (e) => {
-                      setPortValue(e.target.value);
-                      setPortTouched(true);
-                    },
-                  }),
-                  jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-phone-copybtn",
-                    disabled: domainSaving || (!domainTouched && !portTouched),
-                    onClick: () => {
-                      savePhoneNet();
-                    },
-                    children: t("save"),
-                  }),
-                ],
-              })
-            : null,
           links.length > 0
             ? jsxRuntime.jsxs(
                 "div",
@@ -10321,7 +10026,6 @@ ellipsis，窄列只截字不破版 */
         const rbCombo = parseCombo(cfg.rightbarShortcut);
         const sidebarCombo = parseCombo(cfg.sidebarShortcut);
         const onKey = (e) => {
-          if (shortcutCapture !== null) return;
           if (inlineEditCapture) return;
           if (termCombo && cfg.terminalEnabled && comboMatches(e, termCombo)) {
             e.preventDefault();
@@ -10845,479 +10549,6 @@ ellipsis，窄列只截字不破版 */
       });
     }
 
-    // ─────────── 插件设置卡（settings.plugin.item）───────────
-    // 交互规范照官方 CardForm（同 dsh-memory 卡片）：编辑只暂存草稿、保存才写；
-    // "已覆盖" = raw user 层含该键；恢复默认暂存 base 值（保存时 unset 回落默认）。
-    // 写入后回读 user 层验证落盘（Host 是唯一权威，scope.set 失败静默回滚重读）。
-    // 快捷键字段是捕获控件：点「修改」进录制态，下一个含非修饰主键的 keydown 即为
-    // 新组合键；录制期模块级 shortcutCapture 置位，KitSurfaces 面板快捷键让路。
-    const CFG_FIELDS = [
-      { key: "terminalEnabled", kind: "bool" },
-      { key: "fileTreeEnabled", kind: "bool" },
-      { key: "sourceControlEnabled", kind: "bool" },
-      { key: "hideOfficialFilesEntry", kind: "bool" },
-      { key: "hideOfficialBrowserEntry", kind: "bool" },
-      { key: "chatOpenLinkInBrowser", kind: "bool" },
-      { key: "skillsPageEnabled", kind: "bool" },
-      { key: "searchEnabled", kind: "bool" },
-      { key: "searchMaxResults", kind: "number" },
-      { key: "phoneEnabled", kind: "bool" },
-      { key: "phoneKeepGatewayOn", kind: "bool" },
-      { key: "jobsEnabled", kind: "bool" },
-      { key: "browserEnabled", kind: "bool" },
-      { key: "monitorEnabled", kind: "bool" },
-      { key: "monitorWaitMs", kind: "number", min: 5000, max: 600000 },
-      { key: "monitorMaxAuto", kind: "number", min: 1, max: 10 },
-      { key: "monitorRepeatThreshold", kind: "number", min: 2, max: 10 },
-      { key: "notifyEnabled", kind: "bool" },
-      { key: "usageEnabled", kind: "bool" },
-      { key: "vaultEnabled", kind: "bool" },
-      { key: "vaultRoot", kind: "text" },
-      { key: "terminalShortcut", kind: "combo" },
-      { key: "fileTreeShortcut", kind: "combo" },
-      { key: "scShortcut", kind: "combo" },
-      { key: "vaultShortcut", kind: "combo" },
-      { key: "rightbarShortcut", kind: "combo" },
-      { key: "sidebarShortcut", kind: "combo" },
-    ];
-    // 分组渲染：开关行 + 该功能启用时才显示的子配置（所见即所得，保存才落盘生效）；
-    // switchKey 为 null 的组没有开关行，只列字段（侧边栏组：左右两键，无启用开关）。
-    // title 组头（侧边栏这类无单一开关的组）——其余组的功能开关行本身就是组头。
-    // permRow = 该组末尾追加「通知权限」行（权限状态不在 settings 里，是浏览器
-    // 侧事实，只能就地读/就地请求）。
-    // 组顺序：侧边栏（左右键 + 官方「工作区文件」入口开关）→ 文件树 → 源代码管理
-    // → 终端 → 知识库 → 后台任务 → 浏览器 → 会话监视 → 会话通知 → 余额与用量
-    // → 技能页 → 网页搜索 → 手机访问（放最下）。远程域名不在此卡——编辑入口在
-    // 「手机访问」页内。
-    const CFG_GROUPS = [
-      { title: "cfgGroupSidebar", switchKey: null, fields: ["sidebarShortcut", "rightbarShortcut", "hideOfficialFilesEntry", "hideOfficialBrowserEntry"] },
-      { switchKey: "fileTreeEnabled", fields: ["fileTreeShortcut"] },
-      { switchKey: "sourceControlEnabled", fields: ["scShortcut"] },
-      { switchKey: "terminalEnabled", fields: ["terminalShortcut"] },
-      { switchKey: "vaultEnabled", fields: ["vaultRoot", "vaultShortcut"] },
-      { switchKey: "jobsEnabled", fields: [] },
-      { switchKey: "browserEnabled", fields: [] },
-      { switchKey: "monitorEnabled", fields: ["monitorWaitMs", "monitorMaxAuto", "monitorRepeatThreshold"] },
-      { switchKey: "notifyEnabled", fields: [], permRow: true },
-      { switchKey: "usageEnabled", fields: [] },
-      { switchKey: "chatOpenLinkInBrowser", fields: [] },
-      { switchKey: "skillsPageEnabled", fields: [] },
-      { switchKey: "searchEnabled", fields: ["searchMaxResults"] },
-      { switchKey: "phoneEnabled", fields: ["phoneKeepGatewayOn"] },
-    ];
-    const cfgSpec = Object.fromEntries(CFG_FIELDS.map((f) => [f.key, f]));
-    const cfgLabelKey = (field, suffix) =>
-      `cfg${field[0].toUpperCase()}${field.slice(1)}${suffix}`;
-
-    /** 字段显示文本：bool → "true"/"false"；number → 整数字符串；text/combo → 字符串（空/缺项回落内置默认） */
-    function cfgFormat(field, value) {
-      // 非布尔（快照未就绪，或恢复默认时基座缺该项）回落内置默认：基座 base 只带
-      // vaultRoot 一项，其余键取到的是 undefined，写死 "true" 会让默认关的开关
-      // （phoneKeepGatewayOn）在「恢复默认」后仍显示为开
-      if (cfgSpec[field].kind === "bool") return (typeof value === "boolean" ? value : CFG_DEFAULTS[field] === true) ? "true" : "false";
-      if (cfgSpec[field].kind === "number") return String(Number.isFinite(value) ? value : CFG_DEFAULTS[field]);
-      return typeof value === "string" && value.trim() !== "" ? value : CFG_DEFAULTS[field];
-    }
-    /** 草稿文本 → 写入计划；非法（数字越界/非整数、组合键缺主键/修饰键）返回 undefined 阻断保存 */
-    function cfgParse(field, text) {
-      if (cfgSpec[field].kind === "bool") return { kind: "set", value: text === "true" };
-      if (cfgSpec[field].kind === "number") {
-        const trimmed = String(text ?? "").trim();
-        const n = Number(trimmed);
-        const hi = cfgSpec[field].max ?? 8;
-        const lo = cfgSpec[field].min ?? 1;
-        return Number.isInteger(n) && n >= lo && n <= hi ? { kind: "set", value: n } : undefined;
-      }
-      if (cfgSpec[field].kind === "text") return { kind: "set", value: String(text ?? "").trim() };
-      const trimmed = String(text ?? "").trim();
-      return parseCombo(trimmed) ? { kind: "set", value: trimmed } : undefined;
-    }
-
-    function KitConfigCard({ scope }) {
-      react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
-      const [snapshot, setSnapshot] = react.useState(() => scope.getSnapshot());
-      react.useEffect(() => scope.subscribe(() => setSnapshot(scope.getSnapshot())), [scope]);
-      const [drafts, setDrafts] = react.useState({});
-      const [saving, setSaving] = react.useState(false);
-      const [failed, setFailed] = react.useState(false);
-      // 插件管理页的配置区已给足上下文，卡片默认展开省一次点击
-      const [open, setOpen] = react.useState(true);
-      // 正在录制快捷键的字段；null = 非录制态（同一时间至多一个）
-      const [capturing, setCapturing] = react.useState(null);
-      // 通知权限（浏览器侧事实，不是响应式值）：请求/授权后手动重读刷新显示
-      const [notifyPerm, setNotifyPerm] = react.useState(() => notifyPermState());
-      // 非本机访问（手机/远程）时上游把设置镜像钉在本机，快照会永远停在 loading——
-      // 数秒后仍未就绪且地址栏非回环，就把"读取中"换成明确的远程只读提示。
-      const [stuckLoading, setStuckLoading] = react.useState(false);
-      const offDevice =
-        typeof location !== "undefined" && !["localhost", "127.0.0.1"].includes(location.hostname);
-      react.useEffect(() => {
-        if (snapshot.status !== "loading") {
-          setStuckLoading(false);
-          return undefined;
-        }
-        if (!offDevice) return undefined;
-        const timer = setTimeout(() => setStuckLoading(true), 4000);
-        return () => clearTimeout(timer);
-      }, [snapshot.status, offDevice]);
-      const loadingHint = stuckLoading && offDevice ? t("cfgRemoteHint") : t("loadingCfg");
-
-      // 录制期：capture 截获下一个组合键；Esc 取消；纯修饰键继续等待
-      react.useEffect(() => {
-        if (!capturing) return undefined;
-        shortcutCapture = capturing;
-        const onKey = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (e.key === "Escape") {
-            setCapturing(null);
-            return;
-          }
-          const combo = comboFromEvent(e);
-          if (!combo) return;
-          setDrafts((d) => ({ ...d, [capturing]: { text: combo, clear: false } }));
-          setFailed(false);
-          setCapturing(null);
-        };
-        window.addEventListener("keydown", onKey, true);
-        return () => {
-          shortcutCapture = null;
-          window.removeEventListener("keydown", onKey, true);
-        };
-      }, [capturing]);
-
-      // 卡壳永远渲染（加载中也一样）：静默隐身的卡无法和注册失败区分
-      try {
-        return renderCard();
-      } catch (error) {
-        console.error("[dsh-kit] 设置卡渲染错误：", error);
-        return jsxRuntime.jsx("li", {
-          className: "dshk-cfg-card",
-          children: jsxRuntime.jsx("p", {
-            className: "dshk-cfg-status",
-            role: "status",
-            children: `dsh-kit card render error: ${String(error?.message ?? error)}`,
-          }),
-        });
-      }
-
-      function renderCard() {
-        const loading = snapshot.status === "loading";
-        const available = snapshot.status === "ready";
-        const writable = snapshot.writable === true;
-
-        /** raw user 层是否携带该键（"已覆盖"的判据） */
-        const stored = (field) =>
-          snapshot.user !== undefined && snapshot.user !== null && typeof snapshot.user === "object"
-            ? Object.prototype.hasOwnProperty.call(snapshot.user, field)
-            : false;
-        const sectionText = (field) =>
-          cfgFormat(
-            field,
-            available && snapshot.value && typeof snapshot.value === "object" ? snapshot.value[field] : undefined,
-          );
-        const stagedOf = (field) => drafts[field];
-
-        const fieldState = (field) => {
-          const staged = stagedOf(field);
-          if (staged === undefined) return { text: sectionText(field), overridden: stored(field), invalid: false };
-          if (staged.clear) return { text: staged.text, overridden: false, invalid: false };
-          const parsed = cfgParse(field, staged.text);
-          return { text: staged.text, overridden: true, invalid: parsed === undefined };
-        };
-
-        const edit = (field, text) => {
-          // 勾上「会话通知」顺手请求权限：勾选就是用户手势，错过这次浏览器不再
-          // 给请求机会（启动时自动请求会被忽略）
-          if (field === "notifyEnabled" && text === "true") requestNotifyPerm();
-          setDrafts((d) => ({ ...d, [field]: { text, clear: false } }));
-          setFailed(false);
-        };
-        /** 请求桌面通知权限（按钮与上面的开关共用）；已决定过就不再问 */
-        const requestNotifyPerm = () => {
-          if (typeof Notification !== "function" || notifyPermState() !== "default") {
-            setNotifyPerm(notifyPermState());
-            return;
-          }
-          try {
-            const asked = Notification.requestPermission();
-            if (asked && typeof asked.then === "function") {
-              asked.then(() => setNotifyPerm(notifyPermState()), () => setNotifyPerm(notifyPermState()));
-            }
-          } catch {
-            /* 老浏览器不支持 Promise 形态且无回调：按原状态显示 */
-            setNotifyPerm(notifyPermState());
-          }
-        };
-        /** 通知权限行：状态与提示都取自浏览器侧事实，按钮只在可请求时可用 */
-        const notifyPermRow = () => {
-          const text =
-            { granted: "cfgNotifyPermGranted", denied: "cfgNotifyPermDenied", unsupported: "cfgNotifyPermUnsupported" }[notifyPerm] ??
-            "cfgNotifyPermAsk";
-          const hint =
-            { granted: "cfgNotifyPermHintGranted", denied: "cfgNotifyPermHintDenied", unsupported: "cfgNotifyPermHintUnsupported" }[
-              notifyPerm
-            ] ?? "cfgNotifyPermHintDefault";
-          return jsxRuntime.jsxs("div", {
-            className: "dshk-cfg-field dshk-cfg-sub",
-            children: [
-              jsxRuntime.jsxs("div", {
-                className: "dshk-cfg-fieldtext",
-                children: [
-                  jsxRuntime.jsx("span", { className: "dshk-cfg-label", children: t("cfgNotifyPerm") }),
-                  jsxRuntime.jsx("span", { className: "dshk-cfg-hint", children: t(hint) }),
-                ],
-              }),
-              jsxRuntime.jsx("button", {
-                type: "button",
-                className: "dshk-cfg-combo",
-                disabled: notifyPerm !== "default",
-                onClick: requestNotifyPerm,
-                children: t(text),
-              }),
-            ],
-          });
-        };
-        // 恢复默认：暂存基座值 + clear 标记（保存时 unset，回落 schema 默认）。
-        // 基座只带 vaultRoot 一项，其余键由 cfgFormat 回落内置默认
-        const resetField = (field) => {
-          const base = snapshot.base && typeof snapshot.base === "object" ? snapshot.base[field] : undefined;
-          setDrafts((d) => ({ ...d, [field]: { text: cfgFormat(field, base), clear: true } }));
-          setFailed(false);
-        };
-        const discard = () => {
-          setDrafts({});
-          setFailed(false);
-          setCapturing(null);
-        };
-
-        /** 保存要执行的写入列表：无变化跳过、非法阻断整体（返回 null） */
-        const computeWrites = () => {
-          if (!available) return [];
-          const writes = [];
-          for (const { key } of CFG_FIELDS) {
-            const staged = stagedOf(key);
-            if (staged === undefined) continue;
-            if (staged.clear) {
-              if (stored(key)) writes.push({ run: () => clearField(key) });
-              continue;
-            }
-            if (staged.text === sectionText(key)) continue;
-            const parsed = cfgParse(key, staged.text);
-            if (parsed === undefined) return null;
-            writes.push({ run: () => storeField(key, parsed.value) });
-          }
-          return writes;
-        };
-        const freshUser = () => scope.getSnapshot().user;
-        const storeField = async (field, value) => {
-          await scope.set(field, value);
-          const user = freshUser();
-          return !!(user && typeof user === "object" && user[field] === value);
-        };
-        const clearField = async (field) => {
-          await scope.unset(field);
-          const user = freshUser();
-          return !(user && typeof user === "object" && Object.prototype.hasOwnProperty.call(user, field));
-        };
-
-        const writes = computeWrites();
-        const dirty = writes === null || writes.length > 0;
-        const invalid = writes === null;
-        const blocked = !dirty || invalid || saving;
-
-        const save = async () => {
-          const freshWrites = computeWrites();
-          if (freshWrites === null || freshWrites.length === 0 || saving) return;
-          setSaving(true);
-          setFailed(false);
-          let landed = true;
-          for (const write of freshWrites) landed = (await write.run()) && landed;
-          if (landed) setDrafts({});
-          setSaving(false);
-          setFailed(!landed);
-        };
-
-        const startCapture = (field) => setCapturing(capturing === field ? null : field);
-
-        const badges = (state, field) =>
-          state.overridden
-            ? jsxRuntime.jsxs("span", {
-                className: "dshk-cfg-badges",
-                children: [
-                  jsxRuntime.jsx("span", { className: "dshk-cfg-badge", children: t("overridden") }),
-                  jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-cfg-reset",
-                    disabled: !writable,
-                    onClick: () => resetField(field),
-                    children: t("resetDefault"),
-                  }),
-                ],
-              })
-            : null;
-
-        const renderField = (field, isSub) => {
-          const spec = cfgSpec[field];
-          const state = fieldState(field);
-          const control =
-            spec.kind === "bool"
-              ? jsxRuntime.jsx("input", {
-                  type: "checkbox",
-                  className: "dshk-cfg-check",
-                  checked: state.text === "true",
-                  disabled: !writable,
-                  onChange: () => edit(field, state.text === "true" ? "false" : "true"),
-                })
-              : spec.kind === "number"
-                ? jsxRuntime.jsx("input", {
-                    type: "number",
-                    className: "dshk-cfg-text dshk-cfg-num",
-                    min: spec.min ?? 1,
-                    max: spec.max ?? 8,
-                    step: 1,
-                    value: state.text,
-                    disabled: !writable,
-                    onChange: (e) => edit(field, e.target.value),
-                  })
-                : spec.kind === "text"
-                ? jsxRuntime.jsx("input", {
-                    type: "text",
-                    className: "dshk-cfg-text",
-                    value: state.text,
-                    placeholder: "dsh.example.com",
-                    spellCheck: false,
-                    disabled: !writable,
-                    onChange: (e) => edit(field, e.target.value),
-                  })
-                : jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-cfg-combo",
-                    "data-capturing": capturing === field || undefined,
-                    disabled: !writable,
-                    onClick: () => startCapture(field),
-                    children: capturing === field ? t("cfgCapturing") : state.text,
-                  });
-          // 官方行模型（对齐通用设置页）：左列 = 标题(14px) + 说明(12px 三级色)
-          // 纵排，控件恒右置。组合键字段无说明——按钮文本即当前值，非法时说明位
-          // 原位显示错误；「已覆盖/恢复默认」徽标插在文本列与控件之间。
-          const hintText = t(cfgLabelKey(field, "Hint"));
-          const textCol = jsxRuntime.jsxs("div", {
-            className: "dshk-cfg-fieldtext",
-            children: [
-              jsxRuntime.jsx("span", { className: "dshk-cfg-label", children: t(cfgLabelKey(field, "")) }),
-              state.invalid
-                ? jsxRuntime.jsx("span", {
-                    className: "dshk-cfg-invalid",
-                    children: t(spec.kind === "number" ? "invalidNumber" : "invalidCombo"),
-                  })
-                : spec.kind === "combo" || !hintText
-                  ? null
-                  : jsxRuntime.jsx("span", { className: "dshk-cfg-hint", children: hintText }),
-            ],
-          });
-          return jsxRuntime.jsxs("div", {
-            className: isSub ? "dshk-cfg-field dshk-cfg-sub" : "dshk-cfg-field",
-            children: [textCol, badges(state, field), control],
-          });
-        };
-
-        return jsxRuntime.jsxs("li", {
-          className: "dshk-cfg-card",
-          "data-open": open || undefined,
-          children: [
-            jsxRuntime.jsxs("button", {
-              type: "button",
-              className: "dshk-cfg-head",
-              "aria-expanded": open,
-              onClick: () => setOpen(!open),
-              children: [
-                jsxRuntime.jsxs("span", {
-                  className: "dshk-cfg-headtext",
-                  children: [
-                    jsxRuntime.jsx("span", { className: "dshk-cfg-name", children: t("cfgTitle") }),
-                    jsxRuntime.jsx("span", { className: "dshk-cfg-desc", children: t("cfgDesc") }),
-                  ],
-                }),
-                dirty ? jsxRuntime.jsx("span", { className: "dshk-cfg-pill", children: t("unsaved") }) : null,
-                jsxRuntime.jsx("svg", {
-                  width: 14,
-                  height: 14,
-                  viewBox: "0 0 14 14",
-                  fill: "none",
-                  xmlns: "http://www.w3.org/2000/svg",
-                  "aria-hidden": true,
-                  className: "dshk-cfg-chev",
-                  "data-open": open || undefined,
-                  children: jsxRuntime.jsx("path", {
-                    d: "M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z",
-                    fill: "currentColor",
-                  }),
-                }),
-              ],
-            }),
-            open
-              ? jsxRuntime.jsxs("div", {
-                  className: "dshk-cfg-body",
-                  children: [
-                    loading ? jsxRuntime.jsx("p", { className: "dshk-cfg-status", role: "status", children: loadingHint }) : null,
-                    !loading && !available
-                      ? jsxRuntime.jsx("p", { className: "dshk-cfg-status", role: "status", children: t("readOnly") })
-                      : null,
-                    available && !writable
-                      ? jsxRuntime.jsx("p", { className: "dshk-cfg-status", role: "status", children: t("readOnly") })
-                      : null,
-                    available
-                      ? CFG_GROUPS.map((group) => {
-                          // 勾选启用才展开该功能的子配置（草稿态即时显隐，保存落盘生效）；
-                          // switchKey 为 null 的组没有开关行（侧边栏组：左右两键 + 左栏
-                          // 启用位平铺，title 作组头）
-                          const on = group.switchKey === null ? true : fieldState(group.switchKey).text === "true";
-                          return jsxRuntime.jsxs(
-                            "div",
-                            {
-                              className: "dshk-cfg-group",
-                              children: [
-                                group.title ? jsxRuntime.jsx("div", { className: "dshk-cfg-grouptitle", children: t(group.title) }) : null,
-                                group.switchKey === null ? null : renderField(group.switchKey),
-                                on ? group.fields.map((f) => renderField(f, group.switchKey !== null)) : null,
-                                on && group.permRow ? notifyPermRow() : null,
-                              ],
-                            },
-                            group.switchKey ?? group.title ?? group.fields.join("+"),
-                          );
-                        })
-                      : null,
-                    available
-                      ? jsxRuntime.jsxs("div", {
-                          className: "dshk-cfg-footer",
-                          children: [
-                            failed ? jsxRuntime.jsx("p", { className: "dshk-cfg-err", role: "status", children: t("saveFailed") }) : null,
-                            jsxRuntime.jsx("button", {
-                              type: "button",
-                              className: "dshk-cfg-btn dshk-cfg-btn-discard",
-                              disabled: !dirty || saving,
-                              onClick: discard,
-                              children: t("discard"),
-                            }),
-                            jsxRuntime.jsx("button", {
-                              type: "button",
-                              className: "dshk-cfg-btn dshk-cfg-btn-save",
-                              disabled: blocked,
-                              onClick: save,
-                              children: t(saving ? "saving" : "save"),
-                            }),
-                          ],
-                        })
-                      : null,
-                  ],
-                })
-              : null,
-          ],
-        });
-      }
-    }
-
     // ─────────── 官方右侧边栏注册（宿主 0.1.5+）───────────
     // 五个功能各注册一张 dock 页类型（id=正文槽 key，kind=openTab 类型名）+
     // pane 正文。开始页归官方 ShippedGuide（罗盘 + 胶囊条目，条目按 order 升序）：
@@ -11501,12 +10732,12 @@ ellipsis，窄列只截字不破版 */
         }, 5000);
       });
       injectStyles();
-      // 插件配置数据通道：官方 settings scope 绑定本插件命名空间（宿主半边
-      // 已按 ctx.settings.installSection 注册 dsh-kit）。绑定失败（老宿主缺 settingsScope）
-      // 时 cfgScope 保持 null，功能按内置默认全开、卡片不出现。
-      if (ctx.settingsScope && typeof ctx.settingsScope.bind === "function") {
-        cfgScope = ctx.settingsScope.bind({ namespace: "dsh-kit" });
-      }
+      // 拉一次生效配置喂功能门控（见模块顶 cfgSnapshot 注释）；失败保持内置默认
+      kitJson("/dsh-kit/config")
+        .then((body) => {
+          if (body && typeof body === "object") applyConfigSnapshot(body);
+        })
+        .catch(() => {});
       // 全帧浮层宿主：面板渲染、输入框入口与技能页的座位门控、快捷键监听全在
       // KitSurfaces（根作用域常驻，fiber 上下文内做动态 register/dispose）。
       ctx.slots.inject("shell.overlay", () =>
@@ -11515,23 +10746,7 @@ ellipsis，窄列只截字不破版 */
           KitSurfaces,
         ),
       );
-      // 设置→插件 页的配置卡：0.1.6 起该页由官方插件管理页承载，bundle 配置
-      // 注册进 keyed 槽 plugins.bundle.config——页面按包名（pkg.name）派发，
-      // key 必须与 package.json 的 name 一致。常驻不受功能开关门控——
-      // 否则关掉就再也打不开。
-      if (cfgScope) {
-        ctx.slots.inject("plugins.bundle.config", () =>
-          ctx.slots.register(
-            {
-              name: "plugins.bundle.config",
-              key: "dsh-kit",
-              inject: () => ({ scope: cfgScope }),
-            },
-            KitConfigCard,
-          ),
-        );
-      }
-      // 官方右侧边栏：五个功能 dock 签 + 引导页清单 + header 计时。只在宿主
+      // 官方右侧边栏：五个功能 dock 签 + 引导页清单。只在宿主
       // 提供该服务时生效（缺服务 = 只剩 kitUi 存在性补丁，签不出现）。用 inject
       // 等它就绪而非直接读——官方右栏与本插件的客户端加载顺序不保证
       if (typeof ctx.inject === "function") {
@@ -11544,9 +10759,6 @@ ellipsis，窄列只截字不破版 */
       } else {
         registerRightbar(ctx);
       }
-      // 计时入口现居会话 header 工具区；运行态另有悬浮小窗与日程 pane 内芯片。
-      // 组件内部拉
-      // /dsh-kit/schedule/* 数据，与 session 无关。
       // 导航图标替换是点击驱动的轻量方案：打开设置/面板内切换都源于一次 click
       document.addEventListener("click", scheduleSkillIconSwap, true);
       // 对话文件点击的知识库路由：vault 内路径改道知识库标签，其余放行官方
@@ -11567,7 +10779,9 @@ ellipsis，窄列只截字不破版 */
       }
     }
 
-    exports.inject = ["slots", "settingsScope"];
+    // slots 是唯一依赖：settingsScope 已随宿主 0.1.7 移除（配置改走 Config
+    // schema + 原生设置页，client 拉 /dsh-kit/config 只读快照做门控）
+    exports.inject = ["slots"];
     exports.apply = apply;
     return module.exports;
   },
