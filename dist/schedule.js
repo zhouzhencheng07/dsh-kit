@@ -1,10 +1,10 @@
 // dsh-kit 日程模块——结构化存储与查询派生（schedule.ts）
 //
-// 职责：日程/待办/计时的唯一数据持有者（一条一文件、单文件原子落盘，固定
+// 职责：日程/待办的结构化数据持有者（一条一文件、单文件原子落盘，固定
 // $DSH_HOME/dsh-kit/schedule/，与知识库 vaultRoot 互不相干），以及派生层：
-// 区间重复展开、统计、文本汇总。UI 组件在
+// 区间重复展开、统计、文本汇总。UI 组件（只读面板）在
 // client/bundle.js；agent 工具（buildScheduleTools）在本文件定义、经 index.ts
-// 用宿主 defineTool 注册；HTTP 端点在 index.ts。
+// 用宿主 defineTool 注册；HTTP 端点（只读）在 index.ts。
 //
 // 设计要点：
 // - 日程是强结构数据（起止/重复/位置），不是笔记——不做 md 不进 vault；
@@ -13,7 +13,8 @@
 // - 时间全部存本地朴素串（无时区后缀），同格式字符串比较即时间序。
 // - 重复展开只在宿主查询层做（expandOccurrences，带 endDate/state），客户端拿
 //   现成 occurrence 渲染；支持 daily/weekly/monthly × interval × days(weekly) × end。
-// - 计时全局单实例：timer/start 遇 running 先自动 stop（闭合已有条目再开新）。
+// - 不做计时（起停与计时段编辑归望舒端）：数据里的 timeEntries/entries 只读——
+//   独立计时段照常载入并计入统计，目录里望舒端的 timer.json 不读不写。
 // 生命周期：模块级单例懒构造（首次端点/工具触达）；文件缺失=空库；JSON 损坏
 // → 坏文件改存 .bak 后降级空库，不让日程服务砖死。
 import fs from 'node:fs';
@@ -284,13 +285,13 @@ export function resolveScheduleDir() {
 // 一条一文件（与桌面端、鸿蒙端同一份契约）：
 //   events/<id>.json    一条事件或待办（含 recurrence / timeEntries / rev）
 //   entries/<id>.json   一条独立计时段（原 orphans，自带 id）
-//   timer.json          进行中的计时（null = 无）
+//   timer.json          进行中的计时（望舒端专用状态，本端不读不写）
 // 为什么：同步（git 底座）按文件合并——整库单文件时两端各改一次必冲突，拆开后冲突面
 // 只剩"同一条"；文件名 = id，改期只改内容不移动文件、删除 = 删文件（不需要墓碑）。
 export class ScheduleStore {
     /** 当前数据目录（构造可注入别的路径供测试；默认 resolveScheduleDir()） */
     dir;
-    data = { events: [], runningTimer: null };
+    data = { events: [] };
     constructor(dir) {
         this.dir = dir ?? resolveScheduleDir();
         this.load();
@@ -300,9 +301,6 @@ export class ScheduleStore {
     }
     entriesDir() {
         return path.join(this.dir, 'entries');
-    }
-    timerFile() {
-        return path.join(this.dir, 'timer.json');
     }
     /** 原子写单个 JSON（tmp + rename）；失败只告警（内存态仍可用，下次变更会再试） */
     writeJson(file, value) {
@@ -385,22 +383,7 @@ export class ScheduleStore {
             orphans.push(value);
         }
         orphans.sort((a, b) => ((a.id ?? '') < (b.id ?? '') ? -1 : (a.id ?? '') > (b.id ?? '') ? 1 : 0));
-        let runningTimer = null;
-        try {
-            const parsed = JSON.parse(fs.readFileSync(this.timerFile(), 'utf8'));
-            runningTimer = parsed && typeof parsed === 'object' ? parsed : null;
-        }
-        catch {
-            // 缺失 = 无进行中计时；坏文件挪 .bak（不静默覆盖）
-            try {
-                if (fs.existsSync(this.timerFile()))
-                    fs.renameSync(this.timerFile(), `${this.timerFile()}.bak`);
-            }
-            catch {
-                /* 忽略 */
-            }
-        }
-        this.data = { events, runningTimer, orphans };
+        this.data = { events, orphans };
     }
     writeEvent(id) {
         const ev = this.data.events.find((e) => e.id === id);
@@ -415,22 +398,6 @@ export class ScheduleStore {
             /* 不存在也算成功 */
         }
     }
-    writeEntry(id) {
-        const entry = (this.data.orphans ?? []).find((e) => e.id === id);
-        if (entry)
-            this.writeJson(path.join(this.entriesDir(), `${id}.json`), entry);
-    }
-    removeEntryFile(id) {
-        try {
-            fs.unlinkSync(path.join(this.entriesDir(), `${id}.json`));
-        }
-        catch {
-            /* 忽略 */
-        }
-    }
-    writeTimer() {
-        this.writeJson(this.timerFile(), this.data.runningTimer ?? null);
-    }
     /** 内容变了就推进版本号（同步用它判断"这条被改过几次"，不依赖时钟） */
     touch(ev) {
         ev.rev = (ev.rev ?? 0) + 1;
@@ -439,7 +406,7 @@ export class ScheduleStore {
     list() {
         return this.data.events;
     }
-    /** 独立计时段（不进事件列表，统计用）；测试与后续「未分类时段」视图共用 */
+    /** 独立计时段（不进事件列表，统计与网格展示用）；段由望舒端计时产生，本端只读 */
     listOrphans() {
         return Array.isArray(this.data.orphans) ? this.data.orphans : [];
     }
@@ -482,167 +449,6 @@ export class ScheduleStore {
         if (this.data.events.length === before)
             return false;
         this.removeEventFile(id);
-        if (this.data.runningTimer?.id === id) {
-            this.data.runningTimer = null;
-            this.writeTimer();
-        }
-        return true;
-    }
-    setDone(id, done) {
-        const ev = this.data.events.find((e) => e.id === id);
-        if (!ev)
-            return null;
-        ev.completedAt = done ? dtStrOf(new Date()) : null;
-        this.touch(ev);
-        this.writeEvent(id);
-        return ev;
-    }
-    // ── 计时（全局单实例）────────────────────────────────────────────────────
-    timerStart(id, title) {
-        // 已有进行中先闭合（礼貌性互斥：一边计时是人对自己时间的诚实）
-        if (this.data.runningTimer)
-            this.timerStop();
-        const target = id ? this.data.events.find((e) => e.id === id) : undefined;
-        // 独立计时必须有名目（网格=时间分配视图，无名目的
-        // 时段无从识别）；标题与日程/待办同口径限 16 字。挂条目时标题永远跟条目走
-        const label = target ? undefined : title?.trim().slice(0, SCHED_TITLE_MAX) || undefined;
-        if (!target && label === undefined)
-            throw new Error('独立计时需要标题（也允许挂待办）');
-        const start = dtStrOf(new Date(), true);
-        if (target) {
-            if (!Array.isArray(target.timeEntries))
-                target.timeEntries = [];
-            target.timeEntries.push({ start });
-            this.touch(target);
-        }
-        this.data.runningTimer = { id: target ? target.id : '', start, title: label };
-        if (target)
-            this.writeEvent(target.id);
-        this.writeTimer();
-        return { runningTimer: { id: this.data.runningTimer.id, start, title: label } };
-    }
-    timerStop() {
-        const running = this.data.runningTimer;
-        if (!running)
-            return { stopped: false };
-        if (running.id) {
-            const target = this.data.events.find((e) => e.id === running.id);
-            if (target && Array.isArray(target.timeEntries)) {
-                const open = target.timeEntries.find((t) => t.end === undefined);
-                if (open)
-                    open.end = dtStrOf(new Date(), true);
-                this.touch(target);
-            }
-            this.data.runningTimer = null;
-            this.writeEvent(running.id);
-            this.writeTimer();
-        }
-        else {
-            // 独立计时（未挂条目）的时段落到 orphans：不挂列表但统计照计，
-            // 否则停表即丢数据（timerStart 已强制独立计时必带标题，note 不会空）
-            if (!Array.isArray(this.data.orphans))
-                this.data.orphans = [];
-            const entryId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-            const entry = {
-                id: entryId,
-                start: running.start,
-                end: dtStrOf(new Date(), true),
-                note: running.title,
-            };
-            this.data.orphans.push(entry);
-            this.data.runningTimer = null;
-            this.writeEntry(entryId);
-            this.writeTimer();
-        }
-        return { stopped: true };
-    }
-    runningTimer() {
-        const running = this.data.runningTimer;
-        if (!running)
-            return null;
-        const title = running.id
-            ? (this.data.events.find((e) => e.id === running.id)?.title ?? '')
-            : (running.title ?? '');
-        return { id: running.id, start: running.start, title };
-    }
-    // ── 计时段编辑（网格=时间分配视图：计时段真实计入，须可像日程一样改）──────
-    /** owner=null → 独立计时段（orphans），否则事件 id → 其 timeEntries */
-    entryListOf(owner) {
-        if (owner === null) {
-            if (!Array.isArray(this.data.orphans))
-                this.data.orphans = [];
-            return this.data.orphans;
-        }
-        const ev = this.data.events.find((e) => e.id === owner);
-        if (!ev)
-            return null;
-        if (!Array.isArray(ev.timeEntries))
-            ev.timeEntries = [];
-        return ev.timeEntries;
-    }
-    /**
-     * 修改计时段（时刻/备注）。只允许改已闭合段——进行中的段归停表动作管，直接
-     * 改会造成 runningTimer 与数据错位。先整体验证再落字段：时刻非法或 end<=start
-     * 拒绝（返回 null），不做半截更新。
-     */
-    entryUpdate(owner, index, patch) {
-        const list = this.entryListOf(owner);
-        if (!list)
-            return null;
-        const entry = list[index];
-        if (!entry || entry.end === undefined)
-            return null;
-        const start = patch.start !== undefined ? patch.start : entry.start;
-        const end = patch.end !== undefined ? patch.end : entry.end;
-        if (!DT_RE.test(start) || !DT_RE.test(end))
-            return null;
-        const s = parseDT(start);
-        const e = parseDT(end);
-        // end<start 才拒（同秒零长段是快速停表的合法存量，允许只改备注）
-        if (!s || !e || e.getTime() < s.getTime())
-            return null;
-        entry.start = start.slice(0, 16);
-        entry.end = end.slice(0, 16);
-        if (patch.note !== undefined) {
-            // 独立段的 note 就是标题（16 字同口径）；挂条目段是备注
-            const cap = owner === null ? SCHED_TITLE_MAX : 200;
-            const note = patch.note.trim().slice(0, cap);
-            if (note !== '')
-                entry.note = note;
-            else
-                delete entry.note;
-        }
-        if (owner !== null) {
-            const ev = this.data.events.find((e2) => e2.id === owner);
-            if (ev) {
-                this.touch(ev);
-                this.writeEvent(owner);
-            }
-        }
-        else if (entry.id) {
-            this.writeEntry(entry.id);
-        }
-        return entry;
-    }
-    /** 删除计时段（仅已闭合段；进行中的段先停表）。返回是否真的删了 */
-    entryDelete(owner, index) {
-        const list = this.entryListOf(owner);
-        if (!list)
-            return false;
-        const entry = list[index];
-        if (!entry || entry.end === undefined)
-            return false;
-        list.splice(index, 1);
-        if (owner !== null) {
-            const ev = this.data.events.find((e) => e.id === owner);
-            if (ev) {
-                this.touch(ev);
-                this.writeEvent(owner);
-            }
-        }
-        else if (entry.id) {
-            this.removeEntryFile(entry.id);
-        }
         return true;
     }
     // ── 派生：展开 / 统计 / 汇总 ─────────────────────────────────────────────
@@ -777,9 +583,8 @@ export class ScheduleStore {
         return out;
     }
 }
-export function dtStrOf(d, withSeconds = false) {
-    const base = `${dateStrOf(d)}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-    return withSeconds ? `${base}:${pad2(d.getSeconds())}` : base;
+export function dtStrOf(d) {
+    return `${dateStrOf(d)}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 export function rangeOf(scope, date) {
     const base = DATE_RE.test(date) ? date : todayStr();

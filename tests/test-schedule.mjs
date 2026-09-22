@@ -1,7 +1,7 @@
 // 日程模块单测：对构建产物 dist/schedule.js 跑（先 pnpm build 再跑本文件）
 //   node tests/test-schedule.mjs
-// 覆盖：store CRUD/done、重复展开（daily/weekly/monthly × interval × days × end）、
-//       统计口径、summary 文本、timer 全局单计时互斥、持久化往返、字段清洗。
+// 覆盖：store CRUD、重复展开（daily/weekly/monthly × interval × days × end）、
+//       统计口径、summary 文本、计时段存量只读、持久化往返、字段清洗。
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -23,6 +23,17 @@ import {
 } from '../dist/schedule.js'
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'dshkit-sched-'))
+
+/** 直接写一条事件文件（构造存量数据：completedAt/timeEntries 这类不再有本端写入口的字段） */
+const writeEvent = (dir, name, ev) => {
+  const eventsDir = path.join(dir, name, 'events')
+  fs.mkdirSync(eventsDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(eventsDir, `${ev.id}.json`),
+    JSON.stringify({ createdAt: '2026-09-01T00:00', updatedAt: '2026-09-01T00:00', rev: 1, ...ev }),
+    'utf8',
+  )
+}
 
 test('isDateStr 只认 YYYY-MM-DD', () => {
   assert.equal(isDateStr('2026-09-06'), true)
@@ -233,19 +244,12 @@ test('expandOccurrences：窗口前的跨天尾巴也产出（起始日在 from 
 
 test('stats：事件数与已过/未到数 occurrence 口径、计时口径', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'sched'))
-  const ev = store.create({ title: '开会', start: '2026-09-08T09:00', end: '2026-09-08T10:00' })
-  const t1 = store.create({ title: '甲', due: '2026-09-08' })
-  store.create({ title: '乙', due: '2026-09-08' })
-  store.setDone(t1.id, true)
-  // setDone 盖的是真实"今天"，测试口径需要落在 9/8：手工校正完成时刻
-  const doneTask = store.list().find((e) => e.id === t1.id)
-  doneTask.completedAt = '2026-09-08T12:00'
-  // 计时 30 分钟（挂在 ev 上，start 落在 9/8）
-  store.timerStart(ev.id)
-  const withEntry = store.list().find((e) => e.id === ev.id)
-  withEntry.timeEntries[0].start = '2026-09-08T09:30:00'
-  withEntry.timeEntries[0].end = '2026-09-08T10:00:00'
+  const sched = path.join(dir, 'sched')
+  // 计时段与完成时刻都属存量数据（本端无写入口），直接落文件
+  writeEvent(dir, 'sched', { id: 'e1', title: '开会', start: '2026-09-08T09:00', end: '2026-09-08T10:00', timeEntries: [{ start: '2026-09-08T09:30:00', end: '2026-09-08T10:00:00' }] })
+  writeEvent(dir, 'sched', { id: 't1', title: '甲', due: '2026-09-08', completedAt: '2026-09-08T12:00' })
+  writeEvent(dir, 'sched', { id: 't2', title: '乙', due: '2026-09-08' })
+  const store = new ScheduleStore(sched)
   const stats = store.stats('day', '2026-09-08', new Date(2026, 8, 8, 12, 0))
   assert.equal(stats.eventCount, 1)
   // completedCount/openCount 数 occurrence 的已过/未到，不是待办（待办口径在 summary）
@@ -258,16 +262,13 @@ test('stats：事件数与已过/未到数 occurrence 口径、计时口径', ()
 
 test('stats：总时长=已结束日程占位+计时段，未来不记、挂段不重复计', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'sched'))
-  store.create({ title: '已过', start: '2026-09-08T09:00', end: '2026-09-08T10:00' }) // +60min
-  store.create({ title: '未到', start: '2026-09-08T22:00', end: '2026-09-08T23:00' }) // now 12:00 不记
+  const sched = path.join(dir, 'sched')
+  writeEvent(dir, 'sched', { id: 'p1', title: '已过', start: '2026-09-08T09:00', end: '2026-09-08T10:00' }) // +60min
+  writeEvent(dir, 'sched', { id: 'p2', title: '未到', start: '2026-09-08T22:00', end: '2026-09-08T23:00' }) // now 12:00 不记
   // 挂段事件：占位 60min 不计，真实段 30min 计入
-  const seg = store.create({ title: '挂段', start: '2026-09-08T11:00', end: '2026-09-08T12:00' })
-  store.timerStart(seg.id)
-  const withEntry = store.list().find((e) => e.id === seg.id)
-  withEntry.timeEntries[0].start = '2026-09-08T10:30:00'
-  withEntry.timeEntries[0].end = '2026-09-08T11:00:00'
-  store.create({ title: '无尾', start: '2026-09-08T10:00', end: '2026-09-08T11:00' }) // 已过 +60min
+  writeEvent(dir, 'sched', { id: 'p3', title: '挂段', start: '2026-09-08T11:00', end: '2026-09-08T12:00', timeEntries: [{ start: '2026-09-08T10:30:00', end: '2026-09-08T11:00:00' }] })
+  writeEvent(dir, 'sched', { id: 'p4', title: '无尾', start: '2026-09-08T10:00', end: '2026-09-08T11:00' }) // 已过 +60min
+  const store = new ScheduleStore(sched)
   const stats = store.stats('day', '2026-09-08', new Date(2026, 8, 8, 12, 0))
   assert.equal(stats.timedMs, 30 * 60000)
   assert.equal(stats.totalMs, (60 + 30 + 60) * 60000)
@@ -318,42 +319,18 @@ test('summary：日汇总含事件行与待办行，空时段有兜底句', () =
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('timer：全局单计时互斥、stop 闭合、runningTimer 带标题', () => {
+test('不做计时：望舒端的 timer.json 不读不写，条目删除不牵动它', () => {
   const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'sched'))
-  const a = store.create({ title: '任务A', due: '2026-09-08' })
-  const b = store.create({ title: '任务B', due: '2026-09-08' })
-  store.timerStart(a.id)
-  assert.equal(store.runningTimer().title, '任务A')
-  store.timerStart(b.id) // 互斥：A 被自动闭合
-  const aEntry = store.list().find((e) => e.id === a.id).timeEntries
-  assert.equal(aEntry.length, 1)
-  assert.ok(aEntry[0].end !== undefined)
-  assert.equal(store.runningTimer().title, '任务B')
-  store.timerStop()
-  assert.equal(store.runningTimer(), null)
-  const bEntry = store.list().find((e) => e.id === b.id).timeEntries
-  assert.ok(bEntry[0].end !== undefined)
-  // 独立计时强制标题：无名目直接拒绝、不产生 orphan
-  assert.throws(() => store.timerStart(undefined), /独立计时需要标题/)
-  assert.equal(store.runningTimer(), null)
-  assert.equal(store.listOrphans().length, 0)
-  // 带标题的独立计时：标题随 runningTimer 走，停表落 orphan.note
-  store.timerStart(undefined, '  整理周报  ')
-  assert.equal(store.runningTimer().title, '整理周报')
-  store.timerStop()
-  const titled = store.listOrphans().at(-1)
-  assert.equal(titled.note, '整理周报')
-  // 挂条目计时不收 title（标题永远跟条目走）
-  store.timerStart(b.id, '无视这个')
-  assert.equal(store.runningTimer().title, '任务B')
-  store.timerStop()
-  // 同秒起止时长为 0 属边界行为：拉成确定时段验证统计口径
-  const orphan = store.listOrphans()[0]
-  orphan.start = '2026-09-08T09:30:00'
-  orphan.end = '2026-09-08T10:00:00'
-  const dayStats = store.stats('day', '2026-09-08')
-  assert.ok(dayStats.timedMs === 30 * 60000)
+  const sched = path.join(dir, 'sched')
+  const timerRaw = JSON.stringify({ id: 'e1', start: '2026-09-08T09:00:00' })
+  fs.mkdirSync(path.join(sched, 'events'), { recursive: true })
+  fs.writeFileSync(path.join(sched, 'timer.json'), timerRaw, 'utf8')
+  writeEvent(dir, 'sched', { id: 'e1', title: '被计时的', due: '2026-09-08' })
+  const store = new ScheduleStore(sched)
+  assert.equal(store.list().length, 1)
+  store.remove('e1')
+  assert.equal(store.list().length, 0)
+  assert.equal(fs.readFileSync(path.join(sched, 'timer.json'), 'utf8'), timerRaw)
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
@@ -378,22 +355,23 @@ test('持久化往返、update 推进 rev、坏单条挪 .bak 不拖垮整库', 
 
 test('独立计时段持久化往返（entries/<id>.json，文件名即身份）+ 坏单条挪 .bak', () => {
   const dir = tmp()
-  const s1 = new ScheduleStore(path.join(dir, 'sched'))
-  s1.timerStart(undefined, '独立计时')
-  s1.timerStop()
-  // 拉成确定时段（同秒起止时长 0 是边界行为），经 entryUpdate 改写并落盘
-  const orphan = s1.listOrphans()[0]
-  assert.ok(typeof orphan.id === 'string' && orphan.id !== '')
-  s1.entryUpdate(null, 0, { start: '2026-09-08T08:00:00', end: '2026-09-08T08:20:00' })
-  const entryFile = path.join(dir, 'sched', 'entries', `${orphan.id}.json`)
-  assert.ok(fs.existsSync(entryFile))
-  const s2 = new ScheduleStore(path.join(dir, 'sched'))
-  assert.equal(s2.stats('day', '2026-09-08').timedMs, 20 * 60000)
+  const sched = path.join(dir, 'sched')
+  const entriesDir = path.join(sched, 'entries')
+  fs.mkdirSync(entriesDir, { recursive: true })
+  // 独立段由望舒端计时产生，这里直接落文件构造存量
+  fs.writeFileSync(
+    path.join(entriesDir, 'o1.json'),
+    JSON.stringify({ id: 'o1', start: '2026-09-08T08:00:00', end: '2026-09-08T08:20:00', note: '独立计时' }),
+    'utf8',
+  )
+  const store = new ScheduleStore(sched)
+  assert.equal(store.listOrphans().length, 1)
+  assert.equal(store.stats('day', '2026-09-08').timedMs, 20 * 60000)
   // 单条文件损坏 → 挪 .bak（不静默覆盖），库照常打开
-  fs.writeFileSync(entryFile, 'not json', 'utf8')
-  const s3 = new ScheduleStore(path.join(dir, 'sched'))
-  assert.equal(s3.listOrphans().length, 0)
-  assert.ok(fs.existsSync(`${entryFile}.bak`))
+  fs.writeFileSync(path.join(entriesDir, 'o1.json'), 'not json', 'utf8')
+  const s2 = new ScheduleStore(sched)
+  assert.equal(s2.listOrphans().length, 0)
+  assert.ok(fs.existsSync(path.join(entriesDir, 'o1.json.bak')))
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
@@ -678,52 +656,6 @@ test('标题统一上限 16 字（面板/agent 工具同一口径，细节让位
   const up = store.create({ title: 'x' })
   store.update(up.id, { title: long })
   assert.equal(store.list().find((e) => e.id === up.id).title.length, 16)
-  fs.rmSync(dir, { recursive: true, force: true })
-})
-
-test('timerStart：独立计时强制标题且限 16 字', () => {
-  const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'sched'))
-  assert.throws(() => store.timerStart(undefined), /独立计时需要标题/)
-  assert.throws(() => store.timerStart(undefined, '   '), /独立计时需要标题/)
-  const running = store.timerStart(undefined, '一'.repeat(20)).runningTimer
-  assert.equal(running.title.length, 16)
-  store.timerStop()
-  const orphans = store.listOrphans()
-  assert.equal(orphans.length, 1)
-  assert.equal(orphans[0].note.length, 16)
-  fs.rmSync(dir, { recursive: true, force: true })
-})
-
-test('entryUpdate/entryDelete：独立段与挂条目段改删，非法输入拒绝', () => {
-  const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'sched'))
-  const ev = store.create({ title: '挂段事件', start: '2026-09-08T09:00', end: '2026-09-08T10:00' })
-  store.timerStart(ev.id)
-  store.timerStop()
-  store.timerStart(undefined, '独立段')
-  store.timerStop()
-  // 挂条目段改时刻 + 备注
-  const up1 = store.entryUpdate(ev.id, 0, { start: '2026-09-08T10:00', end: '2026-09-08T11:00', note: '备注' })
-  assert.equal(up1.start, '2026-09-08T10:00')
-  assert.equal(up1.note, '备注')
-  assert.equal(store.list().find((e) => e.id === ev.id).timeEntries[0].end, '2026-09-08T11:00')
-  // 独立段改标题（note 即标题）
-  const up2 = store.entryUpdate(null, 0, { note: '改名了' })
-  assert.equal(up2.note, '改名了')
-  // 独立段 note 限 16 字
-  assert.equal(store.entryUpdate(null, 0, { note: '一'.repeat(20) }).note.length, 16)
-  // 非法：end<=start、坏格式、越界下标、不存在 owner
-  assert.equal(store.entryUpdate(null, 0, { start: '2026-09-08T20:00', end: '2026-09-08T09:00' }), null)
-  assert.equal(store.entryUpdate(null, 0, { start: 'bad' }), null)
-  assert.equal(store.entryUpdate(null, 99, { note: 'x' }), null)
-  assert.equal(store.entryUpdate('no-such-id', 0, { note: 'x' }), null)
-  // 删除
-  assert.equal(store.entryDelete(ev.id, 0), true)
-  assert.equal(store.entryDelete(ev.id, 0), false) // 已删，越界
-  assert.equal(store.list().find((e) => e.id === ev.id).timeEntries.length, 0)
-  assert.equal(store.entryDelete(null, 0), true)
-  assert.equal(store.listOrphans().length, 0)
   fs.rmSync(dir, { recursive: true, force: true })
 })
 

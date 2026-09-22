@@ -544,11 +544,11 @@ export async function apply(ctx) {
             }
         }
     });
-    // ── 日程模块（src/schedule.ts）：结构化日程/待办/计时 ──
+    // ── 日程模块（src/schedule.ts）：结构化日程/待办 ──
     //   agent 工具恒开（schedule_query 日/周/月汇总、schedule_create 建、
     //   schedule_update 三态改（null=清空、skip 跳过重复系列的一次）、
-    //   schedule_delete 按 id 删整个系列）；日程签与输入区计时芯片在
-    //   client/bundle.js 挂各自槽位；HTTP 端点在下方 webServer 注入块注册。
+    //   schedule_delete 按 id 删整个系列）；只读日程签在 client/bundle.js
+    //   挂右栏槽位；HTTP 端点（只读）在下方 webServer 注入块注册。
     // 日程存储固定 $DSH_HOME/dsh-kit/schedule/（一条一文件），与知识库（vaultRoot）无关，
     // 无配置门槛
     const scheduleStore = syncScheduleStore();
@@ -2412,36 +2412,14 @@ export async function apply(ctx) {
                 },
             });
             // ── 日程端点：/dsh-kit/schedule/*（src/schedule.ts 单例 store）──
-            //   GET  data?from&to → { events(raw 全量), occurrences(区间展开,带 endDate/state), runningTimer }
-            //   GET  timer → { runningTimer }；GET stats?scope&date → 统计
-            //   POST create / update / delete / done / timer-start / timer-stop /
-            //        entry-update / entry-delete（计时段改/删，owner 缺省=独立段）
-            //   update 是三态 patch：字段传 null = 清空（due→无期限、location/description→清、
-            //   start/end→改待办、completedAt→取消完成），skip:[日期] = 跳过重复系列的一次；
+            //   面板只读，端点也只有读：GET data?from&to → { events(raw 全量),
+            //   occurrences(区间展开,带 endDate/state), orphans }；GET stats?scope&date → 统计。
+            //   写路径只走 agent 工具（工具直调 store，不经 HTTP）与望舒端；
             //   重复展开只在宿主做（客户端只渲染 occurrence）；个人规模 raw 全量直发。
-            //   变更类端点 sameOrigin 门控同 upload。
             const schedJson = (res, code, obj) => {
                 res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
                 res.end(JSON.stringify(obj));
             };
-            const schedReadBody = (req) => new Promise((resolve) => {
-                let raw = '';
-                req.on('data', (c) => {
-                    raw += c;
-                    if (raw.length > 65536)
-                        req.destroy();
-                });
-                req.on('end', () => {
-                    try {
-                        const body = JSON.parse(raw === '' ? '{}' : raw);
-                        resolve(body !== null && typeof body === 'object' ? body : {});
-                    }
-                    catch {
-                        resolve({});
-                    }
-                });
-                req.on('error', () => resolve({}));
-            });
             const disposeSchedule = [];
             const schedRoute = (path, handler) => {
                 disposeSchedule.push(webCtx.webServer.register({
@@ -2464,14 +2442,8 @@ export async function apply(ctx) {
                 schedJson(res, 200, {
                     events: scheduleStore.list(),
                     occurrences: scheduleStore.occurrences(from, to),
-                    runningTimer: scheduleStore.runningTimer(),
                     orphans: scheduleStore.listOrphans(),
                 });
-            });
-            schedRoute('/dsh-kit/schedule/timer', (req, res) => {
-                if (req.method !== 'GET')
-                    return schedJson(res, 405, { error: 'method not allowed' });
-                schedJson(res, 200, { runningTimer: scheduleStore.runningTimer() });
             });
             schedRoute('/dsh-kit/schedule/stats', (req, res, url) => {
                 if (req.method !== 'GET')
@@ -2480,63 +2452,6 @@ export async function apply(ctx) {
                 const scope = rawScope === 'week' || rawScope === 'month' ? rawScope : 'day';
                 schedJson(res, 200, scheduleStore.stats(scope, schedDateParam(url, 'date')));
             });
-            const schedPost = (req, res, action) => {
-                if (req.method !== 'POST')
-                    return schedJson(res, 405, { error: 'method not allowed' });
-                if (!sameOrigin(req))
-                    return schedJson(res, 403, { error: 'cross-origin denied' });
-                void schedReadBody(req).then((body) => {
-                    try {
-                        schedJson(res, 200, action(body) ?? { ok: true });
-                    }
-                    catch (error) {
-                        schedJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
-                    }
-                });
-            };
-            schedRoute('/dsh-kit/schedule/create', (req, res) => schedPost(req, res, (body) => ({ event: scheduleStore.create(body) })));
-            schedRoute('/dsh-kit/schedule/update', (req, res) => schedPost(req, res, (body) => {
-                const ev = scheduleStore.update(String(body.id ?? ''), body);
-                if (!ev)
-                    throw new Error('条目不存在');
-                return { event: ev };
-            }));
-            schedRoute('/dsh-kit/schedule/delete', (req, res) => schedPost(req, res, (body) => ({ ok: scheduleStore.remove(String(body.id ?? '')) })));
-            schedRoute('/dsh-kit/schedule/done', (req, res) => schedPost(req, res, (body) => {
-                const ev = scheduleStore.setDone(String(body.id ?? ''), body.done !== false);
-                if (!ev)
-                    throw new Error('条目不存在');
-                return { event: ev };
-            }));
-            schedRoute('/dsh-kit/schedule/timer-start', (req, res) => schedPost(req, res, (body) => {
-                const id = typeof body.id === 'string' && body.id !== '' ? body.id : undefined;
-                const title = typeof body.title === 'string' && body.title !== '' ? body.title : undefined;
-                return { runningTimer: scheduleStore.timerStart(id, title).runningTimer };
-            }));
-            schedRoute('/dsh-kit/schedule/timer-stop', (req, res) => schedPost(req, res, () => scheduleStore.timerStop()));
-            // 计时段编辑/删除（owner 缺省 = 独立计时段 orphans；index 为数组下标）。
-            // 只允许已闭合段：进行中的段归停表管，直接改会与 runningTimer 错位
-            schedRoute('/dsh-kit/schedule/entry-update', (req, res) => schedPost(req, res, (body) => {
-                const owner = typeof body.owner === 'string' && body.owner !== '' ? body.owner : null;
-                const patch = {};
-                if (typeof body.start === 'string')
-                    patch.start = body.start;
-                if (typeof body.end === 'string')
-                    patch.end = body.end;
-                if (typeof body.note === 'string')
-                    patch.note = body.note;
-                const entry = scheduleStore.entryUpdate(owner, Number(body.index ?? -1), patch);
-                if (!entry)
-                    throw new Error('计时段不存在、时刻非法或仍在进行中');
-                return { entry };
-            }));
-            schedRoute('/dsh-kit/schedule/entry-delete', (req, res) => schedPost(req, res, (body) => {
-                const owner = typeof body.owner === 'string' && body.owner !== '' ? body.owner : null;
-                const ok = scheduleStore.entryDelete(owner, Number(body.index ?? -1));
-                if (!ok)
-                    throw new Error('计时段不存在或仍在进行中');
-                return { ok };
-            }));
             // ── 知识库（vault，src/vault.ts + src/vault-fs.ts）──
             // vaultRoot 是设置卡配置的绝对目录，在工作区外；读端点出索引 / 单页 mtime /
             // 全文搜索，写端点（src/vault-fs.ts）只管目录级文件管理：新建 / 重命名 /
