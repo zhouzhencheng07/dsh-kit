@@ -94,9 +94,9 @@ interface KitWebServer {
   port: number
 }
 
-interface KitSettingsService {
-  installSection(owner: unknown, ns: string, schema: unknown, entry: Record<string, unknown>, hooks: unknown): void
-}
+/** 插件设置的运行时形状（loader 按 Config schema 解析 profile 补丁里的 config 后
+ *  传入 apply；字段缺失时由 readSettings 兜内置默认） */
+type KitSettings = Record<string, unknown>
 
 interface KitCredentials {
   readRecord?: (name: string) => Promise<{ kind?: string; payload?: any } | null>
@@ -190,63 +190,95 @@ function loadDep(spec: string): any {
   return null
 }
 
-/**
- * 从 DSH monorepo 根直接 import 本地 workspace 包（dsh-settings / schemastery），
- * 不依赖 profile node_modules 里的 junction。
- *
- * dsh-settings/schemastery 的 peerDependencies 全是 pnpm `workspace:` 协议，只能在
- * monorepo 内解析，无法作为 file: 依赖拷出。故从 monorepo 根（见 findMonorepoRoot）
- * 直接 import 根下 lib 入口；其 workspace 依赖在 monorepo 自身 node_modules 内解析，
- * 完整可用。
- */
-async function loadMonorepoDep(relEntry: string): Promise<any | null> {
-  const root = findMonorepoRoot()
-  if (!root) return null
-  const entry = path.join(root, relEntry)
-  if (!fs.existsSync(entry)) return null
-  try {
-    return await import(pathToFileURL(entry).href)
-  } catch {
-    return null
-  }
-}
-
-/**
- * 异步多锚点加载设置命名空间依赖（@deepseek-ai/schemastery 自带 cjs）。按可靠度
- * 依次尝试：
- *   1) 裸 import(spec)——依赖在插件解析路径可达的安装形态直接命中；
- *   2) 运行中 dsh 本体锚点——junction/真实拷贝安装下插件位置 parent-walk 够不到
- *      fallback node_modules，但 schemastery 在 dsh 主程序自身的依赖树里：
- *      createRequire(process.argv[1]).resolve 定位实体文件路径，
- *      再 import(pathToFileURL)。resolve 走 CJS 条件，exports 只有 default 的
- *      纯 ESM 包同样可解析；import 统一处理 ESM/CJS，且等待进程内单例加载完成，
- *      天然避开 require(esm) 的 "not yet fully loaded" 启动期竞争；
- *   3) DSH monorepo 源码开发形态（运行中的 dsh 在 monorepo 里）——按 workspace
- *      相对路径直 import 本地包 lib 入口（见 loadMonorepoDep）。
- * 都失败返回 null（设置命名空间不注册，插件其余功能保持可用性优先）。
- */
-async function loadSettingsDep(spec: string, monorepoEntry?: string): Promise<any> {
-  try {
-    return await import(spec)
-  } catch {
-    // 落到下一锚点
-  }
-  const anchor = process.argv[1]
-  if (anchor) {
-    try {
-      const abs = path.isAbsolute(anchor) ? anchor : path.resolve(process.cwd(), anchor)
-      const resolved = createRequire(abs).resolve(spec)
-      if (resolved) return await import(pathToFileURL(resolved).href)
-    } catch {
-      // 落到下一锚点
-    }
-  }
-  return monorepoEntry ? loadMonorepoDep(monorepoEntry) : null
-}
-
 const WebSocketServer = loadDep('ws')?.WebSocketServer ?? null
 if (!WebSocketServer) {
   console.warn('dsh-kit: ws 不可用，浏览器面板不可用')
+}
+
+// ── 插件设置 schema（0.1.7 起的声明式模型）──
+// loader 读 profile 补丁里本 entry 的 config，按 Config 解析出默认值后传进 apply
+// 第二参；设置页由宿主按 schema 自动生成。Config 必须在模块加载期就存在（loader
+// 实例化前读），所以用 loadDep 同步解析 schemastery（锚点链同 ws）。解析失败 →
+// 不导出 Config（本 entry 无设置页），apply 里落 FALLBACK_SETTINGS 兜底，
+// 插件其余功能不受影响。
+const schemastery = loadDep('@deepseek-ai/schemastery')
+const z = (schemastery?.default ?? schemastery ?? null) as any
+
+export const Config =
+  z && typeof z.object === 'function'
+    ? z.object({
+        terminalEnabled: z.boolean().default(true),
+        fileTreeEnabled: z.boolean().default(true),
+        sourceControlEnabled: z.boolean().default(true),
+        // 隐藏官方右栏「工作区文件」入口胶囊（纯浏览器端消费，宿主不读）：那只是个
+        // 目录按钮，与文件树功能重复；隐藏后文件仍可从对话/文件树/搜索进入
+        hideOfficialFilesEntry: z.boolean().default(false),
+        hideOfficialBrowserEntry: z.boolean().default(false),
+        // 对话里的 http(s) 链接点击改投内置浏览器（默认开）。门控在浏览器半边（需要
+        // browserEnabled 同时开），宿主只提供 /dsh-kit/browser/open 这条管道
+        chatOpenLinkInBrowser: z.boolean().default(true),
+        skillsPageEnabled: z.boolean().default(true),
+        searchEnabled: z.boolean().default(true),
+        searchMaxResults: z.number().step(1).min(1).max(8).default(2),
+        // phoneEnabled = 「手机访问」页入口可见性（纯显示开关）。
+        // 网关启停不走 settings（读取器回填滞后），改由状态文件 + kit 端点直管。
+        phoneEnabled: z.boolean().default(true),
+        phoneRemoteDomain: z.string().default(''),
+        phonePort: z.number().step(1).min(1).max(65535).default(3090),
+        phoneKeepGatewayOn: z.boolean().default(false),
+        jobsEnabled: z.boolean().default(true),
+        // 知识库（vault）：总开关，默认关——关 = 不开 vault 端点（默认根是 $DSH_HOME 下
+        // 的固定位置，没开功能就不该在盘上凭空出现目录；插件也不建骨架目录，指向哪里
+        // 读哪里）；开 = 右栏「知识库」标签 + 只读索引/搜索端点（改开关重启生效）。
+        // 库是普通 md 目录，插件不为 agent 注册检索工具。
+        vaultEnabled: z.boolean().default(false),
+        // vaultRoot = 知识库根目录（绝对路径；schema 默认值 = defaultVaultRoot()，字段恒有值）。
+        // 宿主据此提供只读索引/搜索端点，数据契约见 src/vault.ts 头注释。
+        // schema 默认值即默认根：设置面与运行时读到的都是实际路径（与其他配置项
+        // 同一口径——字段恒有值），用户显式清空保存为 '' 时由读取侧兜底回默认
+        vaultRoot: z.string().default(defaultVaultRoot()),
+        // 内置浏览器总开关（默认开）：关=不注册 browser_* 工具（重启生效）；浏览器
+        // 半边入口按钮与面板同步隐藏。execute 内另有守卫兜底（注册期竞态时挡调用）。
+        // 自动切面板与画面跟随 agent 是恒定行为（无开关）——人为切走浏览器
+        // 标签后的"不再拽回"抑制在客户端侧实现。
+        browserEnabled: z.boolean().default(true),
+        // 会话监视器（纯浏览器端消费，宿主不读）：
+        // ① 全局 429 续跑：监视【所有】列表内会话（不要求会话页开着），turn 因 429
+        //    限流失败（客户端镜像 lastAgentError 匹配限流措辞）结束后等 monitorWaitMs
+        //    自动 prompt"继续"，连续自动续跑不超过 monitorMaxAuto 次（一轮正常收尾
+        //    即清零）；
+        // ② 死循环打断（仅当前打开的会话）：流式输出尾部自重叠达 monitorRepeatThreshold
+        //    次时停止当前回合并发循环打断话术。
+        monitorEnabled: z.boolean().default(true),
+        monitorWaitMs: z.number().step(1).min(5000).max(600000).default(15000),
+        monitorMaxAuto: z.number().step(1).min(1).max(10).default(5),
+        monitorRepeatThreshold: z.number().step(1).min(2).max(10).default(3),
+        // 会话通知（纯浏览器端消费，宿主不读）：回合收尾、上下文压缩完成或 agent 提问时，
+        // 若页面不在前台（或事件不属于当前打开的会话）弹桌面通知——浏览器 Notification
+        // API，未授权时退标题闪烁。一个总开关管全部提醒，不分类配置。
+        notifyEnabled: z.boolean().default(true),
+        // 用量与余额（宿主消费：端点门控 + 客户端消费：芯片入口）。默认关——key 不在本
+        // 插件配置里（复用模型配置 llm-pi-ai.providers 的凭证引用），开 = composer 下方
+        // 状态带出「当前会话所用 provider」的余额/配额芯片 + /dsh-kit/usage 聚合端点。
+        usageEnabled: z.boolean().default(false),
+        sidebarShortcut: z.string().default('Ctrl+B'),
+        rightbarShortcut: z.string().default('Ctrl+Alt+B'),
+        terminalShortcut: z.string().default('Ctrl+/'),
+        fileTreeShortcut: z.string().default('Ctrl+,'),
+        scShortcut: z.string().default('Ctrl+Alt+.'),
+        // 知识库入口（输入行）：语义是开合切换——
+        // 开=侧栏索引视图 + 舞台标签，关=两者一起收。日程无侧栏半边、故无快捷键；
+        // 右栏开合快捷键同卡（客户端消费 sidebarRight.toggleExpanded）
+        vaultShortcut: z.string().default('Ctrl+Alt+K'),
+      })
+    : undefined
+
+/** Config 缺席（schemastery 不可达）时 readSettings 的兜底：只覆盖宿主消费的关键键
+ *  （搜索条数、手机端口、库根），其余键缺省行为由读取侧的比较式兜住 */
+const FALLBACK_SETTINGS: KitSettings = {
+  searchMaxResults: 2,
+  phonePort: PHONE_PORT,
+  vaultRoot: '',
 }
 
 type ValidateOk<T> = { ok: true } & T
@@ -365,135 +397,20 @@ const VENDOR_TYPES = new Map([
   ['.ttf', 'font/ttf'],
 ])
 
-export async function apply(ctx: KitCtx): Promise<void> {
-  // ── 插件设置命名空间 ──
-  // 浏览器半边设置卡（client/bundle.js 的 dsh-kit 卡片，settings.plugin.item）
-  // 的数据通道：terminalEnabled/fileTreeEnabled/skillsPageEnabled 三个功能开关
-  // + terminalShortcut/fileTreeShortcut 两个快捷键。宿主自身不消费这些值（门控
-  // 全在浏览器端），但命名空间必须注册——否则浏览器端 settings.mutate 报
-  // "namespace not registered"。注册经 ctx.inject(['settings']) 等服务就绪，
-  // 不能拿 ctx.get('settings') 判存在后跳过。
-  // 宿主消费的开关：searchEnabled 在启动期决定 free-search provider 挂哪种
-  // 实现——开=免费引擎链，关=同 id 转发官方渠道（见 web-search.ts）；
-  // searchMaxResults 是每次搜索的来源条数上限（1-8，默认 2），provider 每次
-  // 调用现读，改完即生效。phoneEnabled 同为宿主消费：经 onChange 热同步网关
-  // 启停/端口，改开关立即生效无需重启。其余开关全在浏览器端门控入口按钮，
-  // 宿主不读。先注册设置层再挂搜索，确保注入回调读到的是已落定值。
-  // readSettings 提升到 apply 作用域：webServer 注入回调（块外）的手机访问段
-  // 也要读开关（远程域名、端口、页面可见性）。网关启用位由状态文件直管，
-  // 不走 settings。设置层不可用时保持空实现 → phone 关、search 直挂（可用性优先）。
-  // 设置注册 API（适配 DSH v0.1.2-alpha.5+）：命名空间注册是 ctx.settings 服务
-  // （dsh-settings-file 提供）上的 installSection(owner, ns, schema, entry, hooks)，
-  // ns 为裸字符串，注册是插件 fiber 上的 effect（dispose 自动注销）。
-  // schemastery 自带 cjs 导出，import() 同样适用（Node 支持 import CJS）；
-  // 多锚点解析见 loadSettingsDep：裸 import 失败后先落运行中 dsh 本体锚点
-  //（junction/真实拷贝安装都有），最后才落 monorepo 源码开发形态的 workspace 入口。
-  const schemasteryMod = await loadSettingsDep('@deepseek-ai/schemastery', 'vendor/schemastery/lib/index.mjs')
-  const z = schemasteryMod?.default ?? schemasteryMod ?? null
-  const Config = z && typeof z.object === 'function' ? z.object({
-    terminalEnabled: z.boolean().default(true),
-    fileTreeEnabled: z.boolean().default(true),
-    sourceControlEnabled: z.boolean().default(true),
-    // 隐藏官方右栏「工作区文件」入口胶囊（纯浏览器端消费，宿主不读）：那只是个
-    // 目录按钮，与文件树功能重复；隐藏后文件仍可从对话/文件树/搜索进入
-    hideOfficialFilesEntry: z.boolean().default(false),
-    hideOfficialBrowserEntry: z.boolean().default(false),
-    // 对话里的 http(s) 链接点击改投内置浏览器（默认开）。门控在浏览器半边（需要
-    // browserEnabled 同时开），宿主只提供 /dsh-kit/browser/open 这条管道
-    chatOpenLinkInBrowser: z.boolean().default(true),
-    skillsPageEnabled: z.boolean().default(true),
-    searchEnabled: z.boolean().default(true),
-    searchMaxResults: z.number().step(1).min(1).max(8).default(2),
-    // phoneEnabled = 「手机访问」页入口可见性（配置卡最下，纯显示开关）。
-    // 网关启停不走 settings（读取器回填滞后），改由状态文件 + kit 端点直管。
-    phoneEnabled: z.boolean().default(true),
-    phoneRemoteDomain: z.string().default(''),
-    phonePort: z.number().step(1).min(1).max(65535).default(3090),
-    phoneKeepGatewayOn: z.boolean().default(false),
-    jobsEnabled: z.boolean().default(true),
-    // 知识库（vault）：总开关，默认关——关 = 不开 vault 端点（默认根是 $DSH_HOME 下
-    // 的固定位置，没开功能就不该在盘上凭空出现目录；插件也不建骨架目录，指向哪里
-    // 读哪里）；开 = 右栏「知识库」标签 + 只读索引/搜索端点（改开关重启生效）。
-    // 库是普通 md 目录，插件不为 agent 注册检索工具。
-    // vaultRoot = 知识库根目录（绝对路径；schema 默认值 = defaultVaultRoot()，字段恒有值）。
-    // 宿主据此提供只读索引/搜索端点，数据契约见 src/vault.ts 头注释。
-    vaultEnabled: z.boolean().default(false),    // schema 默认值即默认根：设置面与运行时读到的都是实际路径（与其他配置项
-    // 同一口径——字段恒有值），用户显式清空保存为 '' 时由读取侧兜底回默认
-    vaultRoot: z.string().default(defaultVaultRoot()),
-    // 内置浏览器总开关（默认开）：关=不注册 browser_* 工具（重启生效）；浏览器
-    // 半边入口按钮与面板同步隐藏。execute 内另有守卫兜底（注册期竞态时挡调用）。
-    // 自动切面板与画面跟随 agent 是恒定行为（无开关）——人为切走浏览器
-    // 标签后的"不再拽回"抑制在客户端侧实现。
-    browserEnabled: z.boolean().default(true),
-    // 会话监视器（纯浏览器端消费，宿主不读）：
-    // ① 全局 429 续跑：监视【所有】列表内会话（不要求会话页开着），turn 因 429
-    //    限流失败（客户端镜像 lastAgentError 匹配限流措辞）结束后等 monitorWaitMs
-    //    自动 prompt"继续"，连续自动续跑不超过 monitorMaxAuto 次（一轮正常收尾
-    //    即清零）；
-    // ② 死循环打断（仅当前打开的会话）：流式输出尾部自重叠达 monitorRepeatThreshold
-    //    次时停止当前回合并发循环打断话术。
-    monitorEnabled: z.boolean().default(true),
-    monitorWaitMs: z.number().step(1).min(5000).max(600000).default(15000),
-    monitorMaxAuto: z.number().step(1).min(1).max(10).default(5),
-    monitorRepeatThreshold: z.number().step(1).min(2).max(10).default(3),
-    // 会话通知（纯浏览器端消费，宿主不读）：回合收尾、上下文压缩完成或 agent 提问时，
-    // 若页面不在前台（或事件不属于当前打开的会话）弹桌面通知——浏览器 Notification
-    // API，未授权时退标题闪烁。一个总开关管全部提醒，不分类配置。
-    notifyEnabled: z.boolean().default(true),
-    // 用量与余额（宿主消费：端点门控 + 客户端消费：芯片入口）。默认关——key 不在本
-    // 插件配置里（复用模型配置 llm-pi-ai.providers 的凭证引用），开 = composer 下方
-    // 状态带出「当前会话所用 provider」的余额/配额芯片 + /dsh-kit/usage 聚合端点。
-    usageEnabled: z.boolean().default(false),
-    sidebarShortcut: z.string().default('Ctrl+B'),
-    rightbarShortcut: z.string().default('Ctrl+Alt+B'),
-    terminalShortcut: z.string().default('Ctrl+/'),
-    fileTreeShortcut: z.string().default('Ctrl+,'),
-    scShortcut: z.string().default('Ctrl+Alt+.'),
-    // 知识库入口（输入行）：语义是开合切换——
-    // 开=侧栏索引视图 + 舞台标签，关=两者一起收。日程无侧栏半边、故无快捷键；
-    // 右栏开合快捷键同卡（客户端消费 sidebarRight.toggleExpanded）
-    vaultShortcut: z.string().default('Ctrl+Alt+K'),
-  }) : null
-
-  let readSettings: () => any = () => ({})
-  /** phoneSettingsReady：setSource 首次触发时置 true，下游 webServer 注入段由此判断
-   *  是立即评估网关启用位还是等 onSettingsReady 回调。解决时序差——readSettings 在
-   *  settings 注册前是空函数，phoneKeepGatewayOn() 恒 false */
-  let phoneSettingsReady = false
-  // 手机网关的设置联动钩子（端口变更热重启等），由 webServer 注入段回填
-  let onSettingsReady = () => {}
-  let onSettingsChanged = () => {}
-  /** setSource/onChange 钩子：settings 首次就绪时触发网关启用位检查（此时 readSettings
-   *  才读到真实值）；注意 onSettingsReady 在 webServer 注入回填前是空函数——如果注入
-   *  回调还未执行，调用无效果；注入回调已存在时触发首次评估（解决时序差） */
-  const settingsHooks = {
-    setSource: (current: () => any) => {
-      readSettings = current
-      phoneSettingsReady = true
-      onSettingsReady()
-    },
-    onChange: () => {
-      onSettingsChanged()
-    },
-  }
-  if (Config) {
-    ctx.inject(['settings'], (settingsCtx: { settings: KitSettingsService }) => {
-      try {
-        // base 带上 vaultRoot 默认根：设置卡「恢复默认」与组合读取都从这里取值
-        // （entry = 组合基座，用户层覆盖其上；空对象会让恢复默认 staged 成空串）
-        settingsCtx.settings.installSection(ctx, 'dsh-kit', Config, { vaultRoot: defaultVaultRoot() }, settingsHooks)
-      } catch (error) {
-        console.warn(`dsh-kit: 设置命名空间注册失败：${error instanceof Error ? error.message : error}`)
-      }
-    })
-    applyWebSearch(ctx, {
-      getEnabled: () => readSettings().searchEnabled !== false,
-      getMaxResults: () => readSettings().searchMaxResults,
-    })
-  } else {
-    // 设置层不可用：搜索按开启处理直接挂链
-    applyWebSearch(ctx)
-  }
+export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void> {
+  // ── 插件设置（0.1.7 声明式模型）──
+  // 值 = loader 按 Config schema 解析 profile 补丁后的 entry config（见模块顶层
+  // Config 注释）。配置变更 = 宿主重启本 entry（profile patchReload: live），apply
+  // 重跑即拿到新值——搜索 provider 门控、手机网关启停都在启动期评估，不再需要
+  // onChange 钩子。readSettings = schema 默认值 + entry config 的合并视图，供全部
+  // 消费点（搜索条数、browserEnabled/vaultRoot 门控、手机网关端口等）现读。
+  const defaults: KitSettings = Config ? Config({}) : FALLBACK_SETTINGS
+  // 返回 any：消费点（搜索条数/手机端口等）直接当具体类型用，与旧 readSettings 同口径
+  const readSettings = (): any => ({ ...defaults, ...config })
+  applyWebSearch(ctx, {
+    getEnabled: () => readSettings().searchEnabled !== false,
+    getMaxResults: () => readSettings().searchMaxResults,
+  })
 
   // 技能池端点（实现见 src/skill-pool.ts）：自带 webServer 注入与同源校验。
   // skills 注册表是可选增强（归属展示），服务晚于本行就绪也无碍——注入回调捕获引用。
@@ -617,6 +534,17 @@ export async function apply(ctx: KitCtx): Promise<void> {
   // webServer 可能在本插件 apply 之后才挂载，用动态注入等它就绪
   ctx.inject(['webServer', 'credentials'], (webCtx: KitWebCtx) => {
     webCtx.effect(() => {
+      // ── 生效配置只读端点（client 功能门控的数据源）──
+      // 0.1.7 起宿主客户端无 settingsScope，client 启动拉一次本端点喂快照
+      // （cfgFromSnapshot 门控）；配置编辑在原生设置页，变更随 entry 重启生效。
+      webCtx.webServer.register({
+        kind: 'exact',
+        path: '/dsh-kit/config',
+        handler: (_req, res) => {
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' })
+          res.end(JSON.stringify(readSettings()))
+        },
+      })
       // ── vendor 静态资源 ──
       const disposeVendor = webCtx.webServer.register({
         kind: 'prefix',
@@ -2001,12 +1929,9 @@ export async function apply(ctx: KitCtx): Promise<void> {
       let phoneGw: PhoneGatewayHandle | null = null
       let phoneGwError: string | null = null
       const bootGwState = loadGatewayState(stateFile, warnLog)
-      // 启动评估（phoneGwWanted）和首次 syncPhoneGateway 由 onSettingsReady 执行：
-      // readSettings 在 setSource 回调前是空函数，phoneKeepGatewayOn() 恒 false。
-      // 若 setSource 已经触发（phoneSettingsReady===true）则在注入段末尾立即评估；
-      // 否则等 onSettingsReady 回调。
+      // 启动评估：readSettings 自 apply 起就是完整值（声明式配置），注入段末尾
+      // 直接评估网关启用位，无需等设置服务回调。
       let phoneGwWanted = false
-      /** 由首次 onSettingsReady 或注入段末尾（phoneSettingsReady 已为 true 时）调用 */
       const bootEvalGateway = () => {
         phoneGwWanted = phoneKeepGatewayOn() && bootGwState.enabled === true
         if (bootGwState.enabled !== phoneGwWanted) {
@@ -2014,7 +1939,6 @@ export async function apply(ctx: KitCtx): Promise<void> {
         }
         syncPhoneGateway()
       }
-      onSettingsReady = () => { bootEvalGateway() }
       /** 现役实例监听的端口；null = 无实例。用于识别端口配置变更 */
       let gwPort: number | null = null
       /** 按当前启用位同步网关启停 */
@@ -2056,15 +1980,8 @@ export async function apply(ctx: KitCtx): Promise<void> {
           phoneGw = null
         }
       }
-      // 若 setSource 已触发（phoneSettingsReady===true），本轮注入段末尾立即评估；
-      // 否则等 onSettingsReady（setSource 首次调用）。二选一防止首次启动双重调用。
-      if (phoneSettingsReady) {
-        bootEvalGateway()
-      }
-      // 设置变更联动：端口改了就热重启（其余键的写入也走这里，sync 幂等无副作用）
-      onSettingsChanged = () => {
-        syncPhoneGateway()
-      }
+      // 启动评估（配置在本 entry 加载时已解析，无时序差）
+      bootEvalGateway()
       /** 改启用位（持久化到状态文件 + 热启停）；由 /dsh-kit/phone/gateway 端点调用。
        *  令牌轮换不再随启停自动发生——页内「刷新链接」按钮经 rotate 端点手动触发，
        *  重启/重开沿用同一令牌（已授权设备不掉线） */
