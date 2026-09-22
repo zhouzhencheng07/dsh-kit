@@ -594,7 +594,6 @@ window.__ModuleLoader__.load({
     // 模块级通道（apply 注入 / KitSurfaces 订阅 / 设置卡捕获互斥）
     let cfgScope = null;
     let shortcutCapture = null; // 正在录制快捷键的字段名；非 null 时面板快捷键监听让路
-    let schedModalOpen = false; // 日程弹窗开着：KitSurfaces 的 Esc 不收标签页（Esc 归弹窗自关）
     let vaultSearchOpen = false; // 知识库搜索浮层开着：同上让路——Esc 归浮层自关，不收页签/不收侧栏
     let inlineEditCapture = false; // 树行内改名输入激活：面板快捷键（含 Esc 分层关闭）让路
     const subscribeCfg = (listener) => (cfgScope ? cfgScope.subscribe(listener) : () => {});
@@ -1343,7 +1342,7 @@ window.__ModuleLoader__.load({
       dockBrowser: "内置浏览器",
       pvCloseTab: "关闭此标签",
       pvDeletedNote: "文件已删除——此标签仅展示删除 diff；可在源代码管理里 ↩ 恢复文件",
-      rbGuideSchedDesc: "周网格、待办与计时",
+      rbGuideSchedDesc: "周网格、待办与统计（只读）",
       rbGuideBrowserDesc: "agent 驱动的真实浏览器，可实时观看与接管",
       rbGuideJobsDesc: "后台任务的输出与停止",
       rbFeatureDisabled: "该功能已在设置中停用",
@@ -1395,40 +1394,8 @@ window.__ModuleLoader__.load({
       jobsOutputTransient: "输出读取失败：{error}",
       schedTab: "日程",
       schedToday: "今天",
-      schedEdit: "编辑日程",
-      schedCreate: "新建日程",
-      schedCreateTask: "新建待办",
-      schedTitlePh: "事项标题…",
-      schedDesc: "备注",
-      schedLoc: "地点",
-      schedStart: "开始",
-      schedEnd: "结束",
-      schedStartDate: "开始日期",
-      schedEndDate: "结束日期",
-      schedRepeat: "重复",
-      schedRepeatNone: "不重复",
-      schedRepeatDaily: "每天",
-      schedRepeatWeekly: "每周",
-      schedRepeatMonthly: "每月",
-      schedRepeatInterval: "间隔",
-      schedDayUnit: "天",
-      schedWeekUnit: "周",
-      schedMonthUnit: "月",
-      schedRepeatUntil: "结束于",
-      schedKindTodo: "待办",
-      schedKindEvent: "日程",
-      schedDueTime: "截止时刻（可空）",
       schedNoDue: "无期限",
-      schedDueHint: "留空 = 无期限",
-      schedSkipDay: "跳过这一天",
-      schedPickDays: "请选择星期几",
-      schedEndBeforeStart: "结束必须晚于开始",
-      schedSave: "保存",
-      schedDelete: "删除",
-      schedDeleteConfirm: "确认删除？",
-      schedClose: "关闭",
       schedTasks: "待办",
-      schedAdd: "添加",
       schedTaskDue: "截止",
       schedOverdue: "逾期",
       schedTasksEmpty: "暂无待办",
@@ -1439,17 +1406,8 @@ window.__ModuleLoader__.load({
       schedStatsDone: "已过",
       schedStatsOpen: "未到",
       schedStatsTitle: "本周统计",
-      schedPickTimer: "选择要计时的待办",
       schedTimerStandalone: "独立计时（不挂待办）",
-      schedEditEntry: "编辑计时",
-      timerLabelPh: "在做点什么（必填名目）",
-      timerStartBtn: "开始计时",
-      timerTitleRequired: "先写个名目（独立计时必带标题）",
-      timerStopConfirm: "确定结束计时？",
-      timerDoneStop: "完成",
-      timerStopYes: "是",
       schedWeekdays: "一,二,三,四,五,六,日",
-      schedOpFail: "操作失败：{error}",
       cfgVaultEnabled: "启用知识库",
       cfgVaultEnabledHint: "输入行入口 + 右栏只读浏览（默认关；改开关重启生效）",
       cfgVaultRoot: "知识库目录",
@@ -1764,7 +1722,7 @@ window.__ModuleLoader__.load({
       dockBrowser: "Built-in browser",
       pvCloseTab: "Close this tab",
       pvDeletedNote: "File deleted — this tab shows the deletion diff only; restore it via ↩ in source control",
-      rbGuideSchedDesc: "Weekly grid, todos, and a timer",
+      rbGuideSchedDesc: "Weekly grid, todos, and stats (read-only)",
       rbGuideBrowserDesc: "Agent-driven real browser you can watch live and take over",
       rbGuideJobsDesc: "Output and controls for background tasks",
       rbFeatureDisabled: "This feature is disabled in settings",
@@ -1836,40 +1794,8 @@ window.__ModuleLoader__.load({
       jobsOutputTransient: "Failed to read output: {error}",
       schedTab: "Schedule",
       schedToday: "Today",
-      schedEdit: "Edit entry",
-      schedCreate: "New entry",
-      schedCreateTask: "New task",
-      schedTitlePh: "Entry title…",
-      schedDesc: "Notes",
-      schedLoc: "Location",
-      schedStart: "Start",
-      schedEnd: "End",
-      schedStartDate: "Start date",
-      schedEndDate: "End date",
-      schedRepeat: "Repeat",
-      schedRepeatNone: "None",
-      schedRepeatDaily: "Daily",
-      schedRepeatWeekly: "Weekly",
-      schedRepeatMonthly: "Monthly",
-      schedRepeatInterval: "Every",
-      schedDayUnit: "day(s)",
-      schedWeekUnit: "week(s)",
-      schedMonthUnit: "month(s)",
-      schedRepeatUntil: "Until",
-      schedKindTodo: "Task",
-      schedKindEvent: "Event",
-      schedDueTime: "Due time (optional)",
       schedNoDue: "No due date",
-      schedDueHint: "Empty = no due date",
-      schedSkipDay: "Skip this one",
-      schedPickDays: "Pick at least one weekday",
-      schedEndBeforeStart: "End must be after start",
-      schedSave: "Save",
-      schedDelete: "Delete",
-      schedDeleteConfirm: "Confirm delete?",
-      schedClose: "Close",
       schedTasks: "Tasks",
-      schedAdd: "Add",
       schedTaskDue: "Due",
       schedOverdue: "Overdue",
       schedTasksEmpty: "No tasks",
@@ -1880,17 +1806,8 @@ window.__ModuleLoader__.load({
       schedStatsDone: "Past",
       schedStatsOpen: "Upcoming",
       schedStatsTitle: "This week",
-      schedPickTimer: "Pick a task to time",
       schedTimerStandalone: "Standalone timer (no task)",
-      schedEditEntry: "Edit timer entry",
-      timerLabelPh: "What are you working on (required)",
-      timerStartBtn: "Start",
-      timerTitleRequired: "Name it first (standalone timers need a title)",
-      timerStopConfirm: "Stop this timer?",
-      timerDoneStop: "Done",
-      timerStopYes: "Yes",
       schedWeekdays: "Mo,Tu,We,Th,Fr,Sa,Su",
-      schedOpFail: "Operation failed: {error}",
       cfgVaultEnabled: "Enable knowledge base",
       cfgVaultEnabledHint: "Composer entry + read-only browsing in the right dock (off by default; restart to apply)",
       cfgVaultRoot: "Knowledge base directory",
@@ -2120,14 +2037,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-rbpane-scroll{overflow:auto}
 .dshk-rbpane .dshk-pane-view{flex:1 1 auto;min-height:0}
 .dshk-rbpane .dshk-vault-panehost{flex:1 1 auto;min-height:0}
-/* 计时芯片（会话 header 工具区）：空闲=▶，运行=脉冲点+实时时长；起表浮层
-   复用 .dshk-timer-pick、贴 header 右缘 */
-.dshk-htimer{position:relative;display:inline-flex}
-.dshk-htimer-chip{appearance:none;border:1px solid var(--dsw-alias-border-l1);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;cursor:pointer;font-variant-numeric:tabular-nums;white-space:nowrap}
-.dshk-htimer-chip:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-htimer-chip.is-running{color:var(--dsw-alias-brand-primary);border-color:currentColor}
-.dshk-htimer-elapsed{min-width:56px;text-align:left}
-.dshk-timer-pick.is-header{left:auto;right:12px;bottom:auto;top:46px}
 /* 侧栏索引宿主（知识库目录/日程待办入口占 sidebar.workspaces） */
 .dshk-sidehost{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;pointer-events:auto}
 /* 技能管理页（settings.section）：三分组卡片；技能行单行布局，操作不换行、描述先收缩 */
@@ -2450,14 +2359,11 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-card{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-3);min-height:0;overflow:auto}
 .dshk-sched-cardtitle{font-weight:600;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-sched-cardhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}
-.dshk-sched-taskinput{flex:1;min-width:0;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 8px;border-radius:6px}
 .dshk-sched-task{display:flex;align-items:center;gap:7px;padding:4px 4px;border-radius:6px}
 .dshk-sched-task:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-sched-tasktitle{flex:1;min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;cursor:pointer;font-size:12px}
+.dshk-sched-tasktitle{flex:1;min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:12px}
 .dshk-sched-taskduebadge{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary);border:1px solid var(--dsw-alias-border-l2);border-radius:5px;padding:1px 5px}
 .dshk-sched-taskduebadge.is-overdue{color:var(--dsw-alias-danger,#cd3131);border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent)}
-.dshk-sched-tasktimer{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:1;width:20px;height:20px;border-radius:999px;cursor:pointer;flex:none}
-.dshk-sched-tasktimer:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-brand-primary)}
 .dshk-sched-emptytasks{font-size:12px;color:var(--dsw-alias-label-tertiary);text-align:center;padding:8px 0}
 /* 清单范围档（近三日/近一周/全部）：一排小 chip，复用 wdchip 的形态 */
 /* 统计两行（桌面同款）：总时长一行大字 + 事件/已过/未到一行小字；
@@ -2466,50 +2372,14 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-statsgrid{display:flex;flex-direction:column;gap:2px;margin:auto 0}
 .dshk-sched-statsgrid b{font-size:15px;font-weight:600}
 .dshk-sched-statrow{font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dshk-sched-overlay{position:fixed;inset:0;background:color-mix(in srgb,#000 45%,transparent);z-index:1000;display:flex;align-items:center;justify-content:center}
-.dshk-sched-modal{width:420px;max-width:92vw;max-height:86vh;overflow:auto;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 40px color-mix(in srgb,#000 30%,transparent)}
-/* 标题字数上限（标题只放重要信息，细节写备注）——
-   计数器悬浮输入框右缘，与 maxLength 同一常量 */
-.dshk-sched-countwrap{position:relative}
-.dshk-sched-countwrap .dshk-sched-input,.dshk-sched-countwrap .dshk-sched-taskinput{padding-right:44px}
-.dshk-sched-count{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--dsw-alias-label-tertiary);pointer-events:none}
-.dshk-sched-modaltitle{font-weight:600;font-size:14px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.dshk-sched-x{appearance:none;border:none;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:13px;line-height:1;padding:4px 6px;border-radius:6px;cursor:pointer;flex:none}
-.dshk-sched-x:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-sched-input{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:6px 8px;border-radius:6px;width:100%;box-sizing:border-box}
-.dshk-sched-input:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
-textarea.dshk-sched-input{resize:vertical}
-.dshk-sched-row{display:flex;gap:10px;align-items:flex-end}
-.dshk-sched-row .dshk-sched-field{flex:1;min-width:0}
-.dshk-sched-field{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--dsw-alias-label-secondary)}
 .dshk-sched-wdchip{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
 .dshk-sched-wdchip.is-active{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
 .dshk-sched-scopes{display:flex;gap:4px;align-items:center}
-.dshk-sched-actions{display:flex;align-items:center;gap:8px;margin-top:2px}
-.dshk-sched-ghost{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;padding:7px 12px;border-radius:8px;cursor:pointer}
-.dshk-sched-ghost:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-sched-primary{appearance:none;border:1px solid transparent;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);font:inherit;font-size:12px;line-height:1;padding:7px 14px;border-radius:8px;cursor:pointer}
-.dshk-sched-primary:disabled{opacity:.5;cursor:default}
-.dshk-sched-danger{appearance:none;border:1px solid color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);background:none;color:var(--dsw-alias-danger,#cd3131);font:inherit;font-size:12px;line-height:1;padding:7px 12px;border-radius:8px;cursor:pointer}
-/* 计时：悬浮小窗（运行中且不在计时页时漂浮内容区右下，坞展开自动让位）+
-   计时标签页视图 */
-/* 计时跑着绿（与网格"进行中"同色），停下即消失；不做红点告警 */
-.dshk-sched-timerdot{width:7px;height:7px;border-radius:999px;background:#2b8a3e;animation:dshk-sched-pulse 1.2s ease-in-out infinite}
-@keyframes dshk-sched-pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.dshk-timer-pill{position:fixed;right:12px;bottom:14px;z-index:700;display:inline-flex;align-items:center;gap:8px;padding:7px 9px 7px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-base);box-shadow:0 6px 20px color-mix(in srgb,#000 22%,transparent);cursor:pointer;user-select:none}
-.dshk-timer-pill:hover{border-color:var(--dsw-alias-brand-primary)}
 /* 会话监视条（composer 上方细条，仅有动作时出现） */
 .dshk-monitor-line{display:flex;align-items:center;gap:10px;padding:5px 12px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 35%,transparent);border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 8%,transparent);font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-monitor-text{flex:1;min-width:0}
 .dshk-monitor-cancel{appearance:none;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:none;padding:2px 10px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer}
 .dshk-monitor-cancel:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-tertiary)}
-.dshk-timer-pilltitle{min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--dsw-alias-label-primary)}
-.dshk-timer-pilltime{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dsw-alias-label-primary);font-variant-numeric:tabular-nums}
-.dshk-timer-stopmeta{display:flex;align-items:center;gap:10px;min-width:0;margin:2px 0 8px}
-.dshk-timer-stopname{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--dsw-alias-label-primary)}
-.dshk-timer-stopelapsed{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
-.dshk-timer-pickback{position:fixed;inset:0;z-index:788}
-.dshk-timer-pick{position:fixed;left:56px;bottom:10px;z-index:790;width:260px;max-height:60vh;overflow:auto;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.16);padding:10px;display:flex;flex-direction:column;gap:6px}
 /* order:1 —— 槽位容器 display:contents，本元素与官方 ContextMeter 环同为 dock 行的
    flex item；order 提到环后面才是真正最右（DOM 里槽位贡献永远在环左边）。
    不加 padding-top：dock 行自带 4px，加了会垂直错位 2px+ */
@@ -2543,10 +2413,6 @@ textarea.dshk-sched-input{resize:vertical}
 .dshk-usage-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-usage-refresh{appearance:none;border:.5px solid var(--dsw-alias-border-l1);background:0 0;border-radius:999px;padding:2px 10px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);cursor:pointer}
 .dshk-usage-refresh:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-timer-picktask{appearance:none;border:0;background:none;text-align:left;padding:6px 8px;border-radius:6px;display:flex;align-items:center;gap:8px;min-width:0;cursor:pointer;color:var(--dsw-alias-label-primary)}
-.dshk-timer-picktask:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-timer-picktask .dshk-sched-tasktitle{flex:1;min-width:0}
-.dshk-timer-pickrow{display:flex;gap:6px;align-items:center;margin-top:2px}
 /* 内置浏览器面板：URL 栏 + 实时画面 canvas（人机共驾） */
 /* 右侧标签页容器：内容视图占满（非激活标签 display:none 保挂载） */
 .dshk-pane-view{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
@@ -6238,11 +6104,11 @@ textarea.dshk-sched-input{resize:vertical}
 
     // ─────────── 日程模块（中心区第三 tab：周时间网格 + 待办 + 统计 + 计时）───────────
     // 数据走宿主 /dsh-kit/schedule/* 端点：raw 全量 events + 区间展开 occurrences
-    // （重复展开与 state 派生都在宿主做，这里只渲染）+ runningTimer。
+    // （重复展开与 state 派生都在宿主做，这里只渲染）+ orphans。
     // 块颜色只表达状态（浅底深字）：还没到橙 / 进行中绿 / 已过去蓝 / 逾期红——
-    // 不再按标题散列取色，存量 color 字段保留但不读；计时跑着绿、停下蓝。
-    // agent 走 schedule_query/create/update/delete 工具；计时全局单实例
-    // （timer/start 遇 running 先自动 stop），芯片挂 conversation.composer.dock。
+    // 不按标题散列取色，存量 color 字段保留但不读；已闭合计时段按已过去蓝展示。
+    // 面板只读：写路径归 agent 工具（schedule_query/create/update/delete）与
+    // 望舒端；计时（起停/计时段编辑）不做，数据里的段只展示不编辑。
 
     // 标题字数上限：与宿主 store 截断/工具描述同一口径（重要信息做标题，其余写备注）
     const SCHED_TITLE_MAX = 16;
@@ -6284,13 +6150,6 @@ textarea.dshk-sched-input{resize:vertical}
     };
     /** 待办截止日（due 的日期部分；无 due = ""） */
     const schedDueDay = (ev) => (typeof ev.due === "string" ? ev.due.slice(0, 10) : "");
-    /** 某日某时刻 +1 小时（23 点起落在次日，供结束缺省值） */
-    const schedPlusHour = (date, hhmm) => {
-      const mins = Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5)) + 60;
-      return mins >= 1440
-        ? { date: schedAddDays(date, 1), time: schedHHmm(mins - 1440) }
-        : { date, time: schedHHmm(mins) };
-    };
     /**
      * 跨天块按日切片（客户端渲染用）：宿主的 occurrence 只有一份（date 起始、
      * endDate 结束），网格每列需要自己的那一片——首日 start→24:00、中间整天、
@@ -6379,10 +6238,10 @@ textarea.dshk-sched-input{resize:vertical}
     };
 
     // ── 日程数据钩子（拆两半共用）：日程 pane 内待办卡与周网格各自
-    // 挂载、各自轮询，靠 dshk-sched-changed 事件即时互相同步（写操作一处发生
-    // 两边即时跟进）；轮询只是兜底，30s 节奏轻端点可承受 ──
+    // 挂载、各自轮询；面板只读无写操作，30s 轮询兜底接住 agent 工具与
+    // 望舒端写进来的变化 ──
     function useScheduleData() {
-      const [data, setData] = react.useState(() => ({ events: [], occurrences: [], runningTimer: null, orphans: [] }));
+      const [data, setData] = react.useState(() => ({ events: [], occurrences: [], orphans: [] }));
       // 统计口径固定周（日/月视图先不做）
       const [stats, setStats] = react.useState(null);
       const [nowTick, setNowTick] = react.useState(() => Date.now());
@@ -6395,7 +6254,6 @@ textarea.dshk-sched-input{resize:vertical}
           setData({
             events: Array.isArray(body.events) ? body.events : [],
             occurrences: Array.isArray(body.occurrences) ? body.occurrences : [],
-            runningTimer: body.runningTimer ?? null,
             orphans: Array.isArray(body.orphans) ? body.orphans : [],
           });
         } catch {
@@ -6416,7 +6274,6 @@ textarea.dshk-sched-input{resize:vertical}
         void fetchStats();
       }, [fetchStats]);
       // 可见时 30s 轮询（agent 经 schedule_create 建的条目靠它进面板）+ 每分钟走当前时刻线
-      // + dshk-sched-changed 事件（写操作即时互相同步，轮询只是兜底）
       react.useEffect(() => {
         const timer = setInterval(() => {
           if (document.visibilityState === "hidden") return;
@@ -6424,39 +6281,20 @@ textarea.dshk-sched-input{resize:vertical}
           setNowTick(Date.now());
         }, 30000);
         const minute = setInterval(() => setNowTick(Date.now()), 60000);
-        const onChanged = () => {
-          void fetchData();
-          void fetchStats();
-        };
-        window.addEventListener("dshk-sched-changed", onChanged);
         return () => {
           clearInterval(timer);
           clearInterval(minute);
-          window.removeEventListener("dshk-sched-changed", onChanged);
         };
-      }, [fetchData, fetchStats]);
-      const mutate = react.useCallback(
-        async (path, body) => {
-          try {
-            await kitJson(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });
-            // 刷新走 dshk-sched-changed 事件：日程 pane/悬浮计时件共用一条
-            // 同步通道，一处写操作全部即时跟进（避免各轮询节奏的 10~30s 滞后）
-            window.dispatchEvent(new Event("dshk-sched-changed"));
-          } catch (error) {
-            flashToast(tf("schedOpFail", { error: String(error?.message ?? error) }));
-          }
-        },
-        [],
-      );
-      return { data, stats, nowTick, fetchData, fetchStats, mutate };
+      }, [fetchData]);
+      return { data, stats, nowTick, fetchData, fetchStats };
     }
 
     /** 待办卡（日程 pane 顶部横条）——清单口径：
      *  行 = 逾期待办 → 有截止日待办 → 无期限待办（仅「全部」）→ 还没过去的定时
-     *  事件实例（**一次一次列**，重复系列不合并）。勾选圈与 ▶ 计时只给待办
-     *  ——定时事件的完成与时间由自己说了算，事件行右侧只给时刻（留空位对齐）。
-     *  范围档：近三日/近一周/全部（滑动窗口严格层层包含，逾期永远进前两档、
-     *  无期限待办只在「全部」）；行全部渲染，卡限高、多了卡内滚。 */
+     *  事件实例（**一次一次列**，重复系列不合并）。面板只读：行只展示标题与
+     *  截止/时刻，无勾选、无计时、无编辑入口。范围档：近三日/近一周/全部
+     *  （滑动窗口严格层层包含，逾期永远进前两档、无期限待办只在「全部」）；
+     *  行全部渲染，卡限高、多了卡内滚。 */
     const SCHED_TODO_SCOPES = ["3d", "week", "all"];
     const SCHED_SCOPE_KEY = { "3d": "schedScope3d", week: "schedScopeWeek", all: "schedScopeAll" };
     function schedTodoScopeSaved() {
@@ -6482,8 +6320,7 @@ textarea.dshk-sched-input{resize:vertical}
         events,
       };
     }
-    function ScheduleTasksCard({ data, mutate }) {
-      const [modal, setModal] = react.useState(null);
+    function ScheduleTasksCard({ data }) {
       const [scope, setScope] = react.useState(schedTodoScopeSaved);
       const groups = react.useMemo(() => schedBuildTodoRows(data), [data]);
       const today = schedToday();
@@ -6514,81 +6351,43 @@ textarea.dshk-sched-input{resize:vertical}
           /* 忽略 */
         }
       };
-      const openTodo = (ev) => {
-        setKitUi(openFeatureDock(kitUi, "schedule"));
-        setModal({ id: ev.id, kind: "task", values: { ...ev } });
-      };
-      const openEvent = (occ) => {
-        const base = (data.events ?? []).find((e) => e.id === occ.baseId);
-        setKitUi(openFeatureDock(kitUi, "schedule"));
-        setModal({ id: occ.baseId, kind: "event", values: { ...(base ?? { title: occ.title }) }, occDate: occ.date });
-      };
-      return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-        jsxRuntime.jsxs("div", { className: "dshk-sched-card is-tasks", children: [
-          jsxRuntime.jsxs("div", { className: "dshk-sched-cardhead", children: [
-            jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: `${t("schedTasks")} · ${rows.length}` }),
-            // 范围档与标题同排（不占独立一行，卡更矮）
-            jsxRuntime.jsx("div", { className: "dshk-sched-scopes", children: SCHED_TODO_SCOPES.map((s) =>
-              jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-wdchip${scope === s ? " is-active" : ""}`, onClick: () => pickScope(s), children: t(SCHED_SCOPE_KEY[s]) }, s),
-            ) }),
-            jsxRuntime.jsx("span", { style: { flex: 1 } }),
-            // 待办与日程同一数据形状（无 start 而已）——创建走同一个弹窗（task 模式）
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", onClick: () => setModal({ id: null, kind: "task", values: { title: "", due: schedToday() } }), children: `+ ${t("schedAdd")}` }),
-          ] }),
-          // 行全部渲染，这一层自己滚（只露两行，表头不动）
-          jsxRuntime.jsx("div", { className: "dshk-sched-taskrows", children:
-            rows.length === 0
-              ? jsxRuntime.jsx("div", { className: "dshk-sched-emptytasks", children: t("schedTasksEmpty") })
-              : rows.map((row) => {
-                  if (row.occ) {
-                    // 定时事件实例：不给勾、不给 ▶，行右只给时刻（留空位与待办行对齐）
-                    const o = row.occ;
-                    return jsxRuntime.jsxs("div", { className: "dshk-sched-task", children: [
-                      jsxRuntime.jsx("span", { style: { width: 13, flexShrink: 0 } }),
-                      jsxRuntime.jsx("span", { className: "dshk-sched-tasktitle", title: o.title, onClick: () => openEvent(o), children: o.title }),
-                      jsxRuntime.jsx("span", { className: "dshk-sched-taskduebadge", children: schedOccRowLabel(o, today) }),
-                      jsxRuntime.jsx("span", { style: { width: 20, flexShrink: 0 } }),
-                    ] }, row.key);
-                  }
-                  const ev = row.ev;
-                  const dueTxt = typeof ev.due === "string" ? ev.due.slice(5).replace("T", " ") : "";
-                  return jsxRuntime.jsxs("div", { className: "dshk-sched-task", children: [
-                    jsxRuntime.jsx("input", {
-                      type: "checkbox",
-                      checked: false,
-                      onChange: () => void mutate("/dsh-kit/schedule/done", { id: ev.id, done: true }),
-                    }),
-                    jsxRuntime.jsx("span", { className: "dshk-sched-tasktitle", title: ev.title, onClick: () => openTodo(ev), children: ev.title }),
-                    dueTxt
-                      ? jsxRuntime.jsx("span", { className: `dshk-sched-taskduebadge${row.overdue ? " is-overdue" : ""}`, children: row.overdue ? `${t("schedOverdue")} ${dueTxt}` : dueTxt })
-                      : jsxRuntime.jsx("span", { className: "dshk-sched-taskduebadge", children: t("schedNoDue") }),
-                    jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-tasktimer", title: t("timerStartBtn"), onClick: () => void mutate("/dsh-kit/schedule/timer-start", { id: ev.id }), children: "▶" }),
-                  ] }, row.key);
-                }),
-          }),
+      return jsxRuntime.jsxs("div", { className: "dshk-sched-card is-tasks", children: [
+        jsxRuntime.jsxs("div", { className: "dshk-sched-cardhead", children: [
+          jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: `${t("schedTasks")} · ${rows.length}` }),
+          // 范围档与标题同排（不占独立一行，卡更矮）
+          jsxRuntime.jsx("div", { className: "dshk-sched-scopes", children: SCHED_TODO_SCOPES.map((s) =>
+            jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-wdchip${scope === s ? " is-active" : ""}`, onClick: () => pickScope(s), children: t(SCHED_SCOPE_KEY[s]) }, s),
+          ) }),
         ] }),
-        modal
-          ? jsxRuntime.jsx(ScheduleModal, {
-              modal,
-              onClose: () => setModal(null),
-              onSave: async (id, values) => {
-                if (id) await mutate("/dsh-kit/schedule/update", { id, ...values });
-                else await mutate("/dsh-kit/schedule/create", values);
-                setModal(null);
-              },
-              onDelete: async (id) => {
-                await mutate("/dsh-kit/schedule/delete", { id });
-                setModal(null);
-              },
-            })
-          : null,
+        // 行全部渲染，这一层自己滚（只露两行，表头不动）
+        jsxRuntime.jsx("div", { className: "dshk-sched-taskrows", children:
+          rows.length === 0
+            ? jsxRuntime.jsx("div", { className: "dshk-sched-emptytasks", children: t("schedTasksEmpty") })
+            : rows.map((row) => {
+                if (row.occ) {
+                  // 定时事件实例：行右给时刻（与待办行的截止同位对齐）
+                  const o = row.occ;
+                  return jsxRuntime.jsxs("div", { className: "dshk-sched-task", children: [
+                    jsxRuntime.jsx("span", { className: "dshk-sched-tasktitle", title: o.title, children: o.title }),
+                    jsxRuntime.jsx("span", { className: "dshk-sched-taskduebadge", children: schedOccRowLabel(o, today) }),
+                  ] }, row.key);
+                }
+                const ev = row.ev;
+                const dueTxt = typeof ev.due === "string" ? ev.due.slice(5).replace("T", " ") : "";
+                return jsxRuntime.jsxs("div", { className: "dshk-sched-task", children: [
+                  jsxRuntime.jsx("span", { className: "dshk-sched-tasktitle", title: ev.title, children: ev.title }),
+                  dueTxt
+                    ? jsxRuntime.jsx("span", { className: `dshk-sched-taskduebadge${row.overdue ? " is-overdue" : ""}`, children: row.overdue ? `${t("schedOverdue")} ${dueTxt}` : dueTxt })
+                    : jsxRuntime.jsx("span", { className: "dshk-sched-taskduebadge", children: t("schedNoDue") }),
+                ] }, row.key);
+              }),
+        }),
       ] });
     }
 
     function ScheduleView({ active }) {
-      const { data, stats, nowTick, fetchData, fetchStats, mutate } = useScheduleData();
+      const { data, stats, nowTick } = useScheduleData();
       const [weekStart, setWeekStart] = react.useState(() => schedMondayOf(schedToday()));
-      const [modal, setModal] = react.useState(null); // { id?, values, kind: 'event'|'task' }
       const gridRef = react.useRef(null);
 
       const weekDates = react.useMemo(() => {
@@ -6616,27 +6415,26 @@ textarea.dshk-sched-input{resize:vertical}
       }, [active]);
 
       // 计时段上网格：事件 timeEntries 与独立计时段（orphans，
-      // note=自由标题）合成显示块——停了的才显示（进行中的没形状），按 start 日
-      // 归属（与 timedMsInRange 统计口径一致）。画法与事件块同一套状态色：停下的
-      // 段=已过去蓝（跑着的段不上网格，绿在计时芯片上）
+      // note=自由标题）合成显示块——只展示已闭合段（本端不做计时，进行中的
+      // 段不会出现），按 start 日归属（与 timedMsInRange 统计口径一致）。
+      // 画法与事件块同一套状态色：停下的段=已过去蓝
       const timedOcc = react.useMemo(() => {
         const segs = [];
         for (const ev of data.events) {
           (Array.isArray(ev.timeEntries) ? ev.timeEntries : []).forEach((t, i) => {
             if (t.end === undefined) return;
-            // owner/index/rawStart/rawEnd/note 供段编辑弹窗寻址（entry-update/delete 同一套下标）
-            segs.push({ baseId: `${ev.id}#timed${i}`, date: t.start.slice(0, 10), endDate: t.end.slice(0, 10), startMins: timerMinsOfDT(t.start), endMins: timerMinsOfDT(t.end), title: t.note || ev.title, virtual: false, isTimed: true, owner: ev.id, index: i, rawStart: t.start, rawEnd: t.end, note: t.note });
+            segs.push({ baseId: `${ev.id}#timed${i}`, date: t.start.slice(0, 10), endDate: t.end.slice(0, 10), startMins: timerMinsOfDT(t.start), endMins: timerMinsOfDT(t.end), title: t.note || ev.title, virtual: false, isTimed: true });
           });
         }
         (Array.isArray(data.orphans) ? data.orphans : []).forEach((o, i) => {
           if (o.end === undefined) return;
-          segs.push({ baseId: `orphan#timed${i}`, date: o.start.slice(0, 10), endDate: o.end.slice(0, 10), startMins: timerMinsOfDT(o.start), endMins: timerMinsOfDT(o.end), title: o.note || t("schedTimerStandalone"), virtual: false, isTimed: true, owner: null, index: i, rawStart: o.start, rawEnd: o.end, note: o.note });
+          segs.push({ baseId: `orphan#timed${i}`, date: o.start.slice(0, 10), endDate: o.end.slice(0, 10), startMins: timerMinsOfDT(o.start), endMins: timerMinsOfDT(o.end), title: o.note || t("schedTimerStandalone"), virtual: false, isTimed: true });
         });
         return segs;
       }, [data.events, data.orphans]);
       // 带时刻的待办上网格：截止只是一个**时刻**、不占一段时间——画成上沿对准
       // 截止时刻的 15 分钟小条，块上写「截止 HH:mm」（不写一段不存在的区间）。
-      // 底色待办橙（逾期红），点开仍是待办弹窗；只到日/无期限的待办不上块
+      // 底色待办橙（逾期红）；只到日/无期限的待办不上块
       const choreOcc = react.useMemo(() => {
         const out = [];
         for (const ev of data.events) {
@@ -6688,31 +6486,6 @@ textarea.dshk-sched-input{resize:vertical}
         [data.events],
       );
 
-      const openCreate = (date, hour) => {
-        const hh = hour ?? 9;
-        setModal({
-          id: null,
-          kind: "event",
-          values: {
-            title: "",
-            description: "",
-            location: "",
-            start: `${date}T${schedPad2(hh)}:00`,
-            recurrence: null,
-          },
-        });
-      };
-      const openEdit = (occ) => {
-        const base = data.events.find((e) => e.id === occ.baseId);
-        if (!base) return;
-        setModal({ id: base.id, kind: "event", values: { ...base }, occDate: occ.origDate ?? occ.date });
-      };
-      // 计时段编辑（网格=时间分配视图，段与日程一样可改可删）：从段上带的
-      // owner/index 寻址，orphan 的 note 即标题
-      const openEntryEdit = (occ) => {
-        setModal({ kind: "entry", owner: occ.owner ?? null, index: occ.index, values: { note: occ.note || "", start: occ.rawStart, end: occ.rawEnd } });
-      };
-
       const today = schedToday();
       const isCurrentWeek = weekDates.includes(today);
       const nowMins = new Date(nowTick).getHours() * 60 + new Date(nowTick).getMinutes();
@@ -6760,10 +6533,6 @@ textarea.dshk-sched-input{resize:vertical}
                 className: `dshk-sched-allday${o.done ? " is-done" : o.late ? " is-overdue" : ""}`,
                 style: { gridRow: 2, gridColumn: outOfWeek ? 2 : col + 2 },
                 title: hint,
-                onClick: () => {
-                  const base = data.events.find((e) => e.id === o.baseId);
-                  setModal({ id: o.baseId, kind: "task", values: { ...(base ?? { title: o.title }) } });
-                },
                 children: o.title,
               },
               `ad-${o.baseId}`,
@@ -6779,7 +6548,6 @@ textarea.dshk-sched-input{resize:vertical}
                 jsxRuntime.jsx("div", {
                   className: "dshk-sched-cell",
                   style: { height: SCHED_HOUR_PX },
-                  onClick: () => openCreate(date, h),
                 }, h),
               ),
               date === today && isCurrentWeek
@@ -6820,11 +6588,6 @@ textarea.dshk-sched-input{resize:vertical}
                     width: `${100 / o.lanes}%`,
                   },
                   title: tipParts.filter(Boolean).join("\n"),
-                  onClick: (e) => {
-                    e.stopPropagation();
-                    if (o.isTimed) openEntryEdit(o);
-                    else openEdit(o);
-                  },
                   children: [
                     jsxRuntime.jsx("span", { className: "dshk-sched-evtitle", children: squeeze ? `${o.title} ${choreTime}` : o.title }),
                     !o.thin && !o.isChore ? jsxRuntime.jsx("span", { className: "dshk-sched-evtime", children: timeLine }) : null,
@@ -6840,7 +6603,7 @@ textarea.dshk-sched-input{resize:vertical}
       // 顶部一条：待办卡（左，吃满余宽）+ 统计卡（右，固定窄列），周网格在下方吃满
       // 余高（所有坞宽一致）
       const sideCol = jsxRuntime.jsxs("div", { className: "dshk-sched-sidecol", children: [
-        jsxRuntime.jsx(ScheduleTasksCard, { data, mutate }),
+        jsxRuntime.jsx(ScheduleTasksCard, { data }),
         stats
           ? jsxRuntime.jsxs("div", { className: "dshk-sched-card is-stats", children: [
               jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedStatsTitle") }),
@@ -6859,346 +6622,11 @@ textarea.dshk-sched-input{resize:vertical}
           sideCol,
           jsxRuntime.jsx("div", { className: "dshk-sched-gridwrap", ref: gridRef, children: jsxRuntime.jsx("div", { className: "dshk-sched-gridinner", children: grid }) }),
         ] }),
-        modal
-          ? jsxRuntime.jsx(ScheduleModal, {
-              modal,
-              onClose: () => setModal(null),
-              onSave: async (id, values) => {
-                if (modal.kind === "entry") await mutate("/dsh-kit/schedule/entry-update", { owner: modal.owner, index: modal.index, ...values });
-                else if (id) await mutate("/dsh-kit/schedule/update", { id, ...values });
-                else await mutate("/dsh-kit/schedule/create", values);
-                setModal(null);
-              },
-              onDelete: async (id) => {
-                if (modal.kind === "entry") await mutate("/dsh-kit/schedule/entry-delete", { owner: modal.owner, index: modal.index });
-                else await mutate("/dsh-kit/schedule/delete", { id });
-                setModal(null);
-              },
-            })
-          : null,
       ] });
     }
-
-    /** 新建/编辑弹窗。一个类型开关（待办 / 日程）——没有"全天日程"（只记那一天
-     *  的事写成"只有截止日的待办"更贴切），改类型保存时旧字段显式清空：
-     *  待办 = 截止日期 + 截止时刻（可空 = 当天结束前，日期留空 = 无期限）+ 地点；
-     *  日程 = 开始日期+开始 / 结束日期+结束（结束缺省 = 开始 +60min，23 点落次日）。
-     *  没有颜色选择（颜色只表达状态）。重复系列实例上可「跳过这一天」
-     *  （往 skip 加一天，系列不动）。保存前拦 end <= start 与 weekly 缺周几。 */
-    function ScheduleModal({ modal, onClose, onSave, onDelete }) {
-      const isEntry = modal.kind === "entry";
-      const entryOrphan = isEntry && modal.owner === null;
-      const [values, setValues] = react.useState(() => ({ ...modal.values }));
-      const [confirming, setConfirming] = react.useState(false);
-      // 可关闭窗口语义（与 dsh 自身弹窗一致：无取消键）——
-      // Esc / 点背景 / 右上 ✕ 都直接关窗，未保存的编辑即放弃。挂 schedModalOpen
-      // 让 KitSurfaces 的全局 Esc（收标签页那个）让路；本监听 stopPropagation
-      // 兜底，Esc 只关本弹窗
-      react.useEffect(() => {
-        schedModalOpen = true;
-        const onKey = (e) => {
-          if (e.key !== "Escape") return;
-          e.stopPropagation();
-          onClose();
-        };
-        window.addEventListener("keydown", onKey, true);
-        return () => {
-          schedModalOpen = false;
-          window.removeEventListener("keydown", onKey, true);
-        };
-      }, [onClose]);
-      const splitDT = (dt) => {
-        const s = typeof dt === "string" ? dt : "";
-        return { date: s.slice(0, 10), time: s.includes("T") ? s.slice(11, 16) : "" };
-      };
-      // 起止拆「日期 + 时刻」两组输入；endTouched=false 时结束自动跟开始走（+60min）
-      const [form, setForm] = react.useState(() => {
-        const v = modal.values ?? {};
-        const start = splitDT(v.start);
-        const end = splitDT(v.end);
-        const due = splitDT(v.due);
-        return {
-          kind: modal.kind === "task" || (modal.id != null && start.date === "") ? "task" : "event",
-          title: v.title ?? "",
-          description: v.description ?? "",
-          location: v.location ?? "",
-          startDate: start.date,
-          startTime: start.time || "09:00",
-          endDate: end.date,
-          endTime: end.time,
-          endTouched: end.date !== "",
-          dueDate: due.date,
-          dueTime: due.time,
-          recurrence: v.recurrence ?? null,
-        };
-      });
-      const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
-      const setStart = (patch) =>
-        setForm((prev) => {
-          const next = { ...prev, ...patch };
-          if (!next.endTouched) {
-            const plus = schedPlusHour(next.startDate, next.startTime);
-            next.endDate = plus.date;
-            next.endTime = plus.time;
-          }
-          return next;
-        });
-      const setEnd = (key, value) => setForm((prev) => ({ ...prev, [key]: value, endTouched: true }));
-      const rec = form.recurrence || null;
-      const setRec = (patch) => setForm((prev) => ({ ...prev, recurrence: { ...(prev.recurrence || { type: "weekly" }), ...patch } }));
-      const weekdays = schedWeekdays();
-      const entrySet = (key, value) => setValues((prev) => ({ ...prev, [key]: value }));
-      // 计时段：独立段 note 即标题必填（同 16 字口径）；挂条目段备注可选
-      const invalid = isEntry
-        ? entryOrphan && (values.note ?? "").trim() === ""
-        : (form.title ?? "").trim() === "" || (form.kind === "event" && form.startDate === "");
-      const save = () => {
-        if (isEntry) {
-          void onSave(modal.id, values);
-          return;
-        }
-        const base = { title: form.title.trim(), description: form.description, location: form.location };
-        if (form.kind === "task") {
-          // 待办：start/end/重复显式清空（改类型不残留旧字段）
-          const due = form.dueDate ? `${form.dueDate}${form.dueTime ? `T${form.dueTime}` : ""}` : null;
-          void onSave(modal.id, { ...base, due, start: null, end: null, recurrence: null });
-          return;
-        }
-        if (rec && rec.type === "weekly" && !(rec.days ?? []).length) {
-          flashToast(t("schedPickDays"));
-          return;
-        }
-        const start = `${form.startDate}T${form.startTime}`;
-        let endDate = form.endDate || form.startDate;
-        let endTime = form.endTime;
-        if (!endTime) {
-          const plus = schedPlusHour(form.startDate, form.startTime);
-          endDate = form.endDate || plus.date;
-          endTime = plus.time;
-        }
-        const end = `${endDate}T${endTime}`;
-        if (end <= start) {
-          flashToast(t("schedEndBeforeStart"));
-          return;
-        }
-        void onSave(modal.id, { ...base, start, end, due: null, recurrence: form.recurrence });
-      };
-      // 跳过这一次：只往 skip 加当天（系列不动），保存动作即提交
-      const skipDay = () => {
-        const cur = Array.isArray(modal.values?.skip) ? modal.values.skip : [];
-        const next = cur.includes(modal.occDate) ? cur : [...cur, modal.occDate].sort();
-        void onSave(modal.id, { skip: next });
-      };
-      const canSkip = !isEntry && modal.id != null && typeof modal.occDate === "string" && modal.values?.recurrence != null;
-      return jsxRuntime.jsxs("div", { className: "dshk-sched-overlay", onClick: onClose, children: [
-        jsxRuntime.jsxs("div", { className: "dshk-sched-modal", onClick: (e) => e.stopPropagation(), children: [
-          jsxRuntime.jsxs("div", { className: "dshk-sched-modaltitle", children: [
-            jsxRuntime.jsx("span", { children: isEntry ? t("schedEditEntry") : modal.id ? t("schedEdit") : form.kind === "task" ? t("schedCreateTask") : t("schedCreate") }),
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-x", "aria-label": t("schedClose"), title: t("schedClose"), onClick: onClose, children: "✕" }),
-          ] }),
-          isEntry ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-            jsxRuntime.jsxs("div", { className: "dshk-sched-countwrap", children: [
-              jsxRuntime.jsx("input", { className: "dshk-sched-input", maxLength: entryOrphan ? SCHED_TITLE_MAX : 200, value: values.note ?? "", placeholder: entryOrphan ? t("schedTitlePh") : t("schedDesc"), autoFocus: true, onChange: (e) => entrySet("note", e.target.value.slice(0, entryOrphan ? SCHED_TITLE_MAX : 200)) }),
-              entryOrphan ? jsxRuntime.jsx("span", { className: "dshk-sched-count", children: `${(values.note ?? "").length}/${SCHED_TITLE_MAX}` }) : null,
-            ] }),
-            jsxRuntime.jsxs("div", { className: "dshk-sched-row", children: [
-              jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
-                jsxRuntime.jsx("span", { children: t("schedStart") }),
-                jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "datetime-local", value: values.start ?? "", onChange: (e) => entrySet("start", e.target.value) }),
-              ] }),
-              jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
-                jsxRuntime.jsx("span", { children: t("schedEnd") }),
-                jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "datetime-local", value: values.end ?? "", onChange: (e) => entrySet("end", e.target.value) }),
-              ] }),
-            ] }),
-          ] })
-          : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-            jsxRuntime.jsxs("div", { className: "dshk-sched-countwrap", children: [
-              jsxRuntime.jsx("input", { className: "dshk-sched-input", maxLength: SCHED_TITLE_MAX, value: form.title ?? "", placeholder: t("schedTitlePh"), autoFocus: true, onChange: (e) => set("title", e.target.value.slice(0, SCHED_TITLE_MAX)) }),
-              jsxRuntime.jsx("span", { className: "dshk-sched-count", children: `${(form.title ?? "").length}/${SCHED_TITLE_MAX}` }),
-            ] }),
-            jsxRuntime.jsxs("div", { className: "dshk-sched-scopes", children: [
-              jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-wdchip${form.kind === "task" ? " is-active" : ""}`, onClick: () => set("kind", "task"), children: t("schedKindTodo") }),
-              jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-wdchip${form.kind === "event" ? " is-active" : ""}`, onClick: () => set("kind", "event"), children: t("schedKindEvent") }),
-            ] }),
-            form.kind === "task"
-              ? jsxRuntime.jsxs("div", { className: "dshk-sched-row", children: [
-                  jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
-                    jsxRuntime.jsx("span", { children: `${t("schedTaskDue")}（${t("schedDueHint")}）` }),
-                    jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "date", value: form.dueDate, onChange: (e) => set("dueDate", e.target.value) }),
-                  ] }),
-                  jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
-                    jsxRuntime.jsx("span", { children: t("schedDueTime") }),
-                    jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "time", value: form.dueTime, onChange: (e) => set("dueTime", e.target.value) }),
-                  ] }),
-                ] })
-              : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-                  jsxRuntime.jsxs("div", { className: "dshk-sched-row", children: [
-                    jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
-                      jsxRuntime.jsx("span", { children: t("schedStartDate") }),
-                      jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "date", value: form.startDate, onChange: (e) => setStart({ startDate: e.target.value }) }),
-                    ] }),
-                    jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
-                      jsxRuntime.jsx("span", { children: t("schedStart") }),
-                      jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "time", value: form.startTime, onChange: (e) => setStart({ startTime: e.target.value }) }),
-                    ] }),
-                  ] }),
-                  jsxRuntime.jsxs("div", { className: "dshk-sched-row", children: [
-                    jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
-                      jsxRuntime.jsx("span", { children: t("schedEndDate") }),
-                      jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "date", value: form.endDate, onChange: (e) => setEnd("endDate", e.target.value) }),
-                    ] }),
-                    jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
-                      jsxRuntime.jsx("span", { children: t("schedEnd") }),
-                      jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "time", value: form.endTime, onChange: (e) => setEnd("endTime", e.target.value) }),
-                    ] }),
-                  ] }),
-                  rec
-                    ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-                        jsxRuntime.jsxs("div", { className: "dshk-sched-row", children: [
-                          jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
-                            jsxRuntime.jsx("span", { children: t("schedRepeat") }),
-                            jsxRuntime.jsx("select", { className: "dshk-sched-input", value: rec.type, onChange: (e) => { if (e.target.value === "none") set("recurrence", null); else setRec({ type: e.target.value }); }, children: [
-                              jsxRuntime.jsx("option", { value: "none", children: t("schedRepeatNone") }),
-                              jsxRuntime.jsx("option", { value: "daily", children: t("schedRepeatDaily") }),
-                              jsxRuntime.jsx("option", { value: "weekly", children: t("schedRepeatWeekly") }),
-                              jsxRuntime.jsx("option", { value: "monthly", children: t("schedRepeatMonthly") }),
-                            ] }),
-                          ] }),
-                          jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
-                            jsxRuntime.jsx("span", { children: t("schedRepeatInterval") }),
-                            jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "number", min: 1, value: rec.interval ?? 1, onChange: (e) => setRec({ interval: Math.max(1, Number(e.target.value) || 1) }) }),
-                            jsxRuntime.jsx("span", { children: rec.type === "daily" ? t("schedDayUnit") : rec.type === "weekly" ? t("schedWeekUnit") : t("schedMonthUnit") }),
-                          ] }),
-                        ] }),
-                        rec.type === "weekly"
-                          ? jsxRuntime.jsx("div", { className: "dshk-sched-row", children: weekdays.map((wd, i) =>
-                              jsxRuntime.jsx("button", {
-                                type: "button",
-                                className: `dshk-sched-wdchip${(rec.days ?? []).includes(i + 1) ? " is-active" : ""}`,
-                                onClick: () => {
-                                  const cur = new Set(rec.days ?? []);
-                                  if (cur.has(i + 1)) cur.delete(i + 1);
-                                  else cur.add(i + 1);
-                                  // 周几必须明确（weekly 缺 days 是非法配置）：
-                                  // 全没勾时不动旧值，保存时拦
-                                  if (cur.size > 0) setRec({ days: [...cur].sort((a, b) => a - b) });
-                                },
-                                children: wd,
-                              }, i),
-                            ) })
-                          : null,
-                        jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
-                          jsxRuntime.jsx("span", { children: t("schedRepeatUntil") }),
-                          jsxRuntime.jsx("input", { className: "dshk-sched-input", type: "date", value: rec.end ?? "", onChange: (e) => setRec({ end: e.target.value || undefined }) }),
-                        ] }),
-                      ] })
-                    : jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", onClick: () => setRec({ type: "weekly", interval: 1, days: [new Date().getDay() === 0 ? 7 : new Date().getDay()] }), children: `+ ${t("schedRepeat")}` }),
-                ] }),
-            jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
-              jsxRuntime.jsx("span", { children: t("schedLoc") }),
-              jsxRuntime.jsx("input", { className: "dshk-sched-input", value: form.location ?? "", onChange: (e) => set("location", e.target.value) }),
-            ] }),
-            jsxRuntime.jsx("textarea", { className: "dshk-sched-input", rows: 2, value: form.description ?? "", placeholder: t("schedDesc"), onChange: (e) => set("description", e.target.value) }),
-          ] }),
-          jsxRuntime.jsxs("div", { className: "dshk-sched-actions", children: [
-            canSkip
-              ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", title: `${t("schedSkipDay")} ${modal.occDate}`, onClick: skipDay, children: t("schedSkipDay") })
-              : null,
-            (modal.id || isEntry)
-              ? confirming
-                ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-danger", onClick: () => void onDelete(modal.id), children: t("schedDeleteConfirm") })
-                : jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", onClick: () => setConfirming(true), children: t("schedDelete") })
-              : null,
-            jsxRuntime.jsx("span", { style: { flex: 1 } }),
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-primary", disabled: invalid, onClick: save, children: t("schedSave") }),
-          ] }),
-        ] }),
-      ] });
-    }
-    /** 计时段的已流逝时长（本地朴素时间串 → hh:mm:ss）；纯函数，渲染与测试共用 */
-    function timerElapsedStr(nowTick, startStr) {
-      const [d, tm = "00:00"] = String(startStr).split("T");
-      const [y, mo, dd] = d.split("-").map(Number);
-      const tp = tm.split(":").map(Number);
-      const startMs = new Date(y, mo - 1, dd, tp[0] ?? 0, tp[1] ?? 0, tp[2] ?? 0).getTime();
-      const s = Math.max(0, Math.floor((nowTick - startMs) / 1000));
-      return `${schedPad2(Math.floor(s / 3600))}:${schedPad2(Math.floor((s % 3600) / 60))}:${schedPad2(s % 60)}`;
-    }
-    /** 计时段 "YYYY-MM-DDTHH:mm(:ss)" → 当日分钟数（网格橙块定位用） */
+    /** 计时段 "YYYY-MM-DDTHH:mm(:ss)" → 当日分钟数（网格块定位用） */
     function timerMinsOfDT(dt) {
       return Number(String(dt).slice(11, 13)) * 60 + Number(String(dt).slice(14, 16));
-    }
-
-    /** 运行态轮询三件套（10s 轻端点 + dshk-sched-changed 即时 + 秒针仅运行中），
-     *  悬浮小窗与收起栏起表钮共用同一套节奏 */
-    function useRunningTimer() {
-      const [running, setRunning] = react.useState(null); // { id, start, title }
-      const [nowTick, setNowTick] = react.useState(() => Date.now());
-      const refresh = react.useCallback(async () => {
-        try {
-          const body = await kitJson("/dsh-kit/schedule/timer");
-          setRunning(body.runningTimer ?? null);
-        } catch {
-          /* 静默：计时件不打扰 */
-        }
-      }, []);
-      react.useEffect(() => {
-        void refresh();
-        const timer = setInterval(() => {
-          if (document.visibilityState === "hidden") return;
-          void refresh();
-          setNowTick(Date.now());
-        }, 10000);
-        const onChanged = () => void refresh();
-        window.addEventListener("dshk-sched-changed", onChanged);
-        return () => {
-          clearInterval(timer);
-          window.removeEventListener("dshk-sched-changed", onChanged);
-        };
-      }, [refresh]);
-      react.useEffect(() => {
-        if (!running) return undefined;
-        setNowTick(Date.now());
-        const tick = setInterval(() => setNowTick(Date.now()), 1000);
-        return () => clearInterval(tick);
-      }, [running && running.id, running && running.start]);
-      const stop = react.useCallback(() => {
-        kitJson("/dsh-kit/schedule/timer-stop", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
-          .then(() => {
-            setRunning(null);
-            window.dispatchEvent(new Event("dshk-sched-changed"));
-          })
-          .catch(() => {});
-      }, []);
-      return { running, nowTick, refresh, stop };
-    }
-
-    /** 悬浮计时小窗：计时运行时常驻内容区右下（坞展开/收起都自动让位）。显示
-     *  名目（挂待办取待办标题，store.runningTimer 已解析；独立计时取名目）。
-     *  点整颗球弹「确定结束计时？」确认窗：是=停止，完成=停止并勾掉待办（仅挂
-     *  待办时出现），✕/Esc/点背景=关窗继续计时（停止入口
-     *  只此一处，误触不会丢计时） */
-    function FloatingTimerPill() {
-      const { running, nowTick, stop } = useRunningTimer();
-      const [confirming, setConfirming] = react.useState(false);
-      if (!running) return null;
-      const name = running.title || t("schedTimerStandalone");
-      return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-        jsxRuntime.jsxs("div", {
-          className: "dshk-timer-pill",
-          title: name,
-          onClick: () => setConfirming(true),
-          children: [
-            jsxRuntime.jsx("span", { className: "dshk-sched-timerdot" }),
-            jsxRuntime.jsx("span", { className: "dshk-timer-pilltitle", title: name, children: name }),
-            jsxRuntime.jsx("span", { className: "dshk-timer-pilltime", children: timerElapsedStr(nowTick, running.start) }),
-          ],
-        }),
-        confirming
-          ? jsxRuntime.jsx(TimerStopModal, { running, nowTick, stop, onClose: () => setConfirming(false) })
-          : null,
-      ] });
     }
 
     // ─────────── 内置浏览器面板（右栏浏览器签）───────────
@@ -10543,55 +9971,6 @@ textarea.dshk-sched-input{resize:vertical}
       ] });
     }
 
-    /** 「确定结束计时？」确认窗（悬浮小窗与侧栏计时钮共用）：完成=停止并勾掉
-     *  待办（仅挂待办时出现）、是=停止、✕/Esc/点背景=关窗继续。停止入口统一
-     *  走确认窗，误触不会丢计时 */
-    function TimerStopModal({ running, nowTick, stop, onClose }) {
-      // 确认窗打开期间接管 Esc（同 ScheduleModal 约定）：Esc 只关确认窗不收标签页
-      react.useEffect(() => {
-        schedModalOpen = true;
-        const onKey = (e) => {
-          if (e.key !== "Escape") return;
-          e.stopPropagation();
-          onClose();
-        };
-        window.addEventListener("keydown", onKey, true);
-        return () => {
-          schedModalOpen = false;
-          window.removeEventListener("keydown", onKey, true);
-        };
-      }, [onClose]);
-      const name = running.title || t("schedTimerStandalone");
-      // 停止并完成待办：先停表（段已闭合落库）再勾 done，两步都成功才算
-      const finishAndDone = async () => {
-        onClose();
-        try {
-          await kitJson("/dsh-kit/schedule/timer-stop", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-          if (running.id) await kitJson("/dsh-kit/schedule/done", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: running.id, done: true }) });
-        } catch {
-          /* 失败静默：下一轮轮询会校正运行态 */
-        }
-        window.dispatchEvent(new Event("dshk-sched-changed"));
-      };
-      return jsxRuntime.jsxs("div", { className: "dshk-sched-overlay", onClick: onClose, children: [
-        jsxRuntime.jsxs("div", { className: "dshk-sched-modal", onClick: (e) => e.stopPropagation(), children: [
-          jsxRuntime.jsxs("div", { className: "dshk-sched-modaltitle", children: [
-            jsxRuntime.jsx("span", { children: t("timerStopConfirm") }),
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-x", "aria-label": t("schedClose"), title: t("schedClose"), onClick: onClose, children: "✕" }),
-          ] }),
-          jsxRuntime.jsxs("div", { className: "dshk-timer-stopmeta", children: [
-            jsxRuntime.jsx("span", { className: "dshk-timer-stopname", title: name, children: name }),
-            jsxRuntime.jsx("span", { className: "dshk-timer-stopelapsed", children: timerElapsedStr(nowTick, running.start) }),
-          ] }),
-          jsxRuntime.jsxs("div", { className: "dshk-sched-actions", children: [
-            jsxRuntime.jsx("span", { style: { flex: 1 } }),
-            running.id ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-ghost", onClick: () => void finishAndDone(), children: t("timerDoneStop") }) : null,
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-primary", onClick: () => { onClose(); stop(); }, children: t("timerStopYes") }),
-          ] }),
-        ] }),
-      ] });
-    }
-
     /** 内容区文档签条（浏览器式页签）：一文档一签、点击切换、✕ 单关；
      *  label(path) 决定签名（文件带后缀、知识库页去掉 .md）。文件区与知识库区
      *  的 pane 正文共用 */
@@ -10761,98 +10140,6 @@ textarea.dshk-sched-input{resize:vertical}
           : jsxRuntime.jsx(BrowserPanel, { active: true, scope }),
       });
     }
-    /** 计时芯片（会话 header 工具区）：空闲=开始钮（弹起表
-     *  浮层：待办清单 + 自由名目），运行=脉冲点 + 实时时长（点击弹停表确认）。
-     *  浮层挂 header 右缘（fixed） */
-    function HeaderTimer() {
-      const { running, nowTick, stop } = useRunningTimer();
-      const [timerPick, setTimerPick] = react.useState(false);
-      const [confirming, setConfirming] = react.useState(false);
-      const [pickLabel, setPickLabel] = react.useState("");
-      const [pickTasks, setPickTasks] = react.useState([]);
-      react.useEffect(() => {
-        if (!timerPick) return undefined;
-        let alive = true;
-        void kitJson(`/dsh-kit/schedule/data?from=${encodeURIComponent(schedToday())}&to=${encodeURIComponent(schedToday())}`)
-          .then((b) => {
-            if (!alive) return;
-            const evs = Array.isArray(b && b.events) ? b.events : [];
-            setPickTasks(evs.filter((e) => e.start === undefined && !e.completedAt).sort((a, b2) => ((a.due ?? "9999") < (b2.due ?? "9999") ? -1 : 1)));
-          })
-          .catch(() => {});
-        return () => {
-          alive = false;
-        };
-      }, [timerPick]);
-      const startTimer = (payload) => {
-        void kitJson("/dsh-kit/schedule/timer-start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
-          .then(() => {
-            setTimerPick(false);
-            setPickLabel("");
-            window.dispatchEvent(new Event("dshk-sched-changed"));
-          })
-          .catch(() => {});
-      };
-      return jsxRuntime.jsxs("div", { className: "dshk-htimer", children: [
-        jsxRuntime.jsxs("button", {
-          type: "button",
-          className: `dshk-htimer-chip${running ? " is-running" : ""}`,
-          title: running ? `${running.title || t("schedTimerStandalone")} · ${timerElapsedStr(nowTick, running.start)}` : t("timerStartBtn"),
-          onClick: () => { if (running) setConfirming(true); else setTimerPick(!timerPick); },
-          children: [
-            running ? jsxRuntime.jsx("span", { className: "dshk-sched-timerdot", "aria-hidden": true }) : "▶",
-            running ? jsxRuntime.jsx("span", { className: "dshk-htimer-elapsed", children: timerElapsedStr(nowTick, running.start) }) : null,
-          ],
-        }),
-        timerPick
-          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-              jsxRuntime.jsx("div", { className: "dshk-timer-pickback", onClick: () => setTimerPick(false) }),
-              jsxRuntime.jsxs("div", { className: "dshk-timer-pick is-header", onClick: (e) => e.stopPropagation(), children: [
-                jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedPickTimer") }),
-                pickTasks.length === 0
-                  ? jsxRuntime.jsx("div", { className: "dshk-sched-emptytasks", children: t("schedTasksEmpty") })
-                  : pickTasks.map((task) =>
-                      jsxRuntime.jsxs("button", {
-                        type: "button",
-                        className: "dshk-timer-picktask",
-                        onClick: () => startTimer({ id: task.id }),
-                        children: [
-                          jsxRuntime.jsx("span", { className: "dshk-sched-tasktitle", title: task.title, children: task.title }),
-                          task.due ? jsxRuntime.jsx("span", { className: "dshk-sched-taskduebadge", children: task.due.slice(5) }) : null,
-                        ],
-                      }, task.id),
-                    ),
-                jsxRuntime.jsxs("div", { className: "dshk-timer-pickrow", children: [
-                  jsxRuntime.jsx("input", {
-                    className: "dshk-sched-taskinput",
-                    value: pickLabel,
-                    maxLength: SCHED_TITLE_MAX,
-                    placeholder: t("timerLabelPh"),
-                    onChange: (e) => setPickLabel(e.target.value.slice(0, SCHED_TITLE_MAX)),
-                    onKeyDown: (e) => {
-                      if (e.key === "Enter" && pickLabel.trim() !== "") startTimer({ title: pickLabel.trim() });
-                    },
-                  }),
-                  jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-sched-primary",
-                    disabled: pickLabel.trim() === "",
-                    title: pickLabel.trim() === "" ? t("timerTitleRequired") : undefined,
-                    onClick: () => {
-                      if (pickLabel.trim() !== "") startTimer({ title: pickLabel.trim() });
-                    },
-                    children: "▶",
-                  }),
-                ] }),
-              ] }),
-            ] })
-          : null,
-        confirming && running
-          ? jsxRuntime.jsx(TimerStopModal, { running, nowTick, stop, onClose: () => setConfirming(false) })
-          : null,
-      ] });
-    }
-
     // ─────────── 面板宿主（shell.overlay 全帧浮层）───────────
     // 终端停靠在这里渲染（fixed 定位不受 composer 祖先
     // stacking context 影响）；知识库单实例挂载、文件树/索引的 sidebar.workspaces
@@ -11089,8 +10376,8 @@ textarea.dshk-sched-input{resize:vertical}
             return;
           }
           if (e.key === "Escape") {
-            // 日程弹窗/知识库搜索浮层开着时让路：Esc 归它们自己（只关自己，不收标签页）
-            if (schedModalOpen || vaultSearchOpen) return;
+            // 知识库搜索浮层开着时让路：Esc 归它自己（只关自己，不收标签页）
+            if (vaultSearchOpen) return;
             // Esc 关当前激活那张文档签（知识库关当前页那张、diff 关当前
             // 那张，各自与标签条的 ✕ 同语义）。功能签归官方 ✕，Esc 不收
             // 功能签（kitUi 收了 pane 还在，状态会对不上）
@@ -11211,8 +10498,6 @@ textarea.dshk-sched-input{resize:vertical}
           cfg.vaultEnabled !== false && (ui.vaultOpen || ui.vaultIdxOpen)
             ? jsxRuntime.jsx("div", { style: { display: "none" }, children: jsxRuntime.jsx(VaultView, {}) })
             : null,
-          // 悬浮计时小窗：运行中且没在看计时页才现身（组件内部自判），平时零占用
-          jsxRuntime.jsx(FloatingTimerPill, {}),
         ],
       });
     }
@@ -12074,13 +11359,6 @@ textarea.dshk-sched-input{resize:vertical}
           }),
         }, Body)), `dsh-kit: rightbar pane body ${f.kind}`);
       }
-      // 计时：会话 header 右对齐工具区（list 型）。corner 席位是 single 型且被
-      // 官方右栏展开钮占着，不去抢
-      rbCtx.effect(() => rbCtx.slots.inject("conversation.session.header.utilities", () => rbCtx.slots.register({
-        name: "conversation.session.header.utilities",
-        id: "dsh-kit-timer",
-        order: 10,
-      }, HeaderTimer)), "dsh-kit: header timer chip");
       // 探测落地：入口走右栏（rightbarStore 的订阅者据此重渲染）
       rightbarStore.setActive(true);
     }
