@@ -12,9 +12,9 @@
 // 浏览器半边（client/bundle.js）：终端/文件树入口按钮注册在对话输入框工具行
 // （conversation.input.left），面板本体挂 shell.overlay 全帧浮层；终端开合底部
 // 停靠面板（Ctrl+`），文件树临时接管侧边栏浏览区（sidebar.workspaces 单槽）。
-// 插件设置卡（dsh-kit 命名空间，plugins.bundle.config）提供功能开关与快捷键自定义；
-// 其中 searchEnabled 由宿主消费（开=免费引擎链，关=转发官方渠道，重启后生效），
-// 其余开关浏览器端消费。
+// 插件配置页（Config schema 声明式模型，编辑面在插件页本行「配置」）提供功能开关
+// 与快捷键自定义；其中 searchEnabled 由宿主消费（开=免费引擎链，关=转发官方渠道，
+// 重启后生效），其余开关浏览器端消费。
 //
 // 宿主半边（本文件）挂这些端点（webserver 默认只绑 loopback）：
 //   1) 静态 /dsh-kit/vendor/* —— xterm 官方预编译 UMD，按需加载；
@@ -44,7 +44,6 @@ import { applyOpenCodeSessionHeader } from "./opencode-session.js";
 import { applyWebSearch } from "./web-search.js";
 import { parseStatusBranch, parseLogRecords, parseBranchList, parseTrack } from "./git.js";
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from "./phone-gateway.js";
-import { teeRegistryJobs, panelReadJobOutput, releaseJobWindow } from "./job-tee.js";
 import { decodePreviewText } from "./text-decode.js";
 import { rawContentType, rawDownloadContentType, rawDisposition, parseRangeHeader } from "./raw-file.js";
 import { BrowserService, normalizeScope, DEFAULT_SCOPE } from "./browser.js";
@@ -143,49 +142,52 @@ if (!WebSocketServer) {
 }
 // ── 插件设置 schema（0.1.7 起的声明式模型）──
 // loader 读 profile 补丁里本 entry 的 config，按 Config 解析出默认值后传进 apply
-// 第二参；设置页由宿主按 schema 自动生成。Config 必须在模块加载期就存在（loader
-// 实例化前读），所以用 loadDep 同步解析 schemastery（锚点链同 ws）。解析失败 →
-// 不导出 Config（本 entry 无设置页），apply 里落 FALLBACK_SETTINGS 兜底，
-// 插件其余功能不受影响。
+// 第二参；设置页挂在插件页本插件行的「配置」（plugins.row.config）。
+// **字段必须 .volatile()**：宿主 SettingsForms 只把 volatile 字段投影进表单
+// （非 volatile 只能改 profile 补丁文件，界面上不可见）；volatile 写入 = 热提交
+// （原地改 fiber config 的 ref，不重启 entry），所以 readSettings 统一解引用。
+// Config 必须在模块加载期就存在（loader 实例化前读），所以用 loadDep 同步解析
+// schemastery（锚点链同 ws）。解析失败 → 不导出 Config（本 entry 无设置页），
+// apply 里落 FALLBACK_SETTINGS 兜底，插件其余功能不受影响。
 const schemastery = loadDep('@deepseek-ai/schemastery');
 const z = (schemastery?.default ?? schemastery ?? null);
 export const Config = z && typeof z.object === 'function'
     ? z.object({
-        terminalEnabled: z.boolean().default(true),
-        fileTreeEnabled: z.boolean().default(true),
-        sourceControlEnabled: z.boolean().default(true),
+        terminalEnabled: z.boolean().default(true).volatile(),
+        fileTreeEnabled: z.boolean().default(true).volatile(),
+        sourceControlEnabled: z.boolean().default(true).volatile(),
         // 隐藏官方右栏「工作区文件」入口胶囊（纯浏览器端消费，宿主不读）：那只是个
         // 目录按钮，与文件树功能重复；隐藏后文件仍可从对话/文件树/搜索进入
-        hideOfficialFilesEntry: z.boolean().default(false),
-        hideOfficialBrowserEntry: z.boolean().default(false),
+        hideOfficialFilesEntry: z.boolean().default(false).volatile(),
+        hideOfficialBrowserEntry: z.boolean().default(false).volatile(),
         // 对话里的 http(s) 链接点击改投内置浏览器（默认开）。门控在浏览器半边（需要
         // browserEnabled 同时开），宿主只提供 /dsh-kit/browser/open 这条管道
-        chatOpenLinkInBrowser: z.boolean().default(true),
-        skillsPageEnabled: z.boolean().default(true),
-        searchEnabled: z.boolean().default(true),
-        searchMaxResults: z.number().step(1).min(1).max(8).default(2),
+        chatOpenLinkInBrowser: z.boolean().default(true).volatile(),
+        skillsPageEnabled: z.boolean().default(true).volatile(),
+        searchEnabled: z.boolean().default(true).volatile(),
+        searchMaxResults: z.number().step(1).min(1).max(8).default(2).volatile(),
         // phoneEnabled = 「手机访问」页入口可见性（纯显示开关）。
         // 网关启停不走 settings（读取器回填滞后），改由状态文件 + kit 端点直管。
-        phoneEnabled: z.boolean().default(true),
-        phoneRemoteDomain: z.string().default(''),
-        phonePort: z.number().step(1).min(1).max(65535).default(3090),
-        phoneKeepGatewayOn: z.boolean().default(false),
-        jobsEnabled: z.boolean().default(true),
+        phoneEnabled: z.boolean().default(true).volatile(),
+        phoneRemoteDomain: z.string().default('').volatile(),
+        phonePort: z.number().step(1).min(1).max(65535).default(3090).volatile(),
+        phoneKeepGatewayOn: z.boolean().default(false).volatile(),
         // 知识库（vault）：总开关，默认关——关 = 不开 vault 端点（默认根是 $DSH_HOME 下
         // 的固定位置，没开功能就不该在盘上凭空出现目录；插件也不建骨架目录，指向哪里
-        // 读哪里）；开 = 右栏「知识库」标签 + 只读索引/搜索端点（改开关重启生效）。
+        // 读哪里）；开 = 右栏「知识库」标签 + 只读索引/搜索端点（端点挂载在 boot 期，
+        // 改开关重启后生效）。
         // 库是普通 md 目录，插件不为 agent 注册检索工具。
-        vaultEnabled: z.boolean().default(false),
+        vaultEnabled: z.boolean().default(false).volatile(),
         // vaultRoot = 知识库根目录（绝对路径；schema 默认值 = defaultVaultRoot()，字段恒有值）。
         // 宿主据此提供只读索引/搜索端点，数据契约见 src/vault.ts 头注释。
         // schema 默认值即默认根：设置面与运行时读到的都是实际路径（与其他配置项
         // 同一口径——字段恒有值），用户显式清空保存为 '' 时由读取侧兜底回默认
-        vaultRoot: z.string().default(defaultVaultRoot()),
+        vaultRoot: z.string().default(defaultVaultRoot()).volatile(),
         // 内置浏览器总开关（默认开）：关=不注册 browser_* 工具（重启生效）；浏览器
         // 半边入口按钮与面板同步隐藏。execute 内另有守卫兜底（注册期竞态时挡调用）。
         // 自动切面板与画面跟随 agent 是恒定行为（无开关）——人为切走浏览器
         // 标签后的"不再拽回"抑制在客户端侧实现。
-        browserEnabled: z.boolean().default(true),
+        browserEnabled: z.boolean().default(true).volatile(),
         // 会话监视器（纯浏览器端消费，宿主不读）：
         // ① 全局 429 续跑：监视【所有】列表内会话（不要求会话页开着），turn 因 429
         //    限流失败（客户端镜像 lastAgentError 匹配限流措辞）结束后等 monitorWaitMs
@@ -193,27 +195,27 @@ export const Config = z && typeof z.object === 'function'
         //    即清零）；
         // ② 死循环打断（仅当前打开的会话）：流式输出尾部自重叠达 monitorRepeatThreshold
         //    次时停止当前回合并发循环打断话术。
-        monitorEnabled: z.boolean().default(true),
-        monitorWaitMs: z.number().step(1).min(5000).max(600000).default(15000),
-        monitorMaxAuto: z.number().step(1).min(1).max(10).default(5),
-        monitorRepeatThreshold: z.number().step(1).min(2).max(10).default(3),
+        monitorEnabled: z.boolean().default(true).volatile(),
+        monitorWaitMs: z.number().step(1).min(5000).max(600000).default(15000).volatile(),
+        monitorMaxAuto: z.number().step(1).min(1).max(10).default(5).volatile(),
+        monitorRepeatThreshold: z.number().step(1).min(2).max(10).default(3).volatile(),
         // 会话通知（纯浏览器端消费，宿主不读）：回合收尾、上下文压缩完成或 agent 提问时，
         // 若页面不在前台（或事件不属于当前打开的会话）弹桌面通知——浏览器 Notification
         // API，未授权时退标题闪烁。一个总开关管全部提醒，不分类配置。
-        notifyEnabled: z.boolean().default(true),
+        notifyEnabled: z.boolean().default(true).volatile(),
         // 用量与余额（宿主消费：端点门控 + 客户端消费：芯片入口）。默认关——key 不在本
         // 插件配置里（复用模型配置 llm-pi-ai.providers 的凭证引用），开 = composer 下方
         // 状态带出「当前会话所用 provider」的余额/配额芯片 + /dsh-kit/usage 聚合端点。
-        usageEnabled: z.boolean().default(false),
-        sidebarShortcut: z.string().default('Ctrl+B'),
-        rightbarShortcut: z.string().default('Ctrl+Alt+B'),
-        terminalShortcut: z.string().default('Ctrl+/'),
-        fileTreeShortcut: z.string().default('Ctrl+,'),
-        scShortcut: z.string().default('Ctrl+Alt+.'),
+        usageEnabled: z.boolean().default(false).volatile(),
+        sidebarShortcut: z.string().default('Ctrl+B').volatile(),
+        rightbarShortcut: z.string().default('Ctrl+Alt+B').volatile(),
+        terminalShortcut: z.string().default('Ctrl+/').volatile(),
+        fileTreeShortcut: z.string().default('Ctrl+,').volatile(),
+        scShortcut: z.string().default('Ctrl+Alt+.').volatile(),
         // 知识库入口（输入行）：语义是开合切换——
         // 开=侧栏索引视图 + 舞台标签，关=两者一起收。日程无侧栏半边、故无快捷键；
         // 右栏开合快捷键同卡（客户端消费 sidebarRight.toggleExpanded）
-        vaultShortcut: z.string().default('Ctrl+Alt+K'),
+        vaultShortcut: z.string().default('Ctrl+Alt+K').volatile(),
     })
     : undefined;
 /** Config 缺席（schemastery 不可达）时 readSettings 的兜底：只覆盖宿主消费的关键键
@@ -355,8 +357,17 @@ export async function apply(ctx, config = {}) {
     // onChange 钩子。readSettings = schema 默认值 + entry config 的合并视图，供全部
     // 消费点（搜索条数、browserEnabled/vaultRoot 门控、手机网关端口等）现读。
     const defaults = Config ? Config({}) : FALLBACK_SETTINGS;
-    // 返回 any：消费点（搜索条数/手机端口等）直接当具体类型用，与旧 readSettings 同口径
-    const readSettings = () => ({ ...defaults, ...config });
+    // 返回 any：消费点（搜索条数/手机端口等）直接当具体类型用，与旧 readSettings 同口径。
+    // volatile 字段在 fiber config 里是稳定 ref（{get}，表单热更新原地改它），统一解引用
+    const readRef = (v) => v !== null && typeof v === 'object' && typeof v.get === 'function'
+        ? v.get()
+        : v;
+    const readSettings = () => {
+        const out = { ...defaults };
+        for (const [key, value] of Object.entries(config ?? {}))
+            out[key] = readRef(value);
+        return out;
+    };
     applyWebSearch(ctx, {
         getEnabled: () => readSettings().searchEnabled !== false,
         getMaxResults: () => readSettings().searchMaxResults,
@@ -370,16 +381,8 @@ export async function apply(ctx, config = {}) {
     applySkillPool(ctx, { getRegistry: () => skillsRegistry });
     // OpenCode Go 会话头按会话注入（实现见 src/opencode-session.ts）
     applyOpenCodeSessionHeader(ctx, (m) => console.warn(`dsh-kit: ${m}`));
-    // 后台任务控制（实现见下）：浏览器半边「任务」面板的结束/读输出走这里。
-    // jobs 注册表（dsh-jobs-local）与 agents 注册表（dsh-agent）都是宿主组合里的
-    // 可选服务，分开注入捕获引用；缺失时对应端点返回 503（面板隐藏对应能力）。
-    // 注入即给 registry 装 start 包装（job-tee）：任务创建即装输出分身，面板与
-    // 模型侧 job_output 各持独立游标，不再互抢同一条增量。
-    let jobsRegistry = null;
-    ctx.inject(['jobs'], (capacityCtx) => {
-        jobsRegistry = capacityCtx.jobs;
-        teeRegistryJobs(jobsRegistry);
-    });
+    // agents 注册表（dsh-agent，宿主组合里的可选服务）：浏览器工具的分区解析
+    // （browserScopeOf）沿 parentSession 上溯用；缺失时分区落 DEFAULT_SCOPE。
     let agentsRegistry = null;
     ctx.inject(['agents'], (capacityCtx) => {
         agentsRegistry = capacityCtx.agents;
@@ -2118,199 +2121,6 @@ export async function apply(ctx, config = {}) {
                     });
                 },
             });
-            // ── 后台任务控制端点 ──
-            // 浏览器半边「任务」面板（运行中任务 + 结束 + 常显输出）的数据源是官方
-            // session/jobs 推送（只带元数据，无输出正文）；这里补两个操作口：
-            //   1) POST /dsh-kit/jobs/kill    body {sessionId, jobId} —— 结束任务
-            //   2) GET  /dsh-kit/jobs/output?sessionId=&jobId=&offset= —— 按偏移读输出
-            //   3) POST /dsh-kit/jobs/release body {sessionId, jobId} —— 丢掉该任务的输出窗口
-            //      （面板「关闭」= 用户说这份输出不再需要；只放终态任务，运行中的先结束）
-            // 输出读取走 job-tee（src/job-tee.ts）：底层 readOutput 降级为取新块进
-            // 公共 buffer，模型侧 job_output 语义不变；面板侧按调用方给的绝对偏移切片，
-            // 偏移由浏览器自持——刷新页面、多开标签页各读各的，宿主不记面板位置。
-            // 身份语义（如实记）：caller 由请求参数 sessionId 反查 agents 注册表得到，
-            // 报得出所属会话即可操作其任务——并非真正的调用方鉴权。定位是「面板只操作
-            // 当前会话的后台任务」的约定门（越界任务仍然 kill/output 不出），守住非浏览器
-            // 客户端之外没有身份可伪造的本地信任边界。jobs 服务缺失（宿主组合没挂
-            // dsh-jobs-local）时能力整体不可用，返回 503。
-            const disposeJobsKill = webCtx.webServer.register({
-                kind: 'exact',
-                path: '/dsh-kit/jobs/kill',
-                handler: (req, res) => {
-                    const json = (code, obj) => {
-                        res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
-                        res.end(JSON.stringify(obj));
-                    };
-                    if (req.method !== 'POST') {
-                        json(405, { error: 'method not allowed' });
-                        return;
-                    }
-                    if (req.headers.origin !== undefined && !sameOrigin(req)) {
-                        json(403, { error: 'cross-origin denied' });
-                        return;
-                    }
-                    let raw = '';
-                    req.on('data', (c) => { raw += c.toString('utf8'); });
-                    req.on('end', () => {
-                        let body;
-                        try {
-                            body = JSON.parse(raw || '{}');
-                        }
-                        catch {
-                            json(400, { error: 'bad json' });
-                            return;
-                        }
-                        const sessionId = String(body?.sessionId ?? '');
-                        const jobId = String(body?.jobId ?? '');
-                        if (sessionId === '' || jobId === '') {
-                            json(400, { error: '需要 sessionId 与 jobId' });
-                            return;
-                        }
-                        if (!jobsRegistry || !agentsRegistry) {
-                            json(503, { error: '后台任务能力不可用（jobs/agents 服务缺失）' });
-                            return;
-                        }
-                        const caller = agentsRegistry.get(sessionId);
-                        if (!caller) {
-                            json(404, { error: '会话不存在（本任务面板只操作当前会话的后台任务）' });
-                            return;
-                        }
-                        try {
-                            const outcome = jobsRegistry.kill(jobId, caller, 'user requested via task panel');
-                            json(200, {
-                                outcome: outcome === 'already-finished' ? 'already-finished' : 'cancellation-requested',
-                                jobId,
-                            });
-                        }
-                        catch (error) {
-                            json(404, { error: String(error instanceof Error ? error.message : error) });
-                        }
-                    });
-                },
-            });
-            const disposeJobsRelease = webCtx.webServer.register({
-                kind: 'exact',
-                path: '/dsh-kit/jobs/release',
-                handler: (req, res) => {
-                    const json = (code, obj) => {
-                        res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-                        res.end(JSON.stringify(obj));
-                    };
-                    if (req.method !== 'POST') {
-                        json(405, { error: 'method not allowed' });
-                        return;
-                    }
-                    if (req.headers.origin !== undefined && !sameOrigin(req)) {
-                        json(403, { error: 'cross-origin denied' });
-                        return;
-                    }
-                    let raw = '';
-                    req.on('data', (c) => { raw += c.toString('utf8'); });
-                    req.on('end', () => {
-                        let body;
-                        try {
-                            body = JSON.parse(raw || '{}');
-                        }
-                        catch {
-                            json(400, { error: 'bad json' });
-                            return;
-                        }
-                        const sessionId = String(body?.sessionId ?? '');
-                        const jobId = String(body?.jobId ?? '');
-                        if (sessionId === '' || jobId === '') {
-                            json(400, { error: '需要 sessionId 与 jobId' });
-                            return;
-                        }
-                        if (!jobsRegistry || !agentsRegistry) {
-                            json(503, { error: '后台任务能力不可用（jobs/agents 服务缺失）' });
-                            return;
-                        }
-                        const caller = agentsRegistry.get(sessionId);
-                        if (!caller) {
-                            json(404, { error: '会话不存在（本任务面板只操作当前会话的后台任务）' });
-                            return;
-                        }
-                        try {
-                            // 存在性 + 归属把关（同 kill/output）。运行中的任务不给释放：窗口一丢，
-                            // 模型侧 job_output 与其它标签页都再看不到内容，必须先结束再关。
-                            const snapshot = jobsRegistry.get(jobId, caller);
-                            if (snapshot.status === 'running' || snapshot.status === 'stopping') {
-                                json(409, { error: '任务还在运行，先结束后再关闭' });
-                                return;
-                            }
-                            const job = jobsRegistry.store?.get(jobId);
-                            const dropped = job !== undefined ? releaseJobWindow(job) : false;
-                            json(200, { ok: true, released: dropped });
-                        }
-                        catch (error) {
-                            json(404, { error: String(error instanceof Error ? error.message : error) });
-                        }
-                    });
-                },
-            });
-            const disposeJobsOutput = webCtx.webServer.register({
-                kind: 'exact',
-                path: '/dsh-kit/jobs/output',
-                handler: (req, res) => {
-                    const json = (code, obj) => {
-                        res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-                        res.end(JSON.stringify(obj));
-                    };
-                    if (req.method !== 'GET') {
-                        json(405, { error: 'method not allowed' });
-                        return;
-                    }
-                    const origin = req.headers.origin;
-                    if (typeof origin === 'string' && origin !== '' && !sameOrigin(req)) {
-                        json(403, { error: 'cross-origin denied' });
-                        return;
-                    }
-                    const url = new URL(req.url ?? '/', 'http://dsh-kit.local');
-                    const sessionId = url.searchParams.get('sessionId') ?? '';
-                    const jobId = url.searchParams.get('jobId') ?? '';
-                    const offsetRaw = url.searchParams.get('offset');
-                    const offset = offsetRaw === null ? 0 : Number(offsetRaw);
-                    if (sessionId === '' || jobId === '') {
-                        json(400, { error: '需要 sessionId 与 jobId' });
-                        return;
-                    }
-                    if (!jobsRegistry || !agentsRegistry) {
-                        json(503, { error: '后台任务能力不可用（jobs/agents 服务缺失）' });
-                        return;
-                    }
-                    const caller = agentsRegistry.get(sessionId);
-                    if (!caller) {
-                        json(404, { error: '会话不存在（本任务面板只操作当前会话的后台任务）' });
-                        return;
-                    }
-                    try {
-                        // 面板读取走 job-tee 的偏移切片（panelReadJobOutput）：底层 readOutput 被
-                        // 降级为"取新块进公共 buffer"，模型侧 job_output 照旧拿自己的增量。offset
-                        // 缺省 0 = 从保留窗口头看全量；响应回 base/next/truncated，客户端拿 next
-                        // 当下一次的 offset。get 提供与 read 相同的存在性/权限把关（无副作用）。
-                        const snapshot = jobsRegistry.get(jobId, caller);
-                        const meta = {
-                            id: snapshot.id,
-                            kind: snapshot.kind,
-                            label: snapshot.label,
-                            status: snapshot.status,
-                            ...(snapshot.detail !== undefined ? { detail: snapshot.detail } : {}),
-                            startedAt: snapshot.startedAt,
-                            ...(snapshot.finishedAt !== undefined ? { finishedAt: snapshot.finishedAt } : {}),
-                        };
-                        const job = jobsRegistry.store?.get(jobId);
-                        // 记录不在 registry.store（宿主换了实现）：回退官方 read 的增量语义，next 固定 0
-                        // 让客户端始终以偏移 0 请求——等价于"本端点不支持偏移"。
-                        const win = job !== undefined
-                            ? panelReadJobOutput(job, offset)
-                            : { text: jobsRegistry.read(jobId, caller).text, base: 0, next: 0, truncated: false, released: false };
-                        json(200, { text: win.text, base: win.base, next: win.next, truncated: win.truncated, released: win.released, job: meta });
-                    }
-                    catch (error) {
-                        json(404, { error: String(error instanceof Error ? error.message : error) });
-                    }
-                },
-            });
             // ── 日程端点：/dsh-kit/schedule/*（src/schedule.ts 单例 store）──
             //   面板只读，端点也只有读：GET data?from&to → { events(raw 全量),
             //   occurrences(区间展开,带 endDate/state), orphans }；GET stats?scope&date → 统计。
@@ -2353,7 +2163,7 @@ export async function apply(ctx, config = {}) {
                 schedJson(res, 200, scheduleStore.stats(scope, schedDateParam(url, 'date')));
             });
             // ── 知识库（vault，src/vault.ts + src/vault-fs.ts）──
-            // vaultRoot 是设置卡配置的绝对目录，在工作区外；读端点出索引 / 单页 mtime /
+            // vaultRoot 是配置页配置的绝对目录，在工作区外；读端点出索引 / 单页 mtime /
             // 全文搜索，写端点（src/vault-fs.ts）只管目录级文件管理：新建 / 重命名 /
             // 移动 / 导入 / 删除。页面正文的写入仍归 agent 文件工具与外部编辑器。
             // 全部端点在 vaultRoot 未配置/不存在时回 400 vault-not-configured。
@@ -2537,9 +2347,6 @@ export async function apply(ctx, config = {}) {
                 disposePhoneLink();
                 disposePhoneRotate();
                 disposePhoneGateway();
-                disposeJobsKill();
-                disposeJobsRelease();
-                disposeJobsOutput();
                 disposeUsage();
                 for (const dispose of disposeSchedule)
                     dispose();

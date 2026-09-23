@@ -79,7 +79,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, DiffPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, JobsPanel, PhoneSection, KitSurfaces, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, MonitorLine, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, notifyDiffCore, notifyCompactionCore, notifyCompleteSettled, notifyState, readPosStore, recordReadPos, jobsOutputMerge, jobsAtBottom, FilePaneBody, VaultPaneBody, SchedulePaneBody, JobsPaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
+  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, DiffPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, PhoneSection, KitSurfaces, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, MonitorLine, MonitorBgAction, KitConfigPage, KIT_CFG_FIELDS, monitorTailRepeatCount, monitorTickCore, monitorCancelPlan, monitorSessions, monitorStore, notifyDiffCore, notifyCompactionCore, notifyCompleteSettled, notifyState, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -93,7 +93,7 @@ const comps = harness((name) => {
 });
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TreeNode", "FileTreePanel", "DiffPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "JobsPanel", "PhoneSection", "KitSurfaces", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "MonitorLine", "monitorTailRepeatCount", "monitorTickCore", "monitorCancelPlan", "notifyDiffCore", "notifyCompactionCore", "recordReadPos", "jobsOutputMerge", "jobsAtBottom", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "JobsPaneBody", "BrowserPaneBody", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["TreeNode", "FileTreePanel", "DiffPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "PhoneSection", "KitSurfaces", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "MonitorLine", "MonitorBgAction", "KitConfigPage", "monitorTailRepeatCount", "monitorTickCore", "monitorCancelPlan", "notifyDiffCore", "notifyCompactionCore", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "BrowserPaneBody", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -269,14 +269,12 @@ const scmBtnEl = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].cla
 scmBtnEl[2].onClick();
 check("ScmEntry 点击后侧栏单槽互斥（知识库索引位让出，两个钮不会同时亮）", comps.getKitUi().gitOpen === true && comps.getKitUi().vaultIdxOpen === false && comps.getKitUi().vaultOpen === true);
 comps.setKitUi(sidebarResetPatch);
-// 7.1) 后台任务面板：无 hooks（jobsBySession 未达 → 空列表）与有任务两种；
-// 入口补丁（openFeatureTab）在这里覆盖：置存在 + 置激活位，纯补丁不触碰别的签
-const otj = comps.openFeatureTab({ files: [], jobsOpen: false, browserOpen: false, schedOpen: false, activeFeature: null }, "jobs");
-check("openFeatureTab 后台任务：置存在+激活", otj.jobsOpen === true && otj.activeFeature === "jobs");
-const ots = comps.openFeatureTab({ files: [], jobsOpen: false, browserOpen: false, schedOpen: false, activeFeature: null }, "schedule");
-check("openFeatureTab 日程：置存在+激活（纯补丁不触碰任务签）", ots.schedOpen === true && ots.activeFeature === "schedule" && ots.jobsOpen === undefined);
-const otb = comps.openFeatureTab({ files: [], jobsOpen: true, browserOpen: false, activeFeature: "jobs" }, "browser");
-check("openFeatureTab 浏览器：纯补丁不触碰任务签（合并保留）", otb.browserOpen === true && otb.activeFeature === "browser" && otb.jobsOpen === undefined);
+// 7.1) 功能签入口补丁（openFeatureTab）：置存在 + 置激活位，纯补丁不触碰别的签。
+// 后台任务不做签（0.1.7 官方会话头部自带任务清单 + 实时输出 + 停止），无 jobs 分支
+const ots = comps.openFeatureTab({ files: [], browserOpen: false, schedOpen: false, activeFeature: null }, "schedule");
+check("openFeatureTab 日程：置存在+激活", ots.schedOpen === true && ots.activeFeature === "schedule" && ots.browserOpen === undefined);
+const otb = comps.openFeatureTab({ files: [], browserOpen: false, schedOpen: true, activeFeature: "schedule" }, "browser");
+check("openFeatureTab 浏览器：纯补丁不触碰日程签（合并保留）", otb.browserOpen === true && otb.activeFeature === "browser" && otb.schedOpen === undefined);
 // 7.1b) 知识库入口（输入行钮 + 快捷键同语义）：只切左侧目录，点具体页才开右栏知识库
 // 签；再点 = 收回会话列表。补丁只含侧栏三键，功能签与页签状态一律不动（setKitUi
 // 合并语义）
@@ -299,83 +297,62 @@ const vpCloseActive = comps.closeVaultPageTab(vp3, "D:/v/a.md");
 check("closeVaultPageTab 关激活页：激活位顺延邻居", vpCloseActive.vaultPages.length === 1 && vpCloseActive.activeVaultPage === "D:/v/b.md");
 const vpLast = comps.closeVaultPageTab({ vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", vaultOpen: true, activeFeature: "vault" }, "D:/v/a.md");
 check("closeVaultPageTab 关最后一个：整片知识库舞台收摊", vpLast.vaultPages.length === 0 && vpLast.vaultOpen === false && vpLast.activeVaultPage === null && vpLast.activeFeature === null);
-callLog = [];
-out = comps.JobsPanel({});
-check("JobsPanel 无hooks渲染无异常(空列表)", !!out && typeof out === "object");
-const jobsHooks = {
-  useSessions: (sel) =>
-    sel({
-      byId: { s1: { id: "s1", cwd: "C:/x", retainedBy: { mainView: 1 } } },
-      jobsBySession: {
-        s1: [
-          { id: "pwsh-1", kind: "pwsh", label: "npm run dev", status: "running", startedAt: Date.now() - 30000 },
-          { id: "pwsh-2", kind: "pwsh", label: "frpc 隧道", status: "stopping", startedAt: Date.now() - 120000 },
-        ],
-      },
-    }),
+// 7.1b) 会话头部 429 状态条（原任务签顶部状态块迁此）：
+// 无待续跑/封顶会话 → null（零常驻）；有 → 触发钮（计数），浮层默认收起
+comps.monitorStore.snapshot = { items: [] };
+out = comps.MonitorBgAction();
+check("MonitorBgAction 无后台会话渲染 null（零常驻）", out === null);
+comps.monitorStore.snapshot = {
+  items: [
+    { id: "s1", title: "跑测试", phase: "waiting", fireAt: Date.now() + 8000, continues: 1, max: 5 },
+    { id: "s2", title: "爬数据", phase: "capped", fireAt: 0, continues: 5, max: 5 },
+  ],
 };
 callLog = [];
-out = comps.JobsPanel(jobsHooks);
-check("JobsPanel 带运行中任务渲染无异常", !!out && typeof out === "object");
-// 输出常显：每个任务行自带输出块，不再有「输出」按钮
-const jobRows = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-jobs-row");
-const jobOutBlocks = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-jobs-output");
-check("JobsPanel 输出块每任务常显（2 行 2 输出块）", jobRows.length === 2 && jobOutBlocks.length === 2);
-check("JobsPanel 不再渲染「输出」按钮", !callLog.some((c) => (c[0] === "jsx") && c[2] && (c[2].children === "Output" || c[2].children === "输出")));
-// 终态保留在列：终态行仍在（data-done 淡化），动作变「关闭」，
-// 运行中行保持「结束」；输出块每行都在
-const doneHooks = {
-  useSessions: (sel) =>
-    sel({
-      byId: { s1: { id: "s1", cwd: "C:/x", retainedBy: { mainView: 1 } } },
-      jobsBySession: {
-        s1: [
-          { id: "pwsh-9", kind: "pwsh", label: "npm run build", status: "running", startedAt: Date.now() - 5000 },
-          { id: "pwsh-8", kind: "pwsh", label: "npm test", status: "completed", startedAt: Date.now() - 60000, finishedAt: Date.now() - 30000 },
-        ],
-      },
-    }),
+out = comps.MonitorBgAction();
+const mbgTrigger = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-mbg-trigger");
+const mbgLabel = mbgTrigger && Array.isArray(mbgTrigger[2].children) ? mbgTrigger[2].children.find((ch) => typeof ch === "string") : null;
+check("MonitorBgAction 有后台会话出触发钮（429 + 计数=2）", !!out && typeof mbgLabel === "string" && mbgLabel.includes("429") && /2$/.test(mbgLabel));
+check("MonitorBgAction 浮层默认收起", !callLog.some((c) => c[2] && c[2].className === "dshk-mbg-menu"));
+comps.monitorStore.snapshot = { items: [] };
+
+// 7.1c) 配置页（plugins.row.config）：字段清单与内置默认同源；
+// summary 视图 null、form 缺降级、ready 分组渲染、只读禁用
+check("KIT_CFG_FIELDS 与 CFG_DEFAULTS 键同源", (() => {
+  const a = comps.KIT_CFG_FIELDS.map((f) => f.key).sort();
+  const b = Object.keys(comps.CFG_DEFAULTS).sort();
+  return a.length === b.length && a.every((k, i) => k === b[i]);
+})());
+check("KitConfigPage summary 视图返回 null", comps.KitConfigPage({ view: "summary", form: null }) === null);
+callLog = [];
+out = comps.KitConfigPage({ view: "page", form: null });
+check("KitConfigPage 无 form 渲染降级文案", !!out && callLog.some((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-note"));
+const fakeForm = {
+  state: {
+    status: "ready",
+    value: { ...comps.CFG_DEFAULTS, searchMaxResults: 3, phoneRemoteDomain: "dsh.example.com" },
+    revision: 7,
+    writable: true,
+  },
+  mutate: async () => true,
 };
 callLog = [];
-out = comps.JobsPanel(doneHooks);
-const doneRows = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-jobs-row" && c[2]["data-done"] === true).length;
-const closeBtn = callLog.some((c) => (c[0] === "jsx") && c[2] && (c[2].children === "Close" || c[2].children === "关闭"));
-const killBtns = callLog.filter((c) => (c[0] === "jsx") && c[2] && (c[2].children === "Stop" || c[2].children === "结束")).length;
-const doneOutBlocks = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-jobs-output").length;
-check("JobsPanel 终态行保留在列且标 data-done（1 行）", doneRows === 1);
-check("JobsPanel 终态动作是关闭、运行中仍是结束", closeBtn && killBtns === 1);
-// 「关闭」回调要能真的跑（清本页正文/偏移/吸底状态 + 记进已关闭集合），不该在渲染桩下炸
-{
-  const closeNode = callLog.find((c) => c[0] === "jsx" && c[2] && (c[2].children === "Close" || c[2].children === "关闭"));
-  let threw = null;
-  try { closeNode[2].onClick(); } catch (error) { threw = String(error); }
-  check("JobsPanel 关闭回调可执行（清本页残留不抛）", threw === null);
-}
-check("JobsPanel 终态行输出块仍在（2 行 2 输出块）", doneOutBlocks === 2);
-// 输出合并规则（页面自持偏移：正文增量追加、截断标记一旦出现就留存、读失败不清空已见进度）
-let outMerge = comps.jobsOutputMerge(undefined, { text: "a", next: 4, truncated: false }, null);
-check("jobsOutputMerge 首帧：正文入库、无错", outMerge.text === "a" && outMerge.error === null && outMerge.truncated === false);
-outMerge = comps.jobsOutputMerge(outMerge, { text: "b", next: 5, truncated: false }, null);
-check("jobsOutputMerge 增量追加", outMerge.text === "ab");
-outMerge = comps.jobsOutputMerge(outMerge, { text: "c", next: 9, truncated: true }, null);
-check("jobsOutputMerge 截断标记入库", outMerge.text === "abc" && outMerge.truncated === true);
-outMerge = comps.jobsOutputMerge(outMerge, { text: "d", next: 10, truncated: false }, null);
-check("jobsOutputMerge 后续响应不抹掉截断标记", outMerge.truncated === true && outMerge.text === "abcd");
-outMerge = comps.jobsOutputMerge(outMerge, null, "HTTP");
-check("jobsOutputMerge 读失败保留已见正文与截断标记", outMerge.text === "abcd" && outMerge.error === "HTTP" && outMerge.truncated === true);
-outMerge = comps.jobsOutputMerge(undefined, { text: "", next: 7, truncated: false, released: true }, null);
-check("jobsOutputMerge 记下宿主已释放（面板据此显示「输出已释放」）", outMerge.released === true && outMerge.text === "");
-// 吸底判据：贴底（含 24px 容差）为真 → 后续渲染把新内容顶到最底；用户上翻后为假 → 不打扰
-check("jobsAtBottom 贴底为真", comps.jobsAtBottom({ scrollHeight: 1000, scrollTop: 820, clientHeight: 180 }) === true);
-check("jobsAtBottom 容差内仍算贴底", comps.jobsAtBottom({ scrollHeight: 1000, scrollTop: 800, clientHeight: 180 }) === true);
-check("jobsAtBottom 上翻后为假", comps.jobsAtBottom({ scrollHeight: 1000, scrollTop: 300, clientHeight: 180 }) === false);
-// 输出框接线：吸底要能拿到 DOM 节点（ref）并读到用户的滚动（onScroll）
-const outWired = callLog.find((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-jobs-output");
-check("JobsPanel 输出框挂吸底接线（ref + onScroll）", !!(outWired && typeof outWired[2].ref === "function" && typeof outWired[2].onScroll === "function"));
-comps.setKitUi({ jobsOpen: true });
-out = comps.KitSurfaces({ ...jobsHooks });
-check("KitSurfaces 带jobsOpen渲染无异常", !!out && typeof out === "object");
-comps.setKitUi({ jobsOpen: false });
+out = comps.KitConfigPage({ view: "page", form: fakeForm });
+const cfgRows = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-cfgp-row");
+const cfgChecks = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].type === "checkbox");
+const cfgNumbers = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].type === "number");
+const cfgTexts = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].type === "text");
+check("KitConfigPage 每字段一行（bool/number/string 控件齐全）", cfgRows.length === comps.KIT_CFG_FIELDS.length && cfgChecks.length === 15 && cfgNumbers.length === 5 && cfgTexts.length === 8);
+const cfgSave = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-cfgp-btn dshk-cfgp-btn-primary");
+check("KitConfigPage 保存钮无草稿时禁用", !!cfgSave && cfgSave[2].disabled === true);
+callLog = [];
+out = comps.KitConfigPage({ view: "page", form: { state: { ...fakeForm.state, writable: false }, mutate: fakeForm.mutate } });
+const roHint = callLog.some((c) => (c[0] === "jsx") && c[2] && (c[2].children === "当前 profile 只读，修改无法保存。" || c[2].children === "The profile is read-only; changes cannot be saved."));
+const roDisabled = callLog.some((c) => (c[0] === "jsx") && c[2] && c[2].type === "checkbox" && c[2].disabled === true);
+check("KitConfigPage 只读态渲染提示且控件禁用", !!out && roHint && roDisabled);
+callLog = [];
+out = comps.KitSurfaces({});
+check("KitSurfaces 渲染无异常（任务签已退役）", !!out && typeof out === "object");
 
 // 6.4) 日程模块（只读面板）：ScheduleView 初始态 / 计时段定位纯函数 / 并行分列
 callLog = [];
@@ -476,8 +453,8 @@ const closeB = comps.closeFileTab(tabBase, "C:/x/b.js");
 check("closeFileTab 单关非激活签：激活位不动", closeB.files.length === 2 && closeB.activeFile === undefined && !closeB.files.some((x) => x.path === "C:/x/b.js"));
 const closeActive = comps.closeFileTab(tabBase, "C:/x/c.js");
 check("closeFileTab 关激活签：激活位顺延邻居", closeActive.files.length === 2 && closeActive.activeFile === "C:/x/b.js");
-const closeLast = comps.closeFileTab({ files: [{ path: "C:/x/a.js", from: "tree", usedAt: 1 }], activeFile: "C:/x/a.js", jobsOpen: true, activeFeature: "file" }, "C:/x/a.js");
-check("closeFileTab 关最后一个：整片文件舞台收摊且激活位顺延到余下标签", closeLast.files.length === 0 && closeLast.activeFile === null && closeLast.activeFeature === "jobs");
+const closeLast = comps.closeFileTab({ files: [{ path: "C:/x/a.js", from: "tree", usedAt: 1 }], activeFile: "C:/x/a.js", browserOpen: true, activeFeature: "file" }, "C:/x/a.js");
+check("closeFileTab 关最后一个：整片文件舞台收摊且激活位顺延到余下标签", closeLast.files.length === 0 && closeLast.activeFile === null && closeLast.activeFeature === "browser");
 
 
 
@@ -520,9 +497,6 @@ comps.setKitUi({ vaultOpen: false, vaultPages: [], activeVaultPage: null });
 callLog = [];
 out = comps.SchedulePaneBody({});
 check("SchedulePaneBody 挂 ScheduleView（pane 内左待办+右网格）", !!out && callLog.some((c) => c[1] === comps.ScheduleView));
-callLog = [];
-out = comps.JobsPaneBody(jobsHooks);
-check("JobsPaneBody 挂 JobsPanel（透传 hooks 供运行中角标）", !!out && callLog.some((c) => c[1] === comps.JobsPanel));
 callLog = [];
 out = comps.BrowserPaneBody({});
 const bpElemRb = callLog.find((c) => c[1] === comps.BrowserPanel && c[2] && c[2].active === true);
@@ -1815,8 +1789,8 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
   check("C 规模未知时只报完成", out5.length === 1 && /压缩完成|compaction finished/i.test(out5[0].body));
 }
 
-// 9) 插件配置（0.1.7 声明式模型）：设置卡已退役，编辑走宿主按 Config schema
-//    自动生成的原生设置页；client 只保留门控用的内置默认表
+// 9) 插件配置（0.1.7 声明式模型）：设置卡已退役，编辑走插件页本行「配置」页
+//    （plugins.row.config；字段必须 .volatile() 才进表单）；client 只保留门控用的内置默认表
 // 内置默认与宿主 Config schema（src/index.ts）逐项同值：client 拉 /dsh-kit/config
 // 前后的门控取值不能漂移——两处不同步就会出现「默认关的功能被当开处理」
 {
@@ -1824,7 +1798,7 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
   const drift = [];
   const missing = [];
   let compared = 0;
-  for (const m of hostSrc.matchAll(/^ {8}(\w+): z\.(?:boolean|number|string)\(\)[^,\n]*\.default\(([^)]*)\),?$/gm)) {
+  for (const m of hostSrc.matchAll(/^ {8}(\w+): z\.(?:boolean|number|string)\(\)[^,\n]*\.default\(([^)]*)\)\.volatile\(\),?$/gm)) {
     const key = m[1];
     if (!Object.prototype.hasOwnProperty.call(comps.CFG_DEFAULTS, key)) { missing.push(key); continue; }
     const raw = m[2].trim();

@@ -6,7 +6,7 @@
 // StackExchange/HN 回退），原生引用卡片照常渲染（seam 直接消费 sources[]）。
 // cordis.patch.yml 负责 patch web 行的 searchProvider 配置，本文件只负责注册。
 //
-// 设置卡 searchEnabled 开关（默认开）在【启动期】一次定夺该 id 背后挂哪种实现：
+// 配置页 searchEnabled 开关（默认开）在【启动期】一次定夺该 id 背后挂哪种实现：
 //   开 = 免费引擎链；
 //   关 = 同 id 转发官方渠道（deepseek-official，搜索时现查注册表）。
 // searchMaxResults（1-8，默认 5）管单次搜索的来源条数上限：取 seam 请求量与

@@ -6,19 +6,20 @@
 //     终端四个小图标钮，工作区级工具跟 session 走）。知识库钮是开合切换：开 =
 //     侧栏索引视图，再点 = 侧栏回会话列表；日程没有 composer 钮（日程只有一个
 //     家：右栏 dock 签，入口归右栏开始页条目与待办卡）。
-//   右栏（唯一工作台形态，宿主 0.1.5+）：sidebarRightTabs 注册五类 dock 签，
+//   右栏（唯一工作台形态，宿主 0.1.5+）：sidebarRightTabs 注册四类 dock 签，
 //     pane 正文经 slots.inject（sidebar.right.pane.tab）按 id 提供，pane 内自管
 //     文档签条。dock 签本身没有按钮：diff/知识库是被动签（SCM/树/对话点开
-//     即开），任务/日程/浏览器走右栏开始页清单与自动跟随。开始页保留官方
-//     ShippedGuide（罗盘 + 胶囊条目），我们只贡献 guide 条目：日程/浏览器/
-//     后台任务三枚（diff/知识库是被动签，不给条目），官方「工作区文件」条目
-//     垫底（设置卡可隐藏）。
+//     即开），日程/浏览器走右栏开始页清单与自动跟随。开始页保留官方
+//     ShippedGuide（罗盘 + 胶囊条目），我们只贡献 guide 条目：日程/浏览器
+//     两枚（diff/知识库是被动签，不给条目），官方「工作区文件」条目
+//     垫底（配置可隐藏）。后台任务不做面板（0.1.7 官方会话头部自带
+//     任务清单 + 实时输出 + 停止，本插件原面板退役）。
 //     缺 sidebarRight 服务时只剩 kitUi 侧的存在性补丁——入口按钮
 //     不报错，签由官方侧自己决定要不要出现。
 //   终端：底部停靠面板（快捷键亦可切换），0.1.6 起引擎为官方 webTerminals
 //   服务（PTY 归宿主），本插件只做 xterm 胶水。
 //   功能存在性（kitUi）：files/activeFile（diff 签）与
-//     vaultPages/activeVaultPage 是文档签；jobsOpen/schedOpen/browserOpen/vaultOpen 是功能签在场
+//     vaultPages/activeVaultPage 是文档签；schedOpen/browserOpen/vaultOpen 是功能签在场
 //     （入口按钮选中态与角标读它）；activeFeature 是当前激活的功能（Esc 关哪张
 //     文档签、浏览器自动跟随的判据）。索引类视图（知识库目录树）住侧栏
 //     sidebar.workspaces 单槽，点条目开对应右栏签。
@@ -79,7 +80,7 @@ window.__ModuleLoader__.load({
     // 都往 files 标签条里加标签，同路径复用一个（重开刷新 diff/未跟踪状态）。
     // 文件树与对话区点击已改投官方右栏文件签，不进这里。diff 签非激活仍挂载
     // （display:none）保住滚动位置，超内部上限（3）自动关最久没看的那张。
-    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, jobsOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, activeFeature: null };
+    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, activeFeature: null };
     const kitUiListeners = new Set();
     function setKitUi(patch) {
       kitUi = { ...kitUi, ...patch };
@@ -199,8 +200,7 @@ window.__ModuleLoader__.load({
       if (tab === "file") {
         patch.files = [];
         patch.activeFile = null;
-      } else if (tab === "jobs") patch.jobsOpen = false;
-      else if (tab === "schedule") patch.schedOpen = false;
+      } else if (tab === "schedule") patch.schedOpen = false;
       else if (tab === "vault") {
         patch.vaultOpen = false;
         patch.vaultPages = [];
@@ -209,7 +209,6 @@ window.__ModuleLoader__.load({
       if (ui.activeFeature === tab) {
         const remaining = [];
         if (tab !== "file" && (ui.files?.length ?? 0) > 0) remaining.push("file");
-        if (tab !== "jobs" && ui.jobsOpen) remaining.push("jobs");
         if (tab !== "schedule" && ui.schedOpen) remaining.push("schedule");
         if (tab !== "vault" && ui.vaultOpen) remaining.push("vault");
         if (tab !== "browser" && ui.browserOpen) remaining.push("browser");
@@ -220,7 +219,6 @@ window.__ModuleLoader__.load({
     /** 打开/激活一个功能签（输入行入口与自动跟随共用）：确保存在并
      *  激活、不清别的标签。浏览器不做抑制（agent 干活必回眼前） */
     function openFeatureTab(ui, tab) {
-      if (tab === "jobs") return { jobsOpen: true, activeFeature: "jobs" };
       if (tab === "schedule") return { schedOpen: true, activeFeature: "schedule" };
       if (tab === "vault") return { vaultOpen: true, activeFeature: "vault" };
       return { browserOpen: true, activeFeature: "browser" };
@@ -249,7 +247,6 @@ window.__ModuleLoader__.load({
       { id: "dsh-kit-file", kind: "dshk-file", feature: "file", titleKey: "fileTabLabel" },
       { id: "dsh-kit-vault", kind: "dshk-vault", feature: "vault", titleKey: "vaultTitle" },
       { id: "dsh-kit-schedule", kind: "dshk-schedule", feature: "schedule", titleKey: "schedTab" },
-      { id: "dsh-kit-jobs", kind: "dshk-jobs", feature: "jobs", titleKey: "dockJobs" },
       { id: "dsh-kit-browser", kind: "dshk-browser", feature: "browser", titleKey: "dockBrowser" },
     ];
     /** sidebarRight 服务实例（openTab 用）：apply 时 ctx.inject(["sidebarRight"])
@@ -473,7 +470,6 @@ window.__ModuleLoader__.load({
       phoneRemoteDomain: "",
       phonePort: 3090,
       phoneKeepGatewayOn: false,
-      jobsEnabled: true,
       browserEnabled: true,
       monitorEnabled: true,
       monitorWaitMs: 15000,
@@ -535,7 +531,6 @@ window.__ModuleLoader__.load({
         searchEnabled: v.searchEnabled !== false,
         phoneEnabled: v.phoneEnabled === true,
         phoneRemoteDomain: typeof v.phoneRemoteDomain === "string" ? v.phoneRemoteDomain : "",
-        jobsEnabled: v.jobsEnabled !== false,
         browserEnabled: v.browserEnabled !== false,
         monitorEnabled: v.monitorEnabled !== false,
         monitorWaitMs:
@@ -580,12 +575,13 @@ window.__ModuleLoader__.load({
             : CFG_DEFAULTS.sidebarShortcut,
       };
     }
-    // 模块级通道（apply 注入 / KitSurfaces 订阅 / 设置卡捕获互斥）
+    // 模块级通道（apply 注入 / KitSurfaces 订阅）
     // ── 插件配置快照（0.1.7：宿主客户端已无 settingsScope 服务）──
-    // 配置真源 = 宿主 Config schema + profile 补丁（原生设置页编辑）。client 启动
-    // 拉 GET /dsh-kit/config 喂快照，全部功能门控照旧走 cfgFromSnapshot；快照
-    // 形状保持 { status:'ready', value } 与旧 scope 相同。配置变更伴随宿主 entry
-    // 重启，浏览器端刷新页面即取到新值（拉取失败保持 null → 功能按内置默认）。
+    // 配置真源 = 宿主 Config schema + profile 补丁（插件页本行「配置」页编辑）。
+    // client 启动拉 GET /dsh-kit/config 喂快照，全部功能门控照旧走 cfgFromSnapshot；
+    // 快照形状保持 { status:'ready', value } 与旧 scope 相同。配置页保存成功后会
+    // 重拉一次本端点（volatile 热提交即时生效）；其余情况（profile 文件直改）刷新
+    // 页面取新值（拉取失败保持 null → 功能按内置默认）。
     let cfgSnapshot = null;
     const cfgListeners = new Set();
     const subscribeCfg = (listener) => {
@@ -1293,13 +1289,11 @@ window.__ModuleLoader__.load({
       browserReconnect: "连接断开，重连中…",
       browserNotRunning: "浏览器未启动——在上方输入网址回车，或等 agent 首次使用时自动拉起",
       browserNoPages: "没有打开的页面——在上方输入网址回车，或等 agent 下次导航自动出现在这里",
-      dockJobs: "后台任务",
       dockBrowser: "内置浏览器",
       pvCloseTab: "关闭此标签",
       pvDeletedNote: "文件已删除——此标签仅展示删除 diff；可在源代码管理里 ↩ 恢复文件",
       rbGuideSchedDesc: "周网格、待办与统计（只读）",
       rbGuideBrowserDesc: "agent 驱动的真实浏览器，可实时观看与接管",
-      rbGuideJobsDesc: "后台任务的输出与停止",
       rbFeatureDisabled: "该功能已在设置中停用",
       fileTabLabel: "文件",
       browserStarting: "正在拉起浏览器…",
@@ -1321,25 +1315,46 @@ window.__ModuleLoader__.load({
       phoneRotateHint: "作废当前链接并生成新链接，已授权设备将全部失效。",
       phoneRotated: "链接已刷新，旧链接已失效",
       phoneRotateFail: "刷新失败：{error}",
-      jobsTitle: "后台任务",
-      jobsEmpty: "没有运行中的后台任务。",
-      jobsStatusRunning: "运行中",
-      jobsStatusStopping: "停止中",
-      jobsStatusCompleted: "已完成",
-      jobsStatusKilled: "已结束",
-      jobsStatusFailed: "失败",
-      jobsDuration: "已运行 {duration}",
-      jobsKill: "结束",
-      jobsKillHint: "结束此任务（等同 job_kill）",
-      jobsRowClose: "关闭",
-      jobsRowCloseHint: "从列表移除并释放宿主保留的输出（此后刷新也不再显示内容）",
-      jobsKillDone: "已请求结束",
-      jobsKillFail: "结束失败：{error}",
-      jobsReleaseFail: "释放输出失败：{error}",
-      jobsOutputEmpty: "（暂无输出）",
-      jobsOutputReleased: "（输出已释放）",
-      jobsOutputTruncated: "（更早的输出已丢弃）",
-      jobsOutputTransient: "输出读取失败：{error}",
+      kcfgLoading: "正在读取配置…",
+      kcfgUnavailable: "配置当前不可读写（宿主未提供该命名空间，或为进程内会话）。",
+      kcfgReadonly: "当前 profile 只读，修改无法保存。",
+      kcfgSaved: "已保存",
+      kcfgSaveFail: "保存失败：{error}",
+      kcfgSave: "保存",
+      kcfgDiscard: "放弃修改",
+      kcfgGroupFeatures: "功能开关",
+      kcfgGroupMonitor: "会话监视与通知",
+      kcfgGroupPhone: "手机访问",
+      kcfgGroupVault: "知识库",
+      kcfgGroupShortcuts: "快捷键",
+      kcfgTerminalEnabled: "终端面板",
+      kcfgFileTreeEnabled: "文件树",
+      kcfgSourceControlEnabled: "源代码管理",
+      kcfgSkillsPageEnabled: "技能管理页",
+      kcfgSearchEnabled: "免费网页搜索",
+      kcfgSearchMaxResults: "搜索结果条数（1–8）",
+      kcfgBrowserEnabled: "内置浏览器",
+      kcfgChatOpenLinkInBrowser: "对话链接改投内置浏览器",
+      kcfgHideOfficialFilesEntry: "隐藏官方「工作区文件」入口",
+      kcfgHideOfficialBrowserEntry: "隐藏官方「浏览器」入口",
+      kcfgUsageEnabled: "余额与用量芯片",
+      kcfgNotifyEnabled: "会话桌面通知",
+      kcfgMonitorEnabled: "会话监视（429 续跑 / 死循环打断）",
+      kcfgMonitorWaitMs: "429 等待毫秒（5000–600000）",
+      kcfgMonitorMaxAuto: "429 连续续跑上限（1–10）",
+      kcfgMonitorRepeatThreshold: "死循环判定重复次数（2–10）",
+      kcfgPhoneEnabled: "「手机访问」页入口",
+      kcfgPhonePort: "手机访问端口（1–65535）",
+      kcfgPhoneRemoteDomain: "手机远程域名",
+      kcfgPhoneKeepGatewayOn: "网关常驻",
+      kcfgVaultEnabled: "知识库（默认关）",
+      kcfgVaultRoot: "知识库根目录（绝对路径）",
+      kcfgSidebarShortcut: "侧栏开合",
+      kcfgRightbarShortcut: "右栏开合",
+      kcfgTerminalShortcut: "终端",
+      kcfgFileTreeShortcut: "文件树",
+      kcfgScShortcut: "源代码管理",
+      kcfgVaultShortcut: "知识库",
       schedTab: "日程",
       schedToday: "今天",
       schedNoDue: "无期限",
@@ -1599,13 +1614,11 @@ window.__ModuleLoader__.load({
       browserReconnect: "Reconnecting…",
       browserNotRunning: "Browser not started — type a URL above or wait for the agent's first use",
       browserNoPages: "No open pages — type a URL above, or the agent's next navigation will appear here",
-      dockJobs: "Background tasks",
       dockBrowser: "Built-in browser",
       pvCloseTab: "Close this tab",
       pvDeletedNote: "File deleted — this tab shows the deletion diff only; restore it via ↩ in source control",
       rbGuideSchedDesc: "Weekly grid, todos, and stats (read-only)",
       rbGuideBrowserDesc: "Agent-driven real browser you can watch live and take over",
-      rbGuideJobsDesc: "Output and controls for background tasks",
       rbFeatureDisabled: "This feature is disabled in settings",
       fileTabLabel: "Files",
       browserStarting: "Starting browser…",
@@ -1630,25 +1643,46 @@ window.__ModuleLoader__.load({
       phoneRotateHint: "Invalidate the current link and issue a new one; all authorized devices are signed out.",
       phoneRotated: "Link rotated; the old one is dead",
       phoneRotateFail: "Rotate failed: {error}",
-      jobsTitle: "Background jobs",
-      jobsEmpty: "No running background jobs.",
-      jobsStatusRunning: "running",
-      jobsStatusStopping: "stopping",
-      jobsStatusCompleted: "completed",
-      jobsStatusKilled: "cancelled",
-      jobsStatusFailed: "failed",
-      jobsDuration: "Running for {duration}",
-      jobsKill: "Stop",
-      jobsKillHint: "Stop this job (same as job_kill)",
-      jobsRowClose: "Close",
-      jobsRowCloseHint: "Remove from list (job has finished; display only)",
-      jobsKillDone: "Stop requested",
-      jobsKillFail: "Failed to stop: {error}",
-      jobsReleaseFail: "Failed to release output: {error}",
-      jobsOutputEmpty: "(no output yet)",
-      jobsOutputReleased: "(output released)",
-      jobsOutputTruncated: "(earlier output dropped)",
-      jobsOutputTransient: "Failed to read output: {error}",
+      kcfgLoading: "Loading configuration…",
+      kcfgUnavailable: "Configuration is unavailable right now (the host does not serve this namespace, or this is an in-process session).",
+      kcfgReadonly: "The profile is read-only; changes cannot be saved.",
+      kcfgSaved: "Saved",
+      kcfgSaveFail: "Save failed: {error}",
+      kcfgSave: "Save",
+      kcfgDiscard: "Discard changes",
+      kcfgGroupFeatures: "Features",
+      kcfgGroupMonitor: "Session monitor & notifications",
+      kcfgGroupPhone: "Phone access",
+      kcfgGroupVault: "Vault",
+      kcfgGroupShortcuts: "Shortcuts",
+      kcfgTerminalEnabled: "Terminal panel",
+      kcfgFileTreeEnabled: "File tree",
+      kcfgSourceControlEnabled: "Source control",
+      kcfgSkillsPageEnabled: "Skills manager page",
+      kcfgSearchEnabled: "Free web search",
+      kcfgSearchMaxResults: "Search results (1–8)",
+      kcfgBrowserEnabled: "Built-in browser",
+      kcfgChatOpenLinkInBrowser: "Open chat links in the built-in browser",
+      kcfgHideOfficialFilesEntry: "Hide the official Workspace files entry",
+      kcfgHideOfficialBrowserEntry: "Hide the official Browser entry",
+      kcfgUsageEnabled: "Balance & usage chip",
+      kcfgNotifyEnabled: "Session desktop notifications",
+      kcfgMonitorEnabled: "Session monitor (429 retry / loop break)",
+      kcfgMonitorWaitMs: "429 wait in ms (5000–600000)",
+      kcfgMonitorMaxAuto: "429 max consecutive retries (1–10)",
+      kcfgMonitorRepeatThreshold: "Loop detection repeats (2–10)",
+      kcfgPhoneEnabled: "Show the Phone access page",
+      kcfgPhonePort: "Phone access port (1–65535)",
+      kcfgPhoneRemoteDomain: "Phone remote domain",
+      kcfgPhoneKeepGatewayOn: "Keep gateway on",
+      kcfgVaultEnabled: "Vault (off by default)",
+      kcfgVaultRoot: "Vault root directory (absolute path)",
+      kcfgSidebarShortcut: "Toggle sidebar",
+      kcfgRightbarShortcut: "Toggle right bar",
+      kcfgTerminalShortcut: "Terminal",
+      kcfgFileTreeShortcut: "File tree",
+      kcfgScShortcut: "Source control",
+      kcfgVaultShortcut: "Vault",
       schedTab: "Schedule",
       schedToday: "Today",
       schedNoDue: "No due date",
@@ -1887,7 +1921,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 /* 官方右栏 dock pane 正文（sidebar.right.pane.tab）：pane 内是普通文档流，
    外壳占满 100%×100%、内容区自己滚；这里只有普通文档流 */
 .dshk-rbpane{width:100%;height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base)}
-.dshk-rbpane-scroll{overflow:auto}
 .dshk-rbpane .dshk-pane-view{flex:1 1 auto;min-height:0}
 .dshk-rbpane .dshk-vault-panehost{flex:1 1 auto;min-height:0}
 /* 侧栏索引宿主（知识库目录/日程待办入口占 sidebar.workspaces） */
@@ -1918,7 +1951,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-sk-target-label{font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-sk-detail{padding:2px 12px 10px}
 .dshk-sk-pre{margin:0;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
-/* 插件设置卡（settings.plugin.item）：对齐官方 CardForm 观感 */
 /* 手机访问页（settings.section 内联区块，与技能页同级） */
 .dshk-phone{width:100%;max-width:460px}
 .dshk-phone-head{display:flex;align-items:center;gap:8px;margin:2px 0 10px}
@@ -1942,28 +1974,33 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-phone-gatebtn:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-phone-gatebtn[disabled]{opacity:.5;cursor:default}
 .dshk-phone-gatebtn-stop{border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
-/* 后台任务面板（任务按钮 + 居中浮层）。点击遮罩收起（kn应行为同 terminal 坞） */
-/* 后台任务面板：右栏任务 pane 内容 */
-.dshk-jobs-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 8px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)}
-.dshk-jobs-headside{display:flex;align-items:center;gap:6px}
-.dshk-jobs-count{font-weight:400;color:var(--dsw-alias-label-tertiary);font-size:11px}
-.dshk-jobs-list{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:1px;overflow:auto;padding:0 10px 10px}
-.dshk-jobs-row{display:flex;flex-direction:column;gap:4px;padding:7px 8px;border-radius:8px;background:var(--dsw-alias-fill-l2,transparent)}
-.dshk-jobs-row[data-live="true"]{background:var(--dsw-alias-interactive-bg-hover,transparent)}
-.dshk-jobs-row[data-done="true"]{opacity:.55}
-.dshk-jobs-rowline{display:flex;align-items:center;gap:8px;min-width:0}
-.dshk-jobs-kind{flex:none;background:var(--dsw-alias-fill-l2);color:var(--dsw-alias-label-secondary);border-radius:5px;padding:0 6px;font-size:11px;line-height:18px}
-.dshk-jobs-label{flex:1;min-width:0;font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dsw-alias-label-primary);white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
-.dshk-jobs-status{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}
-.dshk-jobs-actions{display:flex;align-items:center;gap:6px;flex:none}
-.dshk-jobs-btn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:11px;line-height:1;padding:4px 9px;border-radius:6px;cursor:pointer}
-.dshk-jobs-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-jobs-btn:disabled{opacity:.5;cursor:default}
-.dshk-jobs-btn-kill{border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);color:var(--dsw-alias-danger,#cd3131)}
-.dshk-jobs-output{margin-top:2px;padding:6px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-3);font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;word-break:break-all;max-height:180px;overflow:auto;user-select:text}
-.dshk-jobs-empty{padding:10px 8px;font-size:12px;color:var(--dsw-alias-label-tertiary);text-align:center}
-/* 保留窗口被裁后的提示行：贴在输出框顶部（正文是 pre-wrap，它是块级自己占一行） */
-.dshk-jobs-outnote{margin-bottom:2px;font-size:10px;color:var(--dsw-alias-label-tertiary)}
+/* 会话头部 429 状态条（原右栏任务签顶部状态块；任务签退役后移到头部，
+   与官方后台任务入口同域）。仅当后台会话有待续跑/已封顶时渲染，零常驻。 */
+.dshk-mbg{position:relative}
+.dshk-mbg-trigger{display:inline-flex;align-items:center;gap:5px;min-height:26px;padding:2px 7px;border:0;background:none;border-radius:6px;color:var(--dsw-alias-label-tertiary);cursor:pointer;font:inherit;font-size:12px;line-height:18px}
+.dshk-mbg-trigger:hover,.dshk-mbg-trigger[aria-expanded="true"]{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-fill-l1,transparent)}
+.dshk-mbg-dot{flex:none;width:7px;height:7px;border-radius:999px;background:var(--dsw-alias-state-warning,#e2c08d)}
+.dshk-mbg-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:80;display:flex;flex-direction:column;gap:2px;min-width:300px;max-width:min(460px,92vw);padding:7px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-1));border:1px solid var(--dsw-alias-border-l1);border-radius:10px;box-shadow:var(--dsw-elevation-prominent,0 8px 24px rgba(0,0,0,.2))}
+.dshk-mbg-menu .dshk-monitor-cancel{margin-left:auto}
+/* 配置页（插件页 dsh-kit 行「配置」，plugins.row.config）：分组行式表单，
+   外观跟随宿主令牌；保存栏吸底右侧。 */
+.dshk-cfgp{display:flex;flex-direction:column;gap:14px;padding:4px 2px 8px;color:var(--dsw-alias-label-primary);font-size:13px}
+.dshk-cfgp-group{display:flex;flex-direction:column;gap:1px}
+.dshk-cfgp-grouptitle{margin:0 0 4px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary)}
+.dshk-cfgp-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:32px;padding:3px 8px;border-radius:7px}
+.dshk-cfgp-row:hover{background:var(--dsw-alias-fill-l1,transparent)}
+.dshk-cfgp-label{flex:1;min-width:0;color:var(--dsw-alias-label-primary)}
+.dshk-cfgp-ctl{flex:none;display:inline-flex;align-items:center}
+.dshk-cfgp-ctl input[type="text"],.dshk-cfgp-ctl input[type="number"]{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:4px 8px;border-radius:6px;min-width:0}
+.dshk-cfgp-ctl input[type="text"]{width:260px;max-width:52vw}
+.dshk-cfgp-ctl input[type="number"]{width:110px}
+.dshk-cfgp-ctl input:disabled{opacity:.5;cursor:default}
+.dshk-cfgp-actions{position:sticky;bottom:0;display:flex;align-items:center;gap:8px;justify-content:flex-end;padding:10px 2px 2px;background:linear-gradient(to top,var(--dsw-alias-bg-layer-1) 70%,transparent)}
+.dshk-cfgp-hint{margin-right:auto;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dshk-cfgp-btn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;padding:6px 14px;border-radius:7px;cursor:pointer}
+.dshk-cfgp-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-cfgp-btn:disabled{opacity:.5;cursor:default}
+.dshk-cfgp-btn-primary{border-color:transparent;background:var(--dsw-alias-brand-primary,#4c6fff);color:var(--dsw-alias-bg-base,#fff)}
 /* 知识库（vault）：工具条+目录树投侧栏索引宿主，页编辑器投右栏 pane 宿主（拆两半 portal）。 */
    「选库进入阅读」——空间=顶层目录，树懒加载，[[wikilink]] 页内跳转带历史 */
 .dshk-vault{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
@@ -3185,33 +3222,7 @@ ellipsis，窄列只截字不破版 */
       );
     }
 
-    /** 后台任务图标：正方形框（任务标记用方框，不要待办清单样式）。
-    外框圆角方 + 顶部短横线（窗口/任务语义），与终端描边体系一致 */
-    // 三个图标吃 size/className——官方开始页胶囊条目按条目状态传 22/26 号
-    function JobsIcon(props) {
-      // 官方 IconQueueOutline14 不合理，故自绘
-      return jsxRuntime.jsxs(
-        "svg",
-        {
-          width: (props && props.size) ?? 15,
-          height: (props && props.size) ?? 15,
-          className: props && props.className,
-          viewBox: "0 0 16 16",
-          "aria-hidden": true,
-          fill: "none",
-          stroke: "currentColor",
-          strokeWidth: 1.2,
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          children: [
-            jsxRuntime.jsx("rect", { x: 3.2, y: 3.2, width: 9.6, height: 9.6, rx: 1.6 }),
-            jsxRuntime.jsx("path", { d: "M5.4 6.3h5.2" }),
-          ],
-        },
-      );
-    }
-
-    /** 浏览器图标：地球（圆 + 经纬弧线），与终端/任务描边体系一致 */
+    /** 浏览器图标：地球（圆 + 经纬弧线），与终端描边体系一致 */
     function BrowserIcon(props) {
       // 官方 IconBrowseOutline16 不合理，故自绘
       return jsxRuntime.jsxs(
@@ -5520,293 +5531,6 @@ ellipsis，窄列只截字不破版 */
       });
     }
 
-    // ─────────── 后台任务面板 ───────────
-    // 入口在右栏开始页条目（签带运行中计数徽标）；
-    // 右栏路径由官方 dock 签承载 pane，回退路径由 KitSurfaces 在
-    // shell.overlay 渲染——右栏任务签。任务数据源与官方
-    // JobListAction 相同——useSessions 的 jobsBySession（session/jobs 推送）。
-    // 「结束」走 dsh-kit 宿主端点（/dsh-kit/jobs/kill，权限按 session 隔离，
-    // 与 job_kill 同一套 caller 语义）；输出常显，每个任务各走 /dsh-kit/jobs/
-    // output 轮询，请求带本页面自持的偏移、响应回保留窗口（宿主不记面板位置）——
-    // 刷新页面与多开标签页都能从窗口头重读，互不瓜分。
-    // 终态任务保留在列（session/jobs 推送本就含终态），
-    // 行动作变「关闭」=仅从显示移除，不持久化。
-
-    /** 任务时长：中文「x分y秒」/ 英文 "x m y s"，秒级取整 */
-    function fmtJobDuration(ms) {
-      const total = Math.max(0, Math.floor(ms / 1000));
-      const seconds = total % 60;
-      const minutes = Math.floor(total / 60) % 60;
-      const hours = Math.floor(total / 3600);
-      const zhLang = resolveZh();
-      if (hours > 0) return zhLang ? `${hours}小时${minutes}分` : `${hours}h ${minutes}m`;
-      if (minutes > 0) return zhLang ? `${minutes}分${seconds}秒` : `${minutes}m ${seconds}s`;
-      return zhLang ? `${seconds}秒` : `${seconds}s`;
-    }
-
-    /**
-     * 轮询响应并入某任务的显示态：端点回的是 [offset, next) 这一段的正文，这里增量
-     * 追加；截断标记一旦出现就留存（提示更早的输出已丢弃），后续响应不再清掉。
-     * body 为 null 表示这次响应不可读（HTTP 错 / 解析失败），error 记错误码；正文与
-     * 截断标记都保留——读失败不该抹掉已经看到的进度。
-     */
-    function jobsOutputMerge(cur, body, error) {
-      const base = cur ?? {};
-      return {
-        text: (base.text ?? "") + (body && typeof body.text === "string" ? body.text : ""),
-        truncated: base.truncated === true || (body != null && body.truncated === true),
-        released: base.released === true || (body != null && body.released === true),
-        error: error ?? null,
-      };
-    }
-
-    /**
-     * 输出框是否贴着底。留 24px 容差：行高与亚像素误差内仍算贴底，吸底不该因为差几像素
-     * 就悄悄停掉——判据只在"用户确实往上翻了"时才转假。
-     */
-    function jobsAtBottom(el) {
-      return el.scrollHeight - el.scrollTop - el.clientHeight <= 24;
-    }
-
-    function JobsPanel(props) {
-      const useSessions = props && typeof props.useSessions === "function" ? props.useSessions : null;
-      const row = useSessions ? useSessions(mainRowOf) : undefined;
-      const current = row?.id;
-      const jobs = useSessions ? useSessions((s) => (current ? s.jobsBySession[current] : undefined)) : undefined;
-      const live = Array.isArray(jobs) ? jobs.filter((j) => j.status === "running" || j.status === "stopping") : [];
-      const [outputs, setOutputs] = react.useState({});
-      const [killing, setKilling] = react.useState(null);
-      const [now, setNow] = react.useState(() => Date.now());
-      // 终态任务保留在列（运行中在前、终态在后淡化显示），
-      // 行动作从「结束」变「关闭」=仅从显示移除；关闭记录与终态清单都是页面
-      // 会话内存态——刷新/重启不保留（终态任务本来就只活在宿主进程内存里）。
-      const [dismissed, setDismissed] = react.useState(() => new Set());
-      // 本页已关闭的任务：关闭后迟到的轮询响应不再把正文写回来（见 dismissJob）
-      const closed = react.useRef(new Set());
-      const doneFetched = react.useRef(new Set()); // 终态且已成功拉过输出 → 不再轮询（终态无新量）
-      // 每个任务下一次要带的绝对偏移：本页面自持（宿主不记面板位置），刷新即回到 0
-      // 从保留窗口头重读，多标签页各带各的偏移互不瓜分。
-      const offsets = react.useRef({});
-      // 输出框吸底：只在"用户没往上翻"时把新内容顶到最底（默认吸底，含刷新后的首帧
-      // ——看进度要的是最新几行）；上翻查看历史期间不动视口，滚回底部即自动恢复。
-      const outRefs = react.useRef({});
-      const stickBottom = react.useRef({});
-      const isLive = (j) => j.status === "running" || j.status === "stopping";
-      const shownOrdered = Array.isArray(jobs)
-        ? [...jobs.filter((j) => !dismissed.has(j.id) && isLive(j)), ...jobs.filter((j) => !dismissed.has(j.id) && !isLive(j))]
-        : [];
-
-      // 时长随秒更新（有 live 任务才计时）
-      react.useEffect(() => {
-        if (live.length === 0) return undefined;
-        setNow(Date.now());
-        const timer = setInterval(() => setNow(Date.now()), 1000);
-        return () => clearInterval(timer);
-      }, [live.length]);
-
-      // 吸底在绘制前生效（布局阶段写 scrollTop，避免新内容先闪在顶部再被拽下去）。
-      // 每次渲染都跑：时长每秒一跳也会渲染，但对已经贴底的框写同一个 scrollTop 是无操作。
-      react.useLayoutEffect(() => {
-        for (const job of shownOrdered) {
-          if (stickBottom.current[job.id] === false) continue;
-          const el = outRefs.current[job.id];
-          if (el) el.scrollTop = el.scrollHeight;
-        }
-      });
-
-      // 输出轮询：显示中且未拉到终态的任务各每秒拉一次（输出
-      // 常显不再要「输出」按钮）。拉到终态即标记 doneFetched 停拉——终态没有
-      // 新量，且无 readOutput 的终态任务每次都返回全量 output，重复拉会重复
-      // 追加。终态行保留在列（见上），输出冻结在最后一拉。读取走宿主 job-tee 的
-      // 偏移切片（src/job-tee.ts），与模型侧 job_output 互不抢量，两边都能看到
-      // 全量输出；页面隐藏时暂停，回前台下一秒带着旧偏移续上（窗口被裁则回
-      // truncated，行内提示更早的输出已丢弃）。
-      const shownIdsKey = shownOrdered.map((j) => j.id).join("\n");
-      react.useEffect(() => {
-        if (!current || shownIdsKey === "") return undefined;
-        let disposed = false;
-        const pollOne = (id) => {
-          const offset = offsets.current[id] ?? 0;
-          fetch(
-            `/dsh-kit/jobs/output?sessionId=${encodeURIComponent(current)}&jobId=${encodeURIComponent(id)}&offset=${offset}`,
-          )
-            .then((res) => res.json().catch(() => null))
-            .then((body) => {
-              if (disposed || closed.current.has(id)) return;
-              if (!body || !body.job) {
-                setOutputs((prev) => ({ ...prev, [id]: jobsOutputMerge(prev[id], null, "HTTP") }));
-                return;
-              }
-              if (typeof body.next === "number" && body.next >= 0) offsets.current[id] = body.next;
-              setOutputs((prev) => ({ ...prev, [id]: jobsOutputMerge(prev[id], body, null) }));
-              const st = body.job.status;
-              if (st === "completed" || st === "killed" || st === "failed") doneFetched.current.add(id);
-            })
-            .catch(() => {
-              if (!disposed && !closed.current.has(id)) setOutputs((prev) => ({ ...prev, [id]: jobsOutputMerge(prev[id], null, "network") }));
-            });
-        };
-        const tick = () => {
-          if (document.visibilityState === "hidden") return;
-          for (const id of shownIdsKey.split("\n")) {
-            if (doneFetched.current.has(id)) continue;
-            pollOne(id);
-          }
-        };
-        tick();
-        const timer = setInterval(tick, 1000);
-        return () => {
-          disposed = true;
-          clearInterval(timer);
-        };
-      }, [current, shownIdsKey]);
-
-      const killJob = async (job) => {
-        setKilling(job.id);
-        try {
-          await kitPostJson("/dsh-kit/jobs/kill", { sessionId: current, jobId: job.id });
-          flashToast(t("jobsKillDone"));
-        } catch (error) {
-          flashToast(tf("jobsKillFail", { error: String(error?.message ?? error) }));
-        } finally {
-          setKilling(null);
-        }
-      };
-
-      /**
-       * 「关闭」= 从本页显示移除 + 让宿主丢掉为这个任务保留的输出窗口（内存随即归还）。
-       * 释放不可恢复：那份历史是我们为常显/可重读留的，关掉即表示不再需要——刷新页面后
-       * 该行会随官方记录回来，但内容显示「输出已释放」。本页攒的正文/偏移/吸底状态一并丢掉，
-       * 并记进 closed 挡住迟到的轮询写回。
-       */
-      const dismissJob = (id) => {
-        closed.current.add(id);
-        delete offsets.current[id];
-        delete stickBottom.current[id];
-        doneFetched.current.delete(id);
-        setOutputs((prev) => {
-          if (prev[id] === undefined) return prev;
-          const next = { ...prev };
-          delete next[id];
-          return next;
-        });
-        setDismissed((prev) => new Set(prev).add(id));
-        kitPostJson("/dsh-kit/jobs/release", { sessionId: current, jobId: id }).catch((error) => {
-          flashToast(tf("jobsReleaseFail", { error: String(error?.message ?? error) }));
-        });
-      };
-
-      // 让位布局（body 类/宽度/拖拽）由右侧标签页容器统一负责，本组件只管内容。
-
-      const statusWord = (job) => {
-        switch (job.status) {
-          case "running": return t("jobsStatusRunning");
-          case "stopping": return t("jobsStatusStopping");
-          case "completed": return t("jobsStatusCompleted");
-          case "killed": return t("jobsStatusKilled");
-          case "failed": return t("jobsStatusFailed");
-          default: return job.status;
-        }
-      };
-
-      return jsxRuntime.jsxs(jsxRuntime.Fragment, {
-        children: [
-          jsxRuntime.jsxs("div", {
-            className: "dshk-jobs-head",
-            children: [
-              jsxRuntime.jsxs("span", {
-                className: "dshk-jobs-headside",
-                children: [
-                  jsxRuntime.jsx("span", { children: t("jobsTitle") }),
-                  jsxRuntime.jsx("span", { className: "dshk-jobs-count", children: String(live.length) }),
-                ],
-              }),
-            ],
-          }),
-          shownOrdered.length === 0
-            ? jsxRuntime.jsx("div", { className: "dshk-jobs-empty", children: t("jobsEmpty") })
-            : jsxRuntime.jsx("div", {
-                className: "dshk-jobs-list",
-                children: shownOrdered.map((job) => {
-                  const out = outputs[job.id];
-                  const stopBusy = killing === job.id || job.status === "stopping";
-                  const done = !isLive(job);
-                  return jsxRuntime.jsxs("div", {
-                    className: "dshk-jobs-row",
-                    "data-live": job.status === "running" || undefined,
-                    "data-done": done || undefined,
-                    children: [
-                      jsxRuntime.jsxs("div", {
-                        className: "dshk-jobs-rowline",
-                        children: [
-                          jsxRuntime.jsx("span", { className: "dshk-jobs-kind", children: job.kind }),
-                          jsxRuntime.jsx("span", { className: "dshk-jobs-label", title: job.label, children: job.label }),
-                          jsxRuntime.jsx("span", {
-                            className: "dshk-jobs-status",
-                            title: job.detail ?? statusWord(job),
-                            children:
-                              !done
-                                ? `${statusWord(job)} · ${tf("jobsDuration", { duration: fmtJobDuration(now - job.startedAt) })}`
-                                : job.finishedAt !== undefined
-                                  ? `${statusWord(job)} · ${tf("jobsDuration", { duration: fmtJobDuration(job.finishedAt - job.startedAt) })}`
-                                  : statusWord(job),
-                          }),
-                          jsxRuntime.jsxs("span", {
-                            className: "dshk-jobs-actions",
-                            children: [
-                              done
-                                ? jsxRuntime.jsx("button", {
-                                    type: "button",
-                                    className: "dshk-jobs-btn",
-                                    title: t("jobsRowCloseHint"),
-                                    onClick: () => dismissJob(job.id),
-                                    children: t("jobsRowClose"),
-                                  })
-                                : jsxRuntime.jsx("button", {
-                                    type: "button",
-                                    className: "dshk-jobs-btn dshk-jobs-btn-kill",
-                                    disabled: stopBusy,
-                                    title: t("jobsKillHint"),
-                                    onClick: () => killJob(job),
-                                    children: t("jobsKill"),
-                                  }),
-                            ],
-                          }),
-                        ],
-                      }),
-                      jsxRuntime.jsx("div", {
-                        className: "dshk-jobs-output",
-                        ref: (el) => {
-                          if (el) outRefs.current[job.id] = el;
-                          else delete outRefs.current[job.id];
-                        },
-                        onScroll: (event) => {
-                          stickBottom.current[job.id] = jobsAtBottom(event.currentTarget);
-                        },
-                        children:
-                          out && out.error
-                            ? tf("jobsOutputTransient", { error: out.error })
-                            : out && out.released === true
-                              ? t("jobsOutputReleased")
-                              : jsxRuntime.jsxs(jsxRuntime.Fragment, {
-                                  children: [
-                                    out && out.truncated === true
-                                      ? jsxRuntime.jsx("div", { className: "dshk-jobs-outnote", children: t("jobsOutputTruncated") })
-                                      : null,
-                                    jsxRuntime.jsx("span", {
-                                      children: out && out.text && out.text.length > 0 ? out.text : t("jobsOutputEmpty"),
-                                    }),
-                                  ],
-                                }),
-                      }),
-                    ],
-                  }, job.id);
-                }),
-              }),
-        ],
-      });
-    }
-
     // ─────────── 日程模块（中心区第三 tab：周时间网格 + 待办 + 统计 + 计时）───────────
     // 数据走宿主 /dsh-kit/schedule/* 端点：raw 全量 events + 区间展开 occurrences
     // （重复展开与 state 派生都在宿主做，这里只渲染）+ orphans。
@@ -6827,7 +6551,7 @@ ellipsis，窄列只截字不破版 */
     }
 
     // ─────────── 知识库（vault：侧栏目录索引 + 右栏页编辑器，portal 拆两半）───────────
-    // vault = 设置卡配置的绝对目录，其内一切 md 即页面（数据契约见 src/vault.ts）。
+    // vault = 配置页配置的绝对目录，其内一切 md 即页面（数据契约见 src/vault.ts）。
     // 布局「选库进入阅读」：左窄条 = 空间（顶层目录）+
     // 懒加载目录树；右 = 真·所见即所得编辑区（TipTap 富文本，vendor/richeditor
     // .bundle.js 的 window.DshRTE 工厂：md ↔ 富文本往返、[[wikilink]]/公式/
@@ -8044,7 +7768,7 @@ ellipsis，窄列只截字不破版 */
     }
 
     /** 桌面通知可用：浏览器有 API 且已授权（未授权不能在此处请求——requestPermission
-     *  必须在用户手势里发，入口在设置卡的按钮与开关勾选） */
+     *  必须在用户手势里发；配置页无请求手势入口，首次需在浏览器站点设置里允许） */
     function notifyCanPost() {
       return notifyPermState() === "granted";
     }
@@ -8438,7 +8162,7 @@ ellipsis，窄列只截字不破版 */
       const [index, setIndex] = react.useState(null);
       const [indexErr, setIndexErr] = react.useState("");
       // 面板的树根：null = 库根（vaultRoot）；非 null = 进入的绝对目录
-      // （Ctrl+点击目录行 / 搜索结果点笔记目录；只影响本组件显示，不写设置卡）
+      // （Ctrl+点击目录行 / 搜索结果点笔记目录；只影响本组件显示，不写配置页）
       const [rootHere, setRootHere] = react.useState(null);
       // 目录树：path → entries|null(加载中)；expanded: path → bool
       const [treeDirs, setTreeDirs] = react.useState({});
@@ -8689,7 +8413,7 @@ ellipsis，窄列只截字不破版 */
         setRowMenu((prev) => (prev && prev.anchor === anchor ? null : { entry, head: head === true, rect: anchor.getBoundingClientRect(), anchor }));
       };
       /** 进入目录（Ctrl（⌘）+点击目录行 / 搜索结果点笔记目录）：树根换成该目录，
-       *  树头 ← 回库根。换根只影响面板显示，不动设置卡的 vaultRoot。
+       *  树头 ← 回库根。换根只影响面板显示，不动配置页的 vaultRoot。
        *  资料库那一支不参与换根（它是文献面，见 dirRow） */
       const openHere = (dir) => {
         setRootHere(dir === root ? null : dir);
@@ -9717,7 +9441,7 @@ ellipsis，窄列只截字不破版 */
     // 角标、自动跟随判定都读它）；pane 卸载（用户点官方签 ✕）同步回假——
     // 「签开着吗」以官方 pane 的挂载为准。文件/知识库的文档签状态（files/
     // vaultPages）在卸载后保留，重开签即恢复，与关签前一致。
-    /** 功能存在性跟随 pane 挂载（jobs/schedule/browser 用） */
+    /** 功能存在性跟随 pane 挂载（schedule/browser/vault 用） */
     function useFeaturePresence(feature) {
       react.useEffect(() => {
         setKitUi(openFeatureTab(kitUi, feature));
@@ -9783,33 +9507,65 @@ ellipsis，窄列只截字不破版 */
       useFeaturePresence("schedule");
       return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(ScheduleView, { active: true }) });
     }
-    /** 后台任务 pane */
-    function JobsPaneBody(props) {
-      useFeaturePresence("jobs");
-      const cfg = cfgFromSnapshot(getCfgSnapshot());
-      // 全局 429 续跑器状态块：有待续跑 / capped 会话才出现（零常驻空间）。
-      // 挂在后台任务签顶部——「正在跑的东西」同一语境；jobs 关闭不影响本块。
+    /** 会话头部的 429 后台会话状态条：全局续跑器有待续跑/封顶会话才渲染（零常驻）。
+     *  原挂在右栏任务签顶部，0.1.7 任务签退役（官方会话头部自带任务清单 + 实时输出
+     *  + 停止）后移到这里，与官方后台任务入口同域。点开小浮层逐条列出，待续跑可取消。 */
+    function MonitorBgAction() {
+      react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
+      const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
       const watcherSnap = react.useSyncExternalStore(
         (s) => monitorStore.subscribe(s),
         () => monitorStore.snapshot,
       );
-      const [bgNow, setBgNow] = react.useState(() => Date.now());
+      const [open, setOpen] = react.useState(false);
+      const [now, setNow] = react.useState(() => Date.now());
+      const rootRef = react.useRef(null);
       const hasWaiting = watcherSnap.items.some((x) => x.phase === "waiting");
+      // 倒计时跳动（有待续跑才走秒）
       react.useEffect(() => {
         if (!hasWaiting) return undefined;
-        setBgNow(Date.now());
-        const timer = setInterval(() => setBgNow(Date.now()), 500);
+        setNow(Date.now());
+        const timer = setInterval(() => setNow(Date.now()), 500);
         return () => clearInterval(timer);
       }, [hasWaiting]);
-      return jsxRuntime.jsxs("div", { className: "dshk-rbpane dshk-rbpane-scroll", children: [
-        cfg.monitorEnabled !== false && watcherSnap.items.length > 0
-          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-              jsxRuntime.jsx("div", { className: "dshk-note", children: t("monitorBgTitle") }),
+      // 浮层点外/Esc 收起
+      react.useEffect(() => {
+        if (!open) return undefined;
+        const onDown = (e) => {
+          if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+        };
+        const onKey = (e) => {
+          if (e.key === "Escape") setOpen(false);
+        };
+        document.addEventListener("pointerdown", onDown, true);
+        document.addEventListener("keydown", onKey);
+        return () => {
+          document.removeEventListener("pointerdown", onDown, true);
+          document.removeEventListener("keydown", onKey);
+        };
+      }, [open]);
+      if (cfg.monitorEnabled === false || watcherSnap.items.length === 0) return null;
+      return jsxRuntime.jsxs("div", { className: "dshk-mbg", ref: rootRef, children: [
+        jsxRuntime.jsxs("button", {
+          type: "button",
+          className: "dshk-mbg-trigger",
+          "aria-expanded": open,
+          onClick: () => {
+            setNow(Date.now()); // 展开瞬间先对表，首帧倒计时才不偏大
+            setOpen((v) => !v);
+          },
+          children: [
+            jsxRuntime.jsx("span", { className: "dshk-mbg-dot", "aria-hidden": true }),
+            `${t("monitorBgTitle")} · ${String(watcherSnap.items.length)}`,
+          ],
+        }),
+        open
+          ? jsxRuntime.jsx("div", { className: "dshk-mbg-menu", children:
               watcherSnap.items.map((x) => {
                 const line = x.phase === "waiting"
                   ? tf("monitorBgItem", {
                       title: x.title,
-                      sec: String(Math.max(0, Math.ceil((x.fireAt - bgNow) / 1000))),
+                      sec: String(Math.max(0, Math.ceil((x.fireAt - now) / 1000))),
                       n: String(x.continues + 1),
                       max: String(x.max),
                     })
@@ -9826,11 +9582,8 @@ ellipsis，窄列只截字不破版 */
                     : null,
                 ] }, x.id);
               }),
-            ] })
+            })
           : null,
-        cfg.jobsEnabled === false
-          ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("rbFeatureDisabled") })
-          : jsxRuntime.jsx(JobsPanel, { ...props }),
       ] });
     }
     /** 浏览器 pane（agent 驱动 + 人机共驾 + 自动跟随；与独立面板同构，不加功能）。
@@ -9857,7 +9610,7 @@ ellipsis，窄列只截字不破版 */
       const ui = useKitUi();
       const snap = react.useSyncExternalStore(subscribeCfg, getCfgSnapshot);
       const cfg = cfgFromSnapshot(snap);
-      // useSessions 透传给右栏任务 pane/开始页（在跑任务徽标）：inject 闭包
+      // useSessions 透传给右栏 pane（浏览器 pane 定位当前会话用）：inject 闭包
       // 从这里取最新值（槽位注册发生在 effect，渲染期的 props 用模块变量桥接）
       shellShare.current = props;
       // 对话文件点击的知识库路由状态：当前会话 cwd 与知识库开关每次渲染同步，
@@ -9879,7 +9632,7 @@ ellipsis，窄列只截字不破版 */
         return undefined;
       }, [cfg.vaultEnabled]);
 
-      // 座位门控：按配置动态注册/注销输入框入口与技能页（设置卡
+      // 座位门控：按配置动态注册/注销输入框入口与技能页（配置页
       // 本体不受门控，否则关掉就再也打不开）。快照未就绪按默认全开处理，首个
       // ready 快照到达后本效果自动重跑纠正。
       react.useEffect(() => {
@@ -9891,6 +9644,13 @@ ellipsis，窄列只截字不破版 */
             slotsCtx.slots.register(
               { name: "conversation.composer.dock", id: "dsh-kit-monitor", order: 5 },
               MonitorLine,
+            )],
+          // 429 后台会话状态条：会话头部动作区，排官方后台任务清单（order 20）之后；
+          // 仅当后台会话有待续跑/封顶时自渲染（组件内自门控，零常驻）
+          ["monitorBg", cfg.monitorEnabled, () =>
+            slotsCtx.slots.register(
+              { name: "conversation.session.header.actions", id: "dsh-kit-monitor-bg", order: 21 },
+              MonitorBgAction,
             )],
           // 余额与用量芯片：同一条状态带，排监视条之后
           ["usage", cfg.usageEnabled, () =>
@@ -9938,7 +9698,7 @@ ellipsis，窄列只截字不破版 */
         };
       }, [cfg.phoneEnabled, cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.sourceControlEnabled, cfg.skillsPageEnabled, cfg.monitorEnabled, cfg.vaultEnabled]);
 
-      // 配置关闭但视图还开着（如设置卡保存瞬间）：立即归位，文件随来源跟随清掉；
+      // 配置关闭但视图还开着（如原生配置页保存、entry 重启前的瞬间）：立即归位，文件随来源跟随清掉；
       // 终端功能关闭 = 结束全部终端会话（连 WS 杀 pty，与单终端时代语义一致）
       react.useEffect(() => {
         if (!cfg.terminalEnabled && (ui.termDockOpen || ui.terminals.length > 0)) {
@@ -9947,12 +9707,11 @@ ellipsis，窄列只截字不破版 */
         if (!cfg.fileTreeEnabled && ui.treeOpen) setKitUi({ treeOpen: false, files: [], activeFile: null });
         if (!cfg.sourceControlEnabled && ui.gitOpen) setKitUi({ gitOpen: false, files: [], activeFile: null });
         // 配置门控清场走 closeFeatureTab：清存在性的同时把激活位顺延到剩余标签
-        if (!cfg.jobsEnabled && ui.jobsOpen) setKitUi(closeFeatureTab(kitUi, "jobs"));
         if (!cfg.browserEnabled && ui.browserOpen) setKitUi(closeFeatureTab(kitUi, "browser"));
         if (!cfg.vaultEnabled && (ui.vaultOpen || ui.vaultIdxOpen)) {
           setKitUi({ ...closeFeatureTab(kitUi, "vault"), vaultIdxOpen: false });
         }
-      }, [cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.sourceControlEnabled, cfg.jobsEnabled, cfg.browserEnabled, cfg.vaultEnabled]);
+      }, [cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.sourceControlEnabled, cfg.browserEnabled, cfg.vaultEnabled]);
 
       // 侧边栏浏览区占用：单槽轮换——源代码管理 ↔ 文件树 ↔ 知识库
       // 目录，全关回官方会话列表。
@@ -10014,7 +9773,7 @@ ellipsis，窄列只截字不破版 */
       }, [ui.termDockOpen, ui.terminals.length, cfg.terminalEnabled]);
 
       // 快捷键统一在此监听：组合键来自配置（默认 Ctrl+E / Ctrl+Alt+. 等，capture
-      // 拦截避免页面其它快捷键抢先），对应功能关闭时不响应；设置卡录制新键时让路。
+      // 拦截避免页面其它快捷键抢先），对应功能关闭时不响应。
       // Esc 分层：先关当前激活那张文档签（知识库关当前页那张、文件关当前文件那张），
       // 再关侧栏视图（不拦截，避免挡掉其它 Esc 行为）。功能签归官方 ✕，Esc 不碰。
 
@@ -10550,17 +10309,17 @@ ellipsis，窄列只截字不破版 */
     }
 
     // ─────────── 官方右侧边栏注册（宿主 0.1.5+）───────────
-    // 五个功能各注册一张 dock 页类型（id=正文槽 key，kind=openTab 类型名）+
+    // 四个功能各注册一张 dock 页类型（id=正文槽 key，kind=openTab 类型名）+
     // pane 正文。开始页归官方 ShippedGuide（罗盘 + 胶囊条目，条目按 order 升序）：
-    // 我们只贡献 guide 条目（RB_GUIDE：日程→浏览器→后台任务），order 取 100+ 垫在
-    // 全部官方条目之后（官方现值：文件 10 / 终端 20 / 浏览器 30）；
+    // 我们只贡献 guide 条目（RB_GUIDE：日程→浏览器），order 取 100+ 垫在
+    // 全部官方条目之后（官方现值：工作区文件 10 / 新建终端 20 / 浏览器模式 30）；
     // 文件/知识库是被动签，不给条目——入口在左侧边栏。
+    // 后台任务不做签（0.1.7 官方会话头部自带任务清单 + 实时输出 + 停止）。
     // 服务运行期探测（见 RB_FEATURES 处注释）。
     const RB_BODY = {
       file: FilePaneBody,
       vault: VaultPaneBody,
       schedule: SchedulePaneBody,
-      jobs: JobsPaneBody,
       browser: BrowserPaneBody,
     };
     function registerRightbar(rbCtx) {
@@ -10569,7 +10328,6 @@ ellipsis，窄列只截字不破版 */
       const RB_GUIDE = {
         schedule: { order: 100, icon: SchedIcon, descKey: "rbGuideSchedDesc" },
         browser: { order: 110, icon: BrowserIcon, descKey: "rbGuideBrowserDesc" },
-        jobs: { order: 120, icon: JobsIcon, descKey: "rbGuideJobsDesc" },
       };
       for (const f of RB_FEATURES) {
         const Body = RB_BODY[f.feature];
@@ -10583,7 +10341,7 @@ ellipsis，窄列只截字不破版 */
         rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.pane.tab", () => rbCtx.slots.register({
           name: "sidebar.right.pane.tab",
           key: f.id,
-          // cwd / 运行中任务数经 shellShare 桥接（pane 注册发生在 effect，
+          // cwd（浏览器 pane 定位当前会话）经 shellShare 桥接（pane 注册发生在 effect，
           // 渲染期的 props 由 KitSurfaces 的常驻桥供最新值）
           inject: () => ({
             useSessions: shellShare.current?.useSessions,
@@ -10594,9 +10352,186 @@ ellipsis，窄列只截字不破版 */
       rightbarStore.setActive(true);
     }
 
+    // ─────────── 配置页（0.1.7 plugins.row.config）───────────
+    // 插件页（侧栏「插件」）dsh-kit 行的「配置」控件进这里：页面宿主按
+    // rowId（=entry id「dsh-kit」）绑定宿主命名空间，经 props.form 给已受理值
+    // （form.state）与原子写回（form.mutate）。字段清单与 src/index.ts 的 Config
+    // schema 同源（render-check 钉住）。草稿本地自持，只有「保存」才写入——
+    // 离开页面即丢，符合页面宿主「离开丢弃暂存」的约定；保存成功后 entry
+    // 由宿主重启，开关类改动即时生效。
+    const KIT_CFG_FIELDS = [
+      { key: "terminalEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgTerminalEnabled" },
+      { key: "fileTreeEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgFileTreeEnabled" },
+      { key: "sourceControlEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSourceControlEnabled" },
+      { key: "skillsPageEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSkillsPageEnabled" },
+      { key: "searchEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSearchEnabled" },
+      { key: "searchMaxResults", type: "number", min: 1, max: 8, group: "kcfgGroupFeatures", labelKey: "kcfgSearchMaxResults" },
+      { key: "browserEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgBrowserEnabled" },
+      { key: "chatOpenLinkInBrowser", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgChatOpenLinkInBrowser" },
+      { key: "hideOfficialFilesEntry", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgHideOfficialFilesEntry" },
+      { key: "hideOfficialBrowserEntry", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgHideOfficialBrowserEntry" },
+      { key: "usageEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgUsageEnabled" },
+      { key: "monitorEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgMonitorEnabled" },
+      { key: "monitorWaitMs", type: "number", min: 5000, max: 600000, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorWaitMs" },
+      { key: "monitorMaxAuto", type: "number", min: 1, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorMaxAuto" },
+      { key: "monitorRepeatThreshold", type: "number", min: 2, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorRepeatThreshold" },
+      { key: "notifyEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgNotifyEnabled" },
+      { key: "phoneEnabled", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneEnabled" },
+      { key: "phonePort", type: "number", min: 1, max: 65535, group: "kcfgGroupPhone", labelKey: "kcfgPhonePort" },
+      { key: "phoneRemoteDomain", type: "string", group: "kcfgGroupPhone", labelKey: "kcfgPhoneRemoteDomain" },
+      { key: "phoneKeepGatewayOn", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneKeepGatewayOn" },
+      { key: "vaultEnabled", type: "bool", group: "kcfgGroupVault", labelKey: "kcfgVaultEnabled" },
+      { key: "vaultRoot", type: "string", group: "kcfgGroupVault", labelKey: "kcfgVaultRoot" },
+      { key: "sidebarShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgSidebarShortcut" },
+      { key: "rightbarShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgRightbarShortcut" },
+      { key: "terminalShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgTerminalShortcut" },
+      { key: "fileTreeShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgFileTreeShortcut" },
+      { key: "scShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgScShortcut" },
+      { key: "vaultShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgVaultShortcut" },
+    ];
+    /** KIT_CFG_FIELDS 的分组顺序（组名键也用于 t() 取组标题） */
+    const KIT_CFG_GROUPS = ["kcfgGroupFeatures", "kcfgGroupMonitor", "kcfgGroupPhone", "kcfgGroupVault", "kcfgGroupShortcuts"];
+    /** 两个值是否 JSON 意义上不同（数字统一比较，避免 "3" 与 3 抖动） */
+    function kitCfgDiffers(a, b) {
+      if (a === b) return false;
+      if (typeof a === "number" && typeof b === "number") return a !== b;
+      return JSON.stringify(a ?? null) !== JSON.stringify(b ?? null);
+    }
+    /**
+     * dsh-kit 行配置页。props = { view, form }：view "summary" 返回 null（行描述
+     * 已有）；form 缺席/loading/unavailable 时给一行说明。ready 时按
+     * KIT_CFG_FIELDS 分组渲染草稿表单，「保存」把差异字段一次 mutate 写回
+     * （带读取时的 revision 做围栏），「放弃修改」丢草稿。
+     */
+    function KitConfigPage(props) {
+      react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
+      const view = props && props.view;
+      const form = props && props.form;
+      const snap = form ? form.state : null;
+      const [draft, setDraft] = react.useState(null); // 仅存改动过的字段
+      const [saving, setSaving] = react.useState(false);
+      // 命名空间换版（保存成功/别处改动）且无未保存草稿时不需要动作——快照
+      // 由页面宿主随渲染下发，draft 只按字段覆盖，不整包重置
+      if (view === "summary") return null;
+      if (!form || !snap || snap.status !== "ready" || snap.value == null || typeof snap.value !== "object") {
+        const msg = snap && snap.status === "unavailable" ? t("kcfgUnavailable") : t("kcfgLoading");
+        return jsxRuntime.jsx("div", { className: "dshk-cfgp", children:
+          jsxRuntime.jsx("div", { className: "dshk-note", children: msg }) });
+      }
+      const base = snap.value;
+      const setField = (key, value) => {
+        setDraft((prev) => {
+          const next = { ...(prev ?? {}) };
+          // 改回与受理值一致 = 撤销该字段的草稿（不是记一个同值覆盖）
+          if (!kitCfgDiffers(value, base[key])) delete next[key];
+          else next[key] = value;
+          return Object.keys(next).length > 0 ? next : null;
+        });
+      };
+      const dirtyCount = draft ? Object.keys(draft).length : 0;
+      const writable = snap.writable !== false;
+      const save = async () => {
+        if (!draft || dirtyCount === 0 || !writable || saving) return;
+        setSaving(true);
+        try {
+          const ops = KIT_CFG_FIELDS
+            .filter((f) => Object.prototype.hasOwnProperty.call(draft, f.key))
+            .map((f) => ({ op: "set", path: [f.key], value: draft[f.key] }));
+          const ok = await form.mutate(ops, snap.revision);
+          if (ok) {
+            setDraft(null);
+            // volatile 热提交即时生效：重拉快照喂门控（值同源 readSettings，已解引用）
+            try {
+              const body = await kitJson("/dsh-kit/config");
+              if (body && typeof body === "object") applyConfigSnapshot(body);
+            } catch {
+              // 重拉失败不动快照：下次页面刷新自然取到
+            }
+            flashToast(t("kcfgSaved"));
+          } else {
+            flashToast(tf("kcfgSaveFail", { error: "rejected" }));
+          }
+        } catch (error) {
+          flashToast(tf("kcfgSaveFail", { error: String(error?.message ?? error) }));
+        } finally {
+          setSaving(false);
+        }
+      };
+      const controlOf = (f) => {
+        const cur = draft && Object.prototype.hasOwnProperty.call(draft, f.key) ? draft[f.key] : base[f.key];
+        if (f.type === "bool") {
+          return jsxRuntime.jsx("input", {
+            type: "checkbox",
+            checked: cur === true,
+            disabled: !writable || saving,
+            onChange: (e) => setField(f.key, e.currentTarget.checked),
+          });
+        }
+        if (f.type === "number") {
+          return jsxRuntime.jsx("input", {
+            type: "number",
+            value: typeof cur === "number" ? String(cur) : "",
+            min: f.min,
+            max: f.max,
+            step: 1,
+            disabled: !writable || saving,
+            onChange: (e) => {
+              const raw = e.currentTarget.value;
+              if (raw === "") { setField(f.key, null); return; } // 清空 = 暂记 null，保存时被 schema 拒绝比静默改值好
+              const n = Number(raw);
+              if (Number.isFinite(n)) setField(f.key, Math.trunc(n));
+            },
+          });
+        }
+        return jsxRuntime.jsx("input", {
+          type: "text",
+          value: typeof cur === "string" ? cur : "",
+          disabled: !writable || saving,
+          onChange: (e) => setField(f.key, e.currentTarget.value),
+        });
+      };
+      const groups = KIT_CFG_GROUPS.map((g) => ({
+        title: t(g),
+        fields: KIT_CFG_FIELDS.filter((f) => f.group === g),
+      })).filter((g) => g.fields.length > 0);
+      return jsxRuntime.jsxs("div", { className: "dshk-cfgp", children: [
+        groups.map((g) => jsxRuntime.jsxs("div", { className: "dshk-cfgp-group", children: [
+          jsxRuntime.jsx("h4", { className: "dshk-cfgp-grouptitle", children: g.title }),
+          g.fields.map((f) => jsxRuntime.jsxs("div", { className: "dshk-cfgp-row", children: [
+            jsxRuntime.jsx("span", { className: "dshk-cfgp-label", children: t(f.labelKey) }),
+            jsxRuntime.jsx("span", { className: "dshk-cfgp-ctl", children: controlOf(f) }),
+          ] }, f.key)),
+        ] }, g.title)),
+        jsxRuntime.jsxs("div", { className: "dshk-cfgp-actions", children: [
+          !writable ? jsxRuntime.jsx("span", { className: "dshk-cfgp-hint", children: t("kcfgReadonly") }) : null,
+          jsxRuntime.jsx("button", {
+            type: "button",
+            className: "dshk-cfgp-btn",
+            disabled: !writable || saving || dirtyCount === 0,
+            onClick: () => setDraft(null),
+            children: t("kcfgDiscard"),
+          }),
+          jsxRuntime.jsx("button", {
+            type: "button",
+            className: "dshk-cfgp-btn dshk-cfgp-btn-primary",
+            disabled: !writable || saving || dirtyCount === 0,
+            onClick: save,
+            children: saving ? "…" : t("kcfgSave"),
+          }),
+        ] }),
+      ] });
+    }
+
     // ─────────── 插件体 ───────────
     function apply(ctx) {
       slotsCtx = ctx;
+      // 配置页（0.1.7）：挂进插件页的 plugins.row.config 槽，key 由页面宿主按
+      // <包名>#<行id> 匹配（本插件单行，行 id = dsh-kit）。命名空间未伺服时页面
+      // 宿主不传 form，组件自带降级文案；注册随本 entry 生命周期生灭。
+      ctx.slots.inject("plugins.row.config", () => ctx.slots.register(
+        { name: "plugins.row.config", key: "dsh-kit#dsh-kit" },
+        KitConfigPage,
+      ));
       // 用量芯片的「当前会话模型 provider」数据源（composer 模型座同一份状态）。
       // 服务缺位（老宿主/精简组合）= 芯片不显示，其余功能不受影响
       ctx.inject(["modelDirectories"], (mctx) => {
@@ -10764,7 +10699,7 @@ ellipsis，窄列只截字不破版 */
       // 对话文件点击的知识库路由：vault 内路径改道知识库标签，其余放行官方
       //（门控见 onChatOpenFileClick 与 chatPreviewHook）
       document.addEventListener("click", onChatOpenFileClick, true);
-      // 对话链接改投内置浏览器（默认开：设置卡 chatOpenLinkInBrowser）
+      // 对话链接改投内置浏览器（默认开：配置页 chatOpenLinkInBrowser）
       document.addEventListener("click", onChatLinkClick, true);
       // 官方文件预览头部的下载按钮：预览根 mount（loading→text 整根重建）与路径
       // title 变化（meta 后到才补成绝对路径）都要接住，全走同一防抖扫描
