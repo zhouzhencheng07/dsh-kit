@@ -1256,6 +1256,7 @@ window.__ModuleLoader__.load({
       monitorContinueText: "继续",
       monitorLoopBreakText: "检测到你的输出在重复相同内容，可能陷入了死循环。请立即停止重复，简要说明当前状态，换一种方式继续完成任务。",
       monitorCancel: "取消",
+      monitorDismiss: "忽略",
       monitorRepeatErr: "重复输出（死循环征兆）",
       monitorStopping: "监视：检测到重复输出（死循环征兆），正在停止当前回合…",
       monitorCapped: "监视：已连续自动继续 {max} 次，暂停自动续跑（重复输出仍会中止）",
@@ -1613,6 +1614,7 @@ window.__ModuleLoader__.load({
       monitorContinueText: "Continue",
       monitorLoopBreakText: "Your output appears to be repeating itself, which suggests an infinite loop. Stop repeating immediately, briefly state the current status, and continue the task in a different way.",
       monitorCancel: "Cancel",
+      monitorDismiss: "Dismiss",
       monitorRepeatErr: "repeated output (dead-loop sign)",
       monitorStopping: "Monitor: repeated output detected (dead-loop sign), stopping the current turn…",
       monitorCapped: "Monitor: auto-continued {max} times in a row, pausing auto-continue (repeats are still stopped)",
@@ -7384,13 +7386,18 @@ ellipsis，窄列只截字不破版 */
       }
     }
 
-    /** UI 取消按钮：丢弃待发射 plan（失败沿已消费，不会重排） */
+    /** UI 取消/忽略按钮：待续跑 = 丢弃待发射 plan（失败沿已消费，不会重排）；
+     *  capped = 清标记 + 连续计数归零（handledErr 保留——同一条失败保持静默，
+     *  手动重跑或新失败后才重新给自动续跑额度） */
     function monitorCancelPlan(id) {
       const st = monitorSessions.get(id);
-      if (st && st.plan) {
-        st.plan = null;
-        monitorRebuildItems(); // 立即重建快照并 emit
-      }
+      if (!st) return;
+      if (st.plan) st.plan = null;
+      else if (st.capped) {
+        st.capped = false;
+        st.continues = 0;
+      } else return;
+      monitorRebuildItems(); // 立即重建快照并 emit
     }
 
     /** 尾部自重叠扫描：返回累计文本末尾连续重复块的最大次数（块长在
@@ -7576,31 +7583,32 @@ ellipsis，窄列只截字不破版 */
       if (!cfg.monitorEnabled) return null;
       // 展示优先级：死循环链路本地态在前（正在发生），全局续跑器状态兜底
       let line = "";
-      let cancellable = false;
+      let cancelLabel = ""; // 空 = 不出钮；否则为钮文案（waiting=取消、capped=忽略）
       if (plan?.phase === "waiting") {
         const sec = Math.max(0, Math.ceil((plan.fireAt - now) / 1000));
         line = tf("monitorAutoIn", { err: tf("monitorRepeatErr"), sec: String(sec), n: String(loopBreaksRef.current + 1), max: String(cfg.monitorMaxAuto) });
-        cancellable = true;
+        cancelLabel = t("monitorCancel");
       } else if (plan?.phase === "stopping") {
         line = tf("monitorStopping");
       } else if (watcherItem?.phase === "waiting") {
         const sec = Math.max(0, Math.ceil((watcherItem.fireAt - now) / 1000));
         line = tf("monitorAutoIn", { err: tf("monitorErr429"), sec: String(sec), n: String(watcherItem.continues + 1), max: String(watcherItem.max) });
-        cancellable = true;
+        cancelLabel = t("monitorCancel");
       } else if (watcherItem?.phase === "capped") {
         line = tf("monitorCapped", { max: String(watcherItem.max) });
+        cancelLabel = t("monitorDismiss");
       }
       if (!line) return null;
       return jsxRuntime.jsxs("div", {
         className: "dshk-monitor-line",
         children: [
           jsxRuntime.jsx("span", { className: "dshk-monitor-text", children: line }),
-          cancellable
+          cancelLabel
             ? jsxRuntime.jsx("button", {
                 type: "button",
                 className: "dshk-monitor-cancel",
                 onClick: () => (plan ? setPlan(null) : monitorCancelPlan(sessionId)),
-                children: t("monitorCancel"),
+                children: cancelLabel,
               })
             : null,
         ],
@@ -9631,14 +9639,12 @@ ellipsis，窄列只截字不破版 */
                   : tf("monitorBgCapped", { title: x.title, max: String(x.max) });
                 return jsxRuntime.jsxs("div", { className: "dshk-monitor-line", children: [
                   jsxRuntime.jsx("span", { className: "dshk-monitor-text", children: line }),
-                  x.phase === "waiting"
-                    ? jsxRuntime.jsx("button", {
-                        type: "button",
-                        className: "dshk-monitor-cancel",
-                        onClick: () => monitorCancelPlan(x.id),
-                        children: t("monitorCancel"),
-                      })
-                    : null,
+                  jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-monitor-cancel",
+                    onClick: () => monitorCancelPlan(x.id),
+                    children: x.phase === "waiting" ? t("monitorCancel") : t("monitorDismiss"),
+                  }),
                 ] }, x.id);
               }),
             })
