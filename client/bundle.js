@@ -1317,44 +1317,76 @@ window.__ModuleLoader__.load({
       phoneRotateFail: "刷新失败：{error}",
       kcfgLoading: "正在读取配置…",
       kcfgUnavailable: "配置当前不可读写（宿主未提供该命名空间，或为进程内会话）。",
+      kcfgNeedHost: "宿主版本过旧：缺少官方设置表单组件，无法渲染配置页。",
       kcfgReadonly: "当前 profile 只读，修改无法保存。",
-      kcfgSaved: "已保存",
-      kcfgSaveFail: "保存失败：{error}",
+      kcfgSaveFail: "保存没有被接受，已保留修改供更正。",
+      kcfgSaving: "保存中…",
       kcfgSave: "保存",
-      kcfgDiscard: "放弃修改",
+      kcfgOverridden: "已覆盖",
+      kcfgReset: "恢复默认",
+      kcfgInvalidNumber: "请填数字；留空表示恢复默认。",
+      kcfgTabs: "配置分组",
       kcfgGroupFeatures: "功能开关",
       kcfgGroupMonitor: "会话监视与通知",
       kcfgGroupPhone: "手机访问",
       kcfgGroupVault: "知识库",
       kcfgGroupShortcuts: "快捷键",
       kcfgTerminalEnabled: "终端面板",
+      kcfgTerminalEnabledHint: "对话输入行出终端入口，面板停靠底部（引擎为官方 webTerminals）。",
       kcfgFileTreeEnabled: "文件树",
+      kcfgFileTreeEnabledHint: "侧栏文件树与文件打开入口的总开关。",
       kcfgSourceControlEnabled: "源代码管理",
+      kcfgSourceControlEnabledHint: "源代码管理签（状态/差异/提交图谱/分支）。",
       kcfgSkillsPageEnabled: "技能管理页",
+      kcfgSkillsPageEnabledHint: "侧栏「技能」管理页的入口。",
       kcfgSearchEnabled: "免费网页搜索",
+      kcfgSearchEnabledHint: "关 = 网页搜索转发官方付费渠道；开 = 免费引擎链。",
       kcfgSearchMaxResults: "搜索结果条数（1–8）",
+      kcfgSearchMaxResultsHint: "每次搜索保留的条数。",
       kcfgBrowserEnabled: "内置浏览器",
+      kcfgBrowserEnabledHint: "内置浏览器工具与面板；改后重启生效。",
       kcfgChatOpenLinkInBrowser: "对话链接改投内置浏览器",
+      kcfgChatOpenLinkInBrowserHint: "对话里点 http(s) 链接改在内置浏览器打开。",
       kcfgHideOfficialFilesEntry: "隐藏官方「工作区文件」入口",
+      kcfgHideOfficialFilesEntryHint: "那只是个目录按钮；隐藏后文件仍可从对话/文件树/搜索进入。",
       kcfgHideOfficialBrowserEntry: "隐藏官方「浏览器」入口",
+      kcfgHideOfficialBrowserEntryHint: "避免与内置浏览器重复。",
       kcfgUsageEnabled: "余额与用量芯片",
+      kcfgUsageEnabledHint: "composer 下方显示当前会话 provider 的余额/配额芯片。",
       kcfgNotifyEnabled: "会话桌面通知",
+      kcfgNotifyEnabledHint: "页面不在前台时，回合收尾/压缩完成/agent 提问弹桌面通知。",
       kcfgMonitorEnabled: "会话监视（429 续跑 / 死循环打断）",
+      kcfgMonitorEnabledHint: "监视列表内所有会话：429 限流自动续跑 + 当前会话死循环打断。",
       kcfgMonitorWaitMs: "429 等待毫秒（5000–600000）",
+      kcfgMonitorWaitMsHint: "429 限流后等待多少毫秒再自动续跑。",
       kcfgMonitorMaxAuto: "429 连续续跑上限（1–10）",
+      kcfgMonitorMaxAutoHint: "一轮正常收尾即清零。",
       kcfgMonitorRepeatThreshold: "死循环判定重复次数（2–10）",
+      kcfgMonitorRepeatThresholdHint: "流式输出尾部自重叠达到该次数即停止并发打断话术。",
       kcfgPhoneEnabled: "「手机访问」页入口",
+      kcfgPhoneEnabledHint: "侧栏「手机访问」页的可见性（网关启停在页内管）。",
       kcfgPhonePort: "手机访问端口（1–65535）",
+      kcfgPhonePortHint: "网关对外端口（绑定 0.0.0.0）。",
       kcfgPhoneRemoteDomain: "手机远程域名",
+      kcfgPhoneRemoteDomainHint: "远程访问域名（如内网穿透地址），留空只用局域网。",
       kcfgPhoneKeepGatewayOn: "网关常驻",
+      kcfgPhoneKeepGatewayOnHint: "页面关闭后网关继续跑。",
       kcfgVaultEnabled: "知识库（默认关）",
+      kcfgVaultEnabledHint: "开 = 右栏「知识库」签与只读索引/搜索；改后重启生效。",
       kcfgVaultRoot: "知识库根目录（绝对路径）",
+      kcfgVaultRootHint: "普通 md 目录，指向哪里读哪里；清空恢复默认根。",
       kcfgSidebarShortcut: "侧栏开合",
+      kcfgSidebarShortcutHint: "清空恢复 Ctrl+B。",
       kcfgRightbarShortcut: "右栏开合",
+      kcfgRightbarShortcutHint: "清空恢复 Ctrl+Alt+B。",
       kcfgTerminalShortcut: "终端",
+      kcfgTerminalShortcutHint: "清空恢复 Ctrl+/。",
       kcfgFileTreeShortcut: "文件树",
+      kcfgFileTreeShortcutHint: "清空恢复 Ctrl+,。",
       kcfgScShortcut: "源代码管理",
+      kcfgScShortcutHint: "清空恢复 Ctrl+Alt+.。",
       kcfgVaultShortcut: "知识库",
+      kcfgVaultShortcutHint: "清空恢复 Ctrl+Alt+K。",
       schedTab: "日程",
       schedToday: "今天",
       schedNoDue: "无期限",
@@ -1645,44 +1677,76 @@ window.__ModuleLoader__.load({
       phoneRotateFail: "Rotate failed: {error}",
       kcfgLoading: "Loading configuration…",
       kcfgUnavailable: "Configuration is unavailable right now (the host does not serve this namespace, or this is an in-process session).",
+      kcfgNeedHost: "The host is too old: official settings form components are missing, so this page cannot render.",
       kcfgReadonly: "The profile is read-only; changes cannot be saved.",
-      kcfgSaved: "Saved",
-      kcfgSaveFail: "Save failed: {error}",
+      kcfgSaveFail: "The save was not accepted; your edits were kept for correction.",
+      kcfgSaving: "Saving…",
       kcfgSave: "Save",
-      kcfgDiscard: "Discard changes",
+      kcfgOverridden: "Overridden",
+      kcfgReset: "Reset to default",
+      kcfgInvalidNumber: "Enter a number, or leave blank to use the default.",
+      kcfgTabs: "Configuration sections",
       kcfgGroupFeatures: "Features",
       kcfgGroupMonitor: "Session monitor & notifications",
       kcfgGroupPhone: "Phone access",
       kcfgGroupVault: "Vault",
       kcfgGroupShortcuts: "Shortcuts",
       kcfgTerminalEnabled: "Terminal panel",
+      kcfgTerminalEnabledHint: "Adds the terminal entry to the composer; the panel docks at the bottom (official webTerminals engine).",
       kcfgFileTreeEnabled: "File tree",
+      kcfgFileTreeEnabledHint: "Master switch for the sidebar file tree and file entries.",
       kcfgSourceControlEnabled: "Source control",
+      kcfgSourceControlEnabledHint: "The source control tab (status, diffs, commit graph, branches).",
       kcfgSkillsPageEnabled: "Skills manager page",
+      kcfgSkillsPageEnabledHint: "Entry for the skills manager page in the sidebar.",
       kcfgSearchEnabled: "Free web search",
+      kcfgSearchEnabledHint: "Off forwards web search to the official paid channel; on uses the free engine chain.",
       kcfgSearchMaxResults: "Search results (1–8)",
+      kcfgSearchMaxResultsHint: "How many results each search keeps.",
       kcfgBrowserEnabled: "Built-in browser",
+      kcfgBrowserEnabledHint: "Built-in browser tools and panel; takes effect after a restart.",
       kcfgChatOpenLinkInBrowser: "Open chat links in the built-in browser",
+      kcfgChatOpenLinkInBrowserHint: "http(s) links in chat open in the built-in browser.",
       kcfgHideOfficialFilesEntry: "Hide the official Workspace files entry",
+      kcfgHideOfficialFilesEntryHint: "That entry is just a directory button; files stay reachable from chat, the tree, and search.",
       kcfgHideOfficialBrowserEntry: "Hide the official Browser entry",
+      kcfgHideOfficialBrowserEntryHint: "Avoids duplicating the built-in browser.",
       kcfgUsageEnabled: "Balance & usage chip",
+      kcfgUsageEnabledHint: "Shows a balance/quota chip for the session's provider under the composer.",
       kcfgNotifyEnabled: "Session desktop notifications",
+      kcfgNotifyEnabledHint: "Desktop notifications on turn completion, compaction, or agent questions while the page is in the background.",
       kcfgMonitorEnabled: "Session monitor (429 retry / loop break)",
+      kcfgMonitorEnabledHint: "Watches every listed session: auto-resumes after 429 limits and breaks output loops in the open session.",
       kcfgMonitorWaitMs: "429 wait in ms (5000–600000)",
+      kcfgMonitorWaitMsHint: "Milliseconds to wait after a 429 before auto-resuming.",
       kcfgMonitorMaxAuto: "429 max consecutive retries (1–10)",
+      kcfgMonitorMaxAutoHint: "A cleanly finished round resets the count.",
       kcfgMonitorRepeatThreshold: "Loop detection repeats (2–10)",
+      kcfgMonitorRepeatThresholdHint: "Interrupts once the streaming tail overlaps itself this many times.",
       kcfgPhoneEnabled: "Show the Phone access page",
+      kcfgPhoneEnabledHint: "Visibility of the Phone access page (gateway start/stop lives in the page).",
       kcfgPhonePort: "Phone access port (1–65535)",
+      kcfgPhonePortHint: "Gateway port bound on 0.0.0.0.",
       kcfgPhoneRemoteDomain: "Phone remote domain",
+      kcfgPhoneRemoteDomainHint: "Remote access domain (e.g. a tunnel host); leave blank for LAN only.",
       kcfgPhoneKeepGatewayOn: "Keep gateway on",
+      kcfgPhoneKeepGatewayOnHint: "Keeps the gateway running after the page closes.",
       kcfgVaultEnabled: "Vault (off by default)",
+      kcfgVaultEnabledHint: "On = the Vault tab plus read-only index/search; takes effect after a restart.",
       kcfgVaultRoot: "Vault root directory (absolute path)",
+      kcfgVaultRootHint: "A plain md directory read as-is; blank restores the default root.",
       kcfgSidebarShortcut: "Toggle sidebar",
+      kcfgSidebarShortcutHint: "Blank restores Ctrl+B.",
       kcfgRightbarShortcut: "Toggle right bar",
+      kcfgRightbarShortcutHint: "Blank restores Ctrl+Alt+B.",
       kcfgTerminalShortcut: "Terminal",
+      kcfgTerminalShortcutHint: "Blank restores Ctrl+/.",
       kcfgFileTreeShortcut: "File tree",
+      kcfgFileTreeShortcutHint: "Blank restores Ctrl+,.",
       kcfgScShortcut: "Source control",
+      kcfgScShortcutHint: "Blank restores Ctrl+Alt+..",
       kcfgVaultShortcut: "Vault",
+      kcfgVaultShortcutHint: "Blank restores Ctrl+Alt+K.",
       schedTab: "Schedule",
       schedToday: "Today",
       schedNoDue: "No due date",
@@ -1982,25 +2046,20 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 .dshk-mbg-dot{flex:none;width:7px;height:7px;border-radius:999px;background:var(--dsw-alias-state-warning,#e2c08d)}
 .dshk-mbg-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:80;display:flex;flex-direction:column;gap:2px;min-width:300px;max-width:min(460px,92vw);padding:7px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-1));border:1px solid var(--dsw-alias-border-l1);border-radius:10px;box-shadow:var(--dsw-elevation-prominent,0 8px 24px rgba(0,0,0,.2))}
 .dshk-mbg-menu .dshk-monitor-cancel{margin-left:auto}
-/* 配置页（插件页 dsh-kit 行「配置」，plugins.row.config）：分组行式表单，
-   外观跟随宿主令牌；保存栏吸底右侧。 */
-.dshk-cfgp{display:flex;flex-direction:column;gap:14px;padding:4px 2px 8px;color:var(--dsw-alias-label-primary);font-size:13px}
-.dshk-cfgp-group{display:flex;flex-direction:column;gap:1px}
-.dshk-cfgp-grouptitle{margin:0 0 4px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary)}
-.dshk-cfgp-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:32px;padding:3px 8px;border-radius:7px}
-.dshk-cfgp-row:hover{background:var(--dsw-alias-fill-l1,transparent)}
-.dshk-cfgp-label{flex:1;min-width:0;color:var(--dsw-alias-label-primary)}
-.dshk-cfgp-ctl{flex:none;display:inline-flex;align-items:center}
-.dshk-cfgp-ctl input[type="text"],.dshk-cfgp-ctl input[type="number"]{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:4px 8px;border-radius:6px;min-width:0}
-.dshk-cfgp-ctl input[type="text"]{width:260px;max-width:52vw}
-.dshk-cfgp-ctl input[type="number"]{width:110px}
-.dshk-cfgp-ctl input:disabled{opacity:.5;cursor:default}
-.dshk-cfgp-actions{position:sticky;bottom:0;display:flex;align-items:center;gap:8px;justify-content:flex-end;padding:10px 2px 2px;background:linear-gradient(to top,var(--dsw-alias-bg-layer-1) 70%,transparent)}
-.dshk-cfgp-hint{margin-right:auto;font-size:11px;color:var(--dsw-alias-label-tertiary)}
-.dshk-cfgp-btn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;padding:6px 14px;border-radius:7px;cursor:pointer}
-.dshk-cfgp-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-cfgp-btn:disabled{opacity:.5;cursor:default}
-.dshk-cfgp-btn-primary{border-color:transparent;background:var(--dsw-alias-brand-primary,#4c6fff);color:var(--dsw-alias-bg-base,#fff)}
+/* 配置页（插件页 dsh-kit 行「配置」，plugins.row.config）：字段控件用官方
+   SettingsForm/SettingsValueField/Switch/SegmentedTabs（自带样式），这里只补
+   bool 字段行（对齐官方 .field 的节奏：12px 上下距 + 相邻分隔线）与页签间距。 */
+.dshk-cfgp{display:flex;flex-direction:column;gap:12px;padding:4px 2px 8px;color:var(--dsw-alias-label-primary);font-size:13px}
+.dshk-cfgp-tabs{flex:none}
+.dshk-cfgp-fields > * + *{border-top:.5px solid var(--dsw-alias-border-l2)}
+.dshk-cfgp-bfield{display:flex;flex-direction:column;gap:6px;padding:12px 0}
+.dshk-cfgp-bhead{display:flex;align-items:center;gap:8px}
+.dshk-cfgp-blabel{flex:1;min-width:0;font-size:13px;font-weight:500;line-height:1.5;color:var(--dsw-alias-label-primary)}
+.dshk-cfgp-badges{display:inline-flex;align-items:center;gap:8px}
+.dshk-cfgp-reset{border:none;background:none;padding:0;font:inherit;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.dshk-cfgp-reset:hover:not(:disabled){color:var(--dsw-alias-label-primary)}
+.dshk-cfgp-reset:disabled{cursor:default}
+.dshk-cfgp-hintline{margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}
 /* 知识库（vault）：工具条+目录树投侧栏索引宿主，页编辑器投右栏 pane 宿主（拆两半 portal）。 */
    「选库进入阅读」——空间=顶层目录，树懒加载，[[wikilink]] 页内跳转带历史 */
 .dshk-vault{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
@@ -10355,61 +10414,73 @@ ellipsis，窄列只截字不破版 */
     // ─────────── 配置页（0.1.7 plugins.row.config）───────────
     // 插件页（侧栏「插件」）dsh-kit 行的「配置」控件进这里：页面宿主按
     // rowId（=entry id「dsh-kit」）绑定宿主命名空间，经 props.form 给已受理值
-    // （form.state）与原子写回（form.mutate）。字段清单与 src/index.ts 的 Config
-    // schema 同源（render-check 钉住）。草稿本地自持，只有「保存」才写入——
-    // 离开页面即丢，符合页面宿主「离开丢弃暂存」的约定；保存成功后 entry
-    // 由宿主重启，开关类改动即时生效。
+    // （form.state）与原子写回（form.mutate）。渲染走官方表单原语
+    // （SettingsForm/SettingsValueField/Switch/SegmentedTabs，与图标同一 require），
+    // SegmentedTabs 按 KIT_CFG_GROUPS 页签分组。草稿本地自持（bool 记布尔值，
+    // number/string 文本暂存、保存期解析），只有「保存」才写入——离开页面即丢
+    // （SettingsForm 卸载自动 onDiscard）；清空文本保存 = unset 回 schema 默认
+    // （快捷键消费端本就「非法/空 → 回默认」）。字段清单与 src/index.ts 的 Config
+    // schema 同源（render-check 钉住）。
     const KIT_CFG_FIELDS = [
-      { key: "terminalEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgTerminalEnabled" },
-      { key: "fileTreeEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgFileTreeEnabled" },
-      { key: "sourceControlEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSourceControlEnabled" },
-      { key: "skillsPageEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSkillsPageEnabled" },
-      { key: "searchEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSearchEnabled" },
-      { key: "searchMaxResults", type: "number", min: 1, max: 8, group: "kcfgGroupFeatures", labelKey: "kcfgSearchMaxResults" },
-      { key: "browserEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgBrowserEnabled" },
-      { key: "chatOpenLinkInBrowser", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgChatOpenLinkInBrowser" },
-      { key: "hideOfficialFilesEntry", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgHideOfficialFilesEntry" },
-      { key: "hideOfficialBrowserEntry", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgHideOfficialBrowserEntry" },
-      { key: "usageEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgUsageEnabled" },
-      { key: "monitorEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgMonitorEnabled" },
-      { key: "monitorWaitMs", type: "number", min: 5000, max: 600000, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorWaitMs" },
-      { key: "monitorMaxAuto", type: "number", min: 1, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorMaxAuto" },
-      { key: "monitorRepeatThreshold", type: "number", min: 2, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorRepeatThreshold" },
-      { key: "notifyEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgNotifyEnabled" },
-      { key: "phoneEnabled", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneEnabled" },
-      { key: "phonePort", type: "number", min: 1, max: 65535, group: "kcfgGroupPhone", labelKey: "kcfgPhonePort" },
-      { key: "phoneRemoteDomain", type: "string", group: "kcfgGroupPhone", labelKey: "kcfgPhoneRemoteDomain" },
-      { key: "phoneKeepGatewayOn", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneKeepGatewayOn" },
-      { key: "vaultEnabled", type: "bool", group: "kcfgGroupVault", labelKey: "kcfgVaultEnabled" },
-      { key: "vaultRoot", type: "string", group: "kcfgGroupVault", labelKey: "kcfgVaultRoot" },
-      { key: "sidebarShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgSidebarShortcut" },
-      { key: "rightbarShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgRightbarShortcut" },
-      { key: "terminalShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgTerminalShortcut" },
-      { key: "fileTreeShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgFileTreeShortcut" },
-      { key: "scShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgScShortcut" },
-      { key: "vaultShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgVaultShortcut" },
+      { key: "terminalEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgTerminalEnabled", hintKey: "kcfgTerminalEnabledHint" },
+      { key: "fileTreeEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgFileTreeEnabled", hintKey: "kcfgFileTreeEnabledHint" },
+      { key: "sourceControlEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSourceControlEnabled", hintKey: "kcfgSourceControlEnabledHint" },
+      { key: "skillsPageEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSkillsPageEnabled", hintKey: "kcfgSkillsPageEnabledHint" },
+      { key: "searchEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSearchEnabled", hintKey: "kcfgSearchEnabledHint" },
+      { key: "searchMaxResults", type: "number", min: 1, max: 8, group: "kcfgGroupFeatures", labelKey: "kcfgSearchMaxResults", hintKey: "kcfgSearchMaxResultsHint" },
+      { key: "browserEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgBrowserEnabled", hintKey: "kcfgBrowserEnabledHint" },
+      { key: "chatOpenLinkInBrowser", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgChatOpenLinkInBrowser", hintKey: "kcfgChatOpenLinkInBrowserHint" },
+      { key: "hideOfficialFilesEntry", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgHideOfficialFilesEntry", hintKey: "kcfgHideOfficialFilesEntryHint" },
+      { key: "hideOfficialBrowserEntry", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgHideOfficialBrowserEntry", hintKey: "kcfgHideOfficialBrowserEntryHint" },
+      { key: "usageEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgUsageEnabled", hintKey: "kcfgUsageEnabledHint" },
+      { key: "monitorEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgMonitorEnabled", hintKey: "kcfgMonitorEnabledHint" },
+      { key: "monitorWaitMs", type: "number", min: 5000, max: 600000, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorWaitMs", hintKey: "kcfgMonitorWaitMsHint" },
+      { key: "monitorMaxAuto", type: "number", min: 1, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorMaxAuto", hintKey: "kcfgMonitorMaxAutoHint" },
+      { key: "monitorRepeatThreshold", type: "number", min: 2, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorRepeatThreshold", hintKey: "kcfgMonitorRepeatThresholdHint" },
+      { key: "notifyEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgNotifyEnabled", hintKey: "kcfgNotifyEnabledHint" },
+      { key: "phoneEnabled", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneEnabled", hintKey: "kcfgPhoneEnabledHint" },
+      { key: "phonePort", type: "number", min: 1, max: 65535, group: "kcfgGroupPhone", labelKey: "kcfgPhonePort", hintKey: "kcfgPhonePortHint" },
+      { key: "phoneRemoteDomain", type: "string", group: "kcfgGroupPhone", labelKey: "kcfgPhoneRemoteDomain", hintKey: "kcfgPhoneRemoteDomainHint" },
+      { key: "phoneKeepGatewayOn", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneKeepGatewayOn", hintKey: "kcfgPhoneKeepGatewayOnHint" },
+      { key: "vaultEnabled", type: "bool", group: "kcfgGroupVault", labelKey: "kcfgVaultEnabled", hintKey: "kcfgVaultEnabledHint" },
+      { key: "vaultRoot", type: "string", group: "kcfgGroupVault", labelKey: "kcfgVaultRoot", hintKey: "kcfgVaultRootHint" },
+      { key: "sidebarShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgSidebarShortcut", hintKey: "kcfgSidebarShortcutHint" },
+      { key: "rightbarShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgRightbarShortcut", hintKey: "kcfgRightbarShortcutHint" },
+      { key: "terminalShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgTerminalShortcut", hintKey: "kcfgTerminalShortcutHint" },
+      { key: "fileTreeShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgFileTreeShortcut", hintKey: "kcfgFileTreeShortcutHint" },
+      { key: "scShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgScShortcut", hintKey: "kcfgScShortcutHint" },
+      { key: "vaultShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgVaultShortcut", hintKey: "kcfgVaultShortcutHint" },
     ];
-    /** KIT_CFG_FIELDS 的分组顺序（组名键也用于 t() 取组标题） */
+    /** KIT_CFG_FIELDS 的分组顺序（组名键也用于 t() 取组标题/页签文案） */
     const KIT_CFG_GROUPS = ["kcfgGroupFeatures", "kcfgGroupMonitor", "kcfgGroupPhone", "kcfgGroupVault", "kcfgGroupShortcuts"];
-    /** 两个值是否 JSON 意义上不同（数字统一比较，避免 "3" 与 3 抖动） */
-    function kitCfgDiffers(a, b) {
-      if (a === b) return false;
-      if (typeof a === "number" && typeof b === "number") return a !== b;
-      return JSON.stringify(a ?? null) !== JSON.stringify(b ?? null);
-    }
+    // 官方表单原语：与图标同源（primitives 随宿主前端注册进 ModuleLoader）。老宿主
+    // primitives 缺这些成员时配置页降级为提示，不影响其余功能。
+    const dswCfgUi = dswPrimIcons
+      && typeof dswPrimIcons.SettingsForm === "function"
+      && typeof dswPrimIcons.SettingsValueField === "function"
+      && typeof dswPrimIcons.Switch === "function"
+      && typeof dswPrimIcons.SegmentedTabs === "function"
+      && typeof dswPrimIcons.Tag === "function"
+      ? dswPrimIcons : null;
     /**
-     * dsh-kit 行配置页。props = { view, form }：view "summary" 返回 null（行描述
-     * 已有）；form 缺席/loading/unavailable 时给一行说明。ready 时按
-     * KIT_CFG_FIELDS 分组渲染草稿表单，「保存」把差异字段一次 mutate 写回
-     * （带读取时的 revision 做围栏），「放弃修改」丢草稿。
+     * dsh-kit 行配置页（官方表单形态）。props = { view, form }：view "summary"
+     * 返回 null（行描述已有）；form 缺席/loading/unavailable 或 primitives 缺官方
+     * 表单成员时给一行说明。ready 时 SegmentedTabs 页签分组：bool 走 Switch 行、
+     * number/string 走 SettingsValueField（文本暂存），SettingsForm 出只读横幅与
+     * 保存钮（dirty/invalid/saving 挡保存）；「恢复默认」暂记 unset，保存后回
+     * schema 默认。保存把差异字段一次 mutate 写回（带读取时的 revision 围栏），
+     * 未被接受保留草稿供更正；成功后 entry 由宿主热提交（volatile），重拉快照
+     * 喂门控，开关类改动即时生效。
      */
     function KitConfigPage(props) {
       react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
       const view = props && props.view;
       const form = props && props.form;
       const snap = form ? form.state : null;
-      const [draft, setDraft] = react.useState(null); // 仅存改动过的字段
+      const [draft, setDraft] = react.useState(null); // 草稿：bool={set}；number/string={text}
       const [saving, setSaving] = react.useState(false);
+      const [failed, setFailed] = react.useState(false);
+      const [tab, setTab] = react.useState(KIT_CFG_GROUPS[0]);
       // 命名空间换版（保存成功/别处改动）且无未保存草稿时不需要动作——快照
       // 由页面宿主随渲染下发，draft 只按字段覆盖，不整包重置
       if (view === "summary") return null;
@@ -10418,25 +10489,46 @@ ellipsis，窄列只截字不破版 */
         return jsxRuntime.jsx("div", { className: "dshk-cfgp", children:
           jsxRuntime.jsx("div", { className: "dshk-note", children: msg }) });
       }
+      if (!dswCfgUi) {
+        return jsxRuntime.jsx("div", { className: "dshk-cfgp", children:
+          jsxRuntime.jsx("div", { className: "dshk-note", children: t("kcfgNeedHost") }) });
+      }
       const base = snap.value;
-      const setField = (key, value) => {
+      const writable = snap.writable !== false;
+      const draftOf = (key) => (draft && Object.prototype.hasOwnProperty.call(draft, key) ? draft[key] : null);
+      // entry null = 撤销该字段的草稿；改回与受理值同文/同值也走撤销（不是记同值覆盖）。
+      // 官方语义：失败提示由下一次编辑或保存清除
+      const stage = (key, entry) => {
+        setFailed(false);
         setDraft((prev) => {
           const next = { ...(prev ?? {}) };
-          // 改回与受理值一致 = 撤销该字段的草稿（不是记一个同值覆盖）
-          if (!kitCfgDiffers(value, base[key])) delete next[key];
-          else next[key] = value;
+          if (entry == null) delete next[key];
+          else next[key] = entry;
           return Object.keys(next).length > 0 ? next : null;
         });
       };
-      const dirtyCount = draft ? Object.keys(draft).length : 0;
-      const writable = snap.writable !== false;
+      const baseText = (f) => (base[f.key] == null ? "" : String(base[f.key]));
+      const numBad = (f, d) => f.type === "number" && d != null && d.text.trim() !== "" && !Number.isFinite(Number(d.text));
+      const invalid = KIT_CFG_FIELDS.some((f) => numBad(f, draftOf(f.key)));
       const save = async () => {
-        if (!draft || dirtyCount === 0 || !writable || saving) return;
+        if (!draft || !writable || saving || invalid) return;
+        // bool → set；number 空串 → unset、有限数 → set 截断整数（非法草稿挡在
+        // invalid）；string 空 → unset、否则 set 原文。unset = 回 schema 默认
+        const ops = [];
+        for (const f of KIT_CFG_FIELDS) {
+          const d = draftOf(f.key);
+          if (!d) continue;
+          if (f.type === "bool") ops.push({ op: "set", path: [f.key], value: d.set });
+          else if (f.type === "number") {
+            const txt = d.text.trim();
+            if (txt === "") ops.push({ op: "unset", path: [f.key] });
+            else ops.push({ op: "set", path: [f.key], value: Math.trunc(Number(txt)) });
+          } else if (d.text === "") ops.push({ op: "unset", path: [f.key] });
+          else ops.push({ op: "set", path: [f.key], value: d.text });
+        }
+        if (ops.length === 0) { setDraft(null); return; }
         setSaving(true);
         try {
-          const ops = KIT_CFG_FIELDS
-            .filter((f) => Object.prototype.hasOwnProperty.call(draft, f.key))
-            .map((f) => ({ op: "set", path: [f.key], value: draft[f.key] }));
           const ok = await form.mutate(ops, snap.revision);
           if (ok) {
             setDraft(null);
@@ -10447,78 +10539,71 @@ ellipsis，窄列只截字不破版 */
             } catch {
               // 重拉失败不动快照：下次页面刷新自然取到
             }
-            flashToast(t("kcfgSaved"));
           } else {
-            flashToast(tf("kcfgSaveFail", { error: "rejected" }));
+            setFailed(true); // 草稿保留供更正（官方同语义）
           }
-        } catch (error) {
-          flashToast(tf("kcfgSaveFail", { error: String(error?.message ?? error) }));
+        } catch {
+          setFailed(true);
         } finally {
           setSaving(false);
         }
       };
-      const controlOf = (f) => {
-        const cur = draft && Object.prototype.hasOwnProperty.call(draft, f.key) ? draft[f.key] : base[f.key];
-        if (f.type === "bool") {
-          return jsxRuntime.jsx("input", {
-            type: "checkbox",
-            checked: cur === true,
-            disabled: !writable || saving,
-            onChange: (e) => setField(f.key, e.currentTarget.checked),
-          });
-        }
-        if (f.type === "number") {
-          return jsxRuntime.jsx("input", {
-            type: "number",
-            value: typeof cur === "number" ? String(cur) : "",
-            min: f.min,
-            max: f.max,
-            step: 1,
-            disabled: !writable || saving,
-            onChange: (e) => {
-              const raw = e.currentTarget.value;
-              if (raw === "") { setField(f.key, null); return; } // 清空 = 暂记 null，保存时被 schema 拒绝比静默改值好
-              const n = Number(raw);
-              if (Number.isFinite(n)) setField(f.key, Math.trunc(n));
-            },
-          });
-        }
-        return jsxRuntime.jsx("input", {
-          type: "text",
-          value: typeof cur === "string" ? cur : "",
-          disabled: !writable || saving,
-          onChange: (e) => setField(f.key, e.currentTarget.value),
-        });
+      const boolRow = (f) => {
+        const d = draftOf(f.key);
+        const dis = !writable || saving;
+        return jsxRuntime.jsxs("div", { className: "dshk-cfgp-bfield", children: [
+          jsxRuntime.jsxs("div", { className: "dshk-cfgp-bhead", children: [
+            jsxRuntime.jsx("span", { className: "dshk-cfgp-blabel", children: t(f.labelKey) }),
+            d ? jsxRuntime.jsxs("span", { className: "dshk-cfgp-badges", children: [
+              jsxRuntime.jsx(dswCfgUi.Tag, { tone: "neutral", children: t("kcfgOverridden") }),
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-cfgp-reset", disabled: dis, onClick: () => stage(f.key, null), children: t("kcfgReset") }),
+            ] }) : null,
+            jsxRuntime.jsx(dswCfgUi.Switch, {
+              checked: d ? d.set : base[f.key] === true,
+              label: t(f.labelKey),
+              disabled: dis,
+              onChange: (next) => stage(f.key, next === (base[f.key] === true) ? null : { set: next }),
+            }),
+          ] }),
+          jsxRuntime.jsx("p", { className: "dshk-cfgp-hintline", children: t(f.hintKey) }),
+        ] }, f.key);
       };
-      const groups = KIT_CFG_GROUPS.map((g) => ({
-        title: t(g),
-        fields: KIT_CFG_FIELDS.filter((f) => f.group === g),
-      })).filter((g) => g.fields.length > 0);
+      const valueField = (f) => {
+        const d = draftOf(f.key);
+        return jsxRuntime.jsx(dswCfgUi.SettingsValueField, {
+          id: "dshk-cfgp-" + f.key,
+          label: t(f.labelKey),
+          hint: t(f.hintKey),
+          text: d ? d.text : baseText(f),
+          overridden: d != null,
+          invalid: numBad(f, d),
+          numeric: f.type === "number",
+          disabled: !writable || saving,
+          overriddenLabel: t("kcfgOverridden"),
+          resetLabel: t("kcfgReset"),
+          invalidLabel: t("kcfgInvalidNumber"),
+          onEdit: (txt) => stage(f.key, txt === baseText(f) ? null : { text: txt }),
+          onReset: () => stage(f.key, null),
+        }, f.key);
+      };
+      const active = KIT_CFG_GROUPS.includes(tab) ? tab : KIT_CFG_GROUPS[0];
+      const tabs = KIT_CFG_GROUPS.map((g) => ({ value: g, label: t(g), id: "dshk-cfgp-tab-" + g, panelId: "dshk-cfgp-panel-" + g }));
       return jsxRuntime.jsxs("div", { className: "dshk-cfgp", children: [
-        groups.map((g) => jsxRuntime.jsxs("div", { className: "dshk-cfgp-group", children: [
-          jsxRuntime.jsx("h4", { className: "dshk-cfgp-grouptitle", children: g.title }),
-          g.fields.map((f) => jsxRuntime.jsxs("div", { className: "dshk-cfgp-row", children: [
-            jsxRuntime.jsx("span", { className: "dshk-cfgp-label", children: t(f.labelKey) }),
-            jsxRuntime.jsx("span", { className: "dshk-cfgp-ctl", children: controlOf(f) }),
-          ] }, f.key)),
-        ] }, g.title)),
-        jsxRuntime.jsxs("div", { className: "dshk-cfgp-actions", children: [
-          !writable ? jsxRuntime.jsx("span", { className: "dshk-cfgp-hint", children: t("kcfgReadonly") }) : null,
-          jsxRuntime.jsx("button", {
-            type: "button",
-            className: "dshk-cfgp-btn",
-            disabled: !writable || saving || dirtyCount === 0,
-            onClick: () => setDraft(null),
-            children: t("kcfgDiscard"),
-          }),
-          jsxRuntime.jsx("button", {
-            type: "button",
-            className: "dshk-cfgp-btn dshk-cfgp-btn-primary",
-            disabled: !writable || saving || dirtyCount === 0,
-            onClick: save,
-            children: saving ? "…" : t("kcfgSave"),
-          }),
-        ] }),
+        jsxRuntime.jsx(dswCfgUi.SegmentedTabs, { items: tabs, value: active, onChange: setTab, label: t("kcfgTabs"), className: "dshk-cfgp-tabs" }),
+        jsxRuntime.jsx(dswCfgUi.SettingsForm, {
+          labels: {
+            unavailable: t("kcfgUnavailable"),
+            readOnly: t("kcfgReadonly"),
+            saveFailed: t("kcfgSaveFail"),
+            save: t("kcfgSave"),
+            saving: t("kcfgSaving"),
+          },
+          state: { available: true, writable, dirty: draft != null, invalid, saving, failed },
+          onSave: save,
+          onDiscard: () => setDraft(null),
+          children: jsxRuntime.jsx("div", { className: "dshk-cfgp-fields", id: "dshk-cfgp-panel-" + active, role: "tabpanel", "aria-label": t(active),
+            children: KIT_CFG_FIELDS.filter((f) => f.group === active).map((f) => (f.type === "bool" ? boolRow(f) : valueField(f))) }),
+        }),
       ] });
     }
 
