@@ -327,6 +327,18 @@ const mbgTrigger = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].classNa
 const mbgLabel = mbgTrigger && Array.isArray(mbgTrigger[2].children) ? mbgTrigger[2].children.find((ch) => typeof ch === "string") : null;
 check("MonitorBgAction 有后台会话出触发钮（429 + 计数=2）", !!out && typeof mbgLabel === "string" && mbgLabel.includes("429") && /2$/.test(mbgLabel));
 check("MonitorBgAction 浮层默认收起", !callLog.some((c) => c[2] && c[2].className === "dshk-mbg-menu"));
+// 浮层展开（useState #0=open）：waiting 条目出「取消」、capped 条目出「忽略」
+stateSeq = 0;
+stateStore.clear();
+stateStore.set(0, true);
+callLog = [];
+out = comps.MonitorBgAction();
+const mbgMenu = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-mbg-menu");
+const mbgLines = mbgMenu ? callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-monitor-line") : [];
+const mbgBtns = mbgLines.map((c) => c[2].children.find((ch) => ch && ch.props && ch.props.className === "dshk-monitor-cancel")).filter(Boolean);
+check("MonitorBgAction 浮层展开：两条目各带钮（waiting=取消、capped=忽略）", !!mbgMenu && mbgLines.length === 2 && mbgBtns.length === 2 && mbgBtns.some((b) => b.props.children === "Cancel") && mbgBtns.some((b) => b.props.children === "Dismiss"));
+stateSeq = 0;
+stateStore.clear();
 comps.monitorStore.snapshot = { items: [] };
 
 // 7.1c) 配置页（plugins.row.config）：字段清单与内置默认同源；summary 视图 null、
@@ -1318,7 +1330,7 @@ check("MonitorLine 空闲渲染无异常（null/条）", out === null || (typeof
     inputActions: { setDraft() {}, submit() {} },
     sessionId: "s1",
   });
-  check("MonitorLine 渲染 capped 条", typeof out === "object" && JSON.stringify(out).includes("pausing auto-continue"));
+  check("MonitorLine 渲染 capped 条 + 忽略钮", typeof out === "object" && JSON.stringify(out).includes("pausing auto-continue") && JSON.stringify(out).includes("Dismiss"));
   comps.monitorStore.snapshot = { items: [] };
 }
 
@@ -1453,6 +1465,37 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
   comps.monitorTickCore(s4, baseCfg, T0 + 82000);
   check("G 取消后手动重跑再失败：重新触发", itemOf("session-g4")?.phase === "waiting");
   comps.monitorSessions.delete("session-g4");
+
+  // —— 忽略按钮（capped）：清标记 + 计数归零；同一条失败保持静默（handledErr
+  //    保留），手动重跑后的新失败从零重新给自动续跑额度 ——
+  const r4b = { id: "session-g4b", running: true, err: null };
+  const cfg4b = { ...baseCfg, monitorMaxAuto: 2 };
+  const s4b = mkSessions([r4b]);
+  comps.monitorTickCore(s4b, cfg4b, T0 - 1000); // 基线：运行中
+  for (let round = 0; round < 2; round++) {
+    r4b.running = false;
+    r4b.err = "429: rate limited";
+    comps.monitorTickCore(s4b, cfg4b, T0 + round * 100000);
+    comps.monitorTickCore(s4b, cfg4b, T0 + round * 100000 + 60001);
+    r4b.running = true;
+    comps.monitorTickCore(s4b, cfg4b, T0 + round * 100000 + 61000);
+  }
+  r4b.running = false;
+  r4b.err = "429: rate limited";
+  comps.monitorTickCore(s4b, cfg4b, T0 + 300000);
+  check("G 忽略前 capped 在场", itemOf("session-g4b")?.phase === "capped");
+  comps.monitorCancelPlan("session-g4b");
+  check("G 忽略后条目清除且标记清、计数归零", itemOf("session-g4b") === undefined && comps.monitorSessions.get("session-g4b")?.capped === false && comps.monitorSessions.get("session-g4b")?.continues === 0);
+  comps.monitorTickCore(s4b, cfg4b, T0 + 360000);
+  check("G 忽略后同一条失败保持静默（不重排不发续跑）", itemOf("session-g4b") === undefined && r4b.prompts === 2);
+  r4b.err = null;
+  r4b.running = true; // 用户手动重跑（运行即清记账）
+  comps.monitorTickCore(s4b, cfg4b, T0 + 400000);
+  r4b.running = false;
+  r4b.err = "429: rate limited";
+  comps.monitorTickCore(s4b, cfg4b, T0 + 420000);
+  check("G 忽略后手动重跑再失败：重新排计划且计数从零起", itemOf("session-g4b")?.phase === "waiting" && itemOf("session-g4b")?.continues === 0);
+  comps.monitorSessions.delete("session-g4b");
 
   // —— 到点时回合已被用户手动跑起来：放弃本次（不重复发）——
   const r5 = { id: "session-g5", running: true, err: null };
