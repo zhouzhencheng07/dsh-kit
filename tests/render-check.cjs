@@ -44,6 +44,18 @@ const jsxRuntimeStub = {
   jsx: (type, props) => { callLog.push(["jsx", type, props]); return { type, props, $$dshk: "jsx" }; },
   jsxs: (type, props) => { callLog.push(["jsxs", type, props]); return { type, props, $$dshk: "jsxs" }; },
 };
+// 官方表单原语桩：配置页渲染走宿主 primitives（SettingsForm/SettingsValueField/
+// Switch/SegmentedTabs/Tag）。桩环境不执行组件函数体，jsx 记下的 type 就是函数
+// 本身——断言按 primStub.<名> 的函数引用匹配 callLog，props 层打点（组件内部
+// 行为归宿主自己的测试管）。
+const jsxPrim = (tag) => (props) => jsxRuntimeStub.jsxs(tag, props);
+const primStub = {
+  SettingsForm: jsxPrim("dsw-settings-form"),
+  SettingsValueField: jsxPrim("dsw-settings-field"),
+  Switch: jsxPrim("dsw-switch"),
+  SegmentedTabs: jsxPrim("dsw-segmented-tabs"),
+  Tag: jsxPrim("dsw-tag"),
+};
 const windowStub = {
   __ModuleLoader__: { load: () => { /* noop */ } },
 };
@@ -89,6 +101,7 @@ const comps = harness((name) => {
   if (name === "react") return reactStub;
   if (name === "react/jsx-runtime") return jsxRuntimeStub;
   if (name === "react-dom") return reactDomStub;
+  if (name === "@deepseek-ai/dsh-client-ui-primitives") return primStub;
   throw new Error("unexpected require: " + name);
 });
 
@@ -316,8 +329,10 @@ check("MonitorBgAction 有后台会话出触发钮（429 + 计数=2）", !!out &
 check("MonitorBgAction 浮层默认收起", !callLog.some((c) => c[2] && c[2].className === "dshk-mbg-menu"));
 comps.monitorStore.snapshot = { items: [] };
 
-// 7.1c) 配置页（plugins.row.config）：字段清单与内置默认同源；
-// summary 视图 null、form 缺降级、ready 分组渲染、只读禁用
+// 7.1c) 配置页（plugins.row.config）：字段清单与内置默认同源；summary 视图 null、
+// form 缺降级、页签分组渲染（官方原语桩回显 props，按 dsw- 标签过滤）、草稿 ops
+// 组装（bool set / number 解析与清空 unset / 文本 set）、非法数字挡保存、只读禁用。
+// KitConfigPage 的 useState 序：0=draft 1=saving 2=failed 3=tab（桩按调用序存取）
 check("KIT_CFG_FIELDS 与 CFG_DEFAULTS 键同源", (() => {
   const a = comps.KIT_CFG_FIELDS.map((f) => f.key).sort();
   const b = Object.keys(comps.CFG_DEFAULTS).sort();
@@ -336,20 +351,80 @@ const fakeForm = {
   },
   mutate: async () => true,
 };
+// 渲染一个页签：预置 tab state（hook #3）后直调；sw()/vf() 取本页签的官方控件桩
+const renderCfgTab = (group, form) => {
+  stateSeq = 0;
+  stateStore.clear();
+  if (group != null) stateStore.set(3, group);
+  callLog = [];
+  return comps.KitConfigPage({ view: "page", form });
+};
+const cfgSw = () => callLog.filter((c) => c[1] === primStub.Switch);
+const cfgVf = () => callLog.filter((c) => c[1] === primStub.SettingsValueField);
+out = renderCfgTab(null, fakeForm); // 默认首组
+const cfgTabs = callLog.find((c) => c[1] === primStub.SegmentedTabs);
+check("KitConfigPage SegmentedTabs：5 组页签、默认首组、带可访问名", !!cfgTabs && cfgTabs[2].items.length === 5 && cfgTabs[2].value === "kcfgGroupFeatures" && typeof cfgTabs[2].label === "string" && cfgTabs[2].items.every((it) => typeof it.label === "string" && it.label.length > 0 && it.id === "dshk-cfgp-tab-" + it.value && it.panelId === "dshk-cfgp-panel-" + it.value));
+cfgTabs[2].onChange("kcfgGroupVault");
+check("KitConfigPage 页签切换落 state", stateStore.get(3) === "kcfgGroupVault");
+const cfgFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
+check("KitConfigPage SettingsForm 框架：labels/state/保存动作齐全", !!cfgFrm && typeof cfgFrm[2].onSave === "function" && typeof cfgFrm[2].onDiscard === "function" && cfgFrm[2].state.available === true && cfgFrm[2].state.writable === true && cfgFrm[2].state.dirty === false && !!cfgFrm[2].labels.save && !!cfgFrm[2].labels.readOnly && !!cfgFrm[2].labels.saveFailed);
+const cfgPanel = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-cfgp-fields");
+check("功能开关页签：10 Switch + 1 数值字段 + 面板 aria 挂到当前组", cfgSw().length === 10 && cfgVf().length === 1 && !!cfgPanel && cfgPanel[2].id === "dshk-cfgp-panel-kcfgGroupFeatures" && cfgPanel[2].role === "tabpanel");
+const cfgSmField = cfgVf().find((c) => c[2].id === "dshk-cfgp-searchMaxResults");
+check("数值字段回显受理值（searchMaxResults=3）", !!cfgSmField && cfgSmField[2].text === "3" && cfgSmField[2].numeric === true && cfgSmField[2].overridden === false);
+check("Switch 行回显布尔值且带说明文案", cfgSw()[0][2].checked === true && ["终端面板", "Terminal panel"].includes(cfgSw()[0][2].label));
+out = renderCfgTab("kcfgGroupMonitor", fakeForm);
+check("监视与通知页签：2 Switch + 3 数值字段", cfgSw().length === 2 && cfgVf().length === 3);
+out = renderCfgTab("kcfgGroupPhone", fakeForm);
+check("手机访问页签：2 Switch + 1 数值 + 1 文本（文本回显受理域名）", cfgSw().length === 2 && cfgVf().length === 2 && cfgVf().some((c) => c[2].id === "dshk-cfgp-phoneRemoteDomain" && c[2].text === "dsh.example.com"));
+out = renderCfgTab("kcfgGroupVault", fakeForm);
+check("知识库页签：1 Switch + 1 文本", cfgSw().length === 1 && cfgVf().length === 1);
+out = renderCfgTab("kcfgGroupShortcuts", fakeForm);
+check("快捷键页签：6 文本字段", cfgSw().length === 0 && cfgVf().length === 6);
+// 草稿 ops 组装：bool→set、number "4"→set 4、空文本→unset（回 schema 默认）；
+// 保存不受当前页签限制（草稿跨页签），同步前缀即完成 ops 与 revision 围栏
+let capturedOps = null;
+let capturedRev = null;
+const savingForm = {
+  state: fakeForm.state,
+  mutate: async (ops, rev) => { capturedOps = ops; capturedRev = rev; return true; },
+};
+stateSeq = 0;
+stateStore.clear();
+stateStore.set(0, { searchMaxResults: { text: "4" }, phoneRemoteDomain: { text: "" }, vaultEnabled: { set: false }, sidebarShortcut: { text: "Ctrl+9" } });
+stateStore.set(3, "kcfgGroupShortcuts");
+callLog = [];
+out = comps.KitConfigPage({ view: "page", form: savingForm });
+const saveFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
+check("KitConfigPage 有草稿时 dirty 置位", !!saveFrm && saveFrm[2].state.dirty === true);
+saveFrm[2].onSave();
+check("保存 ops：number set / 清空 unset / bool set / 文本 set（按字段表序）", JSON.stringify(capturedOps) === JSON.stringify([
+  { op: "set", path: ["searchMaxResults"], value: 4 },
+  { op: "unset", path: ["phoneRemoteDomain"] },
+  { op: "set", path: ["vaultEnabled"], value: false },
+  { op: "set", path: ["sidebarShortcut"], value: "Ctrl+9" },
+]));
+check("保存带读取时 revision 围栏", capturedRev === 7);
+// 非法数字草稿：字段 invalid + 框架 invalid 置位（SettingsForm blocked 挡保存）
+stateSeq = 0;
+stateStore.clear();
+stateStore.set(0, { searchMaxResults: { text: "abc" } });
 callLog = [];
 out = comps.KitConfigPage({ view: "page", form: fakeForm });
-const cfgRows = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-cfgp-row");
-const cfgChecks = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].type === "checkbox");
-const cfgNumbers = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].type === "number");
-const cfgTexts = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].type === "text");
-check("KitConfigPage 每字段一行（bool/number/string 控件齐全）", cfgRows.length === comps.KIT_CFG_FIELDS.length && cfgChecks.length === 15 && cfgNumbers.length === 5 && cfgTexts.length === 8);
-const cfgSave = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-cfgp-btn dshk-cfgp-btn-primary");
-check("KitConfigPage 保存钮无草稿时禁用", !!cfgSave && cfgSave[2].disabled === true);
+const badField = callLog.find((c) => c[1] === primStub.SettingsValueField && c[2].id === "dshk-cfgp-searchMaxResults");
+const badFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
+check("非法数字：字段 invalid + 框架 invalid 置位", !!badField && badField[2].invalid === true && !!badFrm && badFrm[2].state.invalid === true);
+// 只读：框架 writable=false、Switch 与数值字段禁用
+stateSeq = 0;
+stateStore.clear();
 callLog = [];
 out = comps.KitConfigPage({ view: "page", form: { state: { ...fakeForm.state, writable: false }, mutate: fakeForm.mutate } });
-const roHint = callLog.some((c) => (c[0] === "jsx") && c[2] && (c[2].children === "当前 profile 只读，修改无法保存。" || c[2].children === "The profile is read-only; changes cannot be saved."));
-const roDisabled = callLog.some((c) => (c[0] === "jsx") && c[2] && c[2].type === "checkbox" && c[2].disabled === true);
-check("KitConfigPage 只读态渲染提示且控件禁用", !!out && roHint && roDisabled);
+const roSwitch = callLog.find((c) => c[1] === primStub.Switch);
+const roField = callLog.find((c) => c[1] === primStub.SettingsValueField);
+const roFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
+check("KitConfigPage 只读态：框架 writable=false、控件禁用", !!out && roFrm[2].state.writable === false && roSwitch[2].disabled === true && roField[2].disabled === true);
+stateSeq = 0;
+stateStore.clear();
 callLog = [];
 out = comps.KitSurfaces({});
 check("KitSurfaces 渲染无异常（任务签已退役）", !!out && typeof out === "object");
