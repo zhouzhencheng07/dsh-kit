@@ -6812,6 +6812,9 @@ ellipsis，窄列只截字不破版 */
      * 各家高峰时段（本地时区，仅工作日，[起,止) 分钟数）：
      *   DeepSeek 工作日 9:00–12:00、14:00–18:00；z.ai 工作日 14:00–18:00；
      *   opencode 无公开时段不标。高峰时芯片前加红色「峰」字提示限流风险。
+     * DeepSeek 峰谷补充（官方 2026-09-19 说明）：周六日全天、调休上班的周末、
+     *   中国法定节假日全天均按空闲时段计费——前两者被周末判定覆盖，落在工作日的
+     *   假期靠 USAGE_HOLIDAYS 免标；z.ai 无同类公开口径，不套用节假日豁免。
      */
     const USAGE_PEAK_WINDOWS = {
       deepseek: [
@@ -6820,11 +6823,40 @@ ellipsis，窄列只截字不破版 */
       ],
       zai: [[840, 1080]],
     };
+    /**
+     * 中国法定节假日（国务院办公厅年度安排，[起月,起日,止月,止日] 按年展开成日期集）。
+     * 只维护已公布的年份：过期年份退回「工作日即可能标峰」，仅提示失真，不影响
+     * 计费数字。2026 = 国办发明电〔2025〕7号；2027 安排公布后照式补一年。
+     */
+    const USAGE_HOLIDAYS = (() => {
+      const YEAR_RANGES = {
+        2026: [
+          [1, 1, 1, 3], // 元旦
+          [2, 15, 2, 23], // 春节
+          [4, 4, 4, 6], // 清明
+          [5, 1, 5, 5], // 劳动节
+          [6, 19, 6, 21], // 端午
+          [9, 25, 9, 27], // 中秋
+          [10, 1, 10, 7], // 国庆
+        ],
+      };
+      const set = new Set();
+      for (const [year, ranges] of Object.entries(YEAR_RANGES)) {
+        for (const [m1, d1, m2, d2] of ranges) {
+          for (let d = new Date(+year, m1 - 1, d1); d <= new Date(+year, m2 - 1, d2); d.setDate(d.getDate() + 1)) {
+            set.add(`${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`);
+          }
+        }
+      }
+      return set;
+    })();
+    const usageDayKey = (d) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
     function usageIsPeak(kind, now) {
       const wins = USAGE_PEAK_WINDOWS[kind];
       if (!wins) return false;
       const day = now.getDay();
-      if (day === 0 || day === 6) return false;
+      if (day === 0 || day === 6) return false; // 周末（含调休上班的周末）DeepSeek 全天按空闲计费
+      if (kind === "deepseek" && USAGE_HOLIDAYS.has(usageDayKey(now))) return false; // 法定节假日全天
       const mins = now.getHours() * 60 + now.getMinutes();
       return wins.some(([a, b]) => mins >= a && mins < b);
     }
