@@ -1645,7 +1645,7 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
 }
 
 // 10c2) 用量芯片峰谷判定（usageIsPeak 直测）：工作日双峰、周末与调休上班的周末
-//       全天免标、法定节假日（落在工作日的）全天免标；z.ai 不套用节假日豁免；
+//       全天免标、法定节假日（落在工作日的）全天免标；只有 deepseek 标峰；
 //       表过期年份退化回工作日双峰。
 {
   const at = (y, m, d, hh, mm) => new Date(y, m - 1, d, hh, mm);
@@ -1657,7 +1657,7 @@ check("空串安全", comps.monitorTailRepeatCount("") === 1);
   check("U 调休上班的周末（10-10 周六）全天非峰", comps.usageIsPeak("deepseek", at(2026, 10, 10, 10, 0)) === false);
   check("U 法定节假日工作日（中秋 9-25 周五）全天非峰", comps.usageIsPeak("deepseek", at(2026, 9, 25, 10, 0)) === false);
   check("U 法定节假日工作日（国庆 10-6 周二）全天非峰", comps.usageIsPeak("deepseek", at(2026, 10, 6, 15, 0)) === false);
-  check("U z.ai 不套用节假日豁免（中秋周五仍标峰）", comps.usageIsPeak("zai", at(2026, 9, 25, 15, 0)) === true);
+  check("U z.ai 不标峰（无公开口径，工作日峰点也不标）", comps.usageIsPeak("zai", at(2026, 9, 23, 15, 0)) === false);
   check("U 表外年份工作日照常标峰", comps.usageIsPeak("deepseek", at(2027, 1, 5, 10, 0)) === true);
   check("U opencode 无时段不标", comps.usageIsPeak("opencode", at(2026, 9, 23, 10, 0)) === false);
 }
