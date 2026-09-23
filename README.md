@@ -8,7 +8,7 @@
 ## 功能
 
 工作台住在**官方右侧边栏**（宿主 0.1.5+ 的 `sidebar.right`）：diff / 知识库 / 日程 /
-后台任务 / 浏览器各一张 dock 签，知识库签里再分文档签（一页一签）。工作区文件的查看
+浏览器各一张 dock 签，知识库签里再分文档签（一页一签）。工作区文件的查看
 走**官方文件预览**（kit 在其头部补一枚「下载到本机」）；工作区文件不做插件内编辑——
 编辑走 VS Code 或让 agent 改。
 索引类视图（文件树、源代码管理、知识库目录）共用左侧边栏一格，对话列常驻。
@@ -30,7 +30,7 @@
   数据结构化落盘 `$DSH_HOME/dsh-kit/schedule/`（一条一文件：`events/` + `entries/`，
   与望舒桌面端共目录——编辑与计时都归望舒端，插件只读展示）
 - **知识库**（工具行开关 / **Ctrl+Alt+K**，默认关）：默认地址开箱即用（数据目录下
-  `dsh-kit\vault`，可在设置改绝对路径）——左栏一行式搜索 + 目录树选页，右栏「知识库」
+  `dsh-kit\vault`，可在配置页改绝对路径）——左栏一行式搜索 + 目录树选页，右栏「知识库」
   签里每页一个文档签（可多开、✕ 单关），`[[双链]]` 页内跳转（`[[页#标题]]` 落到对应
   小节）+ 阅读条「目录/反链」；搜索一次搜两侧（笔记全文 + 笔记目录 + 库根 `library/`
   资料库里的文件与目录按名字匹配），资料库文件点开走官方右栏文件签（PDF 等不在面板里
@@ -44,10 +44,6 @@
   自动加序号；页签随改名／移动／删除同步搬走或关闭；
   与对话互通——聊天里的 vault 路径点击直达、树上「@」把页面/选区插进输入框；
   正文本身不做插件内编辑（写入归 agent 文件工具或你的本地编辑器），插件也不建骨架目录、不碰 git
-- **后台任务**（入口在右栏开始页条目与自动跟随）：列出会话运行中的后台任务，可查看
-  输出、结束任务（等同官方 `job_output`/`job_kill`）。输出随任务常显、按保留窗口留存
-  （最近 2MB），刷新页面或多开标签页都能重新读到，不与模型侧 `job_output` 抢量；
-  终态行的「关闭」= 从列表移除并释放那份保留窗口（此后刷新只剩一行空行）
 - **内置浏览器**（右栏「浏览器」签，默认开）：agent 以 7 个 `browser_*` 工具驱动系统 Edge
   （vendored playwright-core，专用持久 profile）——快照→动作→断言的 GUI 测试循环、
   截图（多模态模型直看，否则落盘）；面板显示 agent 浏览器的实时画面，
@@ -58,7 +54,7 @@
   3090，可改），默认每次启动关闭；局域网与远程双通道，HTTP/WS 全量透传
 - **网页搜索**（自 dsh-free-search 并入）：免 key 引擎链替换付费的 `deepseek-official`——
   专用引擎（GitHub / arXiv / StackExchange / HN，按查询特征参与）优先，其后通用引擎
-  Tavily（免 key）→ Bing → Sogou 逐个故障转移；可经设置卡开关与条数
+  Tavily（免 key）→ Bing → Sogou 逐个故障转移；可经配置页开关与条数
 - **会话监视**（默认开）：回合因 429 限流等可重试错误终态结束后，等待自动发送
   「继续」（连续自动续跑次数有上限）——覆盖所有会话，页面切后台也能续；只认「刚把
   这一轮打死的那个失败」，回合正常做完或被你手动停止时残留在会话里的旧 429 不会
@@ -68,8 +64,8 @@
   提交计划待批时弹桌面通知（浏览器 Notification API，点击通知回到对应会话）——页面切到
   后台标签/别的窗口、或事件发生在你没打开的那个会话时提醒；人正看着该会话时不打扰。
   限流自动续跑期间不会误报「完成」（真的停下时才提醒）；压缩通知覆盖打开过的会话
-  （官方只为当前会话拉历史，没打开过的会话看不到它的压缩）。权限在设置卡里一键申请
-  （未授权时退化为标签标题上的未读计数）
+  （官方只为当前会话拉历史，没打开过的会话看不到它的压缩）。通知权限首次使用需在
+  浏览器站点设置里允许（未授权时退化为标签标题上的未读计数）
 - **余额与用量**（默认关）：composer 下方状态带最右端显示一张芯片，跟随当前会话选中的模型
   provider——DeepSeek 出余额，OpenCode Go / GLM Coding Plan（z.ai）出全部窗口用量
   （`1% · 32% · 84%`，顺序为 5 小时/周/月），超 80% / 欠费变红；高峰时段显示红色「峰」标
@@ -78,9 +74,10 @@
   官方用量页链接。回合收尾即刷新，另每分钟轮询 + 手动刷新。
   API key 复用 dsh 模型配置里的凭证引用（`llm-pi-ai` providers），
   插件不做任何 key 录入；OpenCode / z.ai 的用量端点为非官方契约，上游改动只影响该芯片
-- **设置卡**：dsh-kit 配置卡——各功能独立开关、快捷键自定义（终端/文件树/源代码管理/
-  知识库/侧栏左右两键）、隐藏官方「工作区文件」入口、搜索结果条数、知识库目录、会话监视参数、
-  会话通知与通知权限、手机访问
+- **配置**：插件页（侧栏「插件」）dsh-kit 行的「配置」页——各功能独立开关、快捷键
+  自定义（终端/文件树/源代码管理/知识库/侧栏左右两键）、隐藏官方「工作区文件」入口、
+  搜索结果条数、知识库目录、会话监视参数、会话通知、手机访问；保存即写入
+  profile 并热生效（部分启动期门控在重启 dsh 后生效）
 
 ## 安装与更新
 
@@ -104,7 +101,7 @@ dsh plugin --profile web update dsh-kit
 
 本包声明了 `dsh.bundle.patch`，会被激活为 profile 的 bundle 层。安装/更新后重启
 `dsh web`：工具行出现文件树/源代码管理/知识库/终端四个开关，工作台以官方右侧边栏
-承载（五类 dock 签），AI 的 `web_search` 同时切到免费多源搜索。
+承载（四类 dock 签），AI 的 `web_search` 同时切到免费多源搜索。
 
 **宿主版本要求**：dsh ≥ 0.1.5（依赖官方右侧边栏服务 `sidebar.right`）。
 老宿主没有该服务时插件照常加载，但工作台签不会出现、入口按钮点了没有面板——
@@ -113,16 +110,17 @@ dsh plugin --profile web update dsh-kit
 ## 工作原理
 
 - `src/*.ts` → `dist/`（tsc 构建产物入库）：宿主半边——挂 `/tree`、`/read`、`/raw`
-  （Range/206）、`/fs/op`、`/upload`、`/git/*`、`/browser`（内置浏览器 WS）、`/jobs/*`、
-  `/schedule/*`、`/vault/*`（知识库）、`/skills`、`/phone/*`（手机网关）等端点
+  （Range/206）、`/fs/op`、`/upload`、`/git/*`、`/browser`（内置浏览器 WS）、
+  `/schedule/*`、`/vault/*`（知识库）、`/skills`、`/phone/*`（手机网关）、
+  `/config`（只读配置快照）等端点
 - `client/bundle.js`：浏览器半边（手写 ModuleLoader bundle，**零构建**）——
-  `conversation.input.left` 注册四个入口钮；官方右栏 `sidebarRightTabs` 注册五类 dock 签、
+  `conversation.input.left` 注册四个入口钮；官方右栏 `sidebarRightTabs` 注册四类 dock 签、
   pane 正文经 `sidebar.right.pane.tab` 提供；终端坞引擎为官方 `webTerminals` 服务；
-  设置卡注册进插件管理页 `plugins.bundle.config` 槽位
+  配置页注册进插件管理页 `plugins.row.config` 槽位（dsh-kit 行的「配置」控件）
 - `client/vendor/*`：xterm / TipTap 富文本 / KaTeX / qrcode，全部按需懒加载，
   由 `/dsh-kit/vendor/*` 静态伺服
 - `src/web-search.ts` + `src/engine-chain.ts` + `src/engines/*`：向 web seam 注册
-  `free-search` provider，受设置卡 `searchEnabled` 门控
+  `free-search` provider，受配置页 `searchEnabled` 门控
 - `cordis.patch.yml`：把 dsh-kit 插件行 insert 进 bundle 层，web 行 `searchProvider`
   改为 `free-search`
 - 宿主侧 `node-pty`/`ws`/`@deepseek-ai/*` 不声明依赖：运行时从 profile fallback

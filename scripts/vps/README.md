@@ -9,7 +9,7 @@
 
 - VPS 已装 caddy（官方包自带 systemd）与 frp 服务端；域名 A 记录指向 VPS。
 - 中国大陆节点需域名已 ICP 备案，否则换香港等境外节点。
-- PC 上 dsh-kit 设置卡「启用手机访问」已打开并重启过 dsh（否则 3090 没人听）。
+- PC 上 dsh-kit 配置页「手机访问端口」网关已启动并重启过 dsh（否则 3090 没人听）。
 
 ## 1. VPS 侧
 
@@ -48,4 +48,4 @@ sudo systemctl reload caddy
 | 远程打不开、局域网正常 | `ssh vps "curl -sI http://127.0.0.1:8443"` 通=frp 正常，查 caddy/域名/备案 |
 | frps 日志出现 token 错误 | 两端 auth.token 不一致 |
 | 手机一直 404 | 链接被轮换过——回 PC 面板重新生成再扫 |
-| 面板显示"网关未运行" | 设置卡开关没开或没重启 dsh；端口 3090 被占用也会这样（info.error 有说明） |
+| 面板显示"网关未运行" | 网关没启动或没重启 dsh；端口 3090 被占用也会这样（info.error 有说明） |
