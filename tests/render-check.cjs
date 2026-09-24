@@ -381,7 +381,7 @@ check("KitConfigPage 页签切换落 state", stateStore.get(3) === "kcfgGroupVau
 const cfgFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
 check("KitConfigPage SettingsForm 框架：labels/state/保存动作齐全", !!cfgFrm && typeof cfgFrm[2].onSave === "function" && typeof cfgFrm[2].onDiscard === "function" && cfgFrm[2].state.available === true && cfgFrm[2].state.writable === true && cfgFrm[2].state.dirty === false && !!cfgFrm[2].labels.save && !!cfgFrm[2].labels.readOnly && !!cfgFrm[2].labels.saveFailed);
 const cfgPanel = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-cfgp-fields");
-check("功能开关页签：10 Switch + 1 数值字段 + 面板 aria 挂到当前组", cfgSw().length === 10 && cfgVf().length === 1 && !!cfgPanel && cfgPanel[2].id === "dshk-cfgp-panel-kcfgGroupFeatures" && cfgPanel[2].role === "tabpanel");
+check("功能开关页签：9 Switch + 1 数值字段 + 面板 aria 挂到当前组", cfgSw().length === 9 && cfgVf().length === 1 && !!cfgPanel && cfgPanel[2].id === "dshk-cfgp-panel-kcfgGroupFeatures" && cfgPanel[2].role === "tabpanel");
 const cfgSmField = cfgVf().find((c) => c[2].id === "dshk-cfgp-searchMaxResults");
 check("数值字段回显受理值（searchMaxResults=3）", !!cfgSmField && cfgSmField[2].text === "3" && cfgSmField[2].numeric === true && cfgSmField[2].overridden === false);
 check("Switch 行回显布尔值且带说明文案", cfgSw()[0][2].checked === true && ["终端面板", "Terminal panel"].includes(cfgSw()[0][2].label));
