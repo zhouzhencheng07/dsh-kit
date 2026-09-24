@@ -2313,13 +2313,28 @@ export async function apply(ctx, config = {}) {
             });
             // ── 用量与余额（src/usage.ts）──
             // 发现式 provider（llm-pi-ai.providers + DEEPSEEK_API_KEY 兜底），三家上游
-            // 聚合给 composer 下方状态带的芯片。provider 配置现读（settings.get 可能因
-            // 注入时序拿不到服务，缺了回 null = 无卡可用），端点侧 usageEnabled 门控。
+            // 聚合给 composer 下方状态带的芯片。provider 配置请求时现读（服务缺位回
+            // null = 无卡可用），端点侧 usageEnabled 门控。
             const disposeUsage = registerUsageRoutes({
                 webServer: webCtx.webServer,
                 credentials: webCtx.credentials,
                 readSettings: () => readSettings(),
                 readProviderConfig: () => {
+                    // 0.1.7 起 entry 配置由 configEditor 读：inherited = bundle 层合成值，
+                    // override = profile patch（cordis.patch.yml）层，providers 浅合并后者优先
+                    try {
+                        const editor = ctx.get('configEditor');
+                        const row = editor?.configuration?.().find((r) => r.entry?.options?.id === 'llm-pi-ai');
+                        if (row) {
+                            const providers = {};
+                            for (const layer of [row.inherited, row.override]) {
+                                if (layer !== null && typeof layer === 'object')
+                                    Object.assign(providers, layer.providers);
+                            }
+                            return { providers };
+                        }
+                    }
+                    catch { /* 服务缺位/读取失败落老路径 */ }
                     try {
                         const settings = ctx.get('settings');
                         const value = settings?.get?.('llm-pi-ai');

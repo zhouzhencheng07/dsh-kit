@@ -1,6 +1,6 @@
 // dsh-kit 用量与余额宿主半边
 //
-// 从模型配置发现 provider（settings 的 llm-pi-ai 命名空间，providers.<id>.apiKeyEnv
+// 从模型配置发现 provider（llm-pi-ai entry 配置经宿主 configEditor 读，providers.<id>.apiKeyEnv
 // 是凭证引用名），经 credentials 服务按引用解析 key（每请求现读，改配置即生效、
 // key 不出宿主进程），聚合三家上游给浏览器芯片：
 //   deepseek  GET {base|api.deepseek.com}/user/balance    Bearer        余额（币种/总额/赠送/充值）
