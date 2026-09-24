@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Dock base",
-    "description": "Shared client base for components: kit endpoints, toast, clipboard, session-row helpers, config-page skeleton."
+    "description": "Shared base every component depends on (endpoints, cross-slot state, config-page skeleton) — runs with the kit; keep it on, disabling it stops the other components from loading."
   }
 }
