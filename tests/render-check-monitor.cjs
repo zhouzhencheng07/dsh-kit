@@ -71,16 +71,17 @@ const primStub = {
 };
 let callLog = [];
 
-// 1) dock（真实包）→ monitor 的共享面来源
-const dockExports = loadBundle(__dirname + "/../packages/dsh-kit-dock/client/bundle.js", (name) => {
+// 1) 共享底座（kitBase 内联在根包 client bundle）→ monitor 的共享面来源
+const dockExports = loadBundle(__dirname + "/../client/bundle.js", (name) => {
   if (name === "react") return reactStub;
   if (name === "react/jsx-runtime") return jsxRuntimeStub;
+  if (name === "react-dom") return reactDomStub;
   if (name === "@deepseek-ai/dsh-client-ui-primitives") return primStub;
   throw new Error("unexpected dock require: " + name);
 });
 check(
-  "dock 底座导出面齐全（kit 三件套/轻提示/剪贴板/locale store/mainRowOf/createConfigPage）",
-  [dockExports.kitGetJson, dockExports.kitJson, dockExports.flashToast, dockExports.writeClipboard, dockExports.resolveZh, dockExports.subscribeLocale, dockExports.getLocaleVersion, dockExports.apply, dockExports.mainRowOf, dockExports.createConfigPage].every(
+  "底座共享面齐全（kit 三件套/轻提示/剪贴板/locale store/mainRowOf/createConfigPage）",
+  [dockExports.kitGetJson, dockExports.kitJson, dockExports.flashToast, dockExports.writeClipboard, dockExports.resolveZh, dockExports.subscribeLocale, dockExports.getLocaleVersion, dockExports.mainRowOf, dockExports.createConfigPage].every(
     (fn) => typeof fn === "function",
   ),
 );
@@ -89,7 +90,7 @@ const comps = loadBundle(__dirname + "/../packages/dsh-kit-monitor/client/bundle
   if (name === "react") return reactStub;
   if (name === "react/jsx-runtime") return jsxRuntimeStub;
   if (name === "react-dom") return reactDomStub;
-  if (name === "dsh-kit-dock") return dockExports;
+  if (name === "dsh-kit") return dockExports;
   if (name === "@deepseek-ai/dsh-client-ui-primitives") return primStub;
   throw new Error("unexpected require: " + name);
 });

@@ -13,8 +13,6 @@
     # 行id + 模块名」，id 与包名同文会两行重复
     - id: kit
       name: dsh-kit
-    - id: dock
-      name: dsh-kit-dock
     - id: files
       name: dsh-kit-files
     - id: monitor

@@ -25,7 +25,7 @@ window.__ModuleLoader__.load({
     const react = require("react");
     const jsxRuntime = require("react/jsx-runtime");
     const reactDom = require("react-dom");
-    const dock = require("dsh-kit-dock");
+    const dock = require("dsh-kit");
     const { kitJson, resolveZh, subscribeLocale, getLocaleVersion } = dock;
     let dswPrimIcons = null;
     try { dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 回退自绘 */ }

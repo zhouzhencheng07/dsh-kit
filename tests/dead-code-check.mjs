@@ -53,11 +53,11 @@ if (cssStart < 0 || cssEnd < 0) die('找不到 UI_CSS 锚点（client/bundle.js 
 // 锚点必须认准那一条（文件里还有别的 return {...}，比如 jsx 桩）
 const renderPath = path.join(root, 'tests', 'render-check.cjs')
 const renderSrc = fs.existsSync(renderPath) ? fs.readFileSync(renderPath, 'utf8') : ''
-const EXPORT_ANCHOR = 'return { vaultSideSlot'
+const EXPORT_ANCHOR = 'return Object.assign({ vaultSideSlot'
 const exportAt = renderSrc.indexOf(EXPORT_ANCHOR)
 if (renderSrc !== '' && exportAt < 0) die('找不到 render-check 导出表锚点（测试结构变了，哨兵要同步）')
 const exportedNames = new Set(
-  (exportAt < 0 ? '' : renderSrc.slice(exportAt + 'return {'.length, renderSrc.indexOf('};', exportAt)))
+  (exportAt < 0 ? '' : renderSrc.slice(exportAt + 'return Object.assign({'.length, renderSrc.indexOf('}, kitBase);', exportAt)))
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s !== ''),
