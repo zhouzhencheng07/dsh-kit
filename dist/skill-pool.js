@@ -28,8 +28,8 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { recycleDelete } from "./recycle.js";
-import { sameOrigin } from "./web-guard.js";
+import { recycleDelete } from 'dsh-kit-core';
+import { sameOrigin } from 'dsh-kit-core';
 const POOL_DIRNAME = 'skill-pool';
 const PHYSICAL_ROOTS = [
     { id: 'project-dsh', group: 'workspace', rank: 100 },

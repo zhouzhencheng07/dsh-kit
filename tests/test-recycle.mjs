@@ -1,4 +1,4 @@
-// 回收站删除单测：跑 src/recycle.ts（node 22+ 直接吃 TS，无需先 build）。
+// 回收站删除单测：跑 packages/dsh-kit-core/src/recycle.ts（node 22+ 直接吃 TS，无需先 build）。
 // 用法：node tests/test-recycle.mjs
 // Windows 上做真删除（进回收站、逐项对账）；其它平台只验证「返回全 false」契约。
 import assert from 'node:assert/strict'
@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { recycleDelete, recycleDeleteBatch } from '../src/recycle.ts'
+import { recycleDelete, recycleDeleteBatch } from '../packages/dsh-kit-core/src/recycle.ts'
 
 let failed = 0
 const check = (label, ok) => {

@@ -76,7 +76,8 @@ if (!global.document) {
     visibilityState: "visible",
     addEventListener: () => {},
     removeEventListener: () => {},
-    createElement: () => ({ className: "", textContent: "", setAttribute: () => {}, removeAttribute: () => {}, remove: () => {} }),
+    createElement: () => ({ className: "", textContent: "", setAttribute: () => {}, removeAttribute: () => {}, remove: () => {}, style: {} }),
+    head: { appendChild: () => {} },
     body: { classList: { add() {}, remove() {} }, appendChild: () => {} },
   };
 }
@@ -86,6 +87,24 @@ if (!global.window) {
 if (!global.location) {
   global.location = { protocol: "http:", host: "127.0.0.1:3081" };
 }
+
+// 2.5) 加载真实的 dsh-kit-dock client bundle（组件间共享底座）：根 factory 在
+//      materialization 时 require("dsh-kit-dock")，这里把真包的导出面喂进去——
+//      底座代码由此也过一遍本检查（factory 体内的 CSS 注入等副作用一并执行）
+const dockSrc = fs.readFileSync(__dirname + "/../packages/dsh-kit-dock/client/bundle.js", "utf8").replace(/\r\n/g, "\n");
+const dockFactoryStart = dockSrc.indexOf("factory: (require) => {");
+if (dockFactoryStart < 0) { console.log("FATAL: dock bundle no factory"); process.exit(2); }
+const dockTail = dockSrc.lastIndexOf("  },\n});");
+const dockBody = dockSrc.slice(dockFactoryStart + "factory: (require) => {".length, dockTail);
+const dockFactory = new Function("require", dockBody);
+const dockExports = dockFactory(() => {
+  throw new Error("dock bundle requires nothing");
+});
+const dockOk = [dockExports.kitGetJson, dockExports.kitPostJson, dockExports.kitJson, dockExports.flashToast, dockExports.writeClipboard].every(
+  (fn) => typeof fn === "function",
+);
+console.log((dockOk ? "PASS  " : "FAIL  ") + "dock 底座导出面齐全（kitGetJson/kitPostJson/kitJson/flashToast/writeClipboard）");
+if (!dockOk) process.exitCode = 1;
 
 // 3) 组装可执行的 factory 闭包，并导出组件（替换防 early-return）；
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
@@ -102,6 +121,7 @@ const comps = harness((name) => {
   if (name === "react/jsx-runtime") return jsxRuntimeStub;
   if (name === "react-dom") return reactDomStub;
   if (name === "@deepseek-ai/dsh-client-ui-primitives") return primStub;
+  if (name === "dsh-kit-dock") return dockExports;
   throw new Error("unexpected require: " + name);
 });
 

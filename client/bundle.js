@@ -50,6 +50,10 @@ window.__ModuleLoader__.load({
     let jsxRuntime = require("react/jsx-runtime");
     let reactDom = require("react-dom");
 
+    // 组件间共享底座（kit 端点调用/轻提示/剪贴板）：bundle patch 保证 dock entry
+    // 在场，客户端模块系统按依赖图先物化它
+    const dock = require("dsh-kit-dock");
+
     // ─────────── 官方 primitives 图标复用（能复用就不自绘）───
     // primitives 随宿主前端注册进 ModuleLoader（官方各 client lib 同款 require）；
     // 取不到（0.1.2 老宿主/异常环境）时各图标回退自绘版本，不挡启动。
@@ -2357,8 +2361,6 @@ ellipsis，窄列只截字不破版 */
   [class*="_3e4SsG_item"][class*="_3e4SsG_active"]{background:var(--dsw-alias-interactive-bg-hover)}
 }
 /* 轻提示（双击复制路径等的单例浮层） */
-.dshk-toast{position:fixed;left:50%;bottom:56px;transform:translateX(-50%) translateY(8px);z-index:950;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);font-size:12px;line-height:1;padding:8px 14px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);box-shadow:0 4px 16px rgba(0,0,0,.12);opacity:0;pointer-events:none;transition:opacity .15s var(--ds-ease-in-out),transform .15s var(--ds-ease-in-out)}
-.dshk-toast[data-show]{opacity:1;transform:translateX(-50%) translateY(0)}
 /* markdown 排版（RTE 宿主编辑态 + docx 预览共用）*/
 .dshk-md{flex:1;min-height:0;overflow:auto;padding:12px 16px;font-size:13px;line-height:1.7;color:var(--dsw-alias-label-primary);user-select:text}
 .dshk-md h1,.dshk-md h2,.dshk-md h3,.dshk-md h4{margin:1.2em 0 .5em;line-height:1.3}
@@ -2547,50 +2549,8 @@ ellipsis，窄列只截字不破版 */
       return vendorPromise;
     }
 
-    // ─────────── 轻提示 ───────────
-    let toastTimer = 0;
-    let toastEl = null;
-    /** 轻提示：单例浮层，1.6s 自动淡出 */
-    function flashToast(message) {
-      if (typeof document === "undefined") return;
-      if (!toastEl) {
-        toastEl = document.createElement("div");
-        toastEl.className = "dshk-toast";
-        document.body.appendChild(toastEl);
-      }
-      toastEl.textContent = message;
-      toastEl.setAttribute("data-show", "");
-      window.clearTimeout(toastTimer);
-      toastTimer = window.setTimeout(() => {
-        if (toastEl) toastEl.removeAttribute("data-show");
-      }, 1600);
-    }
-
-    /** 写剪贴板：优先 Clipboard API；手机经局域网 http 访问时无安全上下文，退 execCommand */
-    function writeClipboard(text) {
-      const fallback = () => {
-        try {
-          const ta = document.createElement("textarea");
-          ta.value = text;
-          ta.style.position = "fixed";
-          ta.style.opacity = "0";
-          document.body.appendChild(ta);
-          ta.select();
-          const ok = document.execCommand("copy");
-          ta.remove();
-          return ok;
-        } catch {
-          return false;
-        }
-      };
-      if (typeof navigator !== "undefined" && navigator.clipboard) {
-        return navigator.clipboard.writeText(text).then(
-          () => true,
-          () => fallback(),
-        );
-      }
-      return Promise.resolve(fallback());
-    }
+    // 轻提示/剪贴板：实现随组件化迁入 dsh-kit-dock，这里解构取用
+    const { flashToast, writeClipboard } = dock;
 
     // ─────────── 当前会话工作区 ───────────
     // 0.1.6 宿主多实例化：会话选择归视图所有，sessions.list 快照不再有 current；
@@ -3022,51 +2982,9 @@ ellipsis，窄列只截字不破版 */
 
     // ─────────── kit 端点公共调用 ───────────
     // 宿主端点回包约定：成功 2xx（写端点另带 ok:true），失败非 2xx + { error }。
-    // 取用口径收在这一处，省得每个调用点重写一遍 json().catch() 与错误报文；
-    // validate 是调用点自己的形状断言（缺项按失败处理，免得半个回包被当成功
-    // 往下传）——各端点形状不同，所以断言留在调用点。
-    /** GET /dsh-kit/* 取 JSON；抛出的错误带 status/body，供按状态码分流
-        （如写文件的 409 冲突） */
-    async function kitGetJson(url, signal, validate) {
-      const res = await fetch(url, { signal });
-      const body = await res.json().catch(() => null);
-      if (!res.ok || !body || (validate && !validate(body))) {
-        const error = new Error((body && body.error) || "HTTP " + res.status);
-        error.status = res.status;
-        error.body = body;
-        throw error;
-      }
-      return body;
-    }
-    /** POST /dsh-kit/*（JSON body，缺省 {}）；显式 ok:false 也算失败 */
-    async function kitPostJson(url, payload, validate) {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload ?? {}),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok || body.ok === false || (validate && !validate(body))) {
-        const error = new Error(body.error || "HTTP " + res.status);
-        error.status = res.status;
-        error.body = body;
-        throw error;
-      }
-      return body;
-    }
-    /** 其它 method / 自定义 opts 的 kit 取 JSON：日程、知识库、附件目录等端点
-        回包不带 ok 字段，只按状态码判成败 */
-    async function kitJson(url, opts, validate) {
-      const res = await fetch(url, opts);
-      const body = await res.json().catch(() => null);
-      if (!res.ok || (validate && !validate(body))) {
-        const error = new Error((body && body.error) || "HTTP " + res.status);
-        error.status = res.status;
-        error.body = body;
-        throw error;
-      }
-      return body;
-    }
+    // 实现随组件化迁入 dsh-kit-dock（组件间共享的 client 底座），这里解构取用；
+    // validate 是调用点自己的形状断言（缺项按失败处理，免得半个回包被当成功往下传）。
+    const { kitGetJson, kitPostJson, kitJson } = dock;
 
     // ─────────── 文件树 ───────────
     // 数据走宿主半边只读端点 /dsh-kit/tree（官方 browse RPC 只列目录不列文件）。

@@ -27,6 +27,9 @@
     "@types/node": "^24.0.0",
     "typescript": "^5.9.0"
   },
+  "dependencies": {
+    "dsh-kit-core": "workspace:*"
+  },
   "keywords": [
     "dsh",
     "deepseek",
@@ -50,6 +53,9 @@
       "platform": "web",
       "inject": [
         "slots"
+      ],
+      "external": [
+        "dsh-kit-dock"
       ]
     }
   }
