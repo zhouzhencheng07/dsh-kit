@@ -15,6 +15,8 @@
       name: dsh-kit
     - id: dock
       name: dsh-kit-dock
+    - id: files
+      name: dsh-kit-files
     - id: monitor
       name: dsh-kit-monitor
 # 组件行统一由本 bundle 声明——插件页 dsh-kit 详情页列出全部组件（组件显示名
