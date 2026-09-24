@@ -1238,23 +1238,7 @@ window.__ModuleLoader__.load({
       skOpFail: "操作失败",
       skDone: "完成",
       skDeleted: "已删除",
-      usageRefresh: "刷新",
-      usageUpdatedAt: "更新于",
-      usageDeepseek: "DeepSeek 余额",
-      usageOpencode: "OpenCode Go",
-      usageZai: "GLM Coding Plan",
-      usageAvailable: "可用",
-      usagePaused: "余额不足或已停机",
-      usageBalanceTotal: "总余额",
-      usageBalanceGranted: "赠送",
-      usageBalanceToppedUp: "充值",
-      usageW5h: "5 小时窗口",
-      usageWeek: "本周窗口",
-      usageMonth: "本月窗口",
-      usageResets: "重置",
-      usageLevel: "套餐",
-      usageNoCard: "模型配置未提供此服务的用量数据",
-      usageOfficialPage: "官方用量页",
+
       monitorContinueText: "继续",
       monitorLoopBreakText: "检测到你的输出在重复相同内容，可能陷入了死循环。请立即停止重复，简要说明当前状态，换一种方式继续完成任务。",
       monitorCancel: "取消",
@@ -1594,23 +1578,7 @@ window.__ModuleLoader__.load({
       skOpFail: "Operation failed",
       skDone: "Done",
       skDeleted: "Deleted",
-      usageRefresh: "Refresh",
-      usageUpdatedAt: "Updated",
-      usageDeepseek: "DeepSeek balance",
-      usageOpencode: "OpenCode Go",
-      usageZai: "GLM Coding Plan",
-      usageAvailable: "available",
-      usagePaused: "low balance or suspended",
-      usageBalanceTotal: "Total",
-      usageBalanceGranted: "Granted",
-      usageBalanceToppedUp: "Topped up",
-      usageW5h: "5-hour window",
-      usageWeek: "Weekly window",
-      usageMonth: "Monthly window",
-      usageResets: "resets",
-      usageLevel: "Plan",
-      usageNoCard: "No usage data for this service in the model config",
-      usageOfficialPage: "Usage dashboard",
+
       monitorContinueText: "Continue",
       monitorLoopBreakText: "Your output appears to be repeating itself, which suggests an infinite loop. Stop repeating immediately, briefly state the current status, and continue the task in a different way.",
       monitorCancel: "Cancel",
@@ -1815,16 +1783,9 @@ window.__ModuleLoader__.load({
       vaultPageGone: "Page not found (it may have been moved or deleted)",
       vaultCiteUnavailable: "Composer is not ready (no active session)",
     };
-    /** 语言判定：只认 DSH 的 locale 权威 —— <html lang> 由 dsh-client-locale 的
-     *  syncDocumentLanguage 在启动与每次切换时同步（设置→通用→语言），页面内
-     *  恒有值（服务端标记初始为 en）。不设 navigator.language 回退：中文系统
-     *  浏览器语言恒为 zh-CN，回退会把 DSH 已切到英文的界面锁回中文（实测回归的
-     *  根源）；且 DSH 自身无浏览器语言匹配时的兜底语义就是英文（FALLBACK_LOCALE），
-     *  插件保持一致即可。非 zh 一律按英文渲染。 */
-    function resolveZh() {
-      if (typeof document === "undefined" || !document.documentElement) return false;
-      return /^zh/i.test(document.documentElement.lang || "");
-    }
+    /** 语言判定与切换响应随组件化迁入 dsh-kit-dock（所有组件共享同一份 locale
+     *  store 与 <html lang> MutationObserver），这里解构取用。 */
+    const resolveZh = dock.resolveZh;
     // 每次现读现判，不在模块加载时钉死：DSH 的 locale 服务异步把语言同步到
     // <html lang>（syncDocumentLanguage），时机晚于本 bundle 顶层执行，一次性求值
     // 会拿到旧值而把界面锁死在英文。
@@ -1837,28 +1798,7 @@ window.__ModuleLoader__.load({
       return s;
     };
 
-    // 语言切换响应：外部 store + <html lang> 的 MutationObserver。DSH 异步改写
-    // <html lang> 后 bump version，组件经 useSyncExternalStore 订阅 version，
-    // 变化即 re-render，届时 t/tf 已读到新语言。与上方 cfg 快照订阅同一模式。
-    const localeStore = { version: 0, listeners: new Set() };
-    const subscribeLocale = (fn) => {
-      localeStore.listeners.add(fn);
-      return () => localeStore.listeners.delete(fn);
-    };
-    const getLocaleVersion = () => localeStore.version;
-    if (typeof document !== "undefined" && typeof MutationObserver !== "undefined") {
-      let lastLang = document.documentElement.lang || "";
-      new MutationObserver(() => {
-        const cur = document.documentElement.lang || "";
-        if (cur !== lastLang) {
-          lastLang = cur;
-          localeStore.version++;
-          for (const l of localeStore.listeners) {
-            try { l(); } catch (_e) { /* ignore */ }
-          }
-        }
-      }).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
-    }
+    const { subscribeLocale, getLocaleVersion } = dock;
 
     // ─────────── 外观跟随 ───────────
     /** DSH 主题 presenter 以 body[data-ds-dark-theme] 有无表达明暗 */
@@ -2290,36 +2230,6 @@ ellipsis，窄列只截字不破版 */
 /* order:1 —— 槽位容器 display:contents，本元素与官方 ContextMeter 环同为 dock 行的
    flex item；order 提到环后面才是真正最右（DOM 里槽位贡献永远在环左边）。
    不加 padding-top：dock 行自带 4px，加了会垂直错位 2px+ */
-.dshk-usage{order:1;margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:2px}
-.dshk-usage-win{display:inline-flex;align-items:center;gap:2px}
-.dshk-usage-win.is-hot{color:var(--dsw-alias-danger)}
-.dshk-usage-sep{color:var(--dsw-alias-label-tertiary);opacity:.7}
-.dshk-usage-peak{color:var(--dsw-alias-danger);font-weight:600;margin-right:4px}
-/* 芯片 = 官方 ContextMeter trigger 同款（pill、hover/展开态同色） */
-.dshk-usage-trigger{color:var(--dsw-alias-label-tertiary);font-family:inherit;font-size:var(--dsh-content-font-size-secondary,13px);font-variant-numeric:tabular-nums;line-height:calc(20px + var(--dsh-content-font-delta-secondary,0px));white-space:nowrap;cursor:pointer;background:0 0;border:none;border-radius:24px;flex:none;align-items:center;gap:6px;padding:1px 8px;display:inline-flex}
-.dshk-usage-trigger:hover,.dshk-usage-trigger[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
-.dshk-usage-trigger.dshk-usage-hot{color:var(--dsw-alias-danger)}
-.dshk-usage-trigger.dshk-usage-hot:hover,.dshk-usage-trigger.dshk-usage-hot[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover)}
-/* 面板 = 官方 ContextMeter panel 同款（定位经 primitives useAnchoredPosition，portal 到 body）；背景是半透明色，磨砂 backdrop-filter 缺了背后的界面会整个透出来 */
-.dshk-usage-pop{z-index:1100;box-sizing:border-box;background:var(--dsw-specific-menu);backdrop-filter:var(--dsw-menu-backdrop-filter);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);width:min(264px,100vw - 24px);box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-secondary);cursor:default;border:0;border-radius:12px;padding:12px;font-size:12px;line-height:20px;position:fixed}
-.dshk-usage-header{align-items:center;gap:6px;display:flex}
-.dshk-usage-headline{color:var(--dsw-alias-label-tertiary);min-width:0}
-.dshk-usage-percent{color:var(--dsw-alias-label-primary);font-weight:500}
-.dshk-usage-figures{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary);margin-left:auto;font-weight:500}
-.dshk-usage-hot{color:var(--dsw-alias-danger)}
-.dshk-usage-rows{margin:6px 0 0}
-.dshk-usage-row{justify-content:space-between;align-items:center;gap:12px;padding:2px 0;display:flex;margin:0}
-.dshk-usage-row dt{color:var(--dsw-alias-label-secondary)}
-.dshk-usage-row dd{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary);margin:0}
-.dshk-usage-sub{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;padding:1px 0 0}
-.dshk-usage-bar{corner-shape:round;background:var(--dsw-alias-interactive-bg-hover);border-radius:999px;gap:1px;height:4px;margin:5px 0 8px;display:flex;overflow:hidden}
-.dshk-usage-segment{background:var(--meter-tint,var(--dsw-alias-label-tertiary));border-radius:1px;flex:none;min-width:2px;height:100%}
-.dshk-usage-segment.is-hot{--meter-tint:var(--dsw-alias-danger)}
-.dshk-usage-foot{display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:7px;border-top:.5px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font-size:11px}
-.dshk-usage-link{margin-left:auto;color:var(--dsw-alias-label-secondary);text-decoration:none;border:.5px solid var(--dsw-alias-border-l1);border-radius:999px;padding:2px 10px;font-size:11px;line-height:16px}
-.dshk-usage-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-usage-refresh{appearance:none;border:.5px solid var(--dsw-alias-border-l1);background:0 0;border-radius:999px;padding:2px 10px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);cursor:pointer}
-.dshk-usage-refresh:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 /* 内置浏览器面板：URL 栏 + 实时画面 canvas（人机共驾） */
 /* 右侧标签页容器：内容视图占满（非激活标签 display:none 保挂载） */
 .dshk-pane-view{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
@@ -6657,420 +6567,6 @@ ellipsis，窄列只截字不破版 */
     // （用户手动介入）即放弃本次。
     // 约束：浏览器页必须开着（浏览器端方案的天性）；页面关着的兜底是宿主
     // provider 级 retryPolicy（retryableCodes），与本监视器无关。
-    // ─────────── 用量与余额（UsageLine，composer.dock）───────────
-    // 数据走宿主 /dsh-kit/usage（key 在宿主侧复用模型配置，浏览器拿不到）。状态带
-    // 右缘只出**一张**芯片：当前会话选中的模型 provider（modelDirectories 服务按
-    // sessionId 给的共享目录 store，composer 模型座同源）归类出 deepseek/opencode/
-    // zai 卡位，端点没配对应 provider 或识别不出（如 sensenova）= 不出。芯片只放
-    // 数值（¥余额 / 5h 窗口百分比），全名在悬停提示；点芯片浮层贴正上方只出该家
-    // 明细——定位与关闭复用官方 primitives 的 useAnchoredPosition /
-    // useDismissOnOutsidePointer / Tooltip，面板样式复刻官方 ContextMeter 浮层
-    // （哈希类名复用不了，CSS 原样抄）；primitives 缺位（老宿主）降级为右下角
-    // 固定浮层、无 Tooltip。modelDirectories 是懒就绪服务：就绪时 version++ 通知
-    // 订阅者重跑 effect，否则「服务后到」的挂载永远拿不到数据源。
-    let usageModelDirs = null;
-    const usageDirs = { version: 0 };
-    const usageDirsSubs = new Set();
-    function usageDirsNotify() {
-      usageDirs.version += 1;
-      for (const fn of usageDirsSubs) {
-        try {
-          fn();
-        } catch {
-          /* 订阅者已卸载 */
-        }
-      }
-    }
-
-    function usageProviderKind(providerId) {
-      const s = String(providerId ?? "");
-      if (/deepseek/i.test(s)) return "deepseek";
-      if (/opencode/i.test(s)) return "opencode";
-      if (/zai|glm|bigmodel/i.test(s)) return "zai";
-      return null;
-    }
-
-    /** 芯片数据模块级缓存：换会话/重挂载 60s 内不重复打端点（宿主还有 60s 缓存） */
-    const usageData = { body: null, at: 0 };
-
-    const USAGE_CURRENCY_SYMBOL = { CNY: "¥", USD: "$", TWD: "NT$", HKD: "HK$", EUR: "€" };
-    /** 各家官方用量页（浮层底部链接） */
-    const USAGE_LINKS = {
-      deepseek: "https://platform.deepseek.com/usage",
-      opencode: "https://opencode.ai/zh/go",
-      zai: "https://bigmodel.cn/coding-plan/personal/usage",
-    };
-    const usageUseAnchoredPosition =
-      dswPrimIcons && typeof dswPrimIcons.useAnchoredPosition === "function" ? dswPrimIcons.useAnchoredPosition : null;
-    const usageUseDismiss =
-      dswPrimIcons && typeof dswPrimIcons.useDismissOnOutsidePointer === "function" ? dswPrimIcons.useDismissOnOutsidePointer : null;
-    const usageTooltip = dswIcon("Tooltip");
-
-    function usageFmtCountdown(target, now) {
-      const ms = target - now;
-      if (!Number.isFinite(ms)) return "";
-      const suffix = ms <= 0 ? "" : resolveZh() ? "后" : "";
-      const abs = Math.abs(ms);
-      const d = Math.floor(abs / 86400000);
-      const h = Math.floor((abs % 86400000) / 3600000);
-      const m = Math.floor((abs % 3600000) / 60000);
-      if (ms <= 0) return resolveZh() ? "已重置" : "reset";
-      if (d > 0) return `${resolveZh() ? `${d}天${h}时` : `${d}d ${h}h`}${suffix}`;
-      if (h > 0) return `${resolveZh() ? `${h}时${m}分` : `${h}h ${m}m`}${suffix}`;
-      return `${resolveZh() ? `${Math.max(m, 1)}分` : `${Math.max(m, 1)}m`}${suffix}`;
-    }
-
-    /**
-     * 高峰时段（本地时区，仅工作日，[起,止) 分钟数）：只标 DeepSeek 工作日
-     *   9:00–12:00、14:00–18:00（z.ai / opencode 无公开口径不标）。
-     *   高峰时芯片前加红色「峰」字提示限流风险。
-     * DeepSeek 峰谷补充（官方 2026-09-19 说明）：周六日全天、调休上班的周末、
-     *   中国法定节假日全天均按空闲时段计费——前两者被周末判定覆盖，落在工作日的
-     *   假期靠 USAGE_HOLIDAYS 免标。
-     */
-    const USAGE_PEAK_WINDOWS = {
-      deepseek: [
-        [540, 720],
-        [840, 1080],
-      ],
-    };
-    /**
-     * 中国法定节假日（国务院办公厅年度安排，[起月,起日,止月,止日] 按年展开成日期集）。
-     * 只维护已公布的年份：过期年份退回「工作日即可能标峰」，仅提示失真，不影响
-     * 计费数字。2026 = 国办发明电〔2025〕7号；2027 安排公布后照式补一年。
-     */
-    const USAGE_HOLIDAYS = (() => {
-      const YEAR_RANGES = {
-        2026: [
-          [1, 1, 1, 3], // 元旦
-          [2, 15, 2, 23], // 春节
-          [4, 4, 4, 6], // 清明
-          [5, 1, 5, 5], // 劳动节
-          [6, 19, 6, 21], // 端午
-          [9, 25, 9, 27], // 中秋
-          [10, 1, 10, 7], // 国庆
-        ],
-      };
-      const set = new Set();
-      for (const [year, ranges] of Object.entries(YEAR_RANGES)) {
-        for (const [m1, d1, m2, d2] of ranges) {
-          for (let d = new Date(+year, m1 - 1, d1); d <= new Date(+year, m2 - 1, d2); d.setDate(d.getDate() + 1)) {
-            set.add(`${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`);
-          }
-        }
-      }
-      return set;
-    })();
-    const usageDayKey = (d) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-    function usageIsPeak(kind, now) {
-      const wins = USAGE_PEAK_WINDOWS[kind];
-      if (!wins) return false;
-      const day = now.getDay();
-      if (day === 0 || day === 6) return false; // 周末（含调休上班的周末）DeepSeek 全天按空闲计费
-      if (kind === "deepseek" && USAGE_HOLIDAYS.has(usageDayKey(now))) return false; // 法定节假日全天
-      const mins = now.getHours() * 60 + now.getMinutes();
-      return wins.some(([a, b]) => mins >= a && mins < b);
-    }
-
-    /**
-     * 芯片内容（官方 trigger 同款字体高度，纯数值）：
-     *   deepseek → 单文本 ¥余额；opencode/zai → 全部窗口百分比数组（5h、周、月顺序，zai 无月窗）。
-     * 返回 { text, hot? } 或 { wins:[percent] , }；null = 该家没数、不出芯片。
-     */
-    function usageChipParts(kind, card) {
-      if (!card) return null;
-      if (!card.ok) return { text: "—", hot: true };
-      if (kind === "deepseek") {
-        const info = (card.infos && card.infos[0]) || null;
-        if (!info) return null;
-        return { text: `${USAGE_CURRENCY_SYMBOL[info.currency] || (info.currency ? info.currency + " " : "")}${info.total}`, hot: card.available === false };
-      }
-      const wins =
-        kind === "opencode"
-          ? [card.windows && card.windows.rolling, card.windows && card.windows.weekly, card.windows && card.windows.monthly]
-          : [card.limits && card.limits.find((l) => l.kind === "hours"), card.limits && card.limits.find((l) => l.kind === "week")];
-      const parts = wins
-        .map((win) => {
-          const percent = win ? (Number.isFinite(win.percent) ? win.percent : Number.isFinite(win.percentage) ? win.percentage : null) : null;
-          return percent;
-        })
-        .filter((p) => p !== null);
-      return parts.length > 0 ? { wins: parts } : null;
-    }
-
-    function UsageLine(props) {
-      const { sessionId, useSession } = props;
-      react.useSyncExternalStore(subscribeLocale, getLocaleVersion);
-      const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
-      const [, forceTick] = react.useState(0); // 重置倒计时每分钟重算
-      // 官方回合运行位（与 MonitorLine 同源）：回合收尾时补一拍刷新
-      const running = typeof useSession === "function" ? useSession((s) => s.running) : false;
-      const dirsVersion = react.useSyncExternalStore(
-        (cb) => {
-          usageDirsSubs.add(cb);
-          return () => usageDirsSubs.delete(cb);
-        },
-        () => usageDirs.version,
-      );
-      // 当前会话选中的模型 provider → 卡位；目录 store 换身（load 后）也要重读
-      const [kind, setKind] = react.useState(null);
-      react.useEffect(() => {
-        if (!usageModelDirs || !sessionId) {
-          setKind(null);
-          return undefined;
-        }
-        let alive = true;
-        let off = null;
-        let dir = null;
-        try {
-          dir = usageModelDirs.directoryFor(sessionId);
-        } catch {
-          return undefined; // 未知会话（服务端明说 fail loud）：芯片静默退场
-        }
-        const store = dir && dir.store;
-        if (!store || typeof store.subscribe !== "function") return undefined;
-        const read = () => {
-          if (!alive) return;
-          const cur = store.getSnapshot() && store.getSnapshot().current;
-          setKind(usageProviderKind(cur && cur.provider));
-        };
-        try {
-          off = store.subscribe(read);
-        } catch {
-          return undefined;
-        }
-        read();
-        // 目录懒构造，catalog 首次 load 才落 current：主动补一拍（错误落 store 不外抛）
-        try {
-          void Promise.resolve(dir.load()).catch(() => {});
-        } catch {
-          /* 老宿主形态差异：读不到就靠投影 */
-        }
-        return () => {
-          alive = false;
-          try {
-            if (off) off();
-          } catch {
-            /* 已注销 */
-          }
-        };
-      }, [sessionId, dirsVersion]);
-      const [data, setData] = react.useState(() => usageData.body);
-      const [open, setOpen] = react.useState(false);
-      const anchorRef = react.useRef(null); // 芯片按钮（浮层锚点）
-      const panelRef = react.useRef(null);
-      const load = react.useCallback(async (fresh) => {
-        // 开关刚关（403）或网络失败：保留旧数据，下一轮轮询再试
-        try {
-          const body = await kitJson(`/dsh-kit/usage${fresh ? "?fresh=1" : ""}`, undefined, (b) => b !== null && typeof b.providers === "object");
-          usageData.body = body;
-          usageData.at = Date.now();
-          setData(body);
-        } catch {}
-      }, []);
-      // 回合收尾（running true→false）立即补一拍：配额刚被这轮消耗，等 60s 轮询太慢；
-      // 10s 防抖兜连续短回合
-      const prevRunningRef = react.useRef(running);
-      react.useEffect(() => {
-        if (prevRunningRef.current === true && running === false && Date.now() - usageData.at >= 10000) {
-          void load(false);
-        }
-        prevRunningRef.current = running;
-      }, [running, load]);
-      react.useEffect(() => {
-        void load(false);
-        const timer = setInterval(() => {
-          if (document.visibilityState === "hidden") return;
-          forceTick((n) => n + 1);
-          // 5 分钟节拍：>=60s 才真拉（宿主还有 60s 缓存，多组件挂载借模块缓存去重）
-          if (Date.now() - usageData.at >= 60000) void load(false);
-        }, 60000);
-        return () => clearInterval(timer);
-      }, [load]);
-      react.useEffect(() => {
-        if (kind === null) setOpen(false);
-      }, [kind]);
-      // Esc 关浮层（官方 ContextMeter 同款）
-      react.useEffect(() => {
-        if (!open) return undefined;
-        const onKey = (e) => {
-          if (e.key === "Escape") setOpen(false);
-        };
-        document.addEventListener("keydown", onKey);
-        return () => document.removeEventListener("keydown", onKey);
-      }, [open]);
-      // 官方 primitives 钩子：模块级判定可用性（运行期恒定），条件调用不违反 hooks 规则
-      const position = usageUseAnchoredPosition
-        ? usageUseAnchoredPosition({ open, anchorRef, panelRef, side: "top", gap: 8, margin: 12 })
-        : null;
-      if (usageUseDismiss) usageUseDismiss(anchorRef, open, setOpen, panelRef);
-      // 官方定位会把 top 钳进视口（Math.max(top, margin)）——composer 偏上时上方空间
-      // 不足，面板就被压到锚点下方（「向下展开」）。把面板 max-height 限到锚点上方
-      // 空间，钳制条件永不触发，面板恒贴芯片正上方，放不下就内部滚动
-      react.useLayoutEffect(() => {
-        if (!open) return undefined;
-        const cap = () => {
-          const rect = anchorRef.current ? anchorRef.current.getBoundingClientRect() : null;
-          const panel = panelRef.current;
-          if (!rect || !panel) return;
-          panel.style.maxHeight = `${Math.max(rect.top - 20, 160)}px`;
-        };
-        cap();
-        window.addEventListener("scroll", cap, true);
-        window.addEventListener("resize", cap);
-        return () => {
-          window.removeEventListener("scroll", cap, true);
-          window.removeEventListener("resize", cap);
-        };
-      }, [open]);
-
-      // usageEnabled 开关已随用量组件迁移（组件行启停 = 端点 403 usage-disabled），
-      // 主包配置快照不再携带此键；这里只留「显式关才隐藏」的迁移期门
-      if (!kind || cfg.usageEnabled === false) return null;
-      const providers = (data && data.providers) || {};
-      const card = providers[kind] || null;
-      const parts = usageChipParts(kind, card);
-      if (parts === null) return null;
-      const now = Date.now();
-      const peak = usageIsPeak(kind, new Date()); // forceTick 每分钟重渲染，跨过时段边界一分钟内变色
-      const kindTitle = () => (kind === "deepseek" ? t("usageDeepseek") : kind === "opencode" ? t("usageOpencode") : t("usageZai"));
-
-      /** 浮层里的窗口行：dt/dd 官方行 + 进度条（官方 bar/segment 样式），sub 行放 credits 与重置 */
-      const windowBlock = (label, win) => {
-        if (!win) return null;
-        const percent = Number.isFinite(win.percent) ? win.percent : Number.isFinite(win.percentage) ? win.percentage : null;
-        const resetAt = win.resetsAt ? Date.parse(win.resetsAt) : win.nextResetTime;
-        const credits =
-          win.currentValue !== undefined && Number.isFinite(win.currentValue)
-            ? `${win.currentValue}/${win.usage || "—"} credits`
-            : null;
-        const sub = [credits, resetAt ? `${t("usageResets")} ${usageFmtCountdown(resetAt, now)}` : null].filter(Boolean).join(" · ");
-        return jsxRuntime.jsxs("div", { children: [
-          jsxRuntime.jsxs("dl", { className: "dshk-usage-row", children: [
-            jsxRuntime.jsx("dt", { children: label }),
-            jsxRuntime.jsx("dd", { className: percent !== null && percent >= 80 ? "dshk-usage-hot" : undefined, children: percent === null ? "—" : `${percent}%` }),
-          ] }),
-          sub !== "" ? jsxRuntime.jsx("div", { className: "dshk-usage-sub", children: sub }) : null,
-          jsxRuntime.jsx("div", { className: "dshk-usage-bar", children: percent === null ? null : jsxRuntime.jsx("span", { className: `dshk-usage-segment${percent >= 80 ? " is-hot" : ""}`, style: { width: `${Math.min(percent, 100)}%` } }) }),
-        ] }, label);
-      };
-
-      const panel = (() => {
-        if (!open || !card) return null;
-        const ok = card.ok === true;
-        let figure = null;
-        let badge = null;
-        let body = null;
-        if (!ok) {
-          badge = { text: card.error || t("usageNoCard"), hot: true };
-        } else if (kind === "deepseek") {
-          const info = (card.infos && card.infos[0]) || null;
-          if (info) figure = `${USAGE_CURRENCY_SYMBOL[info.currency] || ""}${info.total}`;
-          badge =
-            card.available === false
-              ? { text: t("usagePaused"), hot: true }
-              : card.available === true
-                ? { text: t("usageAvailable") }
-                : null;
-          body = (card.infos || []).map((info) =>
-            jsxRuntime.jsxs("div", { className: "dshk-usage-rows", children: [
-              jsxRuntime.jsxs("dl", { className: "dshk-usage-row", children: [
-                jsxRuntime.jsx("dt", { children: t("usageBalanceTotal") }),
-                jsxRuntime.jsx("dd", { children: `${USAGE_CURRENCY_SYMBOL[info.currency] || ""}${info.total}` }),
-              ] }),
-              info.granted && info.granted !== "0"
-                ? jsxRuntime.jsxs("dl", { className: "dshk-usage-row", children: [
-                    jsxRuntime.jsx("dt", { children: t("usageBalanceGranted") }),
-                    jsxRuntime.jsx("dd", { children: info.granted }),
-                  ] })
-                : null,
-              info.toppedUp && info.toppedUp !== "0"
-                ? jsxRuntime.jsxs("dl", { className: "dshk-usage-row", children: [
-                    jsxRuntime.jsx("dt", { children: t("usageBalanceToppedUp") }),
-                    jsxRuntime.jsx("dd", { children: info.toppedUp }),
-                  ] })
-                : null,
-            ] }, info.currency));
-        } else if (kind === "opencode") {
-          const win = card.windows && card.windows.rolling;
-          const percent = win ? (Number.isFinite(win.percent) ? win.percent : null) : null;
-          if (percent !== null) figure = `${percent}%`;
-          body = [
-            windowBlock(t("usageW5h"), card.windows && card.windows.rolling),
-            windowBlock(t("usageWeek"), card.windows && card.windows.weekly),
-            windowBlock(t("usageMonth"), card.windows && card.windows.monthly),
-          ];
-        } else {
-          const hours = card.limits && card.limits.find((l) => l.kind === "hours");
-          const percent = hours ? (Number.isFinite(hours.percentage) ? hours.percentage : null) : null;
-          if (percent !== null) figure = `${percent}%`;
-          badge = card.level ? { text: `${t("usageLevel")} ${card.level}` } : badge;
-          body = (card.limits || []).map((l) =>
-            windowBlock(l.kind === "hours" ? (l.number && l.number !== 5 ? `${l.number} ${t("usageW5h")}` : t("usageW5h")) : t("usageWeek"), l),
-          );
-        }
-        return reactDom.createPortal(
-          jsxRuntime.jsxs("div", {
-            ref: panelRef,
-            className: "dshk-usage-pop",
-            style: position ?? { visibility: "hidden", left: 0, top: 0 },
-            role: "dialog",
-            "aria-label": kindTitle(),
-            children: [
-              jsxRuntime.jsxs("div", { className: "dshk-usage-header", children: [
-                jsxRuntime.jsx("span", { className: "dshk-usage-headline", children: kindTitle() }),
-                badge ? jsxRuntime.jsx("span", { className: `dshk-usage-percent${badge.hot ? " dshk-usage-hot" : ""}`, children: badge.text }) : null,
-                figure !== null ? jsxRuntime.jsx("span", { className: "dshk-usage-figures", children: figure }) : null,
-              ] }),
-              body,
-              jsxRuntime.jsxs("div", { className: "dshk-usage-foot", children: [
-                jsxRuntime.jsx("span", { children: `${t("usageUpdatedAt")} ${usageData.at ? new Date(usageData.at).toLocaleTimeString() : "—"}` }),
-                USAGE_LINKS[kind]
-                  ? jsxRuntime.jsx("a", { className: "dshk-usage-link", href: USAGE_LINKS[kind], target: "_blank", rel: "noreferrer", children: t("usageOfficialPage") })
-                  : null,
-                jsxRuntime.jsx("button", { type: "button", className: "dshk-usage-refresh", onClick: () => void load(true), children: t("usageRefresh") }),
-              ] }),
-            ],
-          }),
-          document.body,
-          "dshk-usage-pop",
-        );
-      })();
-
-      const tooltipLabel =
-        (kind === "deepseek"
-          ? t("usageDeepseek")
-          : `${kindTitle()} · ${resolveZh() ? (kind === "opencode" ? "5小时/周/月窗口" : "5小时/周窗口") : kind === "opencode" ? "5h/week/month" : "5h/week"}`) +
-        (peak ? ` · ${resolveZh() ? "高峰时段" : "peak hours"}` : "");
-      const trigger = jsxRuntime.jsx("button", {
-        type: "button",
-        className: `dshk-usage-trigger${parts.hot || peak ? " dshk-usage-hot" : ""}`,
-        "aria-haspopup": "dialog",
-        "aria-expanded": open,
-        onClick: (e) => {
-          anchorRef.current = e.currentTarget;
-          setOpen(!open);
-        },
-        children: (() => {
-          const items = [];
-          if (peak) items.push(jsxRuntime.jsx("span", { className: "dshk-usage-peak", children: resolveZh() ? "峰" : "P" }, "peak"));
-          if (parts.text !== undefined) items.push(parts.text);
-          else
-            parts.wins.forEach((p, i) => {
-              if (i > 0) items.push(jsxRuntime.jsx("span", { className: "dshk-usage-sep", children: "·" }, "sep" + i));
-              items.push(jsxRuntime.jsxs("span", { className: `dshk-usage-win${p >= 80 ? " is-hot" : ""}`, children: [p, "%"] }, "w" + i));
-            });
-          return items;
-        })(),
-      });
-      return jsxRuntime.jsxs("div", { className: "dshk-usage", children: [
-        usageTooltip
-          ? jsxRuntime.jsx(usageTooltip, { label: tooltipLabel, side: "top", delayMs: 200, disabled: open, children: trigger })
-          : jsxRuntime.jsx("span", { title: tooltipLabel, children: trigger }),
-        panel,
-      ] });
-    }
-
     // 死循环停止（MonitorLine，composer.dock）：仅当前打开的会话，回合运行中每
     // 1s 扫描流文本尾部自重叠 ≥monitorRepeatThreshold 次 → sessions.cancel() 停
     // 止当前回合，停止完成后发循环打断话术——检测→停→话术一条链，独立于续跑器。
@@ -9662,12 +9158,6 @@ ellipsis，窄列只截字不破版 */
               { name: "conversation.session.header.actions", id: "dsh-kit-monitor-bg", order: 21 },
               MonitorBgAction,
             )],
-          // 余额与用量芯片：同一条状态带，排监视条之后（开关随用量组件迁移，同上）
-          ["usage", cfg.usageEnabled !== false, () =>
-            slotsCtx.slots.register(
-              { name: "conversation.composer.dock", id: "dsh-kit-usage", order: 6 },
-              UsageLine,
-            )],
           // 输入框入口排序（左→右）：文件树、源代码管理、知识库、终端
           // 手机访问与技能页同类，走 settings.section 页面入口（order：技能 40 → 手机 45）
           ["filetree", cfg.fileTreeEnabled, () =>
@@ -10567,12 +10057,7 @@ ellipsis，窄列只截字不破版 */
         { name: "plugins.row.config", key: "dsh-kit#dsh-kit" },
         KitConfigPage,
       ));
-      // 用量芯片的「当前会话模型 provider」数据源（composer 模型座同一份状态）。
-      // 服务缺位（老宿主/精简组合）= 芯片不显示，其余功能不受影响
-      ctx.inject(["modelDirectories"], (mctx) => {
-        usageModelDirs = mctx.modelDirectories || null;
-        usageDirsNotify();
-      });
+
       // 全局 429 续跑器主循环：轮询自守卫（slots/settings 未就绪直接跳过），
       // monitorEnabled 关闭时 tick 空转；模块随页面销毁，无独立清理需求
       setInterval(monitorTick, MONITOR_TICK_MS);

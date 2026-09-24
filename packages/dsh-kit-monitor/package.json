@@ -1,17 +1,22 @@
 {
   "name": "dsh-kit-monitor",
   "version": "0.5.3-alpha.2",
-  "description": "dsh-kit 用量与监视组件：/dsh-kit/usage 聚合端点（provider 发现 + 三家上游），usageEnabled 总开关门控",
+  "description": "dsh-kit 用量与监视组件：/dsh-kit/usage 聚合端点（provider 发现 + 三家上游）+ 余额用量芯片（UsageLine），usageEnabled 总开关门控",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "exports": {
-    ".": "./dist/index.js",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./client": "./client/bundle.js",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "src"
+    "src",
+    "client"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -23,5 +28,16 @@
   },
   "dependencies": {
     "dsh-kit-core": "workspace:*"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "slots"
+      ],
+      "external": [
+        "dsh-kit-dock"
+      ]
+    }
   }
 }
