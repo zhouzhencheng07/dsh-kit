@@ -1,13 +1,11 @@
 // dsh-kit 用量与监视组件（宿主半边入口）
 //
-// 首个组件化的切片：/dsh-kit/usage 聚合端点 + usageEnabled 总开关从 dsh-kit 主包
-// 迁出，独立成 entry（bundle patch 插单，profile 里 id: dsh-kit-monitor）。
-// provider 配置读取不依赖主包：经宿主 configEditor 服务现读 llm-pi-ai entry 的
-// 合成配置（inherited+override 两层 providers 浅合并），凭证经宿主 credentials
-// 按引用解析，key 不出宿主进程。
-//
-// 客户端芯片（UsageLine）仍在主包 client 半边，按 URL 消费本组件端点；组件
-// 开关关闭 = 端点 403 usage-disabled，芯片自然隐藏。
+// 组件化切片：/dsh-kit/usage 聚合端点 + 用量芯片（client/bundle.js）+ 会话监视
+// （429 续跑 / 死循环打断）+ 会话通知，从 dsh-kit 主包迁出，独立成 entry
+// （bundle patch 插单，profile 里 id: dsh-kit-monitor）。provider 配置读取不依赖
+// 主包：经宿主 configEditor 服务现读 llm-pi-ai entry 的合成配置（inherited+
+// override 两层 providers 浅合并），凭证经宿主 credentials 按引用解析，key 不出
+// 宿主进程。
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -88,12 +86,29 @@ export const Config = z && typeof z.object === 'function'
     ? z.object({
         // 用量与余额总开关。默认关——key 不在本组件配置里（复用模型配置
         // llm-pi-ai.providers 的凭证引用），开 = /dsh-kit/usage 端点放行 +
-        // 主包 client 半边出余额/配额芯片。
+        // client 半边出余额/配额芯片。
         usageEnabled: z.boolean().default(false).volatile(),
+        // 会话监视器（纯浏览器端消费，宿主不读）：
+        // ① 全局 429 续跑：监视【所有】列表内会话（不要求会话页开着），turn 因 429
+        //    限流失败（客户端镜像 lastAgentError 匹配限流措辞）结束后等 monitorWaitMs
+        //    自动 prompt"继续"，连续自动续跑不超过 monitorMaxAuto 次（一轮正常收尾
+        //    即清零）；
+        // ② 死循环打断（仅当前打开的会话）：流式输出尾部自重叠达 monitorRepeatThreshold
+        //    次时停止当前回合并发循环打断话术。
+        monitorEnabled: z.boolean().default(true).volatile(),
+        monitorWaitMs: z.number().step(1).min(5000).max(600000).default(15000).volatile(),
+        monitorMaxAuto: z.number().step(1).min(1).max(10).default(5).volatile(),
+        monitorRepeatThreshold: z.number().step(1).min(2).max(10).default(3).volatile(),
+        // 会话通知（纯浏览器端消费，宿主不读）：回合收尾、上下文压缩完成或 agent 提问时，
+        // 若页面不在前台（或事件不属于当前打开的会话）弹桌面通知——浏览器 Notification
+        // API，未授权时退标题闪烁。一个总开关管全部提醒，不分类配置。
+        notifyEnabled: z.boolean().default(true).volatile(),
     })
     : undefined;
 export async function apply(ctx, config = {}) {
-    const defaults = Config ? Config({}) : { usageEnabled: false };
+    const defaults = Config
+        ? Config({})
+        : { usageEnabled: false, monitorEnabled: true, monitorWaitMs: 15000, monitorMaxAuto: 5, monitorRepeatThreshold: 3, notifyEnabled: true };
     // volatile 字段在 fiber config 里是稳定 ref（{get}），统一解引用
     const readRef = (v) => v !== null && typeof v === 'object' && typeof v.get === 'function'
         ? v.get()

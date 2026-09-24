@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Usage & monitor",
+    "description": "Balance/usage chip, 429 auto-resume, dead-loop interruption, and session desktop notifications; usageEnabled gates the chip."
+  }
+}

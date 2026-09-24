@@ -8,6 +8,7 @@
   "exports": {
     ".": "./dist/index.js",
     "./client": "./client/bundle.js",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
@@ -15,6 +16,7 @@
     "src",
     "client",
     "host-vendor",
+    "locale",
     "cordis.patch.yml",
     "README.md",
     "LICENSE"
