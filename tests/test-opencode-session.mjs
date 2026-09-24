@@ -1,4 +1,4 @@
-// test-opencode-session.mjs — src/opencode-session.ts 单测（按会话注入机制）
+// test-opencode-session.mjs — packages/dsh-kit-core/src/opencode-session.ts 单测（按会话注入机制）
 // 覆盖：门控判定、fetch 补丁（注入/放行/已带头跳过）、withStore 的 ALS 传播、
 // applyOpenCodeSessionHeader 的接线（假 ctx 捕获监听 + fetch 补丁生命周期）。
 import assert from 'node:assert/strict'
@@ -8,7 +8,7 @@ import {
   patchFetch,
   withStore,
   applyOpenCodeSessionHeader,
-} from '../dist/opencode-session.js'
+} from '../packages/dsh-kit-core/dist/opencode-session.js'
 
 let passed = 0
 

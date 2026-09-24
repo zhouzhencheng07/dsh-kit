@@ -1,17 +1,20 @@
 {
-  "name": "dsh-kit-monitor",
+  "name": "dsh-kit-core",
   "version": "0.5.3-alpha.2",
-  "description": "dsh-kit 用量与监视组件：/dsh-kit/usage 聚合端点（provider 发现 + 三家上游），usageEnabled 总开关门控",
+  "description": "dsh-kit 组件间共享的宿主侧工具（同源校验/回收站删除/文本解码/会话头注入），纯库不作为 entry 安装",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -20,8 +23,5 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "typescript": "^5.9.0"
-  },
-  "dependencies": {
-    "dsh-kit-core": "workspace:*"
   }
 }

@@ -30,8 +30,8 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 
-import { recycleDelete } from './recycle.ts'
-import { sameOrigin } from './web-guard.ts'
+import { recycleDelete } from 'dsh-kit-core'
+import { sameOrigin } from 'dsh-kit-core'
 
 const POOL_DIRNAME = 'skill-pool'
 

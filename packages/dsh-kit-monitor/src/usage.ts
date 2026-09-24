@@ -18,7 +18,7 @@
 
 import http from 'node:http'
 
-import { sameOrigin } from './web-guard.ts'
+import { sameOrigin } from 'dsh-kit-core'
 
 /** 宿主对象最小依赖面（与其它模块同约定：只声明实际触达的成员） */
 interface UsageWebServer {

@@ -16,7 +16,7 @@
 // 缓存：每家独立 60s（桌面 + 手机同看不重复打上游）；fresh=1 绕读仍回写。
 // 单飞：同一家的并发请求共享一次上游调用。
 import http from 'node:http';
-import { sameOrigin } from "./web-guard.js";
+import { sameOrigin } from 'dsh-kit-core';
 /** 站点选择：provider id 以 -cn 结尾（如 zai-coding-cn）或名字含 bigmodel 走国内站 */
 function zaiBase(id) {
     return /cn$/i.test(id) || /bigmodel/i.test(id) ? 'https://open.bigmodel.cn' : 'https://api.z.ai';
