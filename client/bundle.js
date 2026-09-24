@@ -476,7 +476,6 @@ window.__ModuleLoader__.load({
       monitorMaxAuto: 5,
       monitorRepeatThreshold: 3,
       notifyEnabled: true,
-      usageEnabled: false,
       vaultEnabled: false,
       vaultRoot: "",
       terminalShortcut: "Ctrl+/",
@@ -546,7 +545,6 @@ window.__ModuleLoader__.load({
             ? v.monitorRepeatThreshold
             : CFG_DEFAULTS.monitorRepeatThreshold,
         notifyEnabled: v.notifyEnabled !== false,
-        usageEnabled: v.usageEnabled === true,
         vaultEnabled: v.vaultEnabled === true,
         vaultRoot: typeof v.vaultRoot === "string" ? v.vaultRoot : "",
         terminalShortcut:
@@ -1352,8 +1350,6 @@ window.__ModuleLoader__.load({
       kcfgHideOfficialFilesEntryHint: "那只是个目录按钮；隐藏后文件仍可从对话/文件树/搜索进入。",
       kcfgHideOfficialBrowserEntry: "隐藏官方「浏览器」入口",
       kcfgHideOfficialBrowserEntryHint: "避免与内置浏览器重复。",
-      kcfgUsageEnabled: "余额与用量芯片",
-      kcfgUsageEnabledHint: "composer 下方显示当前会话 provider 的余额/配额芯片。",
       kcfgNotifyEnabled: "会话桌面通知",
       kcfgNotifyEnabledHint: "页面不在前台时，回合收尾/压缩完成/agent 提问弹桌面通知。",
       kcfgMonitorEnabled: "会话监视（429 续跑 / 死循环打断）",
@@ -1713,8 +1709,6 @@ window.__ModuleLoader__.load({
       kcfgHideOfficialFilesEntryHint: "That entry is just a directory button; files stay reachable from chat, the tree, and search.",
       kcfgHideOfficialBrowserEntry: "Hide the official Browser entry",
       kcfgHideOfficialBrowserEntryHint: "Avoids duplicating the built-in browser.",
-      kcfgUsageEnabled: "Balance & usage chip",
-      kcfgUsageEnabledHint: "Shows a balance/quota chip for the session's provider under the composer.",
       kcfgNotifyEnabled: "Session desktop notifications",
       kcfgNotifyEnabledHint: "Desktop notifications on turn completion, compaction, or agent questions while the page is in the background.",
       kcfgMonitorEnabled: "Session monitor (429 retry / loop break)",
@@ -7012,7 +7006,9 @@ ellipsis，窄列只截字不破版 */
         };
       }, [open]);
 
-      if (!kind || cfg.usageEnabled !== true) return null;
+      // usageEnabled 开关已随用量组件迁移（组件行启停 = 端点 403 usage-disabled），
+      // 主包配置快照不再携带此键；这里只留「显式关才隐藏」的迁移期门
+      if (!kind || cfg.usageEnabled === false) return null;
       const providers = (data && data.providers) || {};
       const card = providers[kind] || null;
       const parts = usageChipParts(kind, card);
@@ -9748,8 +9744,8 @@ ellipsis，窄列只截字不破版 */
               { name: "conversation.session.header.actions", id: "dsh-kit-monitor-bg", order: 21 },
               MonitorBgAction,
             )],
-          // 余额与用量芯片：同一条状态带，排监视条之后
-          ["usage", cfg.usageEnabled, () =>
+          // 余额与用量芯片：同一条状态带，排监视条之后（开关随用量组件迁移，同上）
+          ["usage", cfg.usageEnabled !== false, () =>
             slotsCtx.slots.register(
               { name: "conversation.composer.dock", id: "dsh-kit-usage", order: 6 },
               UsageLine,
@@ -10469,7 +10465,6 @@ ellipsis，窄列只截字不破版 */
       { key: "chatOpenLinkInBrowser", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgChatOpenLinkInBrowser", hintKey: "kcfgChatOpenLinkInBrowserHint" },
       { key: "hideOfficialFilesEntry", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgHideOfficialFilesEntry", hintKey: "kcfgHideOfficialFilesEntryHint" },
       { key: "hideOfficialBrowserEntry", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgHideOfficialBrowserEntry", hintKey: "kcfgHideOfficialBrowserEntryHint" },
-      { key: "usageEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgUsageEnabled", hintKey: "kcfgUsageEnabledHint" },
       { key: "monitorEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgMonitorEnabled", hintKey: "kcfgMonitorEnabledHint" },
       { key: "monitorWaitMs", type: "number", min: 5000, max: 600000, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorWaitMs", hintKey: "kcfgMonitorWaitMsHint" },
       { key: "monitorMaxAuto", type: "number", min: 1, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorMaxAuto", hintKey: "kcfgMonitorMaxAutoHint" },

@@ -56,7 +56,6 @@ import { VaultScanner, defaultVaultRoot } from './vault.ts'
 import { createEntry, renameEntry, moveEntry, importEntry, deleteEntries, parseConflict } from './vault-fs.ts'
 import { sameOrigin } from './web-guard.ts'
 import { recycleDelete } from './recycle.ts'
-import { registerUsageRoutes } from './usage.ts'
 
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在设置里改（phonePort，1-65535） */
 const PHONE_PORT = 3090
@@ -259,10 +258,6 @@ export const Config =
         // 若页面不在前台（或事件不属于当前打开的会话）弹桌面通知——浏览器 Notification
         // API，未授权时退标题闪烁。一个总开关管全部提醒，不分类配置。
         notifyEnabled: z.boolean().default(true).volatile(),
-        // 用量与余额（宿主消费：端点门控 + 客户端消费：芯片入口）。默认关——key 不在本
-        // 插件配置里（复用模型配置 llm-pi-ai.providers 的凭证引用），开 = composer 下方
-        // 状态带出「当前会话所用 provider」的余额/配额芯片 + /dsh-kit/usage 聚合端点。
-        usageEnabled: z.boolean().default(false).volatile(),
         sidebarShortcut: z.string().default('Ctrl+B').volatile(),
         rightbarShortcut: z.string().default('Ctrl+Alt+B').volatile(),
         terminalShortcut: z.string().default('Ctrl+/').volatile(),
@@ -2319,40 +2314,6 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
         return deleteEntries(root, paths)
       })
 
-      // ── 用量与余额（src/usage.ts）──
-      // 发现式 provider（llm-pi-ai.providers + DEEPSEEK_API_KEY 兜底），三家上游
-      // 聚合给 composer 下方状态带的芯片。provider 配置请求时现读（服务缺位回
-      // null = 无卡可用），端点侧 usageEnabled 门控。
-      const disposeUsage = registerUsageRoutes({
-        webServer: webCtx.webServer,
-        credentials: webCtx.credentials,
-        readSettings: () => readSettings(),
-        readProviderConfig: () => {
-          // 0.1.7 起 entry 配置由 configEditor 读：inherited = bundle 层合成值，
-          // override = profile patch（cordis.patch.yml）层，providers 浅合并后者优先
-          try {
-            const editor = ctx.get('configEditor') as
-              | { configuration?: () => Array<{ entry?: { options?: { id?: string } }; inherited?: unknown; override?: unknown }> }
-              | undefined
-            const row = editor?.configuration?.().find((r) => r.entry?.options?.id === 'llm-pi-ai')
-            if (row) {
-              const providers: Record<string, unknown> = {}
-              for (const layer of [row.inherited, row.override]) {
-                if (layer !== null && typeof layer === 'object') Object.assign(providers, (layer as { providers?: unknown }).providers)
-              }
-              return { providers }
-            }
-          } catch { /* 服务缺位/读取失败落老路径 */ }
-          try {
-            const settings = ctx.get('settings') as { get?: (ns: string) => unknown } | undefined
-            const value = settings?.get?.('llm-pi-ai')
-            return value !== null && typeof value === 'object' ? (value as { providers?: unknown }) : null
-          } catch {
-            return null
-          }
-        },
-      })
-
       return () => {
         disposeVendor()
         disposeTree()
@@ -2370,11 +2331,10 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
         disposePhoneLink()
         disposePhoneRotate()
         disposePhoneGateway()
-        disposeUsage()
         for (const dispose of disposeSchedule) dispose()
         for (const dispose of disposeVault) dispose()
         if (phoneGw) phoneGw.close()
       }
-    }, 'dsh-kit: vendor/tree/read/raw/fs-op/git/phone/vault/usage endpoints')
+    }, 'dsh-kit: vendor/tree/read/raw/fs-op/git/phone/vault endpoints')
   })
 }

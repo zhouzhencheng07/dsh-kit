@@ -11,3 +11,5 @@
 - insert:
     - id: dsh-kit
       name: dsh-kit
+    - id: dsh-kit-monitor
+      name: dsh-kit-monitor
