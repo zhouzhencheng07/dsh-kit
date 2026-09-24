@@ -14,6 +14,7 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 
 import { registerUsageRoutes } from './usage.ts'
+import { sameOrigin } from 'dsh-kit-core'
 
 /** 插件设置的运行时形状（loader 按 Config schema 解析后传入 apply 第二参） */
 type KitSettings = Record<string, unknown>
@@ -113,6 +114,28 @@ export async function apply(ctx: any, config: KitSettings = {}): Promise<void> {
 
   const disposers: Array<() => void> = []
   ctx.inject(['webServer', 'credentials'], (webCtx: KitWebCtx) => {
+    // 组件自己的只读配置快照：client 半边拉它做芯片门控（同 root 的 /dsh-kit/config 口径）
+    disposers.push(
+      webCtx.webServer.register({
+        kind: 'exact',
+        path: '/dsh-kit-monitor/config',
+        handler: (req, res) => {
+          const json = (code: number, obj: unknown) => {
+            res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+            res.end(JSON.stringify(obj))
+          }
+          if (req.method !== 'GET') {
+            json(405, { error: 'method not allowed' })
+            return
+          }
+          if (typeof req.headers.origin === 'string' && req.headers.origin !== '' && !sameOrigin(req)) {
+            json(403, { error: 'cross-origin denied' })
+            return
+          }
+          json(200, readSettings())
+        },
+      }),
+    )
     disposers.push(
       registerUsageRoutes({
         webServer: webCtx.webServer,

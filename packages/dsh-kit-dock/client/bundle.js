@@ -105,11 +105,43 @@ window.__ModuleLoader__.load({
       return body;
     }
 
+    /** 语言判定：只认 DSH 的 locale 权威 —— <html lang> 由 dsh-client-locale 的
+     *  syncDocumentLanguage 在启动与每次切换时同步。非 zh 一律按英文渲染。 */
+    function resolveZh() {
+      if (typeof document === "undefined" || !document.documentElement) return false;
+      return /^zh/i.test(document.documentElement.lang || "");
+    }
+    // 语言切换响应：外部 store + <html lang> 的 MutationObserver。DSH 异步改写
+    // <html lang> 后 bump version，组件经 useSyncExternalStore 订阅 version，
+    // 变化即 re-render，届时各自词典已读到新语言。
+    const localeStore = { version: 0, listeners: new Set() };
+    const subscribeLocale = (fn) => {
+      localeStore.listeners.add(fn);
+      return () => localeStore.listeners.delete(fn);
+    };
+    const getLocaleVersion = () => localeStore.version;
+    if (typeof document !== "undefined" && typeof MutationObserver !== "undefined") {
+      let lastLang = document.documentElement.lang || "";
+      new MutationObserver(() => {
+        const cur = document.documentElement.lang || "";
+        if (cur !== lastLang) {
+          lastLang = cur;
+          localeStore.version++;
+          for (const l of localeStore.listeners) {
+            try { l(); } catch (_e) { /* ignore */ }
+          }
+        }
+      }).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+    }
+
     exports.flashToast = flashToast;
     exports.writeClipboard = writeClipboard;
     exports.kitGetJson = kitGetJson;
     exports.kitPostJson = kitPostJson;
     exports.kitJson = kitJson;
+    exports.resolveZh = resolveZh;
+    exports.subscribeLocale = subscribeLocale;
+    exports.getLocaleVersion = getLocaleVersion;
     // 底座是活动 entry：client runner 按 client 插件形状物化本模块，必须带 apply
     //（宿主半边同款：载体 entry，本体无行为）
     exports.apply = async () => {};
