@@ -14,11 +14,11 @@
 //     两枚（diff/知识库是被动签，不给条目），官方「工作区文件」条目
 //     垫底（配置可隐藏）。后台任务不做面板（0.1.7 官方会话头部自带
 //     任务清单 + 实时输出 + 停止，本插件原面板退役）。
-//     缺 sidebarRight 服务时只剩 kitUi 侧的存在性补丁——入口按钮
+//     缺 sidebarRight 服务时只剩 getKitUi() 侧的存在性补丁——入口按钮
 //     不报错，签由官方侧自己决定要不要出现。
 //   终端：底部停靠面板（快捷键亦可切换），0.1.6 起引擎为官方 webTerminals
 //   服务（PTY 归宿主），本插件只做 xterm 胶水。
-//   功能存在性（kitUi）：files/activeFile（diff 签）与
+//   功能存在性（getKitUi()）：files/activeFile（diff 签）与
 //     vaultPages/activeVaultPage 是文档签；schedOpen/browserOpen/vaultOpen 是功能签在场
 //     （入口按钮选中态与角标读它）；activeFeature 是当前激活的功能（Esc 关哪张
 //     文档签、浏览器自动跟随的判据）。索引类视图（知识库目录树）住侧栏
@@ -67,171 +67,45 @@ window.__ModuleLoader__.load({
       return null;
     };
 
+    // ─────────── 跨槽开合状态与操作（实现在 dsh-kit-dock，底座单例共享）───
+    const {
+      setKitUi, subscribeKitUi, useKitUi, getKitUi,
+      PREVIEW_MAX, openFileTab, activateFileTab, closeFileTab,
+      baseName, pageBasename, openVaultPageTab, activateVaultPage, closeVaultPageTab,
+      closeFeatureTab, openFeatureTab, RB_FEATURES,
+      openRightbarTab, closeRightbarTab, openFeatureDock, openFileAndDock,
+      sidebarViewPatch, toggleTermDock, spawnTerm, killTerm, makeTerm, getRightbarSr,
+    } = dock;
+
     /** 终端面板高度（与让位 padding 共用一个变量） */
     const DOCK_H = "min(34vh, 330px)";
 
     /** apply 时捕获的 ctx；KitSurfaces 用它动态 register/dispose sidebar.workspaces 单槽 */
     let slotsCtx = null;
 
-    // ─────────── 跨槽开合状态 ───────────
-    // 入口按钮（composer 工具行）与右栏 pane 宿主是多个
-    // 独立槽位组件，状态必须跨槽共享：模块级不可变快照 + useSyncExternalStore 订阅
-    // （getSnapshot 返回模块绑定值，恒定引用直到 set 替换）。
-    // 功能存在性（open 位）与激活位（activeFeature）分离：打开某功能 = 确保签
-    // 存在并激活，切走不丢状态（diff/知识库的文档签状态在 kitUi 里，官方 dock
-    // 签关掉再开即恢复）。files 与 vaultPages 同构（浏览器式：顶部一条标签条 +
-    // 下面若干内容页）——一页一标签、点击切换、✕ 单关；源代码管理/提交图谱点开
-    // 都往 files 标签条里加标签，同路径复用一个（重开刷新 diff/未跟踪状态）。
-    // 文件树与对话区点击已改投官方右栏文件签，不进这里。diff 签非激活仍挂载
-    // （display:none）保住滚动位置，超内部上限（3）自动关最久没看的那张。
-    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, activeFeature: null };
-    const kitUiListeners = new Set();
-    function setKitUi(patch) {
-      kitUi = { ...kitUi, ...patch };
-      for (const listener of kitUiListeners) listener();
-    }
-    function subscribeKitUi(listener) {
-      kitUiListeners.add(listener);
-      return () => kitUiListeners.delete(listener);
-    }
-    const useKitUi = () => react.useSyncExternalStore(subscribeKitUi, () => kitUi);
-    const getKitUi = () => kitUi;
 
     /** agent 动浏览器 → 把右栏浏览器签拽到眼前（壳层常驻事件源与面板共用此入口）。
      *  无抑制标志（agent 操作浏览器为安全起见必须可见——
      *  人为关掉/隐藏的浏览器签，agent 下次导航照样弹回） */
     function maybeAutoOpenBrowser() {
-      if (kitUi.activeFeature === "browser" && kitUi.browserOpen === true) return;
-      setKitUi(openFeatureDock(kitUi, "browser"));
+      if (getKitUi().activeFeature === "browser" && getKitUi().browserOpen === true) return;
+      setKitUi(openFeatureDock(getKitUi(), "browser"));
     }
     /** 浏览器没了（优雅关闭/空闲自动关/整只崩溃/页崩光）→ 收掉官方浏览器签
      *  （sidebarRight.close）：正常浏览器语义「没了就没了」，agent 下次开页面板
      *  照常弹回 */
     function closeBrowserDockForGone() {
-      if (!kitUi.browserOpen) return;
+      if (!getKitUi().browserOpen) return;
       closeRightbarTab("browser");
-      setKitUi(closeFeatureTab(kitUi, "browser"));
+      setKitUi(closeFeatureTab(getKitUi(), "browser"));
     }
 
-    /** diff 签内部上限（不外露为设置项——签只来自 SCM/提交图谱，堆积面小）：
-     *  超限自动关最久没看的那张 */
-    const PREVIEW_MAX = 3;
-    /** 打开文件 = 文件签条上加一个文件标签（已开过则复用、只刷新状态并激活）。
-     *  usedAt 是 LRU 判据（超上限时关掉最久没看的那张，绝不含本次）；
-     *  deleted=已删除文件，只承载删除 diff。commit（可选）= 提交钉定模式
-     *  （图谱提交详情进入，diff 视图与该提交的第一父对比）；重开同路径时
-     *  commit 随入口刷新（从 SCM 更改列表重开即清除钉定） */
-    function openFileTab(ui, path, from, untracked, deleted, commit) {
-      const now = Date.now();
-      const commitRef = typeof commit === "string" && commit !== "" ? commit : undefined;
-      const items = ui.files ?? [];
-      let list = items.some((x) => x.path === path)
-        ? items.map((x) => (x.path === path ? { ...x, from: from ?? x.from, untracked: untracked === true, deleted: deleted === true, commit: commitRef, usedAt: now } : x))
-        : [...items, { path, from: from ?? "scm", untracked: untracked === true, deleted: deleted === true, commit: commitRef, usedAt: now }];
-      const max = PREVIEW_MAX;
-      while (list.length > max) {
-        let oldest = null;
-        for (const x of list) {
-          if (x.path !== path && (oldest === null || x.usedAt < oldest.usedAt)) oldest = x;
-        }
-        if (oldest === null) break;
-        list = list.filter((x) => x.path !== oldest.path);
-      }
-      return { files: list, activeFile: path, activeFeature: "file" };
-    }
-    /** 只激活一个文件标签（标签条点击走这里）：刷新 usedAt（LRU 判据是「最久没看
-     *  的那张」），不重设 diff/未跟踪状态——那是入口（openFileTab）的事 */
-    function activateFileTab(ui, path) {
-      const items = ui.files ?? [];
-      if (!items.some((x) => x.path === path)) return {};
-      const now = Date.now();
-      return { files: items.map((x) => (x.path === path ? { ...x, usedAt: now } : x)), activeFile: path, activeFeature: "file" };
-    }
-    /** 关一个文件标签：激活位顺延邻居；关光了整片文件区收摊（走 closeFeatureTab，
-     *  激活位顺延到余下的存在标签） */
-    function closeFileTab(ui, path) {
-      const items = ui.files ?? [];
-      const idx = items.findIndex((x) => x.path === path);
-      if (idx < 0) return {};
-      const rest = items.filter((x) => x.path !== path);
-      if (rest.length === 0) return { ...closeFeatureTab(ui, "file"), files: [], activeFile: null };
-      const patch = { files: rest };
-      if (ui.activeFile === path) patch.activeFile = rest[Math.min(idx, rest.length - 1)].path;
-      return patch;
-    }
 
-    // ── 知识库页标签（多开：与文件标签同款交互）──
-    // 一页一标签、点击切换、✕ 单关；vaultOpen 是「知识库这一片有没有」，
-    // 没有任何页标签时它承载一张「请选择页面」空签（入口点开即见右栏签，打开时
-    // 中间页面也要相应打开）。
-    /** 路径尾名（标签名用）：文件保留后缀，知识库页去掉 .md（与索引树的页名一致） */
-    const baseName = (p) => String(p ?? "").split(/[\\/]/).pop() ?? "";
-    const pageBasename = (p) => baseName(p).replace(/\.(md|markdown)$/i, "");
-    /** 开/激活一个知识库页标签（树/搜索/反链/闲聊路径/wikilink 点击都走这里） */
-    function openVaultPageTab(ui, path) {
-      const pages = ui.vaultPages ?? [];
-      const list = pages.includes(path) ? pages : [...pages, path];
-      return {
-        vaultPages: list,
-        activeVaultPage: path,
-        vaultOpen: true,
-        activeFeature: "vault",
-      };
-    }
-    /** 只激活（标签条点击走这里） */
-    function activateVaultPage(ui, path) {
-      if (!(ui.vaultPages ?? []).includes(path)) return {};
-      return { vaultPages: ui.vaultPages, activeVaultPage: path, vaultOpen: true, activeFeature: "vault" };
-    }
-    /** 关一个知识库页标签：激活位顺延邻居；关光了则整片知识库区收摊
-     *  （索引视图不跟着关——那是侧栏的事，输入行入口管它） */
-    function closeVaultPageTab(ui, path) {
-      const pages = ui.vaultPages ?? [];
-      const idx = pages.indexOf(path);
-      if (idx < 0) return {};
-      const rest = pages.filter((p) => p !== path);
-      // 关光了走 closeFeatureTab：清 vaultOpen 的同时把激活位顺延到别的标签
-      if (rest.length === 0) {
-        return { ...closeFeatureTab(ui, "vault"), vaultPages: [], activeVaultPage: null };
-      }
-      const patch = { vaultPages: rest };
-      if (ui.activeVaultPage === path) patch.activeVaultPage = rest[Math.min(idx, rest.length - 1)];
-      return patch;
-    }
-    /** 关一个功能签：清存在性；关的是激活签时激活位顺延剩余签 */
-    function closeFeatureTab(ui, tab) {
-      const patch = {};
-      if (tab === "file") {
-        patch.files = [];
-        patch.activeFile = null;
-      } else if (tab === "schedule") patch.schedOpen = false;
-      else if (tab === "vault") {
-        patch.vaultOpen = false;
-        patch.vaultPages = [];
-        patch.activeVaultPage = null;
-      } else patch.browserOpen = false;
-      if (ui.activeFeature === tab) {
-        const remaining = [];
-        if (tab !== "file" && (ui.files?.length ?? 0) > 0) remaining.push("file");
-        if (tab !== "schedule" && ui.schedOpen) remaining.push("schedule");
-        if (tab !== "vault" && ui.vaultOpen) remaining.push("vault");
-        if (tab !== "browser" && ui.browserOpen) remaining.push("browser");
-        patch.activeFeature = remaining[0] ?? null;
-      }
-      return patch;
-    }
-    /** 打开/激活一个功能签（输入行入口与自动跟随共用）：确保存在并
-     *  激活、不清别的标签。浏览器不做抑制（agent 干活必回眼前） */
-    function openFeatureTab(ui, tab) {
-      if (tab === "schedule") return { schedOpen: true, activeFeature: "schedule" };
-      if (tab === "vault") return { vaultOpen: true, activeFeature: "vault" };
-      return { browserOpen: true, activeFeature: "browser" };
-    }
 
     // ─────────── 官方右侧边栏（宿主 0.1.5+，本插件唯一工作台形态）───────────
     // 每个功能一张 dock 签（页类型），pane 正文是我们的组件。服务是宿主内部实现，
     // **运行期探测取用、绝不写进 dsh.client.inject**——老宿主（0.1.2）没有该服务，
-    // 硬声明整个插件起不来。探测成功 = rightbarActive 翻真；不可用则只剩 kitUi
+    // 硬声明整个插件起不来。探测成功 = rightbarActive 翻真；不可用则只剩 getKitUi()
     // 侧的存在性补丁（入口不报错，签不出现）。
     const rightbarStore = {
       active: false,
@@ -246,69 +120,16 @@ window.__ModuleLoader__.load({
         return () => this.subs.delete(s);
       },
     };
-    /** 功能 → dock 签映射（页类型注册表；kind 即 openTab 用的类型名） */
-    const RB_FEATURES = [
-      { id: "dsh-kit-file", kind: "dshk-file", feature: "file", titleKey: "fileTabLabel" },
-      { id: "dsh-kit-vault", kind: "dshk-vault", feature: "vault", titleKey: "vaultTitle" },
-      { id: "dsh-kit-schedule", kind: "dshk-schedule", feature: "schedule", titleKey: "schedTab" },
-      { id: "dsh-kit-browser", kind: "dshk-browser", feature: "browser", titleKey: "dockBrowser" },
-    ];
-    /** sidebarRight 服务实例（openTab 用）：apply 时 ctx.inject(["sidebarRight"])
-     *  捕获——服务属性不能直接读（`cannot get property without inject`），又不能
-     *  写进 exports.inject（0.1.2 无此服务，硬声明整插件起不来） */
-    let rightbarSr = null;
     /** 官方 sessions 服务（拿当前会话 id 与 cwd，拼文件地址用），同上运行期捕获 */
     let sessionsSvc = null;
     /** 官方终端模型服务（dock 终端引擎，0.1.6+）：view() 按 (会话, key) 给
      *  TerminalView，xterm 胶水见 TerminalPane。缺服务 = 终端坞报「需要 0.1.6+」 */
     let webTerminalsSvc = null;
-    /** 打开/聚焦右栏 dock 签（UI 事件路径）。服务未就绪或宿主不支持时静默放弃
-     *  ——调用方都已先走了 kitUi 侧的开签补丁，签内容状态不会丢 */
-    function openRightbarTab(feature) {
-      const sr = rightbarSr;
-      if (!sr || typeof sr.openTab !== "function") return;
-      const f = RB_FEATURES.find((x) => x.feature === feature);
-      if (!f) return;
-      try {
-        sr.openTab(f.kind);
-      } catch {
-        /* 右栏异常不拖垮入口动作 */
-      }
-    }
-    /** 关掉右栏的某类 dock 签（官方 close API：按 kind 在 mounted surface 的
-     *  layout 签表里找到 id 再关）。服务未就绪或签不在时静默——调用点都在
-     *  「签该消失」的语义位（最后一页文档签关掉 / 浏览器没了） */
-    function closeRightbarTab(feature) {
-      const sr = rightbarSr;
-      const f = RB_FEATURES.find((x) => x.feature === feature);
-      if (!sr || !f || typeof sr.close !== "function") return;
-      try {
-        // mounted() 返回 surface {layout, history, minted}——签表在 layout.tabs
-        const surface = typeof sr.mounted === "function" ? sr.mounted() : undefined;
-        const tabsMap = surface && surface.layout ? surface.layout.tabs : undefined;
-        const tab = tabsMap ? Object.values(tabsMap).find((x) => x && x.kind === f.kind) : null;
-        if (tab && tab.id !== undefined) sr.close(tab.id);
-      } catch {
-        /* 右栏异常不拖垮入口动作 */
-      }
-    }
-    /** 「开功能签」：dock 签交给官方 openTab；kitUi 只补存在性（入口按钮选中态 /
-     *  角标 / 浏览器自动跟随判定还要读它）。服务未就绪时只剩存在性补丁 */
-    function openFeatureDock(ui, feature) {
-      openRightbarTab(feature);
-      return openFeatureTab(ui, feature);
-    }
-    /** 打开 diff 签并确保「文件」dock 签在眼前（源代码管理/提交图谱统一入口；
-     *  文件树与对话区点击已改投官方右栏文件签，不再进这里） */
-    function openFileAndDock(path, from, untracked, deleted, commit) {
-      setKitUi(openFileTab(kitUi, path, from, untracked === true, deleted === true, typeof commit === "string" && commit !== "" ? commit : undefined));
-      openRightbarTab("file");
-    }
     /** 打开知识库页并确保「知识库」dock 签在眼前（目录/搜索/反链/wikilink/
      *  对话路径统一走 VaultRootView 的 openPath）。anchor = `[[页#锚]]` 的锚点，
      *  跨页跳转时随开页带给 VaultPagePane 消费（见 vaultPendingAnchor） */
     function openVaultPageAndDock(path, anchor) {
-      setKitUi(openVaultPageTab(kitUi, path));
+      setKitUi(openVaultPageTab(getKitUi(), path));
       openRightbarTab("vault");
       vaultPendingAnchor = typeof anchor === "string" && anchor !== "" ? { path, anchor } : null;
     }
@@ -327,7 +148,7 @@ window.__ModuleLoader__.load({
     // 逐段 encodeURIComponent、`:` 保留字面量（Windows 盘符）。会话未选中时
     // 无从定位工作区，放弃。
     function openOfficialFile(path, line) {
-      const sr = rightbarSr;
+      const sr = getRightbarSr();
       if (!sr || typeof sr.openResource !== "function") return false;
       const list = sessionsSvc && typeof sessionsSvc.list?.getSnapshot === "function" ? sessionsSvc.list.getSnapshot() : null;
       const sessionId = mainRowOf(list)?.id;
@@ -376,14 +197,6 @@ window.__ModuleLoader__.load({
     // 选中态直接取各自的开合位（选中态与侧栏显示相关、与右栏签
     // 无关）——所以三者必须互斥：否则同一个侧栏位上会有两个按钮一起亮，
     // 而视图按优先级只显示其中一个。
-    /** 单槽互斥补丁：view = 'tree' | 'scm' | 'vault' | null */
-    function sidebarViewPatch(view) {
-      return {
-        treeOpen: view === "tree",
-        gitOpen: view === "scm",
-        vaultIdxOpen: view === "vault",
-      };
-    }
     // 语义：关 → 开；开 → 只把侧栏索引收回会话列表（功能签
     // 不跟着关——签的归宿是官方签 ✕ 与配置清场，入口按钮只管侧栏那格）。知识库钮
     // 只切左侧目录，点具体页才开右栏签；收起态顺带展开
@@ -420,39 +233,6 @@ window.__ModuleLoader__.load({
     const vaultPaneSlot = makeHostSlot();
     const useHostSlot = (slot) => react.useSyncExternalStore(slot.subscribe, slot.get);
 
-    // ── 多终端会话模型 ──
-    // terminals:[{id, sessionId, cwd}] 创建顺序即标签顺序；每个终端在创建那一刻
-    // 绑定当时的会话（官方引擎按会话起 PTY，cwd 定在会话工作区，cwd 只剩标签
-    // 文案用途）。termDockOpen 只管坞的可见性——隐藏不杀进程，后台标签的 shell
-    // 继续跑、xterm 继续缓冲输出；标签 ✕ 才真正结束对应宿主终端。
-    let termSeq = 0;
-    const makeTerm = (sessionId, cwd) => ({ id: `term-${++termSeq}`, sessionId, cwd });
-    /** 入口按钮与 Ctrl+/ 共用：开=恢复视图（无会话则新建绑定当前会话）；关=仅隐藏 */
-    function toggleTermDock(ui, sessionId, cwd) {
-      if (ui.termDockOpen) return { termDockOpen: false };
-      if (ui.terminals.length === 0) {
-        const nt = sessionId ? makeTerm(sessionId, cwd) : null;
-        return nt ? { termDockOpen: true, terminals: [nt], activeTermId: nt.id } : { termDockOpen: true };
-      }
-      return { termDockOpen: true, activeTermId: ui.activeTermId ?? ui.terminals[ui.terminals.length - 1].id };
-    }
-    /** ＋ 新建终端：绑定调用那一刻的当前会话 */
-    function spawnTerm(ui, sessionId, cwd) {
-      const nt = makeTerm(sessionId ?? "", cwd ?? "");
-      return { terminals: [...ui.terminals, nt], activeTermId: nt.id, termDockOpen: true };
-    }
-    /** 标签 ✕：从列表移除（组件卸载即断 WS 杀进程），激活位顺延邻居 */
-    function killTerm(ui, id) {
-      const idx = ui.terminals.findIndex((x) => x.id === id);
-      if (idx < 0) return {};
-      const rest = ui.terminals.filter((x) => x.id !== id);
-      const patch = { terminals: rest };
-      if (ui.activeTermId === id) {
-        patch.activeTermId = rest.length > 0 ? rest[Math.min(idx, rest.length - 1)].id : null;
-      }
-      if (rest.length === 0) patch.termDockOpen = false;
-      return patch;
-    }
 
     // ─────────── 插件配置 ───────────
     // 数据通道：官方 settings scope（宿主 installSettingsSection 注册的
@@ -741,7 +521,7 @@ window.__ModuleLoader__.load({
       if (!/^https?:\/\//i.test(href)) return;
       ev.preventDefault();
       ev.stopPropagation();
-      setKitUi(openFeatureDock(kitUi, "browser"));
+      setKitUi(openFeatureDock(getKitUi(), "browser"));
       // 失败不提示（吞掉 rejection 免成 unhandled）：面板上一步已切到浏览器签——
       // 网址打不开时浏览器自己的错误页就是反馈（同普通浏览器），浏览器起不来时
       // 面板的未启动提示会带上宿主报的原因。再弹 toast 只是重复的噪音。
@@ -3407,11 +3187,11 @@ ellipsis，窄列只截字不破版 */
       /** 已打开的文件被改名/删除后关掉对应文件标签（含其子路径；激活位顺延） */
       const closeStalePreview = (prefix) => {
         const stale = (f) => f === prefix || f.startsWith(`${prefix}\\`) || f.startsWith(`${prefix}/`);
-        const items = kitUi.files ?? [];
+        const items = getKitUi().files ?? [];
         const rest = items.filter((pv) => !stale(pv.path));
         if (rest.length === items.length) return;
         const patch = { files: rest };
-        if (kitUi.activeFile && stale(kitUi.activeFile)) {
+        if (getKitUi().activeFile && stale(getKitUi().activeFile)) {
           patch.activeFile = rest.length > 0 ? rest[rest.length - 1].path : null;
         }
         setKitUi(patch);
@@ -4939,7 +4719,7 @@ ellipsis，窄列只截字不破版 */
         onClick: () => {
           // 只开/关终端坞：隐藏不杀进程，后台会话继续跑；无会话时新建并绑定
           // 当时的当前会话（之后切换会话不影响已开终端）
-          setKitUi(toggleTermDock(kitUi, sessionId, cwd));
+          setKitUi(toggleTermDock(getKitUi(), sessionId, cwd));
         },
         children: [
           jsxRuntime.jsx(TerminalIcon, {}),
@@ -5027,7 +4807,7 @@ ellipsis，窄列只截字不破版 */
         className: "dshk-btn dshk-enbtn",
         "aria-pressed": ui.vaultIdxOpen,
         title: t("vaultTitle"),
-        onClick: () => setKitUi(toggleVaultEntry(kitUi)),
+        onClick: () => setKitUi(toggleVaultEntry(getKitUi())),
         children: jsxRuntime.jsx(VaultIcon, {}),
       });
     }
@@ -6956,7 +6736,7 @@ ellipsis，窄列只截字不破版 */
         );
         if (res === null) return;
         retargetTree(entry.path, res.path, entry.dir === true);
-        const patch = vaultTabsRetarget(kitUi, entry.path, res.path, entry.dir === true);
+        const patch = vaultTabsRetarget(getKitUi(), entry.path, res.path, entry.dir === true);
         if (patch) setKitUi(patch);
         await reloadData();
       };
@@ -6976,7 +6756,7 @@ ellipsis，窄列只截字不破版 */
         setDialog(null);
         if (res.skipped === true) return;
         retargetTree(d.entry.path, res.path, d.entry.dir === true);
-        const patch = vaultTabsRetarget(kitUi, d.entry.path, res.path, d.entry.dir === true);
+        const patch = vaultTabsRetarget(getKitUi(), d.entry.path, res.path, d.entry.dir === true);
         if (patch) setKitUi(patch);
         setExpanded((e) => ({ ...e, [d.dest]: true }));
         void fetchDir(d.dest);
@@ -7048,7 +6828,7 @@ ellipsis，窄列只截字不破版 */
         );
         if (res === null) return;
         setDialog(null);
-        const patch = vaultTabsClose(kitUi, [d.entry.path]);
+        const patch = vaultTabsClose(getKitUi(), [d.entry.path]);
         if (patch) setKitUi(patch);
         forgetTree([d.entry.path]);
         await reloadData();
@@ -7837,21 +7617,21 @@ ellipsis，窄列只截字不破版 */
 
     // ─────────── 右栏 pane 正文（每个 dock 签一个，key = 页类型 id）───────────
     // 官方 pane 是普通文档流：外壳 .dshk-rbpane 占满 100%×100%，内容区自己滚。
-    // pane 挂载 = 官方签开着：把 kitUi 的功能存在性同步为真（入口按钮选中态、
+    // pane 挂载 = 官方签开着：把 getKitUi() 的功能存在性同步为真（入口按钮选中态、
     // 角标、自动跟随判定都读它）；pane 卸载（用户点官方签 ✕）同步回假——
     // 「签开着吗」以官方 pane 的挂载为准。文件/知识库的文档签状态（files/
     // vaultPages）在卸载后保留，重开签即恢复，与关签前一致。
     /** 功能存在性跟随 pane 挂载（schedule/browser/vault 用） */
     function useFeaturePresence(feature) {
       react.useEffect(() => {
-        setKitUi(openFeatureTab(kitUi, feature));
-        return () => setKitUi(closeFeatureTab(kitUi, feature));
+        setKitUi(openFeatureTab(getKitUi(), feature));
+        return () => setKitUi(closeFeatureTab(getKitUi(), feature));
       }, [feature]);
     }
     /** diff pane：文档签条 + 多实例 DiffPane（非激活 display:none 保挂载——
      *  滚动位置不丢）。只承载源代码管理/提交图谱点开的 diff；工作区文件的
      *  预览/编辑已改投官方右栏文件签。不做存在性同步：files 状态本来就在
-     *  kitUi，官方签关了重开，文档签原样恢复。最后一页 diff 签关掉 → 官方
+     *  getKitUi()，官方签关了重开，文档签原样恢复。最后一页 diff 签关掉 → 官方
      *  「文件」dock 签一起关（同浏览器「没了就没了」，没有空页状态） */
     function FilePaneBody(props) {
       const ui = useKitUi();
@@ -7862,7 +7642,7 @@ ellipsis，窄列只截字不破版 */
         if (fileCount === 0) closeRightbarTab("file");
       }, [fileCount]);
       return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
-        fileCount > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(files.map((x) => x.path), ui.activeFile, (p) => activateFileTab(kitUi, p), (p) => closeFileTab(kitUi, p), (p) => baseName(p) || t("fileTabLabel")) }) : null,
+        fileCount > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(files.map((x) => x.path), ui.activeFile, (p) => activateFileTab(getKitUi(), p), (p) => closeFileTab(getKitUi(), p), (p) => baseName(p) || t("fileTabLabel")) }) : null,
         files.map((pv) =>
               jsxRuntime.jsx("div", {
                 className: "dshk-pane-view",
@@ -7891,13 +7671,13 @@ ellipsis，窄列只截字不破版 */
       react.useEffect(() => () => setKitUi({ vaultOpen: false }), []);
       const vaultPages = ui.vaultPages ?? [];
       // 最后一页关掉 → 官方「知识库」dock 签一起关（同文件
-      // 「没了就没了」，没有空页状态）；页签状态留在 kitUi，重开即恢复
+      // 「没了就没了」，没有空页状态）；页签状态留在 getKitUi()，重开即恢复
       const pageCount = vaultPages.length;
       react.useEffect(() => {
         if (pageCount === 0) closeRightbarTab("vault");
       }, [pageCount]);
       return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
-        vaultPages.length > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(vaultPages, ui.activeVaultPage, (p) => activateVaultPage(kitUi, p), (p) => closeVaultPageTab(kitUi, p), (p) => pageBasename(p) || t("vaultTitle")) }) : null,
+        vaultPages.length > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(vaultPages, ui.activeVaultPage, (p) => activateVaultPage(getKitUi(), p), (p) => closeVaultPageTab(getKitUi(), p), (p) => pageBasename(p) || t("vaultTitle")) }) : null,
         // 宿主常驻渲染（页签条之后），portal 目标缺失的时序问题不存在
         jsxRuntime.jsx("div", { className: "dshk-vault-panehost", ref: (el) => vaultPaneSlot.set(el) }),
       ] });
@@ -8009,9 +7789,9 @@ ellipsis，窄列只截字不破版 */
         if (!cfg.fileTreeEnabled && ui.treeOpen) setKitUi({ treeOpen: false, files: [], activeFile: null });
         if (!cfg.sourceControlEnabled && ui.gitOpen) setKitUi({ gitOpen: false, files: [], activeFile: null });
         // 配置门控清场走 closeFeatureTab：清存在性的同时把激活位顺延到剩余标签
-        if (!cfg.browserEnabled && ui.browserOpen) setKitUi(closeFeatureTab(kitUi, "browser"));
+        if (!cfg.browserEnabled && ui.browserOpen) setKitUi(closeFeatureTab(getKitUi(), "browser"));
         if (!cfg.vaultEnabled && (ui.vaultOpen || ui.vaultIdxOpen)) {
-          setKitUi({ ...closeFeatureTab(kitUi, "vault"), vaultIdxOpen: false });
+          setKitUi({ ...closeFeatureTab(getKitUi(), "vault"), vaultIdxOpen: false });
         }
       }, [cfg.terminalEnabled, cfg.fileTreeEnabled, cfg.sourceControlEnabled, cfg.browserEnabled, cfg.vaultEnabled]);
 
@@ -8092,30 +7872,30 @@ ellipsis，窄列只截字不破版 */
             e.preventDefault();
             e.stopPropagation();
             // 与入口按钮同语义：只开/关坞（隐藏不杀进程）；无会话时新建绑定当前会话
-            setKitUi(toggleTermDock(kitUi, sessionId, cwd));
+            setKitUi(toggleTermDock(getKitUi(), sessionId, cwd));
             return;
           }
           if (treeCombo && cfg.fileTreeEnabled && comboMatches(e, treeCombo)) {
             e.preventDefault();
             e.stopPropagation();
             // Ctrl+E 只管文件树（与入口按钮同语义，单槽互斥）
-            if (!kitUi.treeOpen) expandSidebarNow();
-            setKitUi(sidebarViewPatch(kitUi.treeOpen ? null : "tree"));
+            if (!getKitUi().treeOpen) expandSidebarNow();
+            setKitUi(sidebarViewPatch(getKitUi().treeOpen ? null : "tree"));
             return;
           }
           if (scCombo && cfg.sourceControlEnabled && comboMatches(e, scCombo)) {
             e.preventDefault();
             e.stopPropagation();
             // 源代码管理同语义：非 SCM 态 → 打开（展开侧边栏）；已是 → 关闭回会话列表
-            if (!kitUi.gitOpen) expandSidebarNow();
-            setKitUi(sidebarViewPatch(kitUi.gitOpen ? null : "scm"));
+            if (!getKitUi().gitOpen) expandSidebarNow();
+            setKitUi(sidebarViewPatch(getKitUi().gitOpen ? null : "scm"));
             return;
           }
           if (vaultCombo && cfg.vaultEnabled !== false && comboMatches(e, vaultCombo)) {
             e.preventDefault();
             e.stopPropagation();
             // 与输入行知识库钮同语义：开=侧栏索引，再点=收回会话列表
-            setKitUi(toggleVaultEntry(kitUi));
+            setKitUi(toggleVaultEntry(getKitUi()));
             return;
           }
           if (rbCombo && comboMatches(e, rbCombo)) {
@@ -8124,7 +7904,7 @@ ellipsis，窄列只截字不破版 */
             // 右栏收起/展开走官方 sidebarRight 服务（无参 toggle）；服务未就绪
             // 或宿主无此能力（0.1.2）时静默。这个位给右栏开合（日程无左侧栏半边，
             // 不需要全局键）
-            const sr = rightbarSr;
+            const sr = getRightbarSr();
             if (sr && typeof sr.toggleExpanded === "function") {
               try {
                 sr.toggleExpanded();
@@ -8145,23 +7925,23 @@ ellipsis，窄列只截字不破版 */
             if (vaultSearchOpen) return;
             // Esc 关当前激活那张文档签（知识库关当前页那张、diff 关当前
             // 那张，各自与标签条的 ✕ 同语义）。功能签归官方 ✕，Esc 不收
-            // 功能签（kitUi 收了 pane 还在，状态会对不上）
-            const vaultPages = kitUi.vaultPages ?? [];
-            const files = kitUi.files ?? [];
-            const activeVault = kitUi.activeVaultPage ?? vaultPages[vaultPages.length - 1] ?? null;
-            const activeFile = kitUi.activeFile ?? files[files.length - 1]?.path ?? null;
-            if (kitUi.activeFeature === "vault" && activeVault) {
-              setKitUi(closeVaultPageTab(kitUi, activeVault));
-            } else if (kitUi.activeFeature === "file" && activeFile) {
-              setKitUi(closeFileTab(kitUi, activeFile));
+            // 功能签（getKitUi() 收了 pane 还在，状态会对不上）
+            const vaultPages = getKitUi().vaultPages ?? [];
+            const files = getKitUi().files ?? [];
+            const activeVault = getKitUi().activeVaultPage ?? vaultPages[vaultPages.length - 1] ?? null;
+            const activeFile = getKitUi().activeFile ?? files[files.length - 1]?.path ?? null;
+            if (getKitUi().activeFeature === "vault" && activeVault) {
+              setKitUi(closeVaultPageTab(getKitUi(), activeVault));
+            } else if (getKitUi().activeFeature === "file" && activeFile) {
+              setKitUi(closeFileTab(getKitUi(), activeFile));
             } else if (vaultPages.length > 0) {
-              setKitUi(closeVaultPageTab(kitUi, activeVault));
+              setKitUi(closeVaultPageTab(getKitUi(), activeVault));
             } else if (files.length > 0) {
-              setKitUi(closeFileTab(kitUi, activeFile));
-            } else if (kitUi.gitOpen || kitUi.treeOpen || kitUi.vaultIdxOpen) {
+              setKitUi(closeFileTab(getKitUi(), activeFile));
+            } else if (getKitUi().gitOpen || getKitUi().treeOpen || getKitUi().vaultIdxOpen) {
               // 侧栏视图单槽：关一格即可（四者互斥）；功能签不连带关
               setKitUi(sidebarViewPatch(null));
-            } else if (kitUi.termDockOpen) setKitUi({ termDockOpen: false }); // 只隐藏，不杀会话
+            } else if (getKitUi().termDockOpen) setKitUi({ termDockOpen: false }); // 只隐藏，不杀会话
           }
         };
         window.addEventListener("keydown", onKey, true);
@@ -8250,11 +8030,11 @@ ellipsis，窄列只截字不破版 */
                     flashToast(t("noCwd"));
                     return;
                   }
-                  setKitUi(spawnTerm(kitUi, sessionId, cwd));
+                  setKitUi(spawnTerm(getKitUi(), sessionId, cwd));
                 },
                 onHide: () => setKitUi({ termDockOpen: false }),
                 onActivate: (id) => setKitUi({ activeTermId: id, termDockOpen: true }),
-                onKill: (id) => setKitUi(killTerm(kitUi, id)),
+                onKill: (id) => setKitUi(killTerm(getKitUi(), id)),
                 onKillAll: () => setKitUi({ terminals: [], activeTermId: null, termDockOpen: false }),
               })
             : null,
@@ -8774,7 +8554,7 @@ ellipsis，窄列只截字不破版 */
         ),
       );
       // 官方右侧边栏：五个功能 dock 签 + 引导页清单。只在宿主
-      // 提供该服务时生效（缺服务 = 只剩 kitUi 存在性补丁，签不出现）。用 inject
+      // 提供该服务时生效（缺服务 = 只剩 getKitUi() 存在性补丁，签不出现）。用 inject
       // 等它就绪而非直接读——官方右栏与本插件的客户端加载顺序不保证
       if (typeof ctx.inject === "function") {
         ctx.inject(["sidebarRightTabs"], registerRightbar);

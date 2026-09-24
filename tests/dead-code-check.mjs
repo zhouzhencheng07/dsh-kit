@@ -1,4 +1,6 @@
-// 死代码哨兵（client/bundle.js）：把"功能删了、残件还留着"的东西拦在提交前。
+// 死代码哨兵（client/bundle.js + packages/*/client/bundle.js）：把"功能删了、
+// 残件还留着"的东西拦在提交前。组件化后词条/函数/CSS 的消费者可能住在组件包
+// （如 dock 包的 RB_FEATURES 引用根包词条 dockBrowser），扫描面 = 根包 + 全部组件包。
 // 三类发现，全部按引用计数判死，判据随每条注释：
 //   1) i18n 词条：zh/en 字典里定义了、全文件却只有定义处那两处（动态拼的键前缀除外）
 //   2) 顶层函数：全文件只出现一次（定义行），且不在 render-check 的导出表里
@@ -12,7 +14,17 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-const src = fs.readFileSync(path.join(root, 'client', 'bundle.js'), 'utf8')
+const rootSrc = fs.readFileSync(path.join(root, 'client', 'bundle.js'), 'utf8')
+// 组件包 client 半边并入扫描面（词条/类名的消费方可能搬过去了）
+const pkgDir = path.join(root, 'packages')
+let pkgSrc = ''
+if (fs.existsSync(pkgDir)) {
+  for (const p of fs.readdirSync(pkgDir)) {
+    const f = path.join(pkgDir, p, 'client', 'bundle.js')
+    if (fs.existsSync(f)) pkgSrc += '\n' + fs.readFileSync(f, 'utf8')
+  }
+}
+const src = rootSrc + pkgSrc
 const problems = []
 const notes = []
 const fail = (msg) => problems.push(msg)
