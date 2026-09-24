@@ -131,7 +131,7 @@ async function checkApply() {
   check("U 槽位座席：监视条 composer.dock order 5", seat("dsh-kit-monitor") && seat("dsh-kit-monitor").order === 5);
   check("U 槽位座席：头部状态条 header.actions order 21", seat("dsh-kit-monitor-bg") && seat("dsh-kit-monitor-bg").order === 21);
   const cfgKeys = registered.filter((s) => s.name === "plugins.row.config").map((s) => s.key);
-  check("U 配置页挂本组件行（两种包名口径的 key 都在）", cfgKeys.includes("dsh-kit#dsh-kit-monitor") && cfgKeys.includes("dsh-kit-monitor#dsh-kit-monitor"));
+  check("U 配置页挂本组件行（两种包名口径的 key 都在）", cfgKeys.includes("dsh-kit#monitor") && cfgKeys.includes("dsh-kit-monitor#monitor"));
 }
 
 // 10c) 全局 429 续跑器核心（monitorTickCore 依赖注入直测）：沿检测（running

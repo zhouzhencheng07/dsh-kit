@@ -8710,10 +8710,10 @@ ellipsis，窄列只截字不破版 */
     function apply(ctx) {
       slotsCtx = ctx;
       // 配置页（0.1.7）：挂进插件页的 plugins.row.config 槽，key 由页面宿主按
-      // <包名>#<行id> 匹配（本插件单行，行 id = dsh-kit）。命名空间未伺服时页面
+      // <包名>#<行id> 匹配（本插件单行，行 id = kit）。命名空间未伺服时页面
       // 宿主不传 form，组件自带降级文案；注册随本 entry 生命周期生灭。
       ctx.slots.inject("plugins.row.config", () => ctx.slots.register(
-        { name: "plugins.row.config", key: "dsh-kit#dsh-kit" },
+        { name: "plugins.row.config", key: "dsh-kit#kit" },
         KitConfigPage,
       ));
 
