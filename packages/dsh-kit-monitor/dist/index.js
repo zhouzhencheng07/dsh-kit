@@ -2,7 +2,7 @@
 //
 // 组件化切片：/dsh-kit/usage 聚合端点 + 用量芯片（client/bundle.js）+ 会话监视
 // （429 续跑 / 死循环打断）+ 会话通知，从 dsh-kit 主包迁出，独立成 entry
-// （bundle patch 插单，profile 里 id: dsh-kit-monitor）。provider 配置读取不依赖
+// （bundle patch 插单，profile 里行 id: monitor）。provider 配置读取不依赖
 // 主包：经宿主 configEditor 服务现读 llm-pi-ai entry 的合成配置（inherited+
 // override 两层 providers 浅合并），凭证经宿主 credentials 按引用解析，key 不出
 // 宿主进程。

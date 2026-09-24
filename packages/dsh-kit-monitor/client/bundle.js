@@ -1285,28 +1285,33 @@ window.__ModuleLoader__.load({
     if (typeof document !== "undefined") {
       const style = document.createElement("style");
       style.textContent = [
+        // order:1 —— 槽位容器 display:contents，本元素与官方 ContextMeter 环同为 dock 行的
+        // flex item；order 提到环后面才是真正最右（DOM 里槽位贡献永远在环左边）。
+        // 不加 padding-top：dock 行自带 4px，加了会垂直错位 2px+
         ".dshk-usage{order:1;margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:2px}",
         ".dshk-usage-win{display:inline-flex;align-items:center;gap:2px}",
         ".dshk-usage-win.is-hot{color:var(--dsw-alias-danger)}",
         ".dshk-usage-sep{color:var(--dsw-alias-label-tertiary);opacity:.7}",
-        ".dshk-usage-peak{color:var(--dsw-alias-danger);font-weight:600;margin-right:2px}",
-        ".dshk-usage-trigger{color:var(--dsw-alias-label-tertiary);font-family:inherit}",
-        ".dshk-usage-trigger:hover,.dshk-usage-trigger[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover)}",
+        ".dshk-usage-peak{color:var(--dsw-alias-danger);font-weight:600;margin-right:4px}",
+        // 芯片 = 官方 ContextMeter trigger 同款（pill、hover/展开态同色）
+        ".dshk-usage-trigger{color:var(--dsw-alias-label-tertiary);font-family:inherit;font-size:var(--dsh-content-font-size-secondary,13px);font-variant-numeric:tabular-nums;line-height:calc(20px + var(--dsh-content-font-delta-secondary,0px));white-space:nowrap;cursor:pointer;background:0 0;border:none;border-radius:24px;flex:none;align-items:center;gap:6px;padding:1px 8px;display:inline-flex}",
+        ".dshk-usage-trigger:hover,.dshk-usage-trigger[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}",
         ".dshk-usage-trigger.dshk-usage-hot{color:var(--dsw-alias-danger)}",
         ".dshk-usage-trigger.dshk-usage-hot:hover,.dshk-usage-trigger.dshk-usage-hot[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover)}",
+        // 面板 = 官方 ContextMeter panel 同款（定位经 primitives useAnchoredPosition，portal 到 body）；背景是半透明色，磨砂 backdrop-filter 缺了背后的界面会整个透出来
         ".dshk-usage-pop{z-index:1100;box-sizing:border-box;background:var(--dsw-specific-menu);backdrop-filter:var(--dsw-menu-backdrop-filter);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);width:min(264px,100vw - 24px);box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-secondary);cursor:default;border:0;border-radius:12px;padding:12px;font-size:12px;line-height:20px;position:fixed}",
         ".dshk-usage-header{align-items:center;gap:6px;display:flex}",
         ".dshk-usage-headline{color:var(--dsw-alias-label-tertiary);min-width:0}",
         ".dshk-usage-percent{color:var(--dsw-alias-label-primary);font-weight:500}",
-        ".dshk-usage-figures{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary)}",
+        ".dshk-usage-figures{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary);margin-left:auto;font-weight:500}",
         ".dshk-usage-hot{color:var(--dsw-alias-danger)}",
         ".dshk-usage-rows{margin:6px 0 0}",
-        ".dshk-usage-row{justify-content:space-between;align-items:center;gap:12px;display:flex}",
+        ".dshk-usage-row{justify-content:space-between;align-items:center;gap:12px;padding:2px 0;display:flex;margin:0}",
         ".dshk-usage-row dt{color:var(--dsw-alias-label-secondary)}",
-        ".dshk-usage-row dd{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary)}",
-        ".dshk-usage-sub{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}",
-        ".dshk-usage-bar{corner-shape:round;background:var(--dsw-alias-interactive-bg-hover);border-radius:999px;height:4px;overflow:hidden;margin-top:4px}",
-        ".dshk-usage-segment{background:var(--meter-tint,var(--dsw-alias-label-primary));display:block;height:100%;border-radius:inherit}",
+        ".dshk-usage-row dd{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary);margin:0}",
+        ".dshk-usage-sub{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;padding:1px 0 0}",
+        ".dshk-usage-bar{corner-shape:round;background:var(--dsw-alias-interactive-bg-hover);border-radius:999px;gap:1px;height:4px;margin:5px 0 8px;display:flex;overflow:hidden}",
+        ".dshk-usage-segment{background:var(--meter-tint,var(--dsw-alias-label-tertiary));border-radius:1px;flex:none;min-width:2px;height:100%}",
         ".dshk-usage-segment.is-hot{--meter-tint:var(--dsw-alias-danger)}",
         ".dshk-usage-foot{display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:7px;border-top:.5px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font-size:11px}",
         ".dshk-usage-link{margin-left:auto;color:var(--dsw-alias-label-secondary);text-decoration:none;border:.5px solid var(--dsw-alias-border-l1);border-radius:999px;padding:2px 10px;font-size:11px;line-height:16px}",
@@ -1738,7 +1743,7 @@ window.__ModuleLoader__.load({
       // 组件配置页：挂在插件页本组件行上的「配置」。行由 dsh-kit bundle 的 patch
       // 声明，槽位 key = <包名>#<行id>——两种包名口径各挂一枚（页面按精确 key 匹配，
       // 未命中的那枚永远不渲染），宿主改口径也不用动组件
-      for (const key of ["dsh-kit#dsh-kit-monitor", "dsh-kit-monitor#dsh-kit-monitor"]) {
+      for (const key of ["dsh-kit#monitor", "dsh-kit-monitor#monitor"]) {
         ctx.slots.inject("plugins.row.config", () =>
           ctx.slots.register({ name: "plugins.row.config", key }, MonitorConfigPage),
         );
