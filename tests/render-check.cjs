@@ -88,32 +88,14 @@ if (!global.location) {
   global.location = { protocol: "http:", host: "127.0.0.1:3081" };
 }
 
-// 2.5) 加载真实的 dsh-kit-dock client bundle（组件间共享底座）：根 factory 在
-//      materialization 时 require("dsh-kit-dock")，这里把真包的导出面喂进去——
-//      底座代码由此也过一遍本检查（factory 体内的 CSS 注入等副作用一并执行）
-const dockSrc = fs.readFileSync(__dirname + "/../packages/dsh-kit-dock/client/bundle.js", "utf8").replace(/\r\n/g, "\n");
-const dockFactoryStart = dockSrc.indexOf("factory: (require) => {");
-if (dockFactoryStart < 0) { console.log("FATAL: dock bundle no factory"); process.exit(2); }
-const dockTail = dockSrc.lastIndexOf("  },\n});");
-const dockBody = dockSrc.slice(dockFactoryStart + "factory: (require) => {".length, dockTail);
-const dockFactory = new Function("require", dockBody);
-const dockExports = dockFactory((name) => {
-  if (name === "react") return reactStub;
-  if (name === "react/jsx-runtime") return jsxRuntimeStub;
-  if (name === "@deepseek-ai/dsh-client-ui-primitives") return primStub;
-  throw new Error("unexpected dock require: " + name);
-});
-const dockOk = [dockExports.kitGetJson, dockExports.kitPostJson, dockExports.kitJson, dockExports.flashToast, dockExports.writeClipboard, dockExports.mainRowOf, dockExports.createConfigPage].every(
-  (fn) => typeof fn === "function",
-);
-console.log((dockOk ? "PASS  " : "FAIL  ") + "dock 底座导出面齐全（kit 三件套/轻提示/剪贴板/mainRowOf/createConfigPage）");
-if (!dockOk) process.exitCode = 1;
+// 2.5) 共享底座（kitBase）已内联进根包 factory：随本检查一并执行（CSS 注入等
+//      副作用照跑），导出面直接落在根包 exports 上——断言见 comps 加载之后
 
 // 3) 组装可执行的 factory 闭包，并导出组件（替换防 early-return）；
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return { vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, DiffPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, PhoneSection, KitSurfaces, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, KitConfigPage, KIT_CFG_FIELDS, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref };",
+  "return Object.assign({ vaultSideSlot, vaultPaneSlot, TreeNode, FileTreePanel, DiffPane, TerminalEntry, FileTreeEntry, ScmEntry, VaultEntry, PhoneSection, KitSurfaces, GitChangesPanel, GitGraphPanel, GitBranchMenu, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, CommitGraphSvg, computeCommitGraph, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchTree, fetchGitStatus, fetchGitLog, fetchGitInit, postFsOp, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, KitConfigPage, KIT_CFG_FIELDS, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref }, kitBase);",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -124,9 +106,15 @@ const comps = harness((name) => {
   if (name === "react/jsx-runtime") return jsxRuntimeStub;
   if (name === "react-dom") return reactDomStub;
   if (name === "@deepseek-ai/dsh-client-ui-primitives") return primStub;
-  if (name === "dsh-kit-dock") return dockExports;
   throw new Error("unexpected require: " + name);
 });
+
+// 共享底座（kitBase）导出面：已内联进根包 factory，直接落在 comps 上
+const baseOk = [comps.kitGetJson, comps.kitPostJson, comps.kitJson, comps.flashToast, comps.writeClipboard, comps.mainRowOf, comps.createConfigPage, comps.setKitUi, comps.getKitUi, comps.subscribeLocale].every(
+  (fn) => typeof fn === "function",
+);
+console.log((baseOk ? "PASS  " : "FAIL  ") + "底座共享面齐全（kit 三件套/轻提示/剪贴板/mainRowOf/createConfigPage/kitUi/locale store）");
+if (!baseOk) process.exitCode = 1;
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
 const names = ["TreeNode", "FileTreePanel", "DiffPane", "TerminalEntry", "FileTreeEntry", "ScmEntry", "VaultEntry", "PhoneSection", "KitSurfaces", "GitChangesPanel", "GitGraphPanel", "GitBranchMenu", "SkillsManager", "TerminalDock", "TerminalPane", "CommitGraphSvg", "BrowserPanel", "RteEditor", "VaultPagePane", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "KitConfigPage", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "BrowserPaneBody", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];

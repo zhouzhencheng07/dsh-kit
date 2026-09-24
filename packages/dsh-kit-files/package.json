@@ -38,7 +38,7 @@
         "slots"
       ],
       "external": [
-        "dsh-kit-dock"
+        "dsh-kit"
       ]
     }
   }
