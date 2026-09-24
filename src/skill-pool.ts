@@ -30,7 +30,7 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 
-import { recycleDelete } from 'dsh-kit-core'
+import { recycleDelete, findProjectRoot } from 'dsh-kit-core'
 import { sameOrigin } from 'dsh-kit-core'
 
 const POOL_DIRNAME = 'skill-pool'
@@ -96,21 +96,6 @@ export function defaultPoolDir(): string {
   return path.join(dshHome(), POOL_DIRNAME)
 }
 
-/** 自 start 向上找 .git（目录或文件都算），找不到退回 start 本身（对齐 skill-filesystem 语义）。
- *  git 相关端点也用它定位项目根。 */
-export function findProjectRoot(start: string): string {
-  let current = start
-  for (;;) {
-    try {
-      if (fs.existsSync(path.join(current, '.git'))) return current
-    } catch {
-      // 无权限探测就当没有，继续向上
-    }
-    const parent = path.dirname(current)
-    if (parent === current) return start
-    current = parent
-  }
-}
 
 /** 解析全部白名单物理根（带逻辑分组与 rank）；cwd 缺省则无项目组 */
 export function resolveRoots(cwd: unknown): PhysicalRootWithDir[] {
