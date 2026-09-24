@@ -927,7 +927,7 @@ let vaultFetchPrev = null;
     check(
       "改名走宿主端点（源码哨兵：rename 提交后搬树键与已开页签）",
       src.includes('vaultOp("/dsh-kit/vault/rename", { path: entry.path, name })') &&
-        src.includes("const patch = vaultTabsRetarget(kitUi, entry.path, res.path, entry.dir === true);") &&
+        src.includes("const patch = vaultTabsRetarget(getKitUi(), entry.path, res.path, entry.dir === true);") &&
         src.includes("retargetTree(entry.path, res.path, entry.dir === true);"),
     );
     // 移动到…：候选目录列同侧全部分支（根 + wiki + wiki/Python）

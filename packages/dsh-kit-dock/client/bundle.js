@@ -348,6 +348,248 @@ window.__ModuleLoader__.load({
       return ConfigPage;
     }
 
+    // ─────────── 跨槽开合状态（kitUi）───────────
+    // 底座单例持有：入口按钮（composer 工具行）与右栏 pane 宿主是多个独立槽位
+    // 组件（分属不同组件包），状态必须跨包跨槽共享：模块级不可变快照 +
+    // useSyncExternalStore 订阅（getSnapshot 返回模块绑定值，恒定引用直到 set 替换）。
+    // 功能存在性（open 位）与激活位（activeFeature）分离：打开某功能 = 确保签
+    // 存在并激活，切走不丢状态（diff/知识库的文档签状态在 kitUi 里，官方 dock
+    // 签关掉再开即恢复）。files 与 vaultPages 同构（浏览器式：顶部一条标签条 +
+    // 下面若干内容页）——一页一标签、点击切换、✕ 单关；源代码管理/提交图谱点开
+    // 都往 files 标签条里加标签，同路径复用一个（重开刷新 diff/未跟踪状态）。
+    // 文件树与对话区点击已改投官方右栏文件签，不进这里。diff 签非激活仍挂载
+    // （display:none）保住滚动位置，超内部上限（3）自动关最久没看的那张。
+    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, activeFeature: null };
+    const kitUiListeners = new Set();
+    function setKitUi(patch) {
+      kitUi = { ...kitUi, ...patch };
+      for (const listener of kitUiListeners) listener();
+    }
+    function subscribeKitUi(listener) {
+      kitUiListeners.add(listener);
+      return () => kitUiListeners.delete(listener);
+    }
+    const useKitUi = () => react.useSyncExternalStore(subscribeKitUi, () => kitUi);
+    const getKitUi = () => kitUi;
+
+    /** diff 签内部上限（不外露为设置项——签只来自 SCM/提交图谱，堆积面小）：
+     *  超限自动关最久没看的那张 */
+    const PREVIEW_MAX = 3;
+    /** 打开文件 = 文件签条上加一个文件标签（已开过则复用、只刷新状态并激活）。
+     *  usedAt 是 LRU 判据（超上限时关掉最久没看的那张，绝不含本次）；
+     *  deleted=已删除文件，只承载删除 diff。commit（可选）= 提交钉定模式
+     *  （图谱提交详情进入，diff 视图与该提交的第一父对比）；重开同路径时
+     *  commit 随入口刷新（从 SCM 更改列表重开即清除钉定） */
+    function openFileTab(ui, path, from, untracked, deleted, commit) {
+      const now = Date.now();
+      const commitRef = typeof commit === "string" && commit !== "" ? commit : undefined;
+      const items = ui.files ?? [];
+      let list = items.some((x) => x.path === path)
+        ? items.map((x) => (x.path === path ? { ...x, from: from ?? x.from, untracked: untracked === true, deleted: deleted === true, commit: commitRef, usedAt: now } : x))
+        : [...items, { path, from: from ?? "scm", untracked: untracked === true, deleted: deleted === true, commit: commitRef, usedAt: now }];
+      const max = PREVIEW_MAX;
+      while (list.length > max) {
+        let oldest = null;
+        for (const x of list) {
+          if (x.path !== path && (oldest === null || x.usedAt < oldest.usedAt)) oldest = x;
+        }
+        if (oldest === null) break;
+        list = list.filter((x) => x.path !== oldest.path);
+      }
+      return { files: list, activeFile: path, activeFeature: "file" };
+    }
+    /** 只激活一个文件标签（标签条点击走这里）：刷新 usedAt（LRU 判据是「最久没看
+     *  的那张」），不重设 diff/未跟踪状态——那是入口（openFileTab）的事 */
+    function activateFileTab(ui, path) {
+      const items = ui.files ?? [];
+      if (!items.some((x) => x.path === path)) return {};
+      const now = Date.now();
+      return { files: items.map((x) => (x.path === path ? { ...x, usedAt: now } : x)), activeFile: path, activeFeature: "file" };
+    }
+    /** 关一个文件标签：激活位顺延邻居；关光了整片文件区收摊（走 closeFeatureTab，
+     *  激活位顺延到余下的存在标签） */
+    function closeFileTab(ui, path) {
+      const items = ui.files ?? [];
+      const idx = items.findIndex((x) => x.path === path);
+      if (idx < 0) return {};
+      const rest = items.filter((x) => x.path !== path);
+      if (rest.length === 0) return { ...closeFeatureTab(ui, "file"), files: [], activeFile: null };
+      const patch = { files: rest };
+      if (ui.activeFile === path) patch.activeFile = rest[Math.min(idx, rest.length - 1)].path;
+      return patch;
+    }
+
+    // ── 知识库页标签（多开：与文件标签同款交互）──
+    // 一页一标签、点击切换、✕ 单关；vaultOpen 是「知识库这一片有没有」，
+    // 没有任何页标签时它承载一张「请选择页面」空签（入口点开即见右栏签，打开时
+    // 中间页面也要相应打开）。
+    /** 路径尾名（标签名用）：文件保留后缀，知识库页去掉 .md（与索引树的页名一致） */
+    const baseName = (p) => String(p ?? "").split(/[\\/]/).pop() ?? "";
+    const pageBasename = (p) => baseName(p).replace(/\.(md|markdown)$/i, "");
+    /** 开/激活一个知识库页标签（树/搜索/反链/闲聊路径/wikilink 点击都走这里） */
+    function openVaultPageTab(ui, path) {
+      const pages = ui.vaultPages ?? [];
+      const list = pages.includes(path) ? pages : [...pages, path];
+      return {
+        vaultPages: list,
+        activeVaultPage: path,
+        vaultOpen: true,
+        activeFeature: "vault",
+      };
+    }
+    /** 只激活（标签条点击走这里） */
+    function activateVaultPage(ui, path) {
+      if (!(ui.vaultPages ?? []).includes(path)) return {};
+      return { vaultPages: ui.vaultPages, activeVaultPage: path, vaultOpen: true, activeFeature: "vault" };
+    }
+    /** 关一个知识库页标签：激活位顺延邻居；关光了则整片知识库区收摊
+     *  （索引视图不跟着关——那是侧栏的事，输入行入口管它） */
+    function closeVaultPageTab(ui, path) {
+      const pages = ui.vaultPages ?? [];
+      const idx = pages.indexOf(path);
+      if (idx < 0) return {};
+      const rest = pages.filter((p) => p !== path);
+      // 关光了走 closeFeatureTab：清 vaultOpen 的同时把激活位顺延到别的标签
+      if (rest.length === 0) {
+        return { ...closeFeatureTab(ui, "vault"), vaultPages: [], activeVaultPage: null };
+      }
+      const patch = { vaultPages: rest };
+      if (ui.activeVaultPage === path) patch.activeVaultPage = rest[Math.min(idx, rest.length - 1)];
+      return patch;
+    }
+    /** 关一个功能签：清存在性；关的是激活签时激活位顺延剩余签 */
+    function closeFeatureTab(ui, tab) {
+      const patch = {};
+      if (tab === "file") {
+        patch.files = [];
+        patch.activeFile = null;
+      } else if (tab === "schedule") patch.schedOpen = false;
+      else if (tab === "vault") {
+        patch.vaultOpen = false;
+        patch.vaultPages = [];
+        patch.activeVaultPage = null;
+      } else patch.browserOpen = false;
+      if (ui.activeFeature === tab) {
+        const remaining = [];
+        if (tab !== "file" && (ui.files?.length ?? 0) > 0) remaining.push("file");
+        if (tab !== "schedule" && ui.schedOpen) remaining.push("schedule");
+        if (tab !== "vault" && ui.vaultOpen) remaining.push("vault");
+        if (tab !== "browser" && ui.browserOpen) remaining.push("browser");
+        patch.activeFeature = remaining[0] ?? null;
+      }
+      return patch;
+    }
+    /** 打开/激活一个功能签（输入行入口与自动跟随共用）：确保存在并
+     *  激活、不清别的标签。浏览器不做抑制（agent 干活必回眼前） */
+    function openFeatureTab(ui, tab) {
+      if (tab === "schedule") return { schedOpen: true, activeFeature: "schedule" };
+      if (tab === "vault") return { vaultOpen: true, activeFeature: "vault" };
+      return { browserOpen: true, activeFeature: "browser" };
+    }
+
+    /** 功能 → dock 签映射（页类型注册表；kind 即 openTab 用的类型名） */
+    const RB_FEATURES = [
+      { id: "dsh-kit-file", kind: "dshk-file", feature: "file", titleKey: "fileTabLabel" },
+      { id: "dsh-kit-vault", kind: "dshk-vault", feature: "vault", titleKey: "vaultTitle" },
+      { id: "dsh-kit-schedule", kind: "dshk-schedule", feature: "schedule", titleKey: "schedTab" },
+      { id: "dsh-kit-browser", kind: "dshk-browser", feature: "browser", titleKey: "dockBrowser" },
+    ];
+    /** sidebarRight 服务实例（openTab 用）：apply 时 ctx.inject(["sidebarRight"])
+     *  捕获——服务属性不能直接读（`cannot get property without inject`），又不能
+     *  写进 exports.inject（0.1.2 无此服务，硬声明整插件起不来） */
+    let rightbarSr = null;
+    /** 服务实例读取（文件地址拼装等消费方在别的包，直接导出访问器） */
+    function getRightbarSr() {
+      return rightbarSr;
+    }
+
+    /** 打开/聚焦右栏 dock 签（UI 事件路径）。服务未就绪或宿主不支持时静默放弃
+     *  ——调用方都已先走了 kitUi 侧的开签补丁，签内容状态不会丢 */
+    function openRightbarTab(feature) {
+      const sr = rightbarSr;
+      if (!sr || typeof sr.openTab !== "function") return;
+      const f = RB_FEATURES.find((x) => x.feature === feature);
+      if (!f) return;
+      try {
+        sr.openTab(f.kind);
+      } catch {
+        /* 右栏异常不拖垮入口动作 */
+      }
+    }
+    /** 关掉右栏的某类 dock 签（官方 close API：按 kind 在 mounted surface 的
+     *  layout 签表里找到 id 再关）。服务未就绪或签不在时静默——调用点都在
+     *  「签该消失」的语义位（最后一页文档签关掉 / 浏览器没了） */
+    function closeRightbarTab(feature) {
+      const sr = rightbarSr;
+      const f = RB_FEATURES.find((x) => x.feature === feature);
+      if (!sr || !f || typeof sr.close !== "function") return;
+      try {
+        // mounted() 返回 surface {layout, history, minted}——签表在 layout.tabs
+        const surface = typeof sr.mounted === "function" ? sr.mounted() : undefined;
+        const tabsMap = surface && surface.layout ? surface.layout.tabs : undefined;
+        const tab = tabsMap ? Object.values(tabsMap).find((x) => x && x.kind === f.kind) : null;
+        if (tab && tab.id !== undefined) sr.close(tab.id);
+      } catch {
+        /* 右栏异常不拖垮入口动作 */
+      }
+    }
+    /** 「开功能签」：dock 签交给官方 openTab；kitUi 只补存在性（入口按钮选中态 /
+     *  角标 / 浏览器自动跟随判定还要读它）。服务未就绪时只剩存在性补丁 */
+    function openFeatureDock(ui, feature) {
+      openRightbarTab(feature);
+      return openFeatureTab(ui, feature);
+    }
+
+    /** 打开 diff 签并确保「文件」dock 签在眼前（源代码管理/提交图谱统一入口；
+     *  文件树与对话区点击已改投官方右栏文件签，不再进这里） */
+    function openFileAndDock(path, from, untracked, deleted, commit) {
+      setKitUi(openFileTab(kitUi, path, from, untracked === true, deleted === true, typeof commit === "string" && commit !== "" ? commit : undefined));
+      openRightbarTab("file");
+    }
+
+    /** 单槽互斥补丁：view = 'tree' | 'scm' | 'vault' | null */
+    function sidebarViewPatch(view) {
+      return {
+        treeOpen: view === "tree",
+        gitOpen: view === "scm",
+        vaultIdxOpen: view === "vault",
+      };
+    }
+
+    // ── 多终端会话模型 ──
+    // terminals:[{id, sessionId, cwd}] 创建顺序即标签顺序；每个终端在创建那一刻
+    // 绑定当时的会话（官方引擎按会话起 PTY，cwd 定在会话工作区，cwd 只剩标签
+    // 文案用途）。termDockOpen 只管坞的可见性——隐藏不杀进程，后台标签的 shell
+    // 继续跑、xterm 继续缓冲输出；标签 ✕ 才真正结束对应宿主终端。
+    let termSeq = 0;
+    const makeTerm = (sessionId, cwd) => ({ id: `term-${++termSeq}`, sessionId, cwd });
+    /** 入口按钮与 Ctrl+/ 共用：开=恢复视图（无会话则新建绑定当前会话）；关=仅隐藏 */
+    function toggleTermDock(ui, sessionId, cwd) {
+      if (ui.termDockOpen) return { termDockOpen: false };
+      if (ui.terminals.length === 0) {
+        const nt = sessionId ? makeTerm(sessionId, cwd) : null;
+        return nt ? { termDockOpen: true, terminals: [nt], activeTermId: nt.id } : { termDockOpen: true };
+      }
+      return { termDockOpen: true, activeTermId: ui.activeTermId ?? ui.terminals[ui.terminals.length - 1].id };
+    }
+    /** ＋ 新建终端：绑定调用那一刻的当前会话 */
+    function spawnTerm(ui, sessionId, cwd) {
+      const nt = makeTerm(sessionId ?? "", cwd ?? "");
+      return { terminals: [...ui.terminals, nt], activeTermId: nt.id, termDockOpen: true };
+    }
+    /** 标签 ✕：从列表移除（组件卸载即断 WS 杀进程），激活位顺延邻居 */
+    function killTerm(ui, id) {
+      const idx = ui.terminals.findIndex((x) => x.id === id);
+      if (idx < 0) return {};
+      const rest = ui.terminals.filter((x) => x.id !== id);
+      const patch = { terminals: rest };
+      if (ui.activeTermId === id) {
+        patch.activeTermId = rest.length > 0 ? rest[Math.min(idx, rest.length - 1)].id : null;
+      }
+      if (rest.length === 0) patch.termDockOpen = false;
+      return patch;
+    }
+
     exports.flashToast = flashToast;
     exports.writeClipboard = writeClipboard;
     exports.kitGetJson = kitGetJson;
@@ -358,9 +600,39 @@ window.__ModuleLoader__.load({
     exports.getLocaleVersion = getLocaleVersion;
     exports.mainRowOf = mainRowOf;
     exports.createConfigPage = createConfigPage;
+    exports.setKitUi = setKitUi;
+    exports.subscribeKitUi = subscribeKitUi;
+    exports.useKitUi = useKitUi;
+    exports.getKitUi = getKitUi;
+    exports.PREVIEW_MAX = PREVIEW_MAX;
+    exports.openFileTab = openFileTab;
+    exports.activateFileTab = activateFileTab;
+    exports.closeFileTab = closeFileTab;
+    exports.baseName = baseName;
+    exports.pageBasename = pageBasename;
+    exports.openVaultPageTab = openVaultPageTab;
+    exports.activateVaultPage = activateVaultPage;
+    exports.closeVaultPageTab = closeVaultPageTab;
+    exports.closeFeatureTab = closeFeatureTab;
+    exports.openFeatureTab = openFeatureTab;
+    exports.RB_FEATURES = RB_FEATURES;
+    exports.getRightbarSr = getRightbarSr;
+    exports.openRightbarTab = openRightbarTab;
+    exports.closeRightbarTab = closeRightbarTab;
+    exports.openFeatureDock = openFeatureDock;
+    exports.openFileAndDock = openFileAndDock;
+    exports.sidebarViewPatch = sidebarViewPatch;
+    exports.toggleTermDock = toggleTermDock;
+    exports.spawnTerm = spawnTerm;
+    exports.killTerm = killTerm;
+    exports.makeTerm = makeTerm;
     // 底座是活动 entry：client runner 按 client 插件形状物化本模块，必须带 apply
     //（宿主半边同款：载体 entry，本体无行为）
-    exports.apply = async () => {};
+    exports.apply = async (ctx) => {
+      if (typeof ctx?.inject === "function") {
+        ctx.inject(["sidebarRight"], (c) => { rightbarSr = c.sidebarRight; });
+      }
+    };
     return exports;
   },
 });
