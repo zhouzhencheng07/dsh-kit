@@ -243,21 +243,9 @@ export const Config =
         // 自动切面板与画面跟随 agent 是恒定行为（无开关）——人为切走浏览器
         // 标签后的"不再拽回"抑制在客户端侧实现。
         browserEnabled: z.boolean().default(true).volatile(),
-        // 会话监视器（纯浏览器端消费，宿主不读）：
-        // ① 全局 429 续跑：监视【所有】列表内会话（不要求会话页开着），turn 因 429
-        //    限流失败（客户端镜像 lastAgentError 匹配限流措辞）结束后等 monitorWaitMs
-        //    自动 prompt"继续"，连续自动续跑不超过 monitorMaxAuto 次（一轮正常收尾
-        //    即清零）；
-        // ② 死循环打断（仅当前打开的会话）：流式输出尾部自重叠达 monitorRepeatThreshold
-        //    次时停止当前回合并发循环打断话术。
-        monitorEnabled: z.boolean().default(true).volatile(),
-        monitorWaitMs: z.number().step(1).min(5000).max(600000).default(15000).volatile(),
-        monitorMaxAuto: z.number().step(1).min(1).max(10).default(5).volatile(),
-        monitorRepeatThreshold: z.number().step(1).min(2).max(10).default(3).volatile(),
-        // 会话通知（纯浏览器端消费，宿主不读）：回合收尾、上下文压缩完成或 agent 提问时，
-        // 若页面不在前台（或事件不属于当前打开的会话）弹桌面通知——浏览器 Notification
-        // API，未授权时退标题闪烁。一个总开关管全部提醒，不分类配置。
-        notifyEnabled: z.boolean().default(true).volatile(),
+        // 会话监视与通知（monitorEnabled/monitorWaitMs/monitorMaxAuto/
+        // monitorRepeatThreshold/notifyEnabled）随组件化迁入 dsh-kit-monitor 的
+        // Config（配置页在插件页该组件行）；主包不再消费这些字段。
         sidebarShortcut: z.string().default('Ctrl+B').volatile(),
         rightbarShortcut: z.string().default('Ctrl+Alt+B').volatile(),
         terminalShortcut: z.string().default('Ctrl+/').volatile(),

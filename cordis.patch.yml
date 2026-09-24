@@ -15,3 +15,5 @@
       name: dsh-kit-dock
     - id: dsh-kit-monitor
       name: dsh-kit-monitor
+# 组件行统一由本 bundle 声明——插件页 dsh-kit 详情页列出全部组件（组件显示名
+# 取各自包的 locale/*.json meta），组件配置页经 plugins.row.config 挂在组件行上

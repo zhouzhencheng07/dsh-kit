@@ -1,7 +1,7 @@
 {
   "name": "dsh-kit-monitor",
   "version": "0.5.3-alpha.2",
-  "description": "dsh-kit 用量与监视组件：/dsh-kit/usage 聚合端点（provider 发现 + 三家上游）+ 余额用量芯片（UsageLine），usageEnabled 总开关门控",
+  "description": "dsh-kit 用量与监视组件：/dsh-kit/usage 聚合端点与余额用量芯片（UsageLine）、429 限流自动续跑、死循环打断、会话桌面通知",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -11,12 +11,14 @@
       "default": "./dist/index.js"
     },
     "./client": "./client/bundle.js",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
     "src",
-    "client"
+    "client",
+    "locale"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",

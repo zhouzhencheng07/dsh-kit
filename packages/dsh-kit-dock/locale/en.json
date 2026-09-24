@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Dock base",
+    "description": "Shared client base for components: kit endpoints, toast, clipboard, session-row helpers, config-page skeleton."
+  }
+}

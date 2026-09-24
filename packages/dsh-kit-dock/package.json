@@ -8,11 +8,13 @@
   "exports": {
     ".": "./index.js",
     "./client": "./client/bundle.js",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
     "index.js",
-    "client"
+    "client",
+    "locale"
   ],
   "dsh": {
     "client": {
