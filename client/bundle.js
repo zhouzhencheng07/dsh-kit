@@ -2302,8 +2302,8 @@ ellipsis，窄列只截字不破版 */
 .dshk-usage-trigger:hover,.dshk-usage-trigger[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
 .dshk-usage-trigger.dshk-usage-hot{color:var(--dsw-alias-danger)}
 .dshk-usage-trigger.dshk-usage-hot:hover,.dshk-usage-trigger.dshk-usage-hot[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover)}
-/* 面板 = 官方 ContextMeter panel 同款（定位经 primitives useAnchoredPosition，portal 到 body） */
-.dshk-usage-pop{z-index:1100;box-sizing:border-box;background:var(--dsw-specific-menu);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);width:min(264px,100vw - 24px);box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-secondary);cursor:default;border:0;border-radius:12px;padding:12px;font-size:12px;line-height:20px;position:fixed}
+/* 面板 = 官方 ContextMeter panel 同款（定位经 primitives useAnchoredPosition，portal 到 body）；背景是半透明色，磨砂 backdrop-filter 缺了背后的界面会整个透出来 */
+.dshk-usage-pop{z-index:1100;box-sizing:border-box;background:var(--dsw-specific-menu);backdrop-filter:var(--dsw-menu-backdrop-filter);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);width:min(264px,100vw - 24px);box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-secondary);cursor:default;border:0;border-radius:12px;padding:12px;font-size:12px;line-height:20px;position:fixed}
 .dshk-usage-header{align-items:center;gap:6px;display:flex}
 .dshk-usage-headline{color:var(--dsw-alias-label-tertiary);min-width:0}
 .dshk-usage-percent{color:var(--dsw-alias-label-primary);font-weight:500}
