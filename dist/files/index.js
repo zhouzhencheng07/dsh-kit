@@ -94,6 +94,9 @@ export const Config = z && typeof z.object === 'function'
         fileTreeEnabled: z.boolean().default(true).volatile(),
         // 源代码管理签（状态/差异/提交图谱/分支）总开关
         sourceControlEnabled: z.boolean().default(true).volatile(),
+        // 隐藏官方右栏「工作区文件」入口胶囊（纯浏览器端消费，宿主不读）：那只是个
+        // 目录按钮，与文件树功能重复；隐藏后文件仍可从对话/文件树/搜索进入
+        hideOfficialFilesEntry: z.boolean().default(false).volatile(),
         // 键位不在这里：文件树/源代码管理两条命令在 client 半边注册进宿主
         // shortcuts 服务（官方「快捷键」页录制与持久化）
     })
@@ -103,7 +106,7 @@ export function apply(ctx, config = {}) {
     // volatile 字段在 fiber config 里是稳定 ref（{get}），统一解引用
     const defaults = Config
         ? Config({})
-        : { fileTreeEnabled: true, sourceControlEnabled: true };
+        : { fileTreeEnabled: true, sourceControlEnabled: true, hideOfficialFilesEntry: false };
     const readRef = (v) => v !== null && typeof v === 'object' && typeof v.get === 'function'
         ? v.get()
         : v;
