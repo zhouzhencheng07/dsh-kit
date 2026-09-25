@@ -17,6 +17,7 @@ window.__ModuleLoader__.load({
     const dock = require("dsh-kit");
     const {
       setKitUi, getKitUi, useKitUi,
+      KitTip, attachShortcutCatalog,
       openFileAndDock, openTreeFile, sidebarViewPatch,
       flashToast, writeClipboard, kitGetJson, kitPostJson, kitJson,
       resolveZh, currentComposerShell, chatMentionText,
@@ -407,6 +408,7 @@ window.__ModuleLoader__.load({
     function registerShortcuts(scCtx) {
       const shortcuts = scCtx.shortcuts;
       if (!shortcuts || typeof shortcuts.register !== "function") return;
+      attachShortcutCatalog(shortcuts.catalog);
       const commands = [
         {
           id: "dsh-kit-files.tree.toggle",
@@ -2304,16 +2306,19 @@ window.__ModuleLoader__.load({
       const ui = useKitUi();
       const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
       if (cfg.fileTreeEnabled === false) return null;
-      return jsxRuntime.jsx("button", {
-        type: "button",
-        className: "dshk-btn dshk-enbtn",
-        "aria-pressed": ui.treeOpen,
-        title: t("treeLabel"),
-        onClick: () => {
-          if (!ui.treeOpen) expandSidebarNow();
-          setKitUi(sidebarViewPatch(ui.treeOpen ? null : "tree"));
-        },
-        children: jsxRuntime.jsx(FolderIcon, {}),
+      return jsxRuntime.jsx(KitTip, {
+        label: t("treeLabel"),
+        command: "dsh-kit-files.tree.toggle",
+        children: jsxRuntime.jsx("button", {
+          type: "button",
+          className: "dshk-btn dshk-enbtn",
+          "aria-pressed": ui.treeOpen,
+          onClick: () => {
+            if (!ui.treeOpen) expandSidebarNow();
+            setKitUi(sidebarViewPatch(ui.treeOpen ? null : "tree"));
+          },
+          children: jsxRuntime.jsx(FolderIcon, {}),
+        }),
       });
     }
 
@@ -2322,16 +2327,19 @@ window.__ModuleLoader__.load({
       const ui = useKitUi();
       const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
       if (cfg.sourceControlEnabled === false) return null;
-      return jsxRuntime.jsx("button", {
-        type: "button",
-        className: "dshk-btn dshk-enbtn",
-        "aria-pressed": ui.gitOpen,
-        title: t("scTitle"),
-        onClick: () => {
-          if (!ui.gitOpen) expandSidebarNow();
-          setKitUi(sidebarViewPatch(ui.gitOpen ? null : "scm"));
-        },
-        children: jsxRuntime.jsx(BranchIcon, {}),
+      return jsxRuntime.jsx(KitTip, {
+        label: t("scTitle"),
+        command: "dsh-kit-files.scm.toggle",
+        children: jsxRuntime.jsx("button", {
+          type: "button",
+          className: "dshk-btn dshk-enbtn",
+          "aria-pressed": ui.gitOpen,
+          onClick: () => {
+            if (!ui.gitOpen) expandSidebarNow();
+            setKitUi(sidebarViewPatch(ui.gitOpen ? null : "scm"));
+          },
+          children: jsxRuntime.jsx(BranchIcon, {}),
+        }),
       });
     }
 

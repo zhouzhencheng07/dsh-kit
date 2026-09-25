@@ -64,6 +64,52 @@ window.__ModuleLoader__.load({
     let dswPrim = null;
     try { dswPrim = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 老宿主：配置页降级 */ }
 
+    // ── 官方气泡（名称 + 键帽）与宿主键位镜像 ──
+    // 悬停提示一律走官方 primitives 的 Tooltip：同一套主题底色、同一套键帽样式。
+    // 取不到该成员的宿主回落各按钮原来的原生 title（不挡启动）。
+    const dswTooltip = dswPrim && typeof dswPrim.Tooltip === "function" ? dswPrim.Tooltip : null;
+    // 宿主 shortcuts 目录镜像：apply 期 inject 到位后接管（服务可能晚于首次渲染），
+    // 之后活读——官方「快捷键」页里改了键，悬停气泡当场跟着变。
+    let scCatalog = null;
+    let scCatalogOff = null;
+    let scRows = [];
+    const scListeners = new Set();
+    const subscribeShortcutRows = (listener) => {
+      scListeners.add(listener);
+      return () => { scListeners.delete(listener); };
+    };
+    const getShortcutRows = () => scRows;
+    function refreshShortcutRows() {
+      const next = scCatalog && typeof scCatalog.getSnapshot === "function" ? scCatalog.getSnapshot() : null;
+      scRows = Array.isArray(next) ? next : [];
+      for (const listener of [...scListeners]) listener();
+    }
+    /** 接管宿主 shortcuts 目录；重复或后到的同源调用无副作用 */
+    function attachShortcutCatalog(store) {
+      if (!store || store === scCatalog) return;
+      if (typeof scCatalogOff === "function") { try { scCatalogOff(); } catch { /* 旧订阅卸载失败不影响新订阅 */ } }
+      scCatalog = store;
+      scCatalogOff = typeof store.subscribe === "function" ? store.subscribe(refreshShortcutRows) : null;
+      refreshShortcutRows();
+    }
+    /** 官方气泡：label + command 当前生效的键帽（未注册或无绑定时只出 label）。
+     *  command 传命令 id；气泡在锚点上方——composer 工具行里的官方气泡同侧。 */
+    function KitTip({ label, command, children }) {
+      const rows = react.useSyncExternalStore(subscribeShortcutRows, getShortcutRows);
+      const row = command ? rows.find((r) => r.id === command) ?? null : null;
+      if (!dswTooltip) return react.cloneElement(children, { title: label });
+      return jsxRuntime.jsx(dswTooltip, {
+        label,
+        shortcutKeys: row ? row.keys : undefined,
+        side: "top",
+        delayMs: 500,
+        children: react.cloneElement(children, {
+          "aria-label": label,
+          "aria-keyshortcuts": row ? row.aria : undefined,
+        }),
+      });
+    }
+
     // 轻提示样式（本包私有 CSS，materialization 时注入一次）
     if (typeof document !== "undefined") {
       const style = document.createElement("style");
@@ -642,6 +688,8 @@ window.__ModuleLoader__.load({
     }
 
     exports.flashToast = flashToast;
+    exports.KitTip = KitTip;
+    exports.attachShortcutCatalog = attachShortcutCatalog;
     exports.writeClipboard = writeClipboard;
     exports.kitGetJson = kitGetJson;
     exports.kitPostJson = kitPostJson;
@@ -711,6 +759,7 @@ window.__ModuleLoader__.load({
     // ─────────── 跨槽开合状态与操作（实现在 dsh-kit-dock，底座单例共享）───
     const {
       setKitUi, subscribeKitUi, useKitUi, getKitUi,
+      KitTip, attachShortcutCatalog,
       PREVIEW_MAX, openFileTab, activateFileTab, closeFileTab,
       baseName, pageBasename, openVaultPageTab, activateVaultPage, closeVaultPageTab,
       closeFeatureTab, openFeatureTab, RB_FEATURES,
@@ -3212,22 +3261,25 @@ ellipsis，窄列只截字不破版 */
       const cwd = typeof row?.cwd === "string" ? row.cwd : null;
       const count = ui.terminals.length;
       const dockOn = ui.termDockOpen && count > 0;
-      return jsxRuntime.jsxs("button", {
-        type: "button",
-        className: "dshk-btn dshk-enbtn",
-        "aria-pressed": dockOn,
-        title: count > 0 ? `${t("label")} · ${count}` : t("label"),
-        onClick: () => {
-          // 只开/关终端坞：隐藏不杀进程，后台会话继续跑；无会话时新建并绑定
-          // 当时的当前会话（之后切换会话不影响已开终端）
-          setKitUi(toggleTermDock(getKitUi(), sessionId, cwd));
-        },
-        children: [
-          jsxRuntime.jsx(TerminalIcon, {}),
-          count > 0
-            ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(count) })
-            : null,
-        ],
+      return jsxRuntime.jsx(KitTip, {
+        label: count > 0 ? `${t("label")} · ${count}` : t("label"),
+        command: "dsh-kit.terminal.toggle",
+        children: jsxRuntime.jsxs("button", {
+          type: "button",
+          className: "dshk-btn dshk-enbtn",
+          "aria-pressed": dockOn,
+          onClick: () => {
+            // 只开/关终端坞：隐藏不杀进程，后台会话继续跑；无会话时新建并绑定
+            // 当时的当前会话（之后切换会话不影响已开终端）
+            setKitUi(toggleTermDock(getKitUi(), sessionId, cwd));
+          },
+          children: [
+            jsxRuntime.jsx(TerminalIcon, {}),
+            count > 0
+              ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(count) })
+              : null,
+          ],
+        }),
       });
     }
 
@@ -3265,13 +3317,16 @@ ellipsis，窄列只截字不破版 */
      *  按钮与快捷键同语义（toggleVaultEntry） */
     function VaultEntry() {
       const ui = useKitUi();
-      return jsxRuntime.jsx("button", {
-        type: "button",
-        className: "dshk-btn dshk-enbtn",
-        "aria-pressed": ui.vaultIdxOpen,
-        title: t("vaultTitle"),
-        onClick: () => setKitUi(toggleVaultEntry(getKitUi())),
-        children: jsxRuntime.jsx(VaultIcon, {}),
+      return jsxRuntime.jsx(KitTip, {
+        label: t("vaultTitle"),
+        command: "dsh-kit.vault.toggle",
+        children: jsxRuntime.jsx("button", {
+          type: "button",
+          className: "dshk-btn dshk-enbtn",
+          "aria-pressed": ui.vaultIdxOpen,
+          onClick: () => setKitUi(toggleVaultEntry(getKitUi())),
+          children: jsxRuntime.jsx(VaultIcon, {}),
+        }),
       });
     }
 
@@ -6848,6 +6903,7 @@ ellipsis，窄列只截字不破版 */
     function registerShortcuts(scCtx) {
       const shortcuts = scCtx.shortcuts;
       if (!shortcuts || typeof shortcuts.register !== "function") return;
+      attachShortcutCatalog(shortcuts.catalog);
       const commands = [
         {
           id: "dsh-kit.terminal.toggle",

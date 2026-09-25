@@ -56,6 +56,7 @@ const reactStub = {
   useRef: (v) => ({ current: v }),
   useMemo: (fn) => fn(),
   useSyncExternalStore: (subscribe, getSnapshot) => { subscribe(() => {}); return getSnapshot(); },
+  cloneElement: (el, props) => ({ ...el, props: { ...el.props, ...props } }),
   Fragment: function Fragment() {},
 };
 const jsxRuntimeStub = {
@@ -70,6 +71,8 @@ const primStub = {
   Switch: jsxPrim("dsw-switch"),
   SegmentedTabs: jsxPrim("dsw-segmented-tabs"),
   Tag: jsxPrim("dsw-tag"),
+  // 悬停气泡：官方 primitives 的 Tooltip（KitTip 有它就走官方气泡）
+  Tooltip: jsxPrim("dsw-tooltip"),
 };
 
 // 1) 共享底座：root bundle 真实加载（kitBase 随 factory 执行），组件从这里取共享面
@@ -242,9 +245,11 @@ check("DiffPane 渲染无异常", !!out && typeof out === "object");
 callLog = [];
 out = comps.FileTreeEntry({});
 check("FileTreeEntry 渲染无异常", !!out && typeof out === "object");
+check("FileTreeEntry 悬停走官方气泡（KitTip 包住锚点，命令 id 对上快捷键注册）", out.type === dockExports.KitTip && out.props.command === "dsh-kit-files.tree.toggle" && typeof out.props.label === "string");
 callLog = [];
 out = comps.ScmEntry({});
 check("ScmEntry 渲染无异常", !!out && typeof out === "object");
+check("ScmEntry 悬停走官方气泡（同一条 KitTip 链路）", out.type === dockExports.KitTip && out.props.command === "dsh-kit-files.scm.toggle" && typeof out.props.label === "string");
 {
   // 侧栏单槽互斥：源代码管理开着时点入口，知识库索引位让出（kitBase 补丁语义）
   const sidebarResetPatch = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null };
@@ -345,6 +350,8 @@ check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
     !filesSrc.includes("fileTreeShortcut") && !filesSrc.includes("scShortcut") && !filesSrc.includes("kcfgGroupShortcuts") &&
       !filesSrc.includes('type: "combo"') && !hostSrc.includes("fileTreeShortcut") && !hostSrc.includes("scShortcut"),
   );
+  // 两处入口钮的悬停改由 KitTip 出官方气泡，不再自带原生 title
+  check("入口钮的悬停不再自带原生 title（全走官方气泡）", !/dshk-enbtn"[\s\S]{0,120}?\n\s*title:/.test(filesSrc));
 }
 
 // —— apply 激活契约 + 官方快捷键注册 + sidebarView 渲染器座桥 ——
@@ -352,11 +359,14 @@ async function checkApply() {
   const registered = [];
   const shortcutCmds = [];
   const seatInjects = [];
+  // 宿主 shortcuts 目录（键帽来源）：随服务一起给注册回调
+  const scRows = [{ id: "dsh-kit-files.tree.toggle", keys: ["Ctrl", "+", "Alt", "+", ","], aria: "Control+Alt+," }];
+  const scCatalogStore = { getSnapshot: () => scRows, subscribe: () => () => {} };
   const ctxStub = {
     inject: (deps, cb) => {
       if (deps.includes("shortcuts")) {
         cb({
-          shortcuts: { register: (cmd) => { shortcutCmds.push(cmd); return () => {}; } },
+          shortcuts: { register: (cmd) => { shortcutCmds.push(cmd); return () => {}; }, catalog: scCatalogStore },
           effect: (fn) => { fn(); },
         });
       }
@@ -407,6 +417,10 @@ async function checkApply() {
   check("渲染器座 treeOpen 分支出 FileTreePanel", !!treeOut && !!treeCall && treeCall[2].cwd === "C:/y");
   check("渲染器座全关返回 null（让位知识库索引分支）", renderer({ ui: { gitOpen: false, treeOpen: false }, cwd: null, owner: {} }) === null);
   check("渲染器座收起态（wide=false）返回 null", renderer({ ui: { treeOpen: true }, cwd: null, owner: { wide: false } }) === null);
+  // 键帽座跨包共享：files 注册期把宿主 shortcuts 目录挂上 kitBase 的共享座，
+  // root 的 KitTip 因此读得到本组件命令当前生效的键（不是把默认键写死在按钮上）
+  const tipEl = dockExports.KitTip({ label: "文件树", command: "dsh-kit-files.tree.toggle", children: jsxRuntimeStub.jsx("button", { type: "button" }) });
+  check("键帽座跨包共享：root 的 KitTip 读得到 files 命令的键位", tipEl.type === primStub.Tooltip && tipEl.props.shortcutKeys.join("") === "Ctrl+Alt+," && tipEl.props.children.props["aria-keyshortcuts"] === "Control+Alt+,");
 }
 
 (async () => {
