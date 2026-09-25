@@ -48,7 +48,7 @@ export function normalizeScope(raw) {
 function loadPlaywright() {
     let vendorDir;
     try {
-        vendorDir = fileURLToPath(new URL('../host-vendor/playwright-core/', import.meta.url));
+        vendorDir = fileURLToPath(new URL('../../host-vendor/playwright-core/', import.meta.url));
     }
     catch {
         return null;

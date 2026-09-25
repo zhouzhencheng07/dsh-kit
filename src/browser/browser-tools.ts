@@ -11,9 +11,7 @@
 // 响应式/移动布局验证；browser_tabs 是页签收尾口（navigate 只增不减）。全部串行
 // （isConcurrencySafe 省略 = 独占），单页面状态机不允许并发派发。
 //
-// dsh-tools 是 ESM（type: module），加载走两锚点：裸 import →
-// dsh 本体锚点 resolve+import（profile/全局安装都命中）；monorepo 源码形态跳过
-// （dev 环境是 npm 全局布局，bin 锚点已覆盖）。
+// defineTool 契约与 dsh-tools 加载在 core/tools.ts（日程工具共用）。
 //
 // 截图的图片附加管线：decode → 附件服务 + 模型图片能力证明
 // （resolveModelInfo().inputModalities）→ attachments.saveImages →
@@ -23,17 +21,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { createRequire } from 'node:module'
-import { pathToFileURL } from 'node:url'
 
 import { pngSize, normalizeLocatorArgs, normalizeActArgs, normalizeScope } from './browser.ts'
 import type { BrowserService } from './browser.ts'
-
-/** 工具定义的结构契约（dsh-tools 的 defineTool 产物按名字注入注册表） */
-export interface ToolDefinition {
-  name: string
-  [key: string]: unknown
-}
+import type { DefineTool, ToolDefinition } from '../core/tools.ts'
 
 /** 工具执行上下文里本层用到的最小面（宿主对象运行时才挂载） */
 interface ToolExec {
@@ -54,46 +45,9 @@ interface HostCtx {
   get(name: string): unknown
 }
 
-export interface DefineToolOptions {
-  name: string
-  description: string
-  parameters: Record<string, { type: string; required?: boolean; enum?: string[]; description?: string }>
-  output: {
-    schema: Record<string, unknown>
-    render: (args: unknown, value: any) => Array<Record<string, unknown>>
-  }
-  timeoutMs?: number
-  /** 原生呈现卡（宿主 dsh-tools 同名约定）：工具调用行的标题/类别，纯函数只读 args */
-  presentCall?: (args: any) => { card: 'generic'; title: string; kind?: string; rawInput?: unknown } | undefined
-  execute: (args: any, exec?: ToolExec) => Promise<unknown>
-}
-
-export type DefineTool = (options: DefineToolOptions) => ToolDefinition
-
 function dshHomeDir(): string {
   const env = process.env.DSH_HOME
   return env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh')
-}
-
-/** 异步两锚点加载 @deepseek-ai/dsh-tools（ESM）。失败返回 null。 */
-export async function loadToolsModule(log: (msg: string) => void = () => {}) {
-  try {
-    return await import('@deepseek-ai/dsh-tools')
-  } catch {
-    // 落到 dsh 本体锚点
-  }
-  const anchor = process.argv[1]
-  if (anchor) {
-    try {
-      const abs = path.isAbsolute(anchor) ? anchor : path.resolve(process.cwd(), anchor)
-      const resolved = createRequire(abs).resolve('@deepseek-ai/dsh-tools')
-      if (resolved) return await import(pathToFileURL(resolved).href)
-    } catch {
-      // 都失败
-    }
-  }
-  log('dsh-kit: @deepseek-ai/dsh-tools 不可达，浏览器工具未注册（其余功能不受影响）')
-  return null
 }
 
 /**

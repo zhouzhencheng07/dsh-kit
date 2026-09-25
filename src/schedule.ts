@@ -22,7 +22,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 
-import type { DefineTool, ToolDefinition } from './browser-tools.ts'
+import type { DefineTool, ToolDefinition } from './core/tools.ts'
 
 // ── 类型 ────────────────────────────────────────────────────────────────────
 

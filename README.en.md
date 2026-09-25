@@ -65,7 +65,9 @@ slot; the conversation column stays put.
   retained window (latest 2MB), so a page refresh or a second tab re-reads it instead of
   losing it, and never steals output from the model's `job_output`; closing a settled row
   removes it and releases that window (a reload then shows the row with no content)
-- **Built-in browser** (right-dock Browser tab, on by default): the agent drives the
+- **Built-in browser** (right-dock Browser tab; this component's row switch is the master
+  switch — turning it off removes the tools and the panel, leaving only the official
+  browser entry): the agent drives the
   system Edge via **7** `browser_*` tools (vendored playwright-core, dedicated
   persistent profile) — snapshot → act → assert GUI-testing loops, screenshots
   (attached directly for multimodal models, saved to disk otherwise); the panel shows
@@ -109,9 +111,11 @@ slot; the conversation column stays put.
   commands carry their current keys and follow rebinding) — plain truncation hints keep the native
   `title`
 - **Config pages**: component rows that take settings each carry their own config page in the
-  Plugins page — the main row covers per-feature switches, vault directory and phone access;
+  Plugins page — the main row covers the vault directory and phone access;
   the **web search row** only holds the result count (row switch = master switch, turning it
-  off restores the official search); the **usage & monitoring row** covers the balance chip
+  off restores the official search); the **built-in browser row** covers "open chat links in
+  the built-in browser" and "hide the official Browser entry" (row switch = master switch);
+  the **usage & monitoring row** covers the balance chip
   switch, monitor parameters and desktop notifications; the **file tree · source control row**
   covers the file-tree and source-control switches plus hiding the official Workspace Files
   entry. The **terminal** and **skills** rows have no config field (the row switch is the only
@@ -141,8 +145,8 @@ dsh plugin --profile web update dsh-kit
 The package declares `dsh.bundle.patch`, so it is activated as a profile bundle
 layer. After installing/updating, restart `dsh web`: four toggles — Files / Source
 Control / Knowledge base / Terminal — appear on the composer tool row, the workbench
-is carried by the official right sidebar (five dock tabs), and the agent's
-`web_search` uses the free multi-source chain.
+is carried by the official right sidebar (dock tabs for diffs / vault / schedule /
+browser), and the agent's `web_search` uses the free multi-source chain.
 
 **Host requirement**: dsh ≥ 0.1.5 (the official right-sidebar service
 `sidebar.right`). On older hosts the plugin still loads, but no workbench tabs
@@ -151,31 +155,37 @@ appear and the toggles have nothing to open — upgrade dsh first.
 ## How it works
 
 - `src/*.ts` → `dist/` (committed tsc output): host side — `/tree`, `/read`, `/raw`
-  (Range/206), `/fs/op`, `/upload`, `/git/*`, `/browser` (built-in browser WS),
-  `/jobs/*`, `/schedule/*`, `/vault/*`, `/skills` (skill pool), `/phone/*` endpoints
+  (Range/206), `/fs/op`, `/upload`, `/git/*`, `/dsh-kit/skills` (skill pool),
+  `/jobs/*`, `/schedule/*`, `/vault/*`, `/phone/*` endpoints
 - `client/bundle.js`: browser side (hand-written ModuleLoader bundle, **no build**) —
-  the root package registers the vault toggle, the four right-bar dock tab types with
+  the root package registers the vault toggle, the right-bar dock tab types with
   pane bodies served through `sidebar.right.pane.tab`, and the config page
   (`plugins.row.config`); the client halves of the file-tree / source-control,
-  terminal, skills and usage-monitor components live in this same bundle as component
-  modules (the terminal dock renders over the official `webTerminals` engine)
-- `src/core`, `src/files`, `src/skills`, `src/terminal`, `src/monitor`: component
-  boundaries as directories (0.5.3 single-package components — a component is a patch row, not a
-  package) — `core` is the host shared library; `files` serves tree/read/raw/fs-op/
+  terminal, skills, usage-monitor, web-search and built-in-browser components live in
+  this same bundle as component modules (the terminal dock renders over the official
+  `webTerminals` engine)
+- `src/core`, `src/files`, `src/skills`, `src/terminal`, `src/monitor`, `src/browser`:
+  component boundaries as directories (0.5.3 single-package components — a component is a patch
+  row, not a package) — `core` is the host shared library (same-origin check, recycle-bin
+  delete, text decoding, session-header injection, dsh-tools loading);
+  `files` serves tree/read/raw/fs-op/
   git endpoints + file tree and source control panels; `skills` serves `/dsh-kit/skills` and
   `/dsh-kit/skills/op` plus the `/dsh-kit-skills/config` probe (skill-pool manager page);
   `terminal` serves the `/dsh-kit-terminal/config` probe (terminal toggle and dock);
   `monitor` serves `/dsh-kit/usage` + usage chip / 429 auto-resume / loop breaker / session
-  notifications. Rows are materialized by the root `cordis.patch.yml` through
-  package exports subpaths (`dsh-kit/files` etc.)
+  notifications; `browser` serves the 7 `browser_*` tools, the `/dsh-kit/browser` panel
+  WebSocket, `/dsh-kit/browser/open` and the `/dsh-kit-browser/config` probe (right-bar
+  browser tab, shared control, link redirection). Rows are materialized by the root
+  `cordis.patch.yml` through package exports subpaths (`dsh-kit/files` etc.)
 - `client/vendor/*`: xterm / TipTap rich text / KaTeX / qrcode, all lazily loaded
   and served from `/dsh-kit/vendor/*`
 - `src/search/`: the web-search component — `web-search.ts` points the web seam's
   provider at `free-search` and registers the keyless engine chain (`engine-chain.ts` +
   `engines/*`); disabling the component row leaves the seam untouched, so the official
   provider pinned by the base layer keeps serving
-- `cordis.patch.yml`: inserts the dsh-kit row into the bundle layer and rewrites
-  the web row's `searchProvider` to `free-search`
+- `cordis.patch.yml`: inserts the dsh-kit row and the six component rows
+  (files / skills / terminal / monitor / search / browser) into the bundle layer; no
+  official row is patched
 - Host-side `node-pty`/`ws`/`@deepseek-ai/*` declare no dependencies: resolved at
   runtime from the profile fallback node_modules (declaring them would install a
   second copy)
