@@ -1009,6 +1009,42 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
       !src.includes("KitConfigPage") && !src.includes("applyConfigSnapshot"),
   );
 }
+// 10) 插件页组件列表形状：基础设施行无 id（宿主只把带 id 的行当组件，故不进列表），
+//     八个组件行的行序 = 卡片描述的枚举顺序（宿主按 patch insert 原样渲染、不排序）
+{
+  const patchSrc = fs.readFileSync(__dirname + "/../cordis.patch.yml", "utf8");
+  const rows = [];
+  let current = null;
+  for (const line of patchSrc.split("\n")) {
+    const withId = /^ {4}- id: (.+)$/.exec(line);
+    const bare = /^ {4}- name: (.+)$/.exec(line);
+    const nameOf = /^ {6}name: (.+)$/.exec(line);
+    if (withId) rows.push(current = { id: withId[1].trim() });
+    else if (bare) rows.push(current = { id: undefined, name: bare[1].trim() });
+    else if (nameOf && current !== null && current.name === undefined) current.name = nameOf[1].trim();
+  }
+  const comps = rows.filter((row) => typeof row.id === "string");
+  const infra = rows.filter((row) => row.id === undefined);
+  const expected = ["files", "vault", "terminal", "browser", "skills", "phone", "monitor", "search"];
+  check(
+    "patch 形状：基础设施行无 id（不进组件列表）、八个组件行 id/name 齐备且顺序 = 描述顺序",
+    infra.length === 1 && infra[0].name === "dsh-kit" &&
+      JSON.stringify(comps.map((row) => row.id)) === JSON.stringify(expected) &&
+      comps.every((row) => row.name === "dsh-kit/" + row.id),
+  );
+  const inOrder = (text, words) => {
+    const at = words.map((word) => text.indexOf(word));
+    return at.every((p) => p >= 0) && at.every((p, i) => i === 0 || p > at[i - 1]);
+  };
+  const zhDesc = JSON.parse(fs.readFileSync(__dirname + "/../locale/zh.json", "utf8")).meta.description;
+  const enDesc = JSON.parse(fs.readFileSync(__dirname + "/../locale/en.json", "utf8")).meta.description;
+  check(
+    "卡片描述按同一顺序枚举八个组件（zh/en 同序）",
+    inOrder(zhDesc, ["文件树·源代码管理", "知识库·日程", "终端", "浏览器", "技能", "手机访问", "用量与监视", "网页搜索"]) &&
+      inOrder(enDesc, ["File tree & SCM", "vault & schedule", "terminal", "browser", "skills", "phone access", "usage & monitor", "web search"]),
+  );
+}
+
 // 过时文案清理：现行说明不得出现「侧栏底部『任务』钮」、日程索引标题键、搜索默认 5
 check(
   "过时文案已更新（无侧栏底部钮现行说法/默认 5/schedIdxTitle）",

@@ -1,28 +1,33 @@
-# dsh-kit bundle patch：把套件主行与各组件行 insert 进 bundle 层。
+# dsh-kit bundle patch：把套件基础设施行与八个组件行 insert 进 bundle 层。
 # 组件行是同一个包（单包组件化）的 exports 子路径：行 name = dsh-kit/<行id>，exports 与
 # locale/<行id>/*.json 由 package.json 声明；行的中文显示名由宿主按行 name 解析 locale
 # meta（子路径名查不到包 → 回退显示 name 原文）。
+# 行序 = 插件页「包含的组件」的显示顺序（宿主按 insert 原样渲染、不排序），也是
+# locale/*.json 里卡片描述的枚举顺序。
 # 这里不 patch 任何官方行：网页搜索对 web seam 的接管由 dsh-kit/search 组件在加载时完成
 # ——静态把 web 行的 searchProvider 钉成 free-search 会让「关掉该组件行」变成搜索直接抛
 # WEB_PROVIDER_CONFIGURED_MISSING（详见 src/search/web-search.ts 头注释）。
 - insert:
-    # 行 id 用短语义名（官方同款，如 agent-team）：插件页组件行显示「显示名 +
+    # 基础设施行：只有 vendor 静态资源与会话头注入，没有页面能力，故**不给 id**——宿主把
+    # patch 里带 id 的行当可管理组件（组件列表要求 id/name 都是字符串），所以它不进组件
+    # 列表、也没有行开关；loader 会给匿名行自配随机 id，照常挂载。一个 bundle 的宿主代码
+    # 只能经 patch 行挂载，因此它仍是一行。
+    - name: dsh-kit
+    # 组件行 id 用短语义名（官方同款，如 agent-team）：插件页组件行显示「显示名 +
     # 行id + 模块名」，id 与包名同文会两行重复
-    - id: kit
-      name: dsh-kit
     - id: files
       name: dsh-kit/files
-    - id: skills
-      name: dsh-kit/skills
+    - id: vault
+      name: dsh-kit/vault
     - id: terminal
       name: dsh-kit/terminal
+    - id: browser
+      name: dsh-kit/browser
+    - id: skills
+      name: dsh-kit/skills
+    - id: phone
+      name: dsh-kit/phone
     - id: monitor
       name: dsh-kit/monitor
     - id: search
       name: dsh-kit/search
-    - id: browser
-      name: dsh-kit/browser
-    - id: vault
-      name: dsh-kit/vault
-    - id: phone
-      name: dsh-kit/phone

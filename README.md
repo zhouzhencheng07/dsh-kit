@@ -10,7 +10,7 @@
 工作台住在**官方右侧边栏**（宿主 0.1.5+ 的 `sidebar.right`）：diff / 知识库 / 日程 /
 浏览器各一张 dock 签，知识库签里再分文档签（一页一签）。每个能力都是插件页里可单独
 开关的**组件行**——行关掉 = 该能力的端点、agent 工具与界面入口一起退场，全部关掉即
-DSH 原版形态。工作区文件的查看
+DSH 原版形态；插件页里本插件正好**八个组件行**（静态资源与会话头注入这类基础设施不占组件位）。工作区文件的查看
 走**官方文件预览**（kit 在其头部补一枚「下载到本机」）；工作区文件不做插件内编辑——
 编辑走 VS Code 或让 agent 改。
 索引类视图（文件树、源代码管理、知识库目录）共用左侧边栏一格，对话列常驻。
@@ -97,8 +97,7 @@ DSH 原版形态。工作区文件的查看
   **内置浏览器行**管「对话链接改投内置浏览器」与「隐藏官方『浏览器』入口」（行开关 = 总开关）；
   **用量与监视行**管余额与用量芯片开关、会话监视参数与桌面通知；**文件树 · 源代码管理行**
   管文件树 / 源代码管理开关与「隐藏官方『工作区文件』入口」；**终端**与**技能**两行没有配置
-  字段（行开关 = 唯一开关，关掉即入口消失），**主行**只伺服静态资源与会话头注入、同样没有
-  配置字段；保存即写入 profile 并热生效（部分启动期门控在重启 dsh 后生效）
+  字段（行开关 = 唯一开关，关掉即入口消失），**基础设施行**（无 id，不进组件列表）只伺服静态资源与会话头注入、同样没有配置字段；保存即写入 profile 并热生效（部分启动期门控在重启 dsh 后生效）
 
 ## 安装与更新
 
@@ -130,8 +129,9 @@ dsh plugin --profile web update dsh-kit
 
 ## 工作原理
 
-- `src/*.ts` → `dist/`（tsc 构建产物入库）：宿主半边——主行只挂 `/vendor/*`
-  （xterm / TipTap / KaTeX / qrcode）与 OpenCode 会话头注入；文件树
+- `src/*.ts` → `dist/`（tsc 构建产物入库）：宿主半边——基础设施行只挂 `/vendor/*`
+  （xterm / TipTap / KaTeX / qrcode）与 OpenCode 会话头注入（它没有页面能力，因此不给 id、
+  不进插件页组件列表）；文件树
   （`/tree`、`/read`、`/raw`、`/fs/op`、`/upload`、`/git/*`）、技能池、知识库
   （`/vault/*`）、日程（`/schedule/*`）、浏览器等端点各归组件
 - `client/bundle.js`：浏览器半边（手写 ModuleLoader bundle，**零构建**）——根包只剩跨槽
@@ -158,8 +158,8 @@ dsh plugin --profile web update dsh-kit
 - `src/search/`：网页搜索组件——`web-search.ts` 把 web seam 的 provider 指向 `free-search`
   并注册免 key 引擎链（`engine-chain.ts` + `engines/*`）；组件行关掉 = 不接管 seam =
   base 钉的官方搜索原样生效
-- `cordis.patch.yml`：把 dsh-kit 主行与八个组件行（files / skills / terminal / monitor /
-  search / browser / vault / phone）insert 进 bundle 层（组件 = 本包的 exports 子路径，见
+- `cordis.patch.yml`：把 dsh-kit 基础设施行（无 id，不进组件列表）与八个组件行（files / vault / terminal /
+  browser / skills / phone / monitor / search，行序即插件页显示顺序）insert 进 bundle 层（组件 = 本包的 exports 子路径，见
   `dsh-kit/terminal` 等）；不 patch 任何官方行
 - 宿主侧 `node-pty`/`ws`/`@deepseek-ai/*` 不声明依赖：运行时从 profile fallback
   node_modules 解析（声明了 pnpm 会装出第二份实例）
