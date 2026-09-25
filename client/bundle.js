@@ -587,6 +587,11 @@ window.__ModuleLoader__.load({
       { id: "dsh-kit-schedule", kind: "dshk-schedule", feature: "schedule", titleKey: "schedTab" },
       { id: "dsh-kit-browser", kind: "dshk-browser", feature: "browser", titleKey: "dockBrowser" },
     ];
+    // ─────────── 官方右侧边栏（宿主 0.1.5+，本插件唯一工作台形态）───────────
+    // 每个功能一张 dock 签（页类型），pane 正文是我们的组件。服务是宿主内部实现，
+    // **运行期探测取用、绝不写进 dsh.client.inject**——老宿主（0.1.2）没有该服务，
+    // 硬声明整个插件起不来。不可用则只剩 getKitUi() 侧的存在性补丁（入口不报错，
+    // 签不出现）。
     /** sidebarRight 服务实例（openTab 用）：apply 时 ctx.inject(["sidebarRight"])
      *  捕获——服务属性不能直接读（`cannot get property without inject`），又不能
      *  写进 exports.inject（0.1.2 无此服务，硬声明整插件起不来） */
@@ -595,10 +600,65 @@ window.__ModuleLoader__.load({
     function getRightbarSr() {
       return rightbarSr;
     }
+    /** 官方右栏可用时机（= 官方那张 session seat 是否在场）：对话在前台且有选中会话
+     *  时 mounted 有值；全局面板（插件页 / 设置页）占住中栏或没选会话时 undefined。
+     *  树 / 源代码管理 / 知识库三个工作区面与全部开签动作跟它同生灭——seat 不在场时
+     *  右栏压根不画（开签必抛「no session surface is mounted」），左栏浏览区也得让回
+     *  官方会话列表。信号没挂上（老宿主 / 极简组合）时保持 true；信号翻假只收面、
+     *  不清状态，回到对话即原样恢复（同官方右栏的签按会话保留）。 */
+    const rightbarSeat = {
+      available: true,
+      subs: new Set(),
+      set(v) {
+        if (this.available === v) return;
+        this.available = v;
+        for (const s of [...this.subs]) s();
+      },
+      subscribe(s) {
+        this.subs.add(s);
+        return () => {
+          this.subs.delete(s);
+        };
+      },
+    };
+    // 在场信号两路可选源：官方右栏自己的 mounted 首选（「没选会话」也含在内），
+    // 缺位时回落 layout.panelInfo（全局面板占住中栏 = activePanelId 非空）
+    const seatSrc = { mounted: null, panel: null };
+    function seatAvailable() {
+      if (seatSrc.mounted) return seatSrc.mounted.observable.getSnapshot() !== undefined;
+      if (seatSrc.panel) {
+        const info = seatSrc.panel.observable.getSnapshot();
+        return !info || info.activePanelId === null || info.activePanelId === undefined;
+      }
+      return true;
+    }
+    const seatRefresh = () => rightbarSeat.set(seatAvailable());
+    /** 挂一路在场信号；同源重复调用无副作用（服务重载会换实例，换源先退订旧的） */
+    function attachSeatSignal(kind, observable) {
+      if (!observable || typeof observable.getSnapshot !== "function") return;
+      const prev = seatSrc[kind];
+      if (prev && prev.observable === observable) return;
+      if (prev && typeof prev.off === "function") {
+        try { prev.off(); } catch { /* 旧订阅卸载失败不影响新订阅 */ }
+      }
+      const watch = { observable, off: null };
+      seatSrc[kind] = watch;
+      if (typeof observable.subscribe === "function") watch.off = observable.subscribe(seatRefresh);
+      seatRefresh();
+    }
+    /** 在场信号订阅（KitSurfaces 用）：信号在 apply 期才挂上，晚于首渲染也接得住 */
+    function useRightbarSeat() {
+      return react.useSyncExternalStore(
+        (cb) => rightbarSeat.subscribe(cb),
+        () => rightbarSeat.available,
+      );
+    }
 
-    /** 打开/聚焦右栏 dock 签（UI 事件路径）。服务未就绪或宿主不支持时静默放弃
-     *  ——调用方都已先走了 kitUi 侧的开签补丁，签内容状态不会丢 */
+    /** 打开/聚焦右栏 dock 签（UI 事件路径）。seat 不在场（全局面板在前台 / 没选
+     *  会话）或服务未就绪时静默放弃——调用方都已先走了 kitUi 侧的开签补丁，
+     *  签内容状态不会丢 */
     function openRightbarTab(feature) {
+      if (!rightbarSeat.available) return;
       const sr = rightbarSr;
       if (!sr || typeof sr.openTab !== "function") return;
       const f = RB_FEATURES.find((x) => x.feature === feature);
@@ -627,15 +687,18 @@ window.__ModuleLoader__.load({
       }
     }
     /** 「开功能签」：dock 签交给官方 openTab；kitUi 只补存在性（入口按钮选中态 /
-     *  角标 / 浏览器自动跟随判定还要读它）。服务未就绪时只剩存在性补丁 */
+     *  角标 / 浏览器自动跟随判定还要读它）。seat 不在场（右栏压根不存在）时整件事
+     *  不做——只补存在性会留下「状态说开着、右栏没这张签」的假状态 */
     function openFeatureDock(ui, feature) {
+      if (!rightbarSeat.available) return {};
       openRightbarTab(feature);
       return openFeatureTab(ui, feature);
     }
 
     /** 打开 diff 签并确保「差异」dock 签在眼前（源代码管理/提交图谱统一入口；
-     *  文件树与对话区点击已改投官方右栏文件签，不再进这里） */
+     *  文件树与对话区点击已改投官方右栏文件签，不再进这里）。seat 不在场时不动 */
     function openFileAndDock(path, from, untracked, deleted, commit) {
+      if (!rightbarSeat.available) return;
       setKitUi(openFileTab(kitUi, path, from, untracked === true, deleted === true, typeof commit === "string" && commit !== "" ? commit : undefined));
       openRightbarTab("file");
     }
@@ -683,6 +746,10 @@ window.__ModuleLoader__.load({
     exports.openFeatureDock = openFeatureDock;
     exports.openFileAndDock = openFileAndDock;
     exports.sidebarViewPatch = sidebarViewPatch;
+    // 在场信号面：KitSurfaces 订阅它决定工作区面生灭，组件半边读它门控快捷键
+    exports.rightbarSeat = rightbarSeat;
+    exports.useRightbarSeat = useRightbarSeat;
+    exports.attachSeatSignal = attachSeatSignal;
     // 跨组件服务座：文件树/SCM 组件（dsh-kit-files）物化期接管。
     // 必须是**座对象**而非直接给 exports 加键：kitBase 到 module.exports 是工厂尾部
     // 的一次性浅拷贝，组件后写的键只落在 module.exports 上，root 读 kitBase 读不到
@@ -694,7 +761,12 @@ window.__ModuleLoader__.load({
     //（宿主半边同款：载体 entry，本体无行为）
     exports.apply = async (ctx) => {
       if (typeof ctx?.inject === "function") {
-        ctx.inject(["sidebarRight"], (c) => { rightbarSr = c.sidebarRight; });
+        ctx.inject(["sidebarRight"], (c) => {
+          rightbarSr = c.sidebarRight;
+          attachSeatSignal("mounted", c.sidebarRight && c.sidebarRight.mounted);
+        });
+        // 回落源：右栏服务被组合出去时，仍认得出「全局面板占住中栏」
+        ctx.inject(["layout"], (c) => attachSeatSignal("panel", c.layout && c.layout.panelInfo));
       }
     };
     return exports;
@@ -723,6 +795,7 @@ window.__ModuleLoader__.load({
       closeFeatureTab, openFeatureTab, RB_FEATURES,
       openRightbarTab, closeRightbarTab, openFeatureDock, openFileAndDock,
       sidebarViewPatch, toggleTermDock, spawnTerm, killTerm, makeTerm, getRightbarSr,
+      rightbarSeat, useRightbarSeat,
     } = dock;
 
     /** apply 时捕获的 ctx；KitSurfaces 用它动态 register/dispose sidebar.workspaces 单槽 */
@@ -747,30 +820,13 @@ window.__ModuleLoader__.load({
 
 
 
-    // ─────────── 官方右侧边栏（宿主 0.1.5+，本插件唯一工作台形态）───────────
-    // 每个功能一张 dock 签（页类型），pane 正文是我们的组件。服务是宿主内部实现，
-    // **运行期探测取用、绝不写进 dsh.client.inject**——老宿主（0.1.2）没有该服务，
-    // 硬声明整个插件起不来。探测成功 = rightbarActive 翻真；不可用则只剩 getKitUi()
-    // 侧的存在性补丁（入口不报错，签不出现）。
-    const rightbarStore = {
-      active: false,
-      subs: new Set(),
-      setActive(v) {
-        if (this.active === v) return;
-        this.active = v;
-        for (const s of this.subs) s();
-      },
-      subscribe(s) {
-        this.subs.add(s);
-        return () => this.subs.delete(s);
-      },
-    };
     /** 官方 sessions 服务（拿当前会话 id 与 cwd，拼文件地址用），同上运行期捕获 */
     let sessionsSvc = null;
     /** 打开知识库页并确保「知识库」dock 签在眼前（目录/搜索/反链/wikilink/
      *  对话路径统一走 VaultRootView 的 openPath）。anchor = `[[页#锚]]` 的锚点，
      *  跨页跳转时随开页带给 VaultPagePane 消费（见 vaultPendingAnchor） */
     function openVaultPageAndDock(path, anchor) {
+      if (!rightbarSeat.available) return;
       setKitUi(openVaultPageTab(getKitUi(), path));
       openRightbarTab("vault");
       vaultPendingAnchor = typeof anchor === "string" && anchor !== "" ? { path, anchor } : null;
@@ -790,6 +846,9 @@ window.__ModuleLoader__.load({
     // 逐段 encodeURIComponent、`:` 保留字面量（Windows 盘符）。会话未选中时
     // 无从定位工作区，放弃。
     function openOfficialFile(path, line) {
+      // seat 不在场 = 右栏不画（全局面板在前台 / 没选会话）：开签必抛
+      // 「no session surface is mounted」，这里先收手，别把内部错误当用户错误报
+      if (!rightbarSeat.available) return false;
       const sr = getRightbarSr();
       if (!sr || typeof sr.openResource !== "function") return false;
       const list = sessionsSvc && typeof sessionsSvc.list?.getSnapshot === "function" ? sessionsSvc.list.getSnapshot() : null;
@@ -816,8 +875,8 @@ window.__ModuleLoader__.load({
         sr.openResource(address, line === undefined ? undefined : { params: { line } });
         return true;
       } catch (e) {
-        // 右栏 seat 未 mount（极早期）/ 宿主无文件认领类型（精简组合）：点了没
-        // 反应最难排查，至少给一句
+        // 宿主没有认领该地址的签类型（精简组合）等接线错误：点了没反应最难排查，
+        // 至少给一句
         flashToast(`${t("officialOpenFail")}：${String(e?.message ?? e).slice(0, 120)}`);
         return false;
       }
@@ -1479,6 +1538,7 @@ window.__ModuleLoader__.load({
       fileDownload: "下载到本机",
       contentFail: "读取失败",
       officialOpenFail: "打开失败",
+      scNoSeat: "当前不在对话中",
       skillsLabel: "技能",
       skRefresh: "刷新",
       skLoading: "加载中…",
@@ -1684,6 +1744,7 @@ window.__ModuleLoader__.load({
       fileDownload: "Download file",
       contentFail: "Failed to read",
       officialOpenFail: "Open failed",
+      scNoSeat: "Not in a conversation",
       skillsLabel: "Skills",
       skRefresh: "Refresh",
       skLoading: "Loading…",
@@ -5655,6 +5716,9 @@ ellipsis，窄列只截字不破版 */
       const cwd = typeof sessionRow?.cwd === "string" && sessionRow.cwd.trim() !== "" ? sessionRow.cwd : null;
       const sessionId = sessionRow?.id ?? null;
       const ui = useKitUi();
+      // 官方右栏可用时机：seat 不在场（全局面板占住中栏 / 没选会话）时，索引视图
+      // 一并让位给官方会话列表，与「右栏不存在」这件事保持同一时机
+      const rightbarUp = useRightbarSeat();
       const snap = react.useSyncExternalStore(subscribeCfg, getCfgSnapshot);
       const cfg = cfgFromSnapshot(snap);
       // useSessions 透传给右栏 pane（浏览器 pane 定位当前会话用）：inject 闭包
@@ -5732,10 +5796,11 @@ ellipsis，窄列只截字不破版 */
       });
 
       // 侧边栏浏览区占用：单槽轮换——源代码管理 ↔ 文件树 ↔ 知识库
-      // 目录，全关回官方会话列表。
+      // 目录，全关回官方会话列表。右栏不在场时不占（全局面板在前台时左栏该是
+      // 官方会话列表）：开合状态留着，回到对话原样恢复。
       // 动态注册若在运行时抛错，捕获并回滚开合状态，避免入口被错误边界摘掉。
       react.useEffect(() => {
-        if (!slotsCtx || (!ui.treeOpen && !ui.gitOpen && !ui.vaultIdxOpen)) return undefined;
+        if (!slotsCtx || !rightbarUp || (!ui.treeOpen && !ui.gitOpen && !ui.vaultIdxOpen)) return undefined;
         let dispose;
         try {
           // 单槽遮蔽原生需要更低 priority（数字越小越先渲染，原生在 priority 0）。
@@ -5762,7 +5827,7 @@ ellipsis，窄列只截字不破版 */
             // 忽略注销异常
           }
         };
-      }, [ui.treeOpen, ui.gitOpen, ui.vaultIdxOpen, cwd]);
+      }, [ui.treeOpen, ui.gitOpen, ui.vaultIdxOpen, cwd, rightbarUp]);
 
       // 隐藏官方右栏「工作区文件」入口（hideOfficialFilesEntry）：那只是个目录
       // 按钮，与文件树功能重复。body 标记 + CSS display:none，锚点
@@ -6277,8 +6342,6 @@ ellipsis，窄列只截字不破版 */
           }),
         }, Body)), `dsh-kit: rightbar pane body ${f.kind}`);
       }
-      // 探测落地：入口走右栏（rightbarStore 的订阅者据此重渲染）
-      rightbarStore.setActive(true);
     }
 
     // ─────────── 官方快捷键服务（0.1.7-rc.2+）───────────
@@ -6321,6 +6384,7 @@ ellipsis，窄列只截字不破版 */
           modals: [],
           resolve: () => {
             if (!cmd.enabled(cfgFromSnapshot(getCfgSnapshot()))) return { status: "blocked", reason: t(cmd.offKey) };
+            if (!rightbarSeat.available) return { status: "blocked", reason: t("scNoSeat") };
             const run = cmd.run();
             if (run == null) return { status: "pass" };
             return { status: "handled", run };
@@ -6443,9 +6507,9 @@ ellipsis，窄列只截字不破版 */
       // 官方右侧边栏：五个功能 dock 签 + 引导页清单。只在宿主
       // 提供该服务时生效（缺服务 = 只剩 getKitUi() 存在性补丁，签不出现）。用 inject
       // 等它就绪而非直接读——官方右栏与本插件的客户端加载顺序不保证
+      //（sidebarRight 与在场信号的捕获在 kitBase.apply，本处只管右栏签与其它服务）
       if (typeof ctx.inject === "function") {
         ctx.inject(["sidebarRightTabs"], registerRightbar);
-        ctx.inject(["sidebarRight"], (srCtx) => { rightbarSr = srCtx.sidebarRight; });
         // 官方 sessions 服务捕获：openOfficialFile 拼文件地址要当前会话 id 与 cwd
         ctx.inject(["sessions"], (sctx) => { sessionsSvc = sctx.sessions; });
         // 官方快捷键服务（0.1.7-rc.2+）：知识库命令注册进官方页
@@ -6506,6 +6570,7 @@ ellipsis，窄列只截字不破版 */
       flashToast, writeClipboard, kitGetJson, kitPostJson, kitJson,
       resolveZh, currentComposerShell, chatMentionText,
       expandSidebarNow, TreeRowMenu, TreeFolderIcon, FileTypeIcon16, ChevronIcon,
+      rightbarSeat,
     } = dock;
     let dswPrimIcons = null;
     try { dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 回退自绘 */ }
@@ -6605,6 +6670,7 @@ ellipsis，窄列只截字不破版 */
       // 「按不动」时显示的说明
       scTreeOff: "文件树已在配置页关闭",
       scScmOff: "源代码管理已在配置页关闭",
+      scNoSeat: "当前不在对话中",
       // 本包 t() 只看本包词典（root 的同名词条读不到）：用到就得在这里备一份
       skOpFail: "操作失败",
       confirmDelete: "删除「{name}」？内容将移入回收站。",
@@ -6700,6 +6766,7 @@ ellipsis，窄列只截字不破版 */
       kcfgSourceControlEnabledHint: "The source control tab (status, diffs, commit graph, branches).",
       scTreeOff: "File tree is switched off in the config page",
       scScmOff: "Source control is switched off in the config page",
+      scNoSeat: "Not in a conversation",
       skOpFail: "Operation failed",
       confirmDelete: "Delete \"{name}\"? It will be moved to the Recycle Bin.",
       created: "Created",
@@ -6964,6 +7031,8 @@ ellipsis，窄列只截字不破版 */
           modals: [],
           resolve: () => {
             if (!cmd.enabled(cfgFromSnapshot(getCfgSnapshot()))) return { status: "blocked", reason: t(cmd.offKey) };
+            // 右栏不在场（全局面板在前台 / 没选会话）：侧栏索引视图与右栏同生灭
+            if (!rightbarSeat.available) return { status: "blocked", reason: t("scNoSeat") };
             return { status: "handled", run: cmd.run };
           },
         }), `dsh-kit-files: shortcut ${cmd.id}`);

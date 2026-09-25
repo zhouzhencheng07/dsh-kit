@@ -103,7 +103,7 @@ const RETURN = "return module.exports;";
 const rootReturn = body.lastIndexOf(RETURN);
 if (rootReturn < 0) { console.log("FATAL: no root return"); process.exit(2); }
 const wrapper = body.slice(0, rootReturn) +
-  "return Object.assign({ vaultSideSlot, vaultPaneSlot, VaultEntry, PhoneSection, KitSurfaces, SkillsManager, TreeRowMenu, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchSkillsPage, getKitUi, setKitUi, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, KitConfigPage, KIT_CFG_FIELDS, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref, registerShortcuts, shortcutRun }, kitBase);" +
+  "return Object.assign({ vaultSideSlot, vaultPaneSlot, VaultEntry, PhoneSection, KitSurfaces, SkillsManager, TreeRowMenu, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchSkillsPage, getKitUi, setKitUi, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, KitConfigPage, KIT_CFG_FIELDS, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref, registerShortcuts, shortcutRun, rightbarSeat, useRightbarSeat, attachSeatSignal: dock.attachSeatSignal }, kitBase);" +
   body.slice(rootReturn + RETURN.length);
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -493,6 +493,60 @@ check("openFileAndDock 落 kitUi 差异签", comps.getKitUi().activeFile === "C:
 comps.openVaultPageAndDock("D:/v/p.md");
 check("openVaultPageAndDock 落 kitUi 知识库页签", comps.getKitUi().activeVaultPage === "D:/v/p.md" && comps.getKitUi().vaultOpen === true);
 comps.setKitUi({ files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null, activeFeature: null });
+
+// 6.5b) 官方右栏可用时机（rightbarSeat）：树/源代码管理/知识库三个工作区面与全部
+// 开签动作跟官方右栏同生灭——全局面板（插件页/设置页）占住中栏或没选会话时收手。
+// 两路信号：layout.panelInfo 回落源先测（mounted 一旦挂上就首选，无退订 API），
+// 再挂 mounted 验首选关系。断言后恢复在场，后面用例按默认态跑。
+{
+  const seat = comps.rightbarSeat;
+  check("在场信号未挂上时按可用（老宿主 / 极简组合不误伤）", seat.available === true);
+  let panelVal = { activePanelId: null };
+  comps.attachSeatSignal("panel", { getSnapshot: () => panelVal });
+  check("回落源 layout.panelInfo：对话在前台（activePanelId=null）＝在场", seat.available === true);
+  panelVal = { activePanelId: "plugins" };
+  comps.attachSeatSignal("panel", { getSnapshot: () => panelVal });
+  check("回落源 layout.panelInfo：全局面板占住中栏＝不在场", seat.available === false);
+  // mounted 源（首选）：有值＝在场；它的变化经订阅回调驱动重算
+  let mountedVal = "session-1";
+  const seatListeners = new Set();
+  comps.attachSeatSignal("mounted", {
+    getSnapshot: () => mountedVal,
+    subscribe: (cb) => { seatListeners.add(cb); return () => seatListeners.delete(cb); },
+  });
+  check("mounted 首选于 panelInfo：有值＝在场（panelInfo 仍是非空）", seat.available === true);
+  mountedVal = undefined;
+  for (const cb of seatListeners) cb();
+  check("mounted 变 undefined（没选会话 / 全局面板在前台）＝不在场", seat.available === false);
+  check("useRightbarSeat 读的就是这份在场状态（KitSurfaces 据此重绘）", comps.useRightbarSeat() === false);
+  // 不在场：开签动作整件不做（只补存在性会留下「状态说开着、右栏没这张签」）
+  check("不在场：openFeatureDock 不动任何状态", Object.keys(comps.openFeatureDock({ browserOpen: false, activeFeature: null }, "browser")).length === 0);
+  comps.openFileAndDock("C:/x/gated.js", "scm", true);
+  check("不在场：openFileAndDock 不落差异签", (comps.getKitUi().files ?? []).length === 0);
+  comps.openVaultPageAndDock("D:/v/gated.md");
+  check("不在场：openVaultPageAndDock 不落知识库签", (comps.getKitUi().vaultPages ?? []).length === 0 && comps.getKitUi().vaultOpen === false);
+  mountedVal = "session-1";
+  for (const cb of seatListeners) cb();
+  check("回到对话（mounted 有值）＝恢复在场", seat.available === true);
+}
+// 侧栏浏览区占用的在位门控与 openOfficialFile 的先门控后开签（都是 effect 内路径，
+// 桩环境 effect 不执行，按源码顺序钉）
+{
+  const occupant = src.indexOf('slotsCtx.slots.register({ name: "sidebar.workspaces", priority: -1000 }');
+  check(
+    "侧栏工作区面板在位门控（不在场不占 sidebar.workspaces，让回官方会话列表）",
+    occupant > 0 && /if \(!slotsCtx \|\| !rightbarUp \|\| \(!ui\.treeOpen && !ui\.gitOpen && !ui\.vaultIdxOpen\)\) return undefined;/.test(src) && src.includes("[ui.treeOpen, ui.gitOpen, ui.vaultIdxOpen, cwd, rightbarUp]"),
+  );
+  const fnAt = src.indexOf("function openOfficialFile(path, line) {");
+  const gateAt = src.indexOf("if (!rightbarSeat.available) return false;", fnAt);
+  const svcAt = src.indexOf("const sr = getRightbarSr();", fnAt);
+  check("openOfficialFile 先在位门控、再取右栏服务（不在场不开签、不弹内部错误）", fnAt > 0 && gateAt > fnAt && svcAt > gateAt);
+  check(
+    "在场信号两路接在 apply：sidebarRight.mounted 首选、layout.panelInfo 回落",
+    /attachSeatSignal\("mounted", c\.sidebarRight && c\.sidebarRight\.mounted\)/.test(src) && /attachSeatSignal\("panel", c\.layout && c\.layout\.panelInfo\)/.test(src),
+  );
+  check("知识库命令的非在场分支 blocked 带说明（同构行为由 files 侧命令覆盖）", /if \(!rightbarSeat\.available\) return \{ status: "blocked", reason: t\("scNoSeat"\) \};/.test(src));
+}
 
 // 6.6) 知识库纯函数：frontmatter 拆分 / 解析优先级 / 反链
 //（wikilink/数学变换的往返断言在 tests/test-vault-rte.mjs）
