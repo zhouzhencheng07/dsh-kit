@@ -14,8 +14,7 @@
 //     即开），日程/浏览器走右栏开始页清单与自动跟随。开始页保留官方
 //     ShippedGuide（罗盘 + 胶囊条目），我们只贡献 guide 条目：日程/浏览器
 //     两枚（diff/知识库是被动签，不给条目），官方「工作区文件」条目
-//     垫底（配置可隐藏）。后台任务不做面板：官方会话头部自带任务清单 +
-//     实时输出 + 停止。
+//     垫底（配置可隐藏）。
 //     缺 sidebarRight 服务时只剩 getKitUi() 侧的存在性补丁——入口按钮
 //     不报错，签由官方侧自己决定要不要出现。
 //   功能存在性（getKitUi()）：files/activeFile（diff 签）与
@@ -859,7 +858,7 @@ window.__ModuleLoader__.load({
       }
     }
     /** 文件树行点击：vault 内 → 知识库（只读阅读视图）；其余 → 官方
-     *  右栏文件签（工作区文件预览/编辑面不做）。
+     *  右栏文件签。
      *  vault 那一支归 dsh-kit/vault 组件（经 dock.vaultRoute 座接管）：组件不在场
      *  （未装 / 行关闭）时座里是 null，整条改道随之消失 */
     function openTreeFile(path) {
@@ -1960,8 +1959,8 @@ ellipsis，窄列只截字不破版 */
       "</svg>";
 
     // ─────────── 组件配置（/dsh-kit-skills/config）───────
-    // 技能没有独立配置字段：行开关（插件页组件行 switch）= 唯一开关。拉端点只为
-    // 可达性——200 = 行启用；404（行禁用 → 子模块不物化）= 不注册设置页。
+    // 行开关（插件页组件行 switch）= 唯一开关。拉端点只为可达性——200 = 行启用；
+    // 404（行禁用 → 子模块不物化）= 不注册设置页。
     let cfgSnap = null;
     const cfgSubs = new Set();
     const emitCfg = () => {
@@ -3264,8 +3263,8 @@ ellipsis，窄列只截字不破版 */
     // （重复展开与 state 派生都在宿主做，这里只渲染）+ orphans。
     // 块颜色只表达状态（浅底深字）：还没到橙 / 进行中绿 / 已过去蓝 / 逾期红——
     // 不按标题散列取色，存量 color 字段保留但不读；已闭合计时段按已过去蓝展示。
-    // 面板只读：写路径归 agent 工具（schedule_query/create/update/delete）与
-    // 望舒端；计时（起停/计时段编辑）不做，数据里的段只展示不编辑。
+    // 面板只读：写路径归 agent 工具（schedule_query/create/update/delete）与望舒端；
+    // 计时数据只展示不编辑。
 
     // 标题字数上限：与宿主 store 截断/工具描述同一口径（重要信息做标题，其余写备注）
     const SCHED_TITLE_MAX = 16;
@@ -3399,7 +3398,7 @@ ellipsis，窄列只截字不破版 */
     // 望舒端写进来的变化 ──
     function useScheduleData() {
       const [data, setData] = react.useState(() => ({ events: [], occurrences: [], orphans: [] }));
-      // 统计口径固定周（日/月视图先不做）
+      // 统计口径固定周
       const [stats, setStats] = react.useState(null);
       const [nowTick, setNowTick] = react.useState(() => Date.now());
       const fetchData = react.useCallback(async () => {
@@ -3878,7 +3877,7 @@ ellipsis，窄列只截字不破版 */
 
     // 左树行图标（与文件树同一套官方 primitives）——
     // 目录 = TreeFolderIcon、页面 = FileTypeIcon16、展开箭头 = ChevronIcon，
-    // 三个都在文件树那边定义，这里不再自绘
+    // 三个都在文件树那边定义
 
     // 行开关是唯一门槛（探针 404 = 本组件整体不注册，压根走不到这里）；根目录是否
     // 配置好由 VaultRootView 从 /dsh-kit/vault/index 自取——那才是两端一致的配置源
@@ -3896,8 +3895,7 @@ ellipsis，窄列只截字不破版 */
     // ctlRef 暴露 { dirty, flush, flushManual, overwrite } 供切页 flush。
     /** 知识库页面渲染器（一页一个实例，挂右栏 pane 宿主）：vendor RTE 只读态
      *  （editable:false），只负责加载 / 阅读位置记忆 / wikilink 与页内链接点击 /
-     *  面包屑上报 / 就绪回调（跨页锚点落位消费点）。只读：没有斜杠
-     *  菜单、泡泡菜单、自动保存与冲突条。 */
+     *  面包屑上报 / 就绪回调（跨页锚点落位消费点）。 */
     function RteEditor({ rteRef, docKey, docTick, initialMd, labels, onReady, onWikiLink, resolveWiki, resolveSrc, onRelLink, onState }) {
       const [libsReady, setLibsReady] = react.useState(false);
       const [libsFailed, setLibsFailed] = react.useState(false);
@@ -4110,7 +4108,7 @@ ellipsis，窄列只截字不破版 */
           const body = await kitJson(`/dsh-kit/tree?path=${encodeURIComponent(dir)}`);
           const usable = (body.entries ?? []).filter((e) => {
             if (e.name.startsWith(".")) return false;
-            // 笔记树里不再单列 library 那一格——库根下它由「资料库」那一行代表
+            // 库根下 library 由「资料库」那一行代表，这里跳过
             if (!all && lib !== null && e.path === lib) return false;
             if (e.dir) return all || !["attachments", "node_modules"].includes(e.name);
             return all || /\.md$/i.test(e.name);
@@ -4208,13 +4206,13 @@ ellipsis，窄列只截字不破版 */
         return () => window.removeEventListener("dshk-vault-open", openReq);
       }, [openPath]);
 
-      /** 树上 `@`：把这一页 @ 进对话输入框（页条上不再有 @）。
+      /** 树上 `@`：把这一页 @ 进对话输入框。
        *  只有点的就是当前激活页时才带选区镜像——拿别的页的选区去引用本页会张冠李戴。 */
       const citeFromTree = (pagePath) => {
         citeVaultPageToChat(pagePath, pagePath === current ? vaultSelMirror : "", (key) => flashToast(t(key)));
       };
       /** 树行 ⋯「复制绝对路径」：笔记页与资料库文件一律给盘上绝对路径（相对路径
-       *  的去扩展名形态是 wikilink 键，只在页面里用得上，面板不再发） */
+       *  的去扩展名形态是 wikilink 键，只在页面里用得上） */
       const copyVaultPath = (entry) => {
         void writeClipboard(entry.path).then((ok) => {
           if (ok) flashToast(t("treeCopied"));
@@ -4789,8 +4787,7 @@ ellipsis，窄列只截字不破版 */
 
       // 工具条 + 搜索结果 + 目录树 → 侧栏索引宿主；页编辑器 → 右栏 pane 宿主。
       // 单实例双 portal：两侧各自在场才投递（侧栏关闭/右栏关签互不影响）。
-      // 工具条一行：搜索框占满 + 刷新收尾（换根改在树上 Ctrl+点击目录行，树头 ← 回库根，
-      // 不做前进/后退与访问序）
+      // 工具条一行：搜索框占满 + 刷新收尾（换根改在树上 Ctrl+点击目录行，树头 ← 回库根）
       const sideContent = jsxRuntime.jsxs("div", { className: "dshk-vault-sidewrap", children: [
         jsxRuntime.jsxs("div", { className: "dshk-vault-toolbar", children: [
           jsxRuntime.jsxs("div", { className: "dshk-vault-tbarrow", children: [
@@ -5430,7 +5427,7 @@ ellipsis，窄列只截字不破版 */
     // ─────────── 官方快捷键服务（0.1.7-rc.2+）───────────
     // 知识库索引开合命令注册进宿主 shortcuts 服务 = 进官方「快捷键」页（Ctrl+/）：
     // 录制、冲突检测、持久化全归官方。默认键只给 web:macos/web:windows（web 端放行表
-    // 内）与 desktop 三档；运行期 inject，老宿主没有该服务时这条命令不存在。
+    // 内）与 desktop 三档；运行期 inject，服务缺位时这条命令不存在。
     const VAULT_SHORTCUT_DEFAULTS = (code) => ({
       "web:macos": { code, modifiers: ["primary", "alt"] },
       "web:windows": { code, modifiers: ["primary", "alt"] },
@@ -5804,7 +5801,7 @@ ellipsis，窄列只截字不破版 */
         }
         setGateBusy(false);
       };
-      // 手动轮换令牌：作废旧链接生成新链接（启停不再自动轮换，见宿主 setGatewayEnabled）
+      // 手动轮换令牌：作废旧链接生成新链接（启停不轮换，见宿主 setGatewayEnabled）
       const rotateLink = async () => {
         if (gateBusy) return;
         setGateBusy(true);
@@ -6460,8 +6457,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     // ─────────── 官方快捷键服务（0.1.7-rc.2+）───────
     // 文件树 / 源代码管理两条命令注册进宿主 shortcuts 服务 = 进官方「快捷键」页
-    // （Ctrl+/）：录制、冲突检测、跨设备默认值、持久化都归官方，本组件不再自持键位
-    // 配置项、也不再自挂全局 keydown。运行期 inject：老宿主没有该服务时只是没键位。
+    // （Ctrl+/）：录制、冲突检测、跨设备默认值、持久化都归官方。运行期 inject：
+    // 服务缺位时只是没键位。
     // 默认键只给 web:macos/web:windows（web 端放行表只认三键组合或 primary+alt/shift）
     // 与 desktop 三档。
     function registerShortcuts(scCtx) {
@@ -8453,7 +8450,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         return null;
       };
       // 官方快捷键服务（0.1.7-rc.2+）：文件树/源代码管理两条命令注册进官方页。
-      // 运行期 inject：老宿主没有该服务时只是没键位，其余功能照常。
+      // 运行期 inject：服务缺位时只是没键位，其余功能照常。
       ctx.inject(["shortcuts"], registerShortcuts);
       // 官方入口掩码跟随本组件配置：配置页保存 → 重拉快照 → 广播 → 标记类即时切换
       subscribeCfg(syncOfficialFilesMask);
@@ -10347,7 +10344,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 // dsh-kit/search 浏览器半边 —— 网页搜索组件的 client 面。
 // 搜索本体全在宿主半边（web seam 接管 + 引擎链，src/search/），client 面只有本组件行
 // 的「配置」页（搜索结果条数）。行开关即总开关：关行 = 宿主模块不物化 = 不接管 seam，
-// base 钉的官方搜索原样生效——因此这里没有要门控的客户端 UI，也没有配置快照端点。
+// base 钉的官方搜索原样生效。
     const searchModule = (kit, require) => {
     var module = { exports: {} };
     var exports = module.exports;
@@ -11180,8 +11177,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     // ─────────── 右栏「浏览器」功能签（官方 sidebarRightTabs）───────────
     // 一个功能一张 dock 签（页类型），pane 正文是本组件。服务是宿主内部实现，
-    // 运行期探测取用、绝不写进 dsh.client.inject（老宿主没有该服务，硬声明整个
-    // 插件起不来）；缺服务只剩 getKitUi() 侧的存在性补丁（签不出现）。
+    // 运行期探测取用、绝不写进 dsh.client.inject（硬声明缺失服务整个插件起不来）；
+    // 缺服务只剩 getKitUi() 侧的存在性补丁（签不出现）。
     function registerRightbar(rbCtx) {
       const tabs = rbCtx.sidebarRightTabs;
       if (!tabs || typeof tabs.register !== "function") return;
@@ -11359,8 +11356,8 @@ body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{displ
     const t = (key) => lang()[key] ?? key;
 
     // ─────────── 组件配置（/dsh-kit-terminal/config）───────
-    // 终端没有独立配置字段：行开关（插件页组件行 switch）= 唯一开关。拉端点只为
-    // 可达性——200 = 行启用；404（行禁用 → 子模块不物化）= 隐藏入口并结束会话。
+    // 行开关（插件页组件行 switch）= 唯一开关。拉端点只为可达性——200 = 行启用；
+    // 404（行禁用 → 子模块不物化）= 隐藏入口并结束会话。
     let cfgSnap = null;
     const cfgSubs = new Set();
     const emitCfg = () => {
@@ -12065,8 +12062,8 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 
     // ─────────── 官方快捷键服务（0.1.7-rc.2+）───────
     // 终端命令注册进宿主 shortcuts 服务 = 进官方「快捷键」页（Ctrl+/）：录制、冲突
-    // 检测、跨设备默认值、持久化都归官方；运行期 inject——老宿主没有该服务时只是
-    // 没键位。默认键只给 web:macos/web:windows（web 端放行表只认三键组合或
+    // 检测、跨设备默认值、持久化都归官方；运行期 inject——服务缺位时只是没键位。
+    // 默认键只给 web:macos/web:windows（web 端放行表只认三键组合或
     // primary+alt/shift）与 desktop 三档。
     function registerShortcuts(scCtx) {
       const shortcuts = scCtx.shortcuts;

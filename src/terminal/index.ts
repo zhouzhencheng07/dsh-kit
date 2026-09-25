@@ -2,7 +2,7 @@
 //
 // 组件化切片：终端入口与底部多标签终端坞的 client 半边在根包 client/bundle.js 的
 // terminalModule；宿主半边只留一处职责：GET /dsh-kit-terminal/config 可达性探针——
-// 终端没有独立配置字段（行开关 = 唯一开关），client 拉它 200 = 行启用、404（行禁用
+// 行开关 = 唯一开关，client 拉它 200 = 行启用、404（行禁用
 // 子模块不物化）= 隐藏入口并收场。xterm 静态资源走主包 /dsh-kit/vendor 白名单。
 
 import http from 'node:http'

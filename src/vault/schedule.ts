@@ -7,14 +7,14 @@
 // 用宿主 defineTool 注册；HTTP 端点（只读）同在该文件。
 //
 // 设计要点：
-// - 日程是强结构数据（起止/重复/位置），不是笔记——不做 md 不进 vault；
+// - 日程是强结构数据（起止/重复/位置），以 JSON 存 $DSH_HOME，不进知识库目录；
 // - kind 派生：有 start=事件（上网格），无 start=待办（due 可选）——不存显式
 //   kind 字段，避免两处真源。
 // - 时间全部存本地朴素串（无时区后缀），同格式字符串比较即时间序。
 // - 重复展开只在宿主查询层做（expandOccurrences，带 endDate/state），客户端拿
 //   现成 occurrence 渲染；支持 daily/weekly/monthly × interval × days(weekly) × end。
-// - 不做计时（起停与计时段编辑归望舒端）：数据里的 timeEntries/entries 只读——
-//   独立计时段照常载入并计入统计，目录里望舒端的 timer.json 不读不写。
+// - 计时数据只读（起停与计时段编辑归望舒端）：timeEntries 照常载入并计入统计，
+//   目录里望舒端的 timer.json 不读不写。
 // 生命周期：模块级单例懒构造（首次端点/工具触达）；文件缺失=空库；JSON 损坏
 // → 坏文件改存 .bak 后降级空库，不让日程服务砖死。
 
@@ -806,7 +806,7 @@ export function syncScheduleStore(): ScheduleStore {
 // ── agent 工具（schedule_query / schedule_create / schedule_update / schedule_delete）─
 // agent 能查、能建、也能改（update 走 store 的三态 patch：null = 清空，改类型 =
 // start/end 与 due 二选一给）；删除仍由人发起（对话里确认）、agent 代执行，所以
-// query 返回 items（id）+ delete/update 按 id 精确指向，不提供按标题模糊改删。
+// query 返回 items（id）+ delete/update 按 id 精确指向。
 
 /** "H:mm"/"HH:mm" 归一成 "HH:mm"；缺位/越界返回 null */
 function normHHmm(raw: string): string | null {

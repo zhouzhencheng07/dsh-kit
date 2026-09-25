@@ -8,8 +8,7 @@
 // dsh-kit/vault（知识库 · 日程）、dsh-kit/terminal（终端）、dsh-kit/browser（内置浏览器）、
 // dsh-kit/skills（技能）、dsh-kit/phone（手机访问）、dsh-kit/monitor（用量与监视）、
 // dsh-kit/search（网页搜索）——行关闭 = 该子模块不物化 = 它的端点与 agent 工具一起消失。
-// 组件各有自己的 Config（src/<组件>/index.ts）；本行没有可调参数，因此不导出 Config、
-// 也没有配置页（同终端 / 技能行）。
+// 组件各有自己的 Config（src/<组件>/index.ts）；本行没有可调参数。
 //
 // 浏览器半边（client/bundle.js）：各功能入口注册在对话输入框工具行
 // （conversation.input.left），面板本体挂 shell.overlay 与官方右栏签；组件各自的

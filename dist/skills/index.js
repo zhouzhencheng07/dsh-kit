@@ -1,8 +1,8 @@
 // dsh-kit 技能组件（宿主半边入口）
 //
 // 组件化切片：技能管理页的 client 半边在根包 client/bundle.js 的 skillsModule。
-// 宿主半边 = 技能池数据端点（实现见 ./skill-pool.ts）+ 行可达性探针：技能没有
-// 独立配置字段（行开关 = 唯一开关），GET /dsh-kit-skills/config 恒回空对象——
+// 宿主半边 = 技能池数据端点（实现见 ./skill-pool.ts）+ 行可达性探针（行开关 =
+// 唯一开关，GET /dsh-kit-skills/config 恒回空对象）——
 // client 拉 200 = 行启用、404（行禁用 → 本子模块不物化）= 不注册设置页。
 import http from 'node:http';
 import { sameOrigin } from "../core/index.js";
