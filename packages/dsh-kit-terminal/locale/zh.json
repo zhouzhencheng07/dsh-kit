@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "终端",
+    "description": "对话输入行的终端入口与底部多标签终端坞（引擎为官方 webTerminals）。"
+  }
+}

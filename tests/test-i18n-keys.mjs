@@ -10,6 +10,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const bundles = [
   "client/bundle.js",
   "packages/dsh-kit-files/client/bundle.js",
+  "packages/dsh-kit-terminal/client/bundle.js",
   "packages/dsh-kit-monitor/client/bundle.js",
 ];
 

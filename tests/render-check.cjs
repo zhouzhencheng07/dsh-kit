@@ -1,7 +1,7 @@
 // 渲染级验证：桩掉 react hooks，直接函数调用 dsh-kit 的组件
-// （TreeNode/FileTreePanel/DiffPane/TerminalEntry/FileTreeEntry/KitSurfaces/
-// GitChangesPanel/SkillsManager/TerminalDock/TerminalPane），跑完整渲染体。
-// TerminalDock/TerminalPane 通过 setKitUi 预置会话后渲染（防"有状态后才走到的分支"逃逸）。
+// （TreeNode/FileTreePanel/DiffPane/FileTreeEntry/KitSurfaces/GitChangesPanel/
+// SkillsManager/VaultView/KitConfigPage），跑完整渲染体。终端组件的同类检查在
+// tests\render-check-terminal.cjs（组件已拆到 packages\dsh-kit-terminal）。
 // ⚠️ 盲区：桩不会重渲染（effect 不执行、state 不更新），依赖 effect 产出后才走到的
 // 渲染分支（如 FileTreePanel 的 entries.map 行）覆盖不到——残留变量藏在那种行里会
 // 逃过本检查。可疑残留请配合全文扫描排查。
@@ -96,10 +96,10 @@ if (!global.location) {
 //      副作用照跑），导出面直接落在根包 exports 上——断言见 comps 加载之后
 
 // 3) 组装可执行的 factory 闭包，并导出组件（替换防 early-return）；
-//    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
+//    setKitUi 用于预置面板状态等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return Object.assign({ vaultSideSlot, vaultPaneSlot, TerminalEntry, VaultEntry, PhoneSection, KitSurfaces, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, KitConfigPage, KIT_CFG_FIELDS, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref, registerShortcuts, shortcutRun }, kitBase);",
+  "return Object.assign({ vaultSideSlot, vaultPaneSlot, VaultEntry, PhoneSection, KitSurfaces, SkillsManager, TreeRowMenu, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchSkillsPage, getKitUi, setKitUi, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, KitConfigPage, KIT_CFG_FIELDS, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref, registerShortcuts, shortcutRun }, kitBase);",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -121,7 +121,7 @@ console.log((baseOk ? "PASS  " : "FAIL  ") + "底座共享面齐全（kit 三件
 if (!baseOk) process.exitCode = 1;
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["TerminalEntry", "VaultEntry", "PhoneSection", "KitSurfaces", "SkillsManager", "TerminalDock", "TerminalPane", "TreeRowMenu", "BrowserPanel", "RteEditor", "VaultPagePane", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "KitConfigPage", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "BrowserPaneBody", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["VaultEntry", "PhoneSection", "KitSurfaces", "SkillsManager", "TreeRowMenu", "BrowserPanel", "RteEditor", "VaultPagePane", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "KitConfigPage", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "BrowserPaneBody", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -146,11 +146,11 @@ check("TreeRowMenu 目录行菜单(新建文件/目录单入口+复制相对/重
 
 // 5)/6) FileTreePanel 与 DiffPane 直测随组件迁 dsh-kit-files（tests\render-check-files.cjs）
 
-// 7) 入口按钮 / 浮层宿主顶部渲染（conversation.input.left + shell.overlay 槽位）
+// 7) 入口按钮 / 浮层宿主顶部渲染（conversation.input.left + shell.overlay 槽位）：
+//    终端入口与坞随组件迁 dsh-kit-terminal（tests\render-check-terminal.cjs）
 callLog = [];
-out = comps.TerminalEntry({});
-check("TerminalEntry 渲染无异常", !!out && typeof out === "object");
-check("TerminalEntry 悬停走官方气泡（KitTip 包住锚点，命令 id 对上快捷键注册）", out.type === comps.KitTip && out.props.command === "dsh-kit.terminal.toggle" && typeof out.props.label === "string");
+out = comps.VaultEntry({});
+check("VaultEntry 渲染无异常且悬停走官方气泡（KitTip + 命令 id 对上快捷键注册）", !!out && out.type === comps.KitTip && out.props.command === "dsh-kit.vault.toggle" && typeof out.props.label === "string");
 // 7.0) 侧栏索引单槽互斥（sidebarViewPatch 纯补丁语义；入口按钮交互随组件迁 files）
 const svp = comps.sidebarViewPatch("vault");
 check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultIdxOpen === true && svp.treeOpen === false && svp.gitOpen === false);
@@ -223,17 +223,18 @@ check("KitConfigPage 页签切换落 state", stateStore.get(3) === "kcfgGroupVau
 const cfgFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
 check("KitConfigPage SettingsForm 框架：labels/state/保存动作齐全", !!cfgFrm && typeof cfgFrm[2].onSave === "function" && typeof cfgFrm[2].onDiscard === "function" && cfgFrm[2].state.available === true && cfgFrm[2].state.writable === true && cfgFrm[2].state.dirty === false && !!cfgFrm[2].labels.save && !!cfgFrm[2].labels.readOnly && !!cfgFrm[2].labels.saveFailed);
 const cfgPanel = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-cfgp-fields");
-check("功能开关页签：7 Switch + 1 数值字段 + 面板 aria 挂到当前组", cfgSw().length === 7 && cfgVf().length === 1 && !!cfgPanel && cfgPanel[2].id === "dshk-cfgp-panel-kcfgGroupFeatures" && cfgPanel[2].role === "tabpanel");
+check("功能开关页签：6 Switch + 1 数值字段 + 面板 aria 挂到当前组", cfgSw().length === 6 && cfgVf().length === 1 && !!cfgPanel && cfgPanel[2].id === "dshk-cfgp-panel-kcfgGroupFeatures" && cfgPanel[2].role === "tabpanel");
 const cfgSmField = cfgVf().find((c) => c[2].id === "dshk-cfgp-searchMaxResults");
 check("数值字段回显受理值（searchMaxResults=3）", !!cfgSmField && cfgSmField[2].text === "3" && cfgSmField[2].numeric === true && cfgSmField[2].overridden === false);
-check("Switch 行回显布尔值且带说明文案", cfgSw()[0][2].checked === true && ["终端面板", "Terminal panel"].includes(cfgSw()[0][2].label));
+check("Switch 行回显布尔值且带说明文案（终端开关已随组件迁走，首位是技能页）", cfgSw()[0][2].checked === true && ["技能管理页", "Skills manager page"].includes(cfgSw()[0][2].label));
 out = renderCfgTab("kcfgGroupPhone", fakeForm);
 check("手机访问页签：2 Switch + 1 数值 + 1 文本（文本回显受理域名）", cfgSw().length === 2 && cfgVf().length === 2 && cfgVf().some((c) => c[2].id === "dshk-cfgp-phoneRemoteDomain" && c[2].text === "dsh.example.com"));
 out = renderCfgTab("kcfgGroupVault", fakeForm);
 check("知识库页签：1 Switch + 1 文本", cfgSw().length === 1 && cfgVf().length === 1);
 // 10) 键位改由宿主 shortcuts 服务持有（0.1.7-rc.2+ 官方「快捷键」页）：注册面在
 //     client 半边——命令进官方页即自动获得录制/冲突检测/跨设备默认值/持久化。
-//     这里直调注册函数（不经 apply，避开 apply 的联网/定时器副作用）。
+//     这里直调注册函数（不经 apply，避开 apply 的联网/定时器副作用）。终端命令的
+//     同款注册随组件迁 dsh-kit-terminal（tests\render-check-terminal.cjs）。
 {
   const registered = [];
   comps.registerShortcuts({
@@ -241,31 +242,29 @@ check("知识库页签：1 Switch + 1 文本", cfgSw().length === 1 && cfgVf().l
     effect: (fn) => { fn(); },
   });
   const byId = (id) => registered.find((c) => c.id === id);
-  const term = byId("dsh-kit.terminal.toggle");
   const vault = byId("dsh-kit.vault.toggle");
   const def = (cmd) => (cmd && cmd.defaults["web:windows"]) || {};
-  check("终端/知识库两条命令注册进官方 shortcuts（id/label/别名）", !!term && !!vault && typeof term.label === "function" && typeof term.label() === "string" && Array.isArray(term.aliases) && !!vault.label());
-  check("默认键：终端 Ctrl+Alt+`、知识库 Ctrl+Alt+/（primary+alt 口径，web 放行表内）", def(term).code === "Backquote" && String(def(term).modifiers) === "primary,alt" && def(vault).code === "Slash" && String(def(vault).modifiers) === "primary,alt" && !!term.defaults["desktop:windows"] && !!term.defaults["web:macos"]);
-  check("region 覆盖 page/editable/terminal（聊天输入行与终端里都生效）", ["page", "editable", "terminal"].every((r) => term.regions.includes(r)) && term.modals.length === 0);
-  // resolve 门控：功能开关关 → blocked 带说明；开 → handled 且 run 落到浮层挂上的动作
+  check("知识库命令注册进官方 shortcuts（id/label/别名），终端命令不在本包", !!vault && typeof vault.label === "function" && typeof vault.label() === "string" && Array.isArray(vault.aliases) && !byId("dsh-kit.terminal.toggle"));
+  check("默认键：知识库 Ctrl+Alt+/（primary+alt 口径，web 放行表内）", def(vault).code === "Slash" && String(def(vault).modifiers) === "primary,alt" && !!vault.defaults["desktop:windows"] && !!vault.defaults["web:macos"]);
+  check("region 覆盖 page/editable/terminal（聊天输入行与终端里都生效）", ["page", "editable", "terminal"].every((r) => vault.regions.includes(r)) && vault.modals.length === 0);
+  // resolve 门控：功能开关关 → blocked 带说明（开态路径由组件包各自的 render-check 钉，
+  // 它们能预置自家配置快照）；run 接线只验证它取的是浮层渲染期刷新的 shortcutRun
   const ran = [];
-  comps.shortcutRun.terminal = () => ran.push("terminal");
-  const termOn = term.resolve({ region: "page", modal: null });
+  comps.shortcutRun.vault = () => ran.push("vault");
   const vaultOff = vault.resolve({ region: "page", modal: null }); // 内置默认 vaultEnabled=false
-  if (termOn.status === "handled") termOn.run();
-  check("功能开：resolve handled 且 run 触发注册的动作", termOn.status === "handled" && ran.join(",") === "terminal");
-  check("功能关：resolve blocked 并带说明（不吞键也不动作）", vaultOff.status === "blocked" && typeof vaultOff.reason === "string" && vaultOff.reason.length > 0);
-  comps.shortcutRun.terminal = null;
+  check("功能关：resolve blocked 并带说明（不吞键也不动作）", vaultOff.status === "blocked" && typeof vaultOff.reason === "string" && vaultOff.reason.length > 0 && ran.length === 0);
+  check("resolve 的 run 接的是 KitSurfaces 渲染期刷新的 shortcutRun（开态路径由组件包各自的 render-check 钉）", /run: \(\) => shortcutRun\.vault/.test(src));
+  comps.shortcutRun.vault = null;
   // 悬停气泡复用官方 Tooltip（名称 + 键帽），键位从宿主目录活读：官方页里改了键，
   // 悬停当场跟着变（不是把默认键写死在按钮上）
-  const scRows = [{ id: "dsh-kit.terminal.toggle", keys: ["Ctrl", "+", "Alt", "+", "`"], aria: "Control+Alt+`" }];
+  const scRows = [{ id: "dsh-kit.vault.toggle", keys: ["Ctrl", "+", "Alt", "+", "/"], aria: "Control+Alt+/" }];
   comps.attachShortcutCatalog({ getSnapshot: () => scRows, subscribe: () => () => {} });
   const anchor = () => jsxRuntimeStub.jsx("button", { type: "button" });
-  const tipEl = comps.KitTip({ label: "终端面板", command: "dsh-kit.terminal.toggle", side: "top", children: anchor() });
-  check("悬停走官方 Tooltip：label + 该命令当前键帽（官方气泡样式，锚点上方）", tipEl.type === primStub.Tooltip && tipEl.props.label === "终端面板" && String(tipEl.props.shortcutKeys) === "Ctrl,+,Alt,+,`" && tipEl.props.side === "top" && tipEl.props.delayMs === 500);
+  const tipEl = comps.KitTip({ label: "知识库", command: "dsh-kit.vault.toggle", side: "top", children: anchor() });
+  check("悬停走官方 Tooltip：label + 该命令当前键帽（官方气泡样式，锚点上方）", tipEl.type === primStub.Tooltip && tipEl.props.label === "知识库" && String(tipEl.props.shortcutKeys) === "Ctrl,+,Alt,+,/" && tipEl.props.side === "top" && tipEl.props.delayMs === 500);
   const tipBottom = comps.KitTip({ label: "刷新", align: "end", children: anchor() });
   check("方向按官方口径：面板头/工具条默认朝下、行尾动作钮补 align:end", tipBottom.props.side === "bottom" && tipBottom.props.align === "end" && tipBottom.props.shortcutKeys === undefined);
-  check("锚点由 KitTip 补 aria-label / aria-keyshortcuts（原生 title 退役）", tipEl.props.children.props["aria-label"] === "终端面板" && tipEl.props.children.props["aria-keyshortcuts"] === "Control+Alt+`");
+  check("锚点由 KitTip 补 aria-label / aria-keyshortcuts（原生 title 退役）", tipEl.props.children.props["aria-label"] === "知识库" && tipEl.props.children.props["aria-keyshortcuts"] === "Control+Alt+/");
   const tipBare = comps.KitTip({ label: "没注册的命令", command: "dsh-kit.none", children: anchor() });
   check("目录里没有该命令时只出 label（键帽不硬编码）", tipBare.props.label === "没注册的命令" && tipBare.props.shortcutKeys === undefined);
   check("primitives 缺 Tooltip 的老宿主回落原生 title（悬停提示不消失）", /if \(!dswTooltip\) return react\.cloneElement\(children, \{ title: label \}\);/.test(src));
@@ -1075,15 +1074,8 @@ check("openFileTab 携带 commit 钉定", commitOpen.files.length === 1 && commi
 const commitReopen = comps.openFileTab(commitOpen, "C:/x/hist.js", "scm", false);
 check("openFileTab 从 SCM 重开同路径清除钉定", commitReopen.files[0].commit === undefined);
 
-// 7.5) 终端坞（多标签）：预置两个会话（含同 cwd 多开）后渲染——标签 map 曾因
-// 变量遮蔽翻译函数 t 而崩溃，此用例专防"有状态后才走到的渲染分支"
-comps.setKitUi({ terminals: [comps.makeTerm("s1", "C:/x"), comps.makeTerm("s1", "C:/x")], activeTermId: null, termDockOpen: true });
-callLog = [];
-out = comps.TerminalDock({ open: true, cwd: "C:/x", onSpawn: () => {}, onHide: () => {}, onActivate: () => {}, onKill: () => {} });
-check("TerminalDock 带标签渲染无异常", !!out && typeof out === "object");
-callLog = [];
-out = comps.TerminalPane({ term: { id: "t1", sessionId: "s1", cwd: "C:/x" }, visible: true });
-check("TerminalPane 渲染无异常", !!out && typeof out === "object");
+// 7.5) 终端坞（多标签）随组件迁 dsh-kit-terminal（tests\render-check-terminal.cjs）：
+// 预置会话后的标签 map 渲染分支（曾因变量遮蔽翻译函数 t 而崩溃）在那里专测
 comps.setKitUi({ terminals: [], activeTermId: null, termDockOpen: false });
 callLog = [];
 out = comps.KitSurfaces({});
@@ -1144,7 +1136,7 @@ check("SkillsManager 带cwd渲染无异常", !!out && typeof out === "object");
     compared++;
     if (comps.CFG_DEFAULTS[key] !== expected) drift.push(key + "(bundle=" + comps.CFG_DEFAULTS[key] + ",host=" + expected + ")");
   }
-  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 13);
+  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 12);
 }
 // 过时文案清理：现行说明不得出现「侧栏底部『任务』钮」、日程索引标题键、搜索默认 5
 check(
@@ -1186,8 +1178,17 @@ check(
   "文件树上没有上传按钮与逻辑（vault 附件上传不受影响）",
   !src.includes("UploadIcon") && !src.includes("treeUpload") && !src.includes("uploadDone") && !src.includes("uploadFail"),
 );
-// 悬停提示不再自带原生 title（终端/知识库两处入口钮改由 KitTip 出官方气泡）
+// 悬停提示不再自带原生 title（知识库入口钮改由 KitTip 出官方气泡；终端入口随组件迁走）
 check("入口钮的悬停不再自带原生 title（全走官方气泡）", !/dshk-enbtn"[\s\S]{0,120}?\n\s*title:/.test(src));
+// 终端组件已拆出本包（packages\dsh-kit-terminal）：坞/图标/xterm 胶水/命令注册/样式
+// 都不得在根包残留（各件在 tests\render-check-terminal.cjs 里正向钉住）
+check(
+  "终端半边已迁出根包（组件/图标/主题/vendor 加载/命令/样式全无残留）",
+  !src.includes("TerminalEntry") && !src.includes("TerminalDock") && !src.includes("TerminalPane") &&
+    !src.includes("TerminalIcon") && !src.includes("xtermTheme") && !src.includes("ensureVendor") &&
+    !src.includes("webTerminals") && !src.includes("dsh-kit.terminal.toggle") &&
+    !src.includes(".dshk-dock{") && !src.includes(".dshk-term{") && !src.includes(".dshk-term-badge{"),
+);
 
 // React 桩记录到的组件类型必须包含本插件自定义组件名（防 ReferenceError 被忽略后整段缺失）
 const types = new Set(callLog.flatMap(([, t]) => (typeof t === "string" ? [t] : [])));
