@@ -189,7 +189,7 @@ async function checkApply() {
   const seat = on.registered.find((s) => s && s.name === "settings.section");
   check("设置页整块注册：id=kit-phone、order=45、label 取本组件词条", !!seat && seat.id === "kit-phone" && seat.order === 45 && typeof seat.label === "function" && ["手机访问", "Phone access"].includes(seat.label()));
   const keys = on.registered.filter((s) => s && s.name === "plugins.row.config").map((s) => s.key);
-  check("配置页挂本组件行（两种包名口径的 key 都在）", keys.includes("dsh-kit#phone") && keys.includes("dsh-kit-phone#phone"));
+  check("配置页挂本组件行（单包单口径 key）", keys.includes("dsh-kit#phone") && keys.length === 1);
 }
 
 // 5) 源哨兵：宿主半边搬进组件目录、主包与 client 摘干净、端点与配置齐备、

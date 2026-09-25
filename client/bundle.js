@@ -4,7 +4,7 @@
 // 结构：
 //   入口：conversation.input.left（composer 工具行，文件树/源代码管理/知识库/
 //     终端四个小图标钮，工作区级工具跟 session 走）——文件树/源代码管理两枚由
-//     组件包 dsh-kit-files 自注册，终端入口与坞归组件包 dsh-kit-terminal，本包
+//     dsh-kit/files 组件半边自注册，终端入口与坞归 dsh-kit/terminal，本包
 //     只给它们共享面。知识库钮是开合切换：开 = 侧栏索引视图，再点 = 侧栏回
 //     会话列表；日程没有 composer 钮（日程只有一个家：右栏 dock 签，入口归右栏
 //     开始页条目与待办卡）。
@@ -14,8 +14,8 @@
 //     即开），日程/浏览器走右栏开始页清单与自动跟随。开始页保留官方
 //     ShippedGuide（罗盘 + 胶囊条目），我们只贡献 guide 条目：日程/浏览器
 //     两枚（diff/知识库是被动签，不给条目），官方「工作区文件」条目
-//     垫底（配置可隐藏）。后台任务不做面板（0.1.7 官方会话头部自带
-//     任务清单 + 实时输出 + 停止，本插件原面板退役）。
+//     垫底（配置可隐藏）。后台任务不做面板：官方会话头部自带任务清单 +
+//     实时输出 + 停止。
 //     缺 sidebarRight 服务时只剩 getKitUi() 侧的存在性补丁——入口按钮
 //     不报错，签由官方侧自己决定要不要出现。
 //   功能存在性（getKitUi()）：files/activeFile（diff 签）与
@@ -23,7 +23,7 @@
 //     （入口按钮选中态与角标读它）；activeFeature 是当前激活的功能（Esc 关哪张
 //     文档签、浏览器自动跟随的判据）。索引类视图（知识库目录树）住侧栏
 //     sidebar.workspaces 单槽，点条目开对应右栏签。
-//   文件树/源代码管理：面板群与宿主端点归组件包 dsh-kit-files（路径沿用
+//   文件树/源代码管理：面板群与宿主端点归 dsh-kit/files 组件半边（端点路径
 //     /dsh-kit/*），侧栏浏览区的 tree/git 分支经 kitBase.sidebarView 座回到本包
 //     的 sidebar.workspaces 渲染器单槽分发；本包保留右栏「差异」pane 正文
 //     （FilePaneBody，diff 组件经 kitBase.diffPane 座取）与 kitUi 差异签状态。
@@ -47,9 +47,9 @@ window.__ModuleLoader__.load({
     let reactDom = require("react-dom");
 
     // ─────────── 组件间共享底座（kitBase，内联模块）───────────
-    // 端点调用/kitUi 跨槽状态/配置页骨架/右栏接线等共享面直接住在本包：组件包
-    // 经 dsh.client.external: ["dsh-kit"] + require("dsh-kit") 取同一份（模块
-    // 系统按 boot 图先物化根包）。底座随套件主行启停，不再是可单独关闭的组件。
+    // 端点调用/kitUi 跨槽状态/配置页骨架/右栏接线等共享面住在本模块：组件半边同住
+    // 本 factory，执行期拿到的 kit 形参就是这个 exports 对象（同一引用），座对象
+    // 机制保证组件后写的键 root 也读得到。底座随基础设施行启停，没有自己的行开关。
     const kitBase = (function kitBaseFactory(require) {
       var exports = {};
       Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
@@ -444,14 +444,14 @@ window.__ModuleLoader__.load({
 
     // ─────────── 跨槽开合状态（kitUi）───────────
     // 底座单例持有：入口按钮（composer 工具行）与右栏 pane 宿主是多个独立槽位
-    // 组件（分属不同组件包），状态必须跨包跨槽共享：模块级不可变快照 +
+    // 组件（分属不同组件半边），状态必须跨槽共享：模块级不可变快照 +
     // useSyncExternalStore 订阅（getSnapshot 返回模块绑定值，恒定引用直到 set 替换）。
     // 功能存在性（open 位）与激活位（activeFeature）分离：打开某功能 = 确保签
     // 存在并激活，切走不丢状态（diff/知识库的文档签状态在 kitUi 里，官方 dock
     // 签关掉再开即恢复）。files 与 vaultPages 同构（浏览器式：顶部一条标签条 +
     // 下面若干内容页）——一页一标签、点击切换、✕ 单关；源代码管理/提交图谱点开
     // 都往 files 标签条里加标签，同路径复用一个（重开刷新 diff/未跟踪状态）。
-    // 文件树与对话区点击已改投官方右栏文件签，不进这里。diff 签非激活仍挂载
+    // 文件树与对话区点击走官方右栏文件签，不进这里。diff 签非激活仍挂载
     // （display:none）保住滚动位置，超内部上限（3）自动关最久没看的那张。
     let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, activeFeature: null };
     // terminals/activeTermId/termDockOpen 是 dsh-kit-terminal 组件的水位（入口与坞
@@ -584,18 +584,18 @@ window.__ModuleLoader__.load({
     }
 
     /** 功能 → dock 签映射（页类型注册表；kind 即 openTab 用的类型名）。
-     *  知识库 / 日程两张签随组件化迁 dsh-kit/vault 自己注册，根只留文件签 */
+     *  知识库 / 日程两张签由 dsh-kit/vault 组件自己注册，根只留文件签 */
     const RB_FEATURES = [
       { id: "dsh-kit-file", kind: "dshk-file", feature: "file", titleKey: "fileTabLabel" },
     ];
     // ─────────── 官方右侧边栏（宿主 0.1.5+，本插件唯一工作台形态）───────────
     // 每个功能一张 dock 签（页类型），pane 正文是我们的组件。服务是宿主内部实现，
-    // **运行期探测取用、绝不写进 dsh.client.inject**——老宿主（0.1.2）没有该服务，
-    // 硬声明整个插件起不来。不可用则只剩 getKitUi() 侧的存在性补丁（入口不报错，
+    // **运行期探测取用、绝不写进 dsh.client.inject**——硬声明缺失服务会让整个插件
+    // 起不来。不可用则只剩 getKitUi() 侧的存在性补丁（入口不报错，
     // 签不出现）。
     /** sidebarRight 服务实例（openTab 用）：apply 时 ctx.inject(["sidebarRight"])
      *  捕获——服务属性不能直接读（`cannot get property without inject`），又不能
-     *  写进 exports.inject（0.1.2 无此服务，硬声明整插件起不来） */
+     *  写进 exports.inject（硬声明缺失服务整插件起不来） */
     let rightbarSr = null;
     /** 服务实例读取（文件地址拼装等消费方在别的包，直接导出访问器） */
     function getRightbarSr() {
@@ -605,7 +605,7 @@ window.__ModuleLoader__.load({
      *  时 mounted 有值；全局面板（插件页 / 设置页）占住中栏或没选会话时 undefined。
      *  树 / 源代码管理 / 知识库三个工作区面与全部开签动作跟它同生灭——seat 不在场时
      *  右栏压根不画（开签必抛「no session surface is mounted」），左栏浏览区也得让回
-     *  官方会话列表。信号没挂上（老宿主 / 极简组合）时保持 true；信号翻假只收面、
+     *  官方会话列表。信号没挂上（服务缺位 / 极简组合）时保持 true；信号翻假只收面、
      *  不清状态，回到对话即原样恢复（同官方右栏的签按会话保留）。 */
     const rightbarSeat = {
       available: true,
@@ -697,7 +697,7 @@ window.__ModuleLoader__.load({
     }
 
     /** 打开 diff 签并确保「差异」dock 签在眼前（源代码管理/提交图谱统一入口；
-     *  文件树与对话区点击已改投官方右栏文件签，不再进这里）。seat 不在场时不动 */
+     *  文件树与对话区点击走官方右栏文件签，不进这里）。seat 不在场时不动 */
     function openFileAndDock(path, from, untracked, deleted, commit) {
       if (!rightbarSeat.available) return;
       setKitUi(openFileTab(kitUi, path, from, untracked === true, deleted === true, typeof commit === "string" && commit !== "" ? commit : undefined));
@@ -751,7 +751,7 @@ window.__ModuleLoader__.load({
     exports.rightbarSeat = rightbarSeat;
     exports.useRightbarSeat = useRightbarSeat;
     exports.attachSeatSignal = attachSeatSignal;
-    // 跨组件服务座：文件树/SCM 组件（dsh-kit-files）物化期接管。
+    // 跨组件服务座：文件树/SCM 组件（dsh-kit/files）物化期接管。
     // 必须是**座对象**而非直接给 exports 加键：kitBase 到 module.exports 是工厂尾部
     // 的一次性浅拷贝，组件后写的键只落在 module.exports 上，root 读 kitBase 读不到
     // （对象引用拷贝之前的键才能共享，后加组件只改得了座里的字段）
@@ -786,7 +786,7 @@ window.__ModuleLoader__.load({
 
     // ─────────── 官方 primitives 图标复用（能复用就不自绘）───
     // primitives 随宿主前端注册进 ModuleLoader（官方各 client lib 同款 require）；
-    // 取不到（0.1.2 老宿主/异常环境）时各图标回退自绘版本，不挡启动。
+    // 取不到（宿主未注册 primitives / 异常环境）时各图标回退自绘版本，不挡启动。
     let dswPrimIcons = null;
     try { dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 回退自绘 */ }
     const dswIcon = (...names) => {
@@ -797,7 +797,7 @@ window.__ModuleLoader__.load({
       return null;
     };
 
-    // ─────────── 跨槽开合状态与操作（实现在 dsh-kit-dock，底座单例共享）───
+    // ─────────── 跨槽开合状态与操作（实现在共享底座 kitBase，单例共享）───
     const {
       setKitUi, subscribeKitUi, useKitUi, getKitUi,
       KitTip, attachShortcutCatalog,
@@ -859,7 +859,7 @@ window.__ModuleLoader__.load({
       }
     }
     /** 文件树行点击：vault 内 → 知识库（只读阅读视图）；其余 → 官方
-     *  右栏文件签（kit 不再有工作区文件预览/编辑面）。
+     *  右栏文件签（工作区文件预览/编辑面不做）。
      *  vault 那一支归 dsh-kit/vault 组件（经 dock.vaultRoute 座接管）：组件不在场
      *  （未装 / 行关闭）时座里是 null，整条改道随之消失 */
     function openTreeFile(path) {
@@ -1078,8 +1078,8 @@ window.__ModuleLoader__.load({
       imported: "Imported",
       cancel: "Cancel",
     };
-    /** 语言判定与切换响应随组件化迁入 dsh-kit-dock（所有组件共享同一份 locale
-     *  store 与 <html lang> MutationObserver），这里解构取用。 */
+    /** 语言判定与切换响应住在共享底座（所有组件共享同一份 locale store 与
+     *  <html lang> MutationObserver），这里解构取用。 */
     const resolveZh = dock.resolveZh;
     // 每次现读现判，不在模块加载时钉死：DSH 的 locale 服务异步把语言同步到
     // <html lang>（syncDocumentLanguage），时机晚于本 bundle 顶层执行，一次性求值
@@ -1426,7 +1426,7 @@ ellipsis，窄列只截字不破版 */
     }
 
 
-    // 轻提示/剪贴板：实现随组件化迁入 dsh-kit-dock，这里解构取用
+    // 轻提示/剪贴板：实现住在共享底座，这里解构取用
     const { flashToast, writeClipboard } = dock;
 
     // ─────────── 当前会话工作区 ───────────
@@ -1462,7 +1462,7 @@ ellipsis，窄列只截字不破版 */
 
     // ─────────── kit 端点公共调用 ───────────
     // 宿主端点回包约定：成功 2xx（写端点另带 ok:true），失败非 2xx + { error }。
-    // 实现随组件化迁入 dsh-kit-dock（组件间共享的 client 底座），这里解构取用；
+    // 实现住在组件间共享的 client 底座（kitBase），这里解构取用；
     // validate 是调用点自己的形状断言（缺项按失败处理，免得半个回包被当成功往下传）。
     const { kitGetJson, kitPostJson, kitJson } = dock;
 
@@ -1597,7 +1597,7 @@ ellipsis，窄列只截字不破版 */
 
 
     // ─────────── 入口按钮（conversation.input.left）───────────
-    // 终端入口随组件化迁入 dsh-kit-terminal（含坞本体，注册在它自己的 shell.overlay）。
+    // 终端入口与坞本体在 dsh-kit/terminal 组件（注册在它自己的 shell.overlay）。
     // 选中态标记：aria-pressed 属性选择器命中 .dshk-enbtn[aria-pressed="true"]
     // 规则（底色 + 品牌色图标）。选中态底色必须用真实存在的 tool-bar-fill 令牌——
     // 不存在的变量（如 --dsw-alias-fill-l2）会解析成透明，选中态等于没有。
@@ -1668,7 +1668,7 @@ ellipsis，窄列只截字不破版 */
     // vaultPages）在卸载后保留，重开签即恢复，与关签前一致。
     /** diff pane：文档签条 + 多实例 DiffPane（非激活 display:none 保挂载——
      *  滚动位置不丢）。只承载源代码管理/提交图谱点开的 diff；工作区文件的
-     *  预览/编辑已改投官方右栏文件签。不做存在性同步：files 状态本来就在
+     *  预览/编辑走官方右栏文件签。不做存在性同步：files 状态本来就在
      *  getKitUi()，官方签关了重开，文档签原样恢复。最后一页 diff 签关掉 → 官方
      *  「差异」dock 签一起关（同浏览器「没了就没了」，没有空页状态） */
     function FilePaneBody(props) {
@@ -1685,7 +1685,7 @@ ellipsis，窄列只截字不破版 */
               jsxRuntime.jsx("div", {
                 className: "dshk-pane-view",
                 style: { display: pv.path === ui.activeFile ? "flex" : "none" },
-                children: jsxRuntime.jsx(dock.diffPane.Component, { // dsh-kit-files 物化期挂上（渲染期取，boot 后必已物化）
+                children: jsxRuntime.jsx(dock.diffPane.Component, { // dsh-kit/files 物化期挂上（渲染期取，boot 后必已物化）
                   key: pv.path,
                   path: pv.path,
                   untracked: pv.untracked === true,
@@ -1727,7 +1727,7 @@ ellipsis，窄列只截字不破版 */
           dispose = slotsCtx.slots.register({ name: "sidebar.workspaces", priority: -1000 }, (owner) => {
             const side = owner ?? {};
             if (side.wide === false) return null;
-            // 文件树/源代码管理分支归 dsh-kit-files、知识库目录归 dsh-kit/vault，
+            // 文件树/源代码管理分支归 dsh-kit/files、知识库目录归 dsh-kit/vault，
             // 各经 kitBase 的座对象接管；两者都不在场（未装 / 行关闭）时不占槽
             const branch = dock.sidebarView.renderer ? dock.sidebarView.renderer({ ui, cwd, owner }) : null;
             if (branch) return branch;
@@ -1755,7 +1755,7 @@ ellipsis，窄列只截字不破版 */
       react.useEffect(() => {
         const onKey = (e) => {
           if (e.key === "Escape") {
-            if (dock.inlineEdit.active) return; // 树行改名输入激活（dsh-kit-files 经底座座上报）
+            if (dock.inlineEdit.active) return; // 树行改名输入激活（dsh-kit/files 经底座座上报）
             // 知识库搜索浮层开着时让路：Esc 归它自己（只关自己，不收标签页）
             if (dock.vaultSearch.open) return;
             // Esc 关当前激活那张文档签（知识库关当前页那张、diff 关当前
@@ -1849,7 +1849,7 @@ ellipsis，窄列只截字不破版 */
     const dock = kit;
     const { KitTip, kitGetJson, kitPostJson, kitJson, resolveZh, subscribeLocale, getLocaleVersion, useCurrentCwd, registerNavIcon } = dock;
 
-    // 组件私有文案（技能页词条随页迁入本包，与根包字典互不依赖）
+    // 组件私有文案（本组件自持词典，与根包字典互不依赖）
     const zh = {
       skillsLabel: "技能",
       skRefresh: "刷新",
@@ -2362,8 +2362,6 @@ ellipsis，窄列只截字不破版 */
       slotsCtx = ctx;
       kitBase.apply(ctx); // 底座服务捕获（官方右栏 sidebarRight）
 
-      // 会话监视（429 续跑/死循环/通知）已随组件化迁入 dsh-kit-monitor 的 client 半边
-
       // ── 官方文件预览的鸿蒙兼容兜底（依赖宿主断言，升级复核见知识库「DSH 插件开发坑」）──
       // OpenHarmony 等引擎有两个叠加缺陷，缺一个就全站正常、只在真机发作：
       // ① 自定义 scheme 的 URL 解析：dsh-resource://file/… 的 hostname 恒为空 → 宿主
@@ -2436,15 +2434,15 @@ ellipsis，窄列只截字不破版 */
         });
         scanPreviewDownload();
       }
-      // 组件半边激活（单包收回的 files/monitor/terminal/skills/search/browser/vault/phone）：
-      // 与多包时代等价——client 入口注册总是发生，功能存在性由各组件自己的探针门控
-      // （行禁用只摘宿主半边端点，探针 404 的组件整体不注册）
+      // 组件半边激活（files/monitor/terminal/skills/search/browser/vault/phone）：
+      // client 入口注册总是发生，功能存在性由各组件自己的探针门控（行禁用只摘宿主
+      // 半边端点，探针 404 的组件整体不注册）
       for (const componentMod of [exports.files, exports.monitor, exports.terminal, exports.skills, exports.search, exports.browser, exports.vault, exports.phone]) {
         if (componentMod && typeof componentMod.apply === "function") componentMod.apply(ctx);
       }
     }
 
-    // ── dsh-kit-vault 组件（知识库 · 日程）──
+    // ── dsh-kit/vault 组件（知识库 · 日程）──
 // dsh-kit/vault 浏览器半边 —— 知识库 · 日程组件的 client 面。
 // 收纳：侧栏知识库索引（工具条 / 搜索 / 懒加载目录树 / 文件管理）、右栏知识库页阅读面
 // （vendor RTE 只读态 + 双链 / 反链 / 目录导航）、右栏日程签（周时间网格 + 待办 + 统计）、
@@ -2749,7 +2747,7 @@ ellipsis，窄列只截字不破版 */
      *  ③ 交付卡（dsh-client-ui-deliverables 的 PresentedFileCard）→ 路径在覆盖
      *     整卡的 .cardPreview 的 title 上。
      *  vault 内路径 preventDefault 改道知识库标签（只读阅读视图）；其余一律
-     *  放行官方——官方原生 openResource 开右栏文件签，kit 不再接管工作区文件。 */
+     *  放行官方——官方原生 openResource 开右栏文件签（工作区文件面不做）。 */
     function onChatOpenFileClick(ev) {
       if (!ev.isTrusted) return;
       const hook = chatPreviewHook;
@@ -3898,7 +3896,7 @@ ellipsis，窄列只截字不破版 */
     // ctlRef 暴露 { dirty, flush, flushManual, overwrite } 供切页 flush。
     /** 知识库页面渲染器（一页一个实例，挂右栏 pane 宿主）：vendor RTE 只读态
      *  （editable:false），只负责加载 / 阅读位置记忆 / wikilink 与页内链接点击 /
-     *  面包屑上报 / 就绪回调（跨页锚点落位消费点）。写入半边全退役——没有斜杠
+     *  面包屑上报 / 就绪回调（跨页锚点落位消费点）。只读：没有斜杠
      *  菜单、泡泡菜单、自动保存与冲突条。 */
     function RteEditor({ rteRef, docKey, docTick, initialMd, labels, onReady, onWikiLink, resolveWiki, resolveSrc, onRelLink, onState }) {
       const [libsReady, setLibsReady] = react.useState(false);
@@ -4792,7 +4790,7 @@ ellipsis，窄列只截字不破版 */
       // 工具条 + 搜索结果 + 目录树 → 侧栏索引宿主；页编辑器 → 右栏 pane 宿主。
       // 单实例双 portal：两侧各自在场才投递（侧栏关闭/右栏关签互不影响）。
       // 工具条一行：搜索框占满 + 刷新收尾（换根改在树上 Ctrl+点击目录行，树头 ← 回库根，
-      // 前进后退已随访问序退役）
+      // 不做前进/后退与访问序）
       const sideContent = jsxRuntime.jsxs("div", { className: "dshk-vault-sidewrap", children: [
         jsxRuntime.jsxs("div", { className: "dshk-vault-toolbar", children: [
           jsxRuntime.jsxs("div", { className: "dshk-vault-tbarrow", children: [
@@ -5508,12 +5506,9 @@ ellipsis，窄列只截字不破版 */
       document.addEventListener("click", onChatOpenFileClick, true);
       // 官方快捷键服务：知识库索引开合
       ctx.inject(["shortcuts"], registerShortcuts);
-      // 配置页挂本组件行：槽位 key = <包名>#<行id>——两种包名口径各挂一枚
-      //（页面按精确 key 匹配，未命中的那枚永远不渲染）
-      for (const key of ["dsh-kit#vault", "dsh-kit-vault#vault"]) {
-        ctx.slots.inject("plugins.row.config", () =>
-          ctx.slots.register({ name: "plugins.row.config", key }, VaultConfigPage));
-      }
+      // 配置页挂本组件行：槽位 key = <包名>#<行id>（宿主按精确 key 匹配本行）
+      ctx.slots.inject("plugins.row.config", () =>
+        ctx.slots.register({ name: "plugins.row.config", key: "dsh-kit#vault" }, VaultConfigPage));
     };
 
     // 渲染级检查取用
@@ -5994,11 +5989,9 @@ ellipsis，窄列只截字不破版 */
         { name: "settings.section", id: "kit-phone", order: 45, label: () => t("phoneTitle") },
         PhoneSection,
       ));
-      // 配置页挂本组件行：槽位 key = <包名>#<行id>——两种包名口径各挂一枚
-      //（页面按精确 key 匹配，未命中的那枚永远不渲染）
-      for (const key of ["dsh-kit#phone", "dsh-kit-phone#phone"]) {
-        ctx.slots.inject("plugins.row.config", () => ctx.slots.register({ name: "plugins.row.config", key }, PhoneConfigPage));
-      }
+      // 配置页挂本组件行：槽位 key = <包名>#<行id>（宿主按精确 key 匹配本行）
+      ctx.slots.inject("plugins.row.config", () =>
+        ctx.slots.register({ name: "plugins.row.config", key: "dsh-kit#phone" }, PhoneConfigPage));
       registerNavIcon(PHONE_NAV_ICON);
       injectStyles();
     };
@@ -6014,13 +6007,12 @@ ellipsis，窄列只截字不破版 */
     exports.fetchPhoneLinks = fetchPhoneLinks;
     return module.exports;
     };
-    // ─────────── 组件半边模块（单包收回；原 dsh-kit-files/monitor/terminal 独立 bundle）───────────
-    // 多包时代组件是独立 client entry，经 external require("dsh-kit") 取本包导出
-    // （kitBase 浅拷贝 + root 侧设施）。收回后同住本 factory：kit 形参即根 exports
-    // （同一对象引用），组件自己的 module/exports 隔离壳保留，座对象机制不变。
+    // ─────────── 组件半边模块 ───────────
+    // 每个组件一个隔离壳，同住本 factory：kit 形参即根 exports（同一对象引用，
+    // 见文件尾的组件模块执行段），座对象机制不变。
     // 组件模块执行只组装导出（无副作用），apply 由根 apply 尾部的激活循环调用。
-    // ── dsh-kit-files 组件（文件树 · 源代码管理）──
-// dsh-kit-files 浏览器半边 —— 文件树与源代码管理组件的 client 面。
+    // ── dsh-kit/files 组件（文件树 · 源代码管理）──
+// dsh-kit/files 浏览器半边 —— 文件树与源代码管理组件的 client 面。
 // 收纳：侧栏文件树（目录树/新建/改名/删除/@ 到对话）+ 源代码管理（状态/差异/
 // 提交/分支/推送/提交图谱）+ SCM diff 签正文（DiffPane，挂 kitBase 的 diffPane
 // 座供 root 的 FilePaneBody 取用）。数据走本组件宿主半边的端点（路径沿用
@@ -6054,7 +6046,7 @@ ellipsis，窄列只截字不破版 */
       return null;
     };
 
-    // 组件私有文案（tree*/sc*/图谱/diff 词条随面板迁入本包；语言判定/切换响应来自 dock）
+    // 组件私有文案（本组件自持词典；语言判定/切换响应来自 dock）
     const zh = {
       noCwd: "没有可用的会话工作区：先打开或创建一个会话",
       treeLabel: "文件树",
@@ -8434,8 +8426,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     // ─────────── 插件体 ───────────
     function apply(ctx) {
-      // 组件配置页：挂本组件行（槽位 key = dsh-kit#<行id>；多包时代的第二种
-      // 包名口径已随单包收回撤销）
+      // 组件配置页：挂本组件行（槽位 key = <包名>#<行id>）
       ctx.slots.inject("plugins.row.config", () =>
         ctx.slots.register({ name: "plugins.row.config", key: "dsh-kit#files" }, FilesConfigPage),
       );
@@ -8493,11 +8484,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     return module.exports;
 };
 
-    // ── dsh-kit-monitor 组件（用量与监视）──
-// dsh-kit-monitor 浏览器半边 —— 用量与监视组件的 client 面。
+    // ── dsh-kit/monitor 组件（用量与监视）──
+// dsh-kit/monitor 浏览器半边 —— 用量与监视组件的 client 面。
 // 现收纳：余额与用量芯片（UsageLine）+ 会话监视（429 续跑器 / 死循环打断的
-// MonitorLine 与头部 429 状态条 MonitorBgAction）+ 会话通知（桌面通知/标题闪烁），
-// 组件化自主包迁入。
+// MonitorLine 与头部 429 状态条 MonitorBgAction）+ 会话通知（桌面通知/标题闪烁）。
 //
 // 数据走宿主 /dsh-kit/usage（key 在宿主侧复用模型配置，浏览器拿不到）。状态带
 // 右缘只出**一张**芯片：当前会话选中的模型 provider（modelDirectories 服务按
@@ -8531,7 +8521,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       return null;
     };
 
-    // 组件私有文案（usage* 词条随芯片迁入本包）；语言判定/切换响应来自 dock
+    // 组件私有文案（本组件自持词典）；语言判定/切换响应来自 dock
     const zh = {
       usageRefresh: "刷新",
       usageUpdatedAt: "更新于",
@@ -9681,9 +9671,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     }
 
 
-    /** 会话头部的 429 后台会话状态条：全局续跑器有待续跑/封顶会话才渲染（零常驻）。
-     *  原挂在右栏任务签顶部，0.1.7 任务签退役（官方会话头部自带任务清单 + 实时输出
-     *  + 停止）后移到这里，与官方后台任务入口同域。点开小浮层逐条列出，待续跑可取消。 */
+    /** 会话头部的 429 后台会话状态条：全局续跑器有待续跑/封顶会话才渲染（零常驻），
+     *  与官方后台任务入口同域。点开小浮层逐条列出，待续跑可取消。 */
     function MonitorBgAction() {
       react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
       const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
@@ -9759,7 +9748,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       ] });
     }
 
-    // 本组件配置页（插件页 dsh-kit-monitor 行「配置」）：骨架在 dock，这里只喂字段表
+    // 本组件配置页（插件页 dsh-kit/monitor 行「配置」）：骨架在 dock，这里只喂字段表
     const MONITOR_CFG_FIELDS = [
       { key: "usageEnabled", type: "bool", group: "kcfgGroupUsage", labelKey: "kcfgUsageEnabled", hintKey: "kcfgUsageEnabledHint" },
       { key: "monitorEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgMonitorEnabled", hintKey: "kcfgMonitorEnabledHint" },
@@ -10214,13 +10203,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     exports.apply = async (ctx) => {
       slotsCtx = ctx;
       // 组件配置页：挂在插件页本组件行上的「配置」。行由 dsh-kit bundle 的 patch
-      // 声明，槽位 key = <包名>#<行id>——两种包名口径各挂一枚（页面按精确 key 匹配，
-      // 未命中的那枚永远不渲染），宿主改口径也不用动组件
-      for (const key of ["dsh-kit#monitor", "dsh-kit-monitor#monitor"]) {
-        ctx.slots.inject("plugins.row.config", () =>
-          ctx.slots.register({ name: "plugins.row.config", key }, MonitorConfigPage),
-        );
-      }
+      // 声明，槽位 key = <包名>#<行id>（宿主按精确 key 匹配本行）
+      ctx.slots.inject("plugins.row.config", () =>
+        ctx.slots.register({ name: "plugins.row.config", key: "dsh-kit#monitor" }, MonitorConfigPage),
+      );
       // modelDirectories 懒就绪：就绪时通知订阅者重读（用量芯片据此显隐）
       ctx.inject(["modelDirectories"], (mctx) => {
         usageModelDirs = mctx.modelDirectories || null;
@@ -10357,8 +10343,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     return exports;
 };
 
-    // ── dsh-kit-search 组件（网页搜索）──
-// dsh-kit-search 浏览器半边 —— 网页搜索组件的 client 面。
+    // ── dsh-kit/search 组件（网页搜索）──
+// dsh-kit/search 浏览器半边 —— 网页搜索组件的 client 面。
 // 搜索本体全在宿主半边（web seam 接管 + 引擎链，src/search/），client 面只有本组件行
 // 的「配置」页（搜索结果条数）。行开关即总开关：关行 = 宿主模块不物化 = 不接管 seam，
 // base 钉的官方搜索原样生效——因此这里没有要门控的客户端 UI，也没有配置快照端点。
@@ -10395,13 +10381,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     exports.inject = ["slots"];
     exports.apply = async (ctx) => {
-      // 配置页挂在插件页本组件行上：槽位 key = <包名>#<行id>——两种包名口径各挂一枚
-      // （页面按精确 key 匹配，未命中的那枚永远不渲染），宿主改口径也不用动组件
-      for (const key of ["dsh-kit#search", "dsh-kit-search#search"]) {
-        ctx.slots.inject("plugins.row.config", () =>
-          ctx.slots.register({ name: "plugins.row.config", key }, SearchConfigPage),
-        );
-      }
+      // 配置页挂在插件页本组件行上：槽位 key = <包名>#<行id>（宿主按精确 key 匹配本行）
+      ctx.slots.inject("plugins.row.config", () =>
+        ctx.slots.register({ name: "plugins.row.config", key: "dsh-kit#search" }, SearchConfigPage),
+      );
     };
 
     // 渲染级检查取用
@@ -10410,8 +10393,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     return exports;
 };
 
-    // ── dsh-kit-browser 组件（内置浏览器）──
-// dsh-kit-browser 浏览器半边 —— 内置浏览器组件的 client 面。
+    // ── dsh-kit/browser 组件（内置浏览器）──
+// dsh-kit/browser 浏览器半边 —— 内置浏览器组件的 client 面。
 // 收纳：右栏「浏览器」功能签（页签条 + URL 栏 + 实时画面 canvas 人机共驾）、agent
 // 导航自动切签、浏览器收摊收签、对话链接改投内置浏览器、隐藏官方「浏览器」入口。
 // 数据走本组件宿主半边 /dsh-kit/browser WS（state/event 广播 + frame 帧流）；
@@ -11081,8 +11064,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const snap = react.useSyncExternalStore(subscribeBCfg, getBSnap);
       const cfg = bCfgFromSnapshot(snap);
       // 隐藏官方右栏「浏览器」入口（hideOfficialBrowserEntry）：body 标记 + CSS
-      // display:none，锚点 data-sidebar-right-guide-entry 是官方胶囊的稳定属性
-      // （旧置灰方案同款）。「工作区文件」入口的同类标记归 dsh-kit-files 组件
+      // display:none，锚点 data-sidebar-right-guide-entry 是官方胶囊的稳定属性。
+      // 「工作区文件」入口的同类标记归 dsh-kit/files 组件
       react.useEffect(() => {
         document.body.classList.toggle("dshk-hide-official-browser", cfg.hideOfficialBrowserEntry === true);
         return () => {
@@ -11291,13 +11274,10 @@ body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{displ
       );
       // 对话链接改投内置浏览器（默认开：配置页 chatOpenLinkInBrowser）
       document.addEventListener("click", onChatLinkClick, true);
-      // 配置页挂本组件行：槽位 key = <包名>#<行id>——两种包名口径各挂一枚
-      //（页面按精确 key 匹配，未命中的那枚永远不渲染）
-      for (const key of ["dsh-kit#browser", "dsh-kit-browser#browser"]) {
-        ctx.slots.inject("plugins.row.config", () =>
-          ctx.slots.register({ name: "plugins.row.config", key }, BrowserConfigPage),
-        );
-      }
+      // 配置页挂本组件行：槽位 key = <包名>#<行id>（宿主按精确 key 匹配本行）
+      ctx.slots.inject("plugins.row.config", () =>
+        ctx.slots.register({ name: "plugins.row.config", key: "dsh-kit#browser" }, BrowserConfigPage),
+      );
     };
 
     // 渲染级检查取用
@@ -11316,8 +11296,8 @@ body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{displ
     return module.exports;
 };
 
-    // ── dsh-kit-terminal 组件（终端）──
-// dsh-kit-terminal 浏览器半边 —— 终端组件的 client 面。
+    // ── dsh-kit/terminal 组件（终端）──
+// dsh-kit/terminal 浏览器半边 —— 终端组件的 client 面。
 // 收纳：对话输入行的终端入口（多会话角标）+ 底部停靠多标签终端坞 + xterm 胶水
 // （引擎 = 官方 webTerminals 服务，PTY 归宿主：会话工作区绑定、刷新保活、后台清理）。
 // 入口与坞分属两个槽位（conversation.input.left / shell.overlay），共享 kitBase 的
@@ -11337,7 +11317,7 @@ body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{displ
       flashToast, resolveZh, subscribeLocale, getLocaleVersion, kitJson,
     } = dock;
 
-    // 组件私有文案（终端词条随坞迁入本包；contentFail 与 root 的技能页同文，
+    // 组件私有文案（本组件自持词典；contentFail 与 root 的技能页同文，
     // 但本包 t() 只看本包词典，用到就得在这里备一份）
     const zh = {
       label: "终端",
@@ -11711,8 +11691,8 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 
             // gen（= restartKey）进 key/contentId：⟳ 换代后旧 view 已 close、
             // 新 contentId 才会分配全新宿主终端（closed 身份不可复用）
-            const viewKey = `dsh-kit-dock-${term.id}-g${restartKey}`;
-            const contentId = `dsh-kit-dock-${term.id}-g${restartKey}`;
+            const viewKey = `dsh-kit-term-${term.id}-g${restartKey}`;
+            const contentId = `dsh-kit-term-${term.id}-g${restartKey}`;
             view = svc.view(term.sessionId, viewKey, contentId);
             const detach = view.mount();
             detachRef.current = typeof detach === "function" ? detach : null;
@@ -12152,14 +12132,14 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     return module.exports;
 };
 
-    // 组件模块执行移至本 factory 尾部 kitBase/root 设施组装完成之后（见
-    // exports.files 赋值处）——组件体执行期会读 dock.createConfigPage 等成员
-    // slots 是唯一依赖：settingsScope 已随宿主 0.1.7 移除（配置改走 Config
-    // schema + 原生设置页，各组件 client 拉自己的 /dsh-kit-<行id>/config 快照做门控）
-    // 共享面暴露给组件包：require("dsh-kit") 直接取（apply/inject 是插件形状，不暴露）
+    // 组件模块执行必须在 kitBase/root 设施组装完成之后（见下方 exports.files 赋值
+    // 处）——组件体执行期会读 dock.createConfigPage 等成员
+    // slots 是唯一依赖：配置走各组件自己的 Config schema + 原生设置页，client 拉
+    // 自己的 /dsh-kit-<行id>/config 快照做门控
+    // 共享面暴露给组件半边：kit 形参即本对象（apply/inject 是插件形状，不暴露）
     for (const [k, v] of Object.entries(kitBase)) if (k !== "apply" && k !== "inject") exports[k] = v;
-    // 组件包消费的 root 侧设施：闭包引用 root 模块状态（sessionsSvc/rightbarSr/
-    // slotsCtx/vault 状态等），组件 require("dsh-kit") 拿到的就是这里的活引用
+    // 组件半边消费的 root 侧设施：闭包引用 root 模块状态（sessionsSvc/rightbarSr/
+    // slotsCtx/vault 状态等），组件拿到的就是这里的活引用
     exports.useCurrentRow = useCurrentRow;
     exports.useCurrentCwd = useCurrentCwd;
     // 会话 id 与常驻壳层 props 桥（浏览器组件的右栏签与链接改投用）
@@ -12181,7 +12161,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.OfficialIcon = OfficialIcon;
     exports.openTreeFile = openTreeFile;
     exports.registerNavIcon = registerNavIcon;
-    // 组件模块执行（files/monitor/terminal/skills/search/browser/vault）：必须在 kitBase
+    // 组件模块执行（files/monitor/terminal/skills/search/browser/vault/phone）：必须在 kitBase
     // 浅拷贝与 root 设施都挂上 exports 之后——组件体执行期会读 dock.createConfigPage 等成员
     exports.files = filesModule(exports, require);
     exports.monitor = monitorModule(exports, require);

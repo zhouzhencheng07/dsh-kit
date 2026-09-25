@@ -280,8 +280,8 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       // 启动评估（配置在本 entry 加载时已解析，无时序差）
       bootEvalGateway()
       /** 改启用位（持久化到状态文件 + 热启停）；由 /dsh-kit/phone/gateway 端点调用。
-       *  令牌轮换不再随启停自动发生——页内「刷新链接」按钮经 rotate 端点手动触发，
-       *  重启/重开沿用同一令牌（已授权设备不掉线） */
+       *  令牌轮换只经 rotate 端点（页内「刷新链接」按钮）手动触发，重启/重开沿用同一
+       *  令牌（已授权设备不掉线） */
       const setGatewayEnabled = (on: boolean) => {
         phoneGwWanted = on === true
         const token = phoneGw ? phoneGw.token() : loadGatewayState(stateFile, warnLog).token
@@ -343,8 +343,8 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
           phoneJson(res, 200, { links: phoneLinks(), fingerprint: phoneGw.fingerprint() })
         },
       })
-      // 手动轮换端点：页内「刷新链接」按钮（+ 脚本/异常场景）作废旧链接用。
-      // 启停不再自动轮换——见 setGatewayEnabled。
+      // 手动轮换端点：页内「刷新链接」按钮（+ 脚本/异常场景）作废旧链接用
+      // （启停不轮换，见 setGatewayEnabled）。
       const disposePhoneRotate = webCtx.webServer.register({
         kind: 'exact',
         path: '/dsh-kit/phone/rotate',

@@ -13,8 +13,8 @@ check('小写扩展名命中 png', rawContentType('a.png') === 'image/png')
 check('大写扩展名命中', rawContentType('截图.PNG') === 'image/png')
 check('Windows 反斜杠路径取基名', rawContentType('D:\\x\\a.webp') === 'image/webp')
 check('svg 命中（CSP sandbox 兜内嵌脚本）', rawContentType('a.svg') === 'image/svg+xml')
-// pdf/office 类型已随预览通道退役移除：inline 渲染 415，下载模式走 octet-stream
-check('退役类型（pdf/office）返回 null', rawContentType('a.pdf') === null && rawContentType('a.xlsx') === null && rawContentType('a.docx') === null)
+// pdf/office 不在 inline 白名单：inline 渲染 415，下载模式走 octet-stream
+check('白名单外类型（pdf/office）返回 null', rawContentType('a.pdf') === null && rawContentType('a.xlsx') === null && rawContentType('a.docx') === null)
 check('白名单外返回 null', rawContentType('a.exe') === null && rawContentType('a.doc') === null && rawContentType('a.wasm') === null)
 check('无扩展名返回 null', rawContentType('a') === null && rawContentType('a.') === null)
 check('点文件不算扩展名', rawExtOf('.pdf') === '')

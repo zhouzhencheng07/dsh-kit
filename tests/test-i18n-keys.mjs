@@ -1,5 +1,5 @@
 // i18n 词条哨兵：client 半边 t()/tf() 用到的字面量键，必须在词典里有定义。
-// 单包收回后多个模块词典（root + files/terminal/monitor 组件）共存于同一 bundle，
+// 多个模块词典（root + files/terminal/monitor 组件）共存于同一 bundle，
 // 按全部词典区段 union 检查；漏词条 = 界面直接显示 key。用法：node tests\test-i18n-keys.mjs
 import fs from "node:fs";
 import path from "node:path";

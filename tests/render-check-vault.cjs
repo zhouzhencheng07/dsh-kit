@@ -165,7 +165,7 @@ async function checkApply() {
   const on = await run(true);
   check("apply 激活不抛错且等 sidebarRightTabs/shortcuts 声明（inject 而非直读）", on.svcInjects.includes("sidebarRightTabs") && on.svcInjects.includes("shortcuts"));
   const keys = on.registered.filter((s) => s && s.name === "plugins.row.config").map((s) => s.key);
-  check("配置页挂本组件行（两种包名口径的 key 都在）", keys.includes("dsh-kit#vault") && keys.includes("dsh-kit-vault#vault"));
+  check("配置页挂本组件行（单包单口径 key）", keys.includes("dsh-kit#vault") && keys.length === 1);
   check(
     "右栏两签注册：kind=dshk-vault/dshk-schedule + pane 正文槽位",
     on.registered.some((s) => s && s.kind === "dshk-vault" && s.id === "dsh-kit-vault") &&
