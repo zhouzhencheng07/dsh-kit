@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { sameOrigin } from 'dsh-kit-core';
+import { sameOrigin } from "../core/index.js";
 /**
  * 定位运行中 DSH 的 monorepo 根（含 pnpm-workspace.yaml 的目录），loadDep 的
  * 第三锚点用。非 DSH 环境返回 null。

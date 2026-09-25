@@ -9,7 +9,7 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { recycleDeleteBatch } from 'dsh-kit-core'
+import { recycleDeleteBatch } from './core/index.ts'
 
 /** 撞名策略（未知取值按 skip 处理，与前端选项一一对应） */
 export type Conflict = 'skip' | 'overwrite' | 'rename'

@@ -96,11 +96,15 @@ if (!global.location) {
 //      副作用照跑），导出面直接落在根包 exports 上——断言见 comps 加载之后
 
 // 3) 组装可执行的 factory 闭包，并导出组件（替换防 early-return）；
-//    setKitUi 用于预置面板状态等依赖状态的渲染分支
-const wrapper = body.replace(
-  "return module.exports;",
-  "return Object.assign({ vaultSideSlot, vaultPaneSlot, VaultEntry, PhoneSection, KitSurfaces, SkillsManager, TreeRowMenu, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchSkillsPage, getKitUi, setKitUi, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, KitConfigPage, KIT_CFG_FIELDS, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref, registerShortcuts, shortcutRun }, kitBase);",
-);
+//    setKitUi 用于预置面板状态等依赖状态的渲染分支。
+//    根 return 必须取最后一处：单包收回后 files/terminal 组件模块体内各有
+//    一个自己的 return module.exports，replace 首处会把 factory 提前截断在组件段。
+const RETURN = "return module.exports;";
+const rootReturn = body.lastIndexOf(RETURN);
+if (rootReturn < 0) { console.log("FATAL: no root return"); process.exit(2); }
+const wrapper = body.slice(0, rootReturn) +
+  "return Object.assign({ vaultSideSlot, vaultPaneSlot, VaultEntry, PhoneSection, KitSurfaces, SkillsManager, TreeRowMenu, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchSkillsPage, getKitUi, setKitUi, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, KitConfigPage, KIT_CFG_FIELDS, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref, registerShortcuts, shortcutRun }, kitBase);" +
+  body.slice(rootReturn + RETURN.length);
 const harness = new Function("require", wrapper);
 const reactDomStub = {
   createPortal: (children, container, key) => { callLog.push(["portal", children, container, key]); return { type: "portal", props: { children, container, key }, $$dshk: "portal" }; },
@@ -1178,17 +1182,10 @@ check(
   "文件树上没有上传按钮与逻辑（vault 附件上传不受影响）",
   !src.includes("UploadIcon") && !src.includes("treeUpload") && !src.includes("uploadDone") && !src.includes("uploadFail"),
 );
-// 悬停提示不再自带原生 title（知识库入口钮改由 KitTip 出官方气泡；终端入口随组件迁走）
+// 悬停提示不再自带原生 title（知识库入口钮改由 KitTip 出官方气泡）
 check("入口钮的悬停不再自带原生 title（全走官方气泡）", !/dshk-enbtn"[\s\S]{0,120}?\n\s*title:/.test(src));
-// 终端组件已拆出本包（packages\dsh-kit-terminal）：坞/图标/xterm 胶水/命令注册/样式
-// 都不得在根包残留（各件在 tests\render-check-terminal.cjs 里正向钉住）
-check(
-  "终端半边已迁出根包（组件/图标/主题/vendor 加载/命令/样式全无残留）",
-  !src.includes("TerminalEntry") && !src.includes("TerminalDock") && !src.includes("TerminalPane") &&
-    !src.includes("TerminalIcon") && !src.includes("xtermTheme") && !src.includes("ensureVendor") &&
-    !src.includes("webTerminals") && !src.includes("dsh-kit.terminal.toggle") &&
-    !src.includes(".dshk-dock{") && !src.includes(".dshk-term{") && !src.includes(".dshk-term-badge{"),
-);
+// 终端半边已收回根包（单包组件化）：坞/图标/xterm 胶水/命令注册/样式都在本 bundle，
+// 正向钉住见 tests\render-check-terminal.cjs（comps = dockExports.terminal）
 
 // React 桩记录到的组件类型必须包含本插件自定义组件名（防 ReferenceError 被忽略后整段缺失）
 const types = new Set(callLog.flatMap(([, t]) => (typeof t === "string" ? [t] : [])));

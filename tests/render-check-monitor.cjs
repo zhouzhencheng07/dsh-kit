@@ -86,14 +86,8 @@ check(
   ),
 );
 
-const comps = loadBundle(__dirname + "/../packages/dsh-kit-monitor/client/bundle.js", (name) => {
-  if (name === "react") return reactStub;
-  if (name === "react/jsx-runtime") return jsxRuntimeStub;
-  if (name === "react-dom") return reactDomStub;
-  if (name === "dsh-kit") return dockExports;
-  if (name === "@deepseek-ai/dsh-client-ui-primitives") return primStub;
-  throw new Error("unexpected require: " + name);
-});
+// 单包收回：组件模块随根 bundle 一次加载组装（external 桩不再需要）
+const comps = dockExports.monitor;
 
 check("monitor 导出 apply（client 插件形状）与 usageIsPeak", typeof comps.apply === "function" && typeof comps.usageIsPeak === "function");
 

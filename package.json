@@ -7,6 +7,18 @@
   "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
+    "./files": {
+      "types": "./dist/files/index.d.ts",
+      "default": "./dist/files/index.js"
+    },
+    "./terminal": {
+      "types": "./dist/terminal/index.d.ts",
+      "default": "./dist/terminal/index.js"
+    },
+    "./monitor": {
+      "types": "./dist/monitor/index.d.ts",
+      "default": "./dist/monitor/index.js"
+    },
     "./client": "./client/bundle.js",
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
@@ -28,9 +40,6 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "typescript": "^5.9.0"
-  },
-  "dependencies": {
-    "dsh-kit-core": "workspace:*"
   },
   "keywords": [
     "dsh",

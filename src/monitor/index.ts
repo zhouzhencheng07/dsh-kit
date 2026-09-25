@@ -12,7 +12,7 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 
 import { registerUsageRoutes } from './usage.ts'
-import { sameOrigin } from 'dsh-kit-core'
+import { sameOrigin } from '../core/index.ts'
 
 /** 插件设置的运行时形状（loader 按 Config schema 解析后传入 apply 第二参） */
 type KitSettings = Record<string, unknown>

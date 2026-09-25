@@ -14,10 +14,15 @@
     - id: kit
       name: dsh-kit
     - id: files
-      name: dsh-kit-files
+      name: dsh-kit/files
     - id: terminal
-      name: dsh-kit-terminal
+      name: dsh-kit/terminal
     - id: monitor
-      name: dsh-kit-monitor
-# 组件行统一由本 bundle 声明——插件页 dsh-kit 详情页列出全部组件（组件显示名
-# 取各自包的 locale/*.json meta），组件配置页经 plugins.row.config 挂在组件行上
+      name: dsh-kit/monitor
+# 组件行统一由本 bundle 声明——插件页 dsh-kit 详情页列出全部组件。行 name 支持包名 +
+# exports 子路径（官方先例 dsh-tool-subagent-control/list-agents），组件即本包子模块，
+# 不必独立成包。行的中文显示名走包 locale meta（宿主按行 name 的包名装配），子路径名
+# 查不到包 → 组件行显示 name 原文（官方多行显示名恰以多包为前提，单包形态无此通道）
+# 组件行统一由本 bundle 声明——插件页 dsh-kit 详情页列出全部组件。行 name 支持包名 +
+# exports 子路径（官方先例 dsh-tool-subagent-control/list-agents），组件即本包子模块，
+# 不必独立成包。组件显示名取 locale/*.json meta；组件配置页经 plugins.row.config 挂行上

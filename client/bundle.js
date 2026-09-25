@@ -6471,8 +6471,5221 @@ ellipsis，窄列只截字不破版 */
         });
         scanPreviewDownload();
       }
+      // 组件半边激活（单包收回的 files/monitor/terminal）：与多包时代等价——client
+      // 入口注册总是发生，功能存在性由各组件自己的配置门控（行禁用只摘宿主半边端点）
+      for (const componentMod of [exports.files, exports.monitor, exports.terminal]) {
+        if (componentMod && typeof componentMod.apply === "function") componentMod.apply(ctx);
+      }
     }
 
+    // ─────────── 组件半边模块（单包收回；原 dsh-kit-files/monitor/terminal 独立 bundle）───────────
+    // 多包时代组件是独立 client entry，经 external require("dsh-kit") 取本包导出
+    // （kitBase 浅拷贝 + root 侧设施）。收回后同住本 factory：kit 形参即根 exports
+    // （同一对象引用），组件自己的 module/exports 隔离壳保留，座对象机制不变。
+    // 组件模块执行只组装导出（无副作用），apply 由根 apply 尾部的激活循环调用。
+    // ── dsh-kit-files 组件（文件树 · 源代码管理）──
+// dsh-kit-files 浏览器半边 —— 文件树与源代码管理组件的 client 面。
+// 收纳：侧栏文件树（目录树/新建/改名/删除/@ 到对话）+ 源代码管理（状态/差异/
+// 提交/分支/推送/提交图谱）+ SCM diff 签正文（DiffPane，挂 kitBase 的 diffPane
+// 座供 root 的 FilePaneBody 取用）。数据走本组件宿主半边的端点（路径沿用
+// /dsh-kit/*）。入口按钮经 slots.inject 自注册，开关 = 本组件自己的 Config
+// （fileTreeEnabled/sourceControlEnabled，经 /dsh-kit-files/config 拉取）；
+// 侧栏浏览区的 tree/git 分支经 kitBase.sidebarView 座交给 root 单槽分发，
+// 全局快捷键（Ctrl+Alt+, / Ctrl+Alt+.）在这里自挂，组合键读组件自己的配置。
+    const filesModule = (kit, require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+    const react = require("react");
+    const jsxRuntime = require("react/jsx-runtime");
+    const dock = kit;
+    const {
+      setKitUi, getKitUi, useKitUi,
+      KitTip, attachShortcutCatalog,
+      openFileAndDock, openTreeFile, sidebarViewPatch,
+      flashToast, writeClipboard, kitGetJson, kitPostJson, kitJson,
+      resolveZh, currentComposerShell, chatMentionText,
+      expandSidebarNow, TreeRowMenu, TreeFolderIcon, FileTypeIcon16, ChevronIcon,
+    } = dock;
+    let dswPrimIcons = null;
+    try { dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 回退自绘 */ }
+    const dswIcon = (...names) => {
+      for (const n of names) {
+        const c = dswPrimIcons ? dswPrimIcons[n] : null;
+        if (typeof c === "function" || typeof c === "object") return c;
+      }
+      return null;
+    };
+
+    // 组件私有文案（tree*/sc*/图谱/diff 词条随面板迁入本包；语言判定/切换响应来自 dock）
+    const zh = {
+      noCwd: "没有可用的会话工作区：先打开或创建一个会话",
+      treeLabel: "文件树",
+      treeRefresh: "刷新",
+      treeLoading: "加载中…",
+      treeEmpty: "（空目录）",
+      treeFail: "加载失败",
+      treeTruncated: "条目过多，列表已截断",
+      treeNewAny: "新建文件/目录",
+      treeNewPh: "名称，\\ 开头新建文件夹，可含 / 多级，回车创建",
+      treeRename: "重命名",
+      treeDelete: "删除",
+      treeCopyAbs: "复制绝对路径",
+      treeCopyRel: "复制相对路径",
+      treeCopied: "已复制路径",
+      treeAt: "@ 到对话",
+      treeAtUnavailable: "输入框未就绪（无会话或不可用）",
+      treeMenu: "更多操作",
+      scTitle: "源代码管理",
+      scStaged: "暂存的更改",
+      scChanges: "更改",
+      scEmpty: "（没有更改）",
+      scNotGit: "当前目录不是 git 仓库",
+      scInit: "初始化仓库",
+      scInitFail: "初始化失败",
+      scStage: "暂存",
+      scUnstage: "取消暂存",
+      scDiscard: "放弃更改",
+      scDiscardConfirm: "放弃该文件的未暂存改动？此操作不可恢复。",
+      cmtPlaceholder: "提交信息（必填）",
+      scCommit: "提交",
+      scCommitAll: "提交全部更改",
+      cmtAllConfirm: "暂存区为空，将暂存并提交全部更改（含新文件）。继续？",
+      scBranch: "分支",
+      scBranchNew: "新分支名（Enter 新建）",
+      scBranchCreate: "新建",
+      scBranchCreateSwitch: "新建并切换",
+      scBranchDelete: "删除分支",
+      scBranchDeleteConfirm: "删除分支「{name}」？",
+      scBranchForceConfirm: "该分支未合并，强制删除？（分支上的提交可能丢失）",
+      scBranchCurrent: "当前",
+      scBranchEmpty: "（暂无分支）",
+      scBranchCreated: "已创建分支 {name}",
+      scBranchNewTag: "新建",
+      scBranchCreatedTag: "本次新建的分支",
+      scBranchSwitched: "已切换到 {name}",
+      scBranchDeleted: "已删除分支 {name}",
+      scBranchOpFail: "分支操作失败",
+      scPublish: "发布分支",
+      scPullDone: "已拉取",
+      scPullFail: "拉取失败",
+      scSynced: "已同步，无待推送提交",
+      scPushAhead: "推送 {n} 个提交到远程",
+      scPushDone: "已推送",
+      scPushFail: "推送失败",
+      scPushConfirm: "推送到远程仓库？",
+      scPushForceConfirm: "推送被拒绝：远程有本地没有的新提交。以本地为准强制推送？远程上本地没有的提交将丢失！",
+      scPushNoUpstream: "当前分支没有上游，首次推送前需先设置",
+      scPushSetUpstream: "设置上游并推送",
+      scGraph: "提交图谱",
+      scGraphFail: "图谱加载失败",
+      scGraphEmpty: "（暂无提交）",
+      scGraphMore: "加载更多",
+      scFiles: "文件",
+      scDetached: "游离 HEAD",
+      scCommitDetail: "提交详情",
+      scBack: "返回",
+      scMergedCommit: "合并提交",
+      scAuthored: "作者",
+      diffFail: "diff 加载失败",
+      diffBaseParent: "与上一版（父提交 {base}）对比",
+      diffBaseRoot: "根提交：与空树对比（全部为新增）",
+      diffEmpty: "（无未暂存差异）",
+      diffUntracked: "未跟踪文件，暂无 diff",
+      contentLoading: "加载中…",
+      contentEmpty: "（空文件）",
+      pvDeletedNote: "文件已删除——此标签仅展示删除 diff；可在源代码管理里 ↩ 恢复文件",
+      kcfgGroupFeatures: "功能开关",
+
+      kcfgFileTreeEnabled: "文件树",
+      kcfgFileTreeEnabledHint: "侧栏文件树与文件打开入口的总开关。",
+      kcfgSourceControlEnabled: "源代码管理",
+      kcfgSourceControlEnabledHint: "源代码管理签（状态/差异/提交图谱/分支）。",
+      // 命令名复用面板标题（treeLabel/scTitle）；这两条是官方「快捷键」页里
+      // 「按不动」时显示的说明
+      scTreeOff: "文件树已在配置页关闭",
+      scScmOff: "源代码管理已在配置页关闭",
+      // 本包 t() 只看本包词典（root 的同名词条读不到）：用到就得在这里备一份
+      skOpFail: "操作失败",
+      confirmDelete: "删除「{name}」？内容将移入回收站。",
+      created: "已创建",
+      renamed: "已重命名",
+      deleted: "已删除",
+      committed: "已提交",
+      saving: "保存中…",
+    };
+    const en = {
+      noCwd: "No session workspace available: open or create a session first",
+      treeLabel: "Files",
+      treeRefresh: "Refresh",
+      treeLoading: "Loading…",
+      treeEmpty: "(empty)",
+      treeFail: "Failed to load",
+      treeTruncated: "Too many entries, list truncated",
+      treeNewAny: "New file/folder",
+      treeNewPh: "Name, \\ prefix creates a folder, / for nesting, Enter to create",
+      treeRename: "Rename",
+      treeDelete: "Delete",
+      treeCopyAbs: "Copy absolute path",
+      treeCopyRel: "Copy relative path",
+      treeCopied: "Path copied",
+      treeAt: "Insert @ mention",
+      treeAtUnavailable: "Composer is not ready (no active session)",
+      treeMenu: "More actions",
+      scTitle: "Source Control",
+      scStaged: "Staged Changes",
+      scChanges: "Changes",
+      scEmpty: "(no changes)",
+      scNotGit: "This folder is not in a git repository",
+      scInit: "Initialize Repository",
+      scInitFail: "git init failed",
+      scStage: "Stage",
+      scUnstage: "Unstage",
+      scDiscard: "Discard changes",
+      scDiscardConfirm: "Discard unstaged changes in this file? This cannot be undone.",
+      cmtPlaceholder: "Commit message (required)",
+      scCommit: "Commit",
+      scCommitAll: "Commit All",
+      cmtAllConfirm: "Nothing staged. Stage ALL changes (including untracked) and commit?",
+      scBranch: "Branches",
+      scBranchNew: "New branch name (Enter to create)",
+      scBranchCreate: "Create",
+      scBranchCreateSwitch: "Create & switch",
+      scBranchDelete: "Delete branch",
+      scBranchDeleteConfirm: "Delete branch \"{name}\"?",
+      scBranchForceConfirm: "This branch is not fully merged. Force delete? (commits on it may be lost)",
+      scBranchCurrent: "current",
+      scBranchEmpty: "(no branches)",
+      scBranchCreated: "Created branch {name}",
+      scBranchNewTag: "new",
+      scBranchCreatedTag: "Just created",
+      scBranchSwitched: "Switched to {name}",
+      scBranchDeleted: "Deleted branch {name}",
+      scBranchOpFail: "Branch operation failed",
+      scPublish: "Publish branch",
+      scPullDone: "Pulled",
+      scPullFail: "Pull failed",
+      scSynced: "Synced — nothing to push",
+      scPushAhead: "Push {n} commit(s) to remote",
+      scPushDone: "Pushed",
+      scPushFail: "Push failed",
+      scPushConfirm: "Push to the remote repository?",
+      scPushForceConfirm: "Push rejected — the remote has commits not in local. Force push (local wins)? Commits only on the remote will be LOST!",
+      scPushNoUpstream: "This branch has no upstream; set one before the first push",
+      scPushSetUpstream: "Set upstream & push",
+      scGraph: "Commit graph",
+      scGraphFail: "Failed to load the graph",
+      scGraphEmpty: "(no commits)",
+      scGraphMore: "Load more",
+      scFiles: "Files",
+      scDetached: "Detached HEAD",
+      scCommitDetail: "Commit detail",
+      scBack: "Back",
+      scMergedCommit: "Merge commit",
+      scAuthored: "Author",
+      diffFail: "Failed to load diff",
+      diffBaseParent: "Compared with parent commit {base}",
+      diffBaseRoot: "Root commit: diffed against empty tree (all additions)",
+      diffEmpty: "(no unstaged changes)",
+      diffUntracked: "Untracked file, no diff yet",
+      contentLoading: "Loading…",
+      contentEmpty: "(empty file)",
+      pvDeletedNote: "File deleted — this tab shows the deletion diff only; restore it via ↩ in source control",
+
+
+      kcfgGroupFeatures: "Features",
+      kcfgFileTreeEnabled: "File tree",
+      kcfgFileTreeEnabledHint: "Master switch for the sidebar file tree and file entries.",
+      kcfgSourceControlEnabled: "Source control",
+      kcfgSourceControlEnabledHint: "The source control tab (status, diffs, commit graph, branches).",
+      scTreeOff: "File tree is switched off in the config page",
+      scScmOff: "Source control is switched off in the config page",
+      skOpFail: "Operation failed",
+      confirmDelete: "Delete \"{name}\"? It will be moved to the Recycle Bin.",
+      created: "Created",
+      renamed: "Renamed",
+      deleted: "Deleted",
+      committed: "Committed",
+      saving: "Saving…",
+    };
+    const lang = () => (resolveZh() ? zh : en);
+    const t = (key) => lang()[key] ?? key;
+    /** 带占位符的文案变体：tf("x", { n: 1 }) */
+    const tf = (key, vars) => {
+      let s = lang()[key] ?? key;
+      for (const [name, value] of Object.entries(vars ?? {})) s = s.split("{" + name + "}").join(String(value));
+      return s;
+    };
+
+    // ─────────── 组件配置（/dsh-kit-files/config，Config schema 唯一真源）───────
+    // 键位不在这里：两条命令注册进官方 shortcuts 服务（见 registerShortcuts），
+    // 录制与持久化归官方「快捷键」页。
+    const F_CFG_DEFAULTS = {
+      fileTreeEnabled: true,
+      sourceControlEnabled: true,
+    };
+    let cfgSnap = null;
+    const cfgSubs = new Set();
+    const emitCfg = () => {
+      for (const fn of cfgSubs) {
+        try {
+          fn();
+        } catch {
+          /* 订阅者已卸载 */
+        }
+      }
+    };
+    async function loadCfg() {
+      let value = null;
+      try {
+        const v = await kitJson("/dsh-kit-files/config", undefined, (b) => b !== null && typeof b === "object");
+        value = v;
+      } catch {
+        value = null; // 端点不可达：null → cfgFromSnapshot 走内置默认
+      }
+      cfgSnap = value && typeof value === "object" ? { status: "ready", value } : null;
+      emitCfg();
+      sweepDisabledViews();
+    }
+    const subscribeCfg = (fn) => {
+      cfgSubs.add(fn);
+      return () => cfgSubs.delete(fn);
+    };
+    const getCfgSnapshot = () => cfgSnap;
+    /** 从快照提取生效配置（字段缺失/非法逐项回退默认） */
+    function cfgFromSnapshot(snap) {
+      const out = { ...F_CFG_DEFAULTS };
+      if (!snap || snap.status !== "ready" || !snap.value || typeof snap.value !== "object") return out;
+      const v = snap.value;
+      out.fileTreeEnabled = v.fileTreeEnabled !== false;
+      out.sourceControlEnabled = v.sourceControlEnabled !== false;
+      return out;
+    }
+    /** 配置关但侧栏视图还开着（配置页保存 / entry 重启瞬间）：立即归位，文件随来源清掉 */
+    function sweepDisabledViews() {
+      const cfg = cfgFromSnapshot(getCfgSnapshot());
+      const ui = getKitUi();
+      if (!cfg.fileTreeEnabled && ui.treeOpen) setKitUi({ treeOpen: false, files: [], activeFile: null });
+      if (!cfg.sourceControlEnabled && ui.gitOpen) setKitUi({ gitOpen: false, files: [], activeFile: null });
+    }
+
+    // ─────────── 组件样式 ───────────
+    const FILES_CSS = `
+/* 文件树：作为 sidebar.workspaces 单槽 occupant 填满侧边栏浏览区（非浮层）。
+   行/箭头对齐原生工作区树（Radius 8、padding 0 8、gap 6、hover 用 interactive-bg-hover） */
+.dshk-tree{width:100%;height:100%;display:flex;flex-direction:column;pointer-events:auto}
+.dshk-tree-body{flex:1 1 auto;min-height:0;overflow:auto;padding:4px 4px 12px;font-size:13px}
+.dshk-name{overflow:hidden;text-overflow:ellipsis}
+.dshk-dir{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.dshk-file .dshk-name{color:var(--dsw-alias-label-secondary)}
+/* git 状态徽标与 diff 着色 */
+.dshk-gitbadge{flex:none;margin-left:auto;font-size:10px;line-height:14px;padding:0 5px;border-radius:6px;font-family:ui-monospace,Consolas,monospace;border:1px solid currentColor}
+.dshk-gitbadge[data-k="U"]{color:#73c991}
+.dshk-gitbadge[data-k="A"]{color:#73c991}
+.dshk-gitbadge[data-k="M"]{color:#e2c08d}
+.dshk-gitbadge[data-k="R"]{color:#4daafc}
+.dshk-gitbadge[data-k="D"]{color:#e7757f}
+/* ±N 行数统计（更改清单行内） */
+.dshk-nums{flex:none;display:inline-flex;gap:4px;font-family:ui-monospace,Consolas,monospace;font-size:10px;line-height:14px}
+.dshk-nadd{color:#73c991}
+.dshk-ndel{color:#e7757f}
+/* 提交框 + 行悬停操作 + 可折叠组头（源代码管理） */
+.dshk-cmt{display:flex;gap:6px;padding:8px 8px 2px}
+.dshk-cmt-input{flex:1;min-width:0;height:30px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1.5;padding:0 10px}
+.dshk-cmt-input:focus-visible{border-color:var(--dsw-alias-brand-primary);outline:none}
+.dshk-chg-head{cursor:pointer;user-select:none}
+.dshk-chg-chev{flex:none;font-size:9px;line-height:1;color:var(--dsw-alias-label-tertiary);transition:transform .15s var(--ds-ease-in-out);display:inline-block}
+.dshk-chg-chev[data-open]{transform:rotate(90deg)}
+/* 全文件着色 diff：完整内容内联渲染，删除红/新增绿/上下文正常 */
+.dshk-inline{font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-all;padding:4px 0;user-select:text;color:var(--dsw-alias-label-secondary)}
+.dshk-il-add{color:#0dbc79;background:rgba(13,188,121,.08)}
+.dshk-il-del{color:#cd3131;background:rgba(205,49,49,.08)}
+/* 「更改」清单（源代码管理视图） */
+.dshk-changes{margin:2px 4px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;overflow:hidden}
+.dshk-chg-head{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:11px}
+.dshk-diff{font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;padding:4px 0;white-space:pre;overflow-x:auto;user-select:text;color:var(--dsw-alias-label-secondary)}
+.dshk-diff-add{color:#0dbc79;background:rgba(13,188,121,.08)}
+.dshk-diff-del{color:#cd3131;background:rgba(205,49,49,.08)}
+.dshk-diff-hunk{color:#4daafc}
+.dshk-diff-meta{color:var(--dsw-alias-label-tertiary)}
+/* 源代码管理：分支/推送/图谱（头部工具、分支浮层、提交图谱） */
+.dshk-headbtn{flex:none}
+.dshk-headbtn-on{color:var(--dsw-alias-brand-primary)}
+/* width:auto 覆盖 .dshk-btn 的 26px 方钮定宽——否则按钮恒 26 宽，图标与分支名
+   被 flex 压成 0 宽，只剩 ▾ 可见（「源代码管理图标没了」的根因） */
+.dshk-branchbtn{display:inline-flex;flex:none;width:auto;align-items:center;gap:4px;max-width:150px;padding:2px 7px;border-color:var(--dsw-alias-border-l2)}
+.dshk-branchbtn .dshk-branch-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-caret{font-size:9px;color:var(--dsw-alias-label-tertiary)}
+.dshk-pushhint{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.dshk-pushhint span{flex:1;min-width:0}
+.dshk-branch-title{padding:5px 10px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:11px}
+.dshk-branch-row{display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:12px;cursor:pointer}
+.dshk-branch-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-branch-cur{color:var(--dsw-alias-brand-primary)}
+.dshk-branch-ico{flex:none;font-size:8px;color:var(--dsw-alias-label-tertiary)}
+.dshk-branch-cur .dshk-branch-ico{color:var(--dsw-alias-brand-primary)}
+.dshk-branch-name{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-branch-track{flex:none;font-family:ui-monospace,Consolas,monospace;font-size:10px;color:var(--dsw-alias-label-tertiary)}
+.dshk-branch-gone{color:#e7757f}
+.dshk-branch-curtag{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)}
+.dshk-branch-new{display:flex;gap:6px;padding:6px 10px;border-top:1px solid var(--dsw-alias-border-l1)}
+.dshk-branch-new .dshk-cmt-input{height:26px;font-size:11px}
+.dshk-branch-new .dshk-btn-save,.dshk-branch-new .dshk-btn-cancel{white-space:nowrap}
+.dshk-branch-del{appearance:none;flex:none;width:18px;height:18px;font-size:10px;line-height:1;border:0;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer;border-radius:4px;padding:0}
+.dshk-branch-newtag{flex:none;font-size:10px;color:var(--dsw-alias-brand-primary)}
+.dshk-branch-del:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+/* 分支按钮的领先/落后计数（main ↑1↓2） */
+/* 分支浮层（fixed 悬浮面板）：自带内部滚动，不参与 .dshk-tree 的 flex 挤压 */
+.dshk-branch-menu{width:236px;max-height:min(70vh,420px);display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
+.dshk-branch-menu .dshk-branch-title{flex:none;padding:6px 10px 4px;background:none;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.dshk-branch-list{flex:1 1 auto;min-height:0;overflow-y:auto;padding:2px 0}
+.dshk-branch-menu .dshk-branch-new{flex:none;border-top:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1)}
+/* 提交图谱（结构化 lane + SVG 绘制，横向滚动；窄容器隐藏作者/时间列） */
+.dshk-graph{font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.6;overflow-x:auto;user-select:text;padding:2px 0;container-type:inline-size}
+.dshk-grow{display:flex;align-items:center;white-space:pre;padding:0 8px;min-height:24px}
+.dshk-grow-click{cursor:pointer}
+.dshk-grow-click:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-gsvg{flex:none;display:block}
+.dshk-gref{flex:none;font-size:10px;line-height:1.4;margin-right:4px;padding:0 5px;border-radius:5px;border:1px solid currentColor;white-space:nowrap}
+.dshk-gref[data-k="head"]{color:#e2c08d}
+.dshk-gref[data-k="branch"]{color:#4daafc}
+.dshk-gref[data-k="tag"]{color:#b088e0}
+.dshk-gref[data-k="remote"]{color:#73c991}
+.dshk-ghash{flex:none;color:var(--dsw-alias-label-tertiary);width:62px;display:inline-block;margin-right:6px}
+.dshk-gsubj{flex:1;min-width:0;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis}
+.dshk-gauthor{flex:none;max-width:110px;overflow:hidden;text-overflow:ellipsis;color:var(--dsw-alias-label-secondary);font-size:11px;margin-left:8px}
+.dshk-gdate{flex:none;color:var(--dsw-alias-label-tertiary);font-size:11px;margin-left:8px;white-space:nowrap}
+.dshk-gmore{display:block;margin:6px auto;padding:5px 14px;appearance:none;background:none;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);border-radius:6px;font:inherit;font-size:12px;cursor:pointer}
+.dshk-gmore:hover{color:var(--dsw-alias-label-primary)}
+.dshk-gmore[disabled]{opacity:.55;cursor:default}
+@container (max-width: 520px){.dshk-gauthor,.dshk-gdate{display:none}}
+.dshk-gdetail-head{display:flex;align-items:center;gap:8px;padding:6px 10px}
+.dshk-gdetail-title{font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshk-gmeta{padding:6px 10px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.dshk-gmeta-row{display:flex;gap:8px;align-items:baseline;font-size:12px}
+.dshk-gmeta-k{flex:none;color:var(--dsw-alias-label-tertiary);width:44px}
+.dshk-gmeta-date{flex:1;min-width:0;text-align:right;color:var(--dsw-alias-label-tertiary)}
+.dshk-gmeta-hash{font-size:11px;color:var(--dsw-alias-label-tertiary);word-break:break-all;margin-top:2px}
+.dshk-gmeta-subj{font-size:12px;color:var(--dsw-alias-label-primary);margin-top:2px}
+.dshk-gmeta-body{font-size:12px;line-height:1.55;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;word-break:break-word;margin-top:2px}
+.dshk-gmeta-merge{margin-top:2px;font-size:11px;color:#e2c08d}
+.dshk-gfiles-head{padding:5px 10px;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.dshk-gfile{display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:12px;cursor:pointer}
+.dshk-gfile:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-gfile .dshk-name{flex:none}
+.dshk-gfile .dshk-dir{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    `;
+    function injectStyles() {
+      if (typeof document === "undefined") return;
+      if (document.querySelector('style[data-plugin-css="dsh-kit-files/ui"]') === null) {
+        const tag = document.createElement("style");
+        tag.dataset.plugin = "dsh-kit-files";
+        tag.dataset.pluginCss = "dsh-kit-files/ui";
+        tag.textContent = FILES_CSS;
+        document.head.appendChild(tag);
+      }
+    }
+
+    // ─────────── 配置页（挂组件行，骨架在 dock）───────
+    const FILES_CFG_FIELDS = [
+      { key: "fileTreeEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgFileTreeEnabled", hintKey: "kcfgFileTreeEnabledHint" },
+      { key: "sourceControlEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSourceControlEnabled", hintKey: "kcfgSourceControlEnabledHint" },
+    ];
+    const FILES_CFG_GROUPS = ["kcfgGroupFeatures"];
+    const FilesConfigPage = dock.createConfigPage({
+      fields: FILES_CFG_FIELDS,
+      groups: FILES_CFG_GROUPS,
+      t,
+      onSaved: async () => {
+        try {
+          const body = await kitJson("/dsh-kit-files/config");
+          if (body && typeof body === "object") {
+            cfgSnap = { status: "ready", value: body };
+            emitCfg();
+          }
+        } catch {
+          /* 重拉失败不动快照 */
+        }
+        sweepDisabledViews();
+      },
+    });
+
+    // ─────────── 官方快捷键服务（0.1.7-rc.2+）───────
+    // 文件树 / 源代码管理两条命令注册进宿主 shortcuts 服务 = 进官方「快捷键」页
+    // （Ctrl+/）：录制、冲突检测、跨设备默认值、持久化都归官方，本组件不再自持键位
+    // 配置项、也不再自挂全局 keydown。运行期 inject：老宿主没有该服务时只是没键位。
+    // 默认键只给 web:macos/web:windows（web 端放行表只认三键组合或 primary+alt/shift）
+    // 与 desktop 三档。
+    function registerShortcuts(scCtx) {
+      const shortcuts = scCtx.shortcuts;
+      if (!shortcuts || typeof shortcuts.register !== "function") return;
+      attachShortcutCatalog(shortcuts.catalog);
+      const commands = [
+        {
+          id: "dsh-kit-files.tree.toggle",
+          labelKey: "treeLabel",
+          aliases: ["file tree", "workspace files", "dsh-kit"],
+          code: "Comma",
+          enabled: (cfg) => cfg.fileTreeEnabled,
+          offKey: "scTreeOff",
+          // 与入口按钮同语义：单槽互斥，收起态先展开侧栏
+          run: () => {
+            if (!getKitUi().treeOpen) expandSidebarNow();
+            setKitUi(sidebarViewPatch(getKitUi().treeOpen ? null : "tree"));
+          },
+        },
+        {
+          id: "dsh-kit-files.scm.toggle",
+          labelKey: "scTitle",
+          aliases: ["source control", "git", "dsh-kit"],
+          code: "Period",
+          enabled: (cfg) => cfg.sourceControlEnabled,
+          offKey: "scScmOff",
+          run: () => {
+            if (!getKitUi().gitOpen) expandSidebarNow();
+            setKitUi(sidebarViewPatch(getKitUi().gitOpen ? null : "scm"));
+          },
+        },
+      ];
+      const defaultsOf = (code) => ({
+        "web:macos": { code, modifiers: ["primary", "alt"] },
+        "web:windows": { code, modifiers: ["primary", "alt"] },
+        "desktop:macos": { code, modifiers: ["primary", "alt"] },
+        "desktop:windows": { code, modifiers: ["primary", "alt"] },
+        "desktop:linux": { code, modifiers: ["primary", "alt"] },
+      });
+      for (const cmd of commands) {
+        scCtx.effect(() => shortcuts.register({
+          id: cmd.id,
+          label: () => t(cmd.labelKey),
+          aliases: cmd.aliases,
+          defaults: defaultsOf(cmd.code),
+          regions: ["page", "editable", "terminal"],
+          modals: [],
+          resolve: () => {
+            if (!cmd.enabled(cfgFromSnapshot(getCfgSnapshot()))) return { status: "blocked", reason: t(cmd.offKey) };
+            return { status: "handled", run: cmd.run };
+          },
+        }), `dsh-kit-files: shortcut ${cmd.id}`);
+      }
+    }
+
+    // ─────────── 文件树 ───────────
+    // 数据走宿主半边只读端点 /dsh-kit/tree（官方 browse RPC 只列目录不列文件）。
+    function fetchTree(path, signal) {
+      return kitGetJson(`/dsh-kit/tree?path=${encodeURIComponent(path)}`, signal, (b) => Array.isArray(b.entries));
+    }
+
+    /** git 状态：available:false = 非 git 目录，前端隐藏徽标；available 时含
+        branch/upstream/ahead/behind/detached/unborn（宿主 status -b 分支摘要） */
+    function fetchGitStatus(cwd, signal) {
+      return kitGetJson(`/dsh-kit/git/status?cwd=${encodeURIComponent(cwd)}`, signal, (b) => typeof b.available === "boolean");
+    }
+    /** git 图谱：available:false = 非 git 目录/失败；records 空数组 = 尚无提交；
+        hasMore = 还有更早提交（load more 用 skip=已取条数续传） */
+    function fetchGitLog(cwd, n, skip, signal) {
+      const url = `/dsh-kit/git/log?cwd=${encodeURIComponent(cwd)}&n=${Number(n) || 120}&skip=${Number(skip) || 0}`;
+      return kitGetJson(url, signal, (b) => typeof b.available === "boolean");
+    }
+    /** git 单个提交详情（图谱点开行用） */
+    function fetchGitShow(cwd, commit, signal) {
+      return kitGetJson(
+        `/dsh-kit/git/show?cwd=${encodeURIComponent(cwd)}&commit=${encodeURIComponent(commit)}`,
+        signal,
+        (b) => typeof b.available === "boolean",
+      );
+    }
+    /** git 本地分支列表（{current, branches:[{name,isHead,upstream,track,trackParsed}]}） */
+    function fetchGitBranch(cwd, signal) {
+      return kitGetJson(`/dsh-kit/git/branch?cwd=${encodeURIComponent(cwd)}`, signal, (b) => typeof b.available === "boolean");
+    }
+    /** 图谱引用装饰解析（与宿主侧 src/git.js parseDecoration 保持同步，入参为 %D 原文） */
+    function parseDecoration(text) {
+      const out = [];
+      if (typeof text !== "string" || text === "") return out;
+      for (const item of text.split(",").map((x) => x.trim())) {
+        if (item === "") continue;
+        if (item === "HEAD") out.push({ kind: "head", name: "HEAD", pointsTo: null });
+        else if (item.startsWith("HEAD -> ")) out.push({ kind: "head", name: "HEAD", pointsTo: item.slice(8) });
+        else if (item.startsWith("tag: ")) out.push({ kind: "tag", name: item.slice(5) });
+        else if (item.startsWith("origin/")) out.push({ kind: "remote", name: item });
+        else out.push({ kind: "branch", name: item });
+      }
+      return out;
+    }
+
+    /** 在目录初始化仓库（源代码管理空态按钮用；已是仓库则幂等返回 created:false） */
+    function fetchGitInit(cwd) {
+      return kitPostJson("/dsh-kit/git/init", { cwd }, (b) => typeof b.created === "boolean");
+    }
+
+    /** 文件管理操作（新建/重命名/删除）：POST /dsh-kit/fs/op，宿主做子树与名称校验 */
+    function postFsOp(payload) {
+      return kitPostJson("/dsh-kit/fs/op", payload, (b) => b.ok === true);
+    }
+
+    /** 文件行尾的 git 状态小徽标（M/A/D/R/U）：porcelain 未跟踪是 "??"，统一显示 U */
+    function GitBadge({ xy }) {
+      const s = String(xy).trim();
+      const label = s === "??" || s === "?" ? "U" : s || "M";
+      const tipMap = { M: "gitM", A: "gitA", D: "gitD", R: "gitR", U: "gitU" };
+      return jsxRuntime.jsx("span", {
+        className: "dshk-gitbadge",
+        "data-k": label,
+        title: `${t(tipMap[label] ?? "gitTip")}（${String(xy)}）`,
+        children: label,
+      });
+    }
+
+    /** git 状态轮询周期：可见时低频拉取，回窗口/聚焦立即补一次 */
+    // git 轮询间隔：每次轮询都要 spawn 一个 git 进程（实测本机 status 54–276ms、
+  // log 81–110ms），4s 一拍在 SCM 视图常开时是稳定可见的后台开销。动作后的刷新
+  // （stage/commit/branch 成功后各自 kick）与「可见性/焦点变化立即补一拍」不受影响，
+  // 所以拉长到 8s 只影响"放着不动时的自动跟随"这一档。
+  const GIT_POLL_MS = 8000;
+  /** git 轮询共享时钟：状态/图谱/文件 diff 三处轮询共用一条 interval（各自挂载时
+   *  订阅、卸载退订），避免同一拍上叠出多条定时器；谁在看才轮谁由各视图的挂载与
+   *  可见性门控负责，这里只管节拍。全部退订后时钟自己停掉。 */
+  const gitTickSubs = new Set();
+  let gitTickTimer = null;
+
+  function subscribeGitTick(fn) {
+    gitTickSubs.add(fn);
+    if (gitTickTimer === null) {
+      gitTickTimer = window.setInterval(() => {
+        if (document.visibilityState === "hidden") return;
+        for (const sub of [...gitTickSubs]) {
+          try {
+            sub();
+          } catch {
+            // 单个订阅异常不拖垮其它视图
+          }
+        }
+      }, GIT_POLL_MS);
+    }
+    return () => {
+      gitTickSubs.delete(fn);
+      if (gitTickSubs.size === 0 && gitTickTimer !== null) {
+        window.clearInterval(gitTickTimer);
+        gitTickTimer = null;
+      }
+    };
+  }
+
+    /**
+     * 把 unified patch 的 hunk 套回完整新文件内容，产出全文件着色行：
+     * [type, text]，type ∈ ctx | add | del。上下文行来自新文件本体，
+     * 删除行插在原位、不推进新文件游标。hunk 与内容对不上时返回 null（调用方回退原始 patch）。
+     */
+    function buildInlineRows(patch, newLines) {
+      const lines = String(patch ?? "").split("\n");
+      const rows = [];
+      let idx = 0;
+      let i = 0;
+      let seenHunk = false;
+      while (i < lines.length && !/^@@ /.test(lines[i])) i++;
+      for (; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.startsWith("diff ") || line.startsWith("index ")) break;
+        const m = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
+        if (m) {
+          seenHunk = true;
+          const newStart = parseInt(m[1], 10);
+          if (newStart < idx + 1) return null; // hunk 乱序，放弃内联
+          while (idx < newStart - 1) {
+            if (idx >= newLines.length) return null;
+            rows.push(["ctx", newLines[idx++]]);
+          }
+          continue;
+        }
+        if (line.startsWith("+")) {
+          rows.push(["add", line.slice(1)]);
+          idx++;
+        } else if (line.startsWith("-")) {
+          rows.push(["del", line.slice(1)]);
+        } else if (line.startsWith(" ")) {
+          if (idx >= newLines.length) return null;
+          rows.push(["ctx", newLines[idx] === undefined ? line.slice(1) : newLines[idx]]);
+          idx++;
+        }
+        // "\ No newline at end of file" 等杂项行忽略
+      }
+      while (idx < newLines.length) rows.push(["ctx", newLines[idx++]]);
+      return seenHunk ? rows : null;
+    }
+
+    function FolderIcon(props) {
+      const _official = dswIcon("IconFolderOpenOutline16");
+      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
+      return jsxRuntime.jsx(
+        "svg",
+        {
+          width: 15,
+          height: 15,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          children: jsxRuntime.jsx("path", {
+            d: "M1.5 3.5c0-.55.45-1 1-1h3.2l1.6 1.8h6.2c.55 0 1 .45 1 1v7.2c0 .55-.45 1-1 1h-11c-.55 0-1-.45-1-1v-9z",
+            fill: "none",
+            stroke: "currentColor",
+            strokeWidth: 1.2,
+            strokeLinejoin: "round",
+          }),
+        },
+      );
+    }
+
+    /** 分支图标（进入更改视图的入口钮）：git branch 风格两节点一弧线——官方
+     *  IconBranchOutline16 不像分支，故自绘 */
+    function BranchIcon(props) {
+      return jsxRuntime.jsxs(
+        "svg",
+        {
+          width: 15,
+          height: 15,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.2,
+          strokeLinecap: "round",
+          children: [
+            jsxRuntime.jsx("circle", { cx: 4, cy: 3.5, r: 1.7 }),
+            jsxRuntime.jsx("circle", { cx: 4, cy: 12.5, r: 1.7 }),
+            jsxRuntime.jsx("circle", { cx: 11.5, cy: 6, r: 1.7 }),
+            jsxRuntime.jsx("path", { d: "M4 5.2v5.6" }),
+            jsxRuntime.jsx("path", { d: "M11.4 7.7c-.3 2.1-2.6 2.5-5.6 3" }),
+          ],
+        },
+      );
+    }
+
+    /** 新建文件图标：文件折角 + 加号（文件/目录共用单入口后唯一的新建图标） */
+    function FilePlusIcon(props) {
+      const _official = dswIcon("IconPlusOutline16");
+      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
+      return jsxRuntime.jsxs(
+        "svg",
+        {
+          width: 15,
+          height: 15,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.2,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          children: [
+            jsxRuntime.jsx("path", { d: "M3.5 1.5h5l4 4v9h-9z" }),
+            jsxRuntime.jsx("path", { d: "M8.5 1.5v4h4" }),
+            jsxRuntime.jsx("path", { d: "M8 7.8v3.4M6.3 9.5h3.4" }),
+          ],
+        },
+      );
+    }
+
+    /** 复制绝对路径图标：经典双矩形 copy */
+    function CopyAbsIcon(props) {
+      const _official = dswIcon("IconCopyOutline16");
+      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
+      return jsxRuntime.jsxs(
+        "svg",
+        {
+          width: 15,
+          height: 15,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.2,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          children: [
+            jsxRuntime.jsx("path", { d: "M9.5 3.5h-5a1 1 0 0 0-1 1v5" }),
+            jsxRuntime.jsx("rect", { x: "6.5", y: "6.5", width: "7", height: "7", rx: "1" }),
+          ],
+        },
+      );
+    }
+
+    /** 行悬停操作小按钮（新建/重命名/删除共用）：点击不触发行本身的打开/折叠。
+     *  提示走官方气泡并右对齐——行尾一排小钮，居中的气泡会盖住相邻行 */
+    function RowActionBtn({ title, onClick, children }) {
+      return jsxRuntime.jsx(KitTip, {
+        label: title,
+        align: "end",
+        children: jsxRuntime.jsx("button", {
+          type: "button",
+          onClick: (e) => {
+            e.stopPropagation();
+            onClick(e); // 事件转发：⋯ 菜单需要 currentTarget 定位锚点
+          },
+          children,
+        }),
+      });
+    }
+
+    /**
+     * 单层目录状态：{status:'loading'|'ready'|'error', entries?, truncated?, error?}
+     * actions 可选——缺省时不渲染行悬停操作（渲染级验证桩调用即不带）：
+     *   onCreate(dirPath,isDir) / onDelete(entry) / onRename(entry)=进入行内改名；
+     *   onCopyPath(entry, relative)=复制绝对/相对路径；
+     *   renamingPath + onRenameSubmit(entry,value) + onRenameCancel() 驱动行内输入框。
+     */
+    function TreeNode({ entry, depth, expanded, onToggle, onOpenFile, actions }) {
+      const info = entry.dir ? expanded[entry.path] : undefined;
+      const acts = actions ?? {};
+      const renaming = !!acts.onRenameSubmit && acts.renamingPath === entry.path;
+      // 行按钮「常用 + 更多」：常驻 hover 只留 @到对话、复制绝对路径与 ⋯ 菜单；
+      // 新建/复制相对/重命名/删除收敛进 ⋯（留 @ 和绝对路径）
+      const rowActions = [];
+      if (acts.onMention) {
+        rowActions.push(jsxRuntime.jsx(RowActionBtn, { title: t("treeAt"), onClick: () => acts.onMention(entry), children: "@" }, "at"));
+      }
+      if (acts.onCopyPath) {
+        rowActions.push(jsxRuntime.jsx(RowActionBtn, { title: t("treeCopyAbs"), onClick: () => acts.onCopyPath(entry, false), children: jsxRuntime.jsx(CopyAbsIcon, {}) }, "ca"));
+      }
+      if (acts.onMenu) {
+        rowActions.push(jsxRuntime.jsx(RowActionBtn, { title: t("treeMenu"), onClick: (e) => acts.onMenu(entry, e.currentTarget), children: "⋯" }, "mm"));
+      }
+      // 改名输入框：聚焦时只选中最后一个 "." 之前的主名（保留扩展名）；
+      // 目录与点开头的隐藏文件（如 .gitignore）没有扩展名概念，选全名
+      const nameEl = renaming
+        ? jsxRuntime.jsx("input", {
+            className: "dshk-rename",
+            defaultValue: entry.name,
+            spellCheck: false,
+            autoFocus: true,
+            "aria-label": t("treeRename"),
+            onClick: (e) => e.stopPropagation(),
+            onFocus: (e) => {
+              const v = e.currentTarget.value;
+              const i = v.lastIndexOf(".");
+              const end = !entry.dir && i > 0 ? i : v.length;
+              e.currentTarget.setSelectionRange(0, end);
+            },
+            onKeyDown: (e) => {
+              e.stopPropagation();
+              if (e.key === "Enter") {
+                e.preventDefault();
+                acts.onRenameSubmit(entry, e.currentTarget.value);
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                acts.onRenameCancel();
+              }
+            },
+            onBlur: () => {
+              if (acts.renamingPath === entry.path) acts.onRenameCancel();
+            },
+          }, "rename")
+        : jsxRuntime.jsx("span", { className: "dshk-name", children: entry.name }, "name");
+      const rowChildren = [
+        // 空目录（宿主 /tree 附 empty 标记）没有可展开内容：去掉箭头、点击不折叠，
+        // 行本身保留——空目录有"看得见"的必要；目录/文件
+        // 图标常驻（箭头消失后空目录靠它和文件区分）
+        jsxRuntime.jsx("span", { className: "dshk-chev", children: entry.dir && entry.empty !== true ? jsxRuntime.jsx(ChevronIcon, { open: !!info }) : null }, "chev"),
+        jsxRuntime.jsx("span", { className: "dshk-ticonwrap", children: entry.dir ? jsxRuntime.jsx(TreeFolderIcon, {}) : jsxRuntime.jsx(FileTypeIcon16, { name: entry.name }) }, "dicon"),
+        nameEl,
+      ];
+      if (rowActions.length > 0) {
+        rowChildren.push(jsxRuntime.jsx("span", { className: "dshk-rowact", children: rowActions }, "acts"));
+      }
+      const rows = [jsxRuntime.jsxs("div", {
+        className: `dshk-row${entry.dir ? "" : " dshk-file"}`,
+        style: { paddingLeft: 8 + depth * 14 },
+        title: entry.path,
+        onClick: () => {
+          if (renaming) return; // 行内改名中：点击不触发打开/折叠
+          if (entry.dir) {
+            if (entry.empty !== true) onToggle(entry);
+          } else onOpenFile(entry.path);
+        },
+        children: rowChildren,
+      }, entry.path)];
+      if (entry.dir && info) {
+        if (info.status === "loading") {
+          rows.push(jsxRuntime.jsx("div", { className: "dshk-note", style: { paddingLeft: 8 + (depth + 1) * 14 }, children: t("treeLoading") }, `${entry.path}::loading`));
+        } else if (info.status === "error") {
+          rows.push(jsxRuntime.jsx("div", { className: "dshk-note", style: { paddingLeft: 8 + (depth + 1) * 14 }, title: info.error ?? "", children: `${t("treeFail")}${info.error ? `：${info.error}` : ""}` }, `${entry.path}::error`));
+        } else if (info.entries.length === 0) {
+          rows.push(jsxRuntime.jsx("div", { className: "dshk-note", style: { paddingLeft: 8 + (depth + 1) * 14 }, children: t("treeEmpty") }, `${entry.path}::empty`));
+        } else {
+          for (const child of info.entries) {
+            rows.push(jsxRuntime.jsx(TreeNode, { entry: child, depth: depth + 1, expanded, onToggle, onOpenFile, actions }, child.path));
+          }
+          if (info.truncated) {
+            rows.push(jsxRuntime.jsx("div", { className: "dshk-note", style: { paddingLeft: 8 + (depth + 1) * 14 }, children: t("treeTruncated") }, `${entry.path}::truncated`));
+          }
+        }
+      }
+      return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: rows });
+    }
+
+    function FileTreePanel({ cwd, onOpenFile }) {
+      // expanded: 路径 → 目录单层状态；根目录就是 cwd
+      // expanded: 路径 → 目录单层状态；根目录就是 cwd
+      const [expanded, setExpanded] = react.useState({});
+      // 供 nonce 刷新 effect 读取最新展开集合（保留展开状态用）
+      const expandedRef = react.useRef({});
+      expandedRef.current = expanded;
+      const [nonce, setNonce] = react.useState(0);
+      const abortsRef = react.useRef(new Set());
+      // 正在行内改名的条目路径；null = 无
+      const [renamingPath, setRenamingPath] = react.useState(null);
+      // ⋯ 菜单：{entry, rect}；null = 关闭
+      const [menuFor, setMenuFor] = react.useState(null);
+
+      const loadDir = (dirPath) => {
+        const controller = new AbortController();
+        abortsRef.current.add(controller);
+        setExpanded((m) => ({ ...m, [dirPath]: { status: "loading" } }));
+        fetchTree(dirPath, controller.signal)
+          .then((body) => {
+            setExpanded((m) => ({
+              ...m,
+              [dirPath]: { status: "ready", entries: body.entries, truncated: body.truncated === true },
+            }));
+          })
+          .catch((error) => {
+            if (controller.signal.aborted) return;
+            setExpanded((m) => ({ ...m, [dirPath]: { status: "error", error: String(error?.message ?? error) } }));
+          })
+          .finally(() => {
+            abortsRef.current.delete(controller);
+          });
+      };
+
+      // cwd 切换：整树重置（展开状态不保留——那是另一棵树）
+      react.useEffect(() => {
+        abortsRef.current.forEach((c) => c.abort());
+        abortsRef.current.clear();
+        if (!cwd) {
+          setExpanded({});
+          return undefined;
+        }
+        setExpanded({ [cwd]: { status: "loading" } });
+        loadDir(cwd);
+        return () => {
+          abortsRef.current.forEach((c) => c.abort());
+          abortsRef.current.clear();
+        };
+      }, [cwd]);
+
+      // ⟳ 手动刷新：保留展开状态，只重拉根与所有已展开层的内容（树是懒加载的，
+      // 展开过的目录才需要刷新；未展开的下层等用户点开时自然拉最新）
+      react.useEffect(() => {
+        if (!nonce || !cwd) return undefined;
+        const keys = Object.keys(expandedRef.current);
+        const next = {};
+        for (const k of keys) next[k] = { status: "loading" };
+        setExpanded(next);
+        for (const k of keys) loadDir(k);
+        return undefined;
+      }, [nonce]);
+
+      const toggleDir = (entry) => {
+        setExpanded((m) => {
+          if (m[entry.path]) {
+            const next = { ...m };
+            delete next[entry.path];
+            return next;
+          }
+          return { ...m, [entry.path]: { status: "loading" } };
+        });
+        if (!expanded[entry.path]) loadDir(entry.path);
+      };
+
+      // ── 文件管理（新建/重命名/删除）：数据走 POST /dsh-kit/fs/op，宿主做子树校验 ──
+      /** 取父目录：无分隔符时回落 cwd */
+      const parentOf = (p) => {
+        const i = Math.max(p.lastIndexOf("\\"), p.lastIndexOf("/"));
+        return i > 0 ? p.slice(0, i) : cwd ?? p;
+      };
+      // ── 复制路径：entry.path 本就是绝对路径；相对路径 = 去掉树根（cwd）前缀 ──
+      // 前缀比较必须卡在分隔符边界（cwd=D:\proj 时 D:\project2\x 不能误切成 ect2\x），
+      // 不满足边界时回落绝对路径
+      const copyEntryPath = (entry, relative) => {
+        let text = entry.path;
+        if (relative && cwd && entry.path.startsWith(cwd)) {
+          const rest = entry.path.slice(cwd.length);
+          if (rest === "" || /^[\\/]/.test(rest)) text = rest.replace(/^[\\/]+/, "");
+        }
+        writeClipboard(text).then((ok) => {
+          if (ok) flashToast(t("treeCopied"));
+        });
+      };
+      /** 清掉以 prefix 为根的整棵子树的展开缓存（目录改名/删除后这些键全部过期） */
+      const pruneExpandedFrom = (prefix) => {
+        const a = `${prefix}\\`;
+        const b = `${prefix}/`;
+        setExpanded((m) => {
+          const next = {};
+          for (const k of Object.keys(m)) {
+            if (k === prefix || k.startsWith(a) || k.startsWith(b)) continue;
+            next[k] = m[k];
+          }
+          return next;
+        });
+      };
+      // ── 相对路径（@ 引用用，/ 分隔、目录尾 /）：越界/无法表示回落 null ──
+      const relativePathOf = (entry) => {
+        if (!cwd || !entry.path.startsWith(cwd)) return null;
+        const rest = entry.path.slice(cwd.length);
+        if (rest !== "" && !/^[\\/]/.test(rest)) return null;
+        const norm = (rest === "" ? entry.name : rest.replace(/^[\\/]+/, "")).replace(/\\/g, "/");
+        return entry.dir ? `${norm.replace(/\/+$/, "")}/` : norm;
+      };
+      // ── 对话 @ 引用：把选中条目作为官方引用直接插入当前会话输入框 ──
+      // 优先走官方引用芯片直插（shell.insertReference，官方 @ 面板 pick 的
+      // 同款槽位事件监听体，公开实例方法）：phase 须为 plain/claimed、
+      // span.draftRev 须等于当前 rev（CAS），成功即产生真实引用 chip（提交
+      // 时按官方 codec 序列化为 @语法文本），不经过官方 @ 面板；失败兜底为
+      // @ 语法文本追加草稿末尾（与手打一致，此时面板可见属官方行为）。
+      const mentionEntry = (entry) => {
+        const shell = currentComposerShell();
+        if (!shell || typeof shell.actions?.setDraft !== "function") {
+          flashToast(t("treeAtUnavailable"));
+          return;
+        }
+        const relPath = relativePathOf(entry);
+        if (relPath === null) {
+          flashToast(t("treeAtUnavailable"));
+          return;
+        }
+        const mention = chatMentionText(relPath);
+        if (mention === null) {
+          flashToast(t("treeAtUnavailable"));
+          return;
+        }
+        // 目录的开放引号形态（@"dir/）补上闭合引号，作为独立引用提交
+        const chipMention = mention.includes('"') && !mention.endsWith('"') ? `${mention}"` : mention;
+        const chipRef = {
+          source: "reference",
+          ref: chipMention,
+          label: entry.dir ? `${(entry.name || "").replace(/\/+$/, "")}/` : entry.name || relPath.split("/").pop() || relPath,
+          appearance: entry.dir ? "folder" : "file",
+          clipboardText: mention,
+        };
+        if (typeof shell.insertReference === "function") {
+          const phase = shell.core && shell.core.state ? shell.core.state.phase : null;
+          const detectText = typeof shell.projection?.detectText === "string" ? shell.projection.detectText : "";
+          const rev = typeof shell.rev === "number" ? shell.rev : -1;
+          if ((phase === "plain" || phase === "claimed") && rev >= 0) {
+            const span = { start: detectText.length, end: detectText.length, draftRev: rev };
+            let applied = false;
+            try {
+              applied = shell.insertReference(chipRef, span) === true;
+            } catch {
+              applied = false;
+            }
+            if (applied) return;
+          }
+        }
+        // 兜底：官方 @ 语法文本追加草稿末尾
+        const state = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
+        const draft = state && typeof state.draft === "string" ? state.draft : "";
+        shell.actions.setDraft(draft === "" ? mention : `${draft} ${mention}`);
+      };
+      /** 已打开的文件被改名/删除后关掉对应文件标签（含其子路径；激活位顺延） */
+      const closeStalePreview = (prefix) => {
+        const stale = (f) => f === prefix || f.startsWith(`${prefix}\\`) || f.startsWith(`${prefix}/`);
+        const items = getKitUi().files ?? [];
+        const rest = items.filter((pv) => !stale(pv.path));
+        if (rest.length === items.length) return;
+        const patch = { files: rest };
+        if (getKitUi().activeFile && stale(getKitUi().activeFile)) {
+          patch.activeFile = rest.length > 0 ? rest[rest.length - 1].path : null;
+        }
+        setKitUi(patch);
+      };
+      const runFsOp = async (payload, confirmText) => {
+        if (confirmText && !window.confirm(confirmText)) return false;
+        try {
+          await postFsOp({ cwd, ...payload });
+          return true;
+        } catch (error) {
+          flashToast(`${t("skOpFail")}：${error?.message ?? error}`);
+          return false;
+        }
+      };
+      // 新建文件/目录单入口（vault 同款）：内联输入，
+      // `\` 开头 = 新建文件夹（剥前缀），否则建文件；可带 / 多级。头部按钮与
+      // 目录行 ⋯ 菜单都汇到这里（createAt = 目标目录）
+      const [createAt, setCreateAt] = react.useState(null);
+      const [createName, setCreateName] = react.useState("");
+      // 区域外点击 = 取消新建（直接丢弃已输入内容，不弹窗不代建）：误点代建
+      // 会产生意外条目，弹窗又比一行输入的损失重；Enter 始终是显式创建
+      react.useEffect(() => {
+        if (createAt === null) return undefined;
+        const onDown = (e) => {
+          if (e.target instanceof Element && !e.target.closest(".dshk-createrow")) setCreateAt(null);
+        };
+        document.addEventListener("pointerdown", onDown, true);
+        return () => document.removeEventListener("pointerdown", onDown, true);
+      }, [createAt]);
+      const startCreate = (dirPath) => {
+        if (!cwd) return;
+        setCreateAt(dirPath ?? cwd);
+        setCreateName("");
+      };
+      const submitCreate = async () => {
+        const dirPath = createAt ?? cwd;
+        const raw = createName.trim();
+        if (raw === "") return;
+        const wantDir = raw.startsWith("\\");
+        const name = (wantDir ? raw.slice(1) : raw).trim();
+        if (name === "") return;
+        const okDone = await runFsOp({ op: "create", dir: dirPath, name, kind: wantDir ? "dir" : "file" });
+        if (!okDone) return;
+        flashToast(t("created"));
+        setCreateAt(null);
+        setCreateName("");
+        loadDir(dirPath);
+      };
+      // ── 行内改名（✎ 触发）：聚焦时只选中最后一个扩展名分隔符之前的
+      // 主名（目录/隐藏文件选全名），Enter 提交、Esc/失焦取消；改名期间把
+      // dock.inlineEdit 座置真，root 的 Esc 分层据此让路（不会顺手关掉树/预览）──
+      const startRename = (entry) => {
+        if (!cwd) return;
+        setRenamingPath(entry.path);
+      };
+      const cancelRename = () => setRenamingPath(null);
+      const submitRename = async (entry, rawValue) => {
+        setRenamingPath(null);
+        const name = String(rawValue ?? "").trim();
+        if (name === "" || name === entry.name) return;
+        const okDone = await runFsOp({ op: "rename", path: entry.path, name });
+        if (!okDone) return;
+        flashToast(t("renamed"));
+        closeStalePreview(entry.path);
+        pruneExpandedFrom(entry.path);
+        loadDir(parentOf(entry.path));
+      };
+      react.useEffect(() => {
+        dock.inlineEdit.active = renamingPath !== null;
+        return () => {
+          dock.inlineEdit.active = false;
+        };
+      }, [renamingPath]);
+      const deleteEntry = async (entry) => {
+        const okDone = await runFsOp(
+          { op: "delete", path: entry.path },
+          t("confirmDelete").replace("{name}", entry.name),
+        );
+        if (!okDone) return;
+        flashToast(t("deleted"));
+        closeStalePreview(entry.path);
+        pruneExpandedFrom(entry.path);
+        loadDir(parentOf(entry.path));
+      };
+      const treeActions = {
+        onCreate: startCreate,
+        onDelete: deleteEntry,
+        onRename: startRename,
+        onCopyPath: copyEntryPath,
+        onMention: mentionEntry,
+        onMenu: (entry, anchor) => setMenuFor((prev) => (prev && prev.anchor === anchor ? null : { entry, rect: anchor.getBoundingClientRect(), anchor })),
+        renamingPath,
+        onRenameSubmit: submitRename,
+        onRenameCancel: cancelRename,
+      };
+
+      const rootInfo = cwd ? expanded[cwd] : undefined;
+
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-tree",
+        children: [
+          jsxRuntime.jsxs("div", {
+            className: "dshk-head",
+            children: [
+              jsxRuntime.jsx(FolderIcon, {}),
+              // 显示当前目录路径（不显示"文件树"文字），过长时省略号，hover 悬浮看全
+              jsxRuntime.jsx("span", { className: "dshk-dir", title: cwd ?? "", children: cwd ?? t("treeLabel") }),
+              // 根目录新建文件/目录（单入口，\ 前缀建目录）
+              cwd
+                ? jsxRuntime.jsx(KitTip, {
+                    label: t("treeNewAny"),
+                    children: jsxRuntime.jsx("button", {
+                      type: "button",
+                      className: "dshk-btn",
+                      onClick: () => startCreate(cwd),
+                      children: jsxRuntime.jsx(FilePlusIcon, {}),
+                    }),
+                  })
+                : null,
+              jsxRuntime.jsx(KitTip, {
+                label: t("treeRefresh"),
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn",
+                  onClick: () => setNonce((n) => n + 1),
+                  children: "⟳",
+                }),
+              }),
+            ],
+          }),
+          // 新建内联输入（vault 同款）：挂在头部下、目标目录由触发入口决定；
+          // Enter 创建、Esc/空内容退格/区域外点击取消（✓ 按钮取消：回车即建，不需要
+          // 第二确认点）
+          createAt !== null
+            ? jsxRuntime.jsxs("div", { className: "dshk-createrow", title: createAt, children: [
+                jsxRuntime.jsx("input", {
+                  autoFocus: true,
+                  value: createName,
+                  placeholder: t("treeNewPh"),
+                  onChange: (e) => setCreateName(e.target.value),
+                  onKeyDown: (e) => {
+                    if (e.key === "Enter") void submitCreate();
+                    if (e.key === "Escape") setCreateAt(null);
+                    if (e.key === "Backspace" && createName === "") setCreateAt(null);
+                  },
+                }),
+              ] })
+            : null,
+          jsxRuntime.jsx("div", {
+            className: "dshk-tree-body",
+            children:
+              !cwd
+              ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("noCwd") })
+              : !rootInfo || rootInfo.status === "loading"
+                ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("treeLoading") })
+                : rootInfo.status === "error"
+                  ? jsxRuntime.jsx("div", { className: "dshk-note", title: rootInfo.error ?? "", children: `${t("treeFail")}${rootInfo.error ? `：${rootInfo.error}` : ""}` })
+                  : rootInfo.entries.length === 0
+                    ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("treeEmpty") })
+                    : jsxRuntime.jsxs(jsxRuntime.Fragment, {
+                        children: [
+                          rootInfo.entries.map((entry) =>
+                            jsxRuntime.jsx(TreeNode, { entry, depth: 0, expanded, onToggle: toggleDir, onOpenFile, actions: treeActions }, entry.path),
+                          ),
+                          rootInfo.truncated
+                            ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("treeTruncated") })
+                            : null,
+                        ],
+                      }),
+          }),
+          menuFor
+            ? jsxRuntime.jsx(TreeRowMenu, {
+                entry: menuFor.entry,
+                rect: menuFor.rect,
+                anchor: menuFor.anchor,
+                actions: treeActions,
+                onClose: () => setMenuFor(null),
+              })
+            : null,
+        ],
+      });
+    }
+
+    // ─────────── 树行 ⋯ 菜单（收敛操作：新建/复制相对/重命名/删除）───────────
+    // fixed 定位浮层（树 body 滚动裁切不影响的全局层），按钮下方左缘对齐、
+    // 向右展开（与官方对话三点菜单方向一致），右侧空间不足时回退左移。
+    // anchor = 开菜单的那颗触发钮：宿主据此把它做成开关（再点一次关掉）。
+
+    // ─────────── 分支浮层（fixed 悬浮面板，quick-pick）───────────
+    // 不参与 .dshk-tree 的 flex 布局——更改条目再多也不会挤压分支列表；面板自带
+    // 纵向滚动，超出视口高度时 clamp 至视口内。Esc / 点击面板外关闭；点回触发
+    // 按钮不关（按钮自身 onClick 负责切换），用 data-popkey 识别。
+    function GitBranchMenu({ rect, branches, busy, name, created, onName, onCreate, onSwitch, onDelete, onClose }) {
+      const hostRef = react.useRef(null);
+      react.useEffect(() => {
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        const onDown = (e) => {
+          if (e.target instanceof Element) {
+            const el = e.target.closest("[data-popkey]");
+            if (el && el.getAttribute("data-popkey") === "branch") return; // 触发按钮自己管切换
+          }
+          if (hostRef.current && e.target instanceof Element && !hostRef.current.contains(e.target)) onClose();
+        };
+        window.addEventListener("keydown", onKey, true);
+        window.addEventListener("pointerdown", onDown, true);
+        return () => {
+          window.removeEventListener("keydown", onKey, true);
+          window.removeEventListener("pointerdown", onDown, true);
+        };
+      }, [onClose]);
+      const MENU_W = 236;
+      const viewportW = typeof window !== "undefined" && window.innerWidth ? window.innerWidth : 1200;
+      const viewportH = typeof window !== "undefined" && window.innerHeight ? window.innerHeight : 800;
+      const style = {
+        left: Math.min(Math.max(8, rect.left), Math.max(8, viewportW - MENU_W)),
+        top: Math.min(Math.max(8, rect.top), Math.max(8, viewportH - 420)),
+      };
+      return jsxRuntime.jsxs("div", {
+        ref: hostRef,
+        className: "dshk-menu dshk-branch-menu",
+        style,
+        children: [
+          jsxRuntime.jsx("div", { className: "dshk-branch-title", children: t("scBranch") }),
+          jsxRuntime.jsx("div", { className: "dshk-branch-list", children:
+            Array.isArray(branches?.branches) && branches.branches.length > 0
+              ? branches.branches.map((b) =>
+                  jsxRuntime.jsxs(
+                    "div",
+                    {
+                      className: "dshk-branch-row" + (b.isHead ? " dshk-branch-cur" : ""),
+                      title: b.upstream
+                        ? `${b.upstream}${b.trackParsed && (b.trackParsed.ahead || b.trackParsed.behind) ? " [" + (b.trackParsed.ahead ? "ahead " + b.trackParsed.ahead : "") + (b.trackParsed.behind ? " behind " + b.trackParsed.behind : "") + "]" : ""}`
+                        : b.name,
+                      onClick: () => { if (!b.isHead && !busy) onSwitch(b.name); },
+                      children: [
+                        jsxRuntime.jsx("span", { className: "dshk-branch-ico", children: b.isHead ? "●" : "○" }),
+                        jsxRuntime.jsx("span", { className: "dshk-branch-name", children: b.name }),
+                        created && b.name === created
+                          ? jsxRuntime.jsx(KitTip, { label: t("scBranchCreatedTag"), children: jsxRuntime.jsx("span", { className: "dshk-branch-newtag", children: t("scBranchNewTag") }) })
+                          : null,
+                        trackBadgeFor(b),
+                        jsxRuntime.jsx("span", { className: "dshk-spring" }),
+                        b.isHead
+                          ? jsxRuntime.jsx("span", { className: "dshk-branch-curtag", children: t("scBranchCurrent") })
+                          : jsxRuntime.jsx(KitTip, {
+                              label: t("scBranchDelete"),
+                              align: "end",
+                              children: jsxRuntime.jsx("button", {
+                                type: "button",
+                                className: "dshk-branch-del",
+                                disabled: busy,
+                                onClick: (e) => { e.stopPropagation(); onDelete(b.name); },
+                                children: "✕",
+                              }),
+                            }),
+                      ],
+                    },
+                    b.name,
+                  ),
+                )
+              : jsxRuntime.jsx("div", { className: "dshk-note", children: t("scBranchEmpty") }),
+          }),
+          jsxRuntime.jsxs("div", { className: "dshk-branch-new", children: [
+            jsxRuntime.jsx("input", {
+              autoFocus: true,
+              className: "dshk-cmt-input",
+              placeholder: t("scBranchNew"),
+              value: name,
+              onChange: (e) => onName(e.target.value),
+              onKeyDown: (e) => { if (e.key === "Enter") onCreate(false); },
+            }),
+            jsxRuntime.jsx("button", {
+              type: "button",
+              className: "dshk-btn-save",
+              disabled: name.trim() === "" || busy,
+              onClick: () => onCreate(false),
+              children: t("scBranchCreate"),
+            }),
+            jsxRuntime.jsx("button", {
+              type: "button",
+              className: "dshk-btn-cancel",
+              disabled: name.trim() === "" || busy,
+              onClick: () => onCreate(true),
+              children: t("scBranchCreateSwitch"),
+            }),
+          ] }),
+        ],
+      });
+    }
+    /** 分支行上游领先/落后/失效小标记（与面板内 trackBadge 同源，独立函数便于悬浮面板复用） */
+    function trackBadgeFor(b) {
+      const tp = b.trackParsed;
+      if (!tp) return null;
+      if (tp.gone === true) return jsxRuntime.jsx("span", { className: "dshk-branch-track dshk-branch-gone", title: b.track || b.upstream, children: "gone" });
+      if (tp.ahead === 0 && tp.behind === 0) return null;
+      return jsxRuntime.jsx("span", { className: "dshk-branch-track", title: b.track || b.upstream, children: `${tp.ahead ? "↑" + tp.ahead : ""}${tp.behind ? "↓" + tp.behind : ""}` });
+    }
+
+    // ─────────── 源代码管理视图（sidebar.workspaces 的 git 模式）───────────
+    // 文件树头部分支按钮进入；与文件树互斥占用同一单槽，**无 ✕**——原文件树入口
+    // 按钮（及 Ctrl+E）就是切换开关：树 ⇄ 源代码管理 来回切。
+    // 布局：标题行（分支按钮（官方分支图形+名称）+条目数+图谱/同步/刷新）
+    // →「暂存的更改」组 →「更改」组（未跟踪 U 归入更改组）；分支浮层是
+    // fixed 悬浮层（不参与面板布局，更改条目再多分支也完整显示；Esc/外部点击关闭，
+    // 分支列表自带滚动；新建分支输入打开即聚焦，仅新建不切换时浮层保留、新分支
+    // 打「新建」标记）。非 git 目录给「初始化仓库」按钮（POST /git/init，幂等）。
+
+    // 图谱视图（⧉ 切换）见 GitGraphPanel；同步钮 = 拉取+推送（有上游）/
+    // 发布分支（无上游，push -u），失败且无上游时给「设置上游并推送」提示；
+    // 推送入口先 confirm 防误触，被远程 reject 后可 confirm 以本地为准 --force 覆盖。
+    function GitChangesPanel({ cwd, onOpenFile }) {
+      const [data, setData] = react.useState(null); // null=加载中；{available, root?, entries?}
+      const [initializing, setInitializing] = react.useState(false);
+      const [msg, setMsg] = react.useState("");
+      const [busy, setBusy] = react.useState(false);
+      const [collapsed, setCollapsed] = react.useState({});
+      const fetchRef = react.useRef(null);
+      fetchRef.current = () => {
+        if (!cwd) return;
+        const c = new AbortController();
+        fetchGitStatus(cwd, c.signal)
+          .then((b) => {
+            if (!c.signal.aborted) setData(b);
+          })
+          .catch(() => {});
+      };
+      // 视图：changes（更改清单，默认）⇄ graph（提交图谱）；分支浮层内联展开
+      const [view, setView] = react.useState("changes");
+      // 图谱视图激活时本面板不轮 status：图谱面板自己轮 log，两个都轮等于同一拍上
+      // 多 spawn 一个 git 进程；切回 changes 视图时 effect 重跑会立即补一拍
+      react.useEffect(() => {
+        if (view !== "graph" && fetchRef.current) fetchRef.current();
+        const tick = () => {
+          if (view === "graph") return;
+          if (document.visibilityState !== "hidden" && fetchRef.current) fetchRef.current();
+        };
+        const unsubscribe = subscribeGitTick(tick);
+        document.addEventListener("visibilitychange", tick);
+        window.addEventListener("focus", tick);
+        return () => {
+          unsubscribe();
+          document.removeEventListener("visibilitychange", tick);
+          window.removeEventListener("focus", tick);
+        };
+      }, [cwd, view]);
+      const [branchOpen, setBranchOpen] = react.useState(false);
+      const [branches, setBranches] = react.useState(null); // null=未加载；{current, branches[]}
+      const [newBranch, setNewBranch] = react.useState("");
+      const [createdBranch, setCreatedBranch] = react.useState(null); // 刚新建的分支名（列表打「新建」标记）
+      const [branchBusy, setBranchBusy] = react.useState(false);
+      const [pushing, setPushing] = react.useState(false);
+      const [pulling, setPulling] = react.useState(false);
+      // 分支浮层（fixed 悬浮）：anchor 为按钮矩形锚点 {left, top}
+      const [branchAnchor, setBranchAnchor] = react.useState(null);
+      const branchBtnRef = react.useRef(null);
+      /** 按钮锚点：按钮左下 + 6px，视口内 clamp（浮层自带内部滚动，上限留高） */
+      const anchorOf = (ref) => {
+        const el = ref.current;
+        const vw = typeof window !== "undefined" && window.innerWidth ? window.innerWidth : 1200;
+        const vh = typeof window !== "undefined" && window.innerHeight ? window.innerHeight : 800;
+        if (!el) return { left: 8, top: 8 };
+        const r = el.getBoundingClientRect();
+        return {
+          left: Math.min(Math.max(8, r.left), Math.max(8, vw - 244)),
+          top: Math.min(Math.max(8, r.bottom + 6), Math.max(8, vh - 430)),
+        };
+      };
+      const openBranch = () => {
+        setBranchAnchor(anchorOf(branchBtnRef));
+        setBranchOpen(true);
+      };
+      const closeBranch = () => {
+        setBranchOpen(false);
+        setBranchAnchor(null);
+        setCreatedBranch(null);
+      };
+      const toggleBranch = () => {
+        if (branchOpen) closeBranch();
+        else openBranch();
+      };
+      const [pushHint, setPushHint] = react.useState(false); // 无上游时的「设置上游并推送」提示
+      // 图谱面板暴露的刷新句柄（图谱挂载后由 GitGraphPanel 回填），供头部 ⟳ 一并刷新
+      const graphRef = react.useRef(null);
+      const branchRef = react.useRef(null);
+      branchRef.current = () => {
+        if (!cwd) return;
+        const c = new AbortController();
+        fetchGitBranch(cwd, c.signal)
+          .then((b) => {
+            if (!c.signal.aborted && b.available === true) setBranches(b);
+          })
+          .catch(() => {});
+      };
+      // 分支浮层数据：打开时拉取（关闭后保留已加载数据，下次瞬开）
+      react.useEffect(() => {
+        if (branchOpen && branchRef.current) branchRef.current();
+      }, [branchOpen, cwd]);
+
+      /** 推送（upstream=true 时设置上游再推，即首次推送）：入口先确认防误触；
+          失败若为远程拒绝（non-fast-forward）→ 询问「以本地为准」强制重推 */
+      const doPush = async (withUpstream) => {
+        if (pushing || !cwd || !available) return false;
+        if (!window.confirm(t("scPushConfirm"))) return false;
+        setPushing(true);
+        try {
+          const payload = { cwd, op: "push", upstream: withUpstream === true };
+          try {
+            await kitPostJson("/dsh-kit/git/op", payload);
+          } catch (error) {
+            const message = String(error?.message ?? error);
+            const rejected = /\!\s*\[rejected\]|non-fast-forward|failed to push some refs|fetch first/i.test(message);
+            const hintable = /no upstream/i.test(message) || /no configured push destination/i.test(message) || /couldn't find remote ref/i.test(message);
+            setPushHint(hintable);
+            // 远程有新提交被拒：确认后以本地为准覆盖（远程上本地没有的提交丢失）
+            if (!rejected || !window.confirm(t("scPushForceConfirm"))) {
+              flashToast(`${t("scPushFail")}：${message}`);
+              return false;
+            }
+            await kitPostJson("/dsh-kit/git/op", { ...payload, force: true });
+          }
+          flashToast(t("scPushDone"));
+          setPushHint(false);
+          if (fetchRef.current) fetchRef.current();
+          return true;
+        } finally {
+          setPushing(false);
+        }
+      };
+
+      /** 拉取（⋯ 菜单；缺上游/冲突等错误原文 toast）：成功后刷新状态与图谱 */
+      const doPull = async () => {
+        if (pulling || !cwd || !available) return false;
+        setPulling(true);
+        try {
+          await kitPostJson("/dsh-kit/git/op", { cwd, op: "pull" });
+          flashToast(t("scPullDone"));
+          if (fetchRef.current) fetchRef.current();
+          if (graphRef.current) graphRef.current();
+          return true;
+        } catch (error) {
+          flashToast(`${t("scPullFail")}：${error?.message ?? error}`);
+          return false;
+        } finally {
+          setPulling(false);
+        }
+      };
+
+      /** 分支操作（新建/切换/删除）：成功后刷新状态 + 分支列表 */
+      const runBranchOp = async (payload, confirmText) => {
+        if (branchBusy || !cwd) return false;
+        if (confirmText !== undefined && confirmText !== null && !window.confirm(confirmText)) return false;
+        setBranchBusy(true);
+        try {
+          await kitPostJson("/dsh-kit/git/op", { cwd, ...payload });
+          if (fetchRef.current) fetchRef.current();
+          if (branchRef.current) branchRef.current();
+          setNewBranch("");
+          return true;
+        } catch (error) {
+          flashToast(`${t("scBranchOpFail")}：${error?.message ?? error}`);
+          return false;
+        } finally {
+          setBranchBusy(false);
+        }
+      };
+
+      /** 新建分支（doSwitch=true 时一并切换）；成功后收起浮层（分支名已变） */
+      const createBranch = async (doSwitch) => {
+        const name = newBranch.trim();
+        if (name === "" || branchBusy) return;
+        const ok = await runBranchOp({ op: "branchCreate", name, switch: doSwitch === true });
+        if (ok) {
+          flashToast(t(doSwitch ? "scBranchSwitched" : "scBranchCreated").replace("{name}", name));
+          if (doSwitch) {
+            closeBranch(); // 已切换：收起浮层，头部分支按钮显示新名
+          } else {
+            setCreatedBranch(name); // 仅新建：浮层保留，列表刷新后新分支打「新建」标记
+          }
+        }
+      };
+
+      /** 写操作（暂存/取消暂存/放弃/提交）：可选二次确认，成功后静默刷新状态 */
+      const runOp = async (payload, confirmText) => {
+        if (busy || !cwd) return false;
+        if (confirmText !== undefined && confirmText !== null && !window.confirm(confirmText)) return false;
+        setBusy(true);
+        try {
+          await kitPostJson("/dsh-kit/git/op", { cwd, ...payload });
+          if (fetchRef.current) fetchRef.current();
+          return true;
+        } catch (error) {
+          flashToast(`${t("skOpFail")}：${error?.message ?? error}`);
+          return false;
+        } finally {
+          setBusy(false);
+        }
+      };
+
+      const doCommit = async () => {
+        const message = msg.trim();
+        if (message === "" || busy || !available) return false;
+        // 暂存区为空 → 提交全部更改（含新文件），需确认；否则只提交已暂存
+        const all = stagedList.length === 0;
+        const okDone = await runOp({ op: "commit", message, all }, all ? t("cmtAllConfirm") : undefined);
+        if (okDone) {
+          setMsg("");
+          flashToast(t("committed"));
+        }
+        return okDone;
+      };
+
+      const available = data !== null && data.available === true;
+      const entries = available && Array.isArray(data.entries) ? data.entries : [];
+      const root = available ? data.root ?? null : null;
+      // 分组：暂存（xy 第一列非空格且非 ??）与其余（含未跟踪 U），分两组
+      const stagedList = [];
+      const workList = [];
+      for (const e of entries) {
+        const first = e.xy && e.xy[0] !== " " && e.xy[0] !== "?" ? stagedList : workList;
+        first.push(e);
+      }
+      const groups = [
+        { key: "staged", title: t("scStaged"), list: stagedList, isStaged: true },
+        { key: "work", title: t("scChanges"), list: workList, isStaged: false },
+      ].filter((g) => g.list.length > 0);
+
+      const renderRow = (item, isStaged) => {
+        const rel =
+          root && item.abs.startsWith(root)
+            ? item.abs.slice(root.length).replace(/^[\\/]/, "")
+            : item.path;
+        const segs = rel.split(/[\\/]/);
+        const name = segs[segs.length - 1];
+        const dir = segs.slice(0, -1).join("/");
+        const isUntracked = String(item.xy).trim() === "?";
+        // 已删除文件（xy 含 D）：工作区里已无文本可读，点击进「仅删除 diff」预览
+        // （git diff HEAD 能给出被删内容；不做文本预览以免"文件不存在"报错）
+        const isDeleted = !isUntracked && (item.xy[0] === "D" || item.xy[1] === "D");
+        return jsxRuntime.jsxs(
+          "div",
+          {
+            className: "dshk-row dshk-chg-row",
+            title: item.abs,
+            onClick: () => onOpenFile(item.abs, isUntracked, isDeleted),
+            children: [
+              jsxRuntime.jsx("span", { className: "dshk-name", children: name }),
+              dir !== "" ? jsxRuntime.jsx("span", { className: "dshk-dir", title: rel, children: dir }) : null,
+              // 悬停操作（行内命令）：暂存＋ / 放弃↩ / 取消暂存－
+              jsxRuntime.jsxs("span", { className: "dshk-rowact", children: [
+                isStaged
+                  ? jsxRuntime.jsx(KitTip, { label: t("scUnstage"), align: "end", children: jsxRuntime.jsx("button", { type: "button", disabled: busy, onClick: (e) => { e.stopPropagation(); runOp({ op: "unstage", path: item.abs }); }, children: "－" }) })
+                  : jsxRuntime.jsx(KitTip, { label: t("scStage"), align: "end", children: jsxRuntime.jsx("button", { type: "button", disabled: busy, onClick: (e) => { e.stopPropagation(); runOp({ op: "stage", path: item.abs }); }, children: "＋" }) }),
+                !isStaged && !isUntracked
+                  ? jsxRuntime.jsx(KitTip, { label: t("scDiscard"), align: "end", children: jsxRuntime.jsx("button", { type: "button", disabled: busy, onClick: (e) => { e.stopPropagation(); runOp({ op: "discard", path: item.abs }, t("scDiscardConfirm")); }, children: "↩" }) })
+                  : null,
+              ] }),
+              item.stats
+                ? jsxRuntime.jsxs("span", { className: "dshk-nums", children: [
+                    jsxRuntime.jsx("span", { className: "dshk-nadd", children: `+${item.stats.a}` }),
+                    jsxRuntime.jsx("span", { className: "dshk-ndel", children: `−${item.stats.d}` }),
+                  ] })
+                : null,
+              jsxRuntime.jsx(GitBadge, { xy: item.xy }),
+            ],
+          },
+          item.abs,
+        );
+      };
+
+      const initRepo = async () => {
+        if (initializing || !cwd) return;
+        setInitializing(true);
+        try {
+          await fetchGitInit(cwd);
+          if (fetchRef.current) fetchRef.current();
+        } catch (error) {
+          flashToast(`${t("scInitFail")}：${error?.message ?? error}`);
+        } finally {
+          setInitializing(false);
+        }
+      };
+
+      const ahead = available && typeof data?.ahead === "number" ? data.ahead : 0;
+
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-tree",
+        children: [
+          jsxRuntime.jsxs("div", {
+            className: "dshk-head",
+            children: [
+              // 分支按钮（官方分支图形 + 名称；推送计数不在这里——它有自己的
+              // 推送按钮，分支显示不与推送语义重叠）：点击开固定悬浮分支浮层
+              available && data
+                ? jsxRuntime.jsx(KitTip, {
+                    label: t("scBranch"),
+                    children: jsxRuntime.jsx("button", {
+                      type: "button",
+                      ref: branchBtnRef,
+                      className: "dshk-btn dshk-branchbtn" + (branchOpen ? " dshk-headbtn-on" : ""),
+                      "data-popkey": "branch",
+                      "aria-pressed": branchOpen || undefined,
+                      onClick: toggleBranch,
+                      children: [
+                        jsxRuntime.jsx(dswIcon("IconBranchOutline16") ?? BranchIcon, {}),
+                        jsxRuntime.jsx("span", {
+                          className: "dshk-branch-name",
+                          children: data.detached === true ? t("scDetached") : data.branch || "—",
+                        }),
+                        jsxRuntime.jsx("span", { className: "dshk-caret", children: "▾" }),
+                      ],
+                    }),
+                  })
+                : jsxRuntime.jsx("span", { className: "dshk-dir", title: root ?? "", children: t("scTitle") }),
+              available && entries.length > 0
+                ? jsxRuntime.jsx("span", { className: "dshk-status", children: String(entries.length) })
+                : null,
+              jsxRuntime.jsx("span", { className: "dshk-spring" }),
+              // 同步钮（↑↓）：有上游=
+              // 先拉后推，无上游=发布（首次推送）；错误原文 toast
+              available && data && data.detached !== true
+                ? jsxRuntime.jsx(KitTip, {
+                    label: pushing || pulling
+                      ? t("saving")
+                      : !data.upstream
+                        ? t("scPublish")
+                        : ahead > 0
+                          ? t("scPushAhead").replace("{n}", String(ahead))
+                          : t("scSynced"),
+                    children: jsxRuntime.jsx("button", {
+                      type: "button",
+                      className: "dshk-btn dshk-headbtn",
+                      disabled: pushing || pulling || data.unborn === true,
+                      onClick: () => void (async () => {
+                        if (data.upstream) {
+                          const ok = await doPull();
+                          if (!ok) return;
+                        }
+                        await doPush(!(data.upstream));
+                      })(),
+                      children: pushing || pulling ? "…" : ahead > 0 ? `↑${ahead}` : "↑↓",
+                    }),
+                  })
+                : null,
+              jsxRuntime.jsx(KitTip, {
+                label: t("scGraph"),
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn dshk-headbtn" + (view === "graph" ? " dshk-headbtn-on" : ""),
+                  "aria-pressed": view === "graph" || undefined,
+                  onClick: () => setView((v) => (v === "graph" ? "changes" : "graph")),
+                  children: "⧉",
+                }),
+              }),
+              jsxRuntime.jsx(KitTip, {
+                label: t("treeRefresh"),
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn",
+                  onClick: () => {
+                    if (fetchRef.current) fetchRef.current();
+                    if (graphRef.current) graphRef.current();
+                  },
+                  children: "⟳",
+                }),
+              }),
+            ],
+          }),
+          // 分支浮层 / ⋯ 操作菜单：fixed 悬浮（.dshk-menu 模式），不参与面板布局，
+          // 更改条目再多也不会挤压分支列表；关浮层由组件内 Esc/外部点击触发
+          branchOpen && branchAnchor
+            ? jsxRuntime.jsx(GitBranchMenu, {
+                rect: branchAnchor,
+                branches,
+                busy: branchBusy,
+                name: newBranch,
+                created: createdBranch,
+                onName: setNewBranch,
+                onCreate: createBranch,
+                onSwitch: async (name) => {
+                  const ok = await runBranchOp({ op: "branchSwitch", name });
+                  if (ok) {
+                    flashToast(t("scBranchSwitched").replace("{name}", name));
+                    closeBranch();
+                  }
+                },
+                onDelete: async (name) => {
+                  if (!window.confirm(t("scBranchDeleteConfirm").replace("{name}", name))) return;
+                  const ok = await runBranchOp({ op: "branchDelete", name });
+                  if (ok) {
+                    flashToast(t("scBranchDeleted").replace("{name}", name));
+                    return;
+                  }
+                  // -d 失败（典型：未合并）→ 二次确认强制删除
+                  if (window.confirm(t("scBranchForceConfirm"))) {
+                    const ok2 = await runBranchOp({ op: "branchDelete", name, force: true });
+                    if (ok2) flashToast(t("scBranchDeleted").replace("{name}", name));
+                  }
+                },
+                onClose: closeBranch,
+              })
+            : null,
+          // 无上游提示（push 失败后出现）：一键设置上游并重推
+          pushHint && view === "changes"
+            ? jsxRuntime.jsxs("div", { className: "dshk-pushhint", children: [
+                jsxRuntime.jsx("span", { children: t("scPushNoUpstream") }),
+                jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn-save",
+                  disabled: pushing,
+                  onClick: () => doPush(true),
+                  children: t("scPushSetUpstream"),
+                }),
+              ] })
+            : null,
+          jsxRuntime.jsx("div", {
+            className: "dshk-tree-body",
+            children:
+              !cwd
+                ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("noCwd") })
+                : data === null
+                  ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("treeLoading") })
+                  : !available
+                    ? jsxRuntime.jsxs("div", { style: { padding: "16px 10px", textAlign: "center" }, children: [
+                        jsxRuntime.jsx("div", { className: "dshk-note", style: { padding: 0 }, children: t("scNotGit") }),
+                        jsxRuntime.jsx("div", { style: { marginTop: 10 } , children:
+                          jsxRuntime.jsx("button", {
+                            type: "button",
+                            className: "dshk-btn-save",
+                            disabled: initializing,
+                            onClick: initRepo,
+                            children: t(initializing ? "saving" : "scInit"),
+                          }),
+                        }),
+                      ] })
+                    : view === "graph"
+                    ? jsxRuntime.jsx(GitGraphPanel, { cwd, root, refreshRef: graphRef, onOpenFile })
+                    : jsxRuntime.jsxs(jsxRuntime.Fragment, {
+                        children: [
+                          // 提交框：暂存空=提交全部（需确认），否则只提交已暂存
+                          jsxRuntime.jsxs("div", { className: "dshk-cmt", children: [
+                            jsxRuntime.jsx("input", {
+                              className: "dshk-cmt-input",
+                              placeholder: t("cmtPlaceholder"),
+                              value: msg,
+                              onChange: (e) => setMsg(e.target.value),
+                              onKeyDown: (e) => { if (e.key === "Enter") doCommit(); },
+                            }),
+                            jsxRuntime.jsx("button", {
+                              type: "button",
+                              className: "dshk-btn-save",
+                              disabled: msg.trim() === "" || busy,
+                              onClick: doCommit,
+                              children: t(stagedList.length > 0 ? "scCommit" : "scCommitAll"),
+                            }),
+                          ] }),
+                          groups.length === 0
+                            ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("scEmpty") })
+                            : groups.map((group) => {
+                                const isOpen = !collapsed[group.key];
+                                return jsxRuntime.jsxs(
+                                  "div",
+                                  {
+                                    className: "dshk-changes",
+                                    children: [
+                                      jsxRuntime.jsxs("div", {
+                                        className: "dshk-chg-head",
+                                        onClick: () => setCollapsed((c) => ({ ...c, [group.key]: !c[group.key] })),
+                                        children: [
+                                          jsxRuntime.jsx("span", { className: "dshk-chg-chev", "data-open": isOpen || undefined, children: "▶" }),
+                                          jsxRuntime.jsx("span", { children: group.title }),
+                                          jsxRuntime.jsx("span", { className: "dshk-sk-status", children: String(group.list.length) }),
+                                        ],
+                                      }),
+                                      isOpen ? group.list.map((item) => renderRow(item, group.isStaged)) : null,
+                                    ],
+                                  },
+                                  group.key,
+                                );
+                              }),
+                        ],
+                      }),
+          }),
+        ],
+      });
+    }
+
+    // ─────────── 提交图谱（源代码管理面板的 graph 视图）───────────
+    // 数据走 GET /dsh-kit/git/log（结构化提交记录：完整/短哈希、父哈希、作者、
+    // 时间戳、说明、引用装饰），lane 几何由前端从父哈希计算后 SVG 绘制。
+    // 行布局：图谱列 → 引用装饰 chip → 短哈希 → 说明 → 作者 → 相对时间。点提交行进详情（/dsh-kit/git/show）：作者/时间/说明/文件
+    // 清单，清单行可点开进右侧预览面板（A 类按未跟踪语义进原文视图）。
+    // refreshRef：头部 ⟳ 一并刷新的句柄（由 GitChangesPanel 传入并回填）。
+    /** 图谱 lane 配色（按 lane 生命周期循环取用，同一条线颜色恒定） */
+    const LANE_COLORS = ["#4daafc", "#73c991", "#e2c08d", "#b088e0"];
+    const GRAPH_ROW_H = 22;
+    const GRAPH_GAP = 14;
+    const GRAPH_R = 4;
+
+    /** 提交记录 → 图谱几何（纯函数，render-check 直调）。
+     * records 按 --topo-order 到达（子先于父，宿主端点保证）。算法：槽位数组持有
+     * 「期待到达的哈希+颜色」；每行先并拢所有指向本提交的槽位（合并线收进主槽位
+     * 色），无来源则取首个空槽/追加；首父继承本行槽位（线穿过节点延续），次父取
+     * 空槽/追加（新色，同父去重）。输出每行：rec、节点 lane/颜色、进边（被消费
+     * 的线）、出边（父边）、直通竖线；x 单位=槽位序号，渲染层乘 GRAPH_GAP。窗口
+     * 末仍未消费的槽位由各行画到自身行底，load more 续传后自然延续。 */
+    function computeCommitGraph(records) {
+      const rows = [];
+      let slots = []; // Array<{hash, color} | null>
+      let colorSeq = 0;
+      let laneCount = 1;
+      const newColor = () => colorSeq++ % LANE_COLORS.length;
+      for (const rec of records ?? []) {
+        if (!rec || typeof rec.H !== "string" || rec.H === "") continue;
+        const prev = slots.slice();
+        const ins = [];
+        let lane = -1;
+        let laneColor = -1;
+        for (let i = 0; i < prev.length; i++) {
+          if (prev[i] && prev[i].hash === rec.H) {
+            ins.push({ x: i, color: prev[i].color });
+            if (lane < 0) {
+              lane = i;
+              laneColor = prev[i].color;
+            }
+          }
+        }
+        if (lane < 0) {
+          lane = prev.findIndex((s) => s === null);
+          if (lane < 0) lane = prev.length;
+          laneColor = newColor();
+        }
+        const next = prev.slice();
+        for (const e of ins) next[e.x] = null; // 被消费的线终结于本节点
+        const outs = [];
+        const parents = Array.isArray(rec.p) ? rec.p.filter((x) => typeof x === "string" && x !== "") : [];
+        parents.forEach((ph, pi) => {
+          let idx;
+          let color;
+          if (pi === 0) {
+            // 首父必须占节点槽位（线穿过节点延续）；父已被别的槽位等待也照建——
+            // 到时多线并拢进父节点，正是分叉的画法
+            idx = lane;
+            color = laneColor;
+          } else {
+            if (next.some((s) => s && s.hash === ph)) return;
+            idx = next.findIndex((s) => s === null);
+            if (idx < 0) {
+              idx = next.length;
+              next.push(null);
+            }
+            color = newColor();
+          }
+          next[idx] = { hash: ph, color };
+          outs.push({ x: idx, color });
+        });
+        const consumed = new Set(ins.map((e) => e.x));
+        const passes = [];
+        for (let i = 0; i < prev.length; i++) {
+          if (prev[i] && !consumed.has(i)) passes.push({ x: i, color: prev[i].color });
+        }
+        rows.push({ rec, lane, color: laneColor, ins, outs, passes });
+        slots = next;
+        while (slots.length > 0 && slots[slots.length - 1] === null) slots.pop(); // 尾部空槽回收
+        laneCount = Math.max(laneCount, slots.length);
+      }
+      return { rows, laneCount };
+    }
+
+    /** 单行图谱 SVG：进边（top→节点）/出边（节点→bottom）三次曲线（竖直切出、
+     *  竖直切入），直通槽位画竖线，节点实心圆。行盒高 GRAPH_ROW_H，
+     *  x(i)=i*GRAPH_GAP+GAP/2+2 */
+    function CommitGraphSvg({ row, laneCount }) {
+      const x = (i) => GRAPH_GAP / 2 + 2 + i * GRAPH_GAP;
+      const w = Math.max(1, laneCount) * GRAPH_GAP + 4;
+      const mid = GRAPH_ROW_H / 2;
+      const nx = x(row.lane);
+      const parts = [];
+      row.passes.forEach((p, i) =>
+        parts.push(
+          jsxRuntime.jsx("path", { d: `M ${x(p.x)} 0 L ${x(p.x)} ${GRAPH_ROW_H}`, stroke: p.color, strokeWidth: 2, fill: "none", opacity: 0.9 }, "p" + i),
+        ),
+      );
+      row.ins.forEach((e, i) => {
+        const ex = x(e.x);
+        const d =
+          ex === nx
+            ? `M ${ex} 0 L ${ex} ${mid}`
+            : `M ${ex} 0 C ${ex} ${mid}, ${nx} ${mid - GRAPH_R - 1}, ${nx} ${mid}`;
+        parts.push(jsxRuntime.jsx("path", { d, stroke: e.color, strokeWidth: 2, fill: "none", opacity: 0.9 }, "i" + i));
+      });
+      row.outs.forEach((e, i) => {
+        const ex = x(e.x);
+        const d =
+          ex === nx
+            ? `M ${nx} ${mid} L ${ex} ${GRAPH_ROW_H}`
+            : `M ${nx} ${mid} C ${nx} ${mid + GRAPH_R + 1}, ${ex} ${mid}, ${ex} ${GRAPH_ROW_H}`;
+        parts.push(jsxRuntime.jsx("path", { d, stroke: e.color, strokeWidth: 2, fill: "none", opacity: 0.9 }, "o" + i));
+      });
+      parts.push(jsxRuntime.jsx("circle", { cx: nx, cy: mid, r: GRAPH_R, fill: LANE_COLORS[row.color % LANE_COLORS.length] ?? "#888" }, "n"));
+      return jsxRuntime.jsx("svg", { className: "dshk-gsvg", width: w, height: GRAPH_ROW_H, viewBox: `0 0 ${w} ${GRAPH_ROW_H}`, children: parts });
+    }
+
+    function GitGraphPanel({ cwd, root, refreshRef, onOpenFile }) {
+      const [data, setData] = react.useState(null); // null=加载中；{available, records?, hasMore?}
+      const [error, setError] = react.useState(null);
+      const [sel, setSel] = react.useState(null); // null=列表；否则为选中的提交哈希
+      const [detail, setDetail] = react.useState(null); // null | {phase, meta?, files?}
+      const [more, setMore] = react.useState(false); // load more 在途
+      const fetchRef = react.useRef(null);
+      fetchRef.current = () => {
+        if (!cwd) return;
+        const c = new AbortController();
+        fetchGitLog(cwd, 200, 0, c.signal)
+          .then((b) => {
+            if (c.signal.aborted) return;
+            setError(null);
+            setData(b);
+          })
+          .catch((e) => {
+            if (!c.signal.aborted && e?.name !== "AbortError") setError(String(e?.message ?? e));
+          });
+      };
+      // load more：skip=已取条数续传，追加到已加载记录后（lane 几何对追加稳定——
+      // 新记录只会消费/延续已有槽位，不改变前面行的画法）
+      const loadMore = () => {
+        if (!cwd || more || !data || data.available !== true || data.hasMore !== true) return;
+        const c = new AbortController();
+        setMore(true);
+        fetchGitLog(cwd, 200, Array.isArray(data.records) ? data.records.length : 0, c.signal)
+          .then((b) => {
+            if (c.signal.aborted) return;
+            if (b.available !== true) throw new Error("unavailable");
+            setData((prev) => ({
+              available: true,
+              root: prev && prev.root,
+              records: [...(prev && Array.isArray(prev.records) ? prev.records : []), ...(Array.isArray(b.records) ? b.records : [])],
+              hasMore: b.hasMore === true,
+            }));
+          })
+          .catch(() => {})
+          .finally(() => setMore(false));
+      };
+      // 把本面板的刷新函数暴露给父级的 ⟳
+      if (refreshRef) refreshRef.current = () => fetchRef.current();
+      react.useEffect(() => {
+        if (fetchRef.current) fetchRef.current();
+        const tick = () => {
+          if (document.visibilityState !== "hidden" && fetchRef.current) fetchRef.current();
+        };
+        const unsubscribe = subscribeGitTick(tick);
+        document.addEventListener("visibilitychange", tick);
+        window.addEventListener("focus", tick);
+        return () => {
+          unsubscribe();
+          document.removeEventListener("visibilitychange", tick);
+          window.removeEventListener("focus", tick);
+        };
+      }, [cwd]);
+
+      /** 详情拉取控制器（供返回键中止在途请求） */
+      const detailFetchRef = react.useRef(null);
+      const openDetail = (hash) => {
+        setSel(hash);
+        setDetail({ phase: "loading" });
+        const c = new AbortController();
+        detailFetchRef.current = c;
+        fetchGitShow(cwd, hash, c.signal)
+          .then((b) => {
+            if (c.signal.aborted) return;
+            if (b.available !== true) throw new Error("unavailable");
+            setDetail({ phase: "ready", meta: b.meta, files: b.files || [] });
+          })
+          .catch((e) => {
+            if (!c.signal.aborted) setDetail({ phase: "error", error: String(e?.message ?? e) });
+          });
+      };
+      const closeDetail = () => {
+        const c = detailFetchRef.current;
+        if (c) {
+          try {
+            c.abort();
+          } catch {
+            // 已结束
+          }
+        }
+        setSel(null);
+        setDetail(null);
+      };
+
+      const renderRefChips = (d) => {
+        const decs = parseDecoration(d);
+        return decs.map((r, i) =>
+          jsxRuntime.jsx(
+            "span",
+            {
+              className: "dshk-gref",
+              "data-k": r.kind,
+              title: r.kind === "head" && r.pointsTo ? `HEAD → ${r.pointsTo}` : r.name,
+              children: r.kind === "head" && r.pointsTo ? r.pointsTo : r.name,
+            },
+            `${r.kind}-${i}`,
+          ),
+        );
+      };
+
+      if (!cwd) {
+        return jsxRuntime.jsx("div", { className: "dshk-note", children: t("noCwd") });
+      }
+
+      // ── 提交详情子视图 ──
+      if (sel !== null) {
+        const isMerge = typeof detail?.meta?.parents === "string" && detail.meta.parents.trim().includes(" ");
+        return jsxRuntime.jsxs("div", { className: "dshk-graph", children: [
+          jsxRuntime.jsxs("div", { className: "dshk-gdetail-head", children: [
+            jsxRuntime.jsx("button", {
+              type: "button",
+              className: "dshk-btn-cancel",
+              onClick: closeDetail,
+              children: t("scBack"),
+            }),
+            jsxRuntime.jsx("span", { className: "dshk-gdetail-title", children: t("scCommitDetail") }),
+          ] }),
+          detail === null || detail.phase === "loading"
+            ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("treeLoading") })
+            : detail.phase === "error"
+              ? jsxRuntime.jsx("div", { className: "dshk-note", children: `${t("scGraphFail")}：${detail.error}` })
+              : jsxRuntime.jsxs("div", { children: [
+                  jsxRuntime.jsxs("div", { className: "dshk-gmeta", children: [
+                    jsxRuntime.jsxs("div", { className: "dshk-gmeta-row", children: [
+                      jsxRuntime.jsx("span", { className: "dshk-gmeta-k", children: t("scAuthored") }),
+                      jsxRuntime.jsx("span", { children: detail.meta.an }),
+                      jsxRuntime.jsx("span", { className: "dshk-gmeta-date", children: detail.meta.ad }),
+                    ] }),
+                    jsxRuntime.jsx("div", { className: "dshk-gmeta-hash", children: detail.meta.H }),
+                    jsxRuntime.jsx("div", { className: "dshk-gmeta-subj", children: detail.meta.s }),
+                    detail.meta.b
+                      ? jsxRuntime.jsx("div", { className: "dshk-gmeta-body", children: detail.meta.b })
+                      : null,
+                    isMerge
+                      ? jsxRuntime.jsx("div", { className: "dshk-gmeta-merge", children: `${t("scMergedCommit")}：${detail.meta.parents}` })
+                      : null,
+                  ] }),
+                  jsxRuntime.jsx("div", { className: "dshk-gfiles-head", children: t("scFiles") }),
+                  detail.files.length === 0
+                    ? jsxRuntime.jsx("div", { className: "dshk-note", children: isMerge ? t("scMergedCommit") : t("scEmpty") })
+                    : detail.files.map((f) => {
+                        const st = f.st === "C" ? "R" : f.st;
+                        const base = f.path.split(/[\\/]/).pop() || f.path;
+                        return jsxRuntime.jsxs(
+                          "div",
+                          {
+                            className: "dshk-gfile",
+                            title: f.abs,
+                            onClick: () => onOpenFile(f.abs, false, false, sel),
+                            children: [
+                              jsxRuntime.jsx("span", { className: "dshk-gitbadge", "data-k": st, children: st }),
+                              jsxRuntime.jsx("span", { className: "dshk-name", children: base }),
+                              jsxRuntime.jsx("span", { className: "dshk-dir", children: f.path }),
+                            ],
+                          },
+                          f.path,
+                        );
+                      }),
+                ] }),
+        ] });
+      }
+
+      // ── 图谱列表 ──
+      if (data === null) {
+        return jsxRuntime.jsx("div", { className: "dshk-note", children: t("treeLoading") });
+      }
+      if (data.available !== true) {
+        return jsxRuntime.jsx("div", { className: "dshk-note", children: error ? `${t("scGraphFail")}：${error}` : t("scGraphFail") });
+      }
+      const records = Array.isArray(data.records) ? data.records : [];
+      if (records.length === 0) {
+        return jsxRuntime.jsx("div", { className: "dshk-note", children: t("scGraphEmpty") });
+      }
+      const geo = computeCommitGraph(records);
+      const fmtDate = (at) => {
+        if (!Number.isFinite(at) || at <= 0) return "";
+        const d = new Date(at * 1000);
+        const p2 = (v) => String(v).padStart(2, "0");
+        return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+      };
+      const relTime = (at) => {
+        if (!Number.isFinite(at) || at <= 0) return "";
+        const diff = Date.now() / 1000 - at;
+        if (diff < 90) return resolveZh() ? "刚刚" : "just now";
+        if (diff < 3600) return resolveZh() ? `${Math.round(diff / 60)} 分钟前` : `${Math.round(diff / 60)}m ago`;
+        if (diff < 86400) return resolveZh() ? `${Math.round(diff / 3600)} 小时前` : `${Math.round(diff / 3600)}h ago`;
+        if (diff < 86400 * 30) return resolveZh() ? `${Math.round(diff / 86400)} 天前` : `${Math.round(diff / 86400)}d ago`;
+        return fmtDate(at).slice(0, 10);
+      };
+      return jsxRuntime.jsx("div", {
+        className: "dshk-graph",
+        children: [
+          ...geo.rows.map((row, i) =>
+            jsxRuntime.jsxs(
+              "div",
+              {
+                className: "dshk-grow dshk-grow-click",
+                title: `${row.rec.an} · ${fmtDate(row.rec.at)}\n${row.rec.s}`,
+                onClick: () => openDetail(row.rec.H),
+                children: [
+                  jsxRuntime.jsx(CommitGraphSvg, { row, laneCount: geo.laneCount }),
+                  renderRefChips(row.rec.d),
+                  jsxRuntime.jsx("span", { className: "dshk-ghash", children: row.rec.h }),
+                  jsxRuntime.jsx("span", { className: "dshk-gsubj", children: row.rec.s }),
+                  jsxRuntime.jsx("span", { className: "dshk-gauthor", children: row.rec.an }),
+                  jsxRuntime.jsx("span", { className: "dshk-gdate", title: fmtDate(row.rec.at), children: relTime(row.rec.at) }),
+                ],
+              },
+              `${row.rec.H}-${i}`,
+            ),
+          ),
+          data.hasMore === true
+            ? jsxRuntime.jsx(
+                "button",
+                { type: "button", className: "dshk-gmore", disabled: more === true, onClick: loadMore, children: more ? t("contentLoading") : t("scGraphMore") },
+                "more",
+              )
+            : null,
+        ],
+      });
+    }
+
+
+    /** SCM 专用 diff 签（原 FileEditorPane 瘦身）：源代码管理/提交图谱点文件在
+     *  这里看差异。工作区文件的预览/编辑已退役——树与对话区点击改投官方右栏
+     *  文件签。commit（可选）= 提交钉定模式（图谱提交详情进入，diff 与该提交的
+     *  第一父对比）；deleted=工作区已删除（纯红展示全文）；untracked=未跟踪
+     *  （整文件按新增着色，内容来自 read）。 */
+    function DiffPane({ path, untracked, deleted, cwd, commit }) {
+      const [state, setState] = react.useState({ phase: "loading" });
+      const [diff, setDiff] = react.useState({ phase: "loading" });
+      const [reloadNonce, setReloadNonce] = react.useState(0);
+      // deleted 翻转（同一文件先打开后被删 / ↩ 恢复后重开）：实例不重挂（key=path），
+      // 手动跟上——解除删除态时重读内容（未跟踪/着色用），进删除态无需动作
+      //（渲染分支直接读 deleted prop）
+      const deletedRef = react.useRef(deleted);
+      react.useEffect(() => {
+        if (deletedRef.current === deleted) return;
+        deletedRef.current = deleted;
+        if (deleted !== true) setReloadNonce((n) => n + 1);
+      }, [deleted]);
+
+      // diff 拉取（静默版）：已有内容时后台更新不闪「加载中」，数据到位再整体替换
+      const diffFetchRef = react.useRef(null);
+      diffFetchRef.current = () => {
+        const c = new AbortController();
+        const commitQ = commit ? `&commit=${encodeURIComponent(commit)}` : "";
+        kitGetJson(`/dsh-kit/git/diff?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? path)}${commitQ}`, c.signal, (b) => b.available === true)
+          .then((b) => {
+            if (!c.signal.aborted)
+              setDiff({
+                phase: "ready",
+                untracked: b.untracked === true,
+                clean: b.clean === true,
+                base: typeof b.base === "string" ? b.base : "",
+                content: typeof b.content === "string" ? b.content : undefined,
+                blobMissing: b.blobMissing === true,
+                text: typeof b.diff === "string" ? b.diff : null,
+              });
+          })
+          .catch((error) => {
+            if (!c.signal.aborted && error?.name !== "AbortError") setDiff({ phase: "error", error: String(error?.message ?? error) });
+          });
+      };
+      // diff 数据：进入时拉一次，可见期间低频静默跟随（AI 边改边看也能跟上），
+      // 转回可见/聚焦立即补。commit 钉定模式的 diff 不可变（固定对某提交的
+      // 第一父），拉一次即可不轮询
+      react.useEffect(() => {
+        if (!cwd) return undefined;
+        setDiff({ phase: "loading" });
+        if (diffFetchRef.current) diffFetchRef.current();
+        if (commit) return undefined;
+        const tick = () => {
+          if (document.visibilityState !== "hidden" && diffFetchRef.current) diffFetchRef.current();
+        };
+        const unsubscribe = subscribeGitTick(tick);
+        document.addEventListener("visibilitychange", tick);
+        window.addEventListener("focus", tick);
+        return () => {
+          unsubscribe();
+          document.removeEventListener("visibilitychange", tick);
+          window.removeEventListener("focus", tick);
+        };
+      }, [path, cwd, commit]);
+
+      // 内容读取：只服务于 diff 着色（常规视图的新像 = 盘上内容；未跟踪 = 整文件
+      // 按新增着色）。截断（>512KB）或读失败时着色回落原始 patch，不作为错误展示。
+      // 已删除文件读不到，不发请求
+      react.useEffect(() => {
+        if (deleted === true) return undefined;
+        const controller = new AbortController();
+        kitGetJson(`/dsh-kit/read?path=${encodeURIComponent(path)}`, controller.signal, (b) => typeof b.content !== "undefined")
+          .then((body) => {
+            if (controller.signal.aborted) return;
+            setState({ phase: "ready", body });
+          })
+          .catch(() => {
+            /* 读失败只降着色，不作为错误展示 */
+          });
+        return () => controller.abort();
+      }, [path, reloadNonce, deleted]);
+
+      /** diff 视图：优先全文件着色（hunk 套回完整新像，删除红/新增绿）；
+       *  截断大文件或 hunk 对不上时回退原始 patch 渲染。新像来源两分支——
+       *  常规视图 = 当前盘上内容；commit 钉定模式 = 该提交时刻的内容（端点
+       *  随 diff 带回，盘上已是别的版本不能叠）。commit 模式下该提交已删除的
+       *  文件（新像不存在）与工作区删除文件同款纯红展示；内容缺失（过大/二进制）
+       *  回落原始 patch。顶部基线说明见 renderDiffView 包装层。 */
+      const renderDiffBody = () => {
+        if (diff.phase === "loading") return jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentLoading") });
+        if (diff.phase === "error")
+          return jsxRuntime.jsx("div", { className: "dshk-note", title: diff.error, children: `${t("diffFail")}：${diff.error}` });
+        if (deleted === true || (commit && diff.blobMissing === true)) {
+          // 已删除文件：不看 raw diff（diff --git/index/--- 等元数据是噪音）——
+          // 只抽删除行、剥掉前缀 `-`，整块按"已删除"红色展示（= 被删文件全文）。
+          // commit 钉定模式下该提交已删除的文件（新像不存在）同款处理
+          if (diff.clean || diff.text === null) return jsxRuntime.jsx("div", { className: "dshk-note", children: t("diffEmpty") });
+          const removed = diff.text
+            .split("\n")
+            .filter((l) => l.startsWith("-") && !l.startsWith("---"))
+            .map((l) => (l.length > 1 ? l.slice(1) : ""));
+          if (removed.length === 0) return jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentEmpty") });
+          return jsxRuntime.jsx(
+            "div",
+            {
+              className: "dshk-inline",
+              children: removed.map((text, i) =>
+                jsxRuntime.jsx("div", { className: "dshk-il-del", children: text === "" ? " " : text }, i),
+              ),
+            },
+          );
+        }
+        if (diff.untracked) {
+          // 未跟踪文件没有基线版本：整文件按"新增"着色展示（对齐 git 对未跟踪
+          // 文件的 diff 语义，避免只给一行空提示）；内容截断/未就绪时才回落提示
+          const content =
+            state.body && !state.body.truncated && typeof state.body.content === "string" ? state.body.content : null;
+          if (content !== null) {
+            return jsxRuntime.jsx(
+              "div",
+              {
+                className: "dshk-inline",
+                children: content.split("\n").map((text, i) =>
+                  jsxRuntime.jsx("div", { className: "dshk-il-add", children: text === "" ? " " : text }, i),
+                ),
+              },
+            );
+          }
+          return jsxRuntime.jsx("div", { className: "dshk-note", children: t("diffUntracked") });
+        }
+        if (diff.clean || diff.text === null) return jsxRuntime.jsx("div", { className: "dshk-note", children: t("diffEmpty") });
+
+        // 新像：常规视图 = 当前盘上内容（read 带回）；commit 钉定 = 该提交时刻的
+        // 内容（diff 响应带回，不读盘——盘上已是别的版本，套上去会错位着色）。
+        // 钉定模式无新像（过大/二进制）时 null → 回落原始 patch
+        const newLines =
+          commit
+            ? typeof diff.content === "string"
+              ? diff.content.split("\n")
+              : null
+            : state.body && !state.body.truncated && typeof state.body.content === "string"
+              ? state.body.content.split("\n")
+              : null;
+        const rows = newLines ? buildInlineRows(diff.text, newLines) : null;
+        if (rows) {
+          return jsxRuntime.jsx(
+            "div",
+            {
+              className: "dshk-inline",
+              children: rows.map(([type, text], i) =>
+                jsxRuntime.jsx("div", { className: `dshk-il-${type}`, children: text === "" ? " " : text }, i),
+              ),
+            },
+          );
+        }
+        const lines = diff.text.split("\n");
+        return jsxRuntime.jsx("div", {
+          className: "dshk-diff",
+          children: lines.map((line, i) => {
+            const cls = line.startsWith("+")
+              ? "add"
+              : line.startsWith("-")
+                ? "del"
+                : line.startsWith("@@")
+                  ? "hunk"
+                  : line.startsWith("diff ") || line.startsWith("index ") || line.startsWith("--- ") || line.startsWith("+++ ")
+                    ? "meta"
+                    : "ctx";
+            return jsxRuntime.jsx("div", { className: `dshk-diff-${cls}`, children: line === "" ? " " : line }, i);
+          }),
+        });
+      };
+      const renderDiffView = () => {
+        const body = renderDiffBody();
+        if (commit && diff.phase === "ready") {
+          return jsxRuntime.jsxs("div", {
+            className: "dshk-diffwrap",
+            children: [
+              jsxRuntime.jsx("div", {
+                className: "dshk-diffnote",
+                children: diff.base ? tf("diffBaseParent", { base: diff.base }) : t("diffBaseRoot"),
+              }),
+              body,
+            ],
+          });
+        }
+        return body;
+      };
+
+      // 头部只剩路径（签名由页签 chip 承担）；正文恒为 diff 视图
+      return jsxRuntime.jsxs(jsxRuntime.Fragment, {
+        children: [
+          jsxRuntime.jsx("div", {
+            className: "dshk-head",
+            children: jsxRuntime.jsx("span", { className: "dshk-title", children: path }),
+          }),
+          deleted === true
+            ? jsxRuntime.jsxs(jsxRuntime.Fragment, {
+                children: [
+                  jsxRuntime.jsx("div", { className: "dshk-note", children: t("pvDeletedNote") }),
+                  jsxRuntime.jsx("div", { className: "dshk-pane-body", children: renderDiffView() }),
+                ],
+              })
+            : jsxRuntime.jsx("div", { className: "dshk-pane-body", children: renderDiffView() }),
+        ],
+      });
+    }
+
+    /** 文件树入口：非文件树态 → 打开文件树（顺带展开收起的侧栏）；已是 → 关闭回
+     *  会话列表。走单槽互斥补丁（打开文件树同时让出源代码管理/知识库目录/日程
+     *  待办那一格），关闭动作保留已打开的文件标签（标签有独立 ✕） */
+    function FileTreeEntry() {
+      const ui = useKitUi();
+      const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
+      if (cfg.fileTreeEnabled === false) return null;
+      return jsxRuntime.jsx(KitTip, {
+        label: t("treeLabel"),
+        command: "dsh-kit-files.tree.toggle",
+        side: "top",
+        children: jsxRuntime.jsx("button", {
+          type: "button",
+          className: "dshk-btn dshk-enbtn",
+          "aria-pressed": ui.treeOpen,
+          onClick: () => {
+            if (!ui.treeOpen) expandSidebarNow();
+            setKitUi(sidebarViewPatch(ui.treeOpen ? null : "tree"));
+          },
+          children: jsxRuntime.jsx(FolderIcon, {}),
+        }),
+      });
+    }
+
+    /** 源代码管理入口：同文件树语义（互斥占格，关闭保留已打开的文件标签） */
+    function ScmEntry() {
+      const ui = useKitUi();
+      const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
+      if (cfg.sourceControlEnabled === false) return null;
+      return jsxRuntime.jsx(KitTip, {
+        label: t("scTitle"),
+        command: "dsh-kit-files.scm.toggle",
+        side: "top",
+        children: jsxRuntime.jsx("button", {
+          type: "button",
+          className: "dshk-btn dshk-enbtn",
+          "aria-pressed": ui.gitOpen,
+          onClick: () => {
+            if (!ui.gitOpen) expandSidebarNow();
+            setKitUi(sidebarViewPatch(ui.gitOpen ? null : "scm"));
+          },
+          children: jsxRuntime.jsx(BranchIcon, {}),
+        }),
+      });
+    }
+
+    // ─────────── 插件体 ───────────
+    function apply(ctx) {
+      // 组件配置页：挂本组件行（行由 dsh-kit bundle 的 patch 声明，槽位 key =
+      // <包名>#<行id>，两种包名口径各挂一枚防宿主改口径）
+      for (const key of ["dsh-kit#files", "dsh-kit-files#files"]) {
+        ctx.slots.inject("plugins.row.config", () =>
+          ctx.slots.register({ name: "plugins.row.config", key }, FilesConfigPage),
+        );
+      }
+      // 输入框入口（官方 conversation 挂载期声明槽位，inject 等声明落地再注册——
+      // 直接 register 会炸整树 boot）。开关门控在组件内读本组件配置（关 = 渲染
+      // null，volatile 热提交即时生效）
+      ctx.slots.inject("conversation.input.left", () =>
+        ctx.slots.register({ name: "conversation.input.left", id: "dsh-kit-filetree", order: 10 }, FileTreeEntry),
+      );
+      ctx.slots.inject("conversation.input.left", () =>
+        ctx.slots.register({ name: "conversation.input.left", id: "dsh-kit-scm", order: 11 }, ScmEntry),
+      );
+      // 侧栏浏览区 tree/git 分支渲染器：root 的 sidebar.workspaces 单槽分发到这
+      // （owner 携带官方注入的 wide，收起态各占用者自判不渲染）
+      dock.sidebarView.renderer = ({ ui, cwd, owner }) => {
+        const side = owner ?? {};
+        if (side.wide === false) return null;
+        if (ui.gitOpen) {
+          return jsxRuntime.jsx(GitChangesPanel, { cwd, onOpenFile: (p, untracked, deleted, commit) => openFileAndDock(p, "scm", untracked === true, deleted === true, commit), ...owner });
+        }
+        if (ui.treeOpen) {
+          return jsxRuntime.jsx(FileTreePanel, { cwd, onOpenFile: (p) => openTreeFile(p), ...owner });
+        }
+        return null;
+      };
+      // 官方快捷键服务（0.1.7-rc.2+）：文件树/源代码管理两条命令注册进官方页。
+      // 运行期 inject：老宿主没有该服务时只是没键位，其余功能照常。
+      ctx.inject(["shortcuts"], registerShortcuts);
+      void loadCfg(); // 拉配置喂门控（失败保持内置默认）
+      injectStyles();
+    }
+
+    exports.inject = ["slots"];
+    exports.apply = apply;
+    // 渲染级检查与面板引用供测试断言；DiffPane 另挂 root 的 diff 正文座（座对象
+    // 与 root 的 kitBase 共享同一引用，root 读得到）
+    exports.DiffPane = DiffPane;
+    dock.diffPane.Component = DiffPane;
+    exports.TreeNode = TreeNode;
+    exports.FileTreePanel = FileTreePanel;
+    exports.GitChangesPanel = GitChangesPanel;
+    exports.GitGraphPanel = GitGraphPanel;
+    exports.CommitGraphSvg = CommitGraphSvg;
+    exports.GitBranchMenu = GitBranchMenu;
+    exports.computeCommitGraph = computeCommitGraph;
+    exports.fetchTree = fetchTree;
+    exports.FileTreeEntry = FileTreeEntry;
+    exports.ScmEntry = ScmEntry;
+    return module.exports;
+};
+
+    // ── dsh-kit-monitor 组件（用量与监视）──
+// dsh-kit-monitor 浏览器半边 —— 用量与监视组件的 client 面。
+// 现收纳：余额与用量芯片（UsageLine）+ 会话监视（429 续跑器 / 死循环打断的
+// MonitorLine 与头部 429 状态条 MonitorBgAction）+ 会话通知（桌面通知/标题闪烁），
+// 组件化自主包迁入。
+//
+// 数据走宿主 /dsh-kit/usage（key 在宿主侧复用模型配置，浏览器拿不到）。状态带
+// 右缘只出**一张**芯片：当前会话选中的模型 provider（modelDirectories 服务按
+// sessionId 给的共享目录 store，composer 模型座同源）归类出 deepseek/opencode/
+// zai 卡位，端点没配对应 provider 或识别不出（如 sensenova）= 不出。芯片只放
+// 数值（¥余额 / 5h 窗口百分比），全名在悬停提示；点芯片浮层贴正上方只出该家
+// 明细——定位与关闭复用官方 primitives 的 useAnchoredPosition /
+// useDismissOnOutsidePointer / Tooltip，面板样式复刻官方 ContextMeter 浮层
+// （哈希类名复用不了，CSS 原样抄）；primitives 缺位（老宿主）降级为右下角
+// 固定浮层、无 Tooltip。modelDirectories 是懒就绪服务：就绪时 version++ 通知
+// 订阅者重跑 effect，否则「服务后到」的挂载永远拿不到数据源。
+//
+// 开关 = 本组件自己的 Config（usageEnabled），经 /dsh-kit-monitor/config 拉取：
+// 关 = 端点 403 + 芯片不注册数据源，两者一致由同一份配置驱动。
+    const monitorModule = (kit, require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+    const react = require("react");
+    const jsxRuntime = require("react/jsx-runtime");
+    const reactDom = require("react-dom");
+    const dock = kit;
+    const { kitJson, resolveZh, subscribeLocale, getLocaleVersion } = dock;
+    let dswPrimIcons = null;
+    try { dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 回退自绘 */ }
+    const dswIcon = (...names) => {
+      for (const n of names) {
+        const c = dswPrimIcons ? dswPrimIcons[n] : null;
+        if (typeof c === "function" || typeof c === "object") return c;
+      }
+      return null;
+    };
+
+    // 组件私有文案（usage* 词条随芯片迁入本包）；语言判定/切换响应来自 dock
+    const zh = {
+      usageRefresh: "刷新",
+      usageUpdatedAt: "更新于",
+      usageDeepseek: "DeepSeek 余额",
+      usageOpencode: "OpenCode Go",
+      usageZai: "GLM Coding Plan",
+      usageAvailable: "可用",
+      usagePaused: "余额不足或已停机",
+      usageBalanceTotal: "总余额",
+      usageBalanceGranted: "赠送",
+      usageBalanceToppedUp: "充值",
+      usageW5h: "5 小时窗口",
+      usageWeek: "本周窗口",
+      usageMonth: "本月窗口",
+      usageResets: "重置",
+      usageLevel: "套餐",
+      usageNoCard: "模型配置未提供此服务的用量数据",
+      usageOfficialPage: "官方用量页",
+      // 会话监视（429 续跑 / 死循环打断）
+      monitorContinueText: "继续",
+      monitorLoopBreakText: "检测到你的输出在重复相同内容，可能陷入了死循环。请立即停止重复，简要说明当前状态，换一种方式继续完成任务。",
+      monitorCancel: "取消",
+      monitorDismiss: "忽略",
+      monitorRepeatErr: "重复输出（死循环征兆）",
+      monitorErr429: "请求被限流（429）",
+      monitorStopping: "监视：检测到重复输出（死循环征兆），正在停止当前回合…",
+      monitorCapped: "监视：已连续自动继续 {max} 次，暂停自动续跑（重复输出仍会中止）",
+      monitorAutoIn: "监视：检测到{err}，{sec} 秒后自动继续（第 {n}/{max} 次）",
+      monitorBgTitle: "429 自动续跑",
+      monitorBgItem: "{title}：{sec} 秒后自动继续（第 {n}/{max} 次）",
+      monitorBgCapped: "{title}：已连续自动继续 {max} 次，暂停（正常完成一轮后恢复）",
+      // 会话通知
+      notifyCompleteTitle: "{title} · 回合完成",
+      notifyCompleteBody: "点击回到该会话",
+      notifyCompactTitle: "{title} · 上下文压缩完成",
+      notifyCompactBody: "上下文已压缩完成",
+      notifyCompactBodyTokens: "已压缩约 {tokens} tokens 的历史",
+      notifyCappedTitle: "{title} · 自动续跑已暂停",
+      notifyCappedBody: "连续限流失败，已停止自动重试，点开看看",
+      notifyQuestionTitle: "{title} · 等你回答",
+      notifyQuestionBody: "agent 提了一个问题",
+      notifyApprovalTitle: "{title} · 等你批准",
+      notifyApprovalBody: "{tool} 等待批准",
+      notifyPlanTitle: "{title} · 等你批准计划",
+      notifyPlanBody: "agent 提交了计划等你批准",
+      notifyToolFallback: "工具调用",
+      // 本组件配置页字段（骨架通用文案在 dock）
+      kcfgGroupMonitor: "会话监视与通知",
+      kcfgNotifyEnabled: "会话桌面通知",
+      kcfgNotifyEnabledHint: "页面不在前台时，回合收尾/压缩完成/agent 提问弹桌面通知。",
+      kcfgMonitorEnabled: "会话监视（429 续跑 / 死循环打断）",
+      kcfgMonitorEnabledHint: "监视列表内所有会话：429 限流自动续跑 + 当前会话死循环打断。",
+      kcfgMonitorWaitMs: "429 等待毫秒（5000–600000）",
+      kcfgMonitorWaitMsHint: "429 限流后等待多少毫秒再自动续跑。",
+      kcfgMonitorMaxAuto: "429 连续续跑上限（1–10）",
+      kcfgMonitorMaxAutoHint: "一轮正常收尾即清零。",
+      kcfgMonitorRepeatThreshold: "死循环判定重复次数（2–10）",
+      kcfgMonitorRepeatThresholdHint: "流式输出尾部自重叠达到该次数即停止并发打断话术。",
+    };
+    const en = {
+      usageRefresh: "Refresh",
+      usageUpdatedAt: "Updated",
+      usageDeepseek: "DeepSeek balance",
+      usageOpencode: "OpenCode Go",
+      usageZai: "GLM Coding Plan",
+      usageAvailable: "available",
+      usagePaused: "low balance or suspended",
+      usageBalanceTotal: "Total",
+      usageBalanceGranted: "Granted",
+      usageBalanceToppedUp: "Topped up",
+      usageW5h: "5-hour window",
+      usageWeek: "Weekly window",
+      usageMonth: "Monthly window",
+      usageResets: "resets",
+      usageLevel: "Plan",
+      usageNoCard: "No usage data for this service in the model config",
+      usageOfficialPage: "Usage dashboard",
+      monitorContinueText: "Continue",
+      monitorLoopBreakText: "Your output appears to be repeating itself, which suggests an infinite loop. Stop repeating immediately, briefly state the current status, and continue the task in a different way.",
+      monitorCancel: "Cancel",
+      monitorDismiss: "Dismiss",
+      monitorRepeatErr: "repeated output (dead-loop sign)",
+      monitorErr429: "rate limit (429)",
+      monitorStopping: "Monitor: repeated output detected (dead-loop sign), stopping the current turn…",
+      monitorCapped: "Monitor: auto-continued {max} times in a row, pausing auto-continue (repeats are still stopped)",
+      monitorAutoIn: "Monitor: {err}; auto-continue in {sec}s (attempt {n}/{max})",
+      monitorBgTitle: "429 auto-continue",
+      monitorBgItem: "{title}: auto-continue in {sec}s (attempt {n}/{max})",
+      monitorBgCapped: "{title}: paused after {max} consecutive continues (resumes after one clean round)",
+      notifyCompleteTitle: "{title} · turn finished",
+      notifyCompleteBody: "Click to return to this session",
+      notifyCompactTitle: "{title} · context compacted",
+      notifyCompactBody: "Context compaction finished",
+      notifyCompactBodyTokens: "Compacted ~{tokens} tokens of history",
+      notifyCappedTitle: "{title} · auto-continue paused",
+      notifyCappedBody: "Repeated rate-limit failures stopped the auto-retry — open it to take a look",
+      notifyQuestionTitle: "{title} · waiting for your answer",
+      notifyQuestionBody: "The agent asked a question",
+      notifyApprovalTitle: "{title} · waiting for approval",
+      notifyApprovalBody: "{tool} awaits approval",
+      notifyPlanTitle: "{title} · plan awaiting approval",
+      notifyPlanBody: "The agent submitted a plan for your approval",
+      notifyToolFallback: "A tool call",
+      kcfgGroupMonitor: "Session monitor & notifications",
+      kcfgNotifyEnabled: "Session desktop notifications",
+      kcfgNotifyEnabledHint: "Desktop-notify on turn completion / compaction / agent questions while the page is in the background.",
+      kcfgMonitorEnabled: "Session monitor (429 resume / loop interrupt)",
+      kcfgMonitorEnabledHint: "Watch every listed session: auto-resume on 429 rate limits + loop interruption for the current session.",
+      kcfgMonitorWaitMs: "429 wait in ms (5000–600000)",
+      kcfgMonitorWaitMsHint: "How long to wait after a 429 before auto-resuming.",
+      kcfgMonitorMaxAuto: "429 consecutive resume cap (1–10)",
+      kcfgMonitorMaxAutoHint: "One clean round resets the counter.",
+      kcfgMonitorRepeatThreshold: "Loop detection repeat count (2–10)",
+      kcfgMonitorRepeatThresholdHint: "Stop the turn and send the nudge once streamed output self-overlaps this many times.",
+    };
+    const lang = () => (resolveZh() ? zh : en);
+    const t = (key) => lang()[key] ?? key;
+
+    // 组件配置快照：拉本组件自己的 /dsh-kit-monitor/config（用量开关 + 监视/通知
+    // 全部字段——组件的 Config schema 是唯一真源）。快照形状与主包同款
+    // { status:'ready', value }；端点不可达按全默认处理（与门控同源语义）。
+    const M_CFG_DEFAULTS = {
+      usageEnabled: false,
+      monitorEnabled: true,
+      monitorWaitMs: 15000,
+      monitorMaxAuto: 5,
+      monitorRepeatThreshold: 3,
+      notifyEnabled: true,
+    };
+    let cfgSnap = null;
+    const cfgSubs = new Set();
+    async function loadCfg() {
+      let value = null;
+      try {
+        const v = await kitJson("/dsh-kit-monitor/config", undefined, (b) => b !== null && typeof b === "object");
+        value = v;
+      } catch {
+        value = null; // 端点不可达：null → cfgFromSnapshot 走内置默认
+      }
+      cfgSnap = value && typeof value === "object" ? { status: "ready", value } : null;
+      for (const fn of cfgSubs) {
+        try {
+          fn();
+        } catch {
+          /* 订阅者已卸载 */
+        }
+      }
+    }
+    const subscribeCfg = (fn) => {
+      cfgSubs.add(fn);
+      return () => cfgSubs.delete(fn);
+    };
+    const getCfgSnapshot = () => cfgSnap;
+    /** 从快照提取生效配置（字段缺失/非法逐项回退默认） */
+    function cfgFromSnapshot(snap) {
+      const out = { ...M_CFG_DEFAULTS };
+      if (!snap || snap.status !== "ready" || !snap.value || typeof snap.value !== "object") return out;
+      const v = snap.value;
+      out.usageEnabled = v.usageEnabled === true;
+      out.monitorEnabled = v.monitorEnabled !== false;
+      out.monitorWaitMs =
+        Number.isInteger(v.monitorWaitMs) && v.monitorWaitMs >= 5000 && v.monitorWaitMs <= 600000
+          ? v.monitorWaitMs
+          : M_CFG_DEFAULTS.monitorWaitMs;
+      out.monitorMaxAuto =
+        Number.isInteger(v.monitorMaxAuto) && v.monitorMaxAuto >= 1 && v.monitorMaxAuto <= 10
+          ? v.monitorMaxAuto
+          : M_CFG_DEFAULTS.monitorMaxAuto;
+      out.monitorRepeatThreshold =
+        Number.isInteger(v.monitorRepeatThreshold) && v.monitorRepeatThreshold >= 2 && v.monitorRepeatThreshold <= 10
+          ? v.monitorRepeatThreshold
+          : M_CFG_DEFAULTS.monitorRepeatThreshold;
+      out.notifyEnabled = v.notifyEnabled !== false;
+      return out;
+    }
+    void loadCfg();
+    /** 带占位符的文案变体：tf("monitorAutoIn", { sec: 8 }) */
+    const tf = (key, vars) => {
+      let s = lang()[key] ?? key;
+      for (const [name, value] of Object.entries(vars ?? {})) s = s.split(`{${name}}`).join(String(value));
+      return s;
+    };
+    // 主视图会话行判定（0.1.6 会话面多实例化）随会话行共享收进 dock
+    const mainRowOf = dock.mainRowOf;
+
+    // ─────────── 会话监视：429 续跑器（所有会话）+ 死循环停止（仅当前会话）───────────
+    // 服务捕获座（apply 时赋值）：tick / 死循环停止 / 通知都要经它取 sessions 等
+    let slotsCtx = null;
+
+    // ─────────── 全局 429 续跑器（所有会话）+ 死循环停止（仅当前会话）───────────
+    // 续跑是单一全局机制（monitorTick 轮询）：监视会话列表里【所有】会话——人
+    // 发起任务后离开，任何会话被 429 打断都自动续到任务完成，不要求该会话页开着。
+    // 数据源全是官方面（宿主 0.1.5-rc.2 运行时实证）：
+    //   枚举+running ← sessions.list 快照（宿主经 api-session/status 推送，与
+    //                  会话页是否打开无关）；
+    //   失败判定    ← binding(id).session 快照 lastAgentError——agent-loop 对每次
+    //                 回合失败发 agent/error → 网关 api-session/error 广播 → 客户端
+    //                 镜像置位，文本含原始错误（如 `429: {"message":"inference
+    //                 exceeds tpm/rpm limit",...}`）；binding() 对列表内会话惰性
+    //                 物化镜像，事件窗口（open）完全不参与——错误走控制流广播。
+    //   归档过滤  ← workspaces.list 快照 archivedSessionIds（侧栏同款归档集）。
+    //                 归档不从 sessions.list 移除会话（宿主只在 UI 展示层过滤），
+    //                 监视器须自行排除：不监视不续跑、待发射计划作废、状态回收，
+    //                 否则归档会话残留的 429 标记会被静默续跑。
+    //   续跑动作    ← binding.session.prompt([{"继续"}],"queue")（composer 同款
+    //                 发送通道）；prompt 第一行同步清空 lastAgentError，同一条
+    //                 失败天然不会重复触发。
+    // 判定：空闲（list running=false）+ 镜像 lastAgentError 匹配限流特征 + 这次收尾
+    // 就是它造成的（新鲜）+ 未处置过（handledErr 记账去重）。只认措辞不认
+    // body code——sensenova 的 429 形态不定（insufficient_quota/429001/
+    // quota_exceeded_error 都见过，前者会被宿主误分类成 QUOTA 而不内部重试），
+    // 稳定的只有 "429: " 前缀（宿主 formatProviderError 拼的 HTTP 状态）和限流
+    // 措辞本身。不匹配的失败（AUTH/上下文超限等终态类）不自动续。
+    // 「新鲜」是这套判定的命门：镜像只在 prompt() 里清（宿主 client.js），回合正常
+    // 收尾、被用户手动停止都不清——镜像里躺着的 429 完全可能是上一轮的旧账。只看
+    // "空闲 + 有 429 文本"就续跑，会把已经做完的任务、被手动停下的任务再续一遍
+    // （实测踩过）。判据落在观察时序上：错误文本的首次出现时刻必须在本段空闲起点前
+    // MONITOR_ERR_WINDOW_MS 内（= 回合刚因它落地）；在镜像里躺过这个窗口的旧错误
+    // 一律不触发。页面打开时镜像里已有的错误按陈旧播种（errAt=0），刷新页面不会把
+    // 早已结束的任务补续一遍——代价是刷新后不再自动接续旧失败。
+    // 另有一道显式闸门：会话被「停止」过（官方停按钮与本插件的死循环打断都调
+    // session.cancel，见 monitorWrapCancel）之后落地的失败沿不续跑——429 与 abort
+    // 抢同一个回合时会留下一条看着很新鲜的失败沿，新鲜度判据挡不住它。
+    // 计数：每会话独立，继续后一轮正常收尾（lastAgentError 为 null）
+    // 即清零；连续续跑达 monitorMaxAuto 暂停（capped）。等待期到点时回合又跑起来
+    // （用户手动介入）即放弃本次。
+    // 约束：浏览器页必须开着（浏览器端方案的天性）；页面关着的兜底是宿主
+    // provider 级 retryPolicy（retryableCodes），与本监视器无关。
+    // 死循环停止（MonitorLine，composer.dock）：仅当前打开的会话，回合运行中每
+    // 1s 扫描流文本尾部自重叠 ≥monitorRepeatThreshold 次 → sessions.cancel() 停
+    // 止当前回合，停止完成后发循环打断话术——检测→停→话术一条链，独立于续跑器。
+    const MONITOR_TICK_MS = 2000; // 轮询周期：429 是分钟级窗口，2s 跟踪绰绰有余
+    const MONITOR_RATE_LIMIT_RE = /\b429\b|rate.?limit|tpm\/rpm/i;
+    const MONITOR_ERR_WINDOW_MS = 6000; // 「失败即收尾」窗口（3 个 tick）：错误首见时刻早于
+    // 本段空闲起点这么多，说明回合不是因它结束的（旧账），不续跑
+    const MONITOR_ABORT_WINDOW_MS = 6000; // 「刚被停止」窗口：停止后落地的失败沿不续跑
+    const MONITOR_CANCEL_MARK = "__dshkMonitorCancel"; // cancel 包装标记（防重复包装）
+    const MONITOR_SCAN_MS = 1000; // 扫描周期：检测延迟 1-2s；真实死循环以分钟计，绰绰有余
+    const MONITOR_MIN_BLOCK = 8; // 重复块最短长度：放过短分隔符/标点（--- 、换行噪声）
+    const MONITOR_MAX_BLOCK = 128; // 重复块最长扫描长度：兜住长句循环，扫描成本封顶
+
+    /** 续跑器活动状态快照（仅待续跑 / capped 会话上屏）：snapshot.items ×
+     *  {id,title,phase,fireAt,continues,max}。MonitorLine（当前会话条）与工作台
+     *  状态块共同订阅。快照整体换身（不可变），uSES 靠身份对比触发重渲染。 */
+    const monitorStore = {
+      snapshot: { items: [] },
+      __sig: "[]",
+      subs: new Set(),
+      emit() {
+        for (const s of this.subs) s();
+      },
+      subscribe(s) {
+        this.subs.add(s);
+        return () => this.subs.delete(s);
+      },
+    };
+    /** 每会话运行态（只在 tick 内读写）：running 上次已知位、continues 连续续跑
+     *  计数、capped 暂停标记、plan 待发射续跑、handledErr 已处置的错误文本（去重
+     *  记账）、materialized 镜像是否已物化、title/max 失败时缓存的展示字段；
+     *  errText/errAt = 镜像错误的观察记账（当前文本 + 首次出现时刻，0 表示陈旧或
+     *  首见播种），idleSince = 本段空闲的观察起点（0 = 正在跑），primed = 是否已过
+     *  首见播种 */
+    const monitorSessions = new Map();
+    /** 各会话最近一次「被停止」的时刻（sessionId -> 毫秒）。停止是用户明确的
+     *  "别继续"：停止瞬间若正好有一条失败沿落地（429 与 abort 抢同一个回合是
+     *  有的），按新鲜度判定会把它当成真失败又续一轮——这张表把那条沿挡掉 */
+    const monitorAborts = new Map();
+
+    /** 给会话实例的 cancel 包一层记账：官方 UI 的「停止」按钮与本插件的死循环
+     *  打断走的都是它，是浏览器端唯一能观察到"用户刚说了停"的地方。包不上
+     *  （方法缺失/对象冻结）就退化为只靠新鲜度判定，不影响续跑本身。
+     *  每个 tick 调一次：标记在实例上，重复调用是空操作；实例被宿主换掉时能重包。 */
+    function monitorWrapCancel(sessions, id) {
+      let sess = null;
+      try {
+        const b = sessions.binding(id);
+        sess = b ? b.session : null;
+      } catch {
+        return; // 会话刚移除 / 服务异常
+      }
+      if (!sess || typeof sess.cancel !== "function" || sess[MONITOR_CANCEL_MARK]) return;
+      const orig = sess.cancel;
+      try {
+        sess[MONITOR_CANCEL_MARK] = true;
+        sess.cancel = function (...args) {
+          monitorAborts.set(id, Date.now());
+          return orig.apply(this, args);
+        };
+      } catch {
+        /* 只读/冻结的实例：放弃记账 */
+      }
+    }
+
+    /** 取会话镜像快照；顺带完成惰性物化（binding 对列表内会话恒成功）。异常按
+     *  无镜像处理——调用方各自兜底。 */
+    function monitorSnapOf(sessions, id, st) {
+      try {
+        const b = sessions.binding(id);
+        if (b) {
+          st.materialized = true;
+          return b.session.getSnapshot();
+        }
+      } catch {
+        /* 会话刚移除 / 服务异常：按无镜像处理 */
+      }
+      return null;
+    }
+
+    /** 续跑器主循环入口：读真实依赖（slots/settings）后进核心 */
+    function monitorTick() {
+      if (!slotsCtx) return;
+      let cfg;
+      try {
+        cfg = cfgFromSnapshot(getCfgSnapshot());
+      } catch {
+        return;
+      }
+      if (!cfg.monitorEnabled) return;
+      let sessions;
+      try {
+        sessions = slotsCtx.get("sessions");
+      } catch {
+        return;
+      }
+      // 归档集合与 sessions 同源于 slots 的 workspaces 服务；读失败按空集退回
+      // 全员监视（服务缺位只可能出现在基线之外的宿主，静默全员比误伤全员安全）
+      let archived = new Set();
+      try {
+        const ids = slotsCtx.get("workspaces").list.getSnapshot().archivedSessionIds;
+        if (Array.isArray(ids)) archived = new Set(ids);
+      } catch {
+        /* workspaces 服务缺位 / 形状不符：按无归档处理 */
+      }
+      monitorTickCore(sessions, cfg, Date.now(), archived);
+    }
+
+    /** 续跑器核心（依赖注入，render-check 直测）：单次遍历 O(会话数)，读的全是
+     *  内存快照，无网络调用（prompt 仅在发射瞬间一次）。
+     *  触发采用「错误标记驱动」而非 running 沿：list 的 running 推送（api-session/
+     *  status）与错误广播（api-session/error）到达顺序无保证，沿时刻读镜像可能
+     *  还没置位（实测踩过）。改以镜像 lastAgentError 的「新文本」为触发——以
+     *  handledErr 记账去重，免疫到达顺序；文本级去重也天然放行续跑后的再次失败
+     *  （发射即清 handledErr）。
+     *  但「新」必须叠上「这次收尾就是它造成的」：镜像不会被回合收尾清掉，新文本
+     *  也可能是回合中途的旧账（回合后来成功收尾 / 被用户停下）。判据是同一次观察里
+     *  的时序——errAt 必须落在本段空闲起点前 MONITOR_ERR_WINDOW_MS 内，见模块头。 */
+    function monitorTickCore(sessions, cfg, now, archived = new Set()) {
+      if (!sessions || !sessions.list || typeof sessions.binding !== "function") return;
+      let list;
+      try {
+        list = sessions.list.getSnapshot();
+      } catch {
+        return;
+      }
+      for (const id of list.ids ?? []) {
+        const summary = list.byId[id];
+        if (!summary) continue;
+        if (archived.has(id)) continue; // 归档会话：不监视不续跑，状态在尾部回收
+        let st = monitorSessions.get(id);
+        if (!st) {
+          st = {
+            running: false,
+            continues: 0,
+            capped: false,
+            plan: null,
+            materialized: false,
+            handledErr: null,
+            title: null,
+            max: 0,
+            errText: null,
+            errAt: 0,
+            idleSince: 0,
+            primed: false,
+          };
+          monitorSessions.set(id, st);
+        }
+        const snap = monitorSnapOf(sessions, id, st);
+        const lastErr = snap?.lastAgentError ?? null;
+        monitorWrapCancel(sessions, id); // 停止入口记账（用户点「停止」= 别继续）
+        // 错误文本的观察记账：首见只播种（页面打开时镜像里已躺着的错误算陈旧），之后
+        // 只在文本变化时刷新出现时刻——停在镜像里不改写，判据才不会把旧错误当新失败
+        if (!st.primed) {
+          st.primed = true;
+          st.errText = lastErr;
+        } else if (lastErr !== st.errText) {
+          st.errText = lastErr;
+          st.errAt = lastErr === null ? 0 : now;
+        }
+        if (summary.running) {
+          // 运行中：物化镜像（之后失败才有人接 lastAgentError）；等待期回合跑起来
+          // = 用户介入，放弃本次 plan；上一条失败的记账一并清除——新回合的失败是
+          // 新失败，即使文本相同也要重新触发。停止记账也到此用掉（回合又跑起来了）
+          if (st.plan) st.plan = null;
+          st.handledErr = null;
+          st.running = true;
+          st.idleSince = 0; // 本段空闲到此为止
+          monitorAborts.delete(id);
+          continue;
+        }
+        st.running = false;
+        if (st.idleSince === 0) st.idleSince = now; // 本段空闲的观察起点
+        const aborted = (monitorAborts.get(id) ?? 0) >= st.idleSince - MONITOR_ABORT_WINDOW_MS;
+        const fresh = !aborted && st.errAt > 0 && st.errAt >= st.idleSince - MONITOR_ERR_WINDOW_MS;
+        if (lastErr && MONITOR_RATE_LIMIT_RE.test(lastErr)) {
+          if (!fresh) {
+            // 错误早于本段空闲、或这一段空闲是被「停止」打开的：回合是别的原因收的
+            // 尾（正常做完 / 被手动停止），镜像里是旧账——不续跑，也不进 capped
+            //（capped 是要人处理的真终态，不该被旧账点亮）
+          } else if (st.handledErr === lastErr) {
+            // 已处置过的同一条失败：不重排（取消后静默，直到正常收尾）
+          } else if (!st.capped && st.continues < cfg.monitorMaxAuto) {
+            st.handledErr = lastErr;
+            st.title = summary.displayTitle;
+            st.max = cfg.monitorMaxAuto;
+            st.plan = { fireAt: now + cfg.monitorWaitMs };
+          } else if (!st.capped) {
+            st.handledErr = lastErr;
+            st.title = summary.displayTitle;
+            st.max = cfg.monitorMaxAuto;
+            st.capped = true;
+          }
+        } else if (!lastErr) {
+          // 空闲且无错误标记：一次正常收尾 → 连续计数清零、capped 解除（继续成功
+          // 即清零）。幂等，重复 tick 无害。
+          if (st.continues !== 0 || st.capped || st.handledErr !== null) {
+            st.continues = 0;
+            st.capped = false;
+            st.handledErr = null;
+          }
+        }
+        // plan 到点发射：镜像仍在失败态且没人在跑才发；prompt 同步清 lastAgentError
+        // 与 handledErr——续跑后再失败（同文本新失败）可再次触发
+        if (st.plan && now >= st.plan.fireAt) {
+          st.plan = null;
+          const snapAtFire = monitorSnapOf(sessions, id, st);
+          if (snapAtFire && !snapAtFire.running && snapAtFire.lastAgentError && MONITOR_RATE_LIMIT_RE.test(snapAtFire.lastAgentError)) {
+            st.continues += 1;
+            st.handledErr = null;
+            try {
+              const b = sessions.binding(id);
+              void b.session.prompt([{ type: "text", text: tf("monitorContinueText") }], "queue").catch(() => {});
+              // prompt 同步清镜像 lastAgentError：本插件据此把观察记账一并作废，
+              // 续跑后的失败哪怕文本一模一样，也会被认成"新出现"的一次失败。
+              // 放在 prompt 之后：同步抛错就保留旧记账，不反复重排
+              st.errText = null;
+              st.errAt = 0;
+              st.idleSince = 0;
+            } catch {
+              /* 发送通道异常：放弃本次（错误标记仍在但已不算新鲜，不会反复重排） */
+            }
+          }
+        }
+      }
+      // 已移除/已归档会话的状态回收（归档时若有待发射 plan 一并作废）
+      for (const id of [...monitorSessions.keys()]) {
+        if (!list.byId[id] || archived.has(id)) {
+          monitorSessions.delete(id);
+          monitorAborts.delete(id);
+        }
+      }
+      monitorRebuildItems();
+    }
+
+    /** 快照重建（tick 与取消按钮共用）：内容不变不 emit（轮询 2s 一次，序列化
+     *  对比成本可忽略）。条目字段取自会话态缓存（title/max 在失败沿时记录），
+     *  不依赖 list/slots——取消路径随时可调。 */
+    function monitorRebuildItems() {
+      const items = [];
+      for (const [id, st] of monitorSessions) {
+        if (!st.plan && !st.capped) continue;
+        items.push({
+          id,
+          title: st.title ?? id,
+          phase: st.plan ? "waiting" : "capped",
+          fireAt: st.plan ? st.plan.fireAt : 0,
+          continues: st.continues,
+          max: st.max ?? 10,
+        });
+      }
+      items.sort((a, b) => a.id.localeCompare(b.id));
+      const next = JSON.stringify(items);
+      if (next !== monitorStore.__sig) {
+        monitorStore.__sig = next;
+        monitorStore.snapshot = { items };
+        monitorStore.emit();
+      }
+    }
+
+    /** UI 取消/忽略按钮：待续跑 = 丢弃待发射 plan（失败沿已消费，不会重排）；
+     *  capped = 清标记 + 连续计数归零（handledErr 保留——同一条失败保持静默，
+     *  手动重跑或新失败后才重新给自动续跑额度） */
+    function monitorCancelPlan(id) {
+      const st = monitorSessions.get(id);
+      if (!st) return;
+      if (st.plan) st.plan = null;
+      else if (st.capped) {
+        st.capped = false;
+        st.continues = 0;
+      } else return;
+      monitorRebuildItems(); // 立即重建快照并 emit
+    }
+
+    /** 尾部自重叠扫描：返回累计文本末尾连续重复块的最大次数（块长在
+     *  MONITOR_MIN_BLOCK..MAX_BLOCK 内穷举对齐，与流式分块方式无关；文本不足
+     *  两个最短块时返回 1）。死循环判定 = 返回值 ≥ monitorRepeatThreshold。 */
+    function monitorTailRepeatCount(text) {
+      const len = text.length;
+      let best = 1;
+      for (let p = MONITOR_MIN_BLOCK; p <= MONITOR_MAX_BLOCK && p * 2 <= len; p++) {
+        const block = text.slice(len - p);
+        let m = 1;
+        while (len - (m + 1) * p >= 0 && text.slice(len - (m + 1) * p, len - m * p) === block) m++;
+        if (m > best) best = m;
+      }
+      return best;
+    }
+
+    function MonitorLine(props) {
+      const { useChat, useSession, useInput, inputActions, sessionId } = props;
+      react.useSyncExternalStore(subscribeLocale, getLocaleVersion);
+      const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
+      const nodes = typeof useChat === "function" ? useChat((s) => s.legacy.nodes) : [];
+      // 流式文本（text+reasoning）：assistant-step 运行中宿主才产 partial（turn/
+      // step/blocks），落定即清空、nodes 才出现 finalized assistant——所以 partial
+      // 天然只含"正在流出"的文本，天然排除历史回合误判
+      const partial = typeof useChat === "function" ? useChat((s) => s.legacy.partial) : null;
+      const running = typeof useSession === "function" ? useSession((s) => s.running) : false;
+      const draft = typeof useInput === "function" ? useInput((s) => s.draft) : "";
+      // 全局续跑器对本会话的活动状态（waiting/capped）；null = 无。subscribe 箭头
+      // 包装保 this（方法解引用传入 uSES 会丢 this 导致订阅崩溃、条永不渲染）
+      const watcherSnap = react.useSyncExternalStore(
+        (s) => monitorStore.subscribe(s),
+        () => monitorStore.snapshot,
+      );
+      const watcherItem = watcherSnap.items.find((x) => x.id === sessionId) ?? null;
+      // plan（本地态，仅死循环链路）：null | {phase:"stopping"} | {phase:"waiting",fireAt,reason:"repeat"}；
+      // 失败续跑的 waiting/capped 一律来自 watcherItem，本地不再管
+      const [plan, setPlan] = react.useState(null);
+      const [now, setNow] = react.useState(() => Date.now());
+      const loopBreaksRef = react.useRef(0); // 死循环话术已发次数（达上限只停不发，防循环烧 token）
+      const partialTextRef = react.useRef(null); // 最新流式文本（partial.blocks 拼接）
+      const partialKeyRef = react.useRef(null); // 镜像侧记录的当前流 turn/step
+      const lastStreamKeyRef = react.useRef(null); // 上次扫描的数据源标识（换源 = 新回合）
+      const lastLenRef = react.useRef(0); // 本源扫描基线
+      const nodesSeqRef = react.useRef(null); // 最新「未中断」assistant 节点 seq
+      const nodesTextRef = react.useRef(null); // 该节点的文本（回合内步骤落地即扫一次）
+      const stoppingRef = react.useRef(false); // cancel 已发出（防重复触发；话术后复位）
+      // 会话切换：死循环链路状态归零（续跑计数在全局续跑器，随会话独立）
+      react.useEffect(() => {
+        loopBreaksRef.current = 0;
+        partialTextRef.current = null;
+        partialKeyRef.current = null;
+        lastStreamKeyRef.current = null;
+        lastLenRef.current = 0;
+        nodesSeqRef.current = null;
+        nodesTextRef.current = null;
+        stoppingRef.current = false;
+        setPlan(null);
+      }, [sessionId]);
+      // 流式文本镜像：partial 随 chunk 变化，只写 ref 不 setState（渲染开销趋零）。
+      // 部分宿主版本 legacy.partial 恒 null（运行中步骤不进投影或不广播），此路
+      // 不通时由 nodes 镜像兜底。
+      react.useEffect(() => {
+        if (!partial || !Array.isArray(partial.blocks)) {
+          partialTextRef.current = null;
+          return;
+        }
+        partialKeyRef.current = partial.turn + "/" + partial.step;
+        let text = "";
+        for (const b of partial.blocks) {
+          if ((b.kind === "text" || b.kind === "reasoning") && typeof b.text === "string") text += b.text;
+        }
+        partialTextRef.current = text;
+      }, [partial]);
+      // 最新「未中断」assistant 节点镜像：步骤落地即全长出现（0→full 一拍），
+      // interrupted（监视器停止的回合残余）不作扫描源——那是上一轮已处置的文本
+      react.useEffect(() => {
+        let seq = null;
+        let text = null;
+        for (let i = nodes.length - 1; i >= 0; i--) {
+          const n = nodes[i];
+          if (n && n.kind === "assistant") {
+            if (n.interrupted !== true && Array.isArray(n.blocks)) {
+              seq = n.seq;
+              text = "";
+              for (const b of n.blocks) {
+                if ((b.kind === "text" || b.kind === "reasoning") && typeof b.text === "string") text += b.text;
+              }
+            }
+            break;
+          }
+        }
+        nodesSeqRef.current = seq;
+        nodesTextRef.current = text;
+      }, [nodes]);
+      // ② 死循环扫描：仅回合运行中轮询（空闲不扫——历史文本不在观察面）。双数据
+      //    源取其一：partial（流式中，若宿主广播）优先；否则最新未中断 assistant
+      //    节点（步骤落地即全长出现，落地后立扫一次——快速流整段不可分时也有
+      //    检测机会）。对文本做尾部自重叠扫描：长度 ≥MONITOR_MIN_BLOCK 的块 B 在
+      //    末尾连续出现 ≥monitorRepeatThreshold 次（对齐长度穷举，与分块无关）。
+      //    换源（新流/新节点）→ 复位停止标记与基线。interval 依赖刻意不含
+      //    partial/nodes——流式高频换引用会让节拍永远跑不满，读取全走 ref。
+      react.useEffect(() => {
+        if (!cfg.monitorEnabled || !running) return undefined;
+        const timer = setInterval(() => {
+          let key = null;
+          let text = null;
+          if (partialTextRef.current !== null && partialKeyRef.current !== null) {
+            key = "p:" + partialKeyRef.current;
+            text = partialTextRef.current;
+          } else if (nodesSeqRef.current !== null && nodesTextRef.current !== null) {
+            key = "n:" + nodesSeqRef.current;
+            text = nodesTextRef.current;
+          }
+          if (key === null || text === null) return;
+          if (key !== lastStreamKeyRef.current) {
+            lastStreamKeyRef.current = key;
+            stoppingRef.current = false;
+            lastLenRef.current = 0;
+          }
+          if (stoppingRef.current) return;
+          const len = text.length;
+          if (len <= lastLenRef.current) return;
+          lastLenRef.current = len;
+          if (monitorTailRepeatCount(text) < cfg.monitorRepeatThreshold) return;
+          stoppingRef.current = true;
+          setPlan({ phase: "stopping" });
+          try {
+            const sessions = slotsCtx ? slotsCtx.get("sessions") : null;
+            const binding = sessions && typeof sessions.binding === "function" ? sessions.binding(sessionId) : null;
+            const sess = binding && binding.session;
+            if (sess && typeof sess.cancel === "function") void sess.cancel().catch(() => {});
+          } catch {
+            // 服务未就绪：放弃本次停止（等待自然结束），stopping 超时兜底会清态
+          }
+        }, MONITOR_SCAN_MS);
+        return () => clearInterval(timer);
+      }, [running, cfg.monitorEnabled, cfg.monitorRepeatThreshold, sessionId]);
+      // stopping → 停止完成转等待发循环话术（连续次数达上限只停不发，防循环烧
+      // token）；停止超时（cancel 失败/被拒）放弃并复位
+      react.useEffect(() => {
+        if (plan?.phase !== "stopping") return undefined;
+        if (!running) {
+          if (loopBreaksRef.current >= cfg.monitorMaxAuto) return undefined;
+          setPlan({ phase: "waiting", fireAt: Date.now() + 2500, reason: "repeat" });
+          return undefined;
+        }
+        const giveUp = setTimeout(() => {
+          stoppingRef.current = false;
+          setPlan(null);
+        }, 15000);
+        return () => clearTimeout(giveUp);
+      }, [plan, running, cfg.monitorMaxAuto]);
+      // 等待期间用户介入（手动发消息使回合运行）→ 放弃本次（仅死循环链路；失败
+      // 续跑的介入放弃在全局续跑器 tick 里）
+      react.useEffect(() => {
+        if (plan?.phase === "waiting" && running) setPlan(null);
+      }, [running, plan]);
+      // 倒计时跳动（死循环链路 waiting 与全局续跑器 waiting 都要跳）。进入等待
+      // 先立即对表一次——now 可能是组件挂载时的陈旧值，首帧会把剩余秒数显示得偏大
+      react.useEffect(() => {
+        if (plan?.phase !== "waiting" && watcherItem?.phase !== "waiting") return undefined;
+        setNow(Date.now());
+        const timer = setInterval(() => setNow(Date.now()), 500);
+        return () => clearInterval(timer);
+      }, [plan, watcherItem]);
+      // 到点执行（仅死循环链路）：草稿非空（用户在打字）或回合又跑起来都视为
+      // 介入，放弃话术
+      react.useEffect(() => {
+        if (plan?.phase !== "waiting") return;
+        if (Date.now() < plan.fireAt) return;
+        if (running || String(draft ?? "").trim() !== "") {
+          setPlan(null);
+          return;
+        }
+        // 死循环话术：让 agent 知道自己卡在循环里，停止重复并换方式推进
+        inputActions.setDraft(tf("monitorLoopBreakText"));
+        inputActions.submit();
+        stoppingRef.current = false; // 话术已发：本会话下一回合的死循环仍要接管
+        loopBreaksRef.current += 1;
+        setPlan(null);
+      }, [plan, now, running, draft, inputActions]);
+      if (!cfg.monitorEnabled) return null;
+      // 展示优先级：死循环链路本地态在前（正在发生），全局续跑器状态兜底
+      let line = "";
+      let cancelLabel = ""; // 空 = 不出钮；否则为钮文案（waiting=取消、capped=忽略）
+      if (plan?.phase === "waiting") {
+        const sec = Math.max(0, Math.ceil((plan.fireAt - now) / 1000));
+        line = tf("monitorAutoIn", { err: tf("monitorRepeatErr"), sec: String(sec), n: String(loopBreaksRef.current + 1), max: String(cfg.monitorMaxAuto) });
+        cancelLabel = t("monitorCancel");
+      } else if (plan?.phase === "stopping") {
+        line = tf("monitorStopping");
+      } else if (watcherItem?.phase === "waiting") {
+        const sec = Math.max(0, Math.ceil((watcherItem.fireAt - now) / 1000));
+        line = tf("monitorAutoIn", { err: tf("monitorErr429"), sec: String(sec), n: String(watcherItem.continues + 1), max: String(watcherItem.max) });
+        cancelLabel = t("monitorCancel");
+      } else if (watcherItem?.phase === "capped") {
+        line = tf("monitorCapped", { max: String(watcherItem.max) });
+        cancelLabel = t("monitorDismiss");
+      }
+      if (!line) return null;
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-monitor-line",
+        children: [
+          jsxRuntime.jsx("span", { className: "dshk-monitor-text", children: line }),
+          cancelLabel
+            ? jsxRuntime.jsx("button", {
+                type: "button",
+                className: "dshk-monitor-cancel",
+                onClick: () => (plan ? setPlan(null) : monitorCancelPlan(sessionId)),
+                children: cancelLabel,
+              })
+            : null,
+        ],
+      });
+    }
+
+    // ─────────── 会话通知（回合收尾 / 上下文压缩 / agent 提问）───────────
+    // 页面不在前台、或事件不属于当前打开的会话时弹一条桌面通知（浏览器
+    // Notification API）；未授权 / 非安全上下文（手机走局域网 http）退标题闪烁。
+    // 纯浏览器端，宿主只提供 settings 字段。三类事件的观察口不同：
+    //   回合收尾 ← sessions.list 快照的 running（订阅式而非轮询：后台标签的定时器
+    //     被浏览器节流到分钟级，而宿主的推送不受影响）；
+    //   压缩完成 ← 会话事件窗口的增量（会话绑定的 eventSource 里的 compaction/end）——
+    //     官方只为「上台」过的会话开这个窗，所以只覆盖打开过的会话（切走仍在收流，
+    //     刷新后只剩当前会话）；首帧与重放增量只播种不通知，见 notifyCompactionCore；
+    //   提问/批准 ← 旁听官方 remote 瀑布（user-questions|approval/request）——
+    //     官方 UI 只在会话「上台」时才注册待回应，后台会话的请求在它那里是空档，
+    //     本插件挂在根 ctx 上能收到全部会话的请求（会话身份从事件 ctx 的 scope 取）；
+    //     计划评审（exit_plan_mode 的 intent=plan-review）走的是同一条 user-questions
+    //     请求，只是另成一类文案与正文取法（见 notifyKindOf）。官方待回应投影
+    //     （uiSession.pendingInteractions）只作补充口存在——两者是同一次请求的两个
+    //     观察口，谁先看到都能提醒，去重见 notifySeenRequests。
+    // 抑制规则见 notifyWanted（一个总开关管全部提醒，不分类配置）；页面完全关掉时
+    // 浏览器端无从运行，无通知可言。
+    const notifyState = {
+      /** sessionId -> 上次已知 running（沿检测基线；首帧只播种不发通知） */
+      running: new Map(),
+      /** sessionId -> 已提醒过的待回应 key（同一请求只提醒一次） */
+      pendingKey: new Map(),
+      /** sessionId -> {seq}：事件窗口已读到的持久 seq（压缩沿的基线，首帧只播种） */
+      compactions: new Map(),
+      /** 首帧标志：页面刚打开时列表里已在跑的会话不补发通知 */
+      primed: false,
+      /** 标题闪烁：未读计数（0 = 未闪烁）与 <title> 观察器 */
+      flashCount: 0,
+      flashWatch: null,
+      /** 在途的收尾判定定时器（页面销毁无需清理，留着只为可观测） */
+      settles: new Set(),
+    };
+    /** 事件路径已处置过的提问请求（key 用 questions 数组——待回应投影里存的是
+     *  同一个引用，据此让两条观察口只提醒一次）。批准请求没有共用引用可用，靠
+     *  通知 tag 由浏览器归并 */
+    const notifySeenRequests = new WeakSet();
+    const NOTIFY_BODY_MAX = 140; // 提问正文截断长度：桌面通知两行即满，长了被裁
+    const NOTIFY_FLASH_RE = /^\(\d+\) /; // 闪烁前缀：复原时按它剥掉，不存旧标题
+    const NOTIFY_SETTLE_MS = 2500; // 收尾判定延迟：盖过续跑器 2s 的 tick
+
+    /** 折叠空白并按上限截断（通知正文只取一行；超长补省略号） */
+    function notifyClip(text, max) {
+      const flat = String(text ?? "").replace(/\s+/g, " ").trim();
+      return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+    }
+
+    /** 提问批次的类别：官方计划评审（`intent.kind = "plan-review"`）单独成一类，
+     *  提醒文案与正文取法都不同（正文取计划 markdown 的首个标题） */
+    function notifyKindOf(baseKind, request) {
+      if (baseKind !== "question") return baseKind;
+      const first = Array.isArray(request?.questions) ? request.questions[0] : null;
+      return first && first.intent && first.intent.kind === "plan-review" ? "plan" : "question";
+    }
+
+    /** 计划评审正文：取计划首个 markdown 标题（比"批准这份计划吗"有用），
+     *  没有标题（理论上 exit_plan_mode 会拦）就退回提问原文 */
+    function notifyPlanBody(detail, fallback) {
+      const heading = /(?:^|\n)#{1,6}\s+([^\n]+)/.exec(typeof detail === "string" ? detail : "");
+      const text = heading ? heading[1].trim() : "";
+      return notifyClip(text !== "" ? text : fallback, NOTIFY_BODY_MAX);
+    }
+
+    /** 待回应的正文：提问取首问全文，计划取计划标题，批准取理由（无理由用工具名兜底） */
+    function notifyBodyOf(interaction, kind) {
+      if (kind === "approval") {
+        const reason = typeof interaction.reason === "string" ? interaction.reason.trim() : "";
+        if (reason !== "") return notifyClip(reason, NOTIFY_BODY_MAX);
+        const tool = typeof interaction.toolName === "string" ? interaction.toolName.trim() : "";
+        return tf("notifyApprovalBody", { tool: tool === "" ? t("notifyToolFallback") : tool });
+      }
+      const first = Array.isArray(interaction.questions) ? interaction.questions[0] : null;
+      const text = first && typeof first.question === "string" ? first.question.trim() : "";
+      if (kind === "plan") return notifyPlanBody(first ? first.detail : "", text !== "" ? text : t("notifyPlanBody"));
+      return notifyClip(text !== "" ? text : t("notifyQuestionBody"), NOTIFY_BODY_MAX);
+    }
+
+    /** 值不值得打扰：总开关 + 不是「人正看着这个会话」（页面可见且聚焦、事件又正是
+     *  当前会话时，官方界面自己会说）。五类提醒共用这一条判据（不分类配置） */
+    function notifyWanted(cfg, sessionId, current, foreground) {
+      if (!cfg.notifyEnabled) return false;
+      return !(foreground === true && sessionId === current);
+    }
+
+    /**
+     * 通知判定核心（依赖注入，render-check 直测）：把列表快照与待回应表投影成
+     * 应发通知，顺带把沿写回 state。抑制：见 notifyWanted；子会话（导航细节，
+     * 属噪音）与首帧播种也不发。
+     * @param input {ids,byId,current,foreground,pending:Map<sessionId,interaction>,seen:WeakSet}
+     * @returns [{kind:"complete"|"question"|"approval", sessionId, title, body?}]
+     */
+    function notifyDiffCore(state, input, cfg) {
+      const events = [];
+      const byId = input.byId ?? {};
+      const foreground = input.foreground === true;
+      const wanted = (sessionId) => notifyWanted(cfg, sessionId, input.current, foreground);
+      const titleOf = (id) => byId[id]?.displayTitle ?? id;
+      const seen = new Set();
+      for (const id of input.ids ?? []) {
+        const row = byId[id];
+        if (!row) continue;
+        seen.add(id);
+        const was = state.running.get(id);
+        state.running.set(id, row.running === true);
+        // 只认 true→false 的沿：首帧播种、仍在跑、子会话都不发
+        if (!state.primed || was !== true || row.running === true || row.origin === "subagent") continue;
+        if (wanted(id)) events.push({ kind: "complete", sessionId: id, title: titleOf(id) });
+      }
+      for (const id of [...state.running.keys()]) if (!seen.has(id)) state.running.delete(id);
+      // 待回应：key 变化即新请求（一个会话同时只投影一个待回应）。事件路径已经
+      // 处置过的那次请求直接跳过——同一次提问被两条观察口各报一次只算一次
+      const pending = input.pending instanceof Map ? input.pending : new Map();
+      const seenRequests = input.seen instanceof WeakSet ? input.seen : null;
+      const pendingSeen = new Set();
+      for (const [id, interaction] of pending) {
+        if (!interaction || typeof interaction.key !== "string") continue;
+        pendingSeen.add(id);
+        if (seenRequests && seenRequests.has(interaction.questions ?? interaction)) continue;
+        if (state.pendingKey.get(id) === interaction.key) continue;
+        state.pendingKey.set(id, interaction.key);
+        if (!state.primed) continue;
+        const kind = interaction.kind === "approval" ? "approval" : interaction.kind === "plan-review" ? "plan" : "question";
+        if (!wanted(id)) continue;
+        events.push({ kind, sessionId: id, title: titleOf(id), body: notifyBodyOf(interaction, kind) });
+      }
+      for (const id of [...state.pendingKey.keys()]) if (!pendingSeen.has(id)) state.pendingKey.delete(id);
+      state.primed = true;
+      return events;
+    }
+
+    /** 事件条目上的持久 seq（transient 条目的 seq 只是排序号，不在持久序列上） */
+    function notifyDurableSeq(entry) {
+      const event = entry && entry.type === "event" ? entry.event : null;
+      return event && typeof event.seq === "number" ? event.seq : -1;
+    }
+
+    /** 窗口里最大的持久 seq：播种基线用（窗口含翻旧页 prepend 的整段历史） */
+    function notifyMaxSeq(entries, fallback) {
+      let max = fallback;
+      for (const entry of entries) {
+        const seq = notifyDurableSeq(entry);
+        if (seq > max) max = seq;
+      }
+      return max;
+    }
+
+    /** 压缩规模：同一次压缩的 `compaction/summary` 带被压掉历史的 token 估值 */
+    function notifyCompactTokens(entries, compactionId) {
+      for (const entry of entries) {
+        const event = entry && entry.type === "event" ? entry.event : null;
+        if (!event || event.type !== "compaction/summary" || !event.data) continue;
+        if (event.data.compactionId !== compactionId) continue;
+        const tokens = event.data.shadowedTokenCount;
+        if (typeof tokens === "number" && tokens > 0) return tokens;
+      }
+      return 0;
+    }
+
+    /** 压缩正文：说得出规模就说规模，说不出就只报完成 */
+    function notifyCompactBody(entries, compactionId) {
+      const tokens = notifyCompactTokens(entries, compactionId);
+      if (tokens <= 0) return t("notifyCompactBody");
+      return tf("notifyCompactBodyTokens", { tokens: tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens) });
+    }
+
+    /**
+     * 压缩完成判定核心（依赖注入，render-check 直测）：事件窗口的增量里出现
+     * `compaction/end`（不带 error）即一次压缩收尾——手动 /compact 与回合中途的
+     * 自动压缩都落这条事件，模型无关的 tool-result prune 不在其中。
+     * 只认 append 增量：窗口首帧（页面刚打开）与 replace/prepend（重连重放、翻旧页）
+     * 一律只播种——刷新页面不重报历史压缩。
+     * 覆盖边界：官方只为「上台」过的会话开事件窗，从未打开过的会话看不到它的压缩。
+     * @param input {sessionId,title,entries,change,origin,current,foreground}
+     * @returns [{kind:"compact", sessionId, title, body}]
+     */
+    function notifyCompactionCore(state, input, cfg) {
+      const events = [];
+      const id = input.sessionId;
+      const st = state.compactions.get(id) ?? { seq: -1 };
+      state.compactions.set(id, st);
+      const entries = Array.isArray(input.entries) ? input.entries : [];
+      const change = input.change;
+      if (!change || change.kind !== "append") {
+        st.seq = notifyMaxSeq(entries, st.seq); // 首帧 / 重放 / 翻旧页：只播种不通知
+        return events;
+      }
+      for (const entry of Array.isArray(change.entries) ? change.entries : []) {
+        const seq = notifyDurableSeq(entry);
+        if (seq <= st.seq) continue; // 重复投递 / 重放：同一条不报两次
+        st.seq = seq;
+        const event = entry.event;
+        if (event.type !== "compaction/end") continue;
+        const data = event.data;
+        if (!data || data.error) continue; // 失败的压缩不算完成（那个回合的失败另有报法）
+        if (input.origin === "subagent") continue; // 子会话属导航噪音
+        if (!notifyWanted(cfg, id, input.current, input.foreground === true)) continue;
+        events.push({ kind: "compact", sessionId: id, title: input.title, body: notifyCompactBody(entries, data.compactionId) });
+      }
+      return events;
+    }
+
+    /** 前台判据：页面可见 **且** 窗口聚焦。切到别的程序时 visibilityState 仍是
+     *  visible（只有切标签/最小化才变 hidden），只看它会漏判成"人在跟前" */
+    function notifyForeground() {
+      try {
+        return document.visibilityState === "visible" && document.hasFocus() === true;
+      } catch {
+        return false;
+      }
+    }
+
+    /** 当前通知权限：granted | denied | default | unsupported（浏览器侧事实，不在
+     *  settings 里）。老浏览器返回的可能是 undefined——按未授权处理 */
+    function notifyPermState() {
+      if (typeof Notification !== "function") return "unsupported";
+      const perm = Notification.permission;
+      return perm === "granted" || perm === "denied" ? perm : "default";
+    }
+
+    /** 桌面通知可用：浏览器有 API 且已授权（未授权不能在此处请求——requestPermission
+     *  必须在用户手势里发；配置页无请求手势入口，首次需在浏览器站点设置里允许） */
+    function notifyCanPost() {
+      return notifyPermState() === "granted";
+    }
+
+    /** 标题闪烁兜底：未授权/非安全上下文时至少留痕（标签条上看得见未读计数）。
+     *  DSH 自己会改写标题（换会话、生成标题），所以挂着 <title> 观察器把前缀贴
+     *  回去；回窗口（可见且聚焦）即复原 */
+    function notifyApplyFlash() {
+      if (typeof document === "undefined" || notifyState.flashCount === 0) return;
+      const base = document.title.replace(NOTIFY_FLASH_RE, "");
+      const next = `(${notifyState.flashCount}) ${base}`;
+      if (document.title !== next) document.title = next;
+    }
+    function notifyFlash() {
+      if (typeof document === "undefined") return;
+      notifyState.flashCount += 1;
+      notifyApplyFlash();
+      if (!notifyState.flashWatch && typeof MutationObserver === "function") {
+        const titleEl = document.querySelector("title");
+        if (titleEl) {
+          notifyState.flashWatch = new MutationObserver(() => notifyApplyFlash());
+          notifyState.flashWatch.observe(titleEl, { childList: true, characterData: true, subtree: true });
+        }
+      }
+    }
+    function notifyUnflash() {
+      if (typeof document === "undefined" || notifyState.flashCount === 0) return;
+      notifyState.flashCount = 0;
+      const base = document.title.replace(NOTIFY_FLASH_RE, "");
+      if (document.title !== base) document.title = base;
+    }
+    /** 回窗口才复原标题：可见但仍未聚焦（切程序回来一半）时留着闪烁 */
+    function notifyMaybeUnflash() {
+      if (notifyForeground()) notifyUnflash();
+    }
+
+    /** 点通知 → 聚焦窗口并切到该会话（会话已被删除时只聚焦） */
+    function notifyOpenSession(sessions, sessionId) {
+      try {
+        window.focus();
+      } catch {
+        /* 非浏览器环境 */
+      }
+      try {
+        sessions.open(sessionId);
+      } catch {
+        /* 会话已不在列表：只聚焦 */
+      }
+    }
+
+    /** 投递一条：系统通知优先，退标题闪烁。tag 按会话归并——同一会话的新通知
+     *  替换旧的，人不在时也不会堆一屏 */
+    function notifyDeliver(sessions, ev) {
+      const key =
+        ev.kind === "complete"
+          ? "notifyCompleteTitle"
+          : ev.kind === "compact"
+            ? "notifyCompactTitle"
+            : ev.kind === "capped"
+              ? "notifyCappedTitle"
+              : ev.kind === "approval"
+                ? "notifyApprovalTitle"
+                : ev.kind === "plan"
+                  ? "notifyPlanTitle"
+                  : "notifyQuestionTitle";
+      const title = tf(key, { title: ev.title });
+      const body =
+        ev.kind === "complete" ? t("notifyCompleteBody") : ev.kind === "capped" ? t("notifyCappedBody") : ev.body ?? "";
+      if (notifyCanPost()) {
+        try {
+          const note = new Notification(title, { body, tag: `dsh-kit:${ev.sessionId}`, silent: true });
+          note.onclick = () => {
+            notifyOpenSession(sessions, ev.sessionId);
+            try {
+              note.close();
+            } catch {
+              /* 已自动关闭 */
+            }
+          };
+          return;
+        } catch {
+          /* 构造被拒（部分环境只认 ServiceWorker 通知）：退标题闪烁 */
+        }
+      }
+      notifyFlash();
+    }
+
+    /** 事件入口（订阅回调与首帧共用）：读快照 → 核心判定 → 逐条投递 */
+    function notifyEvaluate(sessions, pendingStore) {
+      let cfg;
+      let list;
+      let pending = null;
+      try {
+        cfg = cfgFromSnapshot(getCfgSnapshot());
+        list = sessions.list.getSnapshot();
+      } catch {
+        return; // 服务异常：本轮跳过，下条推送再来
+      }
+      try {
+        if (pendingStore && typeof pendingStore.getSnapshot === "function") pending = pendingStore.getSnapshot();
+      } catch {
+        /* 待回应源异常：只报完成 */
+      }
+      const events = notifyDiffCore(
+        notifyState,
+        { ids: list.ids, byId: list.byId, current: mainRowOf(list)?.id, foreground: notifyForeground(), pending, seen: notifySeenRequests },
+        cfg,
+      );
+      for (const ev of events) {
+        // 收尾不是立刻就能断定的：限流失败也会让 running 落地，而续跑器 2s 后才会
+        // 排上「继续」——不等这一下就会把"待续跑的失败"报成"任务完成"
+        if (ev.kind !== "complete") {
+          notifyDeliver(sessions, ev);
+          continue;
+        }
+        const timer = setTimeout(() => {
+          notifyState.settles.delete(timer);
+          notifyCompleteSettled(sessions, ev);
+        }, NOTIFY_SETTLE_MS);
+        notifyState.settles.add(timer);
+      }
+    }
+
+    /** 压缩完成入口（事件窗口订阅回调）：读窗口快照 → 核心判定 → 逐条投递。
+     *  不走收尾那套延迟判定：压缩是已经落地的事实，没有"待续跑"的歧义 */
+    function notifyCompactionEvaluate(sessions, sessionId) {
+      let cfg;
+      let list;
+      let win;
+      try {
+        cfg = cfgFromSnapshot(getCfgSnapshot());
+        list = sessions.list.getSnapshot();
+        win = sessions.binding(sessionId).eventSource.getSnapshot();
+      } catch {
+        return; // 服务/窗口异常：本轮跳过，下条推送再来
+      }
+      const row = list.byId?.[sessionId];
+      const events = notifyCompactionCore(
+        notifyState,
+        {
+          sessionId,
+          title: row?.displayTitle ?? sessionId,
+          entries: win.entries,
+          change: win.change,
+          origin: row?.origin,
+          current: mainRowOf(list)?.id,
+          foreground: notifyForeground(),
+        },
+        cfg,
+      );
+      for (const ev of events) notifyDeliver(sessions, ev);
+    }
+
+    /** 收尾通知的延迟判定：到点仍空闲、且续跑器没排「等待继续」的计划，才算真收尾。
+     *  已 capped（自动续跑放弃）确实停了，但文案要说清不是任务做完——那是要人回去
+     *  处理的终态。判定读的都是内存快照，无网络调用。 */
+    function notifyCompleteSettled(sessions, ev) {
+      let row = null;
+      try {
+        row = sessions.list.getSnapshot().byId?.[ev.sessionId] ?? null;
+      } catch {
+        return; // 服务异常：放弃本次
+      }
+      if (!row || row.running === true) return; // 已不在列表 / 又跑起来了：不算收尾
+      const plan = monitorStore.snapshot.items.find((x) => x.id === ev.sessionId);
+      if (plan && plan.phase === "waiting") return; // 等会儿就自动继续，别打扰
+      notifyDeliver(sessions, plan ? { ...ev, kind: "capped" } : ev);
+    }
+
+    /** 事件路径投递（提问 / 批准）：会话名从列表快照取，抑制与完成沿同一套判据 */
+    function notifyEventDeliver(sessions, kind, sessionId, request) {
+      let cfg;
+      let list;
+      try {
+        cfg = cfgFromSnapshot(getCfgSnapshot());
+        list = sessions.list.getSnapshot();
+      } catch {
+        return; // 服务异常：放弃本次（作答链路不受影响）
+      }
+      if (!notifyWanted(cfg, sessionId, mainRowOf(list)?.id, notifyForeground())) return;
+      notifyDeliver(sessions, {
+        kind,
+        sessionId,
+        title: list.byId?.[sessionId]?.displayTitle ?? sessionId,
+        body: notifyBodyOf(request, kind),
+      });
+    }
+
+    /** 官方 remote 瀑布的旁听者（提问 / 批准各一条）：**恒 return next()**——作答仍
+     *  归官方 UI，插件只借这条事件补上官方接不到的那一半：官方 UI 只在会话「上台」
+     *  时才注册待回应，后台会话的请求在它那里是空档，而根 ctx 上的监听器能收到
+     *  全部会话的请求（会话身份沿用官方取法：事件 ctx 的 scope）。 */
+    function notifyRequestListener(sessions, kind) {
+      return function (request, next) {
+        try {
+          const sessionId = sessions.scopeOf(this);
+          if (sessionId !== undefined) {
+            // 先记账再投递：官方待回应投影稍后也会看到这次请求，别提醒两遍
+            notifySeenRequests.add(kind === "question" ? request.questions : request);
+            notifyEventDeliver(sessions, notifyKindOf(kind, request), sessionId, request);
+          }
+        } catch {
+          /* 旁听失败不影响作答链路 */
+        }
+        return next();
+      };
+    }
+
+
+    /** 会话头部的 429 后台会话状态条：全局续跑器有待续跑/封顶会话才渲染（零常驻）。
+     *  原挂在右栏任务签顶部，0.1.7 任务签退役（官方会话头部自带任务清单 + 实时输出
+     *  + 停止）后移到这里，与官方后台任务入口同域。点开小浮层逐条列出，待续跑可取消。 */
+    function MonitorBgAction() {
+      react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
+      const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
+      const watcherSnap = react.useSyncExternalStore(
+        (s) => monitorStore.subscribe(s),
+        () => monitorStore.snapshot,
+      );
+      const [open, setOpen] = react.useState(false);
+      const [now, setNow] = react.useState(() => Date.now());
+      const rootRef = react.useRef(null);
+      const hasWaiting = watcherSnap.items.some((x) => x.phase === "waiting");
+      // 倒计时跳动（有待续跑才走秒）
+      react.useEffect(() => {
+        if (!hasWaiting) return undefined;
+        setNow(Date.now());
+        const timer = setInterval(() => setNow(Date.now()), 500);
+        return () => clearInterval(timer);
+      }, [hasWaiting]);
+      // 浮层点外/Esc 收起
+      react.useEffect(() => {
+        if (!open) return undefined;
+        const onDown = (e) => {
+          if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+        };
+        const onKey = (e) => {
+          if (e.key === "Escape") setOpen(false);
+        };
+        document.addEventListener("pointerdown", onDown, true);
+        document.addEventListener("keydown", onKey);
+        return () => {
+          document.removeEventListener("pointerdown", onDown, true);
+          document.removeEventListener("keydown", onKey);
+        };
+      }, [open]);
+      if (cfg.monitorEnabled === false || watcherSnap.items.length === 0) return null;
+      return jsxRuntime.jsxs("div", { className: "dshk-mbg", ref: rootRef, children: [
+        jsxRuntime.jsxs("button", {
+          type: "button",
+          className: "dshk-mbg-trigger",
+          "aria-expanded": open,
+          onClick: () => {
+            setNow(Date.now()); // 展开瞬间先对表，首帧倒计时才不偏大
+            setOpen((v) => !v);
+          },
+          children: [
+            jsxRuntime.jsx("span", { className: "dshk-mbg-dot", "aria-hidden": true }),
+            `${t("monitorBgTitle")} · ${String(watcherSnap.items.length)}`,
+          ],
+        }),
+        open
+          ? jsxRuntime.jsx("div", { className: "dshk-mbg-menu", children:
+              watcherSnap.items.map((x) => {
+                const line = x.phase === "waiting"
+                  ? tf("monitorBgItem", {
+                      title: x.title,
+                      sec: String(Math.max(0, Math.ceil((x.fireAt - now) / 1000))),
+                      n: String(x.continues + 1),
+                      max: String(x.max),
+                    })
+                  : tf("monitorBgCapped", { title: x.title, max: String(x.max) });
+                return jsxRuntime.jsxs("div", { className: "dshk-monitor-line", children: [
+                  jsxRuntime.jsx("span", { className: "dshk-monitor-text", children: line }),
+                  jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-monitor-cancel",
+                    onClick: () => monitorCancelPlan(x.id),
+                    children: x.phase === "waiting" ? t("monitorCancel") : t("monitorDismiss"),
+                  }),
+                ] }, x.id);
+              }),
+            })
+          : null,
+      ] });
+    }
+
+    // 本组件配置页（插件页 dsh-kit-monitor 行「配置」）：骨架在 dock，这里只喂字段表
+    const MONITOR_CFG_FIELDS = [
+      { key: "monitorEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgMonitorEnabled", hintKey: "kcfgMonitorEnabledHint" },
+      { key: "monitorWaitMs", type: "number", min: 5000, max: 600000, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorWaitMs", hintKey: "kcfgMonitorWaitMsHint" },
+      { key: "monitorMaxAuto", type: "number", min: 1, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorMaxAuto", hintKey: "kcfgMonitorMaxAutoHint" },
+      { key: "monitorRepeatThreshold", type: "number", min: 2, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorRepeatThreshold", hintKey: "kcfgMonitorRepeatThresholdHint" },
+      { key: "notifyEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgNotifyEnabled", hintKey: "kcfgNotifyEnabledHint" },
+    ];
+    const MONITOR_CFG_GROUPS = ["kcfgGroupMonitor"];
+    const MonitorConfigPage = dock.createConfigPage({
+      fields: MONITOR_CFG_FIELDS,
+      groups: MONITOR_CFG_GROUPS,
+      t,
+      onSaved: async () => {
+        await loadCfg();
+      },
+    });
+
+    // 组件私有样式：芯片 + 浮层（面板样式复刻官方 ContextMeter，哈希类名复用不了）
+    if (typeof document !== "undefined") {
+      const style = document.createElement("style");
+      style.textContent = [
+        // order:1 —— 槽位容器 display:contents，本元素与官方 ContextMeter 环同为 dock 行的
+        // flex item；order 提到环后面才是真正最右（DOM 里槽位贡献永远在环左边）。
+        // 不加 padding-top：dock 行自带 4px，加了会垂直错位 2px+
+        ".dshk-usage{order:1;margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:2px}",
+        ".dshk-usage-win{display:inline-flex;align-items:center;gap:2px}",
+        ".dshk-usage-win.is-hot{color:var(--dsw-alias-danger)}",
+        ".dshk-usage-sep{color:var(--dsw-alias-label-tertiary);opacity:.7}",
+        ".dshk-usage-peak{color:var(--dsw-alias-danger);font-weight:600;margin-right:4px}",
+        // 芯片 = 官方 ContextMeter trigger 同款（pill、hover/展开态同色）
+        ".dshk-usage-trigger{color:var(--dsw-alias-label-tertiary);font-family:inherit;font-size:var(--dsh-content-font-size-secondary,13px);font-variant-numeric:tabular-nums;line-height:calc(20px + var(--dsh-content-font-delta-secondary,0px));white-space:nowrap;cursor:pointer;background:0 0;border:none;border-radius:24px;flex:none;align-items:center;gap:6px;padding:1px 8px;display:inline-flex}",
+        ".dshk-usage-trigger:hover,.dshk-usage-trigger[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}",
+        ".dshk-usage-trigger.dshk-usage-hot{color:var(--dsw-alias-danger)}",
+        ".dshk-usage-trigger.dshk-usage-hot:hover,.dshk-usage-trigger.dshk-usage-hot[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover)}",
+        // 面板 = 官方 ContextMeter panel 同款（定位经 primitives useAnchoredPosition，portal 到 body）；背景是半透明色，磨砂 backdrop-filter 缺了背后的界面会整个透出来
+        ".dshk-usage-pop{z-index:1100;box-sizing:border-box;background:var(--dsw-specific-menu);backdrop-filter:var(--dsw-menu-backdrop-filter);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);width:min(264px,100vw - 24px);box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-secondary);cursor:default;border:0;border-radius:12px;padding:12px;font-size:12px;line-height:20px;position:fixed}",
+        ".dshk-usage-header{align-items:center;gap:6px;display:flex}",
+        ".dshk-usage-headline{color:var(--dsw-alias-label-tertiary);min-width:0}",
+        ".dshk-usage-percent{color:var(--dsw-alias-label-primary);font-weight:500}",
+        ".dshk-usage-figures{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary);margin-left:auto;font-weight:500}",
+        ".dshk-usage-hot{color:var(--dsw-alias-danger)}",
+        ".dshk-usage-rows{margin:6px 0 0}",
+        ".dshk-usage-row{justify-content:space-between;align-items:center;gap:12px;padding:2px 0;display:flex;margin:0}",
+        ".dshk-usage-row dt{color:var(--dsw-alias-label-secondary)}",
+        ".dshk-usage-row dd{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary);margin:0}",
+        ".dshk-usage-sub{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;padding:1px 0 0}",
+        ".dshk-usage-bar{corner-shape:round;background:var(--dsw-alias-interactive-bg-hover);border-radius:999px;gap:1px;height:4px;margin:5px 0 8px;display:flex;overflow:hidden}",
+        ".dshk-usage-segment{background:var(--meter-tint,var(--dsw-alias-label-tertiary));border-radius:1px;flex:none;min-width:2px;height:100%}",
+        ".dshk-usage-segment.is-hot{--meter-tint:var(--dsw-alias-danger)}",
+        ".dshk-usage-foot{display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:7px;border-top:.5px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font-size:11px}",
+        ".dshk-usage-link{margin-left:auto;color:var(--dsw-alias-label-secondary);text-decoration:none;border:.5px solid var(--dsw-alias-border-l1);border-radius:999px;padding:2px 10px;font-size:11px;line-height:16px}",
+        ".dshk-usage-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",
+        ".dshk-usage-refresh{appearance:none;border:.5px solid var(--dsw-alias-border-l1);background:0 0;border-radius:999px;padding:2px 10px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);cursor:pointer}",
+        ".dshk-usage-refresh:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",
+        // 会话监视条（composer.dock 槽）与头部 429 状态条（session.header.actions 槽）
+        ".dshk-monitor-line{display:flex;align-items:center;gap:10px;padding:5px 12px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 35%,transparent);border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 8%,transparent);font-size:12px;color:var(--dsw-alias-label-secondary)}",
+        ".dshk-monitor-text{flex:1;min-width:0}",
+        ".dshk-monitor-cancel{appearance:none;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:none;padding:2px 10px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer}",
+        ".dshk-monitor-cancel:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-tertiary)}",
+        // 会话头部 429 状态条：仅当后台会话有待续跑/已封顶时渲染，零常驻
+        ".dshk-mbg{position:relative}",
+        ".dshk-mbg-trigger{display:inline-flex;align-items:center;gap:5px;min-height:26px;padding:2px 7px;border:0;background:none;border-radius:6px;color:var(--dsw-alias-label-tertiary);cursor:pointer;font:inherit;font-size:12px;line-height:18px}",
+        ".dshk-mbg-trigger:hover,.dshk-mbg-trigger[aria-expanded=\"true\"]{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-fill-l1,transparent)}",
+        ".dshk-mbg-dot{flex:none;width:7px;height:7px;border-radius:999px;background:var(--dsw-alias-state-warning,#e2c08d)}",
+        ".dshk-mbg-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:80;display:flex;flex-direction:column;gap:2px;min-width:300px;max-width:min(460px,92vw);padding:7px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-1));border:1px solid var(--dsw-alias-border-l1);border-radius:10px;box-shadow:var(--dsw-elevation-prominent,0 8px 24px rgba(0,0,0,.2))}",
+        ".dshk-mbg-menu .dshk-monitor-cancel{margin-left:auto}",
+      ].join("\n");
+      document.head.appendChild(style);
+    }
+
+    // ── modelDirectories 懒就绪接线（apply 时注入，数据源到位后通知芯片重读）──
+    let usageModelDirs = null;
+    const usageDirs = { version: 0 };
+    const usageDirsSubs = new Set();
+    function usageDirsNotify() {
+      usageDirs.version += 1;
+      for (const fn of usageDirsSubs) {
+        try {
+          fn();
+        } catch {
+          /* 订阅者已卸载 */
+        }
+      }
+    }
+
+    function usageProviderKind(providerId) {
+      const s = String(providerId ?? "");
+      if (/deepseek/i.test(s)) return "deepseek";
+      if (/opencode/i.test(s)) return "opencode";
+      if (/zai|glm|bigmodel/i.test(s)) return "zai";
+      return null;
+    }
+
+    /** 芯片数据模块级缓存：换会话/重挂载 60s 内不重复打端点（宿主还有 60s 缓存） */
+    const usageData = { body: null, at: 0 };
+
+    const USAGE_CURRENCY_SYMBOL = { CNY: "¥", USD: "$", TWD: "NT$", HKD: "HK$", EUR: "€" };
+    /** 各家官方用量页（浮层底部链接） */
+    const USAGE_LINKS = {
+      deepseek: "https://platform.deepseek.com/usage",
+      opencode: "https://opencode.ai/zh/go",
+      zai: "https://bigmodel.cn/coding-plan/personal/usage",
+    };
+    const usageUseAnchoredPosition =
+      dswPrimIcons && typeof dswPrimIcons.useAnchoredPosition === "function" ? dswPrimIcons.useAnchoredPosition : null;
+    const usageUseDismiss =
+      dswPrimIcons && typeof dswPrimIcons.useDismissOnOutsidePointer === "function" ? dswPrimIcons.useDismissOnOutsidePointer : null;
+    const usageTooltip = dswIcon("Tooltip");
+
+    function usageFmtCountdown(target, now) {
+      const ms = target - now;
+      if (!Number.isFinite(ms)) return "";
+      const suffix = ms <= 0 ? "" : resolveZh() ? "后" : "";
+      const abs = Math.abs(ms);
+      const d = Math.floor(abs / 86400000);
+      const h = Math.floor((abs % 86400000) / 3600000);
+      const m = Math.floor((abs % 3600000) / 60000);
+      if (ms <= 0) return resolveZh() ? "已重置" : "reset";
+      if (d > 0) return `${resolveZh() ? `${d}天${h}时` : `${d}d ${h}h`}${suffix}`;
+      if (h > 0) return `${resolveZh() ? `${h}时${m}分` : `${h}h ${m}m`}${suffix}`;
+      return `${resolveZh() ? `${Math.max(m, 1)}分` : `${Math.max(m, 1)}m`}${suffix}`;
+    }
+
+    /**
+     * 高峰时段（本地时区，仅工作日，[起,止) 分钟数）：只标 DeepSeek 工作日
+     *   9:00–12:00、14:00–18:00（z.ai / opencode 无公开口径不标）。
+     *   高峰时芯片前加红色「峰」字提示限流风险。
+     * DeepSeek 峰谷补充（官方 2026-09-19 说明）：周六日全天、调休上班的周末、
+     *   中国法定节假日全天均按空闲时段计费——前两者被周末判定覆盖，落在工作日的
+     *   假期靠 USAGE_HOLIDAYS 免标。
+     */
+    const USAGE_PEAK_WINDOWS = {
+      deepseek: [
+        [540, 720],
+        [840, 1080],
+      ],
+    };
+    /**
+     * 中国法定节假日（国务院办公厅年度安排，[起月,起日,止月,止日] 按年展开成日期集）。
+     * 只维护已公布的年份：过期年份退回「工作日即可能标峰」，仅提示失真，不影响
+     * 计费数字。2026 = 国办发明电〔2025〕7号；2027 安排公布后照式补一年。
+     */
+    const USAGE_HOLIDAYS = (() => {
+      const YEAR_RANGES = {
+        2026: [
+          [1, 1, 1, 3], // 元旦
+          [2, 15, 2, 23], // 春节
+          [4, 4, 4, 6], // 清明
+          [5, 1, 5, 5], // 劳动节
+          [6, 19, 6, 21], // 端午
+          [9, 25, 9, 27], // 中秋
+          [10, 1, 10, 7], // 国庆
+        ],
+      };
+      const set = new Set();
+      for (const [year, ranges] of Object.entries(YEAR_RANGES)) {
+        for (let [m1, d1, m2, d2] of YEAR_RANGES[year]) {
+          for (let d = new Date(+year, m1 - 1, d1); d <= new Date(+year, m2 - 1, d2); d.setDate(d.getDate() + 1)) {
+            set.add(`${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`);
+          }
+        }
+      }
+      return set;
+    })();
+    const usageDayKey = (d) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    function usageIsPeak(kind, now) {
+      const wins = USAGE_PEAK_WINDOWS[kind];
+      if (!wins) return false;
+      const day = now.getDay();
+      if (day === 0 || day === 6) return false; // 周末（含调休上班的周末）DeepSeek 全天按空闲计费
+      if (kind === "deepseek" && USAGE_HOLIDAYS.has(usageDayKey(now))) return false; // 法定节假日全天
+      const mins = now.getHours() * 60 + now.getMinutes();
+      return wins.some(([a, b]) => mins >= a && mins < b);
+    }
+
+    /**
+     * 芯片内容（官方 trigger 同款字体高度，纯数值）：
+     *   deepseek → 单文本 ¥余额；opencode/zai → 全部窗口百分比数组（5h、周、月顺序，zai 无月窗）。
+     * 返回 { text, hot? } 或 { wins:[percent] , }；null = 该家没数、不出芯片。
+     */
+    function usageChipParts(kind, card) {
+      if (!card) return null;
+      if (!card.ok) return { text: "—", hot: true };
+      if (kind === "deepseek") {
+        const info = (card.infos && card.infos[0]) || null;
+        if (!info) return null;
+        return { text: `${USAGE_CURRENCY_SYMBOL[info.currency] || (info.currency ? info.currency + " " : "")}${info.total}`, hot: card.available === false };
+      }
+      const wins =
+        kind === "opencode"
+          ? [card.windows && card.windows.rolling, card.windows && card.windows.weekly, card.windows && card.windows.monthly]
+          : [card.limits && card.limits.find((l) => l.kind === "hours"), card.limits && card.limits.find((l) => l.kind === "week")];
+      const parts = wins
+        .map((win) => {
+          const percent = win ? (Number.isFinite(win.percent) ? win.percent : Number.isFinite(win.percentage) ? win.percentage : null) : null;
+          return percent;
+        })
+        .filter((p) => p !== null);
+      return parts.length > 0 ? { wins: parts } : null;
+    }
+
+    function UsageLine(props) {
+      const { sessionId, useSession } = props;
+      react.useSyncExternalStore(subscribeLocale, getLocaleVersion);
+      const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
+      const [, forceTick] = react.useState(0); // 重置倒计时每分钟重算
+      // 官方回合运行位（与 MonitorLine 同源）：回合收尾时补一拍刷新
+      const running = typeof useSession === "function" ? useSession((s) => s.running) : false;
+      const dirsVersion = react.useSyncExternalStore(
+        (cb) => {
+          usageDirsSubs.add(cb);
+          return () => usageDirsSubs.delete(cb);
+        },
+        () => usageDirs.version,
+      );
+      // 当前会话选中的模型 provider → 卡位；目录 store 换身（load 后）也要重读
+      const [kind, setKind] = react.useState(null);
+      react.useEffect(() => {
+        if (!usageModelDirs || !sessionId) {
+          setKind(null);
+          return undefined;
+        }
+        let alive = true;
+        let off = null;
+        let dir = null;
+        try {
+          dir = usageModelDirs.directoryFor(sessionId);
+        } catch {
+          return undefined; // 未知会话（服务端明说 fail loud）：芯片静默退场
+        }
+        const store = dir && dir.store;
+        if (!store || typeof store.subscribe !== "function") return undefined;
+        const read = () => {
+          if (!alive) return;
+          const cur = store.getSnapshot() && store.getSnapshot().current;
+          setKind(usageProviderKind(cur && cur.provider));
+        };
+        try {
+          off = store.subscribe(read);
+        } catch {
+          return undefined;
+        }
+        read();
+        // 目录懒构造，catalog 首次 load 才落 current：主动补一拍（错误落 store 不外抛）
+        try {
+          void Promise.resolve(dir.load()).catch(() => {});
+        } catch {
+          /* 老宿主形态差异：读不到就靠投影 */
+        }
+        return () => {
+          alive = false;
+          try {
+            if (off) off();
+          } catch {
+            /* 已注销 */
+          }
+        };
+      }, [sessionId, dirsVersion]);
+      const [data, setData] = react.useState(() => usageData.body);
+      const [open, setOpen] = react.useState(false);
+      const anchorRef = react.useRef(null); // 芯片按钮（浮层锚点）
+      const panelRef = react.useRef(null);
+      const load = react.useCallback(async (fresh) => {
+        // 开关刚关（403）或网络失败：保留旧数据，下一轮轮询再试
+        try {
+          const body = await kitJson(`/dsh-kit/usage${fresh ? "?fresh=1" : ""}`, undefined, (b) => b !== null && typeof b.providers === "object");
+          usageData.body = body;
+          usageData.at = Date.now();
+          setData(body);
+        } catch {}
+      }, []);
+      // 回合收尾（running true→false）立即补一拍：配额刚被这轮消耗，等 60s 轮询太慢；
+      // 10s 防抖兜连续短回合
+      const prevRunningRef = react.useRef(running);
+      react.useEffect(() => {
+        if (prevRunningRef.current === true && running === false && Date.now() - usageData.at >= 10000) {
+          void load(false);
+        }
+        prevRunningRef.current = running;
+      }, [running, load]);
+      react.useEffect(() => {
+        void load(false);
+        const timer = setInterval(() => {
+          if (document.visibilityState === "hidden") return;
+          forceTick((n) => n + 1);
+          // 5 分钟节拍：>=60s 才真拉（宿主还有 60s 缓存，多组件挂载借模块缓存去重）
+          if (Date.now() - usageData.at >= 60000) void load(false);
+        }, 60000);
+        return () => clearInterval(timer);
+      }, [load]);
+      react.useEffect(() => {
+        if (kind === null) setOpen(false);
+      }, [kind]);
+      // Esc 关浮层（官方 ContextMeter 同款）
+      react.useEffect(() => {
+        if (!open) return undefined;
+        const onKey = (e) => {
+          if (e.key === "Escape") setOpen(false);
+        };
+        document.addEventListener("keydown", onKey);
+        return () => document.removeEventListener("keydown", onKey);
+      }, [open]);
+      // 官方 primitives 钩子：模块级判定可用性（运行期恒定），条件调用不违反 hooks 规则
+      const position = usageUseAnchoredPosition
+        ? usageUseAnchoredPosition({ open, anchorRef, panelRef, side: "top", gap: 8, margin: 12 })
+        : null;
+      if (usageUseDismiss) usageUseDismiss(anchorRef, open, setOpen, panelRef);
+      // 官方定位会把 top 钳进视口（Math.max(top, margin)）——composer 偏上时上方空间
+      // 不足，面板就被压到锚点下方（「向下展开」）。把面板 max-height 限到锚点上方
+      // 空间，钳制条件永不触发，面板恒贴芯片正上方，放不下就内部滚动
+      react.useLayoutEffect(() => {
+        if (!open) return undefined;
+        const cap = () => {
+          const rect = anchorRef.current ? anchorRef.current.getBoundingClientRect() : null;
+          const panel = panelRef.current;
+          if (!rect || !panel) return;
+          panel.style.maxHeight = `${Math.max(rect.top - 20, 160)}px`;
+        };
+        cap();
+        window.addEventListener("scroll", cap, true);
+        window.addEventListener("resize", cap);
+        return () => {
+          window.removeEventListener("scroll", cap, true);
+          window.removeEventListener("resize", cap);
+        };
+      }, [open]);
+
+      // usageEnabled = 本组件自己的 Config；关 = 不出芯片（端点同源 403 兜底）
+      if (!kind || cfg.usageEnabled !== true) return null;
+      const providers = (data && data.providers) || {};
+      const card = providers[kind] || null;
+      const parts = usageChipParts(kind, card);
+      if (parts === null) return null;
+      const now = Date.now();
+      const peak = usageIsPeak(kind, new Date()); // forceTick 每分钟重渲染，跨过时段边界一分钟内变色
+      const kindTitle = () => (kind === "deepseek" ? t("usageDeepseek") : kind === "opencode" ? t("usageOpencode") : t("usageZai"));
+
+      /** 浮层里的窗口行：dt/dd 官方行 + 进度条（官方 bar/segment 样式），sub 行放 credits 与重置 */
+      const windowBlock = (label, win) => {
+        if (!win) return null;
+        const percent = Number.isFinite(win.percent) ? win.percent : Number.isFinite(win.percentage) ? win.percentage : null;
+        const resetAt = win.resetsAt ? Date.parse(win.resetsAt) : win.nextResetTime;
+        const credits =
+          win.currentValue !== undefined && Number.isFinite(win.currentValue)
+            ? `${win.currentValue}/${win.usage || "—"} credits`
+            : null;
+        const sub = [credits, resetAt ? `${t("usageResets")} ${usageFmtCountdown(resetAt, now)}` : null].filter(Boolean).join(" · ");
+        return jsxRuntime.jsxs("div", { children: [
+          jsxRuntime.jsxs("dl", { className: "dshk-usage-row", children: [
+            jsxRuntime.jsx("dt", { children: label }),
+            jsxRuntime.jsx("dd", { className: percent !== null && percent >= 80 ? "dshk-usage-hot" : undefined, children: percent === null ? "—" : `${percent}%` }),
+          ] }),
+          sub !== "" ? jsxRuntime.jsx("div", { className: "dshk-usage-sub", children: sub }) : null,
+          jsxRuntime.jsx("div", { className: "dshk-usage-bar", children: percent === null ? null : jsxRuntime.jsx("span", { className: `dshk-usage-segment${percent >= 80 ? " is-hot" : ""}`, style: { width: `${Math.min(percent, 100)}%` } }) }),
+        ] }, label);
+      };
+
+      const panel = (() => {
+        if (!open || !card) return null;
+        const ok = card.ok === true;
+        let figure = null;
+        let badge = null;
+        let body = null;
+        if (!ok) {
+          badge = { text: card.error || t("usageNoCard"), hot: true };
+        } else if (kind === "deepseek") {
+          const info = (card.infos && card.infos[0]) || null;
+          if (info) figure = `${USAGE_CURRENCY_SYMBOL[info.currency] || ""}${info.total}`;
+          badge =
+            card.available === false
+              ? { text: t("usagePaused"), hot: true }
+              : card.available === true
+                ? { text: t("usageAvailable") }
+                : null;
+          body = (card.infos || []).map((info) =>
+            jsxRuntime.jsxs("div", { className: "dshk-usage-rows", children: [
+              jsxRuntime.jsxs("dl", { className: "dshk-usage-row", children: [
+                jsxRuntime.jsx("dt", { children: t("usageBalanceTotal") }),
+                jsxRuntime.jsx("dd", { children: `${USAGE_CURRENCY_SYMBOL[info.currency] || ""}${info.total}` }),
+              ] }),
+              info.granted && info.granted !== "0"
+                ? jsxRuntime.jsxs("dl", { className: "dshk-usage-row", children: [
+                    jsxRuntime.jsx("dt", { children: t("usageBalanceGranted") }),
+                    jsxRuntime.jsx("dd", { children: info.granted }),
+                  ] })
+                : null,
+              info.toppedUp && info.toppedUp !== "0"
+                ? jsxRuntime.jsxs("dl", { className: "dshk-usage-row", children: [
+                    jsxRuntime.jsx("dt", { children: t("usageBalanceToppedUp") }),
+                    jsxRuntime.jsx("dd", { children: info.toppedUp }),
+                  ] })
+                : null,
+            ] }, info.currency));
+        } else if (kind === "opencode") {
+          const win = card.windows && card.windows.rolling;
+          const percent = win ? (Number.isFinite(win.percent) ? win.percent : null) : null;
+          if (percent !== null) figure = `${percent}%`;
+          body = [
+            windowBlock(t("usageW5h"), card.windows && card.windows.rolling),
+            windowBlock(t("usageWeek"), card.windows && card.windows.weekly),
+            windowBlock(t("usageMonth"), card.windows && card.windows.monthly),
+          ];
+        } else {
+          const hours = card.limits && card.limits.find((l) => l.kind === "hours");
+          const percent = hours ? (Number.isFinite(hours.percentage) ? hours.percentage : null) : null;
+          if (percent !== null) figure = `${percent}%`;
+          badge = card.level ? { text: `${t("usageLevel")} ${card.level}` } : badge;
+          body = (card.limits || []).map((l) =>
+            windowBlock(l.kind === "hours" ? (l.number && l.number !== 5 ? `${l.number} ${t("usageW5h")}` : t("usageW5h")) : t("usageWeek"), l),
+          );
+        }
+        return reactDom.createPortal(
+          jsxRuntime.jsxs("div", {
+            ref: panelRef,
+            className: "dshk-usage-pop",
+            style: position ?? { visibility: "hidden", left: 0, top: 0 },
+            role: "dialog",
+            "aria-label": kindTitle(),
+            children: [
+              jsxRuntime.jsxs("div", { className: "dshk-usage-header", children: [
+                jsxRuntime.jsx("span", { className: "dshk-usage-headline", children: kindTitle() }),
+                badge ? jsxRuntime.jsx("span", { className: `dshk-usage-percent${badge.hot ? " dshk-usage-hot" : ""}`, children: badge.text }) : null,
+                figure !== null ? jsxRuntime.jsx("span", { className: "dshk-usage-figures", children: figure }) : null,
+              ] }),
+              body,
+              jsxRuntime.jsxs("div", { className: "dshk-usage-foot", children: [
+                jsxRuntime.jsx("span", { children: `${t("usageUpdatedAt")} ${usageData.at ? new Date(usageData.at).toLocaleTimeString() : "—"}` }),
+                USAGE_LINKS[kind]
+                  ? jsxRuntime.jsx("a", { className: "dshk-usage-link", href: USAGE_LINKS[kind], target: "_blank", rel: "noreferrer", children: t("usageOfficialPage") })
+                  : null,
+                jsxRuntime.jsx("button", { type: "button", className: "dshk-usage-refresh", onClick: () => void load(true), children: t("usageRefresh") }),
+              ] }),
+            ],
+          }),
+          document.body,
+          "dshk-usage-pop",
+        );
+      })();
+
+      const tooltipLabel =
+        (kind === "deepseek"
+          ? t("usageDeepseek")
+          : `${kindTitle()} · ${resolveZh() ? (kind === "opencode" ? "5小时/周/月窗口" : "5小时/周窗口") : kind === "opencode" ? "5h/week/month" : "5h/week"}`) +
+        (peak ? ` · ${resolveZh() ? "高峰时段" : "peak hours"}` : "");
+      const trigger = jsxRuntime.jsx("button", {
+        type: "button",
+        className: `dshk-usage-trigger${parts.hot || peak ? " dshk-usage-hot" : ""}`,
+        "aria-haspopup": "dialog",
+        "aria-expanded": open,
+        onClick: (e) => {
+          anchorRef.current = e.currentTarget;
+          setOpen(!open);
+        },
+        children: (() => {
+          const items = [];
+          if (peak) items.push(jsxRuntime.jsx("span", { className: "dshk-usage-peak", children: resolveZh() ? "峰" : "P" }, "peak"));
+          if (parts.text !== undefined) items.push(parts.text);
+          else
+            parts.wins.forEach((p, i) => {
+              if (i > 0) items.push(jsxRuntime.jsx("span", { className: "dshk-usage-sep", children: "·" }, "sep" + i));
+              items.push(jsxRuntime.jsxs("span", { className: `dshk-usage-win${p >= 80 ? " is-hot" : ""}`, children: [p, "%"] }, "w" + i));
+            });
+          return items;
+        })(),
+      });
+      return jsxRuntime.jsxs("div", { className: "dshk-usage", children: [
+        usageTooltip
+          ? jsxRuntime.jsx(usageTooltip, { label: tooltipLabel, side: "top", delayMs: 500, disabled: open, children: trigger })
+          : jsxRuntime.jsx("span", { title: tooltipLabel, children: trigger }),
+        panel,
+      ] });
+    }
+
+    exports.inject = ["slots"];
+    exports.apply = async (ctx) => {
+      slotsCtx = ctx;
+      // 组件配置页：挂在插件页本组件行上的「配置」。行由 dsh-kit bundle 的 patch
+      // 声明，槽位 key = <包名>#<行id>——两种包名口径各挂一枚（页面按精确 key 匹配，
+      // 未命中的那枚永远不渲染），宿主改口径也不用动组件
+      for (const key of ["dsh-kit#monitor", "dsh-kit-monitor#monitor"]) {
+        ctx.slots.inject("plugins.row.config", () =>
+          ctx.slots.register({ name: "plugins.row.config", key }, MonitorConfigPage),
+        );
+      }
+      // modelDirectories 懒就绪：就绪时通知订阅者重读（用量芯片据此显隐）
+      ctx.inject(["modelDirectories"], (mctx) => {
+        usageModelDirs = mctx.modelDirectories || null;
+        usageDirsNotify();
+      });
+      // 用量芯片（usageEnabled 门控在组件内）。槽位由官方 conversation 挂载期声明，
+      // 一律经 slots.inject 等声明落地再注册（直接 register 会炸整树 boot）
+      ctx.slots.inject("conversation.composer.dock", () =>
+        ctx.slots.register(
+          { name: "conversation.composer.dock", id: "dsh-kit-usage", order: 6 },
+          UsageLine,
+        ),
+      );
+      // 会话监视条（同槽 order 5，排官方 StatsLine 之后）与头部 429 状态条
+      // （monitorEnabled 门控在组件内，状态条零常驻）
+      ctx.slots.inject("conversation.composer.dock", () =>
+        ctx.slots.register(
+          { name: "conversation.composer.dock", id: "dsh-kit-monitor", order: 5 },
+          MonitorLine,
+        ),
+      );
+      ctx.slots.inject("conversation.session.header.actions", () =>
+        ctx.slots.register(
+          { name: "conversation.session.header.actions", id: "dsh-kit-monitor-bg", order: 21 },
+          MonitorBgAction,
+        ),
+      );
+      // 全局 429 续跑器主循环：轮询自守卫（服务未就绪直接跳过），monitorEnabled 关时空转
+      setInterval(monitorTick, MONITOR_TICK_MS);
+      // 会话通知：订阅官方两个数据源（就绪时机不保证，用 inject 等）。uiSession
+      // 缺位（精简组合/老宿主）时只订阅列表——完成通知照发，提问通知降级为不发
+      ctx.inject(["sessions"], (sctx) => {
+        const offs = [];
+        let pendingStore = null;
+        const evaluate = () => notifyEvaluate(sctx.sessions, pendingStore);
+        // 压缩完成：给列表里的会话各挂一个事件窗口订阅。窗口是会话「上台」才开的
+        // （历史按需拉），没上过台的窗口恒空、自然静默；上过台的即便切走也仍在收流。
+        // 列表变化时对账增删——会话被移除/归档即退订
+        const compactionSubs = new Map(); // sessionId -> off
+        const syncCompactionSubs = () => {
+          let ids;
+          try {
+            ids = sctx.sessions.list.getSnapshot().ids ?? [];
+          } catch {
+            return; // 服务异常：下条推送再来
+          }
+          for (const id of ids) {
+            if (compactionSubs.has(id)) continue;
+            try {
+              const source = sctx.sessions.binding(id)?.eventSource;
+              if (source && typeof source.subscribe === "function") {
+                compactionSubs.set(id, source.subscribe(() => notifyCompactionEvaluate(sctx.sessions, id)));
+              }
+            } catch {
+              /* 该会话暂不可绑定：下一轮列表变化再试 */
+            }
+          }
+          const live = new Set(ids);
+          for (const [id, off] of [...compactionSubs]) {
+            if (live.has(id)) continue;
+            compactionSubs.delete(id);
+            try {
+              off();
+            } catch {
+              /* 已注销 */
+            }
+          }
+          for (const id of [...notifyState.compactions.keys()]) if (!live.has(id)) notifyState.compactions.delete(id);
+        };
+        const sync = () => {
+          evaluate();
+          syncCompactionSubs();
+        };
+        if (typeof sctx.inject === "function") {
+          sctx.inject(["uiSession"], (uctx) => {
+            pendingStore = uctx.uiSession ? uctx.uiSession.pendingInteractions : null;
+            if (pendingStore && typeof pendingStore.subscribe === "function") offs.push(pendingStore.subscribe(evaluate));
+            evaluate();
+          });
+        }
+        const listStore = sctx.sessions ? sctx.sessions.list : null;
+        if (listStore && typeof listStore.subscribe === "function") offs.push(listStore.subscribe(sync));
+        sync(); // 首帧播种：列表里已在跑的会话不补发通知，窗口里已有的压缩同理
+        sctx.effect(() => () => {
+          for (const off of offs) {
+            try {
+              off();
+            } catch {
+              /* 已注销 */
+            }
+          }
+          for (const off of compactionSubs.values()) {
+            try {
+              off();
+            } catch {
+              /* 已注销 */
+            }
+          }
+          compactionSubs.clear();
+        });
+      });
+      // 标题闪烁复原（未授权时的兜底标记）：回窗口即清
+      document.addEventListener("visibilitychange", notifyMaybeUnflash);
+      window.addEventListener("focus", notifyMaybeUnflash);
+      // 提问 / 批准事件：旁听官方 remote 瀑布（根 ctx 上收全部会话的请求，含后台
+      // 会话——官方 UI 只在会话上台时接管，那半边它接不到）。remote 服务缺位
+      // （老宿主）时静默降级：只剩完成通知与官方待回应投影那一半
+      ctx.inject(["remote", "sessions"], (rctx) => {
+        try {
+          rctx.remote.$on("user-questions/request", notifyRequestListener(rctx.sessions, "question"));
+          rctx.remote.$on("approval/request", notifyRequestListener(rctx.sessions, "approval"));
+        } catch {
+          /* 缺 $on（宿主形态不同）：静默降级为只剩完成通知那一半 */
+        }
+      });
+    };
+
+    // 渲染级检查与单测取用（依赖注入的纯核心，直测不经过 apply）
+    exports.MonitorLine = MonitorLine;
+    exports.MonitorBgAction = MonitorBgAction;
+    exports.monitorTickCore = monitorTickCore;
+    exports.monitorTailRepeatCount = monitorTailRepeatCount;
+    exports.monitorCancelPlan = monitorCancelPlan;
+    exports.notifyDiffCore = notifyDiffCore;
+    exports.notifyCompactionCore = notifyCompactionCore;
+    exports.notifyCompleteSettled = notifyCompleteSettled;
+    exports.monitorStore = monitorStore; // 测试注入活动快照用
+    exports.monitorSessions = monitorSessions;
+    exports.usageIsPeak = usageIsPeak;
+    return exports;
+};
+
+    // ── dsh-kit-terminal 组件（终端）──
+// dsh-kit-terminal 浏览器半边 —— 终端组件的 client 面。
+// 收纳：对话输入行的终端入口（多会话角标）+ 底部停靠多标签终端坞 + xterm 胶水
+// （引擎 = 官方 webTerminals 服务，PTY 归宿主：会话工作区绑定、刷新保活、后台清理）。
+// 入口与坞分属两个槽位（conversation.input.left / shell.overlay），共享 kitBase 的
+// kitUi 跨槽状态（terminals/activeTermId/termDockOpen）；开关读本组件 Config
+// （/dsh-kit-terminal/config），键位注册进官方 shortcuts 服务。xterm 静态资源走主包
+// /dsh-kit/vendor 白名单（静态口套件共用）。
+    const terminalModule = (kit, require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+    const react = require("react");
+    const jsxRuntime = require("react/jsx-runtime");
+    const dock = kit;
+    const {
+      setKitUi, getKitUi, useKitUi, useCurrentRow,
+      KitTip, attachShortcutCatalog,
+      flashToast, resolveZh, subscribeLocale, getLocaleVersion, kitJson,
+    } = dock;
+
+    // 组件私有文案（终端词条随坞迁入本包；contentFail 与 root 的技能页同文，
+    // 但本包 t() 只看本包词典，用到就得在这里备一份）
+    const zh = {
+      label: "终端",
+      noCwd: "没有可用的会话工作区：先打开或创建一个会话",
+      connecting: "连接中…",
+      exited: "已退出",
+      code: "代码",
+      restart: "重新启动终端",
+      termNew: "新建终端",
+      termHide: "隐藏终端坞（进程继续运行）",
+      termTabClose: "结束此终端",
+      termCloseAll: "结束全部终端",
+      vendorFail: "终端组件加载失败",
+      officialTermUnavailable: "官方终端服务不可用：此功能需要 DSH 0.1.6+",
+      termLimit: "宿主终端数量已达上限：先结束一些再新建",
+      contentFail: "读取失败",
+      kcfgGroupFeatures: "功能开关",
+      kcfgTerminalEnabled: "终端面板",
+      kcfgTerminalEnabledHint: "对话输入行出终端入口，面板停靠底部（引擎为官方 webTerminals）。",
+      scTerminal: "终端面板",
+      scTerminalOff: "终端面板已在配置页关闭",
+    };
+    const en = {
+      label: "Terminal",
+      noCwd: "No session workspace available: open or create a session first",
+      connecting: "Connecting…",
+      exited: "Exited",
+      code: "code",
+      restart: "Restart terminal",
+      termNew: "New terminal",
+      termHide: "Hide dock (processes keep running)",
+      termTabClose: "Kill this terminal",
+      termCloseAll: "Kill all terminals",
+      vendorFail: "Failed to load terminal components",
+      officialTermUnavailable: "Official terminal service unavailable: requires DSH 0.1.6+",
+      termLimit: "Host terminal limit reached: kill some terminals first",
+      contentFail: "Failed to read",
+      kcfgGroupFeatures: "Features",
+      kcfgTerminalEnabled: "Terminal panel",
+      kcfgTerminalEnabledHint: "Adds the terminal entry to the composer; the panel docks at the bottom (official webTerminals engine).",
+      scTerminal: "Terminal dock",
+      scTerminalOff: "Terminal dock is switched off in the config page",
+    };
+    const lang = () => (resolveZh() ? zh : en);
+    const t = (key) => lang()[key] ?? key;
+
+    // ─────────── 组件配置（/dsh-kit-terminal/config，Config schema 唯一真源）───────
+    // 键位不在这里：终端命令注册进官方 shortcuts 服务（见 registerShortcuts），
+    // 录制与持久化归官方「快捷键」页。
+    const T_CFG_DEFAULTS = {
+      terminalEnabled: true,
+    };
+    let cfgSnap = null;
+    const cfgSubs = new Set();
+    const emitCfg = () => {
+      for (const fn of cfgSubs) {
+        try {
+          fn();
+        } catch {
+          /* 订阅者已卸载 */
+        }
+      }
+    };
+    async function loadCfg() {
+      let value = null;
+      try {
+        const v = await kitJson("/dsh-kit-terminal/config", undefined, (b) => b !== null && typeof b === "object");
+        value = v;
+      } catch {
+        value = null; // 端点不可达：null → cfgFromSnapshot 走内置默认
+      }
+      cfgSnap = value && typeof value === "object" ? { status: "ready", value } : null;
+      emitCfg();
+      sweepDisabledTerm();
+    }
+    const subscribeCfg = (fn) => {
+      cfgSubs.add(fn);
+      return () => cfgSubs.delete(fn);
+    };
+    const getCfgSnapshot = () => cfgSnap;
+    /** 从快照提取生效配置（字段缺失/非法逐项回退默认） */
+    function cfgFromSnapshot(snap) {
+      const out = { ...T_CFG_DEFAULTS };
+      if (!snap || snap.status !== "ready" || !snap.value || typeof snap.value !== "object") return out;
+      out.terminalEnabled = snap.value.terminalEnabled !== false;
+      return out;
+    }
+    /** 配置关但会话还开着（配置页保存 / entry 重启瞬间）：立即清场——结束全部终端，
+     *  与「关 = 入口消失」的语义一致。每条配置通道都经 loadCfg，故清场挂在那里 */
+    function sweepDisabledTerm() {
+      if (cfgFromSnapshot(getCfgSnapshot()).terminalEnabled) return;
+      const ui = getKitUi();
+      if (ui.terminals.length > 0 || ui.termDockOpen) {
+        setKitUi({ terminals: [], activeTermId: null, termDockOpen: false });
+      }
+    }
+
+    // ─────────── 组件样式 ───────────
+    /** 终端面板高度（坞高度与让位 padding 共用一个变量） */
+    const DOCK_H = "min(34vh, 330px)";
+    const TERMINAL_CSS = `
+.dshk-dock{position:fixed;left:0;width:100%;bottom:0;height:var(--dshk-dock-h,${DOCK_H});display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:1px solid var(--dsw-alias-border-l1);box-shadow:0 -6px 20px rgba(0,0,0,.14);z-index:800;pointer-events:auto}
+/* 终端坞标签是固定短文字，不参与弹性：head 里 title 与 spring 双 flex:1 会把空闲
+   空间对半分，宽窗口下标签簇（页签/路径）飘到中间，只有窄窗口看着正常 */
+.dshk-dock-label{flex:0 0 auto}
+.dshk-sub{color:var(--dsw-alias-label-tertiary);font-family:ui-monospace,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46%}
+.dshk-term{height:100%}
+/* padding 加在 .xterm 元素上：fit addon 从该元素读 padding 并从可用面积扣除，cols/rows 不会算错 */
+.dshk-term .xterm{height:100%;box-sizing:border-box;padding:6px 10px}
+.dshk-term .xterm-viewport::-webkit-scrollbar{width:8px}
+.dshk-term .xterm-viewport::-webkit-scrollbar-thumb{background:rgba(127,127,127,.3);border-radius:4px}
+.dshk-term .xterm-viewport::-webkit-scrollbar-track{background:transparent}
+.dshk-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);font-size:13px}
+/* 多终端：入口图标数量角标 + 标签条 + 堆叠 pane（隐藏 pane 离屏缓冲输出） */
+/* 品牌主色是单色令牌（浅色主题近黑、深色主题近白），主色底上的文字一律用 bg-base 取反——
+   写死 #fff 在深色主题就是白底白字 */
+.dshk-term-badge{position:absolute;top:-4px;right:-4px;min-width:14px;height:14px;padding:0 3px;box-sizing:border-box;border-radius:999px;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);font-size:9px;line-height:14px;text-align:center;font-weight:600}
+.dshk-tstack{position:relative;flex:1 1 auto;min-height:0}
+.dshk-tpane{position:absolute;inset:0;padding:2px 8px 8px;box-sizing:border-box;display:none}
+.dshk-tpane[data-on]{display:block}
+.dshk-tbody{height:100%;position:relative}
+.dshk-term-note{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:inline-flex;align-items:center;gap:8px;max-width:92%;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;padding:3px 12px;font-size:12px;color:var(--dsw-alias-label-secondary);pointer-events:none;z-index:5}
+.dshk-term-note button{pointer-events:auto}
+/* 让位布局：终端打开时把对话列顶起，内容不被遮挡（终端宽度即对话列宽） */
+body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})}
+/* 面板开合只保留 dock 的 padding-bottom 过渡：margin-right 如果也带过渡动画，
+   每帧都会触发官方对话宽度 ResizeObserver 重发布 + 长消息流重排（卡顿），
+   让位改为瞬时完成一次，视觉缓冲交给面板自身的 width 过渡 */
+[class*="_centerCol"]{transition:padding-bottom .18s ease}
+@media (prefers-reduced-motion:reduce){[class*="_centerCol"]{transition:none}}
+    `;
+    /** 注入本组件样式与 xterm.css（link），幂等 */
+    function injectStyles() {
+      if (typeof document === "undefined") return;
+      if (document.querySelector('style[data-plugin-css="dsh-kit-terminal/ui"]') === null) {
+        const tag = document.createElement("style");
+        tag.dataset.plugin = "dsh-kit-terminal";
+        tag.dataset.pluginCss = "dsh-kit-terminal/ui";
+        tag.textContent = TERMINAL_CSS;
+        document.head.appendChild(tag);
+      }
+      if (document.querySelector('link[data-plugin-css="dsh-kit-terminal/xterm"]') === null) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.dataset.plugin = "dsh-kit-terminal";
+        link.dataset.pluginCss = "dsh-kit-terminal/xterm";
+        link.href = "/dsh-kit/vendor/xterm.css";
+        document.head.appendChild(link);
+      }
+    }
+
+    // ─────────── vendor 按需加载 ───────────
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = src;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error("load failed: " + src));
+        document.head.appendChild(s);
+      });
+    }
+    let vendorPromise = null;
+    /** 官方预编译 UMD：xterm.js → window.Terminal；addon-fit.js → window.FitAddon.FitAddon */
+    function ensureVendor() {
+      if (vendorPromise === null) {
+        vendorPromise =
+          typeof window.Terminal === "function" && window.FitAddon && typeof window.FitAddon.FitAddon === "function"
+            ? Promise.resolve()
+            : loadScript("/dsh-kit/vendor/xterm.js").then(() => loadScript("/dsh-kit/vendor/addon-fit.js"));
+      }
+      return vendorPromise;
+    }
+
+    // ─────────── 外观跟随 ───────────
+    /** DSH 主题 presenter 以 body[data-ds-dark-theme] 有无表达明暗 */
+    function isDark() {
+      return typeof document !== "undefined" && document.body.hasAttribute("data-ds-dark-theme");
+    }
+    /** 读令牌 computed 值（xterm 需要具体色值），取不到时退回兜底色 */
+    function tokenColor(name, fallback) {
+      try {
+        const v = getComputedStyle(document.body).getPropertyValue(name).trim();
+        return v !== "" ? v : fallback;
+      } catch {
+        return fallback;
+      }
+    }
+    const ANSI_DARK = {
+      black: "#000000", red: "#cd3131", green: "#0dbc79", yellow: "#e5e510",
+      blue: "#2472c8", magenta: "#bc3fbc", cyan: "#11a8cd", white: "#e5e5e5",
+      brightBlack: "#666666", brightRed: "#f14c4c", brightGreen: "#23d18b", brightYellow: "#f5f543",
+      brightBlue: "#3b8eea", brightMagenta: "#d670d6", brightCyan: "#29b8db", brightWhite: "#ffffff",
+    };
+    const ANSI_LIGHT = {
+      black: "#000000", red: "#cd3131", green: "#00bc00", yellow: "#949800",
+      blue: "#0451a5", magenta: "#bc05bc", cyan: "#0598bc", white: "#555555",
+      brightBlack: "#666666", brightRed: "#cd3131", brightGreen: "#14ce14", brightYellow: "#b2ba00",
+      brightBlue: "#0451a5", brightMagenta: "#bc05bc", brightCyan: "#0598bc", brightWhite: "#a5a5a5",
+    };
+    /** 组装 xterm 调色板：背景/前景跟随应用令牌，ANSI 按明暗取标准套 */
+    function xtermTheme() {
+      const dark = isDark();
+      const fg = tokenColor("--dsw-alias-label-primary", dark ? "#cccccc" : "#333333");
+      return {
+        background: tokenColor("--dsw-alias-bg-base", dark ? "#181818" : "#ffffff"),
+        foreground: fg,
+        cursor: fg,
+        cursorAccent: tokenColor("--dsw-alias-bg-base", dark ? "#181818" : "#ffffff"),
+        selectionBackground: dark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.25)",
+        ...(dark ? ANSI_DARK : ANSI_LIGHT),
+      };
+    }
+
+    // ── 多终端会话模型 ──
+    // terminals:[{id, sessionId, cwd}] 创建顺序即标签顺序；每个终端在创建那一刻
+    // 绑定当时的会话（官方引擎按会话起 PTY，cwd 定在会话工作区，cwd 只剩标签
+    // 文案用途）。termDockOpen 只管坞的可见性——隐藏不杀进程，后台标签的 shell
+    // 继续跑、xterm 继续缓冲输出；标签 ✕ 才真正结束对应宿主终端。
+    let termSeq = 0;
+    const makeTerm = (sessionId, cwd) => ({ id: `term-${++termSeq}`, sessionId, cwd });
+    /** 入口按钮与快捷键共用：开=恢复视图（无会话则新建绑定当前会话）；关=仅隐藏 */
+    function toggleTermDock(ui, sessionId, cwd) {
+      if (ui.termDockOpen) return { termDockOpen: false };
+      if (ui.terminals.length === 0) {
+        const nt = sessionId ? makeTerm(sessionId, cwd) : null;
+        return nt ? { termDockOpen: true, terminals: [nt], activeTermId: nt.id } : { termDockOpen: true };
+      }
+      return { termDockOpen: true, activeTermId: ui.activeTermId ?? ui.terminals[ui.terminals.length - 1].id };
+    }
+    /** ＋ 新建终端：绑定调用那一刻的当前会话 */
+    function spawnTerm(ui, sessionId, cwd) {
+      const nt = makeTerm(sessionId ?? "", cwd ?? "");
+      return { terminals: [...ui.terminals, nt], activeTermId: nt.id, termDockOpen: true };
+    }
+    /** 标签 ✕：从列表移除（组件卸载即结束宿主终端），激活位顺延邻居 */
+    function killTerm(ui, id) {
+      const idx = ui.terminals.findIndex((x) => x.id === id);
+      if (idx < 0) return {};
+      const rest = ui.terminals.filter((x) => x.id !== id);
+      const patch = { terminals: rest };
+      if (ui.activeTermId === id) {
+        patch.activeTermId = rest.length > 0 ? rest[Math.min(idx, rest.length - 1)].id : null;
+      }
+      if (rest.length === 0) patch.termDockOpen = false;
+      return patch;
+    }
+    // 快捷键的 resolve 在渲染之外调用，闭包拿不到当前会话——由入口/坞渲染期回填
+    let lastSession = { id: null, cwd: null };
+    /** 官方终端模型服务（0.1.6+）：apply 期 inject 捕获，缺服务 = 坞报版本提示 */
+    let webTerminalsSvc = null;
+
+    // ─────────── 终端坞（多标签）───────────
+    // TerminalPane = 一个终端会话，挂载即接管宿主 TerminalView、卸载即结束进程；
+    // TerminalDock = 底部停靠容器：头部标签条（＋ 新建 / ⟳ 重启 / — 隐藏），body
+    // 纵向堆叠各 pane，仅激活 pane 可见。隐藏的 pane 保持挂载：xterm 离屏继续缓冲
+    // 输出，切回不丢内容（display:none 期间跳过 fit，切回由 ResizeObserver 自动补）。
+    /** execCommand 兜底复制：手机经局域网 http 访问属非安全上下文，navigator.clipboard 不存在 */
+    function execCopyText(text) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        // 尽力而为
+      }
+      ta.remove();
+    }
+    function TerminalPane({ term, visible, restartKey, onRestart, onShell }) {
+      const bodyRef = react.useRef(null);
+      const [state, setState] = react.useState({ phase: "connecting", detail: "" });
+      const visibleRef = react.useRef(visible);
+      visibleRef.current = visible;
+
+      react.useEffect(() => {
+        // 引擎 = 官方 webTerminals（宿主 PTY：系统用户权限、刷新不丢、后台清理）；
+        // 本组件只做 xterm 胶水。
+        const svc = webTerminalsSvc;
+        if (!svc || typeof svc.view !== "function") {
+          setState({ phase: "error", detail: t("officialTermUnavailable") });
+          return undefined;
+        }
+        if (!term.sessionId) {
+          setState({ phase: "error", detail: t("noCwd") });
+          return undefined;
+        }
+        let disposed = false;
+        setState({ phase: "connecting", detail: "" });
+
+        let termInst = null;
+        let host = null;
+        let fitAddon = null;
+        let resizeTimer = 0;
+        let themeObserver = null;
+        let view = null;
+        let cleanupState = null;
+        const detachRef = { current: null };
+
+        const sendResize = () => {
+          if (disposed || !visibleRef.current || !termInst || !fitAddon) return; // 隐藏时不 fit
+          try {
+            fitAddon.fit();
+          } catch {
+            return;
+          }
+          try {
+            view.resize(termInst.cols, termInst.rows);
+          } catch {
+            // 进程可能刚退出
+          }
+        };
+        const scheduleResize = () => {
+          if (resizeTimer || disposed) return;
+          resizeTimer = window.setTimeout(() => {
+            resizeTimer = 0;
+            sendResize();
+          }, 60);
+        };
+        const ro = new ResizeObserver(scheduleResize);
+
+        ensureVendor()
+          .then(() => {
+            if (disposed) return;
+            termInst = new window.Terminal({
+              fontSize: 13,
+              lineHeight: 1.15,
+              fontFamily: 'ui-monospace, Consolas, "Cascadia Mono", "Courier New", monospace',
+              cursorBlink: true,
+              scrollback: 5000,
+              theme: xtermTheme(),
+            });
+            // 有选区时 Ctrl+C = 复制并清选区（随后无选区的 Ctrl+C 恢复中断语义，
+            // VS Code 同款）——否则想复制选中文字，^C 直达 shell 把正在运行的
+            // 前台进程停掉。Ctrl+Shift+C 恒为复制
+            termInst.attachCustomKeyEventHandler((ev) => {
+              if (ev.type !== "keydown" || !ev.ctrlKey || ev.altKey) return true;
+              if (ev.key !== "c" && ev.key !== "C") return true;
+              if (!ev.shiftKey && !termInst.hasSelection()) return true;
+              const text = termInst.getSelection();
+              if (text) {
+                if (navigator.clipboard && window.isSecureContext) {
+                  navigator.clipboard.writeText(text).catch(() => execCopyText(text));
+                } else {
+                  execCopyText(text);
+                }
+              }
+              termInst.clearSelection();
+              return false;
+            });
+            // DSH 明暗切换时热更新调色板（presenter 改 body 属性）
+            themeObserver = new MutationObserver(() => {
+              if (!disposed && termInst) {
+                try {
+                  termInst.options.theme = xtermTheme();
+                } catch {
+                  // 忽略
+                }
+              }
+            });
+            themeObserver.observe(document.body, { attributes: true, attributeFilter: ["data-ds-dark-theme"] });
+            fitAddon = new window.FitAddon.FitAddon();
+            termInst.loadAddon(fitAddon);
+            host = document.createElement("div");
+            host.className = "dshk-term";
+            bodyRef.current.appendChild(host);
+            termInst.open(host);
+            try {
+              if (visibleRef.current) fitAddon.fit();
+            } catch {
+              // ResizeObserver 会再触发
+            }
+            termInst.onData((d) => {
+              try {
+                if (view.writable !== false) view.write(d);
+              } catch {
+                // 尚未连接
+              }
+            });
+            ro.observe(bodyRef.current);
+
+            // gen（= restartKey）进 key/contentId：⟳ 换代后旧 view 已 close、
+            // 新 contentId 才会分配全新宿主终端（closed 身份不可复用）
+            const viewKey = `dsh-kit-dock-${term.id}-g${restartKey}`;
+            const contentId = `dsh-kit-dock-${term.id}-g${restartKey}`;
+            view = svc.view(term.sessionId, viewKey, contentId);
+            const detach = view.mount();
+            detachRef.current = typeof detach === "function" ? detach : null;
+            let lastAck = -1;
+            let shellLabel = "";
+            let focused = false;
+            const onState = () => {
+              if (disposed) return;
+              const s = view.state.getSnapshot();
+              const render = s.render;
+              if (render && render.revision !== lastAck && termInst) {
+                lastAck = render.revision;
+                const f = render.frame;
+                try {
+                  if (f.type === "snapshot") {
+                    termInst.reset();
+                    termInst.write(f.screen);
+                  } else {
+                    termInst.write(f.data);
+                  }
+                } catch {
+                  // xterm 已释放
+                }
+                try {
+                  view.acknowledge(render.revision);
+                } catch {
+                  // 视图已关闭
+                }
+                if (f.type === "snapshot" && f.info) {
+                  const name = f.info.shell?.name ?? "";
+                  if (name && name !== shellLabel) {
+                    shellLabel = name;
+                    if (onShell) onShell(term.id, name);
+                  }
+                }
+              }
+              if (s.phase === "connected") {
+                setState((prev) => (prev.phase === "ready" ? prev : { phase: "ready", detail: "" }));
+                if (!focused && visibleRef.current && termInst) {
+                  focused = true;
+                  termInst.focus(); // 后台启动的终端不抢焦点
+                }
+              } else if (s.phase === "failed") {
+                const detail = s.issue === "terminalLimit" ? t("termLimit") : String(s.error ?? s.issue ?? "");
+                setState((prev) => (prev.phase === "error" && prev.detail === detail ? prev : { phase: "error", detail }));
+              } else if (s.phase === "closed" || s.phase === "disconnected") {
+                const code = s.info && s.info.exitCode !== null && s.info.exitCode !== undefined ? String(s.info.exitCode) : "";
+                setState((prev) => (prev.phase === "exited" && prev.detail === code ? prev : { phase: "exited", detail: code }));
+              }
+            };
+            const offState = view.state.subscribe(onState);
+            onState();
+            cleanupState = () => {
+              offState();
+              try {
+                svc.close(term.sessionId, viewKey, contentId);
+              } catch {
+                // 服务已释放
+              }
+            };
+          })
+          .catch((error) => {
+            if (!disposed) setState({ phase: "error", detail: `${t("vendorFail")}: ${error?.message ?? error}` });
+          });
+
+        return () => {
+          disposed = true;
+          if (resizeTimer) window.clearTimeout(resizeTimer);
+          ro.disconnect();
+          if (themeObserver) themeObserver.disconnect();
+          if (cleanupState) cleanupState(); // 结束宿主终端（卸载即杀）
+          if (detachRef.current) {
+            try {
+              detachRef.current();
+            } catch {
+              // 已分离
+            }
+          }
+          if (termInst) {
+            try {
+              termInst.dispose();
+            } catch {
+              // 已释放
+            }
+          }
+          if (host) host.remove();
+        };
+      }, [term.id, restartKey, term.sessionId]);
+
+      const statusText =
+        state.phase === "connecting"
+          ? t("connecting")
+          : state.phase === "exited"
+            ? `${t("exited")}${state.detail !== "" ? ` · ${t("code")} ${state.detail}` : ""}`
+            : "";
+
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-tpane",
+        "data-on": visible || undefined,
+        children: [
+          jsxRuntime.jsx("div", { className: "dshk-tbody", ref: bodyRef }),
+          statusText !== "" || state.phase === "error"
+            ? jsxRuntime.jsxs("div", { className: "dshk-term-note", children: [
+                jsxRuntime.jsx("span", {
+                  title: state.detail ?? "",
+                  children: state.phase === "error" ? `${t("contentFail")}：${state.detail}` : statusText,
+                }),
+                state.phase === "exited"
+                  ? jsxRuntime.jsx("button", {
+                      type: "button",
+                      className: "dshk-btn-cancel",
+                      onClick: onRestart,
+                      children: t("restart"),
+                    })
+                  : null,
+              ] })
+            : null,
+        ],
+      });
+    }
+
+    /** 标签文案：工作区目录名；同 cwd 多开时追加序号区分 */
+    function termTabLabel(term, items) {
+      const base = String(term.cwd ?? "").split(/[\\/]/).filter(Boolean).pop() || term.cwd || "?";
+      const same = items.filter((x) => x.cwd === term.cwd);
+      return same.length > 1 ? `${base} ${same.indexOf(term) + 1}` : base;
+    }
+
+    function TerminalDock({ open, cwd, onSpawn, onHide, onActivate, onKill, onKillAll }) {
+      const ui = useKitUi();
+      const items = ui.terminals;
+      const activeId = ui.activeTermId ?? (items.length > 0 ? items[items.length - 1].id : null);
+      const activeItem = items.find((x) => x.id === activeId) ?? null;
+      // 每标签的重启计数（⟳ 触发该 pane 重连）与 shell 名（started 时回填头部展示）
+      const [restartMap, setRestartMap] = react.useState({});
+      const [shells, setShells] = react.useState({});
+      const onShell = (id, label) => setShells((s) => (s[id] === label ? s : { ...s, [id]: label }));
+      // 宽度跟随对话列：测量 _centerCol 的视口位置（侧栏开合/拖宽/窗口缩放都会触发）
+      const [pos, setPos] = react.useState(null);
+
+      react.useLayoutEffect(() => {
+        const el = document.querySelector('[class*="_centerCol"]');
+        if (!el) return undefined;
+        const update = () => {
+          const r = el.getBoundingClientRect();
+          if (r.width > 0) setPos({ left: Math.max(0, r.left), width: r.width });
+        };
+        update();
+        const ro = new ResizeObserver(update);
+        ro.observe(el);
+        return () => ro.disconnect();
+      }, []);
+
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-dock",
+        style: {
+          ...(pos ? { left: pos.left, width: pos.width } : {}),
+          ...(open ? {} : { display: "none" }), // 隐藏≠卸载：后台会话保持运行
+        },
+        children: [
+          jsxRuntime.jsxs("div", {
+            className: "dshk-head",
+            children: [
+              jsxRuntime.jsx("span", { className: "dshk-title dshk-dock-label", children: t("label") }),
+              jsxRuntime.jsxs("span", { className: "dshk-tabs", children: [
+                items.map((tab) =>
+                  jsxRuntime.jsxs("div", {
+                    className: `dshk-tab${tab.id === activeId ? " dshk-tab-on" : ""}`,
+                    title: tab.cwd ?? "",
+                    onClick: () => onActivate(tab.id),
+                    children: [
+                      jsxRuntime.jsx("span", { className: "dshk-tab-label", children: termTabLabel(tab, items) }),
+                      jsxRuntime.jsx(KitTip, {
+                        label: t("termTabClose"),
+                        side: "top",
+                        children: jsxRuntime.jsx("button", {
+                          type: "button",
+                          className: "dshk-tab-x",
+                          onClick: (e) => {
+                            e.stopPropagation();
+                            onKill(tab.id);
+                          },
+                          children: "✕",
+                        }),
+                      }),
+                    ],
+                  }, tab.id),
+                ),
+              ] }),
+              jsxRuntime.jsx(KitTip, {
+                label: t("termNew"),
+                side: "top",
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn",
+                  onClick: onSpawn,
+                  children: "＋",
+                }),
+              }),
+              activeItem
+                ? jsxRuntime.jsx("span", {
+                    className: "dshk-sub",
+                    title: activeItem.cwd ?? "",
+                    children: `${shells[activeItem.id] ? `${shells[activeItem.id]} · ` : ""}${activeItem.cwd ?? ""}`,
+                  })
+                : null,
+              jsxRuntime.jsx("span", { className: "dshk-spring" }),
+              jsxRuntime.jsx(KitTip, {
+                label: t("restart"),
+                side: "top",
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn",
+                  onClick: () => {
+                    if (!activeId) return;
+                    setRestartMap((m) => ({ ...m, [activeId]: (m[activeId] ?? 0) + 1 }));
+                  },
+                  children: "⟳",
+                }),
+              }),
+              jsxRuntime.jsx(KitTip, {
+                label: t("termHide"),
+                side: "top",
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn",
+                  onClick: onHide,
+                  children: "—",
+                }),
+              }),
+              jsxRuntime.jsx(KitTip, {
+                label: t("termCloseAll"),
+                side: "top",
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn",
+                  onClick: onKillAll,
+                  children: "✕",
+                }),
+              }),
+            ],
+          }),
+          // pane 必须挂在 tstack（position:relative）里：绝对定位 inset:0 以它为
+          // 包含块，只盖住头部以下的内容区——直接挂 dock 下会连头部一起盖掉
+          jsxRuntime.jsx("div", {
+            className: "dshk-tstack",
+            children: [
+              items.length === 0 ? jsxRuntime.jsx("div", { className: "dshk-msg", children: t("noCwd") }) : null,
+              ...items.map((tt) =>
+                jsxRuntime.jsx(
+                  TerminalPane,
+                  {
+                    term: tt,
+                    visible: tt.id === activeId,
+                    restartKey: restartMap[tt.id] ?? 0,
+                    onRestart: () => setRestartMap((m) => ({ ...m, [tt.id]: (m[tt.id] ?? 0) + 1 })),
+                    onShell,
+                  },
+                  `pane-${tt.id}`,
+                ),
+              ),
+            ],
+          }),
+        ],
+      });
+    }
+
+    // ─────────── 入口按钮（conversation.input.left）───────────
+    // 只负责开合与按压态；坞本体在本组件注册的 shell.overlay 里渲染
+    // （fixed 定位不受 composer 祖先 stacking context 影响）。
+    /** 终端图标：描边同族（15px / viewBox 16 / 1.2 描边 / currentColor）——与文件树、
+     *  源代码管理、知识库三枚入口钮同一套画法。官方引导条目的实心深色卡（#17191d 底
+     *  + 白提示符）在输入行里比其余三枚重一大截，看着像另一套按钮 */
+    function TerminalIcon() {
+      return jsxRuntime.jsxs(
+        "svg",
+        {
+          width: 15,
+          height: 15,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.2,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          children: [
+            jsxRuntime.jsx("rect", { x: 1.7, y: 2.9, width: 12.6, height: 10.2, rx: 1.8 }),
+            jsxRuntime.jsx("path", { d: "M4.7 6.4l1.9 1.9-1.9 1.9" }),
+            jsxRuntime.jsx("path", { d: "M8.9 10.2h2.6" }),
+          ],
+        },
+      );
+    }
+
+    /** 终端入口：非终端态 → 打开终端坞（无会话则新建并绑定当前会话）；已是 → 隐藏
+     *  （隐藏不杀进程，标签 ✕ 才结束进程） */
+    function TerminalEntry(props) {
+      const ui = useKitUi();
+      const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
+      const row = useCurrentRow(props);
+      const sessionId = row?.id ?? null;
+      const cwd = typeof row?.cwd === "string" ? row.cwd : null;
+      lastSession = { id: sessionId, cwd };
+      if (cfg.terminalEnabled === false) return null;
+      const count = ui.terminals.length;
+      const dockOn = ui.termDockOpen && count > 0;
+      return jsxRuntime.jsx(KitTip, {
+        label: count > 0 ? `${t("label")} · ${count}` : t("label"),
+        command: "dsh-kit.terminal.toggle",
+        side: "top",
+        children: jsxRuntime.jsxs("button", {
+          type: "button",
+          className: "dshk-btn dshk-enbtn",
+          "aria-pressed": dockOn,
+          onClick: () => {
+            // 只开/关终端坞：隐藏不杀进程，后台会话继续跑；无会话时新建并绑定
+            // 当时的当前会话（之后切换会话不影响已开终端）
+            setKitUi(toggleTermDock(getKitUi(), sessionId, cwd));
+          },
+          children: [
+            jsxRuntime.jsx(TerminalIcon, {}),
+            count > 0
+              ? jsxRuntime.jsx("span", { className: "dshk-term-badge", "aria-hidden": true, children: String(count) })
+              : null,
+          ],
+        }),
+      });
+    }
+
+    // ─────────── 浮层宿主（shell.overlay）───────────
+    /** 坞本体 + 让位布局：坞可见时挂 body 类 + 设高度变量，样式把对话列顶起来
+     *  （隐藏/无会话时不顶——后台会话继续跑但不占布局） */
+    function TerminalSurfaces(props) {
+      react.useSyncExternalStore(subscribeLocale, getLocaleVersion);
+      const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
+      const ui = useKitUi();
+      const row = useCurrentRow(props);
+      const sessionId = row?.id ?? null;
+      const cwd = typeof row?.cwd === "string" && row.cwd.trim() !== "" ? row.cwd : null;
+      lastSession = { id: sessionId, cwd };
+
+      react.useEffect(() => {
+        if (ui.terminals.length === 0 || !ui.termDockOpen || !cfg.terminalEnabled) return undefined;
+        document.documentElement.style.setProperty("--dshk-dock-h", DOCK_H);
+        document.body.classList.add("dshk-open");
+        return () => {
+          document.body.classList.remove("dshk-open");
+          document.documentElement.style.removeProperty("--dshk-dock-h");
+        };
+      }, [ui.termDockOpen, ui.terminals.length, cfg.terminalEnabled]);
+
+      if (!cfg.terminalEnabled || ui.terminals.length === 0) return null;
+      return jsxRuntime.jsx(TerminalDock, {
+        open: ui.termDockOpen,
+        cwd,
+        onSpawn: () => {
+          if (!sessionId) {
+            flashToast(t("noCwd"));
+            return;
+          }
+          setKitUi(spawnTerm(getKitUi(), sessionId, cwd));
+        },
+        onHide: () => setKitUi({ termDockOpen: false }),
+        onActivate: (id) => setKitUi({ activeTermId: id, termDockOpen: true }),
+        onKill: (id) => setKitUi(killTerm(getKitUi(), id)),
+        onKillAll: () => setKitUi({ terminals: [], activeTermId: null, termDockOpen: false }),
+      });
+    }
+
+    // ─────────── 配置页（挂组件行，骨架在 dock）───────
+    const TERMINAL_CFG_FIELDS = [
+      { key: "terminalEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgTerminalEnabled", hintKey: "kcfgTerminalEnabledHint" },
+    ];
+    const TERMINAL_CFG_GROUPS = ["kcfgGroupFeatures"];
+    const TerminalConfigPage = dock.createConfigPage({
+      fields: TERMINAL_CFG_FIELDS,
+      groups: TERMINAL_CFG_GROUPS,
+      t,
+      onSaved: async () => {
+        // 重拉自家快照喂门控（volatile 热提交即时生效）；端点不可达时快照不动
+        await loadCfg();
+      },
+    });
+
+    // ─────────── 官方快捷键服务（0.1.7-rc.2+）───────
+    // 终端命令注册进宿主 shortcuts 服务 = 进官方「快捷键」页（Ctrl+/）：录制、冲突
+    // 检测、跨设备默认值、持久化都归官方；运行期 inject——老宿主没有该服务时只是
+    // 没键位。默认键只给 web:macos/web:windows（web 端放行表只认三键组合或
+    // primary+alt/shift）与 desktop 三档。
+    function registerShortcuts(scCtx) {
+      const shortcuts = scCtx.shortcuts;
+      if (!shortcuts || typeof shortcuts.register !== "function") return;
+      attachShortcutCatalog(shortcuts.catalog);
+      scCtx.effect(() => shortcuts.register({
+        id: "dsh-kit.terminal.toggle",
+        label: () => t("scTerminal"),
+        aliases: ["terminal", "terminal dock", "dsh-kit"],
+        defaults: {
+          "web:macos": { code: "Backquote", modifiers: ["primary", "alt"] },
+          "web:windows": { code: "Backquote", modifiers: ["primary", "alt"] },
+          "desktop:macos": { code: "Backquote", modifiers: ["primary", "alt"] },
+          "desktop:windows": { code: "Backquote", modifiers: ["primary", "alt"] },
+          "desktop:linux": { code: "Backquote", modifiers: ["primary", "alt"] },
+        },
+        // editable/terminal 都要：聊天输入行里、终端里按都该生效（官方左右栏键同款）
+        regions: ["page", "editable", "terminal"],
+        modals: [],
+        resolve: () => {
+          if (!cfgFromSnapshot(getCfgSnapshot()).terminalEnabled) return { status: "blocked", reason: t("scTerminalOff") };
+          // 会话在 run 期读：resolve 与 run 之间隔着宿主调度，按钮可能已重渲染换过会话
+          return { status: "handled", run: () => setKitUi(toggleTermDock(getKitUi(), lastSession.id, lastSession.cwd)) };
+        },
+      }), "dsh-kit-terminal: shortcut dsh-kit.terminal.toggle");
+    }
+
+    // ─────────── 插件体 ───────────
+    function apply(ctx) {
+      // 组件配置页：挂本组件行（行由 dsh-kit bundle 的 patch 声明，槽位 key =
+      // <包名>#<行id>，两种包名口径各挂一枚防宿主改口径）
+      for (const key of ["dsh-kit#terminal", "dsh-kit-terminal#terminal"]) {
+        ctx.slots.inject("plugins.row.config", () =>
+          ctx.slots.register({ name: "plugins.row.config", key }, TerminalConfigPage),
+        );
+      }
+      // 输入框入口与坞：官方 conversation / shell 挂载期声明槽位，inject 等声明
+      // 落地再注册——直接 register 抛 not declared 且炸掉整个 web boot
+      ctx.slots.inject("conversation.input.left", () =>
+        ctx.slots.register({ name: "conversation.input.left", id: "dsh-kit-terminal", order: 14 }, TerminalEntry),
+      );
+      ctx.slots.inject("shell.overlay", () =>
+        ctx.slots.register({ name: "shell.overlay", id: "dsh-kit-terminal", order: 910 }, TerminalSurfaces),
+      );
+      // 官方终端模型服务（0.1.6+）：缺服务时坞报版本提示，其余功能照常
+      ctx.inject(["webTerminals"], (tctx) => { webTerminalsSvc = tctx.webTerminals; });
+      // 官方快捷键服务：运行期 inject，老宿主只是没键位
+      ctx.inject(["shortcuts"], registerShortcuts);
+      void loadCfg(); // 拉配置喂门控（失败保持内置默认）
+      injectStyles();
+    }
+
+    exports.inject = ["slots"];
+    exports.apply = apply;
+    // 渲染级检查与面板引用供测试断言
+    exports.TerminalEntry = TerminalEntry;
+    exports.TerminalDock = TerminalDock;
+    exports.TerminalPane = TerminalPane;
+    exports.TerminalSurfaces = TerminalSurfaces;
+    exports.TerminalIcon = TerminalIcon;
+    exports.TerminalConfigPage = TerminalConfigPage;
+    exports.termTabLabel = termTabLabel;
+    exports.makeTerm = makeTerm;
+    exports.toggleTermDock = toggleTermDock;
+    exports.spawnTerm = spawnTerm;
+    exports.killTerm = killTerm;
+    exports.cfgFromSnapshot = cfgFromSnapshot;
+    exports.registerShortcuts = registerShortcuts;
+    exports.xtermTheme = xtermTheme;
+    exports.T_CFG_DEFAULTS = T_CFG_DEFAULTS;
+    exports.TERMINAL_CFG_FIELDS = TERMINAL_CFG_FIELDS;
+    exports.TERMINAL_CFG_GROUPS = TERMINAL_CFG_GROUPS;
+    return module.exports;
+};
+
+    // 组件模块执行移至本 factory 尾部 kitBase/root 设施组装完成之后（见
+    // exports.files 赋值处）——组件体执行期会读 dock.createConfigPage 等成员
     // slots 是唯一依赖：settingsScope 已随宿主 0.1.7 移除（配置改走 Config
     // schema + 原生设置页，client 拉 /dsh-kit/config 只读快照做门控）
     // 共享面暴露给组件包：require("dsh-kit") 直接取（apply/inject 是插件形状，不暴露）
@@ -6491,6 +11704,11 @@ ellipsis，窄列只截字不破版 */
     exports.ChevronIcon = ChevronIcon;
     exports.OfficialIcon = OfficialIcon;
     exports.openTreeFile = openTreeFile;
+    // 组件模块执行（files/monitor/terminal）：必须在 kitBase 浅拷贝与 root 设施
+    // 都挂上 exports 之后——组件体执行期会读 dock.createConfigPage 等成员
+    exports.files = filesModule(exports, require);
+    exports.monitor = monitorModule(exports, require);
+    exports.terminal = terminalModule(exports, require);
     exports.inject = ["slots"];
     exports.apply = apply;
     return module.exports;

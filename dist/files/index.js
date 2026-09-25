@@ -12,7 +12,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { decodePreviewText, sameOrigin, recycleDelete, findProjectRoot } from 'dsh-kit-core';
+import { decodePreviewText, sameOrigin, recycleDelete, findProjectRoot } from "../core/index.js";
 import { parseStatusBranch, parseLogRecords, parseBranchList, parseTrack } from "./git.js";
 import { rawContentType, rawDownloadContentType, rawDisposition, parseRangeHeader } from "./raw-file.js";
 import { validateCwd, validateFile, validateAny, validatePathShape, withinTree, invalidFsName } from "./validate.js";

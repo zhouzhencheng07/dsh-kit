@@ -30,8 +30,8 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 
-import { recycleDelete, findProjectRoot } from 'dsh-kit-core'
-import { sameOrigin } from 'dsh-kit-core'
+import { recycleDelete, findProjectRoot } from './core/index.ts'
+import { sameOrigin } from './core/index.ts'
 
 const POOL_DIRNAME = 'skill-pool'
 

@@ -7,58 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      dsh-kit-core:
-        specifier: workspace:*
-        version: link:packages/dsh-kit-core
-    devDependencies:
-      '@types/node':
-        specifier: ^24.0.0
-        version: 24.13.3
-      typescript:
-        specifier: ^5.9.0
-        version: 5.9.2
-
-  packages/dsh-kit-core:
-    devDependencies:
-      '@types/node':
-        specifier: ^24.0.0
-        version: 24.13.3
-      typescript:
-        specifier: ^5.9.0
-        version: 5.9.2
-
-  packages/dsh-kit-files:
-    dependencies:
-      dsh-kit-core:
-        specifier: workspace:*
-        version: link:../dsh-kit-core
-    devDependencies:
-      '@types/node':
-        specifier: ^24.0.0
-        version: 24.13.3
-      typescript:
-        specifier: ^5.9.0
-        version: 5.9.2
-
-  packages/dsh-kit-monitor:
-    dependencies:
-      dsh-kit-core:
-        specifier: workspace:*
-        version: link:../dsh-kit-core
-    devDependencies:
-      '@types/node':
-        specifier: ^24.0.0
-        version: 24.13.3
-      typescript:
-        specifier: ^5.9.0
-        version: 5.9.2
-
-  packages/dsh-kit-terminal:
-    dependencies:
-      dsh-kit-core:
-        specifier: workspace:*
-        version: link:../dsh-kit-core
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
