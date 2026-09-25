@@ -22,3 +22,5 @@
       name: dsh-kit/search
     - id: browser
       name: dsh-kit/browser
+    - id: vault
+      name: dsh-kit/vault

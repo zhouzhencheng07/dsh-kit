@@ -1,10 +1,10 @@
 // vault 文件管理单测（改名/移动的 wikilink 改写 + 导入收图 + 路径安全 + 撞名策略）：
-// 跑 dist/vault-fs.js（先 pnpm build）。用法：node tests/test-vault-fs.mjs
+// 跑 dist/vault/fs.js（先 pnpm build）。用法：node tests/test-vault-fs.mjs
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { VaultScanner } from '../dist/vault.js'
+import { VaultScanner } from '../dist/vault/scanner.js'
 import {
   createEntry,
   dedupeName,
@@ -16,7 +16,7 @@ import {
   rewriteWikiLinks,
   safeLeaf,
   safeRel,
-} from '../dist/vault-fs.js'
+} from '../dist/vault/fs.js'
 
 const test = (name, fn) =>
   Promise.resolve()

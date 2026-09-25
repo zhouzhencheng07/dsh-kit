@@ -580,11 +580,10 @@ window.__ModuleLoader__.load({
       return { browserOpen: true, activeFeature: "browser" };
     }
 
-    /** 功能 → dock 签映射（页类型注册表；kind 即 openTab 用的类型名） */
+    /** 功能 → dock 签映射（页类型注册表；kind 即 openTab 用的类型名）。
+     *  知识库 / 日程两张签随组件化迁 dsh-kit/vault 自己注册，根只留文件签 */
     const RB_FEATURES = [
       { id: "dsh-kit-file", kind: "dshk-file", feature: "file", titleKey: "fileTabLabel" },
-      { id: "dsh-kit-vault", kind: "dshk-vault", feature: "vault", titleKey: "vaultTitle" },
-      { id: "dsh-kit-schedule", kind: "dshk-schedule", feature: "schedule", titleKey: "schedTab" },
     ];
     // ─────────── 官方右侧边栏（宿主 0.1.5+，本插件唯一工作台形态）───────────
     // 每个功能一张 dock 签（页类型），pane 正文是我们的组件。服务是宿主内部实现，
@@ -660,7 +659,7 @@ window.__ModuleLoader__.load({
       if (!rightbarSeat.available) return;
       const sr = rightbarSr;
       if (!sr || typeof sr.openTab !== "function") return;
-      const f = RB_FEATURES.find((x) => x.feature === feature);
+      const f = tabKinds[feature];
       if (!f) return;
       try {
         sr.openTab(f.kind);
@@ -673,7 +672,7 @@ window.__ModuleLoader__.load({
      *  「签该消失」的语义位（最后一页文档签关掉 / 浏览器没了） */
     function closeRightbarTab(feature) {
       const sr = rightbarSr;
-      const f = RB_FEATURES.find((x) => x.feature === feature);
+      const f = tabKinds[feature];
       if (!sr || !f || typeof sr.close !== "function") return;
       try {
         // mounted() 返回 surface {layout, history, minted}——签表在 layout.tabs
@@ -753,9 +752,19 @@ window.__ModuleLoader__.load({
     // 必须是**座对象**而非直接给 exports 加键：kitBase 到 module.exports 是工厂尾部
     // 的一次性浅拷贝，组件后写的键只落在 module.exports 上，root 读 kitBase 读不到
     // （对象引用拷贝之前的键才能共享，后加组件只改得了座里的字段）
+    // 功能 → dock 签（页类型）注册表：openRightbarTab/closeRightbarTab 按它把
+    // feature 映射成官方 kind。root 的 file 行在这里，组件行由各组件 apply 时补登
+    //（同 sidebarView：kitBase 到 module.exports 是一次性浅拷贝，后写的键只有落在
+    // 座对象的字段上 root 才读得到）
+    const tabKinds = { file: { id: "dsh-kit-file", kind: "dshk-file" } };
+    exports.tabKinds = tabKinds;
     exports.sidebarView = { renderer: null }; // 侧栏浏览区 tree/git 分支渲染器（root 单槽分发）
     exports.inlineEdit = { active: false }; // 树行内改名激活中（root 全局快捷键让路）
     exports.diffPane = { Component: null }; // diff 正文组件（root 右栏「差异」签正文用）
+    // 知识库那两处与 root 的接线：座对象由 dsh-kit/vault 组件物化期填字段（root 只读）
+    exports.vaultView = { renderer: null }; // 侧栏知识库目录索引视图（root 单槽分发）
+    exports.vaultRoute = { open: null }; // 文件树行点击的 vault 改道（命中返回 true）
+    exports.vaultSearch = { open: false }; // 知识库搜索浮层开着（root 全局 Esc 让路）
     // 底座是活动 entry：client runner 按 client 插件形状物化本模块，必须带 apply
     //（宿主半边同款：载体 entry，本体无行为）
     exports.apply = async (ctx) => {
@@ -803,22 +812,6 @@ window.__ModuleLoader__.load({
 
     /** 官方 sessions 服务（拿当前会话 id 与 cwd，拼文件地址用），同上运行期捕获 */
     let sessionsSvc = null;
-    /** 打开知识库页并确保「知识库」dock 签在眼前（目录/搜索/反链/wikilink/
-     *  对话路径统一走 VaultRootView 的 openPath）。anchor = `[[页#锚]]` 的锚点，
-     *  跨页跳转时随开页带给 VaultPagePane 消费（见 vaultPendingAnchor） */
-    function openVaultPageAndDock(path, anchor) {
-      if (!rightbarSeat.available) return;
-      setKitUi(openVaultPageTab(getKitUi(), path));
-      openRightbarTab("vault");
-      vaultPendingAnchor = typeof anchor === "string" && anchor !== "" ? { path, anchor } : null;
-    }
-    /** 点击路径落知识库标签（树行/对话拦截器共用）：先落地再派发——知识库未
-     *  挂载时 VaultRootView 不在，挂载后经 vaultOpenRequest 消费请求 */
-    function openVaultPathFromClick(path) {
-      openVaultPageAndDock(path);
-      vaultOpenRequest = path;
-      window.dispatchEvent(new CustomEvent("dshk-vault-open"));
-    }
     // ─────────── 文件树点击 → 官方右栏文件签 ───────────
     // 官方打开文件签的公开通道是 sidebarRight.openResource(地址)（官方文件树与
     // 对话文件 chip 都走它）；文件签由宿主 documentpreview 以 `text` 类型认领
@@ -863,13 +856,11 @@ window.__ModuleLoader__.load({
       }
     }
     /** 文件树行点击：vault 内 → 知识库（只读阅读视图）；其余 → 官方
-     *  右栏文件签（kit 不再有工作区文件预览/编辑面） */
+     *  右栏文件签（kit 不再有工作区文件预览/编辑面）。
+     *  vault 那一支归 dsh-kit/vault 组件（经 dock.vaultRoute 座接管）：组件不在场
+     *  （未装 / 行关闭）时座里是 null，整条改道随之消失 */
     function openTreeFile(path) {
-      const r = vaultRootHint;
-      if (r !== null && isPathInsideVaultRoot(r, path)) {
-        openVaultPathFromClick(path);
-        return;
-      }
+      if (dock.vaultRoute.open !== null && dock.vaultRoute.open(path) === true) return;
       openOfficialFile(path);
     }
 
@@ -883,54 +874,17 @@ window.__ModuleLoader__.load({
     // 不跟着关——签的归宿是官方签 ✕ 与配置清场，入口按钮只管侧栏那格）。知识库钮
     // 只切左侧目录，点具体页才开右栏签；收起态顺带展开
     // 侧栏（视图渲染进铁轨等于不可见）。
-    function openVaultEntry() {
-      expandSidebarNow();
-      return sidebarViewPatch("vault");
-    }
-    function toggleVaultEntry(ui) {
-      if (ui.vaultIdxOpen === true) return sidebarViewPatch(null);
-      return openVaultEntry();
-    }
-
-    // ── portal 宿主登记（侧栏索引 ↔ 右栏内容）──
-    // 知识库拆两半后 VaultRootView 单实例挂在 KitSurfaces，左树/工具条与页编辑器
-    // 经 createPortal 分投两侧：宿主 DOM 节点由侧栏占用组件与右栏 pane 登记。
-    // 宿主出现/消失走最小 store（useSyncExternalStore）驱动 VaultRootView 重渲染。
-    function makeHostSlot() {
-      let el = null;
-      const subs = new Set();
-      return {
-        get: () => el,
-        set(next) {
-          el = next;
-          for (const s of subs) s();
-        },
-        subscribe(s) {
-          subs.add(s);
-          return () => subs.delete(s);
-        },
-      };
-    }
-    const vaultSideSlot = makeHostSlot();
-    const vaultPaneSlot = makeHostSlot();
-    const useHostSlot = (slot) => react.useSyncExternalStore(slot.subscribe, slot.get);
 
 
-    // ─────────── 插件配置 ───────────
-    // 数据通道：官方 settings scope（宿主 installSettingsSection 注册的
-    // dsh-kit 命名空间）。默认值与宿主 Config schema（src/index.ts）逐项同值——
-    // 恢复默认拿的是宿主组合基座（base），基座只有 vaultRoot 一项，其余键在
-    // cfgFormat 里回落这里的默认值，两处不同步会出现「默认值漂移」。
-    // 快照未就绪时一律回退内置默认——功能全开。
-    // 快捷键不在这里：键位注册进官方 shortcuts 服务（见 registerShortcuts），
-    // 录制与持久化归官方「快捷键」页。
+
+    // ─────────── 插件配置（主行 = 手机访问）──────────
+    // 默认值与宿主 Config schema（src/index.ts）逐项同值；快照未就绪一律回退
+    // 内置默认。组件行的配置各自在组件半边（如知识库 vaultRoot 在 dsh-kit/vault）。
     const CFG_DEFAULTS = {
       phoneEnabled: true,
       phoneRemoteDomain: "",
       phonePort: 3090,
       phoneKeepGatewayOn: false,
-      vaultEnabled: false,
-      vaultRoot: "",
     };
     /** 从官方 scope 快照提取生效配置（字段缺失/非法逐项回退默认） */
     function cfgFromSnapshot(snap) {
@@ -939,8 +893,6 @@ window.__ModuleLoader__.load({
       return {
         phoneEnabled: v.phoneEnabled === true,
         phoneRemoteDomain: typeof v.phoneRemoteDomain === "string" ? v.phoneRemoteDomain : "",
-        vaultEnabled: v.vaultEnabled === true,
-        vaultRoot: typeof v.vaultRoot === "string" ? v.vaultRoot : "",
       };
     }
     // 模块级通道（apply 注入 / KitSurfaces 订阅）
@@ -961,151 +913,12 @@ window.__ModuleLoader__.load({
       cfgSnapshot = value && typeof value === "object" ? { status: "ready", value } : null;
       for (const listener of [...cfgListeners]) listener();
     }
-    let vaultSearchOpen = false; // 知识库搜索浮层开着：同上让路——Esc 归浮层自关，不收页签/不收侧栏
 
-    // ─────────── 对话文件点击的知识库路由 ───────────
-    // 官方对话中的文件点击（chips / markdown 内联代码 / 工具行 / 交付卡）原生
-    // 走 sidebarRight.openResource 开右栏文件签，kit 不拦。唯一例外是 vault 内
-    // 路径：改道知识库标签的只读阅读视图（互通是知识库本体能力，无开关）。
-    let chatPreviewHook = null;
     // KitSurfaces 渲染期 props 桥：右栏 pane/开始页的 inject 闭包经此取官方
     // useSessions（任务 pane/开始页要在跑任务数做徽标；槽位注册在 effect 里，
     // 拿不到渲染期 props，用模块变量中转）
     const shellShare = { current: null };
-    // 官方 shortcuts 服务的 resolve 回调入口：注册发生在 apply（拿不到会话与
-    // cwd），动作由 KitSurfaces 每次渲染刷新（闭包带最新 sessionId/cwd）。
-    // 为空 = 浮层还没挂载，命令按 pass 放行不吞键。终端组件的同名入口在它自己包里。
-    const shortcutRun = { vault: null };
 
-    // ── M4 会话→笔记：vault 路径点击直达知识库标签 ──
-    // vault root 的客户端缓存：拦截器/文件树路由判定用（vault 内路径开知识库标签
-    // 的只读阅读视图，其余路径放行官方文件签——互通是知识库本体能力，无开关）。
-    // VaultRootView 每次拉索引同步刷新；从未开过知识库时点击现取一次（索引端
-    // 点宿主侧有 mtime 缓存），失败按无 vault 处理走原行为。vaultOpenRequest：
-    // 坞收起时 VaultRootView 未挂载、open 事件没人听——请求先落地，挂载后消费。
-    // vaultPendingAnchor：[[页#锚]] 跨页跳转的待落锚（openVaultPageAndDock 记、
-    // 目标页 VaultPagePane 消费；同页锚点不经它，直接就地滚动）。
-    let vaultRootHint = null;
-    let vaultRootHintFetching = null;
-    let vaultOpenRequest = null;
-    let vaultPendingAnchor = null;
-    function ensureVaultRootHint() {
-      if (vaultRootHint !== null) return Promise.resolve(vaultRootHint);
-      if (vaultRootHintFetching === null) {
-        vaultRootHintFetching = kitJson("/dsh-kit/vault/index")
-          .then((body) => {
-            vaultRootHint = body && typeof body.root === "string" && body.root !== "" ? body.root : null;
-            return vaultRootHint;
-          })
-          .catch(() => null)
-          .finally(() => {
-            vaultRootHintFetching = null;
-          });
-      }
-      return vaultRootHintFetching;
-    }
-
-    /** title 是否为可接管路径：盘符/UNC/根斜杠绝对路径，或含分隔符的相对路径 */
-    function isChatOpenPathish(title) {
-      return (
-        /^[A-Za-z]:[\\/]/.test(title) ||
-        title.startsWith("\\\\") ||
-        title.startsWith("/") ||
-        (/[\\/]/.test(title) && !/\s/.test(title))
-      );
-    }
-
-    /** 对话文件路径解析：绝对直接用；相对按 cwd 拼接（与官方 resolveWorkspacePath
-     *  同语义）；反斜杠归一避免混用分隔符触发宿主校验问题。 */
-    function resolveChatOpenPath(cwd, title) {
-      // POSIX 写法的盘符绝对路径（/D:/… 或 \D:\…）先归一为盘符开头：这类路径
-      // 官方 resolveWorkspacePath 同样按绝对处理，直接拼 cwd 会产出 D:\D:\…
-      // 双盘符假路径（agent 回复里惯用 /D:/… 引用 Windows 绝对文件）。
-      let t = title;
-      if (/^\/[A-Za-z]:/.test(t)) t = t.slice(1);
-      else if (/^\\[A-Za-z]:/.test(t)) t = t.slice(1);
-      const raw =
-        /^[A-Za-z]:[\\/]/.test(t) || t.startsWith("\\\\")
-          ? t
-          : t.startsWith("/")
-            ? `${cwd}\\${t.slice(1)}`
-            : `${cwd}\\${t}`;
-      const parts = raw.split(/[\\/]+/).filter((s) => s !== "" && s !== ".");
-      const out = [];
-      for (const s of parts) {
-        if (s === "..") out.pop();
-        else out.push(s);
-      }
-      // out 已含盘符元素（D:）或 UNC 的首段；盘符形不能再补 `D:\` 前缀，
-      // 否则产出 D:\D:\… 双盘符（绝对盘符 title 曾因此读不到文件）
-      if (raw.startsWith("\\\\")) return `\\\\${out.join("\\")}`;
-      return out.join("\\");
-    }
-
-    /** document capture：对话区文件点击的知识库路由（M4 会话→笔记）。三种载体
-     *  的路径解析：① markdown 内联代码与「本轮文件改动」chips → button[title=路径]；
-     *  ② read/write/edit 工具行（ui-tool ToolRow）→ button[class*="_fileLink"]，
-     *     无 title，按钮文本即工具 path/file_path 参数按 cwd 相对化的路径；
-     *  ③ 交付卡（dsh-client-ui-deliverables 的 PresentedFileCard）→ 路径在覆盖
-     *     整卡的 .cardPreview 的 title 上。
-     *  vault 内路径 preventDefault 改道知识库标签（只读阅读视图）；其余一律
-     *  放行官方——官方原生 openResource 开右栏文件签，kit 不再接管工作区文件。 */
-    function onChatOpenFileClick(ev) {
-      if (!ev.isTrusted) return;
-      const hook = chatPreviewHook;
-      if (!hook || !hook.vaultOn) return;
-      if (!(ev.target instanceof Element)) return;
-      // 弹层控件（aria-haspopup）不是文件链接，放行官方：模型选择器触发钮的
-      // title=模型名（如 opencode-go/omen-alpha，含分隔符无空格）会被路径判定
-      // 误吞，而 composer 就在对话 scrollBody 内部，位置判定挡不住它；交付卡的
-      // 下拉键同理——那是宿主菜单，菜单项由网关注入脚本按项文本锁
-      if (ev.target.closest("[aria-haspopup]")) return;
-      const btn =
-        ev.target.closest("button[title]") || ev.target.closest('button[class*="_fileLink"]');
-      const card = ev.target.closest("[data-presented-file]");
-      const anchor = btn !== null ? btn : card !== null ? card.querySelector("button[title]") : null;
-      if (anchor === null) return;
-      // 插件自身面板/入口的元素不拦（title 可能是路径的只有文件树行等）。
-      // 但命中元素必须是真插件容器：面板打开时 body 挂的让位标记类
-      // （dshk-pane-open/dshk-open）是全体对话的祖先，若不剔除，面板
-      // 一开拦截就整体失效
-      const kitAnc = anchor.closest('[class*="dshk-"]');
-      if (kitAnc && kitAnc !== document.body && kitAnc !== document.documentElement) return;
-      // 仅官方对话滚动区内的文件按钮（markdown 提及、产物 chips、工具行、交付卡
-      // 都在其中）
-      if (!anchor.closest('[class*="_scroll"]')) return;
-      let path = (anchor.getAttribute("title") || "").trim();
-      if (path === "" && btn !== null) {
-        // ② 工具行 fileLink：文本必为路径（参数解析不出路径时官方渲染 span）；
-        // 家目录缩写形态（~/…）客户端还原不了宿主 home，放行官方
-        path = (btn.textContent || "").trim();
-        if (path === "" || path.startsWith("~")) return;
-      } else if (!isChatOpenPathish(path)) {
-        return;
-      }
-      // 无会话工作区时：仅盘符绝对/UNC（含 /D:… 归一的盘符形态）可脱离 cwd 判定；
-      // 相对路径解析无依，放行官方
-      if (!hook.cwd) {
-        const t2 = path.startsWith("\\\\") ? path : path.replace(/^[\\/](?=[A-Za-z]:)/, "");
-        if (!/^[A-Za-z]:[\\/]/.test(t2) && !t2.startsWith("\\\\")) return;
-      }
-      const resolved = resolveChatOpenPath(hook.cwd, path);
-      // root 已缓存：命中 vault 即改道（preventDefault），不命中放行官方
-      if (vaultRootHint !== null) {
-        if (isPathInsideVaultRoot(vaultRootHint, resolved)) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          openVaultPathFromClick(resolved);
-        }
-        return;
-      }
-      // root 未缓存（插件刚挂载的头几秒）：官方动作同步触发、无法事后撤回，不能
-      // 先吞点击——放行官方，异步补判一次，命中 vault 再开知识库标签（此时官方
-      // 文件签也会开着，多一个签可接受；root 几乎总在首次点击前就预取好了）
-      void ensureVaultRootHint().then((r) => {
-        if (r !== null && isPathInsideVaultRoot(r, resolved)) openVaultPathFromClick(resolved);
-      });
-    }
 
     // ─────────── 官方文件预览头部挂「下载到本机」───────────
     // 官方右栏文件预览的 text/markdown/PDF 各视图共用同一头部，末尾补一枚下载按钮。
@@ -1208,236 +1021,7 @@ window.__ModuleLoader__.load({
       return /\s/u.test(relPath) ? `@"${relPath}"` : `@${relPath}`;
     }
 
-    /** 路径 → 分段（分隔符归一 + 解 ..）：同盘比较与取相对路径共用一处口径 */
-    function pathSegs(p) {
-      const out = [];
-      for (const s of String(p).split(/[\\/]+/)) {
-        if (s === "" || s === ".") continue;
-        if (s === "..") out.pop();
-        else out.push(s);
-      }
-      return out;
-    }
 
-    /** base 内的相对路径（`/` 分隔、无前导分隔符；base 本身回 ""）：不在 base 内回 null。
-     *  Windows 形根（盘符/UNC）只有**比较**大小写不敏感，返回段保留原样大小写——
-     *  调用方拿它跟索引里的 rel（保留原样）做前缀比较，折了大小写就永远对不上。 */
-    function relUnder(base, p) {
-      if (typeof base !== "string" || typeof p !== "string" || base === "" || p === "") return null;
-      const win = /^[A-Za-z]:[\\/]/.test(base) || base.startsWith("\\\\");
-      const fold = (arr) => (win ? arr.map((s) => s.toLowerCase()) : arr);
-      const r = fold(pathSegs(base));
-      const segs = pathSegs(p);
-      const t = fold(segs);
-      if (t.length < r.length) return null;
-      if (!r.every((seg, i) => t[i] === seg)) return null;
-      return segs.slice(r.length).join("/");
-    }
-
-    /** M4 路由判据：path 是否落在 vault root 内（根本身不算内） */
-    function isPathInsideVaultRoot(root, path) {
-      const rel = relUnder(root, path);
-      return rel !== null && rel !== "";
-    }
-
-    /** root 下 rel（`/` 分隔的相对路径）的绝对路径：正斜杠在 Node 侧照收，只用于
-     *  比对与请求参数（不落盘打印） */
-    function joinRelPath(root, rel) {
-      const base = String(root).replace(/[\\/]+$/, "");
-      return rel === "" ? base : `${base}/${rel}`;
-    }
-
-    /** 侧栏搜索的命中集合：宿主全文搜索给笔记页，笔记目录 / 资料库
-     *  文件 / 资料库目录只按名字匹配（PDF 没有正文索引），四类合成一张表。一把尺子：
-     *  路径命中 +8、末段名命中 +5，多词 AND；同分则按类型（能直接打开的在前）与名字排。
-     *  命中行 = {kind, path, rel, label, sub, score}——kind 决定点击动作（页开阅读面、
-     *  文件开官方文件右栏、目录换树根）。 */
-    function vaultSearchHits(query, root, pages, folders, libItems) {
-      const terms = String(query ?? "")
-        .trim()
-        .toLowerCase()
-        .split(/\s+/)
-        .filter((s) => s !== "");
-      if (terms.length === 0) return [];
-      const nameOf = (rel) => rel.slice(rel.lastIndexOf("/") + 1);
-      const parentOf = (rel) => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "");
-      /** 名字打分：路径 +8、末段 +5；有词一个都没中回 null */
-      const scoreName = (rel) => {
-        const lower = String(rel).toLowerCase();
-        const name = nameOf(lower);
-        let score = 0;
-        for (const term of terms) {
-          const inRel = lower.includes(term);
-          const inName = name.includes(term);
-          if (!inRel && !inName) return null;
-          if (inRel) score += 8;
-          if (inName) score += 5;
-        }
-        return score;
-      };
-      const parentLabel = (rel) => parentOf(rel) || t("vaultParentRoot");
-      const rank = { page: 0, libfile: 1, dir: 2, libdir: 3 };
-      const hits = [];
-      for (const p of pages ?? []) {
-        hits.push({ kind: "page", path: p.path, rel: p.rel, label: pageBasename(p.rel), sub: p.snippet ?? "", score: p.score ?? 0 });
-      }
-      for (const rel of folders ?? []) {
-        const score = scoreName(rel);
-        if (score !== null) {
-          hits.push({ kind: "dir", path: joinRelPath(root, rel), rel, label: nameOf(rel), sub: `${t("vaultHitNote")} · ${parentLabel(rel)}`, score });
-        }
-      }
-      for (const it of libItems ?? []) {
-        const score = scoreName(it.rel);
-        if (score === null) continue;
-        hits.push({ kind: it.dir ? "libdir" : "libfile", path: it.path, rel: it.rel, label: nameOf(it.rel), sub: `${t("vaultLibrary")} · ${parentLabel(it.rel)}`, score });
-      }
-      hits.sort((a, b) => b.score - a.score || rank[a.kind] - rank[b.kind] || a.label.localeCompare(b.label, "zh"));
-      return hits.slice(0, 20);
-    }
-
-    /** 知识库面板的文件管理请求：POST 端点 + sameOrigin 校验在宿主侧；错误串直接进 toast。
-     *  成功形状统一 {ok:true, ...}，跳过（撞名不覆盖）由 skipped 字段回执。 */
-    function vaultOp(path, payload) {
-      return kitPostJson(path, payload, (b) => b.ok === true);
-    }
-
-    /** 浏览器上传：File → base64（去 data URL 前缀）——宿主拿不到本机绝对路径，
-     *  这条是"选择文件"那条来源的过河桥 */
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const text = String(reader.result ?? "");
-          resolve(text.slice(text.indexOf(",") + 1));
-        };
-        reader.onerror = () => reject(reader.error ?? new Error("read failed"));
-        reader.readAsDataURL(file);
-      });
-    }
-
-    /** 绝对路径的父目录（两种分隔符都认；无分隔符时回落原值）——移动对话框的默认落点 */
-    function absParent(p) {
-      const s = String(p ?? "");
-      const i = Math.max(s.lastIndexOf("\\"), s.lastIndexOf("/"));
-      return i > 0 ? s.slice(0, i) : s;
-    }
-
-    /** 路径是否等于某前缀或落在其下（改名/移动/删除后同步树与页签用；两种分隔符都认） */
-    function pathUnder(p, prefix) {
-      return p === prefix || p.startsWith(`${prefix}\\`) || p.startsWith(`${prefix}/`);
-    }
-
-    /** 改名/移动后把已开的知识库页签一起搬（等路径或整棵前缀）；无变化回 null。
-     *  撞上已开页时并成一格（去重保序），激活页跟着搬。 */
-    function vaultTabsRetarget(ui, oldPath, newPath, isDir) {
-      const pages = ui.vaultPages ?? [];
-      const map = (p) => {
-        if (p === oldPath) return newPath;
-        return isDir && pathUnder(p, oldPath) ? newPath + p.slice(oldPath.length) : p;
-      };
-      const next = pages.map(map);
-      if (next.every((p, i) => p === pages[i])) return null;
-      const list = [];
-      for (const p of next) if (!list.includes(p)) list.push(p);
-      const patch = { vaultPages: list };
-      if (ui.activeVaultPage != null) patch.activeVaultPage = map(ui.activeVaultPage);
-      return patch;
-    }
-
-    /** 删除后关掉落在删除集里的页签（含整棵子路径）；没有受影响页签回 null */
-    function vaultTabsClose(ui, prefixes) {
-      const pages = ui.vaultPages ?? [];
-      const stale = (p) => prefixes.some((pre) => pathUnder(p, pre));
-      const rest = pages.filter((p) => !stale(p));
-      if (rest.length === pages.length) return null;
-      const patch = { vaultPages: rest };
-      if (ui.activeVaultPage != null && stale(ui.activeVaultPage)) {
-        patch.activeVaultPage = rest.length > 0 ? rest[rest.length - 1] : null;
-      }
-      return patch;
-    }
-
-    /** 移动/删除候选目标：库内目录（含根）。notes = 笔记侧（索引 folders + 库根），
-     *  否则资料库侧（库内清单目录 + 库根）。每项 {path: 绝对路径, label: 显示名}。 */
-    function vaultDirChoices(kind, root, folders, libRoot, libItems) {
-      const out = [];
-      if (kind === "lib") {
-        if (libRoot !== null) out.push({ path: libRoot, label: t("vaultLibrary") });
-        for (const it of libItems ?? []) {
-          if (it.dir) out.push({ path: it.path, label: it.rel.split("/").join(" / ") });
-        }
-        return out;
-      }
-      if (root !== null) out.push({ path: root, label: t("vaultTitle") });
-      for (const rel of folders ?? []) out.push({ path: joinRelPath(root, rel), label: rel.split("/").join(" / ") });
-      return out;
-    }
-
-    /** 页内选区镜像（模块级、只由**当前激活**的页编辑器写）：左侧树的 @ 按钮在
-     *  mousedown 时 preventDefault 保住选区，但点击本身仍会塌掉原生选区——所以引用
-     *  时读这份镜像。多个页签同时挂载时只有激活那个能写，避免后台页清掉它。 */
-    let vaultSelMirror = "";
-
-    /** M4 笔记→会话：「引用到对话」的选区文本转引用块续在草稿后（首尾空行剥
-     *  掉）。页面路径本体由 @ 引用芯片承载（与文件树
-     *  「@到对话」同款方法，此函数只管引用块文本）。render-check 直调。 */
-    function vaultCiteText(draft, selText) {
-      const base = typeof draft === "string" ? draft : "";
-      const lines = typeof selText === "string" ? selText.replace(/\r\n?/g, "\n").split("\n") : [];
-      while (lines.length > 0 && lines[0].trim() === "") lines.shift();
-      while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
-      const quote = lines.length > 0 ? lines.map((l) => `> ${l}`).join("\n") + "\n\n" : "";
-      const joiner = base !== "" && !base.endsWith("\n") ? "\n" : "";
-      return base + joiner + quote;
-    }
-
-    /** 一页 @ 进对话输入框（左侧树行按钮的唯一实现）：以官方 @ 引用芯片直插
-     *  （与文件树「@到对话」同款方法），selText 非空时先落引用块。**成功不提示**——
-     *  插进去的引用就摆在输入框里，再弹一条是噪音；只有失败原因经 notify 回报
-     *  （组件各自有自己的 toast 通道）。 */
-    function citeVaultPageToChat(pagePath, selText, notify) {
-      const shell = currentComposerShell();
-      if (!shell || typeof shell.actions?.setDraft !== "function") {
-        notify("vaultCiteUnavailable");
-        return;
-      }
-      const mention = chatMentionText(pagePath.replace(/\\/g, "/"));
-      if (mention === null) {
-        notify("vaultCiteUnavailable");
-        return;
-      }
-      if (typeof selText === "string" && selText !== "") {
-        const pre = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
-        const draft = pre && typeof pre.draft === "string" ? pre.draft : "";
-        try {
-          shell.actions.setDraft(vaultCiteText(draft, selText));
-        } catch {
-          notify("vaultCiteUnavailable");
-          return;
-        }
-      }
-      const chipRef = { source: "reference", ref: mention, label: pageBasename(pagePath) || pagePath, appearance: "file", clipboardText: mention };
-      if (typeof shell.insertReference === "function") {
-        const phase = shell.core && shell.core.state ? shell.core.state.phase : null;
-        const detectText = typeof shell.projection?.detectText === "string" ? shell.projection.detectText : "";
-        const rev = typeof shell.rev === "number" ? shell.rev : -1;
-        if ((phase === "plain" || phase === "claimed") && rev >= 0) {
-          const span = { start: detectText.length, end: detectText.length, draftRev: rev };
-          let applied = false;
-          try {
-            applied = shell.insertReference(chipRef, span) === true;
-          } catch {
-            applied = false;
-          }
-          if (applied) return;
-        }
-      }
-      // 兜底：@ 语法文本追加草稿末尾（与手打 @ 一致，此时面板可见属官方行为）
-      const state = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
-      const draft = state && typeof state.draft === "string" ? state.draft : "";
-      shell.actions.setDraft(draft === "" ? mention : `${draft} ${mention}`);
-    }
 
     // ─────────── 文案 ───────────
     const zh = {
@@ -1499,7 +1083,6 @@ window.__ModuleLoader__.load({
       phoneRotateFail: "刷新失败：{error}",
       kcfgGroupFeatures: "功能开关",
       kcfgGroupPhone: "手机访问",
-      kcfgGroupVault: "知识库",
       kcfgPhoneEnabled: "「手机访问」页入口",
       kcfgPhoneEnabledHint: "侧栏「手机访问」页的可见性（网关启停在页内管）。",
       kcfgPhonePort: "手机访问端口（1–65535）",
@@ -1508,80 +1091,10 @@ window.__ModuleLoader__.load({
       kcfgPhoneRemoteDomainHint: "远程访问域名（如内网穿透地址），留空只用局域网。",
       kcfgPhoneKeepGatewayOn: "网关常驻",
       kcfgPhoneKeepGatewayOnHint: "页面关闭后网关继续跑。",
-      kcfgVaultEnabled: "知识库（默认关）",
-      kcfgVaultEnabledHint: "开 = 右栏「知识库」签与只读索引/搜索；改后重启生效。",
-      kcfgVaultRoot: "知识库根目录（绝对路径）",
-      kcfgVaultRootHint: "普通 md 目录，指向哪里读哪里；清空恢复默认根。",
       // 官方「快捷键」页里的命令名与「为什么按不动」的说明（键位本身归官方页管）
-      scVault: "知识库索引",
-      scVaultOff: "知识库已在配置页关闭",
-      schedTab: "日程",
-      schedToday: "今天",
-      schedNoDue: "无期限",
-      schedTasks: "待办",
-      schedTaskDue: "截止",
-      schedOverdue: "逾期",
-      schedTasksEmpty: "暂无待办",
-      schedScope3d: "近三日",
-      schedScopeWeek: "近一周",
-      schedScopeAll: "全部",
-      schedStatsEvents: "事件",
-      schedStatsDone: "已过",
-      schedStatsOpen: "未到",
-      schedStatsTitle: "本周统计",
-      schedTimerStandalone: "独立计时（不挂待办）",
-      schedWeekdays: "一,二,三,四,五,六,日",
-      vaultTitle: "知识库",
-      vaultNotConfigured: "未配置知识库目录",
-      vaultNotConfiguredHint: "在 设置 → 插件 → dsh-kit 里填写「知识库目录」后即可使用：目录内一切 md 文件即页面，支持双链跳转与全文搜索",
-      vaultIndexFail: "索引失败：{error}",
-      vaultSearchPh: "搜索笔记 / 资料库",
-      vaultSearchEmpty: "无结果",
-      vaultSearchFail: "搜索失败：{error}",
-      vaultHitNote: "笔记",
-      vaultLibrary: "资料库",
-      vaultParentRoot: "根目录",
-      vaultBackRoot: "返回知识库",
-      vaultNew: "新建",
-      vaultNewPh: "名称；\\ 开头建目录，可含 / 多级",
-      vaultExists: "同名已存在，未改动",
-      vaultLinks: "（改写 {n} 页双链）",
-      vaultMoveTo: "移动到…",
-      vaultMoveTitle: "移动「{name}」",
-      vaultMoveLabel: "移动到",
-      vaultMoveSkipped: "目标已有同名，按「跳过」处理",
-      vaultImportMd: "导入 md 文件…",
-      vaultImportFiles: "导入文件…",
-      vaultImportTitle: "导入",
-      vaultImportTo: "导入到：{dest}",
-      vaultImportPick: "选择文件…",
-      vaultImportPathPh: "或粘贴本机绝对路径",
-      vaultImportName: "名称",
-      vaultImportNeedSrc: "先选择文件，或填一个本机绝对路径",
-      vaultLibAutoName: "同名自动加序号，不覆盖",
-      vaultImportImgs: "（{n} 张图片进附件）",
-      vaultConflict: "目标已有同名，怎么处理？",
-      vaultConflictSkip: "跳过（什么都不做）",
-      vaultConflictOverwrite: "覆盖（旧的送回收站）",
-      vaultConflictRename: "自动加序号",
-      vaultConfirmDeleteDir: "删除文件夹「{name}」及其 {n} 项？",
-      vaultRecycleHint: "移入回收站",
       moved: "已移动",
       imported: "已导入",
       cancel: "取消",
-      vaultRefresh: "刷新索引与目录树",
-      vaultRefreshed: "已刷新",
-      vaultBinaryHint: "二进制文件，知识库不渲染",
-      vaultCopy: "复制",
-      vaultCopied: "已复制",
-      vaultBacklinks: "反链",
-      vaultToc: "目录",
-      vaultTocEmpty: "本文没有标题",
-      vaultBlEmpty: "没有页面引用本页",
-      vaultLibsFail: "渲染组件加载失败",
-      vaultPickPage: "从左侧选择一页开始",
-      vaultPageGone: "页面不存在（可能已被移动或删除）",
-      vaultCiteUnavailable: "对话输入框未就绪（无会话或不可用）",
       save: "保存",
       saving: "保存中…",
       discard: "放弃修改",
@@ -1648,7 +1161,6 @@ window.__ModuleLoader__.load({
       phoneRotateFail: "Rotate failed: {error}",
       kcfgGroupFeatures: "Features",
       kcfgGroupPhone: "Phone access",
-      kcfgGroupVault: "Vault",
       kcfgPhoneEnabled: "Show the Phone access page",
       kcfgPhoneEnabledHint: "Visibility of the Phone access page (gateway start/stop lives in the page).",
       kcfgPhonePort: "Phone access port (1–65535)",
@@ -1657,79 +1169,9 @@ window.__ModuleLoader__.load({
       kcfgPhoneRemoteDomainHint: "Remote access domain (e.g. a tunnel host); leave blank for LAN only.",
       kcfgPhoneKeepGatewayOn: "Keep gateway on",
       kcfgPhoneKeepGatewayOnHint: "Keeps the gateway running after the page closes.",
-      kcfgVaultEnabled: "Vault (off by default)",
-      kcfgVaultEnabledHint: "On = the Vault tab plus read-only index/search; takes effect after a restart.",
-      kcfgVaultRoot: "Vault root directory (absolute path)",
-      kcfgVaultRootHint: "A plain md directory read as-is; blank restores the default root.",
-      scVault: "Vault index",
-      scVaultOff: "Vault is switched off in the config page",
-      schedTab: "Schedule",
-      schedToday: "Today",
-      schedNoDue: "No due date",
-      schedTasks: "Tasks",
-      schedTaskDue: "Due",
-      schedOverdue: "Overdue",
-      schedTasksEmpty: "No tasks",
-      schedScope3d: "3 days",
-      schedScopeWeek: "Week",
-      schedScopeAll: "All",
-      schedStatsEvents: "Events",
-      schedStatsDone: "Past",
-      schedStatsOpen: "Upcoming",
-      schedStatsTitle: "This week",
-      schedTimerStandalone: "Standalone timer (no task)",
-      schedWeekdays: "Mo,Tu,We,Th,Fr,Sa,Su",
-      vaultTitle: "Knowledge base",
-      vaultNotConfigured: "Knowledge base directory not configured",
-      vaultNotConfiguredHint: "Set the knowledge base directory in Settings → Plugins → dsh-kit: every md file inside becomes a page, with wiki-links and full-text search",
-      vaultIndexFail: "Index failed: {error}",
-      vaultSearchPh: "Search notes / library",
-      vaultSearchEmpty: "No results",
-      vaultSearchFail: "Search failed: {error}",
-      vaultHitNote: "Note",
-      vaultLibrary: "Library",
-      vaultParentRoot: "root",
-      vaultBackRoot: "Back to knowledge base",
-      vaultNew: "New",
-      vaultNewPh: "Name; \\ prefix makes a folder, / for nested",
-      vaultExists: "Already exists — nothing changed",
-      vaultLinks: " (rewrote {n} page links)",
-      vaultMoveTo: "Move to…",
-      vaultMoveTitle: "Move “{name}”",
-      vaultMoveLabel: "Move to",
-      vaultMoveSkipped: "Same name exists in the target — skipped",
-      vaultImportMd: "Import markdown…",
-      vaultImportFiles: "Import files…",
-      vaultImportTitle: "Import",
-      vaultImportTo: "Into: {dest}",
-      vaultImportPick: "Choose files…",
-      vaultImportPathPh: "or paste an absolute path on this machine",
-      vaultImportName: "Name",
-      vaultImportNeedSrc: "Choose files or paste an absolute path first",
-      vaultLibAutoName: "Same name → auto-numbered, never overwritten",
-      vaultImportImgs: " ({n} images copied to attachments)",
-      vaultConflict: "A same-named item already exists in the target:",
-      vaultConflictSkip: "Skip (do nothing)",
-      vaultConflictOverwrite: "Overwrite (old one to the Recycle Bin)",
-      vaultConflictRename: "Auto-number",
-      vaultConfirmDeleteDir: "Delete folder “{name}” and its {n} items?",
-      vaultRecycleHint: "moved to the Recycle Bin",
       moved: "Moved",
       imported: "Imported",
       cancel: "Cancel",
-      vaultRefresh: "Refresh index and tree",
-      vaultRefreshed: "Refreshed",
-      vaultBinaryHint: "Binary file — not rendered in the vault",
-      vaultCopy: "Copy",
-      vaultCopied: "Copied",
-      vaultBacklinks: "Backlinks",
-      vaultToc: "Outline",
-      vaultTocEmpty: "No headings in this page",
-      vaultBlEmpty: "No pages link here",
-      vaultLibsFail: "Failed to load renderer components",
-      vaultPickPage: "Pick a page on the left to start",
-      vaultPageGone: "Page not found (it may have been moved or deleted)",
-      vaultCiteUnavailable: "Composer is not ready (no active session)",
     };
     /** 语言判定与切换响应随组件化迁入 dsh-kit-dock（所有组件共享同一份 locale
      *  store 与 <html lang> MutationObserver），这里解构取用。 */
@@ -2107,34 +1549,6 @@ ellipsis，窄列只截字不破版 */
       }
     }
 
-    // ─────────── vendor 按需加载 ───────────
-    function loadScript(src) {
-      return new Promise((resolve, reject) => {
-        const s = document.createElement("script");
-        s.src = src;
-        s.onload = () => resolve();
-        s.onerror = () => reject(new Error("load failed: " + src));
-        document.head.appendChild(s);
-      });
-    }
-    /** KaTeX 公式按需加载（RTE 阅读与编辑都要）：js + css 一起上，重复调用只下一次 */
-    function ensureKatex() {
-      const jobs = [];
-      if (typeof window.katex === "undefined") jobs.push(loadScript("/dsh-kit/vendor/katex.min.js"));
-      if (!document.querySelector('link[data-dshk-katex]')) {
-        const link = document.createElement("link");
-        link.rel = "stylesheet";
-        link.href = "/dsh-kit/vendor/katex.min.css";
-        link.setAttribute("data-dshk-katex", "1");
-        document.head.appendChild(link);
-      }
-      return Promise.all(jobs);
-    }
-    function ensureRteLib() {
-      return typeof window.DshRTE === "object" && window.DshRTE !== null
-        ? Promise.resolve()
-        : loadScript("/dsh-kit/vendor/richeditor.bundle.js");
-    }
 
     // 轻提示/剪贴板：实现随组件化迁入 dsh-kit-dock，这里解构取用
     const { flashToast, writeClipboard } = dock;
@@ -2179,53 +1593,8 @@ ellipsis，窄列只截字不破版 */
 
 
 
-    /** 日程图标：日历（圆角框 + 两枚吊耳 + 头部分隔线），与终端/任务描边体系一致 */
-    function SchedIcon(props) {
-      const _official = dswIcon("IconAlarmClockOutline16");
-      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
-      return jsxRuntime.jsxs(
-        "svg",
-        {
-          width: (props && props.size) ?? 15,
-          height: (props && props.size) ?? 15,
-          className: props && props.className,
-          viewBox: "0 0 16 16",
-          "aria-hidden": true,
-          fill: "none",
-          stroke: "currentColor",
-          strokeWidth: 1.2,
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          children: [
-            jsxRuntime.jsx("rect", { x: 2.8, y: 3.6, width: 10.4, height: 9.6, rx: 1.6 }),
-            jsxRuntime.jsx("path", { d: "M5.4 2.2v2.6M10.6 2.2v2.6M2.8 7h10.4" }),
-          ],
-        },
-      );
-    }
 
 
-    /** 知识库图标：书堆（三枚书脊，第三本微倾斜），与终端/任务描边体系一致 */
-    function VaultIcon() {
-      return jsxRuntime.jsxs(
-        "svg",
-        {
-          width: 15,
-          height: 15,
-          viewBox: "0 0 16 16",
-          "aria-hidden": true,
-          fill: "none",
-          stroke: "currentColor",
-          strokeWidth: 1.2,
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          children: [
-            jsxRuntime.jsx("path", { d: "M3 2.6v10.8M6.6 2.6v10.8" }),
-            jsxRuntime.jsx("rect", { x: 9.4, y: 2.6, width: 3.4, height: 10.8, rx: 0.9 }),
-          ],
-        },
-      );
-    }
 
 
     /** 单个官方图标（取不到退回给定字形）：navigation / 刷新 / 下拉箭头这类
@@ -2348,132 +1717,7 @@ ellipsis，窄列只截字不破版 */
       });
     }
 
-    /** 知识库面板的对话框（移动到…/导入/删除确认共用）：fixed 遮罩 + 居中卡片。
-     *  关闭手势长在自己身上（Esc / 点遮罩）——与菜单同一条约定：宿主各写一份必漏。
-     *  内容与按钮归调用方，这里只管壳与关闭。 */
-    function VaultDialog({ title, onClose, children }) {
-      react.useEffect(() => {
-        const onKey = (e) => {
-          if (e.key === "Escape") {
-            e.stopPropagation();
-            onClose();
-          }
-        };
-        window.addEventListener("keydown", onKey, true);
-        return () => window.removeEventListener("keydown", onKey, true);
-      }, [onClose]);
-      return jsxRuntime.jsx("div", {
-        className: "dshk-vault-modalwrap",
-        onMouseDown: (e) => {
-          if (e.target === e.currentTarget) onClose();
-        },
-        children: jsxRuntime.jsxs("div", {
-          className: "dshk-vault-modal",
-          children: [
-            jsxRuntime.jsx("div", { className: "dshk-vault-modaltitle", children: title }),
-            children,
-          ],
-        }),
-      });
-    }
 
-    // ─────────── 知识库 md 链接解析（VaultPagePane / RteEditor 用）───────────
-    /** 链接点击要不要交给我们：页内锚点与带协议/协议的 href 放行（RTE 的 Link
-     *  扩展配了 openOnClick:false，点了本来也不跳），其余（相对路径 / 站内 / 裸
-     *  路径）都算「文档内链接」候选，由调用方决定能不能解析成文件。 */
-    function isDocHref(href) {
-      const h = String(href ?? "").trim();
-      if (h === "" || h.startsWith("#")) return false;
-      return !/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(h);
-    }
-    /** 把 md 里的相对/站内链接解析为可打开的绝对路径；解析不出返回 null。
-     *  fromPath 为当前文件绝对路径（正反斜杠皆可），cwd 为根（工作区或知识库根，
-     *  合成 / 开头链接用）；href 的 query/hash 在这里剥掉，%xx 就地解码。 */
-    function resolveMdLink(fromPath, cwd, href) {
-      const raw = (() => {
-      try {
-        return decodeURIComponent(href.split(/[?#]/, 1)[0]);
-      } catch {
-        return href.split(/[?#]/, 1)[0];
-      }
-    })();
-      if (raw === "") return null;
-      const norm = (p) => {
-        const parts = p.split(/[\\/]+/).filter((s) => s !== "" && s !== ".");
-        const out = [];
-        for (const s of parts) {
-          if (s === "..") out.pop();
-          else out.push(s);
-        }
-        return out.join("\\");
-      };
-      if (raw.startsWith("/")) {
-        return cwd && cwd.trim() !== "" ? norm(`${cwd}\\${raw.slice(1)}`) : null;
-      }
-      const dir = fromPath.split(/[\\/]+/).slice(0, -1).join("\\");
-      return norm(`${dir}\\${raw}`);
-    }
-    // ─────────── 阅读位置记忆（按文件绝对路径）───────────
-    // 内容重载（刷新浏览器 / vault 重读 / 冲突回读）后落回用户原本看的大致
-    // 位置。每条记录 = { scrollTop, anchor }：anchor 是光标字符偏移（内容变了
-    // 也能落回附近），scrollTop 是精确视口位。运行时 Map + localStorage 持久化
-    // （刷新之后也要在，纯内存不够）。RTE 编辑路径在用。
-    const readPosStore = (() => {
-      let map = new Map();
-      try {
-        const raw = JSON.parse(localStorage.getItem("dshk-read-pos") ?? "{}");
-        if (raw && typeof raw === "object") {
-          for (const [k, v] of Object.entries(raw)) {
-            if (v && typeof v === "object" && Number.isFinite(v.scrollTop) && Number.isFinite(v.anchor)) map.set(k, v);
-          }
-        }
-      } catch {
-        /* 坏数据当作没有 */
-      }
-      let flushTimer = null;
-      const persist = () => {
-        if (flushTimer !== null) return;
-        flushTimer = setTimeout(() => {
-          flushTimer = null;
-          try { localStorage.setItem("dshk-read-pos", JSON.stringify(Object.fromEntries(map))); } catch { /* 存不下就只在内存 */ }
-        }, 400);
-      };
-      return {
-        get: (p) => map.get(p),
-        set(p, scrollTop, anchor) {
-          map.delete(p); // 重插=刷新访问序，容量超限时淘汰最旧
-          map.set(p, { scrollTop: Math.max(0, Math.round(scrollTop)), anchor: Math.max(0, Math.round(anchor)) });
-          while (map.size > 300) map.delete(map.keys().next().value);
-          persist();
-        },
-      };
-    })();
-    /** 记录当前位置（调用方节流）。隐藏容器不记：display:none 的 scrollTop 恒 0，
-     *  会把真位置冲掉（非激活标签仍挂载，切走时会有 resize/兜底路径摸到这里） */
-    function recordReadPos(key, el, anchor) {
-      if (!el || el.getClientRects().length === 0) return;
-      readPosStore.set(key, el.scrollTop, typeof anchor === "number" && Number.isFinite(anchor) ? anchor : 0);
-    }
-    /** 恢复：优先锚点（选区落回），再设 scrollTop。恢复必须等内容渲染后——挂载
-     *  即设会白设（maxScroll 未建立）。容器还隐藏着（非激活标签被后台重读）就
-     *  定时重试到可见为止；期间用户自己滚过（偏离顶部）则放弃，不抢滚动权。
-     *  用 setTimeout 不用 rAF：后台/被遮挡的窗口 rAF 会停发，定时器照走 */
-    function restoreReadPos(key, el, applyAnchor) {
-      const rec = readPosStore.get(key);
-      if (!rec || rec.scrollTop <= 0 || !el) return;
-      let tries = 0;
-      const step = () => {
-        tries += 1;
-        if (el.getClientRects().length === 0) {
-          if (tries < 300) setTimeout(step, 60);
-          return;
-        }
-        if (el.scrollTop > 2) return;
-        try { applyAnchor?.(rec.anchor); } catch { /* 选区失效按纯滚动恢复 */ }
-        el.scrollTop = rec.scrollTop;
-      };
-      setTimeout(step, 60);
-    }
 
 
     // ─────────── 入口按钮（conversation.input.left）───────────
@@ -2510,25 +1754,6 @@ ellipsis，窄列只截字不破版 */
     }
 
 
-    /** 知识库入口（输入行，源代码管理与终端之间）：
-     *  开 = 只切侧栏索引视图（点具体页才开右栏知识库签）；
-     *  再点 = 侧栏回会话列表（右栏知识库签与页签不跟着关）。
-     *  按钮与快捷键同语义（toggleVaultEntry） */
-    function VaultEntry() {
-      const ui = useKitUi();
-      return jsxRuntime.jsx(KitTip, {
-        label: t("vaultTitle"),
-        command: "dsh-kit.vault.toggle",
-        side: "top",
-        children: jsxRuntime.jsx("button", {
-          type: "button",
-          className: "dshk-btn dshk-enbtn",
-          "aria-pressed": ui.vaultIdxOpen,
-          onClick: () => setKitUi(toggleVaultEntry(getKitUi())),
-          children: jsxRuntime.jsx(VaultIcon, {}),
-        }),
-      });
-    }
 
     // ─────────── 手机访问页（settings.section，与技能页同类）───────────
     // 数据源：宿主半边 /dsh-kit/phone/info|link（rotate 无 UI 入口——轮换在
@@ -2760,6 +1985,1728 @@ ellipsis，窄列只截字不破版 */
               )
             : null,
         ],
+      });
+    }
+
+
+    /** 内容区文档签条（浏览器式页签）：一文档一签、点击切换、✕ 单关；
+     *  label(path) 决定签名（文件带后缀、知识库页去掉 .md）。文件区与知识库区
+     *  的 pane 正文共用 */
+    const docChips = (paths, activePath, activate, closeOne, label) =>
+      paths.map((p) =>
+        jsxRuntime.jsxs("span", {
+          className: `dshk-tab${p === activePath ? " dshk-tab-on" : ""}`,
+          title: p,
+          onClick: () => setKitUi(activate(p)),
+          children: [
+            jsxRuntime.jsx("span", { className: "dshk-tab-label", children: label(p) }),
+            jsxRuntime.jsx(KitTip, {
+              label: t("pvCloseTab"),
+              children: jsxRuntime.jsx("button", {
+                type: "button",
+                className: "dshk-tab-x",
+                "aria-label": t("pvCloseTab"),
+                onClick: (e) => {
+                  e.stopPropagation();
+                  setKitUi(closeOne(p));
+                },
+                children: "✕",
+              }),
+            }),
+          ],
+        }, p),
+      );
+
+
+    // ─────────── 右栏 pane 正文（每个 dock 签一个，key = 页类型 id）───────────
+    // 官方 pane 是普通文档流：外壳 .dshk-rbpane 占满 100%×100%，内容区自己滚。
+    // pane 挂载 = 官方签开着：把 getKitUi() 的功能存在性同步为真（入口按钮选中态、
+    // 角标、自动跟随判定都读它）；pane 卸载（用户点官方签 ✕）同步回假——
+    // 「签开着吗」以官方 pane 的挂载为准。文件/知识库的文档签状态（files/
+    // vaultPages）在卸载后保留，重开签即恢复，与关签前一致。
+    /** diff pane：文档签条 + 多实例 DiffPane（非激活 display:none 保挂载——
+     *  滚动位置不丢）。只承载源代码管理/提交图谱点开的 diff；工作区文件的
+     *  预览/编辑已改投官方右栏文件签。不做存在性同步：files 状态本来就在
+     *  getKitUi()，官方签关了重开，文档签原样恢复。最后一页 diff 签关掉 → 官方
+     *  「差异」dock 签一起关（同浏览器「没了就没了」，没有空页状态） */
+    function FilePaneBody(props) {
+      const ui = useKitUi();
+      const cwd = useCurrentCwd(props);
+      const files = ui.files ?? [];
+      const fileCount = files.length;
+      react.useEffect(() => {
+        if (fileCount === 0) closeRightbarTab("file");
+      }, [fileCount]);
+      return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
+        fileCount > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(files.map((x) => x.path), ui.activeFile, (p) => activateFileTab(getKitUi(), p), (p) => closeFileTab(getKitUi(), p), (p) => baseName(p) || t("fileTabLabel")) }) : null,
+        files.map((pv) =>
+              jsxRuntime.jsx("div", {
+                className: "dshk-pane-view",
+                style: { display: pv.path === ui.activeFile ? "flex" : "none" },
+                children: jsxRuntime.jsx(dock.diffPane.Component, { // dsh-kit-files 物化期挂上（渲染期取，boot 后必已物化）
+                  key: pv.path,
+                  path: pv.path,
+                  untracked: pv.untracked === true,
+                  deleted: pv.deleted === true,
+                  commit: pv.commit,
+                  cwd,
+                }),
+              }, pv.path),
+            ),
+      ] });
+    }
+    // ─────────── 面板宿主（shell.overlay 全帧浮层）───────────
+    // 终端停靠在这里渲染（fixed 定位不受 composer 祖先
+    // stacking context 影响）；知识库单实例挂载、文件树/索引的 sidebar.workspaces
+    // 动态注册、几何 RO、快捷键监听全部挂在这个常驻根组件里。
+    function KitSurfaces(props) {
+      react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
+      const sessionRow = useCurrentRow(props);
+      const cwd = typeof sessionRow?.cwd === "string" && sessionRow.cwd.trim() !== "" ? sessionRow.cwd : null;
+      const ui = useKitUi();
+      // 官方右栏可用时机：seat 不在场（全局面板占住中栏 / 没选会话）时，索引视图
+      // 一并让位给官方会话列表，与「右栏不存在」这件事保持同一时机
+      const rightbarUp = useRightbarSeat();
+      const snap = react.useSyncExternalStore(subscribeCfg, getCfgSnapshot);
+      const cfg = cfgFromSnapshot(snap);
+      // useSessions 透传给右栏 pane（浏览器 pane 定位当前会话用）：inject 闭包
+      // 从这里取最新值（槽位注册发生在 effect，渲染期的 props 用模块变量桥接）
+      shellShare.current = props;
+      // 座位门控：按配置动态注册/注销输入框入口与技能页（配置页
+      // 本体不受门控，否则关掉就再也打不开）。快照未就绪按默认全开处理，首个
+      // ready 快照到达后本效果自动重跑纠正。
+      react.useEffect(() => {
+        if (!slotsCtx) return undefined;
+        const handles = [];
+        const want = [
+          // 手机访问走 settings.section（order 45）；输入行入口各归各组件
+          //（文件树 dsh-kit/files、知识库 dsh-kit/vault、终端 dsh-kit/terminal 自注册）
+          ["phone", cfg.phoneEnabled, () =>
+            slotsCtx.slots.register(
+              { name: "settings.section", id: "kit-phone", order: 45, label: () => t("phoneTitle") },
+              PhoneSection,
+            )],
+        ];
+        for (const [key, enabled, make] of want) {
+          if (!enabled) continue;
+          try {
+            handles.push(make());
+          } catch (error) {
+            console.error(`[dsh-kit] 注册座位失败：${key}`, error);
+          }
+        }
+        return () => {
+          for (const dispose of handles) {
+            try {
+              dispose();
+            } catch {
+              // 忽略注销异常
+            }
+          }
+        };
+      }, [cfg.phoneEnabled]);
+
+      // 侧边栏浏览区占用：单槽轮换——源代码管理 ↔ 文件树 ↔ 知识库
+      // 目录，全关回官方会话列表。右栏不在场时不占（全局面板在前台时左栏该是
+      // 官方会话列表）：开合状态留着，回到对话原样恢复。
+      // 动态注册若在运行时抛错，捕获并回滚开合状态，避免入口被错误边界摘掉。
+      react.useEffect(() => {
+        if (!slotsCtx || !rightbarUp || (!ui.treeOpen && !ui.gitOpen && !ui.vaultIdxOpen)) return undefined;
+        let dispose;
+        try {
+          // 单槽遮蔽原生需要更低 priority（数字越小越先渲染，原生在 priority 0）。
+          // owner 携带官方注入的 wide（侧边栏是否展开）：收起态各占用者自判不渲染
+          // （挤进铁轨等于不可见）。
+          dispose = slotsCtx.slots.register({ name: "sidebar.workspaces", priority: -1000 }, (owner) => {
+            const side = owner ?? {};
+            if (side.wide === false) return null;
+            // 文件树/源代码管理分支归 dsh-kit-files、知识库目录归 dsh-kit/vault，
+            // 各经 kitBase 的座对象接管；两者都不在场（未装 / 行关闭）时不占槽
+            const branch = dock.sidebarView.renderer ? dock.sidebarView.renderer({ ui, cwd, owner }) : null;
+            if (branch) return branch;
+            return dock.vaultView.renderer ? dock.vaultView.renderer({ ui, cwd, owner }) : null;
+          });
+        } catch (error) {
+          console.error("[dsh-kit] 注册 sidebar.workspaces 面板失败：", error);
+          setKitUi({ treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null });
+          return undefined;
+        }
+        return () => {
+          try {
+            dispose();
+          } catch {
+            // 忽略注销异常
+          }
+        };
+      }, [ui.treeOpen, ui.gitOpen, ui.vaultIdxOpen, cwd, rightbarUp]);
+
+      // Esc 分层：先关当前激活那张文档签（知识库关当前页那张、文件关当前文件那张），
+      // 再关侧栏视图，最后收起终端坞（不拦截，避免挡掉其它 Esc 行为）。功能签归官方 ✕。
+      // 组件自己的命令（知识库 Ctrl+Alt+/ 等）注册进官方 shortcuts 服务，动作闭包在
+      // 组件自己的壳里刷新。
+
+      react.useEffect(() => {
+        const onKey = (e) => {
+          if (e.key === "Escape") {
+            if (dock.inlineEdit.active) return; // 树行改名输入激活（dsh-kit-files 经底座座上报）
+            // 知识库搜索浮层开着时让路：Esc 归它自己（只关自己，不收标签页）
+            if (dock.vaultSearch.open) return;
+            // Esc 关当前激活那张文档签（知识库关当前页那张、diff 关当前
+            // 那张，各自与标签条的 ✕ 同语义）。功能签归官方 ✕，Esc 不收
+            // 功能签（getKitUi() 收了 pane 还在，状态会对不上）
+            const vaultPages = getKitUi().vaultPages ?? [];
+            const files = getKitUi().files ?? [];
+            const activeVault = getKitUi().activeVaultPage ?? vaultPages[vaultPages.length - 1] ?? null;
+            const activeFile = getKitUi().activeFile ?? files[files.length - 1]?.path ?? null;
+            if (getKitUi().activeFeature === "vault" && activeVault) {
+              setKitUi(closeVaultPageTab(getKitUi(), activeVault));
+            } else if (getKitUi().activeFeature === "file" && activeFile) {
+              setKitUi(closeFileTab(getKitUi(), activeFile));
+            } else if (vaultPages.length > 0) {
+              setKitUi(closeVaultPageTab(getKitUi(), activeVault));
+            } else if (files.length > 0) {
+              setKitUi(closeFileTab(getKitUi(), activeFile));
+            } else if (getKitUi().gitOpen || getKitUi().treeOpen || getKitUi().vaultIdxOpen) {
+              // 侧栏视图单槽：关一格即可（四者互斥）；功能签不连带关
+              setKitUi(sidebarViewPatch(null));
+            } else if (getKitUi().termDockOpen) setKitUi({ termDockOpen: false }); // 只隐藏，不杀会话
+          }
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      });
+
+      // 知识库/日程的面板本体归 dsh-kit/vault 自己的壳（见该组件的 VaultShell），
+      // 根壳只留 shellShare 桥与手机访问页的座位门控
+      return null;
+    }
+
+    // ── 设置导航图标：官方 navIcon(id) 硬编码映射（models/agent-presets/plugins），
+    // 未知 id 一律回退齿轮。没有注册缝，这里按标签文字找到对应行，把行内第一个
+    // svg 换成自绘分层图标——纯外观增强：任何一步失败都静默保持齿轮。
+    // 候选由各归属方注册（根包注册手机访问，组件经 dock.registerNavIcon 注册自己的）。
+    const SVG_OPEN =
+      '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+    const NAV_ICONS = [];
+    function registerNavIcon(entry) {
+      if (entry) NAV_ICONS.push(entry);
+    }
+    registerNavIcon({
+      label: () => t("phoneTitle"),
+      attr: "data-dshk-phone",
+      html:
+        SVG_OPEN +
+        '<rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/>' +
+        '<path d="M6.8 3.4h2.4"/>' +
+        '<path d="M8 12.6h.01"/>' +
+        "</svg>",
+    });
+
+    let iconSwapPending = false;
+    function swapKitNavIcons() {
+      try {
+        const rows = document.querySelectorAll('[role="dialog"][aria-modal="true"] nav button');
+        if (rows.length === 0) return;
+        for (const row of rows) {
+          const span = row.querySelector("span");
+          if (!span) continue;
+          const entry = NAV_ICONS.find((candidate) => span.textContent === candidate.label());
+          if (!entry) continue;
+          const current = row.querySelector("svg");
+          if (!current || current.getAttribute(entry.attr) === "1") continue;
+          const holder = document.createElement("span");
+          holder.innerHTML = entry.html;
+          const icon = holder.firstElementChild;
+          if (!icon) continue;
+          icon.setAttribute(entry.attr, "1");
+          current.replaceWith(icon);
+        }
+      } catch {
+        // 外观增强失败即保持默认齿轮
+      }
+    }
+    function scheduleNavIconSwap() {
+      if (iconSwapPending) return;
+      iconSwapPending = true;
+      window.setTimeout(() => {
+        iconSwapPending = false;
+        swapKitNavIcons();
+        window.setTimeout(swapKitNavIcons, 250); // React 重渲染后的二次补换
+      }, 60);
+    }
+
+    // ─────────── dsh-kit/skills 组件（技能管理页）───────────
+    // 技能池管理页（settings.section）：数据走本组件宿主半边 GET /dsh-kit/skills
+    // （白名单根枚举 + 注册表归属增强）与 POST /dsh-kit/skills/op（copy/move/delete/
+    // disable）。分组显示：工作区(.agents|.dsh/skills) → 用户级($DSH_HOME|~/.agents)
+    // → 技能池；插件自带/运行时来源只读展示。删除=移入池内 .trash，禁用=改
+    // frontmatter 双键。行禁用（宿主子模块不物化）时 /dsh-kit-skills/config 404，
+    // 本组件不注册设置页；样式与词条随本组件自带。
+    const skillsModule = (kit, require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+    const react = require("react");
+    const jsxRuntime = require("react/jsx-runtime");
+    const dock = kit;
+    const { KitTip, kitGetJson, kitPostJson, kitJson, resolveZh, subscribeLocale, getLocaleVersion, useCurrentCwd, registerNavIcon } = dock;
+
+    // 组件私有文案（技能页词条随页迁入本包，与根包字典互不依赖）
+    const zh = {
+      skillsLabel: "技能",
+      skRefresh: "刷新",
+      skLoading: "加载中…",
+      skFail: "加载失败",
+      skEmpty: "（此组暂无技能）",
+      skNotCreated: "未创建",
+      skRankTip: "所在位置的扫描优先级（数值越小越优先）",
+      skWorkspace: "工作区",
+      skUserLevel: "用户级",
+      skPool: "技能池",
+      skOther: "其他来源（插件自带/运行时，只读）",
+      skNoCwdHint: "当前没有会话工作区：只显示用户级与技能池",
+      skDisabled: "已禁用",
+      skShadowed: "被覆盖",
+      skShadowTip: "同名技能在更高优先级位置生效（优先级：.dsh > .agents > $DSH_HOME/skills > ~/.agents/skills）",
+      skVersionTip: "技能自带版本（frontmatter version）：用来对照自己手上这份抄的是哪版",
+      skByPlugin: "随插件",
+      skHide: "收起",
+      skView: "详情",
+      skCopy: "复制",
+      skMove: "移动",
+      skPickTarget: "选择目标位置",
+      skDisable: "禁用",
+      skEnable: "启用",
+      skDelete: "删除",
+      skConfirmDelete: "确认删除？",
+      skCancel: "取消",
+      skOverwrite: "目标已存在同名技能，覆盖？",
+      skOpFail: "操作失败",
+      skDone: "完成",
+      skDeleted: "已删除",
+      contentFail: "读取失败",
+      contentEmpty: "（空）",
+      contentBinary: "二进制文件，无法预览",
+    };
+    const en = {
+      skillsLabel: "Skills",
+      skRefresh: "Refresh",
+      skLoading: "Loading…",
+      skFail: "Failed to load",
+      skEmpty: "(no skills here)",
+      skNotCreated: "not created",
+      skRankTip: "Scan priority of this location (lower wins)",
+      skWorkspace: "Workspace",
+      skUserLevel: "User level",
+      skPool: "Skill pool",
+      skOther: "Other sources (plugin/runtime, read-only)",
+      skNoCwdHint: "No session workspace: showing user-level and pool only",
+      skDisabled: "Disabled",
+      skShadowed: "Shadowed",
+      skShadowTip: "A same-name skill at a higher-priority location takes effect (priority: .dsh > .agents > $DSH_HOME/skills > ~/.agents/skills)",
+      skVersionTip: "Skill's own version (frontmatter version), to compare against your own copy",
+      skByPlugin: "Plugin-bundled",
+      skHide: "Hide",
+      skView: "Details",
+      skCopy: "Copy",
+      skMove: "Move",
+      skPickTarget: "Pick destination",
+      skDisable: "Disable",
+      skEnable: "Enable",
+      skDelete: "Delete",
+      skConfirmDelete: "Confirm delete?",
+      skCancel: "Cancel",
+      skOverwrite: "A skill with the same name exists at the target. Overwrite?",
+      skOpFail: "Operation failed",
+      skDone: "Done",
+      skDeleted: "Deleted",
+      contentFail: "Failed to read",
+      contentEmpty: "(empty)",
+      contentBinary: "Binary file, preview unavailable",
+    };
+    const lang = () => (resolveZh() ? zh : en);
+    const t = (key) => lang()[key] ?? key;
+
+    function fetchSkillsPage(cwd, signal) {
+      const query = cwd ? "?cwd=" + encodeURIComponent(cwd) : "";
+      return kitGetJson("/dsh-kit/skills" + query, signal, (b) => Array.isArray(b.groups));
+    }
+
+    function postSkillOp(payload) {
+      return kitPostJson("/dsh-kit/skills/op", payload);
+    }
+
+    /** 物理根短标签（行内徽标与目标选择条共用） */
+    const SK_ROOT_SHORT = {
+      "project-dsh": ".dsh/skills",
+      "project-agents": ".agents/skills",
+      "user-dsh": "$DSH_HOME/skills",
+      "user-agents": "~/.agents/skills",
+    };
+
+    function skRootShort(id) {
+      return SK_ROOT_SHORT[id] ?? id;
+    }
+
+    function skGroupTitle(groupId) {
+      if (groupId === "pool") return t("skPool");
+      return groupId === "user" ? t("skUserLevel") : t("skWorkspace");
+    }
+
+    // 设置导航图标（官方 navIcon 无注册缝，靠标签文字换行内 svg）：纯外观增强
+    const SVG_SKILL_ICON =
+      '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M8 1.8 14.2 5 8 8.2 1.8 5z"/>' +
+      '<path d="M1.8 8.1 8 11.2l6.2-3.1"/>' +
+      '<path d="M1.8 11.3 8 14.4l6.2-3.1"/>' +
+      "</svg>";
+
+    // ─────────── 组件配置（/dsh-kit-skills/config）───────
+    // 技能没有独立配置字段：行开关（插件页组件行 switch）= 唯一开关。拉端点只为
+    // 可达性——200 = 行启用；404（行禁用 → 子模块不物化）= 不注册设置页。
+    let cfgSnap = null;
+    const cfgSubs = new Set();
+    const emitCfg = () => {
+      for (const fn of cfgSubs) {
+        try {
+          fn();
+        } catch {
+          /* 订阅者已卸载 */
+        }
+      }
+    };
+    async function loadCfg() {
+      let value = null;
+      try {
+        const v = await kitJson("/dsh-kit-skills/config", undefined, (b) => b !== null && typeof b === "object");
+        value = v;
+      } catch {
+        value = null; // 端点不可达（行禁用 404）：探明不可用
+      }
+      cfgSnap = value && typeof value === "object" ? { status: "ready", value } : { status: "unavailable" };
+      emitCfg();
+    }
+    const subscribeCfg = (fn) => {
+      cfgSubs.add(fn);
+      return () => cfgSubs.delete(fn);
+    };
+    const getCfgSnapshot = () => cfgSnap;
+    /** 组件可用性：端点 200（行启用）或未探明（乐观，apply 前的渲染窗口）= true；
+     *  探明 404（行禁用 → 子模块不物化）= false */
+    function cfgFromSnapshot(snap) {
+      return { available: !snap || snap.status === "ready" };
+    }
+
+    // ─────────── 组件样式 ───────────
+    // 技能管理页（settings.section）：三分组卡片；技能行单行布局，操作不换行、描述先收缩
+    const SKS_CSS = `
+.dshk-sk{font-size:13px;color:var(--dsw-alias-label-primary);user-select:text}
+.dshk-sk-head{display:flex;align-items:center;gap:8px;margin:2px 0 10px}
+.dshk-sk-title{font-weight:600;font-size:14px}
+.dshk-sk-status{color:var(--dsw-alias-label-tertiary);font-size:12px}
+.dshk-sk-group{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;margin-bottom:12px;overflow:hidden}
+.dshk-sk-group-head{display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:12px}
+.dshk-sk-group-dir{font-family:ui-monospace,Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;text-align:right}
+/* 单行：名称/徽标 flex:none，描述 flex:1 收缩截断，操作区不换行 */
+.dshk-sk-row{display:flex;align-items:center;gap:8px;padding:7px 12px;min-width:0}
+.dshk-sk-row ~ .dshk-sk-row{border-top:1px solid var(--dsw-alias-border-l1)}
+.dshk-sk-name{font-weight:600;white-space:nowrap;flex:none}
+.dshk-sk-name[data-disabled]{color:var(--dsw-alias-label-tertiary);text-decoration:line-through}
+.dshk-sk-badge{flex:none;font-size:11px;line-height:16px;padding:0 7px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);white-space:nowrap;font-family:ui-monospace,Consolas,monospace}
+.dshk-sk-badge-off{border-style:dashed;color:var(--dsw-alias-label-tertiary)}
+.dshk-sk-desc{flex:1;min-width:0;color:var(--dsw-alias-label-secondary);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.dshk-sk-actions{flex:none;display:flex;align-items:center;gap:5px}
+.dshk-sk-btn{appearance:none;background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:12px;line-height:1;padding:4px 9px;white-space:nowrap}
+.dshk-sk-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-sk-btn[data-danger="1"]{color:var(--dsw-alias-label-primary);font-weight:600;border-color:var(--dsw-alias-label-secondary)}
+.dshk-sk-btn[disabled]{opacity:.5;cursor:default}
+/* 展开式目标选择条：点复制/移动后出现在该行下方（同一时间只展开一行） */
+.dshk-sk-target{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 12px;border-top:1px dashed var(--dsw-alias-border-l1);background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-sk-target-label{font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshk-sk-detail{padding:2px 12px 10px}
+.dshk-sk-pre{margin:0;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
+    `;
+    function injectStyles() {
+      if (typeof document === "undefined") return;
+      if (document.querySelector('style[data-plugin-css="dsh-kit-skills/ui"]') === null) {
+        const tag = document.createElement("style");
+        tag.dataset.plugin = "dsh-kit-skills";
+        tag.dataset.pluginCss = "dsh-kit-skills/ui";
+        tag.textContent = SKS_CSS;
+        document.head.appendChild(tag);
+      }
+    }
+
+    function SkillContent({ file }) {
+      const [state, setState] = react.useState({ phase: "loading", text: "" });
+      react.useEffect(() => {
+        const controller = new AbortController();
+        setState({ phase: "loading", text: "" });
+        kitGetJson(`/dsh-kit/read?path=${encodeURIComponent(file)}`, controller.signal)
+          .then((body) =>
+            setState({
+              phase: "ready",
+              text: body.binary ? t("contentBinary") : body.content ?? "",
+            }),
+          )
+          .catch((error) => {
+            if (!controller.signal.aborted) setState({ phase: "error", text: String(error?.message ?? error) });
+          });
+        return () => controller.abort();
+      }, [file]);
+      if (state.phase === "loading") return jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { padding: "6px 0 0" }, children: t("skLoading") });
+      if (state.phase === "error")
+        return jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { padding: "6px 0 0" }, children: `${t("contentFail")}：${state.text}` });
+      if (state.text.trim() === "") return jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { padding: "6px 0 0" }, children: t("contentEmpty") });
+      return jsxRuntime.jsx("pre", { className: "dshk-sk-pre", children: state.text });
+    }
+
+    /** 展开式目标选择条：点选物理根即执行（不存在的根由宿主按需创建） */
+    function TargetPicker({ roots, mode, onPick }) {
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-sk-target",
+        children: [
+          jsxRuntime.jsxs("span", { className: "dshk-sk-target-label", children: [mode === "copy" ? t("skCopy") : t("skMove"), " · ", t("skPickTarget")] }),
+          roots.map((root) =>
+            jsxRuntime.jsx(
+              "button",
+              { type: "button", className: "dshk-sk-btn", title: root.dir, onClick: () => onPick(root.id), children: root.id === "pool" ? t("skPool") : skRootShort(root.id) },
+              root.id,
+            ),
+          ),
+        ],
+      });
+    }
+
+    /**
+     * 单个技能行（单行布局）：名称+徽标+描述截断+复制/移动/禁用/删除/详情。
+     * 池内技能没有禁用按钮（池不被扫描，禁用无意义）；复制/移动展开目标选择条
+     * （picker 状态提升到页面级，同一时间只允许一行展开）。
+     */
+    function SkillRow({ skill, groupId, allRoots, cwd, busy, runOp, picker, setPicker }) {
+      const [open, setOpen] = react.useState(false);
+      const [confirming, setConfirming] = react.useState(false);
+      const pickerOpen = picker !== null && picker.key === skill.path && (picker.mode === "copy" || picker.mode === "move");
+      const targets = allRoots.filter((root) => root.id !== skill.root);
+
+      const startPicker = (mode) => setPicker(pickerOpen ? null : { key: skill.path, mode });
+      const onDisable = () => runOp({ op: "disable", src: skill.path, cwd, disabled: !skill.disabled });
+      const onDelete = () => {
+        if (!confirming) {
+          setConfirming(true);
+          return;
+        }
+        setConfirming(false);
+        runOp({ op: "delete", src: skill.path, cwd });
+      };
+      const pickDest = (rootId) => {
+        setPicker(null);
+        runOp({ op: picker.mode, src: skill.path, dest: rootId, cwd });
+      };
+
+      return jsxRuntime.jsxs(jsxRuntime.Fragment, {
+        children: [
+          jsxRuntime.jsxs("div", {
+            className: "dshk-sk-row",
+            children: [
+              jsxRuntime.jsx("span", { className: "dshk-sk-name", "data-disabled": skill.disabled || undefined, children: skill.name }),
+              groupId !== "pool" && typeof skill.rank === "number"
+                ? jsxRuntime.jsx(KitTip, { label: `${skRootShort(skill.root)} · ${t("skRankTip")}`, children: jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: `(${skill.rank})` }) })
+                : null,
+              skill.disabled ? jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", children: t("skDisabled") }) : null,
+              // 版本号（技能 frontmatter 的 version，自有约定）：池里的参考技能与个人
+              // 副本靠它对照「抄的是哪版」
+              typeof skill.version === "string" && skill.version !== ""
+                ? jsxRuntime.jsx(KitTip, { label: t("skVersionTip"), children: jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: `v${skill.version}` }) })
+                : null,
+              skill.shadowed ? jsxRuntime.jsx(KitTip, { label: t("skShadowTip"), children: jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", children: t("skShadowed") }) }) : null,
+              typeof skill.description === "string" && skill.description !== ""
+                ? jsxRuntime.jsx("span", { className: "dshk-sk-desc", title: skill.description, children: skill.description })
+                : null,
+              jsxRuntime.jsxs("div", {
+                className: "dshk-sk-actions",
+                children: [
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => startPicker("copy"), children: t("skCopy") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => startPicker("move"), children: t("skMove") }),
+                  groupId !== "pool"
+                    ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onDisable, children: skill.disabled ? t("skEnable") : t("skDisable") })
+                    : null,
+                  confirming
+                    ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", "data-danger": "1", disabled: busy, onClick: onDelete, children: t("skConfirmDelete") })
+                    : jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onDelete, children: t("skDelete") }),
+                  confirming
+                    ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setConfirming(false), children: t("skCancel") })
+                    : null,
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setOpen((v) => !v), children: open ? t("skHide") : t("skView") }),
+                ],
+              }),
+            ],
+          }),
+          pickerOpen ? jsxRuntime.jsx(TargetPicker, { roots: targets, mode: picker.mode, onPick: pickDest }) : null,
+          open ? jsxRuntime.jsx("div", { className: "dshk-sk-detail", children: jsxRuntime.jsx(SkillContent, { file: skill.file }) }) : null,
+        ],
+      });
+    }
+
+    /** 只读展示注册表里非白名单根的技能（插件自带/运行时/custom 目录等） */
+    function ProviderRow({ item }) {
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-sk-row",
+        children: [
+          jsxRuntime.jsxs("div", {
+            className: "dshk-sk-line1",
+            children: [
+              jsxRuntime.jsx("span", { className: "dshk-sk-name", children: item.name }),
+              item.provider !== "" ? jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: item.provider }) : null,
+              item.source !== "" ? jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: item.source }) : null,
+              jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", children: t("skByPlugin") }),
+            ],
+          }),
+          typeof item.description === "string" && item.description !== ""
+            ? jsxRuntime.jsx("div", { className: "dshk-sk-desc", title: item.description, children: item.description })
+            : null,
+        ],
+      });
+    }
+
+    const SK_GROUP_RANK = { workspace: 0, user: 1, pool: 2 };
+
+    function SkillsManager(props) {
+      const cwd = useCurrentCwd(props);
+      const [data, setData] = react.useState(null);
+      const [error, setError] = react.useState("");
+      const [message, setMessage] = react.useState("");
+      const [busy, setBusy] = react.useState(false);
+      const [nonce, setNonce] = react.useState(0);
+      // 展开中的复制/移动目标选择条（{key,mode}）；单值保证同一时间只展开一行
+      const [picker, setPicker] = react.useState(null);
+
+      react.useEffect(() => {
+        const controller = new AbortController();
+        fetchSkillsPage(cwd ?? "", controller.signal)
+          .then((body) => {
+            setData(body);
+            setError("");
+          })
+          .catch((err) => {
+            if (!controller.signal.aborted) setError(String(err?.message ?? err));
+          });
+        return () => controller.abort();
+      }, [cwd, nonce]);
+
+      const runOp = async (payload) => {
+        if (busy) return;
+        setBusy(true);
+        setMessage("");
+        try {
+          try {
+            await postSkillOp(payload);
+          } catch (err) {
+            if (err && err.status === 409 && window.confirm(t("skOverwrite"))) {
+              await postSkillOp({ ...payload, overwrite: true });
+            } else {
+              setMessage(`${t("skOpFail")}：${err?.message ?? err}`);
+              return;
+            }
+          }
+          setMessage(payload.op === "delete" ? t("skDeleted") : t("skDone"));
+          setPicker(null);
+          setNonce((n) => n + 1);
+        } finally {
+          setBusy(false);
+        }
+      };
+
+      const groups = data
+        ? [...data.groups].sort((a, b) => (SK_GROUP_RANK[a.id] ?? 99) - (SK_GROUP_RANK[b.id] ?? 99))
+        : [];
+      const allRoots = data ? groups.flatMap((group) => group.roots) : [];
+
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-sk",
+        children: [
+          jsxRuntime.jsxs("div", {
+            className: "dshk-sk-head",
+            children: [
+              jsxRuntime.jsx("span", { className: "dshk-sk-title", children: t("skillsLabel") }),
+              message !== "" ? jsxRuntime.jsx("span", { className: "dshk-sk-status", children: message }) : null,
+              error !== "" ? jsxRuntime.jsx("span", { className: "dshk-sk-status", title: error, children: `${t("skFail")}：${error}` }) : null,
+              jsxRuntime.jsx("span", { style: { flex: 1 } }),
+              jsxRuntime.jsx(KitTip, { label: t("skRefresh"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setNonce((n) => n + 1), children: "⟳" }) }),
+            ],
+          }),
+          !cwd ? jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { marginBottom: 8 }, children: t("skNoCwdHint") }) : null,
+          groups.map((group) =>
+            jsxRuntime.jsxs(
+              "div",
+              {
+                className: "dshk-sk-group",
+                children: [
+                  jsxRuntime.jsxs("div", {
+                    className: "dshk-sk-group-head",
+                    children: [
+                      jsxRuntime.jsx("span", { children: skGroupTitle(group.id) }),
+                      jsxRuntime.jsx("span", { children: `· ${group.skills.length}` }),
+                      jsxRuntime.jsx("span", {
+                        className: "dshk-sk-group-dir",
+                        title: group.roots.map((root) => root.dir).join("\n"),
+                        children: group.roots
+                          .map((root) =>
+                            root.id === "pool"
+                              ? `${root.dir}${root.exists ? "" : `（${t("skNotCreated")}）`}`
+                              : `${skRootShort(root.id)}(${root.rank})${root.exists ? "" : `（${t("skNotCreated")}）`}`,
+                          )
+                          .join(" | "),
+                      }),
+                    ],
+                  }),
+                  group.skills.length === 0
+                    ? jsxRuntime.jsx("div", { className: "dshk-sk-row dshk-sk-status", children: t("skEmpty") })
+                    : group.skills.map((skill) =>
+                        jsxRuntime.jsx(
+                          SkillRow,
+                          { skill, groupId: group.id, allRoots, cwd, busy, runOp, picker, setPicker },
+                          skill.path,
+                        ),
+                      ),
+                ],
+              },
+              group.id,
+            ),
+          ),
+          data && Array.isArray(data.providers) && data.providers.length > 0
+            ? jsxRuntime.jsxs("div", {
+                className: "dshk-sk-group",
+                children: [
+                  jsxRuntime.jsx("div", { className: "dshk-sk-group-head", children: jsxRuntime.jsx("span", { children: t("skOther") }) }),
+                  data.providers.map((item, index) => jsxRuntime.jsx(ProviderRow, { item }, `${item.name}::${index}`)),
+                ],
+              })
+            : null,
+        ],
+      });
+    }
+
+    // ─────────── 插件体 ───────────
+    function apply(ctx) {
+      // 技能设置页：官方 settings.section 是挂载期声明槽位，inject 等声明落地再注册；
+      // 行禁用（探针 404）时注销，入口从设置导航消失
+      ctx.slots.inject("settings.section", () => {
+        let unregister;
+        const update = () => {
+          if (cfgFromSnapshot(getCfgSnapshot()).available) {
+            if (!unregister) {
+              unregister = ctx.slots.register(
+                { name: "settings.section", id: "kit-skills", order: 40, label: () => t("skillsLabel") },
+                SkillsManager,
+              );
+            }
+          } else if (unregister) {
+            unregister();
+            unregister = undefined;
+          }
+        };
+        const off = subscribeCfg(update);
+        update();
+        return () => {
+          off();
+          if (unregister) {
+            unregister();
+            unregister = undefined;
+          }
+        };
+      });
+      registerNavIcon({ label: () => t("skillsLabel"), attr: "data-dshk-skill", html: SVG_SKILL_ICON });
+      injectStyles();
+      void loadCfg(); // 拉探针喂门控（404 = 行禁用，不注册设置页）
+    }
+
+    exports.apply = apply;
+    exports.inject = ["slots"];
+    // 渲染级检查与直测引用
+    exports.SkillsManager = SkillsManager;
+    exports.fetchSkillsPage = fetchSkillsPage;
+    exports.cfgFromSnapshot = cfgFromSnapshot;
+    return module.exports;
+    };
+
+    // ─────────── 官方右侧边栏注册（宿主 0.1.5+）───────────
+    // 根行只剩文件签（被动签，不给开始页条目——入口在左侧边栏）；知识库 / 日程 /
+    // 浏览器的签与条目各归各自组件半边。服务运行期探测（见 RB_FEATURES 处注释）。
+    const RB_BODY = {
+      file: FilePaneBody,
+    };
+    function registerRightbar(rbCtx) {
+      const tabs = rbCtx.sidebarRightTabs;
+      if (!tabs || typeof tabs.register !== "function") return;
+      for (const f of RB_FEATURES) {
+        const Body = RB_BODY[f.feature];
+        rbCtx.effect(() => tabs.register({
+          id: f.id,
+          kind: f.kind,
+          title: () => t(f.titleKey),
+        }), `dsh-kit: rightbar tab type ${f.kind}`);
+        rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.pane.tab", () => rbCtx.slots.register({
+          name: "sidebar.right.pane.tab",
+          key: f.id,
+          // cwd（浏览器 pane 定位当前会话）经 shellShare 桥接（pane 注册发生在 effect，
+          // 渲染期的 props 由 KitSurfaces 的常驻桥供最新值）
+          inject: () => ({
+            useSessions: shellShare.current?.useSessions,
+          }),
+        }, Body)), `dsh-kit: rightbar pane body ${f.kind}`);
+      }
+    }
+
+    // ─────────── 配置页（0.1.7 plugins.row.config）───────────
+    // 插件页（侧栏「插件」）dsh-kit 行的「配置」控件进这里：页面宿主按
+    // rowId（=entry id「dsh-kit」）绑定宿主命名空间，经 props.form 给已受理值
+    // （form.state）与原子写回（form.mutate）。渲染走官方表单原语
+    // （SettingsForm/SettingsValueField/Switch/SegmentedTabs，与图标同一 require），
+    // SegmentedTabs 按 KIT_CFG_GROUPS 页签分组。草稿本地自持（bool 记布尔值，
+    // number/string 文本暂存、保存期解析），只有「保存」才写入——离开页面即丢
+    // （SettingsForm 卸载自动 onDiscard）；清空文本保存 = unset 回 schema 默认
+    // （快捷键消费端本就「非法/空 → 回默认」）。字段清单与 src/index.ts 的 Config
+    // schema 同源（render-check 钉住）。
+    const KIT_CFG_FIELDS = [
+      { key: "phoneEnabled", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneEnabled", hintKey: "kcfgPhoneEnabledHint" },
+      { key: "phonePort", type: "number", min: 1, max: 65535, group: "kcfgGroupPhone", labelKey: "kcfgPhonePort", hintKey: "kcfgPhonePortHint" },
+      { key: "phoneRemoteDomain", type: "string", group: "kcfgGroupPhone", labelKey: "kcfgPhoneRemoteDomain", hintKey: "kcfgPhoneRemoteDomainHint" },
+      { key: "phoneKeepGatewayOn", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneKeepGatewayOn", hintKey: "kcfgPhoneKeepGatewayOnHint" },
+    ];
+    /** KIT_CFG_FIELDS 的分组顺序（组名键也用于 t() 取组标题/页签文案） */
+    const KIT_CFG_GROUPS = ["kcfgGroupPhone"];
+
+    // 配置页骨架（草稿/保存/官方表单接线）已收进 dock：这里只喂本包字段表与词条
+    const KitConfigPage = dock.createConfigPage({
+      fields: KIT_CFG_FIELDS,
+      groups: KIT_CFG_GROUPS,
+      t,
+      onSaved: async () => {
+        try {
+          const body = await kitJson("/dsh-kit/config");
+          if (body && typeof body === "object") applyConfigSnapshot(body);
+        } catch {
+          // 重拉失败不动快照：下次页面刷新自然取到
+        }
+      },
+    });
+
+    // ─────────── 插件体 ───────────
+    function apply(ctx) {
+      slotsCtx = ctx;
+      kitBase.apply(ctx); // 底座服务捕获（官方右栏 sidebarRight）
+      // 配置页（0.1.7）：挂进插件页的 plugins.row.config 槽，key 由页面宿主按
+      // <包名>#<行id> 匹配（本插件单行，行 id = kit）。命名空间未伺服时页面
+      // 宿主不传 form，组件自带降级文案；注册随本 entry 生命周期生灭。
+      ctx.slots.inject("plugins.row.config", () => ctx.slots.register(
+        { name: "plugins.row.config", key: "dsh-kit#kit" },
+        KitConfigPage,
+      ));
+
+      // 会话监视（429 续跑/死循环/通知）已随组件化迁入 dsh-kit-monitor 的 client 半边
+
+      // ── 官方文件预览的鸿蒙兼容兜底（依赖宿主断言，升级复核见知识库「DSH 插件开发坑」）──
+      // OpenHarmony 等引擎有两个叠加缺陷，缺一个就全站正常、只在真机发作：
+      // ① 自定义 scheme 的 URL 解析：dsh-resource://file/… 的 hostname 恒为空 → 宿主
+      //    client-resources 的 protocolOf 返回 undefined → 资源查找恒 none，预览恒报
+      //    「文件资源服务不可用」；
+      // ② boot 对 api-workspace-files 条目激活失败且**静默**（无报错无日志），file 协议
+      //    provider 无人注册。
+      // 兜底两步：shim 把 providerOf(undefined) 兜到 file provider；补注册在 boot 结束后
+      // 手动跑一次该模块的 apply（合成最小 ctx，effect 立即执行）。**必须晚于 boot**：
+      // boot 中途物化该模块会把宿主的静默激活失败变成「Failed to load plugins」横幅。
+      // 健康浏览器：特性检测不过 + providers 已有 file，两步都空转。
+      ctx.inject(["resources"], (rc) => {
+        try {
+          const reg = rc.resources;
+          if (!reg || typeof reg.providerOf !== "function" || !(reg.providers instanceof Map)) return;
+          let brokenUrlHost = false;
+          try { brokenUrlHost = new URL("dsh-resource://file/x").hostname === ""; } catch (e) { brokenUrlHost = true; }
+          if (!brokenUrlHost || reg.__dshkShimmed) return;
+          reg.__dshkShimmed = true;
+          const origProviderOf = reg.providerOf.bind(reg);
+          reg.providerOf = function (protocol) {
+            return protocol === void 0 ? reg.providers.get("file") : origProviderOf(protocol);
+          };
+        } catch (e) { /* 无害 */ }
+      });
+      ctx.inject(["resources", "remote"], (svc) => {
+        setTimeout(() => {
+          try {
+            if (svc.resources.providers && svc.resources.providers.has("file")) return;
+            const mod = require("@deepseek-ai/dsh-api-workspace-files");
+            if (!mod || typeof mod.apply !== "function") return;
+            mod.apply({
+              resources: svc.resources,
+              remote: svc.remote,
+              effect: (fn) => { fn(); },
+            });
+          } catch (e) { /* 激活失败不可挽时维持宿主原状：预览报「文件资源服务不可用」 */ }
+        }, 5000);
+      });
+      injectStyles();
+      // 拉一次生效配置喂功能门控（见模块顶 cfgSnapshot 注释）；失败保持内置默认
+      kitJson("/dsh-kit/config")
+        .then((body) => {
+          if (body && typeof body === "object") applyConfigSnapshot(body);
+        })
+        .catch(() => {});
+      // 全帧浮层宿主：面板渲染、输入框入口与技能页的座位门控、快捷键监听全在
+      // KitSurfaces（根作用域常驻，fiber 上下文内做动态 register/dispose）。
+      ctx.slots.inject("shell.overlay", () =>
+        ctx.slots.register(
+          { name: "shell.overlay", id: "dsh-kit-surfaces", order: 900 },
+          KitSurfaces,
+        ),
+      );
+      // 官方右侧边栏：五个功能 dock 签 + 引导页清单。只在宿主
+      // 提供该服务时生效（缺服务 = 只剩 getKitUi() 存在性补丁，签不出现）。用 inject
+      // 等它就绪而非直接读——官方右栏与本插件的客户端加载顺序不保证
+      //（sidebarRight 与在场信号的捕获在 kitBase.apply，本处只管右栏签与其它服务）
+      if (typeof ctx.inject === "function") {
+        ctx.inject(["sidebarRightTabs"], registerRightbar);
+        // 官方 sessions 服务捕获：openOfficialFile 拼文件地址要当前会话 id 与 cwd
+        ctx.inject(["sessions"], (sctx) => { sessionsSvc = sctx.sessions; });
+      } else {
+        registerRightbar(ctx);
+      }
+      // 导航图标替换是点击驱动的轻量方案：打开设置/面板内切换都源于一次 click
+      document.addEventListener("click", scheduleNavIconSwap, true);
+      // 官方文件预览头部的下载按钮：预览根 mount（loading→text 整根重建）与路径
+      // title 变化（meta 后到才补成绝对路径）都要接住，全走同一防抖扫描
+      if (typeof MutationObserver !== "undefined" && document.documentElement) {
+        new MutationObserver(schedulePreviewDownloadScan).observe(document.documentElement, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ["title"],
+        });
+        scanPreviewDownload();
+      }
+      // 组件半边激活（单包收回的 files/monitor/terminal/skills/search/browser/vault）：
+      // 与多包时代等价——client 入口注册总是发生，功能存在性由各组件自己的探针门控
+      // （行禁用只摘宿主半边端点，探针 404 的组件整体不注册）
+      for (const componentMod of [exports.files, exports.monitor, exports.terminal, exports.skills, exports.search, exports.browser, exports.vault]) {
+        if (componentMod && typeof componentMod.apply === "function") componentMod.apply(ctx);
+      }
+    }
+
+    // ── dsh-kit-vault 组件（知识库 · 日程）──
+// dsh-kit/vault 浏览器半边 —— 知识库 · 日程组件的 client 面。
+// 收纳：侧栏知识库索引（工具条 / 搜索 / 懒加载目录树 / 文件管理）、右栏知识库页阅读面
+// （vendor RTE 只读态 + 双链 / 反链 / 目录导航）、右栏日程签（周时间网格 + 待办 + 统计）、
+// 对话文件路径改投知识库标签、组件配置页与快捷键。
+// 数据走本组件宿主半边 /dsh-kit/vault/* 与 /dsh-kit/schedule/*；行开关即总开关：
+// 宿主半边不物化时 /dsh-kit-vault/config 404，apply 直接不注册任何槽位与监听
+//（侧栏索引、右栏签、入口按钮、对话改投全不出现）。
+    const vaultModule = (kit, require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+    const react = require("react");
+    const jsxRuntime = require("react/jsx-runtime");
+    const reactDom = require("react-dom");
+    const dock = kit;
+    const {
+      getKitUi, setKitUi, useKitUi, KitTip, flashToast, writeClipboard,
+      kitJson, kitPostJson, resolveZh, baseName, pageBasename, docChips,
+      openVaultPageTab, activateVaultPage, closeVaultPageTab, closeFeatureTab, openFeatureTab,
+      openRightbarTab, closeRightbarTab, sidebarViewPatch,
+      rightbarSeat, mainRowOf, getRightbarSr,
+      useCurrentRow, useCurrentCwd, currentComposerShell, chatMentionText,
+      openOfficialFile, TreeRowMenu, TreeFolderIcon, FileTypeIcon16, ChevronIcon, OfficialIcon, dswIcon,
+      expandSidebarNow, attachShortcutCatalog, t: rootT,
+    } = dock;
+
+    // 组件私有文案（树 / 页 / 日程 / 配置页）；共用词条（取消、已移动、已导入等）回落根包 t
+    const zh = {
+      kcfgGroupVault: "知识库",
+      kcfgVaultRoot: "知识库根目录（绝对路径）",
+      kcfgVaultRootHint: "普通 md 目录，指向哪里读哪里；清空恢复默认根。",
+      scVault: "知识库索引",
+      scVaultOff: "知识库已在配置页关闭",
+      schedTab: "日程",
+      schedToday: "今天",
+      schedNoDue: "无期限",
+      schedTasks: "待办",
+      schedTaskDue: "截止",
+      schedOverdue: "逾期",
+      schedTasksEmpty: "暂无待办",
+      schedScope3d: "近三日",
+      schedScopeWeek: "近一周",
+      schedScopeAll: "全部",
+      schedStatsEvents: "事件",
+      schedStatsDone: "已过",
+      schedStatsOpen: "未到",
+      schedStatsTitle: "本周统计",
+      schedTimerStandalone: "独立计时（不挂待办）",
+      schedWeekdays: "一,二,三,四,五,六,日",
+      vaultTitle: "知识库",
+      vaultNotConfigured: "未配置知识库目录",
+      vaultNotConfiguredHint: "在 设置 → 插件 → dsh-kit 里填写「知识库目录」后即可使用：目录内一切 md 文件即页面，支持双链跳转与全文搜索",
+      vaultIndexFail: "索引失败：{error}",
+      vaultSearchPh: "搜索笔记 / 资料库",
+      vaultSearchEmpty: "无结果",
+      vaultSearchFail: "搜索失败：{error}",
+      vaultHitNote: "笔记",
+      vaultLibrary: "资料库",
+      vaultParentRoot: "根目录",
+      vaultBackRoot: "返回知识库",
+      vaultNew: "新建",
+      vaultNewPh: "名称；\\ 开头建目录，可含 / 多级",
+      vaultExists: "同名已存在，未改动",
+      vaultLinks: "（改写 {n} 页双链）",
+      vaultMoveTo: "移动到…",
+      vaultMoveTitle: "移动「{name}」",
+      vaultMoveLabel: "移动到",
+      vaultMoveSkipped: "目标已有同名，按「跳过」处理",
+      vaultImportMd: "导入 md 文件…",
+      vaultImportFiles: "导入文件…",
+      vaultImportTitle: "导入",
+      vaultImportTo: "导入到：{dest}",
+      vaultImportPick: "选择文件…",
+      vaultImportPathPh: "或粘贴本机绝对路径",
+      vaultImportName: "名称",
+      vaultImportNeedSrc: "先选择文件，或填一个本机绝对路径",
+      vaultLibAutoName: "同名自动加序号，不覆盖",
+      vaultImportImgs: "（{n} 张图片进附件）",
+      vaultConflict: "目标已有同名，怎么处理？",
+      vaultConflictSkip: "跳过（什么都不做）",
+      vaultConflictOverwrite: "覆盖（旧的送回收站）",
+      vaultConflictRename: "自动加序号",
+      vaultConfirmDeleteDir: "删除文件夹「{name}」及其 {n} 项？",
+      vaultRecycleHint: "移入回收站",
+      vaultRefresh: "刷新索引与目录树",
+      vaultRefreshed: "已刷新",
+      vaultBinaryHint: "二进制文件，知识库不渲染",
+      vaultCopy: "复制",
+      vaultCopied: "已复制",
+      vaultBacklinks: "反链",
+      vaultToc: "目录",
+      vaultTocEmpty: "本文没有标题",
+      vaultBlEmpty: "没有页面引用本页",
+      vaultLibsFail: "渲染组件加载失败",
+      vaultPickPage: "从左侧选择一页开始",
+      vaultPageGone: "页面不存在（可能已被移动或删除）",
+      vaultCiteUnavailable: "对话输入框未就绪（无会话或不可用）",
+    };
+    const en = {
+      kcfgGroupVault: "Vault",
+      kcfgVaultRoot: "Vault root directory (absolute path)",
+      kcfgVaultRootHint: "A plain md directory read as-is; blank restores the default root.",
+      scVault: "Vault index",
+      scVaultOff: "Vault is switched off in the config page",
+      schedTab: "Schedule",
+      schedToday: "Today",
+      schedNoDue: "No due date",
+      schedTasks: "Tasks",
+      schedTaskDue: "Due",
+      schedOverdue: "Overdue",
+      schedTasksEmpty: "No tasks",
+      schedScope3d: "3 days",
+      schedScopeWeek: "Week",
+      schedScopeAll: "All",
+      schedStatsEvents: "Events",
+      schedStatsDone: "Past",
+      schedStatsOpen: "Upcoming",
+      schedStatsTitle: "This week",
+      schedTimerStandalone: "Standalone timer (no task)",
+      schedWeekdays: "Mo,Tu,We,Th,Fr,Sa,Su",
+      vaultTitle: "Knowledge base",
+      vaultNotConfigured: "Knowledge base directory not configured",
+      vaultNotConfiguredHint: "Set the knowledge base directory in Settings → Plugins → dsh-kit: every md file inside becomes a page, with wiki-links and full-text search",
+      vaultIndexFail: "Index failed: {error}",
+      vaultSearchPh: "Search notes / library",
+      vaultSearchEmpty: "No results",
+      vaultSearchFail: "Search failed: {error}",
+      vaultHitNote: "Note",
+      vaultLibrary: "Library",
+      vaultParentRoot: "root",
+      vaultBackRoot: "Back to knowledge base",
+      vaultNew: "New",
+      vaultNewPh: "Name; \\ prefix makes a folder, / for nested",
+      vaultExists: "Already exists — nothing changed",
+      vaultLinks: " (rewrote {n} page links)",
+      vaultMoveTo: "Move to…",
+      vaultMoveTitle: "Move “{name}”",
+      vaultMoveLabel: "Move to",
+      vaultMoveSkipped: "Same name exists in the target — skipped",
+      vaultImportMd: "Import markdown…",
+      vaultImportFiles: "Import files…",
+      vaultImportTitle: "Import",
+      vaultImportTo: "Into: {dest}",
+      vaultImportPick: "Choose files…",
+      vaultImportPathPh: "or paste an absolute path on this machine",
+      vaultImportName: "Name",
+      vaultImportNeedSrc: "Choose files or paste an absolute path first",
+      vaultLibAutoName: "Same name → auto-numbered, never overwritten",
+      vaultImportImgs: " ({n} images copied to attachments)",
+      vaultConflict: "A same-named item already exists in the target:",
+      vaultConflictSkip: "Skip (do nothing)",
+      vaultConflictOverwrite: "Overwrite (old one to the Recycle Bin)",
+      vaultConflictRename: "Auto-number",
+      vaultConfirmDeleteDir: "Delete folder “{name}” and its {n} items?",
+      vaultRecycleHint: "moved to the Recycle Bin",
+      vaultRefresh: "Refresh index and tree",
+      vaultRefreshed: "Refreshed",
+      vaultBinaryHint: "Binary file — not rendered in the vault",
+      vaultCopy: "Copy",
+      vaultCopied: "Copied",
+      vaultBacklinks: "Backlinks",
+      vaultToc: "Outline",
+      vaultTocEmpty: "No headings in this page",
+      vaultBlEmpty: "No pages link here",
+      vaultLibsFail: "Failed to load renderer components",
+      vaultPickPage: "Pick a page on the left to start",
+      vaultPageGone: "Page not found (it may have been moved or deleted)",
+      vaultCiteUnavailable: "Composer is not ready (no active session)",
+    };
+    const lang = () => (resolveZh() ? zh : en);
+    const t = (key) => lang()[key] ?? rootT(key);
+
+    /** 打开知识库页并确保「知识库」dock 签在眼前（目录/搜索/反链/wikilink/
+     *  对话路径统一走 VaultRootView 的 openPath）。anchor = `[[页#锚]]` 的锚点，
+     *  跨页跳转时随开页带给 VaultPagePane 消费（见 vaultPendingAnchor） */
+    function openVaultPageAndDock(path, anchor) {
+      if (!rightbarSeat.available) return;
+      setKitUi(openVaultPageTab(getKitUi(), path));
+      openRightbarTab("vault");
+      vaultPendingAnchor = typeof anchor === "string" && anchor !== "" ? { path, anchor } : null;
+    }
+    /** 点击路径落知识库标签（树行/对话拦截器共用）：先落地再派发——知识库未
+     *  挂载时 VaultRootView 不在，挂载后经 vaultOpenRequest 消费请求 */
+    function openVaultPathFromClick(path) {
+      openVaultPageAndDock(path);
+      vaultOpenRequest = path;
+      window.dispatchEvent(new CustomEvent("dshk-vault-open"));
+    }
+
+    function openVaultEntry() {
+      expandSidebarNow();
+      return sidebarViewPatch("vault");
+    }
+    function toggleVaultEntry(ui) {
+      if (ui.vaultIdxOpen === true) return sidebarViewPatch(null);
+      return openVaultEntry();
+    }
+
+    // ── portal 宿主登记（侧栏索引 ↔ 右栏内容）──
+    // 知识库拆两半后 VaultRootView 单实例挂在 KitSurfaces，左树/工具条与页编辑器
+    // 经 createPortal 分投两侧：宿主 DOM 节点由侧栏占用组件与右栏 pane 登记。
+    // 宿主出现/消失走最小 store（useSyncExternalStore）驱动 VaultRootView 重渲染。
+    function makeHostSlot() {
+      let el = null;
+      const subs = new Set();
+      return {
+        get: () => el,
+        set(next) {
+          el = next;
+          for (const s of subs) s();
+        },
+        subscribe(s) {
+          subs.add(s);
+          return () => subs.delete(s);
+        },
+      };
+    }
+    const vaultSideSlot = makeHostSlot();
+    const vaultPaneSlot = makeHostSlot();
+    const useHostSlot = (slot) => react.useSyncExternalStore(slot.subscribe, slot.get);
+
+    // ─────────── 对话文件点击的知识库路由 ───────────
+    // 官方对话中的文件点击（chips / markdown 内联代码 / 工具行 / 交付卡）原生
+    // 走 sidebarRight.openResource 开右栏文件签，kit 不拦。唯一例外是 vault 内
+    // 路径：改道知识库标签的只读阅读视图（互通是知识库本体能力，无开关）。
+    let chatPreviewHook = null;
+
+    // 官方 shortcuts 服务的 resolve 回调入口：注册发生在 apply（拿不到会话与
+    // cwd），动作由 KitSurfaces 每次渲染刷新（闭包带最新 sessionId/cwd）。
+    // 为空 = 浮层还没挂载，命令按 pass 放行不吞键。终端组件的同名入口在它自己包里。
+    const shortcutRun = { vault: null };
+
+    // ── M4 会话→笔记：vault 路径点击直达知识库标签 ──
+    // vault root 的客户端缓存：拦截器/文件树路由判定用（vault 内路径开知识库标签
+    // 的只读阅读视图，其余路径放行官方文件签——互通是知识库本体能力，无开关）。
+    // VaultRootView 每次拉索引同步刷新；从未开过知识库时点击现取一次（索引端
+    // 点宿主侧有 mtime 缓存），失败按无 vault 处理走原行为。vaultOpenRequest：
+    // 坞收起时 VaultRootView 未挂载、open 事件没人听——请求先落地，挂载后消费。
+    // vaultPendingAnchor：[[页#锚]] 跨页跳转的待落锚（openVaultPageAndDock 记、
+    // 目标页 VaultPagePane 消费；同页锚点不经它，直接就地滚动）。
+    let vaultRootHint = null;
+    let vaultRootHintFetching = null;
+    let vaultOpenRequest = null;
+    let vaultPendingAnchor = null;
+    function ensureVaultRootHint() {
+      if (vaultRootHint !== null) return Promise.resolve(vaultRootHint);
+      if (vaultRootHintFetching === null) {
+        vaultRootHintFetching = kitJson("/dsh-kit/vault/index")
+          .then((body) => {
+            vaultRootHint = body && typeof body.root === "string" && body.root !== "" ? body.root : null;
+            return vaultRootHint;
+          })
+          .catch(() => null)
+          .finally(() => {
+            vaultRootHintFetching = null;
+          });
+      }
+      return vaultRootHintFetching;
+    }
+
+    /** title 是否为可接管路径：盘符/UNC/根斜杠绝对路径，或含分隔符的相对路径 */
+    function isChatOpenPathish(title) {
+      return (
+        /^[A-Za-z]:[\\/]/.test(title) ||
+        title.startsWith("\\\\") ||
+        title.startsWith("/") ||
+        (/[\\/]/.test(title) && !/\s/.test(title))
+      );
+    }
+
+    /** 对话文件路径解析：绝对直接用；相对按 cwd 拼接（与官方 resolveWorkspacePath
+     *  同语义）；反斜杠归一避免混用分隔符触发宿主校验问题。 */
+    function resolveChatOpenPath(cwd, title) {
+      // POSIX 写法的盘符绝对路径（/D:/… 或 \D:\…）先归一为盘符开头：这类路径
+      // 官方 resolveWorkspacePath 同样按绝对处理，直接拼 cwd 会产出 D:\D:\…
+      // 双盘符假路径（agent 回复里惯用 /D:/… 引用 Windows 绝对文件）。
+      let t = title;
+      if (/^\/[A-Za-z]:/.test(t)) t = t.slice(1);
+      else if (/^\\[A-Za-z]:/.test(t)) t = t.slice(1);
+      const raw =
+        /^[A-Za-z]:[\\/]/.test(t) || t.startsWith("\\\\")
+          ? t
+          : t.startsWith("/")
+            ? `${cwd}\\${t.slice(1)}`
+            : `${cwd}\\${t}`;
+      const parts = raw.split(/[\\/]+/).filter((s) => s !== "" && s !== ".");
+      const out = [];
+      for (const s of parts) {
+        if (s === "..") out.pop();
+        else out.push(s);
+      }
+      // out 已含盘符元素（D:）或 UNC 的首段；盘符形不能再补 `D:\` 前缀，
+      // 否则产出 D:\D:\… 双盘符（绝对盘符 title 曾因此读不到文件）
+      if (raw.startsWith("\\\\")) return `\\\\${out.join("\\")}`;
+      return out.join("\\");
+    }
+
+    /** document capture：对话区文件点击的知识库路由（M4 会话→笔记）。三种载体
+     *  的路径解析：① markdown 内联代码与「本轮文件改动」chips → button[title=路径]；
+     *  ② read/write/edit 工具行（ui-tool ToolRow）→ button[class*="_fileLink"]，
+     *     无 title，按钮文本即工具 path/file_path 参数按 cwd 相对化的路径；
+     *  ③ 交付卡（dsh-client-ui-deliverables 的 PresentedFileCard）→ 路径在覆盖
+     *     整卡的 .cardPreview 的 title 上。
+     *  vault 内路径 preventDefault 改道知识库标签（只读阅读视图）；其余一律
+     *  放行官方——官方原生 openResource 开右栏文件签，kit 不再接管工作区文件。 */
+    function onChatOpenFileClick(ev) {
+      if (!ev.isTrusted) return;
+      const hook = chatPreviewHook;
+      if (!hook || !hook.vaultOn) return;
+      if (!(ev.target instanceof Element)) return;
+      // 弹层控件（aria-haspopup）不是文件链接，放行官方：模型选择器触发钮的
+      // title=模型名（如 opencode-go/omen-alpha，含分隔符无空格）会被路径判定
+      // 误吞，而 composer 就在对话 scrollBody 内部，位置判定挡不住它；交付卡的
+      // 下拉键同理——那是宿主菜单，菜单项由网关注入脚本按项文本锁
+      if (ev.target.closest("[aria-haspopup]")) return;
+      const btn =
+        ev.target.closest("button[title]") || ev.target.closest('button[class*="_fileLink"]');
+      const card = ev.target.closest("[data-presented-file]");
+      const anchor = btn !== null ? btn : card !== null ? card.querySelector("button[title]") : null;
+      if (anchor === null) return;
+      // 插件自身面板/入口的元素不拦（title 可能是路径的只有文件树行等）。
+      // 但命中元素必须是真插件容器：面板打开时 body 挂的让位标记类
+      // （dshk-pane-open/dshk-open）是全体对话的祖先，若不剔除，面板
+      // 一开拦截就整体失效
+      const kitAnc = anchor.closest('[class*="dshk-"]');
+      if (kitAnc && kitAnc !== document.body && kitAnc !== document.documentElement) return;
+      // 仅官方对话滚动区内的文件按钮（markdown 提及、产物 chips、工具行、交付卡
+      // 都在其中）
+      if (!anchor.closest('[class*="_scroll"]')) return;
+      let path = (anchor.getAttribute("title") || "").trim();
+      if (path === "" && btn !== null) {
+        // ② 工具行 fileLink：文本必为路径（参数解析不出路径时官方渲染 span）；
+        // 家目录缩写形态（~/…）客户端还原不了宿主 home，放行官方
+        path = (btn.textContent || "").trim();
+        if (path === "" || path.startsWith("~")) return;
+      } else if (!isChatOpenPathish(path)) {
+        return;
+      }
+      // 无会话工作区时：仅盘符绝对/UNC（含 /D:… 归一的盘符形态）可脱离 cwd 判定；
+      // 相对路径解析无依，放行官方
+      if (!hook.cwd) {
+        const t2 = path.startsWith("\\\\") ? path : path.replace(/^[\\/](?=[A-Za-z]:)/, "");
+        if (!/^[A-Za-z]:[\\/]/.test(t2) && !t2.startsWith("\\\\")) return;
+      }
+      const resolved = resolveChatOpenPath(hook.cwd, path);
+      // root 已缓存：命中 vault 即改道（preventDefault），不命中放行官方
+      if (vaultRootHint !== null) {
+        if (isPathInsideVaultRoot(vaultRootHint, resolved)) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          openVaultPathFromClick(resolved);
+        }
+        return;
+      }
+      // root 未缓存（插件刚挂载的头几秒）：官方动作同步触发、无法事后撤回，不能
+      // 先吞点击——放行官方，异步补判一次，命中 vault 再开知识库标签（此时官方
+      // 文件签也会开着，多一个签可接受；root 几乎总在首次点击前就预取好了）
+      void ensureVaultRootHint().then((r) => {
+        if (r !== null && isPathInsideVaultRoot(r, resolved)) openVaultPathFromClick(resolved);
+      });
+    }
+
+    /** 路径 → 分段（分隔符归一 + 解 ..）：同盘比较与取相对路径共用一处口径 */
+    function pathSegs(p) {
+      const out = [];
+      for (const s of String(p).split(/[\\/]+/)) {
+        if (s === "" || s === ".") continue;
+        if (s === "..") out.pop();
+        else out.push(s);
+      }
+      return out;
+    }
+
+    /** base 内的相对路径（`/` 分隔、无前导分隔符；base 本身回 ""）：不在 base 内回 null。
+     *  Windows 形根（盘符/UNC）只有**比较**大小写不敏感，返回段保留原样大小写——
+     *  调用方拿它跟索引里的 rel（保留原样）做前缀比较，折了大小写就永远对不上。 */
+    function relUnder(base, p) {
+      if (typeof base !== "string" || typeof p !== "string" || base === "" || p === "") return null;
+      const win = /^[A-Za-z]:[\\/]/.test(base) || base.startsWith("\\\\");
+      const fold = (arr) => (win ? arr.map((s) => s.toLowerCase()) : arr);
+      const r = fold(pathSegs(base));
+      const segs = pathSegs(p);
+      const t = fold(segs);
+      if (t.length < r.length) return null;
+      if (!r.every((seg, i) => t[i] === seg)) return null;
+      return segs.slice(r.length).join("/");
+    }
+
+    /** M4 路由判据：path 是否落在 vault root 内（根本身不算内） */
+    function isPathInsideVaultRoot(root, path) {
+      const rel = relUnder(root, path);
+      return rel !== null && rel !== "";
+    }
+
+    /** root 下 rel（`/` 分隔的相对路径）的绝对路径：正斜杠在 Node 侧照收，只用于
+     *  比对与请求参数（不落盘打印） */
+    function joinRelPath(root, rel) {
+      const base = String(root).replace(/[\\/]+$/, "");
+      return rel === "" ? base : `${base}/${rel}`;
+    }
+
+    /** 侧栏搜索的命中集合：宿主全文搜索给笔记页，笔记目录 / 资料库
+     *  文件 / 资料库目录只按名字匹配（PDF 没有正文索引），四类合成一张表。一把尺子：
+     *  路径命中 +8、末段名命中 +5，多词 AND；同分则按类型（能直接打开的在前）与名字排。
+     *  命中行 = {kind, path, rel, label, sub, score}——kind 决定点击动作（页开阅读面、
+     *  文件开官方文件右栏、目录换树根）。 */
+    function vaultSearchHits(query, root, pages, folders, libItems) {
+      const terms = String(query ?? "")
+        .trim()
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((s) => s !== "");
+      if (terms.length === 0) return [];
+      const nameOf = (rel) => rel.slice(rel.lastIndexOf("/") + 1);
+      const parentOf = (rel) => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "");
+      /** 名字打分：路径 +8、末段 +5；有词一个都没中回 null */
+      const scoreName = (rel) => {
+        const lower = String(rel).toLowerCase();
+        const name = nameOf(lower);
+        let score = 0;
+        for (const term of terms) {
+          const inRel = lower.includes(term);
+          const inName = name.includes(term);
+          if (!inRel && !inName) return null;
+          if (inRel) score += 8;
+          if (inName) score += 5;
+        }
+        return score;
+      };
+      const parentLabel = (rel) => parentOf(rel) || t("vaultParentRoot");
+      const rank = { page: 0, libfile: 1, dir: 2, libdir: 3 };
+      const hits = [];
+      for (const p of pages ?? []) {
+        hits.push({ kind: "page", path: p.path, rel: p.rel, label: pageBasename(p.rel), sub: p.snippet ?? "", score: p.score ?? 0 });
+      }
+      for (const rel of folders ?? []) {
+        const score = scoreName(rel);
+        if (score !== null) {
+          hits.push({ kind: "dir", path: joinRelPath(root, rel), rel, label: nameOf(rel), sub: `${t("vaultHitNote")} · ${parentLabel(rel)}`, score });
+        }
+      }
+      for (const it of libItems ?? []) {
+        const score = scoreName(it.rel);
+        if (score === null) continue;
+        hits.push({ kind: it.dir ? "libdir" : "libfile", path: it.path, rel: it.rel, label: nameOf(it.rel), sub: `${t("vaultLibrary")} · ${parentLabel(it.rel)}`, score });
+      }
+      hits.sort((a, b) => b.score - a.score || rank[a.kind] - rank[b.kind] || a.label.localeCompare(b.label, "zh"));
+      return hits.slice(0, 20);
+    }
+
+    /** 知识库面板的文件管理请求：POST 端点 + sameOrigin 校验在宿主侧；错误串直接进 toast。
+     *  成功形状统一 {ok:true, ...}，跳过（撞名不覆盖）由 skipped 字段回执。 */
+    function vaultOp(path, payload) {
+      return kitPostJson(path, payload, (b) => b.ok === true);
+    }
+
+    /** 浏览器上传：File → base64（去 data URL 前缀）——宿主拿不到本机绝对路径，
+     *  这条是"选择文件"那条来源的过河桥 */
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = String(reader.result ?? "");
+          resolve(text.slice(text.indexOf(",") + 1));
+        };
+        reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    /** 绝对路径的父目录（两种分隔符都认；无分隔符时回落原值）——移动对话框的默认落点 */
+    function absParent(p) {
+      const s = String(p ?? "");
+      const i = Math.max(s.lastIndexOf("\\"), s.lastIndexOf("/"));
+      return i > 0 ? s.slice(0, i) : s;
+    }
+
+    /** 路径是否等于某前缀或落在其下（改名/移动/删除后同步树与页签用；两种分隔符都认） */
+    function pathUnder(p, prefix) {
+      return p === prefix || p.startsWith(`${prefix}\\`) || p.startsWith(`${prefix}/`);
+    }
+
+    /** 改名/移动后把已开的知识库页签一起搬（等路径或整棵前缀）；无变化回 null。
+     *  撞上已开页时并成一格（去重保序），激活页跟着搬。 */
+    function vaultTabsRetarget(ui, oldPath, newPath, isDir) {
+      const pages = ui.vaultPages ?? [];
+      const map = (p) => {
+        if (p === oldPath) return newPath;
+        return isDir && pathUnder(p, oldPath) ? newPath + p.slice(oldPath.length) : p;
+      };
+      const next = pages.map(map);
+      if (next.every((p, i) => p === pages[i])) return null;
+      const list = [];
+      for (const p of next) if (!list.includes(p)) list.push(p);
+      const patch = { vaultPages: list };
+      if (ui.activeVaultPage != null) patch.activeVaultPage = map(ui.activeVaultPage);
+      return patch;
+    }
+
+    /** 删除后关掉落在删除集里的页签（含整棵子路径）；没有受影响页签回 null */
+    function vaultTabsClose(ui, prefixes) {
+      const pages = ui.vaultPages ?? [];
+      const stale = (p) => prefixes.some((pre) => pathUnder(p, pre));
+      const rest = pages.filter((p) => !stale(p));
+      if (rest.length === pages.length) return null;
+      const patch = { vaultPages: rest };
+      if (ui.activeVaultPage != null && stale(ui.activeVaultPage)) {
+        patch.activeVaultPage = rest.length > 0 ? rest[rest.length - 1] : null;
+      }
+      return patch;
+    }
+
+    /** 移动/删除候选目标：库内目录（含根）。notes = 笔记侧（索引 folders + 库根），
+     *  否则资料库侧（库内清单目录 + 库根）。每项 {path: 绝对路径, label: 显示名}。 */
+    function vaultDirChoices(kind, root, folders, libRoot, libItems) {
+      const out = [];
+      if (kind === "lib") {
+        if (libRoot !== null) out.push({ path: libRoot, label: t("vaultLibrary") });
+        for (const it of libItems ?? []) {
+          if (it.dir) out.push({ path: it.path, label: it.rel.split("/").join(" / ") });
+        }
+        return out;
+      }
+      if (root !== null) out.push({ path: root, label: t("vaultTitle") });
+      for (const rel of folders ?? []) out.push({ path: joinRelPath(root, rel), label: rel.split("/").join(" / ") });
+      return out;
+    }
+
+    /** 页内选区镜像（模块级、只由**当前激活**的页编辑器写）：左侧树的 @ 按钮在
+     *  mousedown 时 preventDefault 保住选区，但点击本身仍会塌掉原生选区——所以引用
+     *  时读这份镜像。多个页签同时挂载时只有激活那个能写，避免后台页清掉它。 */
+    let vaultSelMirror = "";
+
+    /** M4 笔记→会话：「引用到对话」的选区文本转引用块续在草稿后（首尾空行剥
+     *  掉）。页面路径本体由 @ 引用芯片承载（与文件树
+     *  「@到对话」同款方法，此函数只管引用块文本）。render-check 直调。 */
+    function vaultCiteText(draft, selText) {
+      const base = typeof draft === "string" ? draft : "";
+      const lines = typeof selText === "string" ? selText.replace(/\r\n?/g, "\n").split("\n") : [];
+      while (lines.length > 0 && lines[0].trim() === "") lines.shift();
+      while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
+      const quote = lines.length > 0 ? lines.map((l) => `> ${l}`).join("\n") + "\n\n" : "";
+      const joiner = base !== "" && !base.endsWith("\n") ? "\n" : "";
+      return base + joiner + quote;
+    }
+
+    /** 一页 @ 进对话输入框（左侧树行按钮的唯一实现）：以官方 @ 引用芯片直插
+     *  （与文件树「@到对话」同款方法），selText 非空时先落引用块。**成功不提示**——
+     *  插进去的引用就摆在输入框里，再弹一条是噪音；只有失败原因经 notify 回报
+     *  （组件各自有自己的 toast 通道）。 */
+    function citeVaultPageToChat(pagePath, selText, notify) {
+      const shell = currentComposerShell();
+      if (!shell || typeof shell.actions?.setDraft !== "function") {
+        notify("vaultCiteUnavailable");
+        return;
+      }
+      const mention = chatMentionText(pagePath.replace(/\\/g, "/"));
+      if (mention === null) {
+        notify("vaultCiteUnavailable");
+        return;
+      }
+      if (typeof selText === "string" && selText !== "") {
+        const pre = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
+        const draft = pre && typeof pre.draft === "string" ? pre.draft : "";
+        try {
+          shell.actions.setDraft(vaultCiteText(draft, selText));
+        } catch {
+          notify("vaultCiteUnavailable");
+          return;
+        }
+      }
+      const chipRef = { source: "reference", ref: mention, label: pageBasename(pagePath) || pagePath, appearance: "file", clipboardText: mention };
+      if (typeof shell.insertReference === "function") {
+        const phase = shell.core && shell.core.state ? shell.core.state.phase : null;
+        const detectText = typeof shell.projection?.detectText === "string" ? shell.projection.detectText : "";
+        const rev = typeof shell.rev === "number" ? shell.rev : -1;
+        if ((phase === "plain" || phase === "claimed") && rev >= 0) {
+          const span = { start: detectText.length, end: detectText.length, draftRev: rev };
+          let applied = false;
+          try {
+            applied = shell.insertReference(chipRef, span) === true;
+          } catch {
+            applied = false;
+          }
+          if (applied) return;
+        }
+      }
+      // 兜底：@ 语法文本追加草稿末尾（与手打 @ 一致，此时面板可见属官方行为）
+      const state = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
+      const draft = state && typeof state.draft === "string" ? state.draft : "";
+      shell.actions.setDraft(draft === "" ? mention : `${draft} ${mention}`);
+    }
+
+    // ─────────── vendor 按需加载 ───────────
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = src;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error("load failed: " + src));
+        document.head.appendChild(s);
+      });
+    }
+    /** KaTeX 公式按需加载（RTE 阅读与编辑都要）：js + css 一起上，重复调用只下一次 */
+    function ensureKatex() {
+      const jobs = [];
+      if (typeof window.katex === "undefined") jobs.push(loadScript("/dsh-kit/vendor/katex.min.js"));
+      if (!document.querySelector('link[data-dshk-katex]')) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "/dsh-kit/vendor/katex.min.css";
+        link.setAttribute("data-dshk-katex", "1");
+        document.head.appendChild(link);
+      }
+      return Promise.all(jobs);
+    }
+    function ensureRteLib() {
+      return typeof window.DshRTE === "object" && window.DshRTE !== null
+        ? Promise.resolve()
+        : loadScript("/dsh-kit/vendor/richeditor.bundle.js");
+    }
+
+    /** 日程图标：日历（圆角框 + 两枚吊耳 + 头部分隔线），与终端/任务描边体系一致 */
+    function SchedIcon(props) {
+      const _official = dswIcon("IconAlarmClockOutline16");
+      if (_official) return jsxRuntime.jsx(_official, { className: props && props.className });
+      return jsxRuntime.jsxs(
+        "svg",
+        {
+          width: (props && props.size) ?? 15,
+          height: (props && props.size) ?? 15,
+          className: props && props.className,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.2,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          children: [
+            jsxRuntime.jsx("rect", { x: 2.8, y: 3.6, width: 10.4, height: 9.6, rx: 1.6 }),
+            jsxRuntime.jsx("path", { d: "M5.4 2.2v2.6M10.6 2.2v2.6M2.8 7h10.4" }),
+          ],
+        },
+      );
+    }
+
+    /** 知识库图标：书堆（三枚书脊，第三本微倾斜），与终端/任务描边体系一致 */
+    function VaultIcon() {
+      return jsxRuntime.jsxs(
+        "svg",
+        {
+          width: 15,
+          height: 15,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.2,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          children: [
+            jsxRuntime.jsx("path", { d: "M3 2.6v10.8M6.6 2.6v10.8" }),
+            jsxRuntime.jsx("rect", { x: 9.4, y: 2.6, width: 3.4, height: 10.8, rx: 0.9 }),
+          ],
+        },
+      );
+    }
+
+    /** 知识库面板的对话框（移动到…/导入/删除确认共用）：fixed 遮罩 + 居中卡片。
+     *  关闭手势长在自己身上（Esc / 点遮罩）——与菜单同一条约定：宿主各写一份必漏。
+     *  内容与按钮归调用方，这里只管壳与关闭。 */
+    function VaultDialog({ title, onClose, children }) {
+      react.useEffect(() => {
+        const onKey = (e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            onClose();
+          }
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      }, [onClose]);
+      return jsxRuntime.jsx("div", {
+        className: "dshk-vault-modalwrap",
+        onMouseDown: (e) => {
+          if (e.target === e.currentTarget) onClose();
+        },
+        children: jsxRuntime.jsxs("div", {
+          className: "dshk-vault-modal",
+          children: [
+            jsxRuntime.jsx("div", { className: "dshk-vault-modaltitle", children: title }),
+            children,
+          ],
+        }),
+      });
+    }
+
+    // ─────────── 知识库 md 链接解析（VaultPagePane / RteEditor 用）───────────
+    /** 链接点击要不要交给我们：页内锚点与带协议/协议的 href 放行（RTE 的 Link
+     *  扩展配了 openOnClick:false，点了本来也不跳），其余（相对路径 / 站内 / 裸
+     *  路径）都算「文档内链接」候选，由调用方决定能不能解析成文件。 */
+    function isDocHref(href) {
+      const h = String(href ?? "").trim();
+      if (h === "" || h.startsWith("#")) return false;
+      return !/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(h);
+    }
+    /** 把 md 里的相对/站内链接解析为可打开的绝对路径；解析不出返回 null。
+     *  fromPath 为当前文件绝对路径（正反斜杠皆可），cwd 为根（工作区或知识库根，
+     *  合成 / 开头链接用）；href 的 query/hash 在这里剥掉，%xx 就地解码。 */
+    function resolveMdLink(fromPath, cwd, href) {
+      const raw = (() => {
+      try {
+        return decodeURIComponent(href.split(/[?#]/, 1)[0]);
+      } catch {
+        return href.split(/[?#]/, 1)[0];
+      }
+    })();
+      if (raw === "") return null;
+      const norm = (p) => {
+        const parts = p.split(/[\\/]+/).filter((s) => s !== "" && s !== ".");
+        const out = [];
+        for (const s of parts) {
+          if (s === "..") out.pop();
+          else out.push(s);
+        }
+        return out.join("\\");
+      };
+      if (raw.startsWith("/")) {
+        return cwd && cwd.trim() !== "" ? norm(`${cwd}\\${raw.slice(1)}`) : null;
+      }
+      const dir = fromPath.split(/[\\/]+/).slice(0, -1).join("\\");
+      return norm(`${dir}\\${raw}`);
+    }
+    // ─────────── 阅读位置记忆（按文件绝对路径）───────────
+    // 内容重载（刷新浏览器 / vault 重读 / 冲突回读）后落回用户原本看的大致
+    // 位置。每条记录 = { scrollTop, anchor }：anchor 是光标字符偏移（内容变了
+    // 也能落回附近），scrollTop 是精确视口位。运行时 Map + localStorage 持久化
+    // （刷新之后也要在，纯内存不够）。RTE 编辑路径在用。
+    const readPosStore = (() => {
+      let map = new Map();
+      try {
+        const raw = JSON.parse(localStorage.getItem("dshk-read-pos") ?? "{}");
+        if (raw && typeof raw === "object") {
+          for (const [k, v] of Object.entries(raw)) {
+            if (v && typeof v === "object" && Number.isFinite(v.scrollTop) && Number.isFinite(v.anchor)) map.set(k, v);
+          }
+        }
+      } catch {
+        /* 坏数据当作没有 */
+      }
+      let flushTimer = null;
+      const persist = () => {
+        if (flushTimer !== null) return;
+        flushTimer = setTimeout(() => {
+          flushTimer = null;
+          try { localStorage.setItem("dshk-read-pos", JSON.stringify(Object.fromEntries(map))); } catch { /* 存不下就只在内存 */ }
+        }, 400);
+      };
+      return {
+        get: (p) => map.get(p),
+        set(p, scrollTop, anchor) {
+          map.delete(p); // 重插=刷新访问序，容量超限时淘汰最旧
+          map.set(p, { scrollTop: Math.max(0, Math.round(scrollTop)), anchor: Math.max(0, Math.round(anchor)) });
+          while (map.size > 300) map.delete(map.keys().next().value);
+          persist();
+        },
+      };
+    })();
+    /** 记录当前位置（调用方节流）。隐藏容器不记：display:none 的 scrollTop 恒 0，
+     *  会把真位置冲掉（非激活标签仍挂载，切走时会有 resize/兜底路径摸到这里） */
+    function recordReadPos(key, el, anchor) {
+      if (!el || el.getClientRects().length === 0) return;
+      readPosStore.set(key, el.scrollTop, typeof anchor === "number" && Number.isFinite(anchor) ? anchor : 0);
+    }
+    /** 恢复：优先锚点（选区落回），再设 scrollTop。恢复必须等内容渲染后——挂载
+     *  即设会白设（maxScroll 未建立）。容器还隐藏着（非激活标签被后台重读）就
+     *  定时重试到可见为止；期间用户自己滚过（偏离顶部）则放弃，不抢滚动权。
+     *  用 setTimeout 不用 rAF：后台/被遮挡的窗口 rAF 会停发，定时器照走 */
+    function restoreReadPos(key, el, applyAnchor) {
+      const rec = readPosStore.get(key);
+      if (!rec || rec.scrollTop <= 0 || !el) return;
+      let tries = 0;
+      const step = () => {
+        tries += 1;
+        if (el.getClientRects().length === 0) {
+          if (tries < 300) setTimeout(step, 60);
+          return;
+        }
+        if (el.scrollTop > 2) return;
+        try { applyAnchor?.(rec.anchor); } catch { /* 选区失效按纯滚动恢复 */ }
+        el.scrollTop = rec.scrollTop;
+      };
+      setTimeout(step, 60);
+    }
+
+    /** 知识库入口（输入行，源代码管理与终端之间）：
+     *  开 = 只切侧栏索引视图（点具体页才开右栏知识库签）；
+     *  再点 = 侧栏回会话列表（右栏知识库签与页签不跟着关）。
+     *  按钮与快捷键同语义（toggleVaultEntry） */
+    function VaultEntry() {
+      const ui = useKitUi();
+      return jsxRuntime.jsx(KitTip, {
+        label: t("vaultTitle"),
+        command: "dsh-kit.vault.toggle",
+        side: "top",
+        children: jsxRuntime.jsx("button", {
+          type: "button",
+          className: "dshk-btn dshk-enbtn",
+          "aria-pressed": ui.vaultIdxOpen,
+          onClick: () => setKitUi(toggleVaultEntry(getKitUi())),
+          children: jsxRuntime.jsx(VaultIcon, {}),
+        }),
       });
     }
 
@@ -3290,16 +4237,15 @@ ellipsis，窄列只截字不破版 */
       return Number(String(dt).slice(11, 13)) * 60 + Number(String(dt).slice(14, 16));
     }
 
-    // ─────────── 知识库（vault：侧栏目录索引 + 右栏页编辑器，portal 拆两半）───────────
-    // vault = 配置页配置的绝对目录，其内一切 md 即页面（数据契约见 src/vault.ts）。
-    // 布局「选库进入阅读」：左窄条 = 空间（顶层目录）+
-    // 懒加载目录树；右 = 真·所见即所得编辑区（TipTap 富文本，vendor/richeditor
-    // .bundle.js 的 window.DshRTE 工厂：md ↔ 富文本往返、[[wikilink]]/公式/
-    // 未知块 HTML 原样保留）。
-    // 知识库 = 纯只读阅读面：目录/搜索/双链/反链/大纲导航，渲染走 vendor RTE
-    // 只读态。页面本体由 agent 文件工具或外部编辑器写（文件即接口），插件没有写入
-    // 端点——盘上被改（stat 轮询发现 mtime 变化）就整页静默重读。搜索走宿主
-    // 全文端点（路径 8 / 文件名 5 / 正文 2）。
+    // ─────────── 知识库（vault：侧栏目录索引 + 右栏页阅读面，portal 拆两半）───────────
+    // vault = 本组件行配置页配置的绝对目录，其内一切 md 即页面（数据契约见 src/vault/scanner.ts）。
+    // 布局「选库进入阅读」：左 = 工具条（搜索 + ↻）+ 懒加载目录树；右 = 页阅读面
+    // （TipTap 只读态，vendor/richeditor.bundle.js 的 window.DshRTE 工厂：md ↔ 富文本
+    // 往返、[[wikilink]]/公式/未知块 HTML 原样保留）。VaultRootView 单实例挂在组件壳里，
+    // 两半经 portal 分投侧栏与右栏 pane 宿主。
+    // 只读阅读面：目录 / 搜索 / 双链 / 反链 / 大纲导航。页面本体由 agent 文件工具或
+    // 外部编辑器写（文件即接口），插件没有正文写入端点——盘上被改（stat 轮询发现
+    // mtime 变化）就整页静默重读。全文搜索走本组件宿主端点（路径 8 / 文件名 5 / 正文 2）。
 
     /** 拆 frontmatter：返回 { fmText, rest }。fmText = "---…---" 块（含随后的
      *  首个换行）的字节级原文，无 frontmatter 时 fmText=""；rest = 其余全部。
@@ -3385,17 +4331,9 @@ ellipsis，窄列只截字不破版 */
     // 目录 = TreeFolderIcon、页面 = FileTypeIcon16、展开箭头 = ChevronIcon，
     // 三个都在文件树那边定义，这里不再自绘
 
+    // 行开关是唯一门槛（探针 404 = 本组件整体不注册，压根走不到这里）；根目录是否
+    // 配置好由 VaultRootView 从 /dsh-kit/vault/index 自取——那才是两端一致的配置源
     function VaultView() {
-      const cfg = cfgFromSnapshot(getCfgSnapshot());
-      // 只保留开关门槛；vaultRoot 不读 settings 快照——手机/远程浏览器拿不到设置
-      // 镜像（快照恒 loading，回退默认空串），root 由 VaultRootView 从
-      // /dsh-kit/vault/index 自取，那才是两端一致的配置源
-      if (cfg.vaultEnabled === false) {
-        return jsxRuntime.jsxs("div", { className: "dshk-vault", children: [
-          jsxRuntime.jsx("div", { className: "dshk-vault-hinttitle", children: t("vaultNotConfigured") }),
-          jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultNotConfiguredHint") }),
-        ] });
-      }
       return jsxRuntime.jsx(VaultRootView, {});
     }
 
@@ -4824,33 +5762,6 @@ ellipsis，窄列只截字不破版 */
       ] });
     }
 
-    /** 内容区文档签条（浏览器式页签）：一文档一签、点击切换、✕ 单关；
-     *  label(path) 决定签名（文件带后缀、知识库页去掉 .md）。文件区与知识库区
-     *  的 pane 正文共用 */
-    const docChips = (paths, activePath, activate, closeOne, label) =>
-      paths.map((p) =>
-        jsxRuntime.jsxs("span", {
-          className: `dshk-tab${p === activePath ? " dshk-tab-on" : ""}`,
-          title: p,
-          onClick: () => setKitUi(activate(p)),
-          children: [
-            jsxRuntime.jsx("span", { className: "dshk-tab-label", children: label(p) }),
-            jsxRuntime.jsx(KitTip, {
-              label: t("pvCloseTab"),
-              children: jsxRuntime.jsx("button", {
-                type: "button",
-                className: "dshk-tab-x",
-                "aria-label": t("pvCloseTab"),
-                onClick: (e) => {
-                  e.stopPropagation();
-                  setKitUi(closeOne(p));
-                },
-                children: "✕",
-              }),
-            }),
-          ],
-        }, p),
-      );
 
     /** 侧栏索引宿主（知识库目录/日程待办占 sidebar.workspaces 单槽）：
      *  wide=false（侧栏收起）不渲染——视图挤进铁轨等于不可见；宿主 div 交给
@@ -4861,12 +5772,6 @@ ellipsis，窄列只截字不破版 */
       return jsxRuntime.jsx("div", { className: "dshk-sidehost", ref: (el) => vaultSideSlot.set(el) });
     }
 
-    // ─────────── 右栏 pane 正文（每个 dock 签一个，key = 页类型 id）───────────
-    // 官方 pane 是普通文档流：外壳 .dshk-rbpane 占满 100%×100%，内容区自己滚。
-    // pane 挂载 = 官方签开着：把 getKitUi() 的功能存在性同步为真（入口按钮选中态、
-    // 角标、自动跟随判定都读它）；pane 卸载（用户点官方签 ✕）同步回假——
-    // 「签开着吗」以官方 pane 的挂载为准。文件/知识库的文档签状态（files/
-    // vaultPages）在卸载后保留，重开签即恢复，与关签前一致。
     /** 功能存在性跟随 pane 挂载（schedule/browser/vault 用） */
     function useFeaturePresence(feature) {
       react.useEffect(() => {
@@ -4874,37 +5779,7 @@ ellipsis，窄列只截字不破版 */
         return () => setKitUi(closeFeatureTab(getKitUi(), feature));
       }, [feature]);
     }
-    /** diff pane：文档签条 + 多实例 DiffPane（非激活 display:none 保挂载——
-     *  滚动位置不丢）。只承载源代码管理/提交图谱点开的 diff；工作区文件的
-     *  预览/编辑已改投官方右栏文件签。不做存在性同步：files 状态本来就在
-     *  getKitUi()，官方签关了重开，文档签原样恢复。最后一页 diff 签关掉 → 官方
-     *  「差异」dock 签一起关（同浏览器「没了就没了」，没有空页状态） */
-    function FilePaneBody(props) {
-      const ui = useKitUi();
-      const cwd = useCurrentCwd(props);
-      const files = ui.files ?? [];
-      const fileCount = files.length;
-      react.useEffect(() => {
-        if (fileCount === 0) closeRightbarTab("file");
-      }, [fileCount]);
-      return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
-        fileCount > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(files.map((x) => x.path), ui.activeFile, (p) => activateFileTab(getKitUi(), p), (p) => closeFileTab(getKitUi(), p), (p) => baseName(p) || t("fileTabLabel")) }) : null,
-        files.map((pv) =>
-              jsxRuntime.jsx("div", {
-                className: "dshk-pane-view",
-                style: { display: pv.path === ui.activeFile ? "flex" : "none" },
-                children: jsxRuntime.jsx(dock.diffPane.Component, { // dsh-kit-files 物化期挂上（渲染期取，boot 后必已物化）
-                  key: pv.path,
-                  path: pv.path,
-                  untracked: pv.untracked === true,
-                  deleted: pv.deleted === true,
-                  commit: pv.commit,
-                  cwd,
-                }),
-              }, pv.path),
-            ),
-      ] });
-    }
+
     /** 知识库 pane：页签条 + portal 宿主（VaultRootView 单实例投页编辑器进来）。
      *  vaultOpen 跟随挂载——KitSurfaces 靠它决定挂不挂 VaultView；挂载期间
      *  vaultOpen 被别处收掉（Esc 关光页签的「收摊」分支）也强制回真，pane 在
@@ -4933,770 +5808,81 @@ ellipsis，窄列只截字不破版 */
       useFeaturePresence("schedule");
       return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(ScheduleView, { active: true }) });
     }
-    // ─────────── 面板宿主（shell.overlay 全帧浮层）───────────
-    // 终端停靠在这里渲染（fixed 定位不受 composer 祖先
-    // stacking context 影响）；知识库单实例挂载、文件树/索引的 sidebar.workspaces
-    // 动态注册、几何 RO、快捷键监听全部挂在这个常驻根组件里。
-    function KitSurfaces(props) {
-      react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
-      const sessionRow = useCurrentRow(props);
-      const cwd = typeof sessionRow?.cwd === "string" && sessionRow.cwd.trim() !== "" ? sessionRow.cwd : null;
-      const sessionId = sessionRow?.id ?? null;
-      const ui = useKitUi();
-      // 官方右栏可用时机：seat 不在场（全局面板占住中栏 / 没选会话）时，索引视图
-      // 一并让位给官方会话列表，与「右栏不存在」这件事保持同一时机
-      const rightbarUp = useRightbarSeat();
-      const snap = react.useSyncExternalStore(subscribeCfg, getCfgSnapshot);
-      const cfg = cfgFromSnapshot(snap);
-      // useSessions 透传给右栏 pane（浏览器 pane 定位当前会话用）：inject 闭包
-      // 从这里取最新值（槽位注册发生在 effect，渲染期的 props 用模块变量桥接）
-      shellShare.current = props;
-      // 对话文件点击的知识库路由状态：当前会话 cwd 与知识库开关每次渲染同步，
-      // 供模块级 capture 拦截器读取（vault 关闭时拦截器完全不介入）
-      chatPreviewHook = {
-        cwd,
-        vaultOn: cfg.vaultEnabled !== false,
-      };
 
-      // 卸载时清空模块级接管状态，避免拦截器持有失效闭包
-      react.useEffect(() => () => { chatPreviewHook = null; }, []);
-
-      // vault root 预取：对话路径点击的 M4 路由判定同步读 vaultRootHint——
-      // 等用户点击时再取来不及（官方动作同步触发，无法事后撤回）。插件挂载即
-      // 预取一次（宿主 mtime 缓存，零成本）；VaultRootView 每次拉索引也会刷新
-      react.useEffect(() => {
-        if (cfg.vaultEnabled === false) return undefined;
-        void ensureVaultRootHint();
-        return undefined;
-      }, [cfg.vaultEnabled]);
-
-      // 座位门控：按配置动态注册/注销输入框入口与技能页（配置页
-      // 本体不受门控，否则关掉就再也打不开）。快照未就绪按默认全开处理，首个
-      // ready 快照到达后本效果自动重跑纠正。
-      react.useEffect(() => {
-        if (!slotsCtx) return undefined;
-        const handles = [];
-        const want = [
-          // 输入框入口排序（左→右）：文件树、源代码管理、知识库、终端——前三者中
-          // 终端入口由 dsh-kit-terminal 自注册（order 14），本表只管本包的座位。
-          // 技能页随组件化迁 dsh-kit/skills；手机访问走 settings.section（order 45）
-          ["vault", cfg.vaultEnabled, () =>
-            slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-vault", order: 12 }, VaultEntry)],
-          ["phone", cfg.phoneEnabled, () =>
-            slotsCtx.slots.register(
-              { name: "settings.section", id: "kit-phone", order: 45, label: () => t("phoneTitle") },
-              PhoneSection,
-            )],
-        ];
-        for (const [key, enabled, make] of want) {
-          if (!enabled) continue;
-          try {
-            handles.push(make());
-          } catch (error) {
-            console.error(`[dsh-kit] 注册座位失败：${key}`, error);
-          }
-        }
-        return () => {
-          for (const dispose of handles) {
-            try {
-              dispose();
-            } catch {
-              // 忽略注销异常
-            }
-          }
-        };
-      }, [cfg.phoneEnabled, cfg.monitorEnabled, cfg.vaultEnabled]);
-
-      // 配置关闭但视图还开着（如原生配置页保存、entry 重启前的瞬间）：立即归位，文件随来源跟随清掉
-      // （终端功能关闭的同类清场在 dsh-kit-terminal 自己那侧）
-      react.useEffect(() => {
-        // 配置门控清场走 closeFeatureTab：清存在性的同时把激活位顺延到剩余标签
-        if (!cfg.vaultEnabled && (ui.vaultOpen || ui.vaultIdxOpen)) {
-          setKitUi({ ...closeFeatureTab(getKitUi(), "vault"), vaultIdxOpen: false });
-        }
-      });
-
-      // 侧边栏浏览区占用：单槽轮换——源代码管理 ↔ 文件树 ↔ 知识库
-      // 目录，全关回官方会话列表。右栏不在场时不占（全局面板在前台时左栏该是
-      // 官方会话列表）：开合状态留着，回到对话原样恢复。
-      // 动态注册若在运行时抛错，捕获并回滚开合状态，避免入口被错误边界摘掉。
-      react.useEffect(() => {
-        if (!slotsCtx || !rightbarUp || (!ui.treeOpen && !ui.gitOpen && !ui.vaultIdxOpen)) return undefined;
-        let dispose;
-        try {
-          // 单槽遮蔽原生需要更低 priority（数字越小越先渲染，原生在 priority 0）。
-          // owner 携带官方注入的 wide（侧边栏是否展开）：收起态各占用者自判不渲染
-          // （挤进铁轨等于不可见）。
-          dispose = slotsCtx.slots.register({ name: "sidebar.workspaces", priority: -1000 }, (owner) => {
-            const side = owner ?? {};
-            if (side.wide === false) return null;
-            // 文件树/源代码管理分支由 dsh-kit-files 组件经 kitBase.sidebarView 座接管；
-            // 组件缺位（未装）时为 null，落知识库索引分支，行为与单包时代一致
-            const branch = dock.sidebarView.renderer ? dock.sidebarView.renderer({ ui, cwd, owner }) : null;
-            if (branch) return branch;
-            return jsxRuntime.jsx(SidebarVaultIndex, { ...owner });
-          });
-        } catch (error) {
-          console.error("[dsh-kit] 注册 sidebar.workspaces 面板失败：", error);
-          setKitUi({ treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null });
-          return undefined;
-        }
-        return () => {
-          try {
-            dispose();
-          } catch {
-            // 忽略注销异常
-          }
-        };
-      }, [ui.treeOpen, ui.gitOpen, ui.vaultIdxOpen, cwd, rightbarUp]);
-
-      // Esc 分层：先关当前激活那张文档签（知识库关当前页那张、文件关当前文件那张），
-      // 再关侧栏视图，最后收起终端坞（不拦截，避免挡掉其它 Esc 行为）。功能签归官方
-      // ✕，Esc 不碰。组合键不在这里：知识库命令注册进官方 shortcuts 服务（键位、录制、
-      // 冲突检测、持久化都归官方「快捷键」页），本处只把最新动作挂上 shortcutRun 供
-      // 其 resolve 调用——闭包要最新会话与 cwd，不能注册期固定。
-      shortcutRun.vault = () => setKitUi(toggleVaultEntry(getKitUi()));
-
-      react.useEffect(() => {
-        const onKey = (e) => {
-          if (e.key === "Escape") {
-            if (dock.inlineEdit.active) return; // 树行改名输入激活（dsh-kit-files 经底座座上报）
-            // 知识库搜索浮层开着时让路：Esc 归它自己（只关自己，不收标签页）
-            if (vaultSearchOpen) return;
-            // Esc 关当前激活那张文档签（知识库关当前页那张、diff 关当前
-            // 那张，各自与标签条的 ✕ 同语义）。功能签归官方 ✕，Esc 不收
-            // 功能签（getKitUi() 收了 pane 还在，状态会对不上）
-            const vaultPages = getKitUi().vaultPages ?? [];
-            const files = getKitUi().files ?? [];
-            const activeVault = getKitUi().activeVaultPage ?? vaultPages[vaultPages.length - 1] ?? null;
-            const activeFile = getKitUi().activeFile ?? files[files.length - 1]?.path ?? null;
-            if (getKitUi().activeFeature === "vault" && activeVault) {
-              setKitUi(closeVaultPageTab(getKitUi(), activeVault));
-            } else if (getKitUi().activeFeature === "file" && activeFile) {
-              setKitUi(closeFileTab(getKitUi(), activeFile));
-            } else if (vaultPages.length > 0) {
-              setKitUi(closeVaultPageTab(getKitUi(), activeVault));
-            } else if (files.length > 0) {
-              setKitUi(closeFileTab(getKitUi(), activeFile));
-            } else if (getKitUi().gitOpen || getKitUi().treeOpen || getKitUi().vaultIdxOpen) {
-              // 侧栏视图单槽：关一格即可（四者互斥）；功能签不连带关
-              setKitUi(sidebarViewPatch(null));
-            } else if (getKitUi().termDockOpen) setKitUi({ termDockOpen: false }); // 只隐藏，不杀会话
-          }
-        };
-        window.addEventListener("keydown", onKey, true);
-        return () => window.removeEventListener("keydown", onKey, true);
-      });
-
-      return jsxRuntime.jsx(jsxRuntime.Fragment, {
-        children: [
-          // 知识库单实例：侧栏目录/右栏页签任一在场即挂载（两侧 portal 自取），
-          // 隐藏包装层不影响 portal 内容落点
-          cfg.vaultEnabled !== false && (ui.vaultOpen || ui.vaultIdxOpen)
-            ? jsxRuntime.jsx("div", { style: { display: "none" }, children: jsxRuntime.jsx(VaultView, {}) })
-            : null,
-        ],
-      });
+    // ─────────── 本组件生效配置（0.1.7 声明式模型）───────────
+    // 配置真源 = 本组件宿主 Config（src/vault/index.ts）。client 启动拉
+    // /dsh-kit-vault/config 喂快照；行开关关闭时该端点随宿主半边不物化而 404，
+    // apply 据此整体不注册（侧栏索引、右栏签、入口按钮、对话改投全不出现）。
+    let vSnap = null;
+    let vAvailable = false;
+    const getVSnap = () => vSnap;
+    const V_CFG_DEFAULTS = { vaultRoot: "" };
+    function vCfgFromSnapshot(snap) {
+      if (!snap || snap.status !== "ready" || !snap.value || typeof snap.value !== "object") return { ...V_CFG_DEFAULTS };
+      const v = snap.value;
+      return { vaultRoot: typeof v.vaultRoot === "string" ? v.vaultRoot : "" };
+    }
+    /** 拉生效配置；返回 false = 宿主半边不可达（行关闭）= 本组件 client 面整体不注册 */
+    async function loadCfg() {
+      try {
+        const body = await kitJson("/dsh-kit-vault/config");
+        vAvailable = !!(body && typeof body === "object");
+        vSnap = vAvailable ? { status: "ready", value: body } : null;
+      } catch {
+        vAvailable = false;
+        vSnap = null;
+      }
+      return vAvailable;
     }
 
-    // ── 设置导航图标：官方 navIcon(id) 硬编码映射（models/agent-presets/plugins），
-    // 未知 id 一律回退齿轮。没有注册缝，这里按标签文字找到对应行，把行内第一个
-    // svg 换成自绘分层图标——纯外观增强：任何一步失败都静默保持齿轮。
-    // 候选由各归属方注册（根包注册手机访问，组件经 dock.registerNavIcon 注册自己的）。
-    const SVG_OPEN =
-      '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" ' +
-      'stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
-    const NAV_ICONS = [];
-    function registerNavIcon(entry) {
-      if (entry) NAV_ICONS.push(entry);
-    }
-    registerNavIcon({
-      label: () => t("phoneTitle"),
-      attr: "data-dshk-phone",
-      html:
-        SVG_OPEN +
-        '<rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/>' +
-        '<path d="M6.8 3.4h2.4"/>' +
-        '<path d="M8 12.6h.01"/>' +
-        "</svg>",
+    // ─────────── 配置页（plugins.row.config）───────────
+    // 骨架（草稿/保存/官方表单接线）在 dock，这里只喂本组件字段表与词条；
+    // 字段清单与 src/vault/index.ts 的 Config schema 同源（render-check 钉住）。
+    const VAULT_CFG_FIELDS = [
+      { key: "vaultRoot", type: "string", group: "kcfgGroupVault", labelKey: "kcfgVaultRoot", hintKey: "kcfgVaultRootHint" },
+    ];
+    const VAULT_CFG_GROUPS = ["kcfgGroupVault"];
+    const VaultConfigPage = dock.createConfigPage({
+      fields: VAULT_CFG_FIELDS,
+      groups: VAULT_CFG_GROUPS,
+      t,
+      onSaved: async () => { await loadCfg(); },
     });
 
-    let iconSwapPending = false;
-    function swapKitNavIcons() {
-      try {
-        const rows = document.querySelectorAll('[role="dialog"][aria-modal="true"] nav button');
-        if (rows.length === 0) return;
-        for (const row of rows) {
-          const span = row.querySelector("span");
-          if (!span) continue;
-          const entry = NAV_ICONS.find((candidate) => span.textContent === candidate.label());
-          if (!entry) continue;
-          const current = row.querySelector("svg");
-          if (!current || current.getAttribute(entry.attr) === "1") continue;
-          const holder = document.createElement("span");
-          holder.innerHTML = entry.html;
-          const icon = holder.firstElementChild;
-          if (!icon) continue;
-          icon.setAttribute(entry.attr, "1");
-          current.replaceWith(icon);
-        }
-      } catch {
-        // 外观增强失败即保持默认齿轮
-      }
-    }
-    function scheduleNavIconSwap() {
-      if (iconSwapPending) return;
-      iconSwapPending = true;
-      window.setTimeout(() => {
-        iconSwapPending = false;
-        swapKitNavIcons();
-        window.setTimeout(swapKitNavIcons, 250); // React 重渲染后的二次补换
-      }, 60);
-    }
-
-    // ─────────── dsh-kit/skills 组件（技能管理页）───────────
-    // 技能池管理页（settings.section）：数据走本组件宿主半边 GET /dsh-kit/skills
-    // （白名单根枚举 + 注册表归属增强）与 POST /dsh-kit/skills/op（copy/move/delete/
-    // disable）。分组显示：工作区(.agents|.dsh/skills) → 用户级($DSH_HOME|~/.agents)
-    // → 技能池；插件自带/运行时来源只读展示。删除=移入池内 .trash，禁用=改
-    // frontmatter 双键。行禁用（宿主子模块不物化）时 /dsh-kit-skills/config 404，
-    // 本组件不注册设置页；样式与词条随本组件自带。
-    const skillsModule = (kit, require) => {
-    var module = { exports: {} };
-    var exports = module.exports;
-    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
-    const react = require("react");
-    const jsxRuntime = require("react/jsx-runtime");
-    const dock = kit;
-    const { KitTip, kitGetJson, kitPostJson, kitJson, resolveZh, subscribeLocale, getLocaleVersion, useCurrentCwd, registerNavIcon } = dock;
-
-    // 组件私有文案（技能页词条随页迁入本包，与根包字典互不依赖）
-    const zh = {
-      skillsLabel: "技能",
-      skRefresh: "刷新",
-      skLoading: "加载中…",
-      skFail: "加载失败",
-      skEmpty: "（此组暂无技能）",
-      skNotCreated: "未创建",
-      skRankTip: "所在位置的扫描优先级（数值越小越优先）",
-      skWorkspace: "工作区",
-      skUserLevel: "用户级",
-      skPool: "技能池",
-      skOther: "其他来源（插件自带/运行时，只读）",
-      skNoCwdHint: "当前没有会话工作区：只显示用户级与技能池",
-      skDisabled: "已禁用",
-      skShadowed: "被覆盖",
-      skShadowTip: "同名技能在更高优先级位置生效（优先级：.dsh > .agents > $DSH_HOME/skills > ~/.agents/skills）",
-      skVersionTip: "技能自带版本（frontmatter version）：用来对照自己手上这份抄的是哪版",
-      skByPlugin: "随插件",
-      skHide: "收起",
-      skView: "详情",
-      skCopy: "复制",
-      skMove: "移动",
-      skPickTarget: "选择目标位置",
-      skDisable: "禁用",
-      skEnable: "启用",
-      skDelete: "删除",
-      skConfirmDelete: "确认删除？",
-      skCancel: "取消",
-      skOverwrite: "目标已存在同名技能，覆盖？",
-      skOpFail: "操作失败",
-      skDone: "完成",
-      skDeleted: "已删除",
-      contentFail: "读取失败",
-      contentEmpty: "（空）",
-      contentBinary: "二进制文件，无法预览",
-    };
-    const en = {
-      skillsLabel: "Skills",
-      skRefresh: "Refresh",
-      skLoading: "Loading…",
-      skFail: "Failed to load",
-      skEmpty: "(no skills here)",
-      skNotCreated: "not created",
-      skRankTip: "Scan priority of this location (lower wins)",
-      skWorkspace: "Workspace",
-      skUserLevel: "User level",
-      skPool: "Skill pool",
-      skOther: "Other sources (plugin/runtime, read-only)",
-      skNoCwdHint: "No session workspace: showing user-level and pool only",
-      skDisabled: "Disabled",
-      skShadowed: "Shadowed",
-      skShadowTip: "A same-name skill at a higher-priority location takes effect (priority: .dsh > .agents > $DSH_HOME/skills > ~/.agents/skills)",
-      skVersionTip: "Skill's own version (frontmatter version), to compare against your own copy",
-      skByPlugin: "Plugin-bundled",
-      skHide: "Hide",
-      skView: "Details",
-      skCopy: "Copy",
-      skMove: "Move",
-      skPickTarget: "Pick destination",
-      skDisable: "Disable",
-      skEnable: "Enable",
-      skDelete: "Delete",
-      skConfirmDelete: "Confirm delete?",
-      skCancel: "Cancel",
-      skOverwrite: "A skill with the same name exists at the target. Overwrite?",
-      skOpFail: "Operation failed",
-      skDone: "Done",
-      skDeleted: "Deleted",
-      contentFail: "Failed to read",
-      contentEmpty: "(empty)",
-      contentBinary: "Binary file, preview unavailable",
-    };
-    const lang = () => (resolveZh() ? zh : en);
-    const t = (key) => lang()[key] ?? key;
-
-    function fetchSkillsPage(cwd, signal) {
-      const query = cwd ? "?cwd=" + encodeURIComponent(cwd) : "";
-      return kitGetJson("/dsh-kit/skills" + query, signal, (b) => Array.isArray(b.groups));
-    }
-
-    function postSkillOp(payload) {
-      return kitPostJson("/dsh-kit/skills/op", payload);
-    }
-
-    /** 物理根短标签（行内徽标与目标选择条共用） */
-    const SK_ROOT_SHORT = {
-      "project-dsh": ".dsh/skills",
-      "project-agents": ".agents/skills",
-      "user-dsh": "$DSH_HOME/skills",
-      "user-agents": "~/.agents/skills",
-    };
-
-    function skRootShort(id) {
-      return SK_ROOT_SHORT[id] ?? id;
-    }
-
-    function skGroupTitle(groupId) {
-      if (groupId === "pool") return t("skPool");
-      return groupId === "user" ? t("skUserLevel") : t("skWorkspace");
-    }
-
-    // 设置导航图标（官方 navIcon 无注册缝，靠标签文字换行内 svg）：纯外观增强
-    const SVG_SKILL_ICON =
-      '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<path d="M8 1.8 14.2 5 8 8.2 1.8 5z"/>' +
-      '<path d="M1.8 8.1 8 11.2l6.2-3.1"/>' +
-      '<path d="M1.8 11.3 8 14.4l6.2-3.1"/>' +
-      "</svg>";
-
-    // ─────────── 组件配置（/dsh-kit-skills/config）───────
-    // 技能没有独立配置字段：行开关（插件页组件行 switch）= 唯一开关。拉端点只为
-    // 可达性——200 = 行启用；404（行禁用 → 子模块不物化）= 不注册设置页。
-    let cfgSnap = null;
-    const cfgSubs = new Set();
-    const emitCfg = () => {
-      for (const fn of cfgSubs) {
-        try {
-          fn();
-        } catch {
-          /* 订阅者已卸载 */
-        }
-      }
-    };
-    async function loadCfg() {
-      let value = null;
-      try {
-        const v = await kitJson("/dsh-kit-skills/config", undefined, (b) => b !== null && typeof b === "object");
-        value = v;
-      } catch {
-        value = null; // 端点不可达（行禁用 404）：探明不可用
-      }
-      cfgSnap = value && typeof value === "object" ? { status: "ready", value } : { status: "unavailable" };
-      emitCfg();
-    }
-    const subscribeCfg = (fn) => {
-      cfgSubs.add(fn);
-      return () => cfgSubs.delete(fn);
-    };
-    const getCfgSnapshot = () => cfgSnap;
-    /** 组件可用性：端点 200（行启用）或未探明（乐观，apply 前的渲染窗口）= true；
-     *  探明 404（行禁用 → 子模块不物化）= false */
-    function cfgFromSnapshot(snap) {
-      return { available: !snap || snap.status === "ready" };
-    }
-
-    // ─────────── 组件样式 ───────────
-    // 技能管理页（settings.section）：三分组卡片；技能行单行布局，操作不换行、描述先收缩
-    const SKS_CSS = `
-.dshk-sk{font-size:13px;color:var(--dsw-alias-label-primary);user-select:text}
-.dshk-sk-head{display:flex;align-items:center;gap:8px;margin:2px 0 10px}
-.dshk-sk-title{font-weight:600;font-size:14px}
-.dshk-sk-status{color:var(--dsw-alias-label-tertiary);font-size:12px}
-.dshk-sk-group{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;margin-bottom:12px;overflow:hidden}
-.dshk-sk-group-head{display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:12px}
-.dshk-sk-group-dir{font-family:ui-monospace,Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;text-align:right}
-/* 单行：名称/徽标 flex:none，描述 flex:1 收缩截断，操作区不换行 */
-.dshk-sk-row{display:flex;align-items:center;gap:8px;padding:7px 12px;min-width:0}
-.dshk-sk-row ~ .dshk-sk-row{border-top:1px solid var(--dsw-alias-border-l1)}
-.dshk-sk-name{font-weight:600;white-space:nowrap;flex:none}
-.dshk-sk-name[data-disabled]{color:var(--dsw-alias-label-tertiary);text-decoration:line-through}
-.dshk-sk-badge{flex:none;font-size:11px;line-height:16px;padding:0 7px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);white-space:nowrap;font-family:ui-monospace,Consolas,monospace}
-.dshk-sk-badge-off{border-style:dashed;color:var(--dsw-alias-label-tertiary)}
-.dshk-sk-desc{flex:1;min-width:0;color:var(--dsw-alias-label-secondary);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
-.dshk-sk-actions{flex:none;display:flex;align-items:center;gap:5px}
-.dshk-sk-btn{appearance:none;background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:12px;line-height:1;padding:4px 9px;white-space:nowrap}
-.dshk-sk-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-sk-btn[data-danger="1"]{color:var(--dsw-alias-label-primary);font-weight:600;border-color:var(--dsw-alias-label-secondary)}
-.dshk-sk-btn[disabled]{opacity:.5;cursor:default}
-/* 展开式目标选择条：点复制/移动后出现在该行下方（同一时间只展开一行） */
-.dshk-sk-target{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 12px;border-top:1px dashed var(--dsw-alias-border-l1);background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-sk-target-label{font-size:12px;color:var(--dsw-alias-label-secondary)}
-.dshk-sk-detail{padding:2px 12px 10px}
-.dshk-sk-pre{margin:0;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
-    `;
-    function injectStyles() {
-      if (typeof document === "undefined") return;
-      if (document.querySelector('style[data-plugin-css="dsh-kit-skills/ui"]') === null) {
-        const tag = document.createElement("style");
-        tag.dataset.plugin = "dsh-kit-skills";
-        tag.dataset.pluginCss = "dsh-kit-skills/ui";
-        tag.textContent = SKS_CSS;
-        document.head.appendChild(tag);
-      }
-    }
-
-    function SkillContent({ file }) {
-      const [state, setState] = react.useState({ phase: "loading", text: "" });
-      react.useEffect(() => {
-        const controller = new AbortController();
-        setState({ phase: "loading", text: "" });
-        kitGetJson(`/dsh-kit/read?path=${encodeURIComponent(file)}`, controller.signal)
-          .then((body) =>
-            setState({
-              phase: "ready",
-              text: body.binary ? t("contentBinary") : body.content ?? "",
-            }),
-          )
-          .catch((error) => {
-            if (!controller.signal.aborted) setState({ phase: "error", text: String(error?.message ?? error) });
-          });
-        return () => controller.abort();
-      }, [file]);
-      if (state.phase === "loading") return jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { padding: "6px 0 0" }, children: t("skLoading") });
-      if (state.phase === "error")
-        return jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { padding: "6px 0 0" }, children: `${t("contentFail")}：${state.text}` });
-      if (state.text.trim() === "") return jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { padding: "6px 0 0" }, children: t("contentEmpty") });
-      return jsxRuntime.jsx("pre", { className: "dshk-sk-pre", children: state.text });
-    }
-
-    /** 展开式目标选择条：点选物理根即执行（不存在的根由宿主按需创建） */
-    function TargetPicker({ roots, mode, onPick }) {
-      return jsxRuntime.jsxs("div", {
-        className: "dshk-sk-target",
-        children: [
-          jsxRuntime.jsxs("span", { className: "dshk-sk-target-label", children: [mode === "copy" ? t("skCopy") : t("skMove"), " · ", t("skPickTarget")] }),
-          roots.map((root) =>
-            jsxRuntime.jsx(
-              "button",
-              { type: "button", className: "dshk-sk-btn", title: root.dir, onClick: () => onPick(root.id), children: root.id === "pool" ? t("skPool") : skRootShort(root.id) },
-              root.id,
-            ),
-          ),
-        ],
-      });
-    }
-
-    /**
-     * 单个技能行（单行布局）：名称+徽标+描述截断+复制/移动/禁用/删除/详情。
-     * 池内技能没有禁用按钮（池不被扫描，禁用无意义）；复制/移动展开目标选择条
-     * （picker 状态提升到页面级，同一时间只允许一行展开）。
-     */
-    function SkillRow({ skill, groupId, allRoots, cwd, busy, runOp, picker, setPicker }) {
-      const [open, setOpen] = react.useState(false);
-      const [confirming, setConfirming] = react.useState(false);
-      const pickerOpen = picker !== null && picker.key === skill.path && (picker.mode === "copy" || picker.mode === "move");
-      const targets = allRoots.filter((root) => root.id !== skill.root);
-
-      const startPicker = (mode) => setPicker(pickerOpen ? null : { key: skill.path, mode });
-      const onDisable = () => runOp({ op: "disable", src: skill.path, cwd, disabled: !skill.disabled });
-      const onDelete = () => {
-        if (!confirming) {
-          setConfirming(true);
-          return;
-        }
-        setConfirming(false);
-        runOp({ op: "delete", src: skill.path, cwd });
-      };
-      const pickDest = (rootId) => {
-        setPicker(null);
-        runOp({ op: picker.mode, src: skill.path, dest: rootId, cwd });
-      };
-
-      return jsxRuntime.jsxs(jsxRuntime.Fragment, {
-        children: [
-          jsxRuntime.jsxs("div", {
-            className: "dshk-sk-row",
-            children: [
-              jsxRuntime.jsx("span", { className: "dshk-sk-name", "data-disabled": skill.disabled || undefined, children: skill.name }),
-              groupId !== "pool" && typeof skill.rank === "number"
-                ? jsxRuntime.jsx(KitTip, { label: `${skRootShort(skill.root)} · ${t("skRankTip")}`, children: jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: `(${skill.rank})` }) })
-                : null,
-              skill.disabled ? jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", children: t("skDisabled") }) : null,
-              // 版本号（技能 frontmatter 的 version，自有约定）：池里的参考技能与个人
-              // 副本靠它对照「抄的是哪版」
-              typeof skill.version === "string" && skill.version !== ""
-                ? jsxRuntime.jsx(KitTip, { label: t("skVersionTip"), children: jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: `v${skill.version}` }) })
-                : null,
-              skill.shadowed ? jsxRuntime.jsx(KitTip, { label: t("skShadowTip"), children: jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", children: t("skShadowed") }) }) : null,
-              typeof skill.description === "string" && skill.description !== ""
-                ? jsxRuntime.jsx("span", { className: "dshk-sk-desc", title: skill.description, children: skill.description })
-                : null,
-              jsxRuntime.jsxs("div", {
-                className: "dshk-sk-actions",
-                children: [
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => startPicker("copy"), children: t("skCopy") }),
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => startPicker("move"), children: t("skMove") }),
-                  groupId !== "pool"
-                    ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onDisable, children: skill.disabled ? t("skEnable") : t("skDisable") })
-                    : null,
-                  confirming
-                    ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", "data-danger": "1", disabled: busy, onClick: onDelete, children: t("skConfirmDelete") })
-                    : jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onDelete, children: t("skDelete") }),
-                  confirming
-                    ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setConfirming(false), children: t("skCancel") })
-                    : null,
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setOpen((v) => !v), children: open ? t("skHide") : t("skView") }),
-                ],
-              }),
-            ],
-          }),
-          pickerOpen ? jsxRuntime.jsx(TargetPicker, { roots: targets, mode: picker.mode, onPick: pickDest }) : null,
-          open ? jsxRuntime.jsx("div", { className: "dshk-sk-detail", children: jsxRuntime.jsx(SkillContent, { file: skill.file }) }) : null,
-        ],
-      });
-    }
-
-    /** 只读展示注册表里非白名单根的技能（插件自带/运行时/custom 目录等） */
-    function ProviderRow({ item }) {
-      return jsxRuntime.jsxs("div", {
-        className: "dshk-sk-row",
-        children: [
-          jsxRuntime.jsxs("div", {
-            className: "dshk-sk-line1",
-            children: [
-              jsxRuntime.jsx("span", { className: "dshk-sk-name", children: item.name }),
-              item.provider !== "" ? jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: item.provider }) : null,
-              item.source !== "" ? jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: item.source }) : null,
-              jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", children: t("skByPlugin") }),
-            ],
-          }),
-          typeof item.description === "string" && item.description !== ""
-            ? jsxRuntime.jsx("div", { className: "dshk-sk-desc", title: item.description, children: item.description })
-            : null,
-        ],
-      });
-    }
-
-    const SK_GROUP_RANK = { workspace: 0, user: 1, pool: 2 };
-
-    function SkillsManager(props) {
-      const cwd = useCurrentCwd(props);
-      const [data, setData] = react.useState(null);
-      const [error, setError] = react.useState("");
-      const [message, setMessage] = react.useState("");
-      const [busy, setBusy] = react.useState(false);
-      const [nonce, setNonce] = react.useState(0);
-      // 展开中的复制/移动目标选择条（{key,mode}）；单值保证同一时间只展开一行
-      const [picker, setPicker] = react.useState(null);
-
-      react.useEffect(() => {
-        const controller = new AbortController();
-        fetchSkillsPage(cwd ?? "", controller.signal)
-          .then((body) => {
-            setData(body);
-            setError("");
-          })
-          .catch((err) => {
-            if (!controller.signal.aborted) setError(String(err?.message ?? err));
-          });
-        return () => controller.abort();
-      }, [cwd, nonce]);
-
-      const runOp = async (payload) => {
-        if (busy) return;
-        setBusy(true);
-        setMessage("");
-        try {
-          try {
-            await postSkillOp(payload);
-          } catch (err) {
-            if (err && err.status === 409 && window.confirm(t("skOverwrite"))) {
-              await postSkillOp({ ...payload, overwrite: true });
-            } else {
-              setMessage(`${t("skOpFail")}：${err?.message ?? err}`);
-              return;
-            }
-          }
-          setMessage(payload.op === "delete" ? t("skDeleted") : t("skDone"));
-          setPicker(null);
-          setNonce((n) => n + 1);
-        } finally {
-          setBusy(false);
-        }
-      };
-
-      const groups = data
-        ? [...data.groups].sort((a, b) => (SK_GROUP_RANK[a.id] ?? 99) - (SK_GROUP_RANK[b.id] ?? 99))
-        : [];
-      const allRoots = data ? groups.flatMap((group) => group.roots) : [];
-
-      return jsxRuntime.jsxs("div", {
-        className: "dshk-sk",
-        children: [
-          jsxRuntime.jsxs("div", {
-            className: "dshk-sk-head",
-            children: [
-              jsxRuntime.jsx("span", { className: "dshk-sk-title", children: t("skillsLabel") }),
-              message !== "" ? jsxRuntime.jsx("span", { className: "dshk-sk-status", children: message }) : null,
-              error !== "" ? jsxRuntime.jsx("span", { className: "dshk-sk-status", title: error, children: `${t("skFail")}：${error}` }) : null,
-              jsxRuntime.jsx("span", { style: { flex: 1 } }),
-              jsxRuntime.jsx(KitTip, { label: t("skRefresh"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setNonce((n) => n + 1), children: "⟳" }) }),
-            ],
-          }),
-          !cwd ? jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { marginBottom: 8 }, children: t("skNoCwdHint") }) : null,
-          groups.map((group) =>
-            jsxRuntime.jsxs(
-              "div",
-              {
-                className: "dshk-sk-group",
-                children: [
-                  jsxRuntime.jsxs("div", {
-                    className: "dshk-sk-group-head",
-                    children: [
-                      jsxRuntime.jsx("span", { children: skGroupTitle(group.id) }),
-                      jsxRuntime.jsx("span", { children: `· ${group.skills.length}` }),
-                      jsxRuntime.jsx("span", {
-                        className: "dshk-sk-group-dir",
-                        title: group.roots.map((root) => root.dir).join("\n"),
-                        children: group.roots
-                          .map((root) =>
-                            root.id === "pool"
-                              ? `${root.dir}${root.exists ? "" : `（${t("skNotCreated")}）`}`
-                              : `${skRootShort(root.id)}(${root.rank})${root.exists ? "" : `（${t("skNotCreated")}）`}`,
-                          )
-                          .join(" | "),
-                      }),
-                    ],
-                  }),
-                  group.skills.length === 0
-                    ? jsxRuntime.jsx("div", { className: "dshk-sk-row dshk-sk-status", children: t("skEmpty") })
-                    : group.skills.map((skill) =>
-                        jsxRuntime.jsx(
-                          SkillRow,
-                          { skill, groupId: group.id, allRoots, cwd, busy, runOp, picker, setPicker },
-                          skill.path,
-                        ),
-                      ),
-                ],
-              },
-              group.id,
-            ),
-          ),
-          data && Array.isArray(data.providers) && data.providers.length > 0
-            ? jsxRuntime.jsxs("div", {
-                className: "dshk-sk-group",
-                children: [
-                  jsxRuntime.jsx("div", { className: "dshk-sk-group-head", children: jsxRuntime.jsx("span", { children: t("skOther") }) }),
-                  data.providers.map((item, index) => jsxRuntime.jsx(ProviderRow, { item }, `${item.name}::${index}`)),
-                ],
-              })
-            : null,
-        ],
-      });
-    }
-
-    // ─────────── 插件体 ───────────
-    function apply(ctx) {
-      // 技能设置页：官方 settings.section 是挂载期声明槽位，inject 等声明落地再注册；
-      // 行禁用（探针 404）时注销，入口从设置导航消失
-      ctx.slots.inject("settings.section", () => {
-        let unregister;
-        const update = () => {
-          if (cfgFromSnapshot(getCfgSnapshot()).available) {
-            if (!unregister) {
-              unregister = ctx.slots.register(
-                { name: "settings.section", id: "kit-skills", order: 40, label: () => t("skillsLabel") },
-                SkillsManager,
-              );
-            }
-          } else if (unregister) {
-            unregister();
-            unregister = undefined;
-          }
-        };
-        const off = subscribeCfg(update);
-        update();
-        return () => {
-          off();
-          if (unregister) {
-            unregister();
-            unregister = undefined;
-          }
-        };
-      });
-      registerNavIcon({ label: () => t("skillsLabel"), attr: "data-dshk-skill", html: SVG_SKILL_ICON });
-      injectStyles();
-      void loadCfg(); // 拉探针喂门控（404 = 行禁用，不注册设置页）
-    }
-
-    exports.apply = apply;
-    exports.inject = ["slots"];
-    // 渲染级检查与直测引用
-    exports.SkillsManager = SkillsManager;
-    exports.fetchSkillsPage = fetchSkillsPage;
-    exports.cfgFromSnapshot = cfgFromSnapshot;
-    return module.exports;
-    };
-
-    // ─────────── 官方右侧边栏注册（宿主 0.1.5+）───────────
-    // 四个功能各注册一张 dock 页类型（id=正文槽 key，kind=openTab 类型名）+
-    // pane 正文。开始页归官方 ShippedGuide（罗盘 + 胶囊条目，条目按 order 升序）：
-    // 我们只贡献 guide 条目（RB_GUIDE：日程→浏览器），order 取 100+ 垫在
-    // 全部官方条目之后（官方现值：工作区文件 10 / 新建终端 20 / 浏览器模式 30）；
-    // 文件/知识库是被动签，不给条目——入口在左侧边栏。
-    // 后台任务不做签（0.1.7 官方会话头部自带任务清单 + 实时输出 + 停止）。
-    // 服务运行期探测（见 RB_FEATURES 处注释）。
-    const RB_BODY = {
-      file: FilePaneBody,
-      vault: VaultPaneBody,
-      schedule: SchedulePaneBody,
-    };
+    // ─────────── 右栏两张功能签（官方 sidebarRightTabs）───────────
+    // 知识库是被动签（入口在左侧边栏，不给开始页条目）；日程给一条开始页条目
+    // （order 100+ 垫在官方条目之后）。服务运行期探测取用，缺服务只剩 kitUi 侧的
+    // 存在性补丁（签不出现），不写进 dsh.client.inject。
+    const VAULT_RB_TABS = [
+      { id: "dsh-kit-vault", kind: "dshk-vault", feature: "vault", titleKey: "vaultTitle" },
+      { id: "dsh-kit-schedule", kind: "dshk-schedule", feature: "schedule", titleKey: "schedTab" },
+    ];
+    const VAULT_RB_BODY = { vault: VaultPaneBody, schedule: SchedulePaneBody };
     function registerRightbar(rbCtx) {
       const tabs = rbCtx.sidebarRightTabs;
       if (!tabs || typeof tabs.register !== "function") return;
-      const RB_GUIDE = {
-        schedule: { order: 100, icon: SchedIcon, descKey: "rbGuideSchedDesc" },
-      };
-      for (const f of RB_FEATURES) {
-        const Body = RB_BODY[f.feature];
-        const guide = RB_GUIDE[f.feature];
+      const guideOf = { schedule: { order: 100, icon: SchedIcon, descKey: "rbGuideSchedDesc" } };
+      for (const f of VAULT_RB_TABS) {
+        const Body = VAULT_RB_BODY[f.feature];
+        const guide = guideOf[f.feature];
         rbCtx.effect(() => tabs.register({
           id: f.id,
           kind: f.kind,
           title: () => t(f.titleKey),
-          ...guide ? { guide: [{ order: guide.order, title: () => t(f.titleKey), description: () => t(guide.descKey), icon: guide.icon }] } : {},
-        }), `dsh-kit: rightbar tab type ${f.kind}`);
+          ...(guide ? { guide: [{ order: guide.order, title: () => t(f.titleKey), description: () => t(guide.descKey), icon: guide.icon }] } : {}),
+        }), "dsh-kit-vault: rightbar tab type " + f.kind);
         rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.pane.tab", () => rbCtx.slots.register({
           name: "sidebar.right.pane.tab",
           key: f.id,
-          // cwd（浏览器 pane 定位当前会话）经 shellShare 桥接（pane 注册发生在 effect，
-          // 渲染期的 props 由 KitSurfaces 的常驻桥供最新值）
-          inject: () => ({
-            useSessions: shellShare.current?.useSessions,
-          }),
-        }, Body)), `dsh-kit: rightbar pane body ${f.kind}`);
+        }, Body)), "dsh-kit-vault: rightbar pane body " + f.kind);
       }
     }
 
     // ─────────── 官方快捷键服务（0.1.7-rc.2+）───────────
-    // 命令注册进宿主 shortcuts 服务 = 进官方「快捷键」页（Ctrl+/）：录制（按下即记）、
-    // 冲突检测、跨设备默认值、持久化（web 落 localStorage dsh.keybindings.v1）全归官方，
-    // 本插件不再自持快捷键配置项。默认键只给 web:macos/web:windows（web 端只放行
-    // 三键、或 primary+alt/shift 两键这类组合，web:linux 不在放行表内）与 desktop 三档。
-    // 运行期 inject：老宿主没有该服务时这条命令不存在，其余功能不受影响。
-    // （终端命令的同款注册在 dsh-kit-terminal 自己那侧，位置也在官方快捷键页）
-    const KIT_SHORTCUT_DEFAULTS = (code) => ({
+    // 知识库索引开合命令注册进宿主 shortcuts 服务 = 进官方「快捷键」页（Ctrl+/）：
+    // 录制、冲突检测、持久化全归官方。默认键只给 web:macos/web:windows（web 端放行表
+    // 内）与 desktop 三档；运行期 inject，老宿主没有该服务时这条命令不存在。
+    const VAULT_SHORTCUT_DEFAULTS = (code) => ({
       "web:macos": { code, modifiers: ["primary", "alt"] },
       "web:windows": { code, modifiers: ["primary", "alt"] },
       "desktop:macos": { code, modifiers: ["primary", "alt"] },
@@ -5707,176 +5893,136 @@ ellipsis，窄列只截字不破版 */
       const shortcuts = scCtx.shortcuts;
       if (!shortcuts || typeof shortcuts.register !== "function") return;
       attachShortcutCatalog(shortcuts.catalog);
-      const commands = [
-        {
-          id: "dsh-kit.vault.toggle",
-          labelKey: "scVault",
-          aliases: ["vault", "knowledge base", "dsh-kit"],
-          code: "Slash",
-          enabled: (cfg) => cfg.vaultEnabled === true,
-          offKey: "scVaultOff",
-          run: () => shortcutRun.vault,
+      scCtx.effect(() => shortcuts.register({
+        id: "dsh-kit.vault.toggle",
+        label: () => t("scVault"),
+        aliases: ["vault", "knowledge base", "dsh-kit"],
+        defaults: VAULT_SHORTCUT_DEFAULTS("Slash"),
+        // editable/terminal 都要：聊天输入行里、终端里按都该生效（官方左右栏键同款）
+        regions: ["page", "editable", "terminal"],
+        modals: [],
+        resolve: () => {
+          if (!vAvailable) return { status: "blocked", reason: t("scVaultOff") };
+          if (!rightbarSeat.available) return { status: "blocked", reason: rootT("scNoSeat") };
+          const run = shortcutRun.vault;
+          if (run == null) return { status: "pass" };
+          return { status: "handled", run };
         },
-      ];
-      for (const cmd of commands) {
-        scCtx.effect(() => shortcuts.register({
-          id: cmd.id,
-          label: () => t(cmd.labelKey),
-          aliases: cmd.aliases,
-          defaults: KIT_SHORTCUT_DEFAULTS(cmd.code),
-          // editable/terminal 都要：聊天输入行里、终端里按都该生效（官方左右栏键同款）
-          regions: ["page", "editable", "terminal"],
-          modals: [],
-          resolve: () => {
-            if (!cmd.enabled(cfgFromSnapshot(getCfgSnapshot()))) return { status: "blocked", reason: t(cmd.offKey) };
-            if (!rightbarSeat.available) return { status: "blocked", reason: t("scNoSeat") };
-            const run = cmd.run();
-            if (run == null) return { status: "pass" };
-            return { status: "handled", run };
-          },
-        }), `dsh-kit: shortcut ${cmd.id}`);
-      }
+      }), "dsh-kit-vault: shortcut dsh-kit.vault.toggle");
     }
 
-    // ─────────── 配置页（0.1.7 plugins.row.config）───────────
-    // 插件页（侧栏「插件」）dsh-kit 行的「配置」控件进这里：页面宿主按
-    // rowId（=entry id「dsh-kit」）绑定宿主命名空间，经 props.form 给已受理值
-    // （form.state）与原子写回（form.mutate）。渲染走官方表单原语
-    // （SettingsForm/SettingsValueField/Switch/SegmentedTabs，与图标同一 require），
-    // SegmentedTabs 按 KIT_CFG_GROUPS 页签分组。草稿本地自持（bool 记布尔值，
-    // number/string 文本暂存、保存期解析），只有「保存」才写入——离开页面即丢
-    // （SettingsForm 卸载自动 onDiscard）；清空文本保存 = unset 回 schema 默认
-    // （快捷键消费端本就「非法/空 → 回默认」）。字段清单与 src/index.ts 的 Config
-    // schema 同源（render-check 钉住）。
-    const KIT_CFG_FIELDS = [
-      { key: "phoneEnabled", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneEnabled", hintKey: "kcfgPhoneEnabledHint" },
-      { key: "phonePort", type: "number", min: 1, max: 65535, group: "kcfgGroupPhone", labelKey: "kcfgPhonePort", hintKey: "kcfgPhonePortHint" },
-      { key: "phoneRemoteDomain", type: "string", group: "kcfgGroupPhone", labelKey: "kcfgPhoneRemoteDomain", hintKey: "kcfgPhoneRemoteDomainHint" },
-      { key: "phoneKeepGatewayOn", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneKeepGatewayOn", hintKey: "kcfgPhoneKeepGatewayOnHint" },
-      { key: "vaultEnabled", type: "bool", group: "kcfgGroupVault", labelKey: "kcfgVaultEnabled", hintKey: "kcfgVaultEnabledHint" },
-      { key: "vaultRoot", type: "string", group: "kcfgGroupVault", labelKey: "kcfgVaultRoot", hintKey: "kcfgVaultRootHint" },
-    ];
-    /** KIT_CFG_FIELDS 的分组顺序（组名键也用于 t() 取组标题/页签文案） */
-    const KIT_CFG_GROUPS = ["kcfgGroupPhone", "kcfgGroupVault"];
+    // ─────────── 组件常驻壳（shell.overlay）───────────
+    // 知识库单实例（侧栏目录 / 右栏页签任一在场即挂载，两侧 portal 自取）+ 对话文件
+    // 点击路由的渲染期状态 + 快捷键动作闭包（闭包要最新会话与 cwd，不能注册期固定）。
+    function VaultShell(props) {
+      const ui = useKitUi();
+      const sessionRow = useCurrentRow(props);
+      const cwd = typeof sessionRow?.cwd === "string" && sessionRow.cwd.trim() !== "" ? sessionRow.cwd : null;
+      // 对话文件点击的知识库路由状态：当前会话 cwd 每次渲染同步，供模块级 capture
+      // 拦截器读取（组件不在场时拦截器整个不注册）
+      chatPreviewHook = { cwd, vaultOn: true };
+      shortcutRun.vault = () => setKitUi(toggleVaultEntry(getKitUi()));
+      react.useEffect(() => () => { chatPreviewHook = null; }, []);
+      if (!(ui.vaultOpen || ui.vaultIdxOpen)) return null;
+      return jsxRuntime.jsx("div", { style: { display: "none" }, children: jsxRuntime.jsx(VaultView, {}) });
+    }
 
-    // 配置页骨架（草稿/保存/官方表单接线）已收进 dock：这里只喂本包字段表与词条
-    const KitConfigPage = dock.createConfigPage({
-      fields: KIT_CFG_FIELDS,
-      groups: KIT_CFG_GROUPS,
-      t,
-      onSaved: async () => {
-        try {
-          const body = await kitJson("/dsh-kit/config");
-          if (body && typeof body === "object") applyConfigSnapshot(body);
-        } catch {
-          // 重拉失败不动快照：下次页面刷新自然取到
-        }
-      },
-    });
-
-    // ─────────── 插件体 ───────────
-    function apply(ctx) {
-      slotsCtx = ctx;
-      kitBase.apply(ctx); // 底座服务捕获（官方右栏 sidebarRight）
-      // 配置页（0.1.7）：挂进插件页的 plugins.row.config 槽，key 由页面宿主按
-      // <包名>#<行id> 匹配（本插件单行，行 id = kit）。命名空间未伺服时页面
-      // 宿主不传 form，组件自带降级文案；注册随本 entry 生命周期生灭。
-      ctx.slots.inject("plugins.row.config", () => ctx.slots.register(
-        { name: "plugins.row.config", key: "dsh-kit#kit" },
-        KitConfigPage,
-      ));
-
-      // 会话监视（429 续跑/死循环/通知）已随组件化迁入 dsh-kit-monitor 的 client 半边
-
-      // ── 官方文件预览的鸿蒙兼容兜底（依赖宿主断言，升级复核见知识库「DSH 插件开发坑」）──
-      // OpenHarmony 等引擎有两个叠加缺陷，缺一个就全站正常、只在真机发作：
-      // ① 自定义 scheme 的 URL 解析：dsh-resource://file/… 的 hostname 恒为空 → 宿主
-      //    client-resources 的 protocolOf 返回 undefined → 资源查找恒 none，预览恒报
-      //    「文件资源服务不可用」；
-      // ② boot 对 api-workspace-files 条目激活失败且**静默**（无报错无日志），file 协议
-      //    provider 无人注册。
-      // 兜底两步：shim 把 providerOf(undefined) 兜到 file provider；补注册在 boot 结束后
-      // 手动跑一次该模块的 apply（合成最小 ctx，effect 立即执行）。**必须晚于 boot**：
-      // boot 中途物化该模块会把宿主的静默激活失败变成「Failed to load plugins」横幅。
-      // 健康浏览器：特性检测不过 + providers 已有 file，两步都空转。
-      ctx.inject(["resources"], (rc) => {
-        try {
-          const reg = rc.resources;
-          if (!reg || typeof reg.providerOf !== "function" || !(reg.providers instanceof Map)) return;
-          let brokenUrlHost = false;
-          try { brokenUrlHost = new URL("dsh-resource://file/x").hostname === ""; } catch (e) { brokenUrlHost = true; }
-          if (!brokenUrlHost || reg.__dshkShimmed) return;
-          reg.__dshkShimmed = true;
-          const origProviderOf = reg.providerOf.bind(reg);
-          reg.providerOf = function (protocol) {
-            return protocol === void 0 ? reg.providers.get("file") : origProviderOf(protocol);
-          };
-        } catch (e) { /* 无害 */ }
-      });
-      ctx.inject(["resources", "remote"], (svc) => {
-        setTimeout(() => {
-          try {
-            if (svc.resources.providers && svc.resources.providers.has("file")) return;
-            const mod = require("@deepseek-ai/dsh-api-workspace-files");
-            if (!mod || typeof mod.apply !== "function") return;
-            mod.apply({
-              resources: svc.resources,
-              remote: svc.remote,
-              effect: (fn) => { fn(); },
-            });
-          } catch (e) { /* 激活失败不可挽时维持宿主原状：预览报「文件资源服务不可用」 */ }
-        }, 5000);
-      });
-      injectStyles();
-      // 拉一次生效配置喂功能门控（见模块顶 cfgSnapshot 注释）；失败保持内置默认
-      kitJson("/dsh-kit/config")
-        .then((body) => {
-          if (body && typeof body === "object") applyConfigSnapshot(body);
-        })
-        .catch(() => {});
-      // 全帧浮层宿主：面板渲染、输入框入口与技能页的座位门控、快捷键监听全在
-      // KitSurfaces（根作用域常驻，fiber 上下文内做动态 register/dispose）。
+    exports.inject = ["slots"];
+    // 行开关即总开关：宿主半边不物化时 /dsh-kit-vault/config 404，这里整体不注册
+    //（侧栏索引、右栏知识库/日程签、输入行入口、对话路径改投、快捷键全不出现）。
+    exports.apply = async (ctx) => {
+      if (!(await loadCfg())) return;
+      // 本组件的两张 dock 签 kind 补登（openFeatureDock/closeRightbarTab 按 feature 查）
+      dock.tabKinds.vault = { id: "dsh-kit-vault", kind: "dshk-vault" };
+      dock.tabKinds.schedule = { id: "dsh-kit-schedule", kind: "dshk-schedule" };
+      // 座对象（root 只读，本组件填字段）：侧栏索引视图 + 文件树行点击的 vault 改道
+      dock.vaultView.renderer = ({ owner }) => jsxRuntime.jsx(SidebarVaultIndex, { ...(owner ?? {}) });
+      dock.vaultRoute.open = (path) => {
+        if (vaultRootHint === null || !isPathInsideVaultRoot(vaultRootHint, path)) return false;
+        openVaultPathFromClick(path);
+        return true;
+      };
+      // vault root 预取：文件树/对话点击的判定同步读缓存，等点击时再取来不及
+      //（索引端点宿主侧有 mtime 缓存，零成本）
+      void ensureVaultRootHint();
+      // 输入行入口（conversation.input.left，order 12：文件树 10 → 知识库 → 终端 14）
+      ctx.slots.inject("conversation.input.left", () =>
+        ctx.slots.register({ name: "conversation.input.left", id: "dsh-kit-vault", order: 12 }, VaultEntry));
+      // 常驻壳（order 910：根壳 900 之后）
       ctx.slots.inject("shell.overlay", () =>
-        ctx.slots.register(
-          { name: "shell.overlay", id: "dsh-kit-surfaces", order: 900 },
-          KitSurfaces,
-        ),
-      );
-      // 官方右侧边栏：五个功能 dock 签 + 引导页清单。只在宿主
-      // 提供该服务时生效（缺服务 = 只剩 getKitUi() 存在性补丁，签不出现）。用 inject
-      // 等它就绪而非直接读——官方右栏与本插件的客户端加载顺序不保证
-      //（sidebarRight 与在场信号的捕获在 kitBase.apply，本处只管右栏签与其它服务）
-      if (typeof ctx.inject === "function") {
-        ctx.inject(["sidebarRightTabs"], registerRightbar);
-        // 官方 sessions 服务捕获：openOfficialFile 拼文件地址要当前会话 id 与 cwd
-        ctx.inject(["sessions"], (sctx) => { sessionsSvc = sctx.sessions; });
-        // 官方快捷键服务（0.1.7-rc.2+）：知识库命令注册进官方页
-        ctx.inject(["shortcuts"], registerShortcuts);
-      } else {
-        registerRightbar(ctx);
-      }
-      // 导航图标替换是点击驱动的轻量方案：打开设置/面板内切换都源于一次 click
-      document.addEventListener("click", scheduleNavIconSwap, true);
-      // 对话文件点击的知识库路由：vault 内路径改道知识库标签，其余放行官方
-      //（门控见 onChatOpenFileClick 与 chatPreviewHook）
+        ctx.slots.register({ name: "shell.overlay", id: "dsh-kit-vault", order: 910 }, VaultShell));
+      // 右栏两张签 + pane 正文
+      ctx.inject(["sidebarRightTabs"], registerRightbar);
+      // 对话文件点击的知识库路由（vault 内路径改道知识库标签，其余放行官方）
       document.addEventListener("click", onChatOpenFileClick, true);
-      // 官方文件预览头部的下载按钮：预览根 mount（loading→text 整根重建）与路径
-      // title 变化（meta 后到才补成绝对路径）都要接住，全走同一防抖扫描
-      if (typeof MutationObserver !== "undefined" && document.documentElement) {
-        new MutationObserver(schedulePreviewDownloadScan).observe(document.documentElement, {
-          childList: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: ["title"],
-        });
-        scanPreviewDownload();
+      // 官方快捷键服务：知识库索引开合
+      ctx.inject(["shortcuts"], registerShortcuts);
+      // 配置页挂本组件行：槽位 key = <包名>#<行id>——两种包名口径各挂一枚
+      //（页面按精确 key 匹配，未命中的那枚永远不渲染）
+      for (const key of ["dsh-kit#vault", "dsh-kit-vault#vault"]) {
+        ctx.slots.inject("plugins.row.config", () =>
+          ctx.slots.register({ name: "plugins.row.config", key }, VaultConfigPage));
       }
-      // 组件半边激活（单包收回的 files/monitor/terminal/skills/search/browser）：与多包时代等价——
-      // client 入口注册总是发生，功能存在性由各组件自己的配置门控（行禁用只摘宿主半边端点）
-      for (const componentMod of [exports.files, exports.monitor, exports.terminal, exports.skills, exports.search, exports.browser]) {
-        if (componentMod && typeof componentMod.apply === "function") componentMod.apply(ctx);
-      }
-    }
+    };
+
+    // 渲染级检查取用
+    exports.VaultShell = VaultShell;
+    exports.VaultView = VaultView;
+    exports.VaultRootView = VaultRootView;
+    exports.VaultPaneBody = VaultPaneBody;
+    exports.SchedulePaneBody = SchedulePaneBody;
+    exports.ScheduleView = ScheduleView;
+    exports.ScheduleTasksCard = ScheduleTasksCard;
+    exports.VaultEntry = VaultEntry;
+    exports.VaultDialog = VaultDialog;
+    exports.VaultPagePane = VaultPagePane;
+    exports.RteEditor = RteEditor;
+    exports.SidebarVaultIndex = SidebarVaultIndex;
+    exports.VaultConfigPage = VaultConfigPage;
+    exports.VAULT_CFG_FIELDS = VAULT_CFG_FIELDS;
+    exports.vCfgFromSnapshot = vCfgFromSnapshot;
+    exports.getVSnap = getVSnap;
+    exports.loadCfg = loadCfg;
+    exports.registerRightbar = registerRightbar;
+    exports.registerShortcuts = registerShortcuts;
+    exports.VaultIcon = VaultIcon;
+    exports.SchedIcon = SchedIcon;
+    exports.vaultSearchHits = vaultSearchHits;
+    exports.vaultSplitFrontmatter = vaultSplitFrontmatter;
+    exports.resolveVaultLink = resolveVaultLink;
+    exports.vaultBacklinks = vaultBacklinks;
+    exports.vaultOutline = vaultOutline;
+    exports.vaultHeadingSlug = vaultHeadingSlug;
+    exports.vaultTabsRetarget = vaultTabsRetarget;
+    exports.vaultTabsClose = vaultTabsClose;
+    exports.vaultDirChoices = vaultDirChoices;
+    exports.vaultCiteText = vaultCiteText;
+    exports.pathUnder = pathUnder;
+    exports.absParent = absParent;
+    exports.resolveMdLink = resolveMdLink;
+    exports.isDocHref = isDocHref;
+    exports.readPosStore = readPosStore;
+    exports.recordReadPos = recordReadPos;
+    exports.restoreReadPos = restoreReadPos;
+    exports.ensureVaultRootHint = ensureVaultRootHint;
+    exports.openVaultPathFromClick = openVaultPathFromClick;
+    exports.relUnder = relUnder;
+    exports.pathSegs = pathSegs;
+    exports.isPathInsideVaultRoot = isPathInsideVaultRoot;
+    exports.openVaultPageAndDock = openVaultPageAndDock;
+    exports.onChatOpenFileClick = onChatOpenFileClick;
+    exports.timerMinsOfDT = timerMinsOfDT;
+    exports.schedAssignLanes = schedAssignLanes;
+    exports.useHostSlot = useHostSlot;
+    exports.vaultSideSlot = vaultSideSlot;
+    exports.vaultPaneSlot = vaultPaneSlot;
+    exports.toggleVaultEntry = toggleVaultEntry;
+    exports.openVaultEntry = openVaultEntry;
+    exports.vaultSearchOpen = dock.vaultSearch;
+    exports.shortcutRun = shortcutRun;
+
+    return module.exports;
+};
 
     // ─────────── 组件半边模块（单包收回；原 dsh-kit-files/monitor/terminal 独立 bundle）───────────
     // 多包时代组件是独立 client entry，经 external require("dsh-kit") 取本包导出
@@ -10321,8 +10467,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       dockBrowser: "内置浏览器",
       rbGuideBrowserDesc: "agent 驱动的真实浏览器，可实时观看与接管",
       browserStarting: "正在拉起浏览器…",
-      kcfgBrowserEnabled: "内置浏览器",
-      kcfgBrowserEnabledHint: "内置浏览器工具与面板；改后重启生效。",
       kcfgChatOpenLinkInBrowser: "对话链接改投内置浏览器",
       kcfgChatOpenLinkInBrowserHint: "对话里点 http(s) 链接改在内置浏览器打开。",
       kcfgHideOfficialBrowserEntry: "隐藏官方「浏览器」入口",
@@ -10344,8 +10488,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       dockBrowser: "Built-in browser",
       rbGuideBrowserDesc: "Agent-driven real browser you can watch live and take over",
       browserStarting: "Starting browser…",
-      kcfgBrowserEnabled: "Built-in browser",
-      kcfgBrowserEnabledHint: "Built-in browser tools and panel; takes effect after a restart.",
       kcfgChatOpenLinkInBrowser: "Open chat links in the built-in browser",
       kcfgChatOpenLinkInBrowserHint: "http(s) links in chat open in the built-in browser.",
       kcfgHideOfficialBrowserEntry: "Hide the official Browser entry",
@@ -11148,6 +11290,8 @@ body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{displ
     //（面板、右栏签、链接改投、官方入口掩码全不出现）。
     exports.apply = async (ctx) => {
       if (!(await loadCfg())) return;
+      // 本组件的 dock 签 kind 补登（openFeatureDock/closeRightbarTab 按 feature 查）
+      dock.tabKinds.browser = { id: "dsh-kit-browser", kind: "dshk-browser" };
       injectStyles();
       // 右栏功能签：官方 sidebarRightTabs 是挂载期声明的服务，inject 等它就绪
       ctx.inject(["sidebarRightTabs"], registerRightbar);
@@ -12033,8 +12177,11 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.shellShare = shellShare;
     exports.currentComposerShell = currentComposerShell;
     exports.chatMentionText = chatMentionText;
-    exports.pathSegs = pathSegs;
-    exports.relUnder = relUnder;
+    // 主行文案与官方文件签打开（组件半边的共用词条回落 rootT、资料库文件开官方右栏）
+    exports.t = t;
+    exports.openOfficialFile = openOfficialFile;
+    exports.docChips = docChips;
+    exports.dswIcon = dswIcon;
     exports.sidebarBtn = sidebarBtn;
     exports.expandSidebarNow = expandSidebarNow;
     exports.TreeRowMenu = TreeRowMenu;
@@ -12044,14 +12191,15 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.OfficialIcon = OfficialIcon;
     exports.openTreeFile = openTreeFile;
     exports.registerNavIcon = registerNavIcon;
-    // 组件模块执行（files/monitor/terminal/skills/search）：必须在 kitBase 浅拷贝与 root 设施
-    // 都挂上 exports 之后——组件体执行期会读 dock.createConfigPage 等成员
+    // 组件模块执行（files/monitor/terminal/skills/search/browser/vault）：必须在 kitBase
+    // 浅拷贝与 root 设施都挂上 exports 之后——组件体执行期会读 dock.createConfigPage 等成员
     exports.files = filesModule(exports, require);
     exports.monitor = monitorModule(exports, require);
     exports.terminal = terminalModule(exports, require);
     exports.skills = skillsModule(exports, require);
     exports.search = searchModule(exports, require);
     exports.browser = browserModule(exports, require);
+    exports.vault = vaultModule(exports, require);
     exports.inject = ["slots"];
     exports.apply = apply;
     return module.exports;

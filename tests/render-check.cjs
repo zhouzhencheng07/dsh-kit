@@ -1,7 +1,9 @@
 // 渲染级验证：桩掉 react hooks，直接函数调用 dsh-kit 的组件
-// （TreeNode/FileTreePanel/DiffPane/FileTreeEntry/KitSurfaces/GitChangesPanel/
-// VaultView/KitConfigPage），跑完整渲染体。组件（终端/技能）的同类检查在
-// tests\render-check-terminal.cjs（组件已拆到 packages\dsh-kit-terminal）。
+// （KitSurfaces/KitConfigPage/FilePaneBody/PhoneSection 等根侧渲染体），跑完整渲染体。
+// 组件各自的分册在 tests\render-check-<组件>.cjs（comps = dockExports.<组件>）。
+// 知识库/日程的行为级检查留在本文件：harness 末尾把 exports.vault 并进 comps，
+// 直测的就是组件里那一份代码（VaultRootView/VaultPagePane/ScheduleView/纯函数）；
+// 组件契约与装配门控另见 tests\render-check-vault.cjs。
 // ⚠️ 盲区：桩不会重渲染（effect 不执行、state 不更新），依赖 effect 产出后才走到的
 // 渲染分支（如 FileTreePanel 的 entries.map 行）覆盖不到——残留变量藏在那种行里会
 // 逃过本检查。可疑残留请配合全文扫描排查。
@@ -103,7 +105,7 @@ const RETURN = "return module.exports;";
 const rootReturn = body.lastIndexOf(RETURN);
 if (rootReturn < 0) { console.log("FATAL: no root return"); process.exit(2); }
 const wrapper = body.slice(0, rootReturn) +
-  "return Object.assign({ vaultSideSlot, vaultPaneSlot, VaultEntry, PhoneSection, KitSurfaces, TreeRowMenu, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, getKitUi, setKitUi, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, KitConfigPage, KIT_CFG_FIELDS, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref, registerShortcuts, shortcutRun, rightbarSeat, useRightbarSeat, attachSeatSignal: dock.attachSeatSignal }, kitBase);" +
+  "return Object.assign({ PhoneSection, KitSurfaces, TreeRowMenu, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, sidebarViewPatch, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, getKitUi, setKitUi, KitConfigPage, KIT_CFG_FIELDS, FilePaneBody, openFeatureDock, openFileAndDock, closeRightbarTab, docChips, openOfficialFile, openTreeFile }, kitBase, exports.vault);" +
   body.slice(rootReturn + RETURN.length);
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -219,43 +221,22 @@ const renderCfgTab = (group, form) => {
 };
 const cfgSw = () => callLog.filter((c) => c[1] === primStub.Switch);
 const cfgVf = () => callLog.filter((c) => c[1] === primStub.SettingsValueField);
-out = renderCfgTab(null, fakeForm); // 默认首组（浏览器功能开关已随组件迁走，首组是手机访问）
+out = renderCfgTab(null, fakeForm); // 主行只剩手机访问一组（知识库随组件迁 dsh-kit/vault）
 const cfgTabs = callLog.find((c) => c[1] === primStub.SegmentedTabs);
-check("KitConfigPage SegmentedTabs：2 组页签、默认首组、带可访问名", !!cfgTabs && cfgTabs[2].items.length === 2 && cfgTabs[2].value === "kcfgGroupPhone" && typeof cfgTabs[2].label === "string" && cfgTabs[2].items.every((it) => typeof it.label === "string" && it.label.length > 0 && it.id === "dshk-cfgp-tab-" + it.value && it.panelId === "dshk-cfgp-panel-" + it.value));
-cfgTabs[2].onChange("kcfgGroupVault");
-check("KitConfigPage 页签切换落 state", stateStore.get(3) === "kcfgGroupVault");
+check("KitConfigPage 单组页签：不摆 SegmentedTabs（页签只在一组以上时出现）", cfgTabs === undefined);
 const cfgFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
 check("KitConfigPage SettingsForm 框架：labels/state/保存动作齐全", !!cfgFrm && typeof cfgFrm[2].onSave === "function" && typeof cfgFrm[2].onDiscard === "function" && cfgFrm[2].state.available === true && cfgFrm[2].state.writable === true && cfgFrm[2].state.dirty === false && !!cfgFrm[2].labels.save && !!cfgFrm[2].labels.readOnly && !!cfgFrm[2].labels.saveFailed);
 const cfgPanel = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-cfgp-fields");
 check("手机访问页签（默认首组）：2 Switch + 2 字段、面板 aria 挂到当前组", cfgSw().length === 2 && cfgVf().length === 2 && !!cfgPanel && cfgPanel[2].id === "dshk-cfgp-panel-kcfgGroupPhone" && cfgPanel[2].role === "tabpanel");
 check("Switch 行回显布尔值且带说明文案（首位是「手机访问」入口）", cfgSw()[0][2].checked === true && ["「手机访问」页入口", "手机访问", "Phone access"].some((s) => String(cfgSw()[0][2].label).includes(s)));
 check("手机访问页签字段：数值回显受理值、文本回显受理域名", cfgVf().some((c) => c[2].id === "dshk-cfgp-phonePort" && c[2].text === "3091" && c[2].numeric === true && c[2].overridden === false) && cfgVf().some((c) => c[2].id === "dshk-cfgp-phoneRemoteDomain" && c[2].text === "dsh.example.com"));
-out = renderCfgTab("kcfgGroupVault", fakeForm);
-check("知识库页签：1 Switch + 1 文本", cfgSw().length === 1 && cfgVf().length === 1);
 // 10) 键位改由宿主 shortcuts 服务持有（0.1.7-rc.2+ 官方「快捷键」页）：注册面在
 //     client 半边——命令进官方页即自动获得录制/冲突检测/跨设备默认值/持久化。
 //     这里直调注册函数（不经 apply，避开 apply 的联网/定时器副作用）。终端命令的
 //     同款注册随组件迁 dsh-kit-terminal（tests\render-check-terminal.cjs）。
 {
-  const registered = [];
-  comps.registerShortcuts({
-    shortcuts: { register: (cmd) => { registered.push(cmd); return () => {}; } },
-    effect: (fn) => { fn(); },
-  });
-  const byId = (id) => registered.find((c) => c.id === id);
-  const vault = byId("dsh-kit.vault.toggle");
-  const def = (cmd) => (cmd && cmd.defaults["web:windows"]) || {};
-  check("知识库命令注册进官方 shortcuts（id/label/别名），终端命令不在本包", !!vault && typeof vault.label === "function" && typeof vault.label() === "string" && Array.isArray(vault.aliases) && !byId("dsh-kit.terminal.toggle"));
-  check("默认键：知识库 Ctrl+Alt+/（primary+alt 口径，web 放行表内）", def(vault).code === "Slash" && String(def(vault).modifiers) === "primary,alt" && !!vault.defaults["desktop:windows"] && !!vault.defaults["web:macos"]);
-  check("region 覆盖 page/editable/terminal（聊天输入行与终端里都生效）", ["page", "editable", "terminal"].every((r) => vault.regions.includes(r)) && vault.modals.length === 0);
-  // resolve 门控：功能开关关 → blocked 带说明（开态路径由组件包各自的 render-check 钉，
-  // 它们能预置自家配置快照）；run 接线只验证它取的是浮层渲染期刷新的 shortcutRun
-  const ran = [];
-  comps.shortcutRun.vault = () => ran.push("vault");
-  const vaultOff = vault.resolve({ region: "page", modal: null }); // 内置默认 vaultEnabled=false
-  check("功能关：resolve blocked 并带说明（不吞键也不动作）", vaultOff.status === "blocked" && typeof vaultOff.reason === "string" && vaultOff.reason.length > 0 && ran.length === 0);
-  check("resolve 的 run 接的是 KitSurfaces 渲染期刷新的 shortcutRun（开态路径由组件包各自的 render-check 钉）", /run: \(\) => shortcutRun\.vault/.test(src));
-  comps.shortcutRun.vault = null;
+  // 命令注册（知识库 Ctrl+Alt+/）随组件迁 dsh-kit/vault，见 tests\render-check-vault.cjs；
+  // 这里只钉主行共用的悬停气泡与键位目录（KitTip/attachShortcutCatalog 在 kitBase）
   // 悬停气泡复用官方 Tooltip（名称 + 键帽），键位从宿主目录活读：官方页里改了键，
   // 悬停当场跟着变（不是把默认键写死在按钮上）
   const scRows = [{ id: "dsh-kit.vault.toggle", keys: ["Ctrl", "+", "Alt", "+", "/"], aria: "Control+Alt+/" }];
@@ -280,18 +261,16 @@ const savingForm = {
 };
 stateSeq = 0;
 stateStore.clear();
-stateStore.set(0, { phonePort: { text: "4" }, phoneRemoteDomain: { text: "" }, vaultEnabled: { set: false }, vaultRoot: { text: "D:/notes" } });
-stateStore.set(3, "kcfgGroupVault");
+stateStore.set(0, { phonePort: { text: "4" }, phoneRemoteDomain: { text: "" } });
+stateStore.set(3, "kcfgGroupPhone");
 callLog = [];
 out = comps.KitConfigPage({ view: "page", form: savingForm });
 const saveFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
 check("KitConfigPage 有草稿时 dirty 置位", !!saveFrm && saveFrm[2].state.dirty === true);
 saveFrm[2].onSave();
-check("保存 ops：number set / 清空 unset / bool set / 文本 set（按字段表序）", JSON.stringify(capturedOps) === JSON.stringify([
+check("保存 ops：number set / 清空 unset（按字段表序）", JSON.stringify(capturedOps) === JSON.stringify([
   { op: "set", path: ["phonePort"], value: 4 },
   { op: "unset", path: ["phoneRemoteDomain"] },
-  { op: "set", path: ["vaultEnabled"], value: false },
-  { op: "set", path: ["vaultRoot"], value: "D:/notes" },
 ]));
 check("保存带读取时 revision 围栏", capturedRev === 7);
 // 非法数字草稿：字段 invalid + 框架 invalid 置位（SettingsForm blocked 挡保存）
@@ -318,7 +297,7 @@ stateSeq = 0;
 stateStore.clear();
 callLog = [];
 out = comps.KitSurfaces({});
-check("KitSurfaces 渲染无异常（任务签已退役）", !!out && typeof out === "object");
+check("KitSurfaces 渲染无异常（根壳只做座位门控，面板本体归组件壳）", out === null);
 
 // 6.4) 日程模块（只读面板）：ScheduleView 初始态 / 计时段定位纯函数 / 并行分列
 callLog = [];
@@ -1090,7 +1069,7 @@ check("openFileTab 从 SCM 重开同路径清除钉定", commitReopen.files[0].c
 comps.setKitUi({ terminals: [], activeTermId: null, termDockOpen: false });
 callLog = [];
 out = comps.KitSurfaces({});
-check("KitSurfaces 无hooks渲染无异常", !!out && typeof out === "object");
+check("KitSurfaces 无hooks渲染无异常（根壳不渲染面板本体）", out === null);
 // 更改视图/提交图谱/分支浮层直测随组件迁 dsh-kit-files（tests\render-check-files.cjs）；
 // 技能管理页直测随组件迁 dsh-kit-skills（tests\render-check-skills.cjs）
 callLog = [];
@@ -1098,7 +1077,11 @@ const fakeHooks = {
   useSessions: (sel) => sel({ byId: { s1: { id: "s1", cwd: "C:/x", retainedBy: { mainView: 1 } } } }),
 };
 out = comps.KitSurfaces(fakeHooks);
-check("KitSurfaces 带cwd渲染无异常", !!out && typeof out === "object");
+check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out === null);
+// 主行自己仍有渲染体（手机访问设置页）：直调一次确认产出 JSX
+callLog = [];
+out = comps.PhoneSection({});
+check("PhoneSection 渲染无异常（主行设置页）", !!out && typeof out === "object");
 
 
 // 10c-10f）429 续跑器（G）/ 会话通知（N）/ 收尾判定 / 压缩完成（C）判定核心
@@ -1141,9 +1124,8 @@ check("KitSurfaces 带cwd渲染无异常", !!out && typeof out === "object");
     compared++;
     if (comps.CFG_DEFAULTS[key] !== expected) drift.push(key + "(bundle=" + comps.CFG_DEFAULTS[key] + ",host=" + expected + ")");
   }
-  // 浏览器三项（browserEnabled/chatOpenLinkInBrowser/hideOfficialBrowserEntry）已随组件
-  // 迁走，本包可比对项剩 5（vaultRoot 默认是表达式，不比对）。
-  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 5);
+  // 浏览器 / 知识库（含 vaultRoot）已随组件迁走，主行可比对项 = 手机访问 4 项。
+  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 4);
 }
 // 过时文案清理：现行说明不得出现「侧栏底部『任务』钮」、日程索引标题键、搜索默认 5
 check(

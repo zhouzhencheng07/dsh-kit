@@ -223,6 +223,7 @@ async function checkApply() {
   check("壳层常驻事件源挂 shell.overlay（id 稳定）", on.registered.some((s) => s && s.name === "shell.overlay" && s.id === "dsh-kit-browser"));
   check("右栏签注册：页类型 kind=dshk-browser + pane 正文槽位", on.registered.some((s) => s && s.kind === "dshk-browser" && s.id === "dsh-kit-browser") && on.slotInjects.includes("sidebar.right.pane.tab"));
   check("槽位经 slots.inject 等声明落地（不直接 register）", on.slotInjects.every((k) => typeof k === "string" && k.length > 0));
+  check("dock 签 kind 补登（openFeatureDock/closeRightbarTab 按 feature 查 tabKinds）", dockExports.tabKinds.browser.kind === "dshk-browser");
 }
 
 // 6) 源哨兵：宿主半边搬进组件目录、主包与 client 摘干净、端点与配置齐备
@@ -255,7 +256,7 @@ async function checkApply() {
     !hostCode.includes("BrowserService") && !hostCode.includes("buildBrowserTools") &&
       !hostCode.includes("/dsh-kit/browser") && !hostCode.includes("WebSocketServer"),
   );
-  check("dsh-tools 的 defineTool 契约与加载归 core/tools.ts（浏览器与日程共用）", coreSrc.includes("export async function loadToolsModule") && read("src/schedule.ts").includes("from './core/tools.ts'"));
+  check("dsh-tools 的 defineTool 契约与加载归 core/tools.ts（浏览器与知识库·日程组件共用）", coreSrc.includes("export async function loadToolsModule") && read("src/vault/schedule.ts").includes("from '../core/tools.ts'"));
   check(
     "组件入口自持服务/工具/端点/配置，且带 dsh-tools 不可达降级",
     compSrc.includes("name = 'dsh-kit/browser'") && compSrc.includes("new BrowserService(") &&

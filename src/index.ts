@@ -1,35 +1,25 @@
-// dsh-kit — DSH 页面能力插件包（宿主半边）
+// dsh-kit — DSH 页面能力套件（主行宿主半边）
 //
-// 当前能力：
-//   文件树（file tree）——GET /dsh-kit/tree?path=<绝对目录> 返回该层
-//     目录+文件的 JSON 列表（官方 browse RPC 只列目录不列文件，故自建）；
-//   文件预览（file preview）——GET /dsh-kit/read?path=<绝对文件> 读取文本
-//     内容（限长 + 二进制探测），浏览器端在右侧 details 列展示。
+// 本文件只剩主行自己那点装配：手机访问网关（./phone-gateway.ts）、vendor 静态资源
+// （xterm / qrcode / 知识库阅读器的 TipTap 与 KaTeX）、主行生效配置快照
+// GET /dsh-kit/config、OpenCode Go 会话头注入（./core/opencode-session.ts）。
+// 页面能力本身已按组件行拆开（cordis.patch.yml 里 insert 七行，行 name = 包名 +
+// exports 子路径）：dsh-kit/files（文件树 · 源代码管理）、dsh-kit/skills（技能）、
+// dsh-kit/terminal（终端）、dsh-kit/monitor（用量与监视）、dsh-kit/search（网页搜索）、
+// dsh-kit/browser（内置浏览器）、dsh-kit/vault（知识库 · 日程）——行关闭 = 该子模块
+// 不物化 = 它的端点与 agent 工具一起消失。
 //
-// 浏览器半边（client/bundle.js）：终端/文件树入口按钮注册在对话输入框工具行
-// （conversation.input.left），面板本体挂 shell.overlay 全帧浮层；终端开合底部
-// 停靠面板（Ctrl+`），文件树临时接管侧边栏浏览区（sidebar.workspaces 单槽）。
-// 插件配置页（Config schema 声明式模型，编辑面在插件页本行「配置」）提供功能开关
-// 与快捷键自定义；开关都由浏览器端消费（宿主侧的门控在启动期读同一份配置）。
+// 浏览器半边（client/bundle.js）：各功能入口注册在对话输入框工具行
+// （conversation.input.left），面板本体挂 shell.overlay 与官方右栏签；组件各自的
+// client 面住在 bundle 尾部的 xModule 隔离壳里，激活由根 apply 尾部循环触发。
+// 插件配置页（Config schema 声明式模型）分两层：主行管手机访问（本文件 Config），
+// 组件行管自己的细粒度开关（如知识库的 vaultRoot）。
 //
-// 宿主半边（本文件）挂这些端点（webserver 默认只绑 loopback）：
-//   1) 静态 /dsh-kit/vendor/* —— xterm 官方预编译 UMD，按需加载；
-//   2) GET /dsh-kit/tree?path=… —— 单层目录列表（含文件），只读；
-//   3) GET /dsh-kit/read?path=… —— 单文件文本内容，只读；
-//   4) GET /dsh-kit/raw?path=… —— 原始字节透传（扩展名白名单 + Range/206；官方
-//      文件预览头部的「下载到本机」与 vault 图片/附件走这里）；
-//   5) POST /dsh-kit/fs/op —— 文件树新建/重命名/删除（删除优先移入回收站）；
-//   6) GET /dsh-kit/git/status|diff|log|show|branch、POST /dsh-kit/git/init|op ——
-//      源代码管理。status 含分支/领先信息（branch/upstream/ahead/behind），
-//      log 是提交图谱（git log --all --graph），show 是单个提交详情，
-//      branch 是本地分支列表；op 含 stage/unstage/discard/commit/push/
-//      branchCreate/branchSwitch/branchDelete。
-//   内置浏览器（agent 工具 + WebSocket 面板端点 + /dsh-kit/browser/open）与
-//   日程 agent 工具之外的浏览器能力已随组件化迁入 dsh-kit/browser（src/browser/）。
-//
-// 终端自 0.1.6 起不走本插件：dock 界面仍在（client 半边），引擎换官方
-// webTerminals 服务（PTY 归宿主：系统用户权限、刷新不丢、shell 选择），宿主半边
-// 不再需要 node-pty 与终端端点。
+// 本行端点（webserver 默认只绑 loopback）：
+//   GET  /dsh-kit/config            —— 主行生效配置快照（client 功能门控的数据源）
+//   GET  /dsh-kit/vendor/*          —— xterm / qrcode / richeditor / katex 静态资源
+//   GET  /dsh-kit/phone/info|link   —— 手机访问状态与带令牌链接
+//   POST /dsh-kit/phone/rotate|gateway —— 轮换令牌 / 热启停网关
 
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -37,13 +27,9 @@ import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 
-import { applyOpenCodeSessionHeader, loadToolsModule } from './core/index.ts'
+import { applyOpenCodeSessionHeader, sameOrigin } from './core/index.ts'
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from './phone-gateway.ts'
 import type { PhoneGatewayHandle } from './phone-gateway.ts'
-import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from './schedule.ts'
-import { VaultScanner, defaultVaultRoot } from './vault.ts'
-import { createEntry, renameEntry, moveEntry, importEntry, deleteEntries, parseConflict } from './vault-fs.ts'
-import { sameOrigin } from './core/index.ts'
 
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在设置里改（phonePort，1-65535） */
 const PHONE_PORT = 3090
@@ -190,34 +176,21 @@ export const Config =
         phoneRemoteDomain: z.string().default('').volatile(),
         phonePort: z.number().step(1).min(1).max(65535).default(3090).volatile(),
         phoneKeepGatewayOn: z.boolean().default(false).volatile(),
-        // 知识库（vault）：总开关，默认关——关 = 不开 vault 端点（默认根是 $DSH_HOME 下
-        // 的固定位置，没开功能就不该在盘上凭空出现目录；插件也不建骨架目录，指向哪里
-        // 读哪里）；开 = 右栏「知识库」标签 + 只读索引/搜索端点（端点挂载在 boot 期，
-        // 改开关重启后生效）。
-        // 库是普通 md 目录，插件不为 agent 注册检索工具。
-        vaultEnabled: z.boolean().default(false).volatile(),
-        // vaultRoot = 知识库根目录（绝对路径；schema 默认值 = defaultVaultRoot()，字段恒有值）。
-        // 宿主据此提供只读索引/搜索端点，数据契约见 src/vault.ts 头注释。
-        // schema 默认值即默认根：设置面与运行时读到的都是实际路径（与其他配置项
-        // 同一口径——字段恒有值），用户显式清空保存为 '' 时由读取侧兜底回默认
-        vaultRoot: z.string().default(defaultVaultRoot()).volatile(),
-        // 内置浏览器（browserEnabled 总开关 / chatOpenLinkInBrowser /
-        // hideOfficialBrowserEntry）随组件化迁入 dsh-kit/browser 的 Config
-        //（src/browser/index.ts）；行开关即该组件的总开关。
-        // 会话监视与通知（monitorEnabled/monitorWaitMs/monitorMaxAuto/
-        // monitorRepeatThreshold/notifyEnabled）随组件化迁入 dsh-kit-monitor 的
-        // Config（配置页在插件页该组件行）；终端开关（terminalEnabled）同理随
-        // dsh-kit-terminal 迁出，主包不再消费这两组字段。
+        // 各组件行的细粒度配置都在组件自己的 Config 里（src/<组件>/index.ts）：
+        // 知识库 vaultRoot 在 dsh-kit/vault，浏览器链接改投 / 官方入口掩码在
+        // dsh-kit/browser，用量监视在 dsh-kit/monitor，搜索条数在 dsh-kit/search，
+        // 文件树 / 源代码管理在 dsh-kit/files。行开关 = 该组件的总开关，所以主行
+        // 不再有 vaultEnabled / browserEnabled / monitorEnabled / terminalEnabled
+        // 这类与行同粒度的字段。
         // 键位不在这里：左右栏开合归宿主自带快捷键，本插件的终端/知识库命令在
         // client 半边注册进宿主 shortcuts 服务（官方「快捷键」页录制与持久化）
       })
     : undefined
 
 /** Config 缺席（schemastery 不可达）时 readSettings 的兜底：只覆盖宿主消费的关键键
- *  （手机端口、库根），其余键缺省行为由读取侧的比较式兜住 */
+ *  （手机端口），其余键缺省行为由读取侧的比较式兜住 */
 const FALLBACK_SETTINGS: KitSettings = {
   phonePort: PHONE_PORT,
-  vaultRoot: '',
 }
 
 // vendor 静态资源：白名单文件名 → client/vendor/ 下同名文件
@@ -271,44 +244,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
   // OpenCode Go 会话头按会话注入（实现见 src/core/opencode-session.ts）
   applyOpenCodeSessionHeader(ctx, (m) => console.warn(`dsh-kit: ${m}`))
 
-  // ── 日程模块（src/schedule.ts）：结构化日程/待办 ──
-  //   agent 工具恒开（schedule_query 日/周/月汇总、schedule_create 建、
-  //   schedule_update 三态改（null=清空、skip 跳过重复系列的一次）、
-  //   schedule_delete 按 id 删整个系列）；只读日程签在 client/bundle.js
-  //   挂右栏槽位；HTTP 端点（只读）在下方 webServer 注入块注册。
-  // 日程存储固定 $DSH_HOME/dsh-kit/schedule/（一条一文件），与知识库（vaultRoot）无关，
-  // 无配置门槛
-  const scheduleStore = syncScheduleStore()
-  const scheduleToolsMod = await loadToolsModule((m) => console.warn(`dsh-kit: ${m}`))
-  const scheduleDefs =
-    scheduleToolsMod && typeof scheduleToolsMod.defineTool === 'function'
-      ? buildScheduleTools({ defineTool: scheduleToolsMod.defineTool, store: scheduleStore })
-      : null
-  if (!scheduleDefs) {
-    console.warn('dsh-kit: dsh-tools 不可达，日程 agent 工具未注册（日程面板不受影响）')
-  }
-  ctx.inject(['settings', 'tools'], (caps: { tools: { register: (def: unknown) => void } }) => {
-    if (!scheduleDefs) return
-    for (const def of scheduleDefs) {
-      try {
-        caps.tools.register(def)
-      } catch (error) {
-        console.warn(`dsh-kit: 日程工具注册失败：${error instanceof Error ? error.message : error}`)
-      }
-    }
-  })
-
-  // ── 知识库扫描器（src/vault.ts）：提到 apply 级——webServer 注入可能重进，
-  //   vault 端点块共享同一实例（mtime 缓存也就不用重建）。
-  //   vaultRoot 留空用默认根（即开即用）；只读——不建目录不碰 git
-  const vaultScanner = new VaultScanner(() => {
-    try {
-      const configured = String(readSettings().vaultRoot ?? '').trim()
-      return configured === '' ? defaultVaultRoot() : configured
-    } catch {
-      return ''
-    }
-  })
+  // 日程工具（src/vault/index.ts）与知识库扫描器随组件行迁走，主行不再装配。
 
   // webServer 可能在本插件 apply 之后才挂载，用动态注入等它就绪
   ctx.inject(['webServer', 'credentials'], (webCtx: KitWebCtx) => {
@@ -611,215 +547,14 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
         },
       })
 
-      // ── 日程端点：/dsh-kit/schedule/*（src/schedule.ts 单例 store）──
-      //   面板只读，端点也只有读：GET data?from&to → { events(raw 全量),
-      //   occurrences(区间展开,带 endDate/state), orphans }；GET stats?scope&date → 统计。
-      //   写路径只走 agent 工具（工具直调 store，不经 HTTP）与望舒端；
-      //   重复展开只在宿主做（客户端只渲染 occurrence）；个人规模 raw 全量直发。
-      const schedJson = (res: http.ServerResponse, code: number, obj: unknown) => {
-        res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' })
-        res.end(JSON.stringify(obj))
-      }
-      const disposeSchedule: Array<() => void> = []
-      const schedRoute = (
-        path: string,
-        handler: (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => void,
-      ) => {
-        disposeSchedule.push(
-          webCtx.webServer.register({
-            kind: 'exact',
-            path,
-            handler: (req, res) => {
-              handler(req, res, new URL(req.url ?? '/', 'http://dsh-kit.local'))
-            },
-          }),
-        )
-      }
-      const schedDateParam = (url: URL, key: 'from' | 'to' | 'date'): string => {
-        const raw = url.searchParams.get(key) ?? ''
-        return isDateStr(raw) ? raw : todayStr()
-      }
-      schedRoute('/dsh-kit/schedule/data', (req, res, url) => {
-        if (req.method !== 'GET') return schedJson(res, 405, { error: 'method not allowed' })
-        const from = schedDateParam(url, 'from')
-        const to = schedDateParam(url, 'to')
-        schedJson(res, 200, {
-          events: scheduleStore.list(),
-          occurrences: scheduleStore.occurrences(from, to),
-          orphans: scheduleStore.listOrphans(),
-        })
-      })
-      schedRoute('/dsh-kit/schedule/stats', (req, res, url) => {
-        if (req.method !== 'GET') return schedJson(res, 405, { error: 'method not allowed' })
-        const rawScope = url.searchParams.get('scope') ?? 'day'
-        const scope = rawScope === 'week' || rawScope === 'month' ? rawScope : 'day'
-        schedJson(res, 200, scheduleStore.stats(scope, schedDateParam(url, 'date')))
-      })
-
-      // ── 知识库（vault，src/vault.ts + src/vault-fs.ts）──
-      // vaultRoot 是配置页配置的绝对目录，在工作区外；读端点出索引 / 单页 mtime /
-      // 全文搜索，写端点（src/vault-fs.ts）只管目录级文件管理：新建 / 重命名 /
-      // 移动 / 导入 / 删除。页面正文的写入仍归 agent 文件工具与外部编辑器。
-      // 全部端点在 vaultRoot 未配置/不存在时回 400 vault-not-configured。
-      const disposeVault: Array<() => void> = []
-      const vaultRoute = (
-        path: string,
-        handler: (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => void,
-      ) => {
-        disposeVault.push(
-          webCtx.webServer.register({
-            kind: 'exact',
-            path,
-            handler: (req, res) => {
-              handler(req, res, new URL(req.url ?? '/', 'http://dsh-kit.local'))
-            },
-          }),
-        )
-      }
-      const vaultGuard = (res: http.ServerResponse): string | null => {
-        // 总开关关着就整片端点一起拒：知识库默认关，前端入口同步隐藏，
-        // 这里挡的是直接打端点的路径
-        if (readSettings().vaultEnabled !== true) {
-          res.writeHead(403, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' })
-          res.end(JSON.stringify({ error: 'vault-disabled' }))
-          return null
-        }
-        const root = vaultScanner.root()
-        if (root === null) {
-          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' })
-          res.end(JSON.stringify({ error: 'vault-not-configured' }))
-          return null
-        }
-        return root
-      }
-      const vaultJson = (res: http.ServerResponse, code: number, obj: unknown) => {
-        res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' })
-        res.end(JSON.stringify(obj))
-      }
-      vaultRoute('/dsh-kit/vault/index', (req, res) => {
-        if (req.method !== 'GET') return vaultJson(res, 405, { error: 'method not allowed' })
-        const root = vaultGuard(res)
-        if (root === null) return
-        void vaultScanner
-          .scan()
-          .then((index) => vaultJson(res, 200, index ?? { root: null, spaces: [], pages: [] }))
-          .catch((error) => vaultJson(res, 500, { error: error instanceof Error ? error.message : String(error) }))
-      })
-      // 外部修改实时刷新：只回打开页的 mtime，不读正文——前端
-      // 轮询发现 mtime 变化且本地无脏改即自动重读整页（AI/编辑器改文件零手动刷新）
-      vaultRoute('/dsh-kit/vault/stat', (req, res, url) => {
-        if (req.method !== 'GET') return vaultJson(res, 405, { error: 'method not allowed' })
-        const root = vaultGuard(res)
-        if (root === null) return
-        const resolved = path.resolve(String(url.searchParams.get('path') ?? ''))
-        const rel = path.relative(root, resolved)
-        if (rel.startsWith('..') || path.isAbsolute(rel) || rel === '') return vaultJson(res, 400, { error: '页面不在 vault 内' })
-        try {
-          const stat = fs.statSync(resolved)
-          return vaultJson(res, 200, { mtimeMs: stat.mtimeMs })
-        } catch {
-          // 文件已被外部删除：回 gone，前端按需重读（页签显示已消失）
-          return vaultJson(res, 200, { gone: true })
-        }
-      })
-      vaultRoute('/dsh-kit/vault/search', (req, res, url) => {
-        if (req.method !== 'GET') return vaultJson(res, 405, { error: 'method not allowed' })
-        const root = vaultGuard(res)
-        if (root === null) return
-        const q = (url.searchParams.get('q') ?? '').slice(0, 200)
-        void vaultScanner
-          .search(q, 20)
-          .then((result) => vaultJson(res, 200, result ?? { root, results: [] }))
-          .catch((error) => vaultJson(res, 500, { error: error instanceof Error ? error.message : String(error) }))
-      })
-
-      // ── 文件管理端点（src/vault-fs.ts）──
-      // 面板树上的目录级管理：create / rename / move / import / delete。路径一律
-      // 绝对路径且必须落在 vault 根内（resolveInside 拒 `..` 段并 realpath 比包含，
-      // 挡软链与短名绕行）；撞名策略由前端选（skip/overwrite/rename），资料库那一支
-      // 固定自动加序号。笔记页改名 / 移动会顺带改写指向它的双链（目录整体搬移不改，
-      // 文件名没变解析结果就不变）；删除走回收站。导入两条来源：本机绝对路径直拷
-      // （md 页连带把页内引用的本地图片收进 attachments/）与浏览器上传的字节。
-      const vaultReadBody = (req: http.IncomingMessage, limit: number): Promise<Record<string, unknown>> =>
-        new Promise((resolve) => {
-          let raw = ''
-          req.on('data', (c) => {
-            raw += c
-            if (raw.length > limit) req.destroy()
-          })
-          req.on('end', () => {
-            try {
-              const body: unknown = JSON.parse(raw === '' ? '{}' : raw)
-              resolve(body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : {})
-            } catch {
-              resolve({})
-            }
-          })
-          req.on('error', () => resolve({}))
-        })
-      const VAULT_BODY_LIMIT = 1024 * 1024
-      /** 导入上限：base64 文本长度（≈32MB 原始字节），PDF 这类文献够用 */
-      const VAULT_IMPORT_LIMIT = 48 * 1024 * 1024
-      const vaultPost = (
-        path: string,
-        action: (body: Record<string, unknown>, root: string) => unknown,
-        limit: number = VAULT_BODY_LIMIT,
-      ) => {
-        vaultRoute(path, (req, res) => {
-          if (req.method !== 'POST') return vaultJson(res, 405, { error: 'method not allowed' })
-          if (!sameOrigin(req)) return vaultJson(res, 403, { error: 'cross-origin denied' })
-          const root = vaultGuard(res)
-          if (root === null) return
-          void vaultReadBody(req, limit).then((body) => {
-            void Promise.resolve()
-              .then(() => action(body, root))
-              .then((result) => vaultJson(res, 200, { ok: true, ...(result as object) }))
-              .catch((error) => vaultJson(res, 400, { error: error instanceof Error ? error.message : String(error) }))
-          })
-        })
-      }
-      vaultPost('/dsh-kit/vault/create', (body, root) =>
-        createEntry(root, String(body.dir ?? ''), body.name, body.kind === 'dir' ? 'dir' : 'page'),
-      )
-      vaultPost('/dsh-kit/vault/rename', async (body, root) => {
-        // 双链改写要用**操作前**的页面集合（改完名字旧页已不在索引里，判重名会走偏）
-        const index = await vaultScanner.scan()
-        return renameEntry(root, String(body.path ?? ''), body.name, index?.pages ?? [])
-      })
-      vaultPost('/dsh-kit/vault/move', async (body, root) => {
-        const index = await vaultScanner.scan()
-        return moveEntry(root, String(body.path ?? ''), String(body.dest ?? ''), parseConflict(body.conflict), index?.pages ?? [])
-      })
-      vaultPost(
-        '/dsh-kit/vault/import',
-        async (body, root) => {
-          const data = typeof body.dataBase64 === 'string' && body.dataBase64 !== '' ? Buffer.from(body.dataBase64, 'base64') : undefined
-          return importEntry(root, {
-            destAbs: String(body.dest ?? ''),
-            name: body.name,
-            fileName: typeof body.fileName === 'string' ? body.fileName : undefined,
-            srcPath: typeof body.src === 'string' ? body.src : undefined,
-            data,
-            conflict: parseConflict(body.conflict),
-          })
-        },
-        VAULT_IMPORT_LIMIT,
-      )
-      vaultPost('/dsh-kit/vault/delete', async (body, root) => {
-        const paths = Array.isArray(body.paths) ? body.paths : []
-        return deleteEntries(root, paths)
-      })
-
       return () => {
         disposeVendor()
         disposePhoneInfo()
         disposePhoneLink()
         disposePhoneRotate()
         disposePhoneGateway()
-        for (const dispose of disposeSchedule) dispose()
-        for (const dispose of disposeVault) dispose()
         if (phoneGw) phoneGw.close()
       }
-    }, 'dsh-kit: vendor/config/phone/vault/schedule endpoints')
+    }, 'dsh-kit: vendor/config/phone endpoints')
   })
 }
