@@ -37,6 +37,8 @@ const reactStub = {
   useMemo: (fn) => fn(),
   // subscribe 真调用（上下文无关调用——方法解引用传参导致的 this 丢失在此暴露）
   useSyncExternalStore: (subscribe, getSnapshot) => { subscribe(() => {}); return getSnapshot(); },
+  // KitTip 用 cloneElement 往锚点补 aria-label/aria-keyshortcuts（官方 Tooltip 的锚点形状）
+  cloneElement: (el, props) => ({ ...el, props: { ...el.props, ...props } }),
   Fragment: function Fragment() {},
 };
 const jsxRuntimeStub = {
@@ -55,6 +57,8 @@ const primStub = {
   Switch: jsxPrim("dsw-switch"),
   SegmentedTabs: jsxPrim("dsw-segmented-tabs"),
   Tag: jsxPrim("dsw-tag"),
+  // 悬停气泡：官方 primitives 的 Tooltip（KitTip 有它就走官方气泡，没有才回原生 title）
+  Tooltip: jsxPrim("dsw-tooltip"),
 };
 const windowStub = {
   __ModuleLoader__: { load: () => { /* noop */ } },
@@ -110,10 +114,10 @@ const comps = harness((name) => {
 });
 
 // 共享底座（kitBase）导出面：已内联进根包 factory，直接落在 comps 上
-const baseOk = [comps.kitGetJson, comps.kitPostJson, comps.kitJson, comps.flashToast, comps.writeClipboard, comps.mainRowOf, comps.createConfigPage, comps.setKitUi, comps.getKitUi, comps.subscribeLocale].every(
+const baseOk = [comps.kitGetJson, comps.kitPostJson, comps.kitJson, comps.flashToast, comps.writeClipboard, comps.mainRowOf, comps.createConfigPage, comps.setKitUi, comps.getKitUi, comps.subscribeLocale, comps.KitTip, comps.attachShortcutCatalog].every(
   (fn) => typeof fn === "function",
 );
-console.log((baseOk ? "PASS  " : "FAIL  ") + "底座共享面齐全（kit 三件套/轻提示/剪贴板/mainRowOf/createConfigPage/kitUi/locale store）");
+console.log((baseOk ? "PASS  " : "FAIL  ") + "底座共享面齐全（kit 三件套/轻提示/剪贴板/mainRowOf/createConfigPage/kitUi/locale store/官方气泡与键位镜像）");
 if (!baseOk) process.exitCode = 1;
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
@@ -146,6 +150,7 @@ check("TreeRowMenu 目录行菜单(新建文件/目录单入口+复制相对/重
 callLog = [];
 out = comps.TerminalEntry({});
 check("TerminalEntry 渲染无异常", !!out && typeof out === "object");
+check("TerminalEntry 悬停走官方气泡（KitTip 包住锚点，命令 id 对上快捷键注册）", out.type === comps.KitTip && out.props.command === "dsh-kit.terminal.toggle" && typeof out.props.label === "string");
 // 7.0) 侧栏索引单槽互斥（sidebarViewPatch 纯补丁语义；入口按钮交互随组件迁 files）
 const svp = comps.sidebarViewPatch("vault");
 check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultIdxOpen === true && svp.treeOpen === false && svp.gitOpen === false);
@@ -251,6 +256,17 @@ check("知识库页签：1 Switch + 1 文本", cfgSw().length === 1 && cfgVf().l
   check("功能开：resolve handled 且 run 触发注册的动作", termOn.status === "handled" && ran.join(",") === "terminal");
   check("功能关：resolve blocked 并带说明（不吞键也不动作）", vaultOff.status === "blocked" && typeof vaultOff.reason === "string" && vaultOff.reason.length > 0);
   comps.shortcutRun.terminal = null;
+  // 悬停气泡复用官方 Tooltip（名称 + 键帽），键位从宿主目录活读：官方页里改了键，
+  // 悬停当场跟着变（不是把默认键写死在按钮上）
+  const scRows = [{ id: "dsh-kit.terminal.toggle", keys: ["Ctrl", "+", "Alt", "+", "`"], aria: "Control+Alt+`" }];
+  comps.attachShortcutCatalog({ getSnapshot: () => scRows, subscribe: () => () => {} });
+  const anchor = () => jsxRuntimeStub.jsx("button", { type: "button" });
+  const tipEl = comps.KitTip({ label: "终端面板", command: "dsh-kit.terminal.toggle", children: anchor() });
+  check("悬停走官方 Tooltip：label + 该命令当前键帽（官方气泡样式，锚点上方）", tipEl.type === primStub.Tooltip && tipEl.props.label === "终端面板" && String(tipEl.props.shortcutKeys) === "Ctrl,+,Alt,+,`" && tipEl.props.side === "top" && tipEl.props.delayMs === 500);
+  check("锚点由 KitTip 补 aria-label / aria-keyshortcuts（原生 title 退役）", tipEl.props.children.props["aria-label"] === "终端面板" && tipEl.props.children.props["aria-keyshortcuts"] === "Control+Alt+`");
+  const tipBare = comps.KitTip({ label: "没注册的命令", command: "dsh-kit.none", children: anchor() });
+  check("目录里没有该命令时只出 label（键帽不硬编码）", tipBare.props.label === "没注册的命令" && tipBare.props.shortcutKeys === undefined);
+  check("primitives 缺 Tooltip 的老宿主回落原生 title（悬停提示不消失）", /if \(!dswTooltip\) return react\.cloneElement\(children, \{ title: label \}\);/.test(src));
 }
 // 草稿 ops 组装：bool→set、number "4"→set 4、空文本→unset（回 schema 默认）；
 // 保存不受当前页签限制（草稿跨页签），同步前缀即完成 ops 与 revision 围栏
@@ -1164,6 +1180,8 @@ check(
   "文件树上没有上传按钮与逻辑（vault 附件上传不受影响）",
   !src.includes("UploadIcon") && !src.includes("treeUpload") && !src.includes("uploadDone") && !src.includes("uploadFail"),
 );
+// 悬停提示不再自带原生 title（终端/知识库两处入口钮改由 KitTip 出官方气泡）
+check("入口钮的悬停不再自带原生 title（全走官方气泡）", !/dshk-enbtn"[\s\S]{0,120}?\n\s*title:/.test(src));
 
 // React 桩记录到的组件类型必须包含本插件自定义组件名（防 ReferenceError 被忽略后整段缺失）
 const types = new Set(callLog.flatMap(([, t]) => (typeof t === "string" ? [t] : [])));

@@ -102,7 +102,9 @@ slot; the conversation column stays put.
   registered with the **host's shortcut page** (Ctrl+/) — pressing keys to record, conflict
   marking, per-device defaults and persistence all belong to the host; both sidebars toggle with
   the host's own keys (web: left Ctrl+Alt+B, right Ctrl+Shift+B). Rebind there, not in the plugin
-  config page (needs DSH 0.1.7-rc.2+; on older hosts these bindings do not exist)
+  config page (needs DSH 0.1.7-rc.2+; on older hosts these bindings do not exist). The four
+  composer entry buttons show the **official tooltip** on hover (name + the command's current keys,
+  following any rebinding)
 - **Settings card**: dsh-kit config card — per-feature switches,
   hide-the-official-Workspace-Files-entry, search result count, vault directory,
   monitor parameters, session notifications and their
