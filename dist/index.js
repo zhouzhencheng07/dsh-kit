@@ -24,7 +24,8 @@
 //      log 是提交图谱（git log --all --graph），show 是单个提交详情，
 //      branch 是本地分支列表；op 含 stage/unstage/discard/commit/push/
 //      branchCreate/branchSwitch/branchDelete。
-//   另有 WebSocket /dsh-kit/browser（见下方浏览器面板端点）。
+//   内置浏览器（agent 工具 + WebSocket 面板端点 + /dsh-kit/browser/open）与
+//   日程 agent 工具之外的浏览器能力已随组件化迁入 dsh-kit/browser（src/browser/）。
 //
 // 终端自 0.1.6 起不走本插件：dock 界面仍在（client 半边），引擎换官方
 // webTerminals 服务（PTY 归宿主：系统用户权限、刷新不丢、shell 选择），宿主半边
@@ -34,10 +35,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { applyOpenCodeSessionHeader } from "./core/index.js";
+import { applyOpenCodeSessionHeader, loadToolsModule } from "./core/index.js";
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from "./phone-gateway.js";
-import { BrowserService, normalizeScope, DEFAULT_SCOPE } from "./browser.js";
-import { loadToolsModule, buildBrowserTools } from "./browser-tools.js";
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from "./schedule.js";
 import { VaultScanner, defaultVaultRoot } from "./vault.js";
 import { createEntry, renameEntry, moveEntry, importEntry, deleteEntries, parseConflict } from "./vault-fs.js";
@@ -124,10 +123,6 @@ function loadDep(spec) {
     }
     return null;
 }
-const WebSocketServer = loadDep('ws')?.WebSocketServer ?? null;
-if (!WebSocketServer) {
-    console.warn('dsh-kit: ws 不可用，浏览器面板不可用');
-}
 // ── 插件设置 schema（0.1.7 起的声明式模型）──
 // loader 读 profile 补丁里本 entry 的 config，按 Config 解析出默认值后传进 apply
 // 第二参；设置页挂在插件页本插件行的「配置」（plugins.row.config）。
@@ -135,16 +130,12 @@ if (!WebSocketServer) {
 // （非 volatile 只能改 profile 补丁文件，界面上不可见）；volatile 写入 = 热提交
 // （原地改 fiber config 的 ref，不重启 entry），所以 readSettings 统一解引用。
 // Config 必须在模块加载期就存在（loader 实例化前读），所以用 loadDep 同步解析
-// schemastery（锚点链同 ws）。解析失败 → 不导出 Config（本 entry 无设置页），
+// schemastery。解析失败 → 不导出 Config（本 entry 无设置页），
 // apply 里落 FALLBACK_SETTINGS 兜底，插件其余功能不受影响。
 const schemastery = loadDep('@deepseek-ai/schemastery');
 const z = (schemastery?.default ?? schemastery ?? null);
 export const Config = z && typeof z.object === 'function'
     ? z.object({
-        hideOfficialBrowserEntry: z.boolean().default(false).volatile(),
-        // 对话里的 http(s) 链接点击改投内置浏览器（默认开）。门控在浏览器半边（需要
-        // browserEnabled 同时开），宿主只提供 /dsh-kit/browser/open 这条管道
-        chatOpenLinkInBrowser: z.boolean().default(true).volatile(),
         // phoneEnabled = 「手机访问」页入口可见性（纯显示开关）。
         // 网关启停不走 settings（读取器回填滞后），改由状态文件 + kit 端点直管。
         phoneEnabled: z.boolean().default(true).volatile(),
@@ -162,11 +153,9 @@ export const Config = z && typeof z.object === 'function'
         // schema 默认值即默认根：设置面与运行时读到的都是实际路径（与其他配置项
         // 同一口径——字段恒有值），用户显式清空保存为 '' 时由读取侧兜底回默认
         vaultRoot: z.string().default(defaultVaultRoot()).volatile(),
-        // 内置浏览器总开关（默认开）：关=不注册 browser_* 工具（重启生效）；浏览器
-        // 半边入口按钮与面板同步隐藏。execute 内另有守卫兜底（注册期竞态时挡调用）。
-        // 自动切面板与画面跟随 agent 是恒定行为（无开关）——人为切走浏览器
-        // 标签后的"不再拽回"抑制在客户端侧实现。
-        browserEnabled: z.boolean().default(true).volatile(),
+        // 内置浏览器（browserEnabled 总开关 / chatOpenLinkInBrowser /
+        // hideOfficialBrowserEntry）随组件化迁入 dsh-kit/browser 的 Config
+        //（src/browser/index.ts）；行开关即该组件的总开关。
         // 会话监视与通知（monitorEnabled/monitorWaitMs/monitorMaxAuto/
         // monitorRepeatThreshold/notifyEnabled）随组件化迁入 dsh-kit-monitor 的
         // Config（配置页在插件页该组件行）；终端开关（terminalEnabled）同理随
@@ -212,7 +201,7 @@ export async function apply(ctx, config = {}) {
     // Config 注释）。配置变更 = 宿主重启本 entry（profile patchReload: live），apply
     // 重跑即拿到新值——搜索 provider 门控、手机网关启停都在启动期评估，不再需要
     // onChange 钩子。readSettings = schema 默认值 + entry config 的合并视图，供全部
-    // 消费点（搜索条数、browserEnabled/vaultRoot 门控、手机网关端口等）现读。
+    // 消费点（vaultRoot 门控、手机网关端口等）现读。
     const defaults = Config ? Config({}) : FALLBACK_SETTINGS;
     // 返回 any：消费点（搜索条数/手机端口等）直接当具体类型用，与旧 readSettings 同口径。
     // volatile 字段在 fiber config 里是稳定 ref（{get}，表单热更新原地改它），统一解引用
@@ -225,76 +214,11 @@ export async function apply(ctx, config = {}) {
             out[key] = readRef(value);
         return out;
     };
-    // 网页搜索已随组件化迁入 dsh-kit/search（src/search/），主包不再装配。
-    // 技能池端点已随组件化迁入 dsh-kit/skills（src/skills/），主包不再装配。
-    // OpenCode Go 会话头按会话注入（实现见 src/opencode-session.ts）
+    // 网页搜索已随组件化迁入 dsh-kit/search（src/search/），
+    // 技能池迁入 dsh-kit/skills（src/skills/），内置浏览器迁入 dsh-kit/browser
+    // （src/browser/），主包不再装配这三块。
+    // OpenCode Go 会话头按会话注入（实现见 src/core/opencode-session.ts）
     applyOpenCodeSessionHeader(ctx, (m) => console.warn(`dsh-kit: ${m}`));
-    // agents 注册表（dsh-agent，宿主组合里的可选服务）：浏览器工具的分区解析
-    // （browserScopeOf）沿 parentSession 上溯用；缺失时分区落 DEFAULT_SCOPE。
-    let agentsRegistry = null;
-    ctx.inject(['agents'], (capacityCtx) => {
-        agentsRegistry = capacityCtx.agents;
-    });
-    // ── 内置浏览器（src/browser.ts + src/browser-tools.ts）──
-    // 服务懒启动（首次工具调用/面板 watch 才拉起 Edge），这里只建对象与注册：
-    //   工具注册门控 = settings 就绪 + tools 就绪（双键注入），关=不注册（重启生效）；
-    //   execute 内有 isDisabled 守卫兜底注册期竞态；dispose 挂 ctx.effect（插件卸载
-    //   时关浏览器，profile 保留）。
-    const browserService = new BrowserService({ log: (m) => console.log(`dsh-kit: ${m}`) });
-    if (typeof ctx.effect === 'function') {
-        ctx.effect(() => () => {
-            void browserService.dispose();
-        });
-    }
-    const browserToolsMod = browserService.available ? await loadToolsModule((m) => console.warn(`dsh-kit: ${m}`)) : null;
-    // 浏览器分区解析（工具侧）：调用方会话 id；子代理沿 durable parentSession 上溯到仍存活的
-    // 最顶层会话——子代理的浏览归它所属的主对话，主对话面板里看得见，不另开隐身页签。
-    // 认不出调用方会话（宿主辅助调用 / 注册表未挂）就落 DEFAULT_SCOPE，与面板的兜底同一格。
-    const browserScopeOf = (exec) => {
-        const agent = exec?.agent;
-        const id = typeof agent?.id === 'string' ? agent.id : '';
-        if (id === '')
-            return DEFAULT_SCOPE;
-        let root = id;
-        let parent = agent?.session?.header?.parentSession;
-        for (let i = 0; i < 16 && typeof parent === 'string' && parent !== ''; i++) {
-            const up = agentsRegistry?.get?.(parent);
-            if (!up)
-                break;
-            root = parent;
-            parent = up?.session?.header?.parentSession;
-        }
-        return root;
-    };
-    let browserDefs = null;
-    try {
-        browserDefs =
-            browserToolsMod && typeof browserToolsMod.defineTool === 'function'
-                ? buildBrowserTools({ defineTool: browserToolsMod.defineTool, service: browserService, ctx, isDisabled: () => readSettings().browserEnabled === false, scopeOf: browserScopeOf })
-                : null;
-    }
-    catch (error) {
-        // 构建失败降级为无浏览器工具，不炸插件树（可用性优先，同 node-pty 先例）
-        console.warn(`dsh-kit: 浏览器工具构建失败，本插件浏览器工具未注册：${error instanceof Error ? error.message : error}`);
-        browserDefs = null;
-    }
-    if (browserService.available && !browserDefs) {
-        console.warn('dsh-kit: dsh-tools 不可达或形态不符，浏览器工具未注册（其余功能不受影响）');
-    }
-    ctx.inject(['settings', 'tools'], (caps) => {
-        if (readSettings().browserEnabled === false)
-            return;
-        if (!browserDefs)
-            return;
-        for (const def of browserDefs) {
-            try {
-                caps.tools.register(def);
-            }
-            catch (error) {
-                console.warn(`dsh-kit: 浏览器工具注册失败：${error instanceof Error ? error.message : error}`);
-            }
-        }
-    });
     // ── 日程模块（src/schedule.ts）：结构化日程/待办 ──
     //   agent 工具恒开（schedule_query 日/周/月汇总、schedule_create 建、
     //   schedule_update 三态改（null=清空、skip 跳过重复系列的一次）、
@@ -385,264 +309,6 @@ export async function apply(ctx, config = {}) {
                     });
                 },
             });
-            // ── 浏览器面板 WebSocket 端点（src/browser.ts 的面板面）──
-            // 协议：hello（连接即回 state）→ 浏览器端；watch {on}（帧流订阅引用计数，
-            // 0 时停流）/ open {url}（URL 栏导航）/ activate {tabId}（切观察页）/
-            // closeTab {tabId}（关页）/ nav {op}（back/forward/reload）/ newTab（＋）
-            // → 宿主。每条消息可带 scope（会话 id，见 normalizeScope）：连接按它认领分区，
-            // state/event/frame 都按分区投递——不同对话各看各的页签与画面，浏览器实例与
-            // profile 仍是全局共享的。面板挂舞台「浏览器」功能签，关闭标签即断 WS。
-            // 同源校验同终端；开关关闭时面板入口在浏览器端已隐藏，此处不再重复门控。
-            // 另有 HTTP 侧的 /dsh-kit/browser/open（见下）：对话链接点击改投内置浏览器，
-            // 走它而不是 WS——点击发生时面板未必已挂载/已连上，HTTP 不依赖任一状态。
-            if (browserService.available) {
-                const browserSockets = new Map();
-                const sendTo = (ws, obj) => {
-                    try {
-                        if (ws.readyState === 1)
-                            ws.send(JSON.stringify(obj));
-                    }
-                    catch {
-                        // 连接正在断开
-                    }
-                };
-                /** 按分区投递：scope 为 undefined = 全局事件（实例级），发给每条连接 */
-                const broadcast = (obj, scope) => {
-                    for (const [ws, key] of browserSockets) {
-                        if (scope !== undefined && key !== scope)
-                            continue;
-                        sendTo(ws, obj);
-                    }
-                };
-                /** 预序列化广播：帧体是几百 KB 的 base64 字符串，逐连接 JSON.stringify 会把
-                 *  同一份大字符串重复编码 N 次——一次编好，同分区的连接复用同一个串 */
-                const broadcastJson = (json, scope) => {
-                    for (const [ws, key] of browserSockets) {
-                        if (key !== scope)
-                            continue;
-                        try {
-                            if (ws.readyState === 1)
-                                ws.send(json);
-                        }
-                        catch {
-                            // 连接正在断开
-                        }
-                    }
-                };
-                /** 回发某条连接自己分区的 state（连接认领分区、分区事件、全局事件都走它） */
-                const sendState = (ws) => {
-                    const scope = browserSockets.get(ws);
-                    if (scope === undefined)
-                        return;
-                    void browserService.state(scope).then((s) => sendTo(ws, { t: 'state', ...s }));
-                };
-                const sendStateAll = () => {
-                    for (const ws of browserSockets.keys())
-                        sendState(ws);
-                };
-                const sendStateScope = (scope) => {
-                    for (const [ws, key] of browserSockets) {
-                        if (key === scope)
-                            sendState(ws);
-                    }
-                };
-                const offBrowserEvent = browserService.on((evt) => {
-                    // ws 投影统一字段形状：state/closed 无 tabId/url/title（投影为 undefined，JSON 序列化时丢弃）
-                    const flat = evt;
-                    const scoped = evt.kind === 'scope' || evt.kind === 'navigated' || evt.kind === 'crashed';
-                    broadcast({ t: 'event', kind: flat.kind, scope: flat.scope, tabId: flat.tabId, url: flat.url, title: flat.title }, scoped ? flat.scope : undefined);
-                    // 页集/指针变了要重发 state（closed/state 是实例级的，各连接按自己分区取）
-                    if (scoped)
-                        sendStateScope(flat.scope);
-                    else
-                        sendStateAll();
-                });
-                void offBrowserEvent;
-                const bwss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
-                bwss.on('connection', (ws) => {
-                    browserSockets.set(ws, DEFAULT_SCOPE);
-                    /** 本连接当前订着的分区（null = 没订流）；换分区时先退订旧分区 */
-                    let watchedScope = null;
-                    const scopeOf = () => browserSockets.get(ws) ?? DEFAULT_SCOPE;
-                    const openWatch = (scope) => {
-                        // 分区内单回调（同分区多连接扇出同一份帧）
-                        void browserService.watcherOpen(scope, (data) => broadcastJson(JSON.stringify({ t: 'frame', data }), scope));
-                        // 点开浏览器面板就该是「浏览器在、有页签」：本分区没有页就开一页
-                        // （懒启动 + 空白页签；运行中 ensure 是幂等 no-op）
-                        void browserService.ensurePage(scope);
-                    };
-                    const closeWatch = () => {
-                        if (watchedScope === null)
-                            return;
-                        browserService.watcherClose(watchedScope);
-                        watchedScope = null;
-                    };
-                    sendState(ws);
-                    ws.on('message', (raw) => {
-                        let msg;
-                        try {
-                            msg = JSON.parse(String(raw));
-                        }
-                        catch {
-                            return;
-                        }
-                        if (!msg || typeof msg !== 'object')
-                            return;
-                        // 面板每条消息都带 scope（会话 id）：认领/切换分区，换分区时帧流跟着换
-                        if (typeof msg.scope === 'string') {
-                            const next = normalizeScope(msg.scope);
-                            if (next !== scopeOf()) {
-                                browserSockets.set(ws, next);
-                                if (watchedScope !== null) {
-                                    closeWatch();
-                                    openWatch(next);
-                                }
-                                sendState(ws);
-                            }
-                        }
-                        const scope = scopeOf();
-                        if (msg.t === 'watch') {
-                            if (msg.on === true && watchedScope !== scope) {
-                                closeWatch();
-                                watchedScope = scope;
-                                openWatch(scope);
-                            }
-                            else if (msg.on === true) {
-                                // 已订阅的连接重发 watch = 面板重新激活：浏览器若已收摊（关最后一页/
-                                // 空闲关闭），懒启动拉回并自带空白页签（同 openWatch 语义）
-                                void browserService.ensurePage(scope);
-                            }
-                            else if (msg.on === false && watchedScope !== null) {
-                                closeWatch();
-                            }
-                            return;
-                        }
-                        if (msg.t === 'open' && typeof msg.url === 'string') {
-                            // 失败不发 error 事件：面板已经切到浏览器签，网址打不开时浏览器自己的错误页
-                            // 就是反馈（普通浏览器也这样），起不来时面板按 state.error 显示原因。
-                            // 别的操作（切页/关页/新页）失败仍要报——那些没有"页面上看得见"的等价物
-                            void browserService.humanOpen(scope, msg.url);
-                            return;
-                        }
-                        if (msg.t === 'activate' && msg.tabId !== undefined) {
-                            void browserService.activatePage(scope, Number(msg.tabId)).then((r) => {
-                                if (!r.ok)
-                                    sendTo(ws, { t: 'event', kind: 'error', message: r.error });
-                            });
-                            return;
-                        }
-                        if (msg.t === 'closeTab' && msg.tabId !== undefined) {
-                            void browserService.closePage(scope, Number(msg.tabId)).then((r) => {
-                                if (!r.ok)
-                                    sendTo(ws, { t: 'event', kind: 'error', message: r.error });
-                            });
-                            return;
-                        }
-                        if (msg.t === 'newTab') {
-                            void browserService.humanNewTab(scope).then((r) => {
-                                if (!r.ok)
-                                    sendTo(ws, { t: 'event', kind: 'error', message: r.error });
-                            });
-                            return;
-                        }
-                        if (msg.t === 'nav' && (msg.op === 'back' || msg.op === 'forward' || msg.op === 'reload')) {
-                            void browserService.history(scope, msg.op).then((r) => {
-                                if (!r.ok)
-                                    sendTo(ws, { t: 'event', kind: 'error', message: r.error });
-                            });
-                            return;
-                        }
-                        if (msg.t === 'close') {
-                            // 优雅关闭（cookie 落盘；下次打开免重新登录）——实例级，所有对话一起收
-                            void browserService.closeNow();
-                            return;
-                        }
-                        if (msg.t === 'input') {
-                            // 人机共驾：面板输入回传本分区观察页（未运行时宿主拒绝，不误拉起）
-                            void browserService.humanInput(scope, msg);
-                            return;
-                        }
-                    });
-                    ws.on('close', () => {
-                        browserSockets.delete(ws);
-                        closeWatch();
-                    });
-                    ws.on('error', () => {
-                        // close 会跟着来
-                    });
-                });
-                const disposeBrowserUpgrade = webCtx.webServer.registerUpgrade({
-                    path: '/dsh-kit/browser',
-                    handler: (req, socket, head) => {
-                        if (!sameOrigin(req)) {
-                            socket.destroy();
-                            return;
-                        }
-                        bwss.handleUpgrade(req, socket, head, (ws) => bwss.emit('connection', ws, req));
-                    },
-                });
-                const disposeBrowserProbe = webCtx.webServer.register({
-                    kind: 'exact',
-                    path: '/dsh-kit/browser',
-                    handler: (_req, res) => {
-                        res.writeHead(426, { 'content-type': 'text/plain; charset=utf-8' });
-                        res.end('dsh-kit browser: WebSocket Upgrade Required');
-                    },
-                });
-                void disposeBrowserUpgrade;
-                void disposeBrowserProbe;
-                // 对话里的链接改投内置浏览器（浏览器半边 onChatLinkClick 调用）。语义与面板
-                // URL 栏一致（humanOpen：作用于观察页、不动 agent 活动页；浏览器没在跑时
-                // ensure() 拉起），好处是点击不必等面板挂载与 WS 就绪。browserEnabled 关时
-                // 客户端已不拦（改回官方新标签行为），这里再挡一道防止直接打端点。
-                const disposeBrowserOpen = webCtx.webServer.register({
-                    kind: 'exact',
-                    path: '/dsh-kit/browser/open',
-                    handler: (req, res) => {
-                        const json = (code, obj) => {
-                            res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-                            res.end(JSON.stringify(obj));
-                        };
-                        if (req.method !== 'POST') {
-                            json(405, { error: 'method not allowed' });
-                            return;
-                        }
-                        if (req.headers.origin !== undefined && !sameOrigin(req)) {
-                            json(403, { error: 'cross-origin denied' });
-                            return;
-                        }
-                        if (readSettings().browserEnabled === false) {
-                            json(503, { error: '内置浏览器已关闭' });
-                            return;
-                        }
-                        let raw = '';
-                        req.on('data', (c) => { raw += c.toString('utf8'); });
-                        req.on('end', () => {
-                            let body;
-                            try {
-                                body = JSON.parse(raw || '{}');
-                            }
-                            catch {
-                                json(400, { error: 'bad json' });
-                                return;
-                            }
-                            const url = String(body?.url ?? '').trim();
-                            if (!/^https?:\/\//i.test(url)) {
-                                json(400, { error: '仅支持 http/https URL' });
-                                return;
-                            }
-                            // 分区 = 点链接时的会话（客户端带 sessionId）：链接落在该对话自己的观察页
-                            void browserService.humanOpen(normalizeScope(body?.sessionId), url).then((r) => {
-                                if (r.ok)
-                                    json(200, { ok: true, tabId: r.tabId, url: r.url });
-                                else
-                                    json(502, { error: r.error });
-                            });
-                        });
-                    },
-                });
-                void disposeBrowserOpen;
-            }
             // ── 手机访问网关（src/phone-gateway.ts）──
             // 网关启用位以状态文件直管（loadGatewayState/enabled 字段）：settings 读取器
             // 回填有时序滞后（实测开关写了但 reader 仍报旧值，重进设置页"恢复未开启"），

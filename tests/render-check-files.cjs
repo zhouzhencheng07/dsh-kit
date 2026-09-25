@@ -364,9 +364,10 @@ check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
   const uiCss = bundleSrc.slice(uiCssStart, bundleSrc.indexOf("`;", uiCssStart));
   const hostSrc = fs.readFileSync(__dirname + "/../src/files/index.ts", "utf8");
   check(
-    "掩码 CSS 随字段搬进本组件（根 UI_CSS 只剩浏览器入口那条）",
-    uiCss.includes("body.dshk-hide-official-browser") && !uiCss.includes("dshk-hide-official-files") &&
-      bundleSrc.includes('body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:none}'),
+    "掩码 CSS 随字段搬进各组件（根 UI_CSS 两类掩码都不再持有）",
+    !uiCss.includes("dshk-hide-official-") &&
+      bundleSrc.includes('body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:none}') &&
+      bundleSrc.includes('body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{display:none}'),
   );
   check(
     "掩码跟着配置快照活切（apply 订阅 + 标记类按快照 toggle）",

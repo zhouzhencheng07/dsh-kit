@@ -585,7 +585,6 @@ window.__ModuleLoader__.load({
       { id: "dsh-kit-file", kind: "dshk-file", feature: "file", titleKey: "fileTabLabel" },
       { id: "dsh-kit-vault", kind: "dshk-vault", feature: "vault", titleKey: "vaultTitle" },
       { id: "dsh-kit-schedule", kind: "dshk-schedule", feature: "schedule", titleKey: "schedTab" },
-      { id: "dsh-kit-browser", kind: "dshk-browser", feature: "browser", titleKey: "dockBrowser" },
     ];
     // ─────────── 官方右侧边栏（宿主 0.1.5+，本插件唯一工作台形态）───────────
     // 每个功能一张 dock 签（页类型），pane 正文是我们的组件。服务是宿主内部实现，
@@ -802,24 +801,6 @@ window.__ModuleLoader__.load({
     let slotsCtx = null;
 
 
-    /** agent 动浏览器 → 把右栏浏览器签拽到眼前（壳层常驻事件源与面板共用此入口）。
-     *  无抑制标志（agent 操作浏览器为安全起见必须可见——
-     *  人为关掉/隐藏的浏览器签，agent 下次导航照样弹回） */
-    function maybeAutoOpenBrowser() {
-      if (getKitUi().activeFeature === "browser" && getKitUi().browserOpen === true) return;
-      setKitUi(openFeatureDock(getKitUi(), "browser"));
-    }
-    /** 浏览器没了（优雅关闭/空闲自动关/整只崩溃/页崩光）→ 收掉官方浏览器签
-     *  （sidebarRight.close）：正常浏览器语义「没了就没了」，agent 下次开页面板
-     *  照常弹回 */
-    function closeBrowserDockForGone() {
-      if (!getKitUi().browserOpen) return;
-      closeRightbarTab("browser");
-      setKitUi(closeFeatureTab(getKitUi(), "browser"));
-    }
-
-
-
     /** 官方 sessions 服务（拿当前会话 id 与 cwd，拼文件地址用），同上运行期捕获 */
     let sessionsSvc = null;
     /** 打开知识库页并确保「知识库」dock 签在眼前（目录/搜索/反链/wikilink/
@@ -944,13 +925,10 @@ window.__ModuleLoader__.load({
     // 快捷键不在这里：键位注册进官方 shortcuts 服务（见 registerShortcuts），
     // 录制与持久化归官方「快捷键」页。
     const CFG_DEFAULTS = {
-      hideOfficialBrowserEntry: false,
-      chatOpenLinkInBrowser: true,
       phoneEnabled: true,
       phoneRemoteDomain: "",
       phonePort: 3090,
       phoneKeepGatewayOn: false,
-      browserEnabled: true,
       vaultEnabled: false,
       vaultRoot: "",
     };
@@ -959,11 +937,8 @@ window.__ModuleLoader__.load({
       if (!snap || snap.status !== "ready" || !snap.value || typeof snap.value !== "object") return { ...CFG_DEFAULTS };
       const v = snap.value;
       return {
-        hideOfficialBrowserEntry: v.hideOfficialBrowserEntry === true,
-        chatOpenLinkInBrowser: v.chatOpenLinkInBrowser === true,
         phoneEnabled: v.phoneEnabled === true,
         phoneRemoteDomain: typeof v.phoneRemoteDomain === "string" ? v.phoneRemoteDomain : "",
-        browserEnabled: v.browserEnabled !== false,
         vaultEnabled: v.vaultEnabled === true,
         vaultRoot: typeof v.vaultRoot === "string" ? v.vaultRoot : "",
       };
@@ -1130,40 +1105,6 @@ window.__ModuleLoader__.load({
       void ensureVaultRootHint().then((r) => {
         if (r !== null && isPathInsideVaultRoot(r, resolved)) openVaultPathFromClick(resolved);
       });
-    }
-
-    // ─────────── 对话链接改投内置浏览器（设置项 chatOpenLinkInBrowser，默认开）───────────
-    /** 官方 markdown 把链接渲染成 `<a target="_blank">`（新标签打开，系统浏览器接管）。
-     *  开启后把对话滚动区内的 http(s) 链接改投右栏浏览器签：宿主端点
-     *  /dsh-kit/browser/open 与面板 URL 栏同一条 humanOpen 语义（作用于观察页、浏览器
-     *  没在跑时拉起），点击即达，不依赖面板是否已挂载/已连上 WS。
-     *  判定链任何一环不命中都放行官方：自家面板元素、非 http(s)（相对链接/mailto/锚点）、
-     *  浏览器总开关关着（那开关关时入口与面板都隐藏，改投只会开出一个空壳）。 */
-    function onChatLinkClick(ev) {
-      if (!ev.isTrusted) return;
-      const cfg = cfgFromSnapshot(getCfgSnapshot());
-      if (cfg.chatOpenLinkInBrowser !== true || cfg.browserEnabled !== true) return;
-      if (!(ev.target instanceof Element)) return;
-      const kitAnc = ev.target.closest('[class*="dshk-"]');
-      if (kitAnc && kitAnc !== document.body && kitAnc !== document.documentElement) return;
-      const anchor = ev.target.closest("a[href]");
-      if (!anchor || anchor.hasAttribute("download")) return;
-      // 仅官方对话滚动区内的链接（markdown 正文、工具输出、web_search 结果都在其中）
-      if (!anchor.closest('[class*="_scroll"]')) return;
-      const href = (anchor.getAttribute("href") || "").trim();
-      if (!/^https?:\/\//i.test(href)) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      setKitUi(openFeatureDock(getKitUi(), "browser"));
-      // 失败不提示（吞掉 rejection 免成 unhandled）：面板上一步已切到浏览器签——
-      // 网址打不开时浏览器自己的错误页就是反馈（同普通浏览器），浏览器起不来时
-      // 面板的未启动提示会带上宿主报的原因。再弹 toast 只是重复的噪音。
-      // sessionId = 点击时所在会话：宿主按它把链接落进该对话自己的浏览器分区
-      kitJson("/dsh-kit/browser/open", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url: href, sessionId: currentSessionId() }),
-      }).catch(() => {});
     }
 
     // ─────────── 官方文件预览头部挂「下载到本机」───────────
@@ -1533,24 +1474,9 @@ window.__ModuleLoader__.load({
       officialOpenFail: "打开失败",
       scNoSeat: "当前不在对话中",
 
-      browserUrlPh: "输入 HTTP(S) 地址",
-      browserGo: "前往",
-      browserBack: "后退",
-      browserForward: "前进",
-      browserReload: "刷新",
-      browserExternal: "在系统浏览器中打开",
-      browserNewTab: "新建页签",
-      browserCloseTab: "关闭页签",
-      browserReconnect: "连接断开，重连中…",
-      browserNotRunning: "浏览器未启动——在上方输入网址回车，或等 agent 首次使用时自动拉起",
-      browserNoPages: "没有打开的页面——在上方输入网址回车，或等 agent 下次导航自动出现在这里",
-      dockBrowser: "内置浏览器",
       pvCloseTab: "关闭此标签",
       rbGuideSchedDesc: "周网格、待办与统计（只读）",
-      rbGuideBrowserDesc: "agent 驱动的真实浏览器，可实时观看与接管",
-      rbFeatureDisabled: "该功能已在设置中停用",
       fileTabLabel: "差异",
-      browserStarting: "正在拉起浏览器…",
       phoneGateStart: "启动网关",
       phoneGateStop: "关闭网关",
       phoneStoppedHint: "网关未启动。开启后可用「刷新链接」作废旧链接。",
@@ -1572,12 +1498,6 @@ window.__ModuleLoader__.load({
       kcfgGroupFeatures: "功能开关",
       kcfgGroupPhone: "手机访问",
       kcfgGroupVault: "知识库",
-      kcfgBrowserEnabled: "内置浏览器",
-      kcfgBrowserEnabledHint: "内置浏览器工具与面板；改后重启生效。",
-      kcfgChatOpenLinkInBrowser: "对话链接改投内置浏览器",
-      kcfgChatOpenLinkInBrowserHint: "对话里点 http(s) 链接改在内置浏览器打开。",
-      kcfgHideOfficialBrowserEntry: "隐藏官方「浏览器」入口",
-      kcfgHideOfficialBrowserEntryHint: "避免与内置浏览器重复。",
       kcfgPhoneEnabled: "「手机访问」页入口",
       kcfgPhoneEnabledHint: "侧栏「手机访问」页的可见性（网关启停在页内管）。",
       kcfgPhonePort: "手机访问端口（1–65535）",
@@ -1700,24 +1620,9 @@ window.__ModuleLoader__.load({
       officialOpenFail: "Open failed",
       scNoSeat: "Not in a conversation",
 
-      browserUrlPh: "Enter an HTTP(S) address",
-      browserGo: "Go",
-      browserBack: "Back",
-      browserForward: "Forward",
-      browserReload: "Reload",
-      browserExternal: "Open in system browser",
-      browserNewTab: "New tab",
-      browserCloseTab: "Close tab",
-      browserReconnect: "Reconnecting…",
-      browserNotRunning: "Browser not started — type a URL above or wait for the agent's first use",
-      browserNoPages: "No open pages — type a URL above, or the agent's next navigation will appear here",
-      dockBrowser: "Built-in browser",
       pvCloseTab: "Close this tab",
       rbGuideSchedDesc: "Weekly grid, todos, and stats (read-only)",
-      rbGuideBrowserDesc: "Agent-driven real browser you can watch live and take over",
-      rbFeatureDisabled: "This feature is disabled in settings",
       fileTabLabel: "Diff",
-      browserStarting: "Starting browser…",
       phoneGateStart: "Start gateway",
       phoneGateStop: "Stop gateway",
       phoneStoppedHint: "Gateway is off. Use \"New link\" after starting to invalidate old links.",
@@ -1742,12 +1647,6 @@ window.__ModuleLoader__.load({
       kcfgGroupFeatures: "Features",
       kcfgGroupPhone: "Phone access",
       kcfgGroupVault: "Vault",
-      kcfgBrowserEnabled: "Built-in browser",
-      kcfgBrowserEnabledHint: "Built-in browser tools and panel; takes effect after a restart.",
-      kcfgChatOpenLinkInBrowser: "Open chat links in the built-in browser",
-      kcfgChatOpenLinkInBrowserHint: "http(s) links in chat open in the built-in browser.",
-      kcfgHideOfficialBrowserEntry: "Hide the official Browser entry",
-      kcfgHideOfficialBrowserEntryHint: "Avoids duplicating the built-in browser.",
       kcfgPhoneEnabled: "Show the Phone access page",
       kcfgPhoneEnabledHint: "Visibility of the Phone access page (gateway start/stop lives in the page).",
       kcfgPhonePort: "Phone access port (1–65535)",
@@ -1859,8 +1758,6 @@ window.__ModuleLoader__.load({
 .dshk-preview-dl{appearance:none;background:transparent;border:0;color:var(--dsw-alias-label-secondary);width:28px;height:28px;border-radius:28px;cursor:pointer;flex:none;display:inline-flex;align-items:center;justify-content:center;padding:6px;line-height:1}
 .dshk-preview-dl:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-preview-dl svg{width:15px;height:15px;display:block}
-/* 隐藏官方右栏「浏览器」入口（hideOfficialBrowserEntry）：iframe 预览框，站点覆盖面天然受限 */
-body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{display:none}
 /* 多终端：入口图标数量角标 + 标签条 + 堆叠 pane（隐藏 pane 离屏缓冲输出） */
 .dshk-enbtn{position:relative}
 /* 品牌主色是单色令牌（浅色主题近黑、深色主题近白），主色底上的文字一律用 bg-base 取反——
@@ -2149,38 +2046,12 @@ ellipsis，窄列只截字不破版 */
 /* order:1 —— 槽位容器 display:contents，本元素与官方 ContextMeter 环同为 dock 行的
    flex item；order 提到环后面才是真正最右（DOM 里槽位贡献永远在环左边）。
    不加 padding-top：dock 行自带 4px，加了会垂直错位 2px+ */
-/* 内置浏览器面板：URL 栏 + 实时画面 canvas（人机共驾） */
 /* 右侧标签页容器：内容视图占满（非激活标签 display:none 保挂载） */
 .dshk-pane-view{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
 /* 功能内容区（文件/知识库）：顶部文档签条 + 下面的内容页；签条超宽横向滚动
    （滚动条隐藏），标签多了滑过去点，不被裁掉 */
 .dshk-subtabs{flex:none;display:flex;align-items:center;gap:2px;min-width:0;padding:6px 8px 4px;border-bottom:1px solid var(--dsw-alias-border-l1);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .dshk-subtabs::-webkit-scrollbar{display:none}
-/* 工具栏/地址框/提示条/空状态规格照抄官方右栏浏览器签
-   （@deepseek-ai/dsh-client-ui-sidebar-browser 的 Browser.module.css：38px 工具栏、
-   28px 图标钮、0.5px 分隔线、dsw 令牌与字号；哈希类名不跨包复用，仅搬规格）。
-   页签条与画布（多页切换 + 人机共驾）是本插件特有，官方无对应物 */
-.dshk-brw-tabrow{flex:none;display:flex;align-items:center;gap:4px;height:32px;padding:0 6px;min-width:0;overflow:hidden}
-.dshk-brw-newtab{padding:0 7px;font-size:13px}
-.dshk-brw-bar{box-sizing:border-box;flex:none;display:flex;align-items:center;gap:4px;height:38px;padding:5px 6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
-.dshk-brw-tool{width:28px;height:28px;flex:none;display:inline-flex;align-items:center;justify-content:center;padding:0;border:0;border-radius:6px;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer}
-.dshk-brw-tool:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
-/* label-quaternary 官方有引用但本宿主主题未定义——带回退链，将来补上即自动对齐 */
-.dshk-brw-tool:disabled{color:var(--dsw-alias-label-quaternary,var(--dsw-alias-label-tertiary));cursor:default}
-.dshk-brw-addrbox{position:relative;flex:auto;min-width:0}
-.dshk-brw-url{box-sizing:border-box;width:100%;height:28px;padding:0 34px 0 9px;border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12)}
-.dshk-brw-url:focus{outline:1px solid var(--dsw-alias-brand-primary-new-colorprimary-new-color,var(--dsw-alias-brand-primary));outline-offset:-1px}
-/* 「前往」贴地址框右缘，聚焦时才现形（官方 addressGo 同款） */
-.dshk-brw-go{position:absolute;top:0;right:0;visibility:hidden;opacity:0}
-.dshk-brw-addrbox:focus-within .dshk-brw-go{visibility:visible;opacity:1}
-.dshk-brw-warn{flex:none;padding:6px 12px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warning-primary,var(--dsw-alias-state-business-primary));background:color-mix(in srgb,var(--dsw-alias-state-warning-primary,var(--dsw-alias-state-business-primary)) 8%,transparent)}
-.dshk-brw-fail{flex:none;padding:6px 12px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 8%,transparent)}
-.dshk-brw-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:var(--dsw-alias-bg-base)}
-.dshk-brw-canvas{max-width:100%;max-height:100%;margin:auto;display:block;outline:none}
-.dshk-brw-canvas-off{display:none}
-.dshk-brw-start{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:24px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xs-13);text-align:center}
-/* 透明 IME 输入：只做组合事件宿主，视觉隐形、不拦截点击 */
-.dshk-brw-ime{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;border:0;padding:0;margin:0;outline:none;pointer-events:none;z-index:-1;background:transparent}
 /* 手机触控增强：斜杠菜单（input-trigger）在触屏上滚不动/悬停粘滞的兜底。
    类名是前端构建哈希（_3e4SsG_*），升级换哈希后本段静默失效——需跟随维护。 */
 @media (hover: none) {
@@ -2305,31 +2176,6 @@ ellipsis，窄列只截字不破版 */
 
 
 
-
-    /** 浏览器图标：地球（圆 + 经纬弧线），与终端描边体系一致 */
-    function BrowserIcon(props) {
-      // 官方 IconBrowseOutline16 不合理，故自绘
-      return jsxRuntime.jsxs(
-        "svg",
-        {
-          width: (props && props.size) ?? 15,
-          height: (props && props.size) ?? 15,
-          className: props && props.className,
-          viewBox: "0 0 16 16",
-          "aria-hidden": true,
-          fill: "none",
-          stroke: "currentColor",
-          strokeWidth: 1.2,
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          children: [
-            jsxRuntime.jsx("circle", { cx: 8, cy: 8, r: 6 }),
-            jsxRuntime.jsx("path", { d: "M2 8h12" }),
-            jsxRuntime.jsx("path", { d: "M8 2c1.8 1.6 2.7 3.6 2.7 6S9.8 12.4 8 14c-1.8-1.6-2.7-3.6-2.7-6S6.2 3.6 8 2z" }),
-          ],
-        },
-      );
-    }
 
     /** 日程图标：日历（圆角框 + 两枚吊耳 + 头部分隔线），与终端/任务描边体系一致 */
     function SchedIcon(props) {
@@ -3440,502 +3286,6 @@ ellipsis，窄列只截字不破版 */
     /** 计时段 "YYYY-MM-DDTHH:mm(:ss)" → 当日分钟数（网格块定位用） */
     function timerMinsOfDT(dt) {
       return Number(String(dt).slice(11, 13)) * 60 + Number(String(dt).slice(14, 16));
-    }
-
-    // ─────────── 内置浏览器面板（右栏浏览器签）───────────
-    // 数据走宿主半边 /dsh-kit/browser WS：state/event 广播 + frame 帧流（jpeg）+
-    // watch 引用计数 + open/activate/closeTab/nav/newTab（人操作）+ input（人机共驾）。
-    // 分区（scope = 本 pane 所属会话 id）：页签按对话隔离，浏览器实例与 profile
-    // 全局共享（登录态一份）——连接先报 scope，宿主只回本分区的 state/帧/事件，
-    // 换会话即重连换分区。
-    // 设计定位：面板是 agent 浏览器的「现场直播 + 遥控」——canvas 绘观察页实时
-    // 画面；人的点击/滚轮/键入经画布坐标换算回传宿主，派发到观察页（人与 agent 可
-    // 各看各页，画面是否跟随 agent 由宿主侧 follow 开关决定）。面板常驻挂在右侧
-    // 标签页容器：WS 管帧流与共驾输入；「agent 导航自动切到浏览器标签」的事件源
-    // 已升级为壳层常驻（ShellBrowserEvents），标签被收掉（0 页自动收/人为关）也能弹回。
-    // 生命周期：关标签仅停流不关浏览器（分区空闲 10 分钟自动收该对话的页、全局无页
-    // 无观察者时空闲关实例，登录态保留在专用 profile，重开无损）。
-
-    // 关页签即关（无确认）：「agent 活动页」的宿主识别与实际操作页常对
-    // 不上，据此弹「agent 在用」确认只会误拦；agent 被关页后按 URL 重走即可
-
-    // 工具栏图标 = 官方浏览器签同一套 primitives（后退/前进 Chevron14、刷新
-    // Refresh14、前往 Link14、外部打开 RightUp16 传 size 14）；取不到（老宿主）
-    // 时回退同尺寸自绘，不挡渲染
-    const BRW_ICON_NAME = {
-      back: "IconChevronLeftOutline14",
-      forward: "IconChevronRightOutline14",
-      reload: "IconRefreshOutline14",
-      go: "IconLinkOutline14",
-      external: "IconRightUpOutline16",
-    };
-    const BRW_ICON_FALLBACK = {
-      back: ["M10 3.2L5.6 8L10 12.8"],
-      forward: ["M6 3.2L10.4 8L6 12.8"],
-      reload: ["M12.6 6.1A4.8 4.8 0 1 0 12.9 9.4", "M12.7 2.9V6.3H9.3"],
-      go: ["M2.8 8h9.6", "M9.2 4.4L12.8 8l-3.6 3.6"],
-      external: ["M6.6 3.2h6.2v6.2", "M12.8 3.2L6.4 9.6", "M12.4 9.4v2.8a1.6 1.6 0 0 1-1.6 1.6H4.4a1.6 1.6 0 0 1-1.6-1.6V4.8a1.6 1.6 0 0 1 1.6-1.6h2.4"],
-    };
-    function BrwToolIcon({ name }) {
-      const Official = dswIcon(BRW_ICON_NAME[name]);
-      if (Official) return jsxRuntime.jsx(Official, name === "external" ? { size: 14 } : {});
-      return jsxRuntime.jsx("svg", {
-        width: 14,
-        height: 14,
-        viewBox: "0 0 16 16",
-        fill: "none",
-        "aria-hidden": true,
-        stroke: "currentColor",
-        strokeWidth: 1.2,
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-        children: (BRW_ICON_FALLBACK[name] ?? []).map((d) => jsxRuntime.jsx("path", { d }, d)),
-      });
-    }
-
-    function BrowserPanel({ active, scope }) {
-      const [state, setState] = react.useState({ running: false, launching: false, pages: [], activeId: null, viewId: null });
-      const [draft, setDraft] = react.useState("");
-      const [visible, setVisible] = react.useState(document.visibilityState === "visible");
-      const [connLost, setConnLost] = react.useState(false);
-      const canvasRef = react.useRef(null);
-      const imeRef = react.useRef(null); // 透明输入：IME 组合事件宿主（canvas 不可编辑，组合起不来）
-      const wsRef = react.useRef(null);
-      const frameRef = react.useRef(null); // 最新帧（绘制去抖：只画最新）
-      const rafRef = react.useRef(0);
-      const moveRef = react.useRef(0); // 输入节流（~30/s）
-      const downRef = react.useRef(null); // 双击判定（时间+距离窗）
-      // 分区（本 pane 所属会话 id）：连接按它认领分区，消息都带它——换会话时 WS 重连
-      // 到新分区（effect 依赖 scope），宿主只回本分区的 state/frame/event
-      const scopeRef = react.useRef(scope);
-      scopeRef.current = scope;
-      // watch 门控与事件回调里要读「最新」的激活/可见态，走 ref（闭包会停在创建帧）
-      const activeRef = react.useRef(active);
-      activeRef.current = active;
-      const visibleRef = react.useRef(visible);
-      visibleRef.current = visible;
-
-      // 观察页（页签条/URL 栏数据源；URL 栏与导航按钮都作用于它）
-      const viewPage = (state.pages ?? []).find((p) => p.viewed) ?? null;
-      const viewUrl = viewPage?.url ?? "";
-      const live = state.running === true;
-
-      // 让位布局（body 类/宽度/拖拽）由右侧标签页容器统一负责，本组件只管内容。
-
-      // agent 导航 → 自动切到浏览器标签：统一走模块级 maybeAutoOpenBrowser（壳层
-      // 常驻事件源与面板共用同一入口，抑制与「已在浏览器标签」的判断都在那边）
-
-      // 帧绘制：base64 jpeg → Image 解码 → canvas（尺寸随帧更新，宽 100% 等比）。
-      // Image 实例复用：每帧 new Image 会把分配与 GC 压进帧路径（每秒几十帧），
-      // 复用同一个对象只换 src——上一帧没解完就被新 src 顶掉，正是我们要的（旧帧已过期）
-      const frameImgRef = react.useRef(null);
-      const drawFrame = react.useCallback((data) => {
-        let img = frameImgRef.current;
-        if (!img) {
-          img = new Image();
-          frameImgRef.current = img;
-        }
-        img.onload = () => {
-          const canvas = canvasRef.current;
-          if (!canvas) return;
-          if (canvas.width !== img.naturalWidth || canvas.height !== img.naturalHeight) {
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-          }
-          const ctx = canvas.getContext("2d");
-          if (ctx) ctx.drawImage(img, 0, 0);
-        };
-        img.src = `data:image/jpeg;base64,${data}`;
-      }, []);
-
-      // WS 生命周期：挂载连接 + 断线重连（2.5s）+ 换分区重连；watch 跟随「实时画面
-      // 模式 + 页面可见」。握手后先报分区（scope），再发 watch——宿主按连接分区回
-      // state/帧/事件，别的对话的页签与画面不会串进来。
-      react.useEffect(() => {
-        let disposed = false;
-        let retry = null;
-        const connect = () => {
-          const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/dsh-kit/browser`);
-          wsRef.current = ws;
-          ws.onopen = () => {
-            if (disposed) return;
-            setConnLost(false);
-            sendScope(); // 认领分区（换会话重连时也靠它）
-            sendWatch(); // 首连补发：effect 里那次检查时握手未完成，会被 readyState 挡掉
-          };
-          ws.onmessage = (e) => {
-            let msg;
-            try {
-              msg = JSON.parse(e.data);
-            } catch {
-              return;
-            }
-            if (!msg || typeof msg !== "object") return;
-            if (msg.t === "state") {
-              setState((prev) => ({ ...prev, ...msg }));
-              // 全部页签被关后清掉画布残帧：死页面的定格不能伪装成直播
-              if (!(msg.pages ?? []).length && canvasRef.current) {
-                const ctx2d = canvasRef.current.getContext("2d");
-                if (ctx2d) ctx2d.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-              }
-              return;
-            }
-            if (msg.t === "frame" && typeof msg.data === "string") {
-              frameRef.current = msg.data;
-              if (!rafRef.current) {
-                rafRef.current = window.requestAnimationFrame(() => {
-                  rafRef.current = 0;
-                  const data = frameRef.current;
-                  frameRef.current = null;
-                  if (data) drawFrame(data);
-                });
-              }
-              return;
-            }
-            if (msg.t === "event") {
-              if (msg.kind === "navigated" && typeof msg.url === "string") {
-                setState((prev) => {
-                  const pages = (prev.pages ?? []).map((p) =>
-                    p.tabId === msg.tabId ? { ...p, url: msg.url, title: msg.title ?? p.title } : p,
-                  );
-                  return { ...prev, pages, running: true };
-                });
-                maybeAutoOpenBrowser();
-                return;
-              }
-              if (msg.kind === "crashed" || msg.kind === "closed") {
-                setState((prev) => ({ ...prev, running: msg.kind === "closed" ? false : prev.running }));
-                return;
-              }
-              if (msg.kind === "error" && typeof msg.message === "string") {
-                flashToast(msg.message);
-              }
-            }
-          };
-          ws.onclose = () => {
-            if (disposed) return;
-            setConnLost(true);
-            setState((prev) => ({ ...prev, running: false }));
-            retry = window.setTimeout(connect, 2500);
-          };
-          ws.onerror = () => {};
-        };
-        connect();
-        return () => {
-          disposed = true;
-          if (retry !== null) window.clearTimeout(retry);
-          try {
-            wsRef.current?.close();
-          } catch {
-            // 已断
-          }
-        };
-      }, [drawFrame, scope]);
-
-      // watch 开关：「浏览器标签激活 + 页面可见」才要帧（切走/隐藏即停流，回来自动
-      // 续）；WS 本身保持连接（自动打开的事件源）。onopen 另有补发——首次连接建立
-      // 时本 effect 已跑过（握手未完成被 readyState 挡掉），不补发首连收不到帧。
-      const sendScope = () => {
-        const ws = wsRef.current;
-        if (!ws || ws.readyState !== 1) return;
-        try {
-          ws.send(JSON.stringify({ t: "scope", scope: scopeRef.current ?? "" }));
-        } catch {
-          // 已断
-        }
-      };
-      const sendWatch = () => {
-        const ws = wsRef.current;
-        if (!ws || ws.readyState !== 1) return;
-        try {
-          ws.send(JSON.stringify({ t: "watch", on: visibleRef.current === true && activeRef.current === true, scope: scopeRef.current ?? "" }));
-        } catch {
-          // 已断
-        }
-      };
-      react.useEffect(() => {
-        sendWatch();
-      }, [visible, active, connLost]);
-      react.useEffect(() => {
-        const onVis = () => {
-          // 事件回调先于重渲染：先同步 ref 再发，避免 watch 带着过期的可见态
-          const vis = document.visibilityState === "visible";
-          visibleRef.current = vis;
-          setVisible(vis);
-          sendWatch();
-        };
-        document.addEventListener("visibilitychange", onVis);
-        return () => document.removeEventListener("visibilitychange", onVis);
-      }, []);
-
-      // ── 人机共驾：画布输入 → 页面坐标 → 宿主派发（仅运行中；未运行不误拉起）──
-      // 所有面板消息都带上本 pane 的分区（scope）：宿主按连接分区派发到该对话的观察页
-      const sendInput = (obj) => {
-        try {
-          wsRef.current?.send(JSON.stringify({ ...obj, scope: scopeRef.current ?? "" }));
-        } catch {
-          // 已断：丢帧无害（下一帧画面自校正）
-        }
-      };
-      const pagePoint = (e) => {
-        const c = canvasRef.current;
-        if (!c) return null;
-        const rect = c.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0 || !c.width || !c.height) return null;
-        const x = ((e.clientX - rect.left) * c.width) / rect.width;
-        const y = ((e.clientY - rect.top) * c.height) / rect.height;
-        return { x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) };
-      };
-      const onCanvasPointerDown = (e) => {
-        if (!live) return;
-        if (e.button !== 0 && e.button !== 1 && e.button !== 2) return;
-        e.preventDefault();
-        try {
-          canvasRef.current?.setPointerCapture?.(e.pointerId);
-        } catch {
-          // 捕获失败不影响转发
-        }
-        const p = pagePoint(e);
-        if (!p) return;
-        const now = Date.now();
-        const dbl =
-          downRef.current !== null &&
-          now - downRef.current.t < 350 &&
-          Math.abs(p.x - downRef.current.x) < 12 &&
-          Math.abs(p.y - downRef.current.y) < 12;
-        downRef.current = { t: now, x: p.x, y: p.y };
-        sendInput({ t: "input", kind: "mousedown", x: p.x, y: p.y, button: e.button, clicks: dbl ? 2 : 1 });
-        // 键入目标：透明输入钉在按下点并接管焦点——它的组合事件（中文输入法）
-        // 与 keydown（英文逐键/快捷键）两条路都从这里出去
-        const ime = imeRef.current;
-        if (ime) {
-          ime.style.left = `${e.clientX}px`;
-          ime.style.top = `${e.clientY}px`;
-          try {
-            ime.focus({ preventScroll: true });
-          } catch {
-            ime.focus();
-          }
-        }
-      };
-      const onCanvasPointerMove = (e) => {
-        if (!live) return;
-        const now = performance.now();
-        if (now - moveRef.current < 33) return; // ~30/s 节流（悬停 + 拖拽共用）
-        moveRef.current = now;
-        const p = pagePoint(e);
-        if (!p) return;
-        sendInput({ t: "input", kind: "mousemove", x: p.x, y: p.y });
-      };
-      const onCanvasPointerUp = (e) => {
-        if (!live) return;
-        const p = pagePoint(e);
-        if (!p) return;
-        sendInput({ t: "input", kind: "mouseup", x: p.x, y: p.y, button: e.button });
-      };
-      const onCanvasWheel = (e) => {
-        if (!live) return;
-        e.preventDefault(); // 画面滚动交给远端页面，不滚面板
-        sendInput({ t: "input", kind: "wheel", dx: e.deltaX, dy: e.deltaY });
-      };
-      const onCanvasKeyDown = (e) => {
-        if (!live) return;
-        // IME 组合中的 keydown（key=Process / keyCode 229）合成不出任何字，跳过；
-        // 组合文本由透明输入的 compositionend → kind:'text' 整段出
-        if (e.isComposing === true || e.keyCode === 229) return;
-        // 纯修饰键不单独转发（并入下一个键的组合串）
-        if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return;
-        e.preventDefault(); // 焦点留在画布，Tab 等也透传给页面
-        const parts = [];
-        if (e.ctrlKey) parts.push("Control");
-        if (e.altKey) parts.push("Alt");
-        if (e.shiftKey) parts.push("Shift");
-        if (e.metaKey) parts.push("Meta");
-        parts.push(e.key.length === 1 ? e.key.toLowerCase() : e.key);
-        sendInput({ t: "input", kind: "key", combo: parts.join("+") });
-      };
-
-      const go = (raw) => {
-        const text = String(raw ?? "").trim();
-        if (text === "") return;
-        const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `http://${text}`;
-        setDraft(withScheme);
-        // 先本地反馈（宿主 navigated 事件随后校正）；humanOpen 作用于观察页
-        setState((prev) => ({
-          ...prev,
-          running: true,
-          pages: (prev.pages ?? []).map((p) => (p.viewed ? { ...p, url: withScheme, title: "" } : p)),
-        }));
-        try {
-          wsRef.current?.send(JSON.stringify({ t: "open", url: withScheme, scope: scopeRef.current ?? "" }));
-        } catch {
-          // 连接断开时忽略（重连后用户可再按）
-        }
-      };
-
-      // URL 栏跟随观察页：切页签/导航事件（宿主侧校正）都把地址栏对到观察页
-      react.useEffect(() => {
-        setDraft(viewUrl);
-      }, [viewPage?.tabId, viewUrl]);
-
-      const tabLabel = (p) => {
-        if (typeof p.title === "string" && p.title.trim() !== "") return p.title;
-        try {
-          return new URL(p.url).host || p.url;
-        } catch {
-          return p.url || `#${p.tabId}`;
-        }
-      };
-
-      // 在系统浏览器打开（官方工具栏同款）：web 端 = 你自己浏览器的新标签页，
-      // 桌面壳里 = 系统浏览器。地址取观察页——没有观察页就没得开
-      const openExternal = () => {
-        const url = String(viewUrl ?? "").trim();
-        if (url === "") return;
-        try {
-          window.open(url, "_blank", "noopener,noreferrer");
-        } catch {
-          // 弹窗被拦：无副作用
-        }
-      };
-
-      // 画面占位（官方空状态同款居中提示）：没帧可看的三种情形；断线/启动失败
-      // 另走顶部提示条，不占画面（定格帧保留，重连回来自动续上）
-      const start = connLost
-        ? null
-        : !live && state.launching === true
-          ? t("browserStarting")
-          : !live && viewUrl === ""
-            ? t("browserNotRunning")
-            : (state.pages ?? []).length === 0
-              ? t("browserNoPages")
-              : null;
-
-      return jsxRuntime.jsxs(jsxRuntime.Fragment, {
-        children: [
-          // 页签条：高亮=观察页；× 关页签（直关无确认）；＋ 新页签
-          jsxRuntime.jsx("div", {
-            className: "dshk-brw-tabrow",
-            children: jsxRuntime.jsxs("span", {
-              className: "dshk-tabs",
-              children: [
-                (state.pages ?? []).map((p) =>
-                  jsxRuntime.jsxs("span", {
-                    className: `dshk-tab${p.viewed ? " dshk-tab-on" : ""}`,
-                    title: p.url,
-                    onClick: () => sendInput({ t: "activate", tabId: p.tabId }),
-                    children: [
-                      jsxRuntime.jsx("span", { className: "dshk-tab-label", children: tabLabel(p) }),
-                      jsxRuntime.jsx(KitTip, {
-                        label: t("browserCloseTab"),
-                        children: jsxRuntime.jsx("button", {
-                          type: "button",
-                          className: "dshk-tab-x",
-                          "aria-label": t("browserCloseTab"),
-                          onClick: (e) => {
-                            e.stopPropagation();
-                            sendInput({ t: "closeTab", tabId: p.tabId });
-                          },
-                          children: "✕",
-                        }),
-                      }),
-                    ],
-                  }, p.tabId),
-                ),
-                jsxRuntime.jsx(KitTip, {
-                  label: t("browserNewTab"),
-                  children: jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-tab dshk-brw-newtab",
-                    "aria-label": t("browserNewTab"),
-                    onClick: () => sendInput({ t: "newTab" }),
-                    children: "＋",
-                  }),
-                }),
-              ],
-            }),
-          }),
-          // 工具栏（规格同官方浏览器签）：后退/前进/刷新 + 地址框（「前往」聚焦才现形）
-          // + 在系统浏览器中打开；都作用于观察页
-          jsxRuntime.jsxs("form", {
-            className: "dshk-brw-bar",
-            onSubmit: (e) => {
-              e.preventDefault();
-              go(draft);
-            },
-            children: [
-              jsxRuntime.jsx(KitTip, { label: t("browserBack"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserBack"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "back" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "back" }) }) }),
-              jsxRuntime.jsx(KitTip, { label: t("browserForward"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserForward"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "forward" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "forward" }) }) }),
-              jsxRuntime.jsx(KitTip, { label: t("browserReload"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserReload"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "reload" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "reload" }) }) }),
-              jsxRuntime.jsxs("div", {
-                className: "dshk-brw-addrbox",
-                children: [
-                  jsxRuntime.jsx("input", {
-                    className: "dshk-brw-url",
-                    value: draft,
-                    placeholder: t("browserUrlPh"),
-                    "aria-label": t("browserUrlPh"),
-                    spellCheck: false,
-                    onChange: (e) => setDraft(e.target.value),
-                  }),
-                  jsxRuntime.jsx(KitTip, { label: t("browserGo"), children: jsxRuntime.jsx("button", { type: "submit", className: "dshk-brw-tool dshk-brw-go", "aria-label": t("browserGo"), children: jsxRuntime.jsx(BrwToolIcon, { name: "go" }) }) }),
-                ],
-              }),
-              jsxRuntime.jsx(KitTip, { label: t("browserExternal"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserExternal"), disabled: viewUrl === "", onClick: openExternal, children: jsxRuntime.jsx(BrwToolIcon, { name: "external" }) }) }),
-            ],
-          }),
-          // 顶部提示条（官方 failure / sandboxWarning 同款）：断线取警示色、启动失败取
-          // 错误色；压在画面上方，定格帧不动（重连回来自动续流）
-          connLost ? jsxRuntime.jsx("div", { className: "dshk-brw-warn", role: "status", children: t("browserReconnect") }) : null,
-          !connLost && !live && state.error ? jsxRuntime.jsx("div", { className: "dshk-brw-fail", role: "alert", children: state.error }) : null,
-          jsxRuntime.jsx("div", {
-            className: "dshk-brw-body",
-            children: [
-              jsxRuntime.jsx("canvas", {
-                className: `dshk-brw-canvas${start === null ? "" : " dshk-brw-canvas-off"}`,
-                ref: canvasRef,
-                tabIndex: 0,
-                onPointerDown: onCanvasPointerDown,
-                onPointerMove: onCanvasPointerMove,
-                onPointerUp: onCanvasPointerUp,
-                onWheel: onCanvasWheel,
-                onKeyDown: onCanvasKeyDown,
-                onContextMenu: (e) => e.preventDefault(), // 右键菜单交给远端页面
-              }),
-              start === null ? null : jsxRuntime.jsx("div", { className: "dshk-brw-start", role: "status", children: start }),
-            ],
-          }),
-          // 透明输入：IME 组合事件宿主（画布不可编辑，中文组合事件起不来）。
-          // 点击画布后焦点在此（见 onCanvasPointerDown）——keydown 必须也挂它，
-          // 否则英文逐键/快捷键的 keydown 冒泡不到处理器（键盘输入全断的根因）。
-          // 组合中 value 只累积不发送；compositionend 把提交文本整段发宿主
-          // （kind:'text' → 远端 keyboard.insertText）。非组合的 input（英文
-          // 逐键已被 keydown preventDefault 拦下，不入 value）只清 value 不发，
-          // 防残字混入下次组合。
-          jsxRuntime.jsx("input", {
-            ref: imeRef,
-            className: "dshk-brw-ime",
-            autoComplete: "off",
-            tabIndex: -1,
-            onKeyDown: onCanvasKeyDown,
-            onInput: (e) => {
-              const el = e.currentTarget;
-              if (el.dataset.composing === "1" || e.isComposing === true) return;
-              el.value = "";
-            },
-            onCompositionStart: (e) => {
-              e.currentTarget.dataset.composing = "1";
-            },
-            onCompositionEnd: (e) => {
-              const el = e.currentTarget;
-              el.dataset.composing = "0";
-              const text = typeof e.data === "string" && e.data !== "" ? e.data : el.value;
-              el.value = "";
-              if (text !== "") sendInput({ t: "input", kind: "text", text });
-            },
-          }),
-        ],
-      });
     }
 
     // ─────────── 知识库（vault：侧栏目录索引 + 右栏页编辑器，portal 拆两半）───────────
@@ -5581,18 +4931,6 @@ ellipsis，窄列只截字不破版 */
       useFeaturePresence("schedule");
       return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(ScheduleView, { active: true }) });
     }
-    /** 浏览器 pane（agent 驱动 + 人机共驾 + 自动跟随；与独立面板同构，不加功能）。
-     *  分区 = 本 pane 所属会话 id——页签按对话隔离，同一浏览器实例/profile 共享登录态 */
-    function BrowserPaneBody(props) {
-      useFeaturePresence("browser");
-      const cfg = cfgFromSnapshot(getCfgSnapshot());
-      const scope = useCurrentRow(props)?.id ?? "";
-      return jsxRuntime.jsx("div", { className: "dshk-rbpane", children:
-        cfg.browserEnabled === false
-          ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("rbFeatureDisabled") })
-          : jsxRuntime.jsx(BrowserPanel, { active: true, scope }),
-      });
-    }
     // ─────────── 面板宿主（shell.overlay 全帧浮层）───────────
     // 终端停靠在这里渲染（fixed 定位不受 composer 祖先
     // stacking context 影响）；知识库单实例挂载、文件树/索引的 sidebar.workspaces
@@ -5671,7 +5009,6 @@ ellipsis，窄列只截字不破版 */
       // （终端功能关闭的同类清场在 dsh-kit-terminal 自己那侧）
       react.useEffect(() => {
         // 配置门控清场走 closeFeatureTab：清存在性的同时把激活位顺延到剩余标签
-        if (!cfg.browserEnabled && ui.browserOpen) setKitUi(closeFeatureTab(getKitUi(), "browser"));
         if (!cfg.vaultEnabled && (ui.vaultOpen || ui.vaultIdxOpen)) {
           setKitUi({ ...closeFeatureTab(getKitUi(), "vault"), vaultIdxOpen: false });
         }
@@ -5711,16 +5048,6 @@ ellipsis，窄列只截字不破版 */
         };
       }, [ui.treeOpen, ui.gitOpen, ui.vaultIdxOpen, cwd, rightbarUp]);
 
-      // 隐藏官方右栏「浏览器」入口（hideOfficialBrowserEntry）：body 标记 + CSS
-      // display:none，锚点 data-sidebar-right-guide-entry 是官方胶囊的稳定属性
-      // （旧置灰方案同款）。「工作区文件」入口的同类标记归 dsh-kit-files 组件
-      react.useEffect(() => {
-        document.body.classList.toggle("dshk-hide-official-browser", cfg.hideOfficialBrowserEntry === true);
-        return () => {
-          document.body.classList.remove("dshk-hide-official-browser");
-        };
-      }, [cfg.hideOfficialBrowserEntry]);
-
       // Esc 分层：先关当前激活那张文档签（知识库关当前页那张、文件关当前文件那张），
       // 再关侧栏视图，最后收起终端坞（不拦截，避免挡掉其它 Esc 行为）。功能签归官方
       // ✕，Esc 不碰。组合键不在这里：知识库命令注册进官方 shortcuts 服务（键位、录制、
@@ -5758,75 +5085,6 @@ ellipsis，窄列只截字不破版 */
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
       });
-
-      // ShellBrowserEvents：壳层常驻浏览器事件源（与面板 WS 并存，不订阅帧流）。
-      // 面板标签会被收掉（0 页自动收/人为关闭），「agent 开页切到浏览器」不能依赖
-      // 面板自己活着——壳层恒听宿主广播：navigated → 拽出右栏浏览器签（无抑制，
-      // agent 操作浏览器必须可见）；浏览器收摊 → 顺手收掉标签。两者兼得：正常浏览器的
-      // 「没了就没了」+ agent 干活时画面自动回眼前。
-      // 分区 = 当前会话：连接先报 scope（宿主只回本会话的 navigated），换会话即重连；
-      // 0 页收签只在「曾经有页又变 0」时触发——本会话刚开面板（页还没建）不该被收掉。
-      react.useEffect(() => {
-        if (cfg.browserEnabled === false) return undefined;
-        let disposed = false;
-        let retry = null;
-        let ws = null;
-        let hadPages = false;
-        const connect = () => {
-          ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/dsh-kit/browser`);
-          ws.onopen = () => {
-            if (disposed) return;
-            try {
-              ws.send(JSON.stringify({ t: "scope", scope: sessionId ?? "" }));
-            } catch {
-              // 已断
-            }
-          };
-          ws.onmessage = (e) => {
-            let msg;
-            try {
-              msg = JSON.parse(e.data);
-            } catch {
-              return;
-            }
-            if (!msg || typeof msg !== "object") return;
-            if (msg.t === "event") {
-              if (msg.kind === "navigated") maybeAutoOpenBrowser();
-              else if (msg.kind === "closed") {
-                hadPages = false;
-                closeBrowserDockForGone();
-              }
-              return;
-            }
-            if (msg.t === "state" && msg.launching !== true && msg.running === true) {
-              // 页崩光残留（running 但 0 页）= 浏览器实质没了，收掉标签。
-              // running:false 不作依据——快照无历史，启动失败也会落到这个形状，
-              // 收掉标签会让用户连错误线索都看不到；「曾活着→没了」由 closed 事件负责。
-              // 本会话刚开、页还没建（hadPages 为假）时不动它
-              if ((msg.pages ?? []).length > 0) hadPages = true;
-              else if (hadPages) {
-                hadPages = false;
-                closeBrowserDockForGone();
-              }
-            }
-          };
-          ws.onclose = () => {
-            if (disposed) return;
-            retry = window.setTimeout(connect, 2500);
-          };
-          ws.onerror = () => {};
-        };
-        connect();
-        return () => {
-          disposed = true;
-          if (retry !== null) window.clearTimeout(retry);
-          try {
-            ws?.close();
-          } catch {
-            // 已断
-          }
-        };
-      }, [cfg.browserEnabled, sessionId]);
 
       return jsxRuntime.jsx(jsxRuntime.Fragment, {
         children: [
@@ -6401,14 +5659,12 @@ ellipsis，窄列只截字不破版 */
       file: FilePaneBody,
       vault: VaultPaneBody,
       schedule: SchedulePaneBody,
-      browser: BrowserPaneBody,
     };
     function registerRightbar(rbCtx) {
       const tabs = rbCtx.sidebarRightTabs;
       if (!tabs || typeof tabs.register !== "function") return;
       const RB_GUIDE = {
         schedule: { order: 100, icon: SchedIcon, descKey: "rbGuideSchedDesc" },
-        browser: { order: 110, icon: BrowserIcon, descKey: "rbGuideBrowserDesc" },
       };
       for (const f of RB_FEATURES) {
         const Body = RB_BODY[f.feature];
@@ -6491,9 +5747,6 @@ ellipsis，窄列只截字不破版 */
     // （快捷键消费端本就「非法/空 → 回默认」）。字段清单与 src/index.ts 的 Config
     // schema 同源（render-check 钉住）。
     const KIT_CFG_FIELDS = [
-      { key: "browserEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgBrowserEnabled", hintKey: "kcfgBrowserEnabledHint" },
-      { key: "chatOpenLinkInBrowser", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgChatOpenLinkInBrowser", hintKey: "kcfgChatOpenLinkInBrowserHint" },
-      { key: "hideOfficialBrowserEntry", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgHideOfficialBrowserEntry", hintKey: "kcfgHideOfficialBrowserEntryHint" },
       { key: "phoneEnabled", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneEnabled", hintKey: "kcfgPhoneEnabledHint" },
       { key: "phonePort", type: "number", min: 1, max: 65535, group: "kcfgGroupPhone", labelKey: "kcfgPhonePort", hintKey: "kcfgPhonePortHint" },
       { key: "phoneRemoteDomain", type: "string", group: "kcfgGroupPhone", labelKey: "kcfgPhoneRemoteDomain", hintKey: "kcfgPhoneRemoteDomainHint" },
@@ -6502,7 +5755,7 @@ ellipsis，窄列只截字不破版 */
       { key: "vaultRoot", type: "string", group: "kcfgGroupVault", labelKey: "kcfgVaultRoot", hintKey: "kcfgVaultRootHint" },
     ];
     /** KIT_CFG_FIELDS 的分组顺序（组名键也用于 t() 取组标题/页签文案） */
-    const KIT_CFG_GROUPS = ["kcfgGroupFeatures", "kcfgGroupPhone", "kcfgGroupVault"];
+    const KIT_CFG_GROUPS = ["kcfgGroupPhone", "kcfgGroupVault"];
 
     // 配置页骨架（草稿/保存/官方表单接线）已收进 dock：这里只喂本包字段表与词条
     const KitConfigPage = dock.createConfigPage({
@@ -6605,8 +5858,6 @@ ellipsis，窄列只截字不破版 */
       // 对话文件点击的知识库路由：vault 内路径改道知识库标签，其余放行官方
       //（门控见 onChatOpenFileClick 与 chatPreviewHook）
       document.addEventListener("click", onChatOpenFileClick, true);
-      // 对话链接改投内置浏览器（默认开：配置页 chatOpenLinkInBrowser）
-      document.addEventListener("click", onChatLinkClick, true);
       // 官方文件预览头部的下载按钮：预览根 mount（loading→text 整根重建）与路径
       // title 变化（meta 后到才补成绝对路径）都要接住，全走同一防抖扫描
       if (typeof MutationObserver !== "undefined" && document.documentElement) {
@@ -6618,9 +5869,9 @@ ellipsis，窄列只截字不破版 */
         });
         scanPreviewDownload();
       }
-      // 组件半边激活（单包收回的 files/monitor/terminal/skills/search）：与多包时代等价——
+      // 组件半边激活（单包收回的 files/monitor/terminal/skills/search/browser）：与多包时代等价——
       // client 入口注册总是发生，功能存在性由各组件自己的配置门控（行禁用只摘宿主半边端点）
-      for (const componentMod of [exports.files, exports.monitor, exports.terminal, exports.skills, exports.search]) {
+      for (const componentMod of [exports.files, exports.monitor, exports.terminal, exports.skills, exports.search, exports.browser]) {
         if (componentMod && typeof componentMod.apply === "function") componentMod.apply(ctx);
       }
     }
@@ -11021,6 +10272,914 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     return exports;
 };
 
+    // ── dsh-kit-browser 组件（内置浏览器）──
+// dsh-kit-browser 浏览器半边 —— 内置浏览器组件的 client 面。
+// 收纳：右栏「浏览器」功能签（页签条 + URL 栏 + 实时画面 canvas 人机共驾）、agent
+// 导航自动切签、浏览器收摊收签、对话链接改投内置浏览器、隐藏官方「浏览器」入口。
+// 数据走本组件宿主半边 /dsh-kit/browser WS（state/event 广播 + frame 帧流）；
+// 行开关即总开关：宿主半边不物化时 /dsh-kit-browser/config 404，apply 直接不注册
+// 任何槽位与监听（面板、右栏签、链接改投、官方入口掩码全不出现）。
+// 分区（scope）＝ 会话 id：页签按对话隔离，浏览器实例与 profile 全局共享登录态。
+    const browserModule = (kit, require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+    const react = require("react");
+    const jsxRuntime = require("react/jsx-runtime");
+    const dock = kit;
+    const {
+      getKitUi, setKitUi, KitTip, flashToast, kitJson, resolveZh,
+      closeFeatureTab, openFeatureTab, openFeatureDock, closeRightbarTab,
+      useCurrentRow, currentSessionId, shellShare,
+    } = dock;
+    let dswPrimIcons = null;
+    try { dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 回退自绘 */ }
+    const dswIcon = (...names) => {
+      for (const n of names) {
+        const c = dswPrimIcons ? dswPrimIcons[n] : null;
+        if (typeof c === "function" || typeof c === "object") return c;
+      }
+      return null;
+    };
+
+    // 组件私有文案（配置页骨架文案在 dock）
+    const zh = {
+      kcfgGroupBrowser: "内置浏览器",
+      browserUrlPh: "输入 HTTP(S) 地址",
+      browserGo: "前往",
+      browserBack: "后退",
+      browserForward: "前进",
+      browserReload: "刷新",
+      browserExternal: "在系统浏览器中打开",
+      browserNewTab: "新建页签",
+      browserCloseTab: "关闭页签",
+      browserReconnect: "连接断开，重连中…",
+      browserNotRunning: "浏览器未启动——在上方输入网址回车，或等 agent 首次使用时自动拉起",
+      browserNoPages: "没有打开的页面——在上方输入网址回车，或等 agent 下次导航自动出现在这里",
+      dockBrowser: "内置浏览器",
+      rbGuideBrowserDesc: "agent 驱动的真实浏览器，可实时观看与接管",
+      browserStarting: "正在拉起浏览器…",
+      kcfgBrowserEnabled: "内置浏览器",
+      kcfgBrowserEnabledHint: "内置浏览器工具与面板；改后重启生效。",
+      kcfgChatOpenLinkInBrowser: "对话链接改投内置浏览器",
+      kcfgChatOpenLinkInBrowserHint: "对话里点 http(s) 链接改在内置浏览器打开。",
+      kcfgHideOfficialBrowserEntry: "隐藏官方「浏览器」入口",
+      kcfgHideOfficialBrowserEntryHint: "避免与内置浏览器重复。",
+    };
+    const en = {
+      kcfgGroupBrowser: "Built-in browser",
+      browserUrlPh: "Enter an HTTP(S) address",
+      browserGo: "Go",
+      browserBack: "Back",
+      browserForward: "Forward",
+      browserReload: "Reload",
+      browserExternal: "Open in system browser",
+      browserNewTab: "New tab",
+      browserCloseTab: "Close tab",
+      browserReconnect: "Reconnecting…",
+      browserNotRunning: "Browser not started — type a URL above or wait for the agent's first use",
+      browserNoPages: "No open pages — type a URL above, or the agent's next navigation will appear here",
+      dockBrowser: "Built-in browser",
+      rbGuideBrowserDesc: "Agent-driven real browser you can watch live and take over",
+      browserStarting: "Starting browser…",
+      kcfgBrowserEnabled: "Built-in browser",
+      kcfgBrowserEnabledHint: "Built-in browser tools and panel; takes effect after a restart.",
+      kcfgChatOpenLinkInBrowser: "Open chat links in the built-in browser",
+      kcfgChatOpenLinkInBrowserHint: "http(s) links in chat open in the built-in browser.",
+      kcfgHideOfficialBrowserEntry: "Hide the official Browser entry",
+      kcfgHideOfficialBrowserEntryHint: "Avoids duplicating the built-in browser.",
+    };
+    const lang = () => (resolveZh() ? zh : en);
+    const t = (key) => lang()[key] ?? key;
+
+    // ─────────── 本组件生效配置（0.1.7 声明式模型）───────────
+    // 配置真源 = 本组件宿主 Config（src/browser/index.ts）。client 启动拉
+    // /dsh-kit-browser/config 喂快照；行开关关闭时该端点随宿主半边不物化而 404，
+    // apply 据此整体不注册。快照未就绪/拉取失败一律回退内置默认（功能全开）。
+    let bSnap = null;
+    let bAvailable = false;
+    const bSubs = new Set();
+    const subscribeBCfg = (listener) => { bSubs.add(listener); return () => bSubs.delete(listener); };
+    const getBSnap = () => bSnap;
+    const B_CFG_DEFAULTS = { chatOpenLinkInBrowser: true, hideOfficialBrowserEntry: false };
+    function bCfgFromSnapshot(snap) {
+      if (!snap || snap.status !== "ready" || !snap.value || typeof snap.value !== "object") return { ...B_CFG_DEFAULTS };
+      const v = snap.value;
+      return {
+        chatOpenLinkInBrowser: v.chatOpenLinkInBrowser === true,
+        hideOfficialBrowserEntry: v.hideOfficialBrowserEntry === true,
+      };
+    }
+    /** 拉生效配置；返回 false = 宿主半边不可达（行关闭）= 本组件 client 面整体不注册 */
+    async function loadCfg() {
+      try {
+        const body = await kitJson("/dsh-kit-browser/config");
+        bAvailable = !!(body && typeof body === "object");
+        bSnap = bAvailable ? { status: "ready", value: body } : null;
+      } catch {
+        bAvailable = false;
+        bSnap = null;
+      }
+      for (const listener of [...bSubs]) listener();
+      return bAvailable;
+    }
+
+    /** agent 动浏览器 → 把右栏浏览器签拽到眼前（壳层常驻事件源与面板共用此入口）。
+     *  无抑制标志（agent 操作浏览器为安全起见必须可见——
+     *  人为关掉/隐藏的浏览器签，agent 下次导航照样弹回） */
+    function maybeAutoOpenBrowser() {
+      if (getKitUi().activeFeature === "browser" && getKitUi().browserOpen === true) return;
+      setKitUi(openFeatureDock(getKitUi(), "browser"));
+    }
+    /** 浏览器没了（优雅关闭/空闲自动关/整只崩溃/页崩光）→ 收掉官方浏览器签
+     *  （sidebarRight.close）：正常浏览器语义「没了就没了」，agent 下次开页面板
+     *  照常弹回 */
+    function closeBrowserDockForGone() {
+      if (!getKitUi().browserOpen) return;
+      closeRightbarTab("browser");
+      setKitUi(closeFeatureTab(getKitUi(), "browser"));
+    }
+
+
+
+    /** 浏览器图标：地球（圆 + 经纬弧线），与终端描边体系一致 */
+    function BrowserIcon(props) {
+      // 官方 IconBrowseOutline16 不合理，故自绘
+      return jsxRuntime.jsxs(
+        "svg",
+        {
+          width: (props && props.size) ?? 15,
+          height: (props && props.size) ?? 15,
+          className: props && props.className,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.2,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          children: [
+            jsxRuntime.jsx("circle", { cx: 8, cy: 8, r: 6 }),
+            jsxRuntime.jsx("path", { d: "M2 8h12" }),
+            jsxRuntime.jsx("path", { d: "M8 2c1.8 1.6 2.7 3.6 2.7 6S9.8 12.4 8 14c-1.8-1.6-2.7-3.6-2.7-6S6.2 3.6 8 2z" }),
+          ],
+        },
+      );
+    }
+
+    // ─────────── 内置浏览器面板（右栏浏览器签）───────────
+    // 数据走宿主半边 /dsh-kit/browser WS：state/event 广播 + frame 帧流（jpeg）+
+    // watch 引用计数 + open/activate/closeTab/nav/newTab（人操作）+ input（人机共驾）。
+    // 分区（scope = 本 pane 所属会话 id）：页签按对话隔离，浏览器实例与 profile
+    // 全局共享（登录态一份）——连接先报 scope，宿主只回本分区的 state/帧/事件，
+    // 换会话即重连换分区。
+    // 设计定位：面板是 agent 浏览器的「现场直播 + 遥控」——canvas 绘观察页实时
+    // 画面；人的点击/滚轮/键入经画布坐标换算回传宿主，派发到观察页（人与 agent 可
+    // 各看各页，画面是否跟随 agent 由宿主侧 follow 开关决定）。面板常驻挂在右侧
+    // 标签页容器：WS 管帧流与共驾输入；「agent 导航自动切到浏览器标签」的事件源
+    // 已升级为壳层常驻（ShellBrowserEvents），标签被收掉（0 页自动收/人为关）也能弹回。
+    // 生命周期：关标签仅停流不关浏览器（分区空闲 10 分钟自动收该对话的页、全局无页
+    // 无观察者时空闲关实例，登录态保留在专用 profile，重开无损）。
+
+    // 关页签即关（无确认）：「agent 活动页」的宿主识别与实际操作页常对
+    // 不上，据此弹「agent 在用」确认只会误拦；agent 被关页后按 URL 重走即可
+
+    // 工具栏图标 = 官方浏览器签同一套 primitives（后退/前进 Chevron14、刷新
+    // Refresh14、前往 Link14、外部打开 RightUp16 传 size 14）；取不到（老宿主）
+    // 时回退同尺寸自绘，不挡渲染
+    const BRW_ICON_NAME = {
+      back: "IconChevronLeftOutline14",
+      forward: "IconChevronRightOutline14",
+      reload: "IconRefreshOutline14",
+      go: "IconLinkOutline14",
+      external: "IconRightUpOutline16",
+    };
+    const BRW_ICON_FALLBACK = {
+      back: ["M10 3.2L5.6 8L10 12.8"],
+      forward: ["M6 3.2L10.4 8L6 12.8"],
+      reload: ["M12.6 6.1A4.8 4.8 0 1 0 12.9 9.4", "M12.7 2.9V6.3H9.3"],
+      go: ["M2.8 8h9.6", "M9.2 4.4L12.8 8l-3.6 3.6"],
+      external: ["M6.6 3.2h6.2v6.2", "M12.8 3.2L6.4 9.6", "M12.4 9.4v2.8a1.6 1.6 0 0 1-1.6 1.6H4.4a1.6 1.6 0 0 1-1.6-1.6V4.8a1.6 1.6 0 0 1 1.6-1.6h2.4"],
+    };
+    function BrwToolIcon({ name }) {
+      const Official = dswIcon(BRW_ICON_NAME[name]);
+      if (Official) return jsxRuntime.jsx(Official, name === "external" ? { size: 14 } : {});
+      return jsxRuntime.jsx("svg", {
+        width: 14,
+        height: 14,
+        viewBox: "0 0 16 16",
+        fill: "none",
+        "aria-hidden": true,
+        stroke: "currentColor",
+        strokeWidth: 1.2,
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+        children: (BRW_ICON_FALLBACK[name] ?? []).map((d) => jsxRuntime.jsx("path", { d }, d)),
+      });
+    }
+
+    function BrowserPanel({ active, scope }) {
+      const [state, setState] = react.useState({ running: false, launching: false, pages: [], activeId: null, viewId: null });
+      const [draft, setDraft] = react.useState("");
+      const [visible, setVisible] = react.useState(document.visibilityState === "visible");
+      const [connLost, setConnLost] = react.useState(false);
+      const canvasRef = react.useRef(null);
+      const imeRef = react.useRef(null); // 透明输入：IME 组合事件宿主（canvas 不可编辑，组合起不来）
+      const wsRef = react.useRef(null);
+      const frameRef = react.useRef(null); // 最新帧（绘制去抖：只画最新）
+      const rafRef = react.useRef(0);
+      const moveRef = react.useRef(0); // 输入节流（~30/s）
+      const downRef = react.useRef(null); // 双击判定（时间+距离窗）
+      // 分区（本 pane 所属会话 id）：连接按它认领分区，消息都带它——换会话时 WS 重连
+      // 到新分区（effect 依赖 scope），宿主只回本分区的 state/frame/event
+      const scopeRef = react.useRef(scope);
+      scopeRef.current = scope;
+      // watch 门控与事件回调里要读「最新」的激活/可见态，走 ref（闭包会停在创建帧）
+      const activeRef = react.useRef(active);
+      activeRef.current = active;
+      const visibleRef = react.useRef(visible);
+      visibleRef.current = visible;
+
+      // 观察页（页签条/URL 栏数据源；URL 栏与导航按钮都作用于它）
+      const viewPage = (state.pages ?? []).find((p) => p.viewed) ?? null;
+      const viewUrl = viewPage?.url ?? "";
+      const live = state.running === true;
+
+      // 让位布局（body 类/宽度/拖拽）由右侧标签页容器统一负责，本组件只管内容。
+
+      // agent 导航 → 自动切到浏览器标签：统一走模块级 maybeAutoOpenBrowser（壳层
+      // 常驻事件源与面板共用同一入口，抑制与「已在浏览器标签」的判断都在那边）
+
+      // 帧绘制：base64 jpeg → Image 解码 → canvas（尺寸随帧更新，宽 100% 等比）。
+      // Image 实例复用：每帧 new Image 会把分配与 GC 压进帧路径（每秒几十帧），
+      // 复用同一个对象只换 src——上一帧没解完就被新 src 顶掉，正是我们要的（旧帧已过期）
+      const frameImgRef = react.useRef(null);
+      const drawFrame = react.useCallback((data) => {
+        let img = frameImgRef.current;
+        if (!img) {
+          img = new Image();
+          frameImgRef.current = img;
+        }
+        img.onload = () => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          if (canvas.width !== img.naturalWidth || canvas.height !== img.naturalHeight) {
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+          }
+          const ctx = canvas.getContext("2d");
+          if (ctx) ctx.drawImage(img, 0, 0);
+        };
+        img.src = `data:image/jpeg;base64,${data}`;
+      }, []);
+
+      // WS 生命周期：挂载连接 + 断线重连（2.5s）+ 换分区重连；watch 跟随「实时画面
+      // 模式 + 页面可见」。握手后先报分区（scope），再发 watch——宿主按连接分区回
+      // state/帧/事件，别的对话的页签与画面不会串进来。
+      react.useEffect(() => {
+        let disposed = false;
+        let retry = null;
+        const connect = () => {
+          const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/dsh-kit/browser`);
+          wsRef.current = ws;
+          ws.onopen = () => {
+            if (disposed) return;
+            setConnLost(false);
+            sendScope(); // 认领分区（换会话重连时也靠它）
+            sendWatch(); // 首连补发：effect 里那次检查时握手未完成，会被 readyState 挡掉
+          };
+          ws.onmessage = (e) => {
+            let msg;
+            try {
+              msg = JSON.parse(e.data);
+            } catch {
+              return;
+            }
+            if (!msg || typeof msg !== "object") return;
+            if (msg.t === "state") {
+              setState((prev) => ({ ...prev, ...msg }));
+              // 全部页签被关后清掉画布残帧：死页面的定格不能伪装成直播
+              if (!(msg.pages ?? []).length && canvasRef.current) {
+                const ctx2d = canvasRef.current.getContext("2d");
+                if (ctx2d) ctx2d.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+              }
+              return;
+            }
+            if (msg.t === "frame" && typeof msg.data === "string") {
+              frameRef.current = msg.data;
+              if (!rafRef.current) {
+                rafRef.current = window.requestAnimationFrame(() => {
+                  rafRef.current = 0;
+                  const data = frameRef.current;
+                  frameRef.current = null;
+                  if (data) drawFrame(data);
+                });
+              }
+              return;
+            }
+            if (msg.t === "event") {
+              if (msg.kind === "navigated" && typeof msg.url === "string") {
+                setState((prev) => {
+                  const pages = (prev.pages ?? []).map((p) =>
+                    p.tabId === msg.tabId ? { ...p, url: msg.url, title: msg.title ?? p.title } : p,
+                  );
+                  return { ...prev, pages, running: true };
+                });
+                maybeAutoOpenBrowser();
+                return;
+              }
+              if (msg.kind === "crashed" || msg.kind === "closed") {
+                setState((prev) => ({ ...prev, running: msg.kind === "closed" ? false : prev.running }));
+                return;
+              }
+              if (msg.kind === "error" && typeof msg.message === "string") {
+                flashToast(msg.message);
+              }
+            }
+          };
+          ws.onclose = () => {
+            if (disposed) return;
+            setConnLost(true);
+            setState((prev) => ({ ...prev, running: false }));
+            retry = window.setTimeout(connect, 2500);
+          };
+          ws.onerror = () => {};
+        };
+        connect();
+        return () => {
+          disposed = true;
+          if (retry !== null) window.clearTimeout(retry);
+          try {
+            wsRef.current?.close();
+          } catch {
+            // 已断
+          }
+        };
+      }, [drawFrame, scope]);
+
+      // watch 开关：「浏览器标签激活 + 页面可见」才要帧（切走/隐藏即停流，回来自动
+      // 续）；WS 本身保持连接（自动打开的事件源）。onopen 另有补发——首次连接建立
+      // 时本 effect 已跑过（握手未完成被 readyState 挡掉），不补发首连收不到帧。
+      const sendScope = () => {
+        const ws = wsRef.current;
+        if (!ws || ws.readyState !== 1) return;
+        try {
+          ws.send(JSON.stringify({ t: "scope", scope: scopeRef.current ?? "" }));
+        } catch {
+          // 已断
+        }
+      };
+      const sendWatch = () => {
+        const ws = wsRef.current;
+        if (!ws || ws.readyState !== 1) return;
+        try {
+          ws.send(JSON.stringify({ t: "watch", on: visibleRef.current === true && activeRef.current === true, scope: scopeRef.current ?? "" }));
+        } catch {
+          // 已断
+        }
+      };
+      react.useEffect(() => {
+        sendWatch();
+      }, [visible, active, connLost]);
+      react.useEffect(() => {
+        const onVis = () => {
+          // 事件回调先于重渲染：先同步 ref 再发，避免 watch 带着过期的可见态
+          const vis = document.visibilityState === "visible";
+          visibleRef.current = vis;
+          setVisible(vis);
+          sendWatch();
+        };
+        document.addEventListener("visibilitychange", onVis);
+        return () => document.removeEventListener("visibilitychange", onVis);
+      }, []);
+
+      // ── 人机共驾：画布输入 → 页面坐标 → 宿主派发（仅运行中；未运行不误拉起）──
+      // 所有面板消息都带上本 pane 的分区（scope）：宿主按连接分区派发到该对话的观察页
+      const sendInput = (obj) => {
+        try {
+          wsRef.current?.send(JSON.stringify({ ...obj, scope: scopeRef.current ?? "" }));
+        } catch {
+          // 已断：丢帧无害（下一帧画面自校正）
+        }
+      };
+      const pagePoint = (e) => {
+        const c = canvasRef.current;
+        if (!c) return null;
+        const rect = c.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0 || !c.width || !c.height) return null;
+        const x = ((e.clientX - rect.left) * c.width) / rect.width;
+        const y = ((e.clientY - rect.top) * c.height) / rect.height;
+        return { x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) };
+      };
+      const onCanvasPointerDown = (e) => {
+        if (!live) return;
+        if (e.button !== 0 && e.button !== 1 && e.button !== 2) return;
+        e.preventDefault();
+        try {
+          canvasRef.current?.setPointerCapture?.(e.pointerId);
+        } catch {
+          // 捕获失败不影响转发
+        }
+        const p = pagePoint(e);
+        if (!p) return;
+        const now = Date.now();
+        const dbl =
+          downRef.current !== null &&
+          now - downRef.current.t < 350 &&
+          Math.abs(p.x - downRef.current.x) < 12 &&
+          Math.abs(p.y - downRef.current.y) < 12;
+        downRef.current = { t: now, x: p.x, y: p.y };
+        sendInput({ t: "input", kind: "mousedown", x: p.x, y: p.y, button: e.button, clicks: dbl ? 2 : 1 });
+        // 键入目标：透明输入钉在按下点并接管焦点——它的组合事件（中文输入法）
+        // 与 keydown（英文逐键/快捷键）两条路都从这里出去
+        const ime = imeRef.current;
+        if (ime) {
+          ime.style.left = `${e.clientX}px`;
+          ime.style.top = `${e.clientY}px`;
+          try {
+            ime.focus({ preventScroll: true });
+          } catch {
+            ime.focus();
+          }
+        }
+      };
+      const onCanvasPointerMove = (e) => {
+        if (!live) return;
+        const now = performance.now();
+        if (now - moveRef.current < 33) return; // ~30/s 节流（悬停 + 拖拽共用）
+        moveRef.current = now;
+        const p = pagePoint(e);
+        if (!p) return;
+        sendInput({ t: "input", kind: "mousemove", x: p.x, y: p.y });
+      };
+      const onCanvasPointerUp = (e) => {
+        if (!live) return;
+        const p = pagePoint(e);
+        if (!p) return;
+        sendInput({ t: "input", kind: "mouseup", x: p.x, y: p.y, button: e.button });
+      };
+      const onCanvasWheel = (e) => {
+        if (!live) return;
+        e.preventDefault(); // 画面滚动交给远端页面，不滚面板
+        sendInput({ t: "input", kind: "wheel", dx: e.deltaX, dy: e.deltaY });
+      };
+      const onCanvasKeyDown = (e) => {
+        if (!live) return;
+        // IME 组合中的 keydown（key=Process / keyCode 229）合成不出任何字，跳过；
+        // 组合文本由透明输入的 compositionend → kind:'text' 整段出
+        if (e.isComposing === true || e.keyCode === 229) return;
+        // 纯修饰键不单独转发（并入下一个键的组合串）
+        if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return;
+        e.preventDefault(); // 焦点留在画布，Tab 等也透传给页面
+        const parts = [];
+        if (e.ctrlKey) parts.push("Control");
+        if (e.altKey) parts.push("Alt");
+        if (e.shiftKey) parts.push("Shift");
+        if (e.metaKey) parts.push("Meta");
+        parts.push(e.key.length === 1 ? e.key.toLowerCase() : e.key);
+        sendInput({ t: "input", kind: "key", combo: parts.join("+") });
+      };
+
+      const go = (raw) => {
+        const text = String(raw ?? "").trim();
+        if (text === "") return;
+        const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `http://${text}`;
+        setDraft(withScheme);
+        // 先本地反馈（宿主 navigated 事件随后校正）；humanOpen 作用于观察页
+        setState((prev) => ({
+          ...prev,
+          running: true,
+          pages: (prev.pages ?? []).map((p) => (p.viewed ? { ...p, url: withScheme, title: "" } : p)),
+        }));
+        try {
+          wsRef.current?.send(JSON.stringify({ t: "open", url: withScheme, scope: scopeRef.current ?? "" }));
+        } catch {
+          // 连接断开时忽略（重连后用户可再按）
+        }
+      };
+
+      // URL 栏跟随观察页：切页签/导航事件（宿主侧校正）都把地址栏对到观察页
+      react.useEffect(() => {
+        setDraft(viewUrl);
+      }, [viewPage?.tabId, viewUrl]);
+
+      const tabLabel = (p) => {
+        if (typeof p.title === "string" && p.title.trim() !== "") return p.title;
+        try {
+          return new URL(p.url).host || p.url;
+        } catch {
+          return p.url || `#${p.tabId}`;
+        }
+      };
+
+      // 在系统浏览器打开（官方工具栏同款）：web 端 = 你自己浏览器的新标签页，
+      // 桌面壳里 = 系统浏览器。地址取观察页——没有观察页就没得开
+      const openExternal = () => {
+        const url = String(viewUrl ?? "").trim();
+        if (url === "") return;
+        try {
+          window.open(url, "_blank", "noopener,noreferrer");
+        } catch {
+          // 弹窗被拦：无副作用
+        }
+      };
+
+      // 画面占位（官方空状态同款居中提示）：没帧可看的三种情形；断线/启动失败
+      // 另走顶部提示条，不占画面（定格帧保留，重连回来自动续上）
+      const start = connLost
+        ? null
+        : !live && state.launching === true
+          ? t("browserStarting")
+          : !live && viewUrl === ""
+            ? t("browserNotRunning")
+            : (state.pages ?? []).length === 0
+              ? t("browserNoPages")
+              : null;
+
+      return jsxRuntime.jsxs(jsxRuntime.Fragment, {
+        children: [
+          // 页签条：高亮=观察页；× 关页签（直关无确认）；＋ 新页签
+          jsxRuntime.jsx("div", {
+            className: "dshk-brw-tabrow",
+            children: jsxRuntime.jsxs("span", {
+              className: "dshk-tabs",
+              children: [
+                (state.pages ?? []).map((p) =>
+                  jsxRuntime.jsxs("span", {
+                    className: `dshk-tab${p.viewed ? " dshk-tab-on" : ""}`,
+                    title: p.url,
+                    onClick: () => sendInput({ t: "activate", tabId: p.tabId }),
+                    children: [
+                      jsxRuntime.jsx("span", { className: "dshk-tab-label", children: tabLabel(p) }),
+                      jsxRuntime.jsx(KitTip, {
+                        label: t("browserCloseTab"),
+                        children: jsxRuntime.jsx("button", {
+                          type: "button",
+                          className: "dshk-tab-x",
+                          "aria-label": t("browserCloseTab"),
+                          onClick: (e) => {
+                            e.stopPropagation();
+                            sendInput({ t: "closeTab", tabId: p.tabId });
+                          },
+                          children: "✕",
+                        }),
+                      }),
+                    ],
+                  }, p.tabId),
+                ),
+                jsxRuntime.jsx(KitTip, {
+                  label: t("browserNewTab"),
+                  children: jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-tab dshk-brw-newtab",
+                    "aria-label": t("browserNewTab"),
+                    onClick: () => sendInput({ t: "newTab" }),
+                    children: "＋",
+                  }),
+                }),
+              ],
+            }),
+          }),
+          // 工具栏（规格同官方浏览器签）：后退/前进/刷新 + 地址框（「前往」聚焦才现形）
+          // + 在系统浏览器中打开；都作用于观察页
+          jsxRuntime.jsxs("form", {
+            className: "dshk-brw-bar",
+            onSubmit: (e) => {
+              e.preventDefault();
+              go(draft);
+            },
+            children: [
+              jsxRuntime.jsx(KitTip, { label: t("browserBack"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserBack"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "back" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "back" }) }) }),
+              jsxRuntime.jsx(KitTip, { label: t("browserForward"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserForward"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "forward" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "forward" }) }) }),
+              jsxRuntime.jsx(KitTip, { label: t("browserReload"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserReload"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "reload" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "reload" }) }) }),
+              jsxRuntime.jsxs("div", {
+                className: "dshk-brw-addrbox",
+                children: [
+                  jsxRuntime.jsx("input", {
+                    className: "dshk-brw-url",
+                    value: draft,
+                    placeholder: t("browserUrlPh"),
+                    "aria-label": t("browserUrlPh"),
+                    spellCheck: false,
+                    onChange: (e) => setDraft(e.target.value),
+                  }),
+                  jsxRuntime.jsx(KitTip, { label: t("browserGo"), children: jsxRuntime.jsx("button", { type: "submit", className: "dshk-brw-tool dshk-brw-go", "aria-label": t("browserGo"), children: jsxRuntime.jsx(BrwToolIcon, { name: "go" }) }) }),
+                ],
+              }),
+              jsxRuntime.jsx(KitTip, { label: t("browserExternal"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserExternal"), disabled: viewUrl === "", onClick: openExternal, children: jsxRuntime.jsx(BrwToolIcon, { name: "external" }) }) }),
+            ],
+          }),
+          // 顶部提示条（官方 failure / sandboxWarning 同款）：断线取警示色、启动失败取
+          // 错误色；压在画面上方，定格帧不动（重连回来自动续流）
+          connLost ? jsxRuntime.jsx("div", { className: "dshk-brw-warn", role: "status", children: t("browserReconnect") }) : null,
+          !connLost && !live && state.error ? jsxRuntime.jsx("div", { className: "dshk-brw-fail", role: "alert", children: state.error }) : null,
+          jsxRuntime.jsx("div", {
+            className: "dshk-brw-body",
+            children: [
+              jsxRuntime.jsx("canvas", {
+                className: `dshk-brw-canvas${start === null ? "" : " dshk-brw-canvas-off"}`,
+                ref: canvasRef,
+                tabIndex: 0,
+                onPointerDown: onCanvasPointerDown,
+                onPointerMove: onCanvasPointerMove,
+                onPointerUp: onCanvasPointerUp,
+                onWheel: onCanvasWheel,
+                onKeyDown: onCanvasKeyDown,
+                onContextMenu: (e) => e.preventDefault(), // 右键菜单交给远端页面
+              }),
+              start === null ? null : jsxRuntime.jsx("div", { className: "dshk-brw-start", role: "status", children: start }),
+            ],
+          }),
+          // 透明输入：IME 组合事件宿主（画布不可编辑，中文组合事件起不来）。
+          // 点击画布后焦点在此（见 onCanvasPointerDown）——keydown 必须也挂它，
+          // 否则英文逐键/快捷键的 keydown 冒泡不到处理器（键盘输入全断的根因）。
+          // 组合中 value 只累积不发送；compositionend 把提交文本整段发宿主
+          // （kind:'text' → 远端 keyboard.insertText）。非组合的 input（英文
+          // 逐键已被 keydown preventDefault 拦下，不入 value）只清 value 不发，
+          // 防残字混入下次组合。
+          jsxRuntime.jsx("input", {
+            ref: imeRef,
+            className: "dshk-brw-ime",
+            autoComplete: "off",
+            tabIndex: -1,
+            onKeyDown: onCanvasKeyDown,
+            onInput: (e) => {
+              const el = e.currentTarget;
+              if (el.dataset.composing === "1" || e.isComposing === true) return;
+              el.value = "";
+            },
+            onCompositionStart: (e) => {
+              e.currentTarget.dataset.composing = "1";
+            },
+            onCompositionEnd: (e) => {
+              const el = e.currentTarget;
+              el.dataset.composing = "0";
+              const text = typeof e.data === "string" && e.data !== "" ? e.data : el.value;
+              el.value = "";
+              if (text !== "") sendInput({ t: "input", kind: "text", text });
+            },
+          }),
+        ],
+      });
+    }
+
+
+    /** 功能存在性跟随 pane 挂载（本组件的右栏签用）：pane 挂载 = 官方签开着 */
+    function useFeaturePresence(feature) {
+      react.useEffect(() => {
+        setKitUi(openFeatureTab(getKitUi(), feature));
+        return () => setKitUi(closeFeatureTab(getKitUi(), feature));
+      }, [feature]);
+    }
+    /** 浏览器 pane（agent 驱动 + 人机共驾 + 自动跟随）：分区 = 本 pane 所属会话 id */
+    function BrowserPaneBody(props) {
+      useFeaturePresence("browser");
+      const scope = useCurrentRow(props)?.id ?? "";
+      return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(BrowserPanel, { active: true, scope }) });
+    }
+
+    /** 壳层常驻（shell.overlay）：浏览器事件源 + 官方「浏览器」入口掩码。
+     *  面板标签会被收掉（0 页自动收/人为关闭），「agent 开页切到浏览器」不能依赖
+     *  面板自己活着——壳层恒听宿主广播；浏览器收摊顺手收掉标签。 */
+    function BrowserShell(props) {
+      const row = useCurrentRow(props);
+      const sessionId = row?.id ?? null;
+      const snap = react.useSyncExternalStore(subscribeBCfg, getBSnap);
+      const cfg = bCfgFromSnapshot(snap);
+      // 隐藏官方右栏「浏览器」入口（hideOfficialBrowserEntry）：body 标记 + CSS
+      // display:none，锚点 data-sidebar-right-guide-entry 是官方胶囊的稳定属性
+      // （旧置灰方案同款）。「工作区文件」入口的同类标记归 dsh-kit-files 组件
+      react.useEffect(() => {
+        document.body.classList.toggle("dshk-hide-official-browser", cfg.hideOfficialBrowserEntry === true);
+        return () => {
+          document.body.classList.remove("dshk-hide-official-browser");
+        };
+      }, [cfg.hideOfficialBrowserEntry]);
+
+      // ShellBrowserEvents：壳层常驻浏览器事件源（与面板 WS 并存，不订阅帧流）。
+      // 面板标签会被收掉（0 页自动收/人为关闭），「agent 开页切到浏览器」不能依赖
+      // 面板自己活着——壳层恒听宿主广播：navigated → 拽出右栏浏览器签（无抑制，
+      // agent 操作浏览器必须可见）；浏览器收摊 → 顺手收掉标签。两者兼得：正常浏览器的
+      // 「没了就没了」+ agent 干活时画面自动回眼前。
+      // 分区 = 当前会话：连接先报 scope（宿主只回本会话的 navigated），换会话即重连；
+      // 0 页收签只在「曾经有页又变 0」时触发——本会话刚开面板（页还没建）不该被收掉。
+      react.useEffect(() => {
+        let disposed = false;
+        let retry = null;
+        let ws = null;
+        let hadPages = false;
+        const connect = () => {
+          ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/dsh-kit/browser`);
+          ws.onopen = () => {
+            if (disposed) return;
+            try {
+              ws.send(JSON.stringify({ t: "scope", scope: sessionId ?? "" }));
+            } catch {
+              // 已断
+            }
+          };
+          ws.onmessage = (e) => {
+            let msg;
+            try {
+              msg = JSON.parse(e.data);
+            } catch {
+              return;
+            }
+            if (!msg || typeof msg !== "object") return;
+            if (msg.t === "event") {
+              if (msg.kind === "navigated") maybeAutoOpenBrowser();
+              else if (msg.kind === "closed") {
+                hadPages = false;
+                closeBrowserDockForGone();
+              }
+              return;
+            }
+            if (msg.t === "state" && msg.launching !== true && msg.running === true) {
+              // 页崩光残留（running 但 0 页）= 浏览器实质没了，收掉标签。
+              // running:false 不作依据——快照无历史，启动失败也会落到这个形状，
+              // 收掉标签会让用户连错误线索都看不到；「曾活着→没了」由 closed 事件负责。
+              // 本会话刚开、页还没建（hadPages 为假）时不动它
+              if ((msg.pages ?? []).length > 0) hadPages = true;
+              else if (hadPages) {
+                hadPages = false;
+                closeBrowserDockForGone();
+              }
+            }
+          };
+          ws.onclose = () => {
+            if (disposed) return;
+            retry = window.setTimeout(connect, 2500);
+          };
+          ws.onerror = () => {};
+        };
+        connect();
+        return () => {
+          disposed = true;
+          if (retry !== null) window.clearTimeout(retry);
+          try {
+            ws?.close();
+          } catch {
+            // 已断
+          }
+        };
+      }, [sessionId]);
+
+      return null;
+    }
+
+    // ─────────── 对话链接改投内置浏览器（设置项 chatOpenLinkInBrowser，默认开）───────────
+    /** 官方 markdown 把链接渲染成 `<a target="_blank">`（新标签打开，系统浏览器接管）。
+     *  开启后把对话滚动区内的 http(s) 链接改投右栏浏览器签：宿主端点
+     *  /dsh-kit/browser/open 与面板 URL 栏同一条 humanOpen 语义（作用于观察页、浏览器
+     *  没在跑时拉起），点击即达，不依赖面板是否已挂载/已连上 WS。
+     *  判定链任何一环不命中都放行官方：自家面板元素、非 http(s)（相对链接/mailto/锚点）。 */
+    function onChatLinkClick(ev) {
+      if (!ev.isTrusted) return;
+      const cfg = bCfgFromSnapshot(getBSnap());
+      if (cfg.chatOpenLinkInBrowser !== true) return;
+      if (!(ev.target instanceof Element)) return;
+      const kitAnc = ev.target.closest('[class*="dshk-"]');
+      if (kitAnc && kitAnc !== document.body && kitAnc !== document.documentElement) return;
+      const anchor = ev.target.closest("a[href]");
+      if (!anchor || anchor.hasAttribute("download")) return;
+      // 仅官方对话滚动区内的链接（markdown 正文、工具输出、web_search 结果都在其中）
+      if (!anchor.closest('[class*="_scroll"]')) return;
+      const href = (anchor.getAttribute("href") || "").trim();
+      if (!/^https?:\/\//i.test(href)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      setKitUi(openFeatureDock(getKitUi(), "browser"));
+      // 失败不提示（吞掉 rejection 免成 unhandled）：面板上一步已切到浏览器签——
+      // 网址打不开时浏览器自己的错误页就是反馈（同普通浏览器），浏览器起不来时
+      // 面板的未启动提示会带上宿主报的原因。再弹 toast 只是重复的噪音。
+      // sessionId = 点击时所在会话：宿主按它把链接落进该对话自己的浏览器分区
+      kitJson("/dsh-kit/browser/open", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: href, sessionId: currentSessionId() }),
+      }).catch(() => {});
+    }
+
+
+    // ─────────── 右栏「浏览器」功能签（官方 sidebarRightTabs）───────────
+    // 一个功能一张 dock 签（页类型），pane 正文是本组件。服务是宿主内部实现，
+    // 运行期探测取用、绝不写进 dsh.client.inject（老宿主没有该服务，硬声明整个
+    // 插件起不来）；缺服务只剩 getKitUi() 侧的存在性补丁（签不出现）。
+    function registerRightbar(rbCtx) {
+      const tabs = rbCtx.sidebarRightTabs;
+      if (!tabs || typeof tabs.register !== "function") return;
+      rbCtx.effect(() => tabs.register({
+        id: "dsh-kit-browser",
+        kind: "dshk-browser",
+        title: () => t("dockBrowser"),
+        guide: [{ order: 110, title: () => t("dockBrowser"), description: () => t("rbGuideBrowserDesc"), icon: BrowserIcon }],
+      }), "dsh-kit-browser: rightbar tab type dshk-browser");
+      rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.pane.tab", () => rbCtx.slots.register({
+        name: "sidebar.right.pane.tab",
+        key: "dsh-kit-browser",
+        // 会话行经 root 的 shellShare 桥（pane 注册发生在 effect，渲染期 props 由
+        // 常驻的 KitSurfaces 桥供最新值）
+        inject: () => ({ useSessions: shellShare.current?.useSessions }),
+      }, BrowserPaneBody)), "dsh-kit-browser: rightbar pane body dshk-browser");
+    }
+
+    // ─────────── 配置页（plugins.row.config）───────────
+    // 骨架（草稿/保存/官方表单接线）在 dock，这里只喂本组件字段表与词条；
+    // 字段清单与 src/browser/index.ts 的 Config schema 同源（render-check 钉住）。
+    const BROWSER_CFG_FIELDS = [
+      { key: "chatOpenLinkInBrowser", type: "bool", group: "kcfgGroupBrowser", labelKey: "kcfgChatOpenLinkInBrowser", hintKey: "kcfgChatOpenLinkInBrowserHint" },
+      { key: "hideOfficialBrowserEntry", type: "bool", group: "kcfgGroupBrowser", labelKey: "kcfgHideOfficialBrowserEntry", hintKey: "kcfgHideOfficialBrowserEntryHint" },
+    ];
+    const BROWSER_CFG_GROUPS = ["kcfgGroupBrowser"];
+    const BrowserConfigPage = dock.createConfigPage({
+      fields: BROWSER_CFG_FIELDS,
+      groups: BROWSER_CFG_GROUPS,
+      t,
+      onSaved: async () => {
+        await loadCfg();
+      },
+    });
+
+    // 组件私有样式：面板（页签条/工具栏/地址框/提示条/画布/透明 IME 输入）+ 官方入口掩码
+    const BROWSER_CSS = `
+/* 工具栏/地址框/提示条/空状态规格照抄官方右栏浏览器签
+   （@deepseek-ai/dsh-client-ui-sidebar-browser 的 Browser.module.css：38px 工具栏、
+   28px 图标钮、0.5px 分隔线、dsw 令牌与字号；哈希类名不跨包复用，仅搬规格）。
+   页签条与画布（多页切换 + 人机共驾）是本插件特有，官方无对应物 */
+.dshk-brw-tabrow{flex:none;display:flex;align-items:center;gap:4px;height:32px;padding:0 6px;min-width:0;overflow:hidden}
+.dshk-brw-newtab{padding:0 7px;font-size:13px}
+.dshk-brw-bar{box-sizing:border-box;flex:none;display:flex;align-items:center;gap:4px;height:38px;padding:5px 6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.dshk-brw-tool{width:28px;height:28px;flex:none;display:inline-flex;align-items:center;justify-content:center;padding:0;border:0;border-radius:6px;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.dshk-brw-tool:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+/* label-quaternary 官方有引用但本宿主主题未定义——带回退链，将来补上即自动对齐 */
+.dshk-brw-tool:disabled{color:var(--dsw-alias-label-quaternary,var(--dsw-alias-label-tertiary));cursor:default}
+.dshk-brw-addrbox{position:relative;flex:auto;min-width:0}
+.dshk-brw-url{box-sizing:border-box;width:100%;height:28px;padding:0 34px 0 9px;border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12)}
+.dshk-brw-url:focus{outline:1px solid var(--dsw-alias-brand-primary-new-colorprimary-new-color,var(--dsw-alias-brand-primary));outline-offset:-1px}
+/* 「前往」贴地址框右缘，聚焦时才现形（官方 addressGo 同款） */
+.dshk-brw-go{position:absolute;top:0;right:0;visibility:hidden;opacity:0}
+.dshk-brw-addrbox:focus-within .dshk-brw-go{visibility:visible;opacity:1}
+.dshk-brw-warn{flex:none;padding:6px 12px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warning-primary,var(--dsw-alias-state-business-primary));background:color-mix(in srgb,var(--dsw-alias-state-warning-primary,var(--dsw-alias-state-business-primary)) 8%,transparent)}
+.dshk-brw-fail{flex:none;padding:6px 12px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 8%,transparent)}
+.dshk-brw-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:var(--dsw-alias-bg-base)}
+.dshk-brw-canvas{max-width:100%;max-height:100%;margin:auto;display:block;outline:none}
+.dshk-brw-canvas-off{display:none}
+.dshk-brw-start{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:24px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xs-13);text-align:center}
+/* 透明 IME 输入：只做组合事件宿主，视觉隐形、不拦截点击 */
+.dshk-brw-ime{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;border:0;padding:0;margin:0;outline:none;pointer-events:none;z-index:-1;background:transparent}
+/* 隐藏官方右栏「浏览器」入口（hideOfficialBrowserEntry）：iframe 预览框，站点覆盖面天然受限 */
+body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{display:none}
+`;
+    function injectStyles() {
+      if (typeof document === "undefined") return;
+      if (document.querySelector('style[data-plugin-css="dsh-kit-browser/ui"]') === null) {
+        const tag = document.createElement("style");
+        tag.dataset.plugin = "dsh-kit";
+        tag.dataset.pluginCss = "dsh-kit-browser/ui";
+        tag.textContent = BROWSER_CSS;
+        document.head.appendChild(tag);
+      }
+    }
+
+    exports.inject = ["slots"];
+    // 行开关即总开关：宿主半边不物化时 /dsh-kit-browser/config 404，这里整体不注册
+    //（面板、右栏签、链接改投、官方入口掩码全不出现）。
+    exports.apply = async (ctx) => {
+      if (!(await loadCfg())) return;
+      injectStyles();
+      // 右栏功能签：官方 sidebarRightTabs 是挂载期声明的服务，inject 等它就绪
+      ctx.inject(["sidebarRightTabs"], registerRightbar);
+      // 壳层常驻事件源（agent 导航自动切签 + 收签 + 入口掩码）
+      ctx.slots.inject("shell.overlay", () =>
+        ctx.slots.register({ name: "shell.overlay", id: "dsh-kit-browser", order: 920 }, BrowserShell),
+      );
+      // 对话链接改投内置浏览器（默认开：配置页 chatOpenLinkInBrowser）
+      document.addEventListener("click", onChatLinkClick, true);
+      // 配置页挂本组件行：槽位 key = <包名>#<行id>——两种包名口径各挂一枚
+      //（页面按精确 key 匹配，未命中的那枚永远不渲染）
+      for (const key of ["dsh-kit#browser", "dsh-kit-browser#browser"]) {
+        ctx.slots.inject("plugins.row.config", () =>
+          ctx.slots.register({ name: "plugins.row.config", key }, BrowserConfigPage),
+        );
+      }
+    };
+
+    // 渲染级检查取用
+    exports.BrowserPanel = BrowserPanel;
+    exports.BrowserPaneBody = BrowserPaneBody;
+    exports.BrowserShell = BrowserShell;
+    exports.BrowserIcon = BrowserIcon;
+    exports.maybeAutoOpenBrowser = maybeAutoOpenBrowser;
+    exports.closeBrowserDockForGone = closeBrowserDockForGone;
+    exports.onChatLinkClick = onChatLinkClick;
+    exports.registerRightbar = registerRightbar;
+    exports.bCfgFromSnapshot = bCfgFromSnapshot;
+    exports.getBSnap = getBSnap;
+    exports.BROWSER_CFG_FIELDS = BROWSER_CFG_FIELDS;
+    exports.BrowserConfigPage = BrowserConfigPage;
+    return module.exports;
+};
+
     // ── dsh-kit-terminal 组件（终端）──
 // dsh-kit-terminal 浏览器半边 —— 终端组件的 client 面。
 // 收纳：对话输入行的终端入口（多会话角标）+ 底部停靠多标签终端坞 + xterm 胶水
@@ -11867,6 +12026,9 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     // slotsCtx/vault 状态等），组件 require("dsh-kit") 拿到的就是这里的活引用
     exports.useCurrentRow = useCurrentRow;
     exports.useCurrentCwd = useCurrentCwd;
+    // 会话 id 与常驻壳层 props 桥（浏览器组件的右栏签与链接改投用）
+    exports.currentSessionId = currentSessionId;
+    exports.shellShare = shellShare;
     exports.currentComposerShell = currentComposerShell;
     exports.chatMentionText = chatMentionText;
     exports.sidebarBtn = sidebarBtn;
@@ -11885,6 +12047,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.terminal = terminalModule(exports, require);
     exports.skills = skillsModule(exports, require);
     exports.search = searchModule(exports, require);
+    exports.browser = browserModule(exports, require);
     exports.inject = ["slots"];
     exports.apply = apply;
     return module.exports;

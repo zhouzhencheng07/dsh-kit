@@ -27,6 +27,11 @@
       "default": "./dist/monitor/index.js"
     },
     "./monitor/locale/*.json": "./locale/monitor/*.json",
+    "./browser": {
+      "types": "./dist/browser/index.d.ts",
+      "default": "./dist/browser/index.js"
+    },
+    "./browser/locale/*.json": "./locale/browser/*.json",
     "./search": {
       "types": "./dist/search/index.d.ts",
       "default": "./dist/search/index.js"
@@ -65,6 +70,8 @@
     "skills",
     "skill-pool",
     "settings",
+    "browser",
+    "playwright",
     "search",
     "web-search",
     "tavily"

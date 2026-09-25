@@ -20,3 +20,5 @@
       name: dsh-kit/monitor
     - id: search
       name: dsh-kit/search
+    - id: browser
+      name: dsh-kit/browser

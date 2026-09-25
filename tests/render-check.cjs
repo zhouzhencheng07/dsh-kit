@@ -103,7 +103,7 @@ const RETURN = "return module.exports;";
 const rootReturn = body.lastIndexOf(RETURN);
 if (rootReturn < 0) { console.log("FATAL: no root return"); process.exit(2); }
 const wrapper = body.slice(0, rootReturn) +
-  "return Object.assign({ vaultSideSlot, vaultPaneSlot, VaultEntry, PhoneSection, KitSurfaces, TreeRowMenu, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, getKitUi, setKitUi, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, KitConfigPage, KIT_CFG_FIELDS, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref, registerShortcuts, shortcutRun, rightbarSeat, useRightbarSeat, attachSeatSignal: dock.attachSeatSignal }, kitBase);" +
+  "return Object.assign({ vaultSideSlot, vaultPaneSlot, VaultEntry, PhoneSection, KitSurfaces, TreeRowMenu, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, getKitUi, setKitUi, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, KitConfigPage, KIT_CFG_FIELDS, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref, registerShortcuts, shortcutRun, rightbarSeat, useRightbarSeat, attachSeatSignal: dock.attachSeatSignal }, kitBase);" +
   body.slice(rootReturn + RETURN.length);
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -125,7 +125,7 @@ console.log((baseOk ? "PASS  " : "FAIL  ") + "底座共享面齐全（kit 三件
 if (!baseOk) process.exitCode = 1;
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["VaultEntry", "PhoneSection", "KitSurfaces", "TreeRowMenu", "BrowserPanel", "RteEditor", "VaultPagePane", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "KitConfigPage", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "BrowserPaneBody", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["VaultEntry", "PhoneSection", "KitSurfaces", "TreeRowMenu", "RteEditor", "VaultPagePane", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "KitConfigPage", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -219,18 +219,17 @@ const renderCfgTab = (group, form) => {
 };
 const cfgSw = () => callLog.filter((c) => c[1] === primStub.Switch);
 const cfgVf = () => callLog.filter((c) => c[1] === primStub.SettingsValueField);
-out = renderCfgTab(null, fakeForm); // 默认首组
+out = renderCfgTab(null, fakeForm); // 默认首组（浏览器功能开关已随组件迁走，首组是手机访问）
 const cfgTabs = callLog.find((c) => c[1] === primStub.SegmentedTabs);
-check("KitConfigPage SegmentedTabs：3 组页签、默认首组、带可访问名", !!cfgTabs && cfgTabs[2].items.length === 3 && cfgTabs[2].value === "kcfgGroupFeatures" && typeof cfgTabs[2].label === "string" && cfgTabs[2].items.every((it) => typeof it.label === "string" && it.label.length > 0 && it.id === "dshk-cfgp-tab-" + it.value && it.panelId === "dshk-cfgp-panel-" + it.value));
+check("KitConfigPage SegmentedTabs：2 组页签、默认首组、带可访问名", !!cfgTabs && cfgTabs[2].items.length === 2 && cfgTabs[2].value === "kcfgGroupPhone" && typeof cfgTabs[2].label === "string" && cfgTabs[2].items.every((it) => typeof it.label === "string" && it.label.length > 0 && it.id === "dshk-cfgp-tab-" + it.value && it.panelId === "dshk-cfgp-panel-" + it.value));
 cfgTabs[2].onChange("kcfgGroupVault");
 check("KitConfigPage 页签切换落 state", stateStore.get(3) === "kcfgGroupVault");
 const cfgFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
 check("KitConfigPage SettingsForm 框架：labels/state/保存动作齐全", !!cfgFrm && typeof cfgFrm[2].onSave === "function" && typeof cfgFrm[2].onDiscard === "function" && cfgFrm[2].state.available === true && cfgFrm[2].state.writable === true && cfgFrm[2].state.dirty === false && !!cfgFrm[2].labels.save && !!cfgFrm[2].labels.readOnly && !!cfgFrm[2].labels.saveFailed);
 const cfgPanel = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-cfgp-fields");
-check("功能开关页签：3 Switch（搜索/终端/技能已随组件迁走，无数值字段）+ 面板 aria 挂到当前组", cfgSw().length === 3 && cfgVf().length === 0 && !!cfgPanel && cfgPanel[2].id === "dshk-cfgp-panel-kcfgGroupFeatures" && cfgPanel[2].role === "tabpanel");
-check("Switch 行回显布尔值且带说明文案（首位是内置浏览器）", cfgSw()[0][2].checked === true && ["内置浏览器", "Built-in browser"].includes(cfgSw()[0][2].label));
-out = renderCfgTab("kcfgGroupPhone", fakeForm);
-check("手机访问页签：2 Switch + 1 数值 + 1 文本（数值回显受理值、文本回显受理域名）", cfgSw().length === 2 && cfgVf().length === 2 && cfgVf().some((c) => c[2].id === "dshk-cfgp-phonePort" && c[2].text === "3091" && c[2].numeric === true && c[2].overridden === false) && cfgVf().some((c) => c[2].id === "dshk-cfgp-phoneRemoteDomain" && c[2].text === "dsh.example.com"));
+check("手机访问页签（默认首组）：2 Switch + 2 字段、面板 aria 挂到当前组", cfgSw().length === 2 && cfgVf().length === 2 && !!cfgPanel && cfgPanel[2].id === "dshk-cfgp-panel-kcfgGroupPhone" && cfgPanel[2].role === "tabpanel");
+check("Switch 行回显布尔值且带说明文案（首位是「手机访问」入口）", cfgSw()[0][2].checked === true && ["「手机访问」页入口", "手机访问", "Phone access"].some((s) => String(cfgSw()[0][2].label).includes(s)));
+check("手机访问页签字段：数值回显受理值、文本回显受理域名", cfgVf().some((c) => c[2].id === "dshk-cfgp-phonePort" && c[2].text === "3091" && c[2].numeric === true && c[2].overridden === false) && cfgVf().some((c) => c[2].id === "dshk-cfgp-phoneRemoteDomain" && c[2].text === "dsh.example.com"));
 out = renderCfgTab("kcfgGroupVault", fakeForm);
 check("知识库页签：1 Switch + 1 文本", cfgSw().length === 1 && cfgVf().length === 1);
 // 10) 键位改由宿主 shortcuts 服务持有（0.1.7-rc.2+ 官方「快捷键」页）：注册面在
@@ -343,67 +342,6 @@ callLog = [];
 out = comps.PhoneSection({});
 check("PhoneSection loading 渲染无异常", !!out && typeof out === "object");
 
-// 7.2) 内置浏览器：面板（未运行态：canvas + 输入处理器就位）；入口已迁右坞，
-// 「+」菜单项/空态卡片在 RightDock 用例覆盖
-callLog = [];
-out = comps.BrowserPanel({});
-const canvasHost = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-brw-canvas"));
-const hasInputHandlers = canvasHost && canvasHost[2].onPointerDown && canvasHost[2].onKeyDown && canvasHost[2].onWheel;
-check("BrowserPanel 未运行态渲染无异常", !!out && typeof out === "object");
-check("BrowserPanel 渲染出带共驾输入处理器的 canvas", !!canvasHost && !!hasInputHandlers);
-comps.setKitUi({ browserOpen: false });
-
-// 7.2.5) 关页签直关（宿主 active 识别常不准）——✕ 点击不弹确认
-stateStore.clear();
-stateSeq = 0;
-stateStore.set(0, { running: true, launching: false, pages: [
-  { tabId: 1, url: "http://a.example/", title: "A", active: false, viewed: false },
-  { tabId: 2, url: "http://b.example/", title: "B", active: true, viewed: true },
-], activeId: 2, viewId: 2 });
-callLog = [];
-out = comps.BrowserPanel({ active: true });
-const tabXs = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-tab-x");
-check("BrowserPanel 运行态渲染出页签 ✕（2 个）", tabXs.length === 2);
-const noDot = callLog.every((c) => !(c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-tab-dot")));
-check("页签条不再渲染 agent 活动圆点", noDot);
-const fakeEvent = { stopPropagation() {} };
-global.window.confirm = (msg) => { throw new Error(`confirm should never be called`) };
-let threw = null;
-try { tabXs[0][2].onClick(fakeEvent); tabXs[1][2].onClick(fakeEvent); } catch (e) { threw = e; }
-global.window.confirm = undefined;
-check("页签 ✕ 直关不弹确认", threw === null);
-
-// 7.2.55) 工具栏对齐官方浏览器签：5 枚 28px 图标钮（后退/前进/刷新 + 地址框内
-// 「前往」+ 在系统浏览器中打开）；外部打开拿观察页 URL，有页才可用
-const toolBtns = callLog.filter((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.split(" ").includes("dshk-brw-tool"));
-check("BrowserPanel 工具栏为官方同款图标钮（5 枚）", toolBtns.length === 5);
-const externalBtn = toolBtns.find((c) => ["在系统浏览器中打开", "Open in system browser"].includes(c[2]["aria-label"]));
-check("在系统浏览器中打开：观察页 URL 就位时可用", !!externalBtn && externalBtn[2].disabled === false && typeof externalBtn[2].onClick === "function");
-check("「前往」是地址框内提交钮（官方同款）", toolBtns.some((c) => c[2].type === "submit" && c[2].className.includes("dshk-brw-go")));
-
-// 7.2.6) 全部页签关闭后的空态：运行中 0 页显示「没有打开的页面」提示（官方同款
-// 居中占位），且画布隐去——不留无提示的僵尸画面；预置 running + 空 pages
-stateStore.clear();
-stateSeq = 0;
-stateStore.set(0, { running: true, launching: false, pages: [], activeId: null, viewId: null });
-callLog = [];
-out = comps.BrowserPanel({ active: true });
-const noPagesNote = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-brw-start" && typeof c[2].children === "string" && ["没有打开的页面", "No open pages"].some((s) => c[2].children.includes(s)));
-check("BrowserPanel 运行中 0 页渲染空态提示", !!noPagesNote);
-const canvasHidden = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-brw-canvas-off"));
-check("空态时画布隐去（不留定格帧）", !!canvasHidden);
-
-// 7.2.7) 壳层事件源语义（模块函数直调，getKitUi 读回）：navigated → 弹回浏览器
-// 标签；浏览器没了 → 收掉面板标签且不置抑制（agent 下次导航照常弹回——抑制的
-// 置/清只发生在人为路径，事件源不碰）
-comps.setKitUi({ browserOpen: false, activeFeature: null });
-comps.maybeAutoOpenBrowser();
-check("maybeAutoOpenBrowser 切到浏览器标签（无抑制，agent 干活必回眼前）", comps.getKitUi().browserOpen === true && comps.getKitUi().activeFeature === "browser");
-comps.closeBrowserDockForGone();
-check("closeBrowserDockForGone 收掉面板标签（0 页无面板壳）", comps.getKitUi().browserOpen === false && comps.getKitUi().activeFeature === null);
-
-
-
 // 7.2.2a) 文件标签纯逻辑：点击只激活（刷新 usedAt）／✕ 单关顺延邻居／关光了整片收摊
 const tabBase = {
   files: [
@@ -472,10 +410,6 @@ comps.setKitUi({ vaultOpen: false, vaultPages: [], activeVaultPage: null });
 callLog = [];
 out = comps.SchedulePaneBody({});
 check("SchedulePaneBody 挂 ScheduleView（pane 内左待办+右网格）", !!out && callLog.some((c) => c[1] === comps.ScheduleView));
-callLog = [];
-out = comps.BrowserPaneBody({});
-const bpElemRb = callLog.find((c) => c[1] === comps.BrowserPanel && c[2] && c[2].active === true);
-check("BrowserPaneBody 挂 BrowserPanel（active 恒真：pane 显示即在看）", !!out && !!bpElemRb);
 callLog = [];
 let rbCloseOk = true;
 try { comps.closeRightbarTab("file"); } catch { rbCloseOk = false; }
@@ -1188,7 +1122,9 @@ check("KitSurfaces 带cwd渲染无异常", !!out && typeof out === "object");
     compared++;
     if (comps.CFG_DEFAULTS[key] !== expected) drift.push(key + "(bundle=" + comps.CFG_DEFAULTS[key] + ",host=" + expected + ")");
   }
-  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 8);
+  // 浏览器三项（browserEnabled/chatOpenLinkInBrowser/hideOfficialBrowserEntry）已随组件
+  // 迁走，本包可比对项剩 5（vaultRoot 默认是表达式，不比对）。
+  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 5);
 }
 // 过时文案清理：现行说明不得出现「侧栏底部『任务』钮」、日程索引标题键、搜索默认 5
 check(
