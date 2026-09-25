@@ -8,7 +8,7 @@
 //     只给它们共享面。知识库钮是开合切换：开 = 侧栏索引视图，再点 = 侧栏回
 //     会话列表；日程没有 composer 钮（日程只有一个家：右栏 dock 签，入口归右栏
 //     开始页条目与待办卡）。
-//   右栏（唯一工作台形态，宿主 0.1.5+）：sidebarRightTabs 注册四类 dock 签，
+//   右栏（唯一工作台形态）：sidebarRightTabs 注册四类 dock 签，
 //     pane 正文经 slots.inject（sidebar.right.pane.tab）按 id 提供，pane 内自管
 //     文档签条。dock 签本身没有按钮：diff/知识库是被动签（SCM/树/对话点开
 //     即开），日程/浏览器走右栏开始页清单与自动跟随。开始页保留官方
@@ -54,12 +54,11 @@ window.__ModuleLoader__.load({
       Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
       const react = require("react");
     const jsxRuntime = require("react/jsx-runtime");
-    let dswPrim = null;
-    try { dswPrim = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 老宿主：配置页降级 */ }
+    const dswPrim = require("@deepseek-ai/dsh-client-ui-primitives");
 
     // ── 官方气泡（名称 + 键帽）与宿主键位镜像 ──
     // 悬停提示一律走官方 primitives 的 Tooltip：同一套主题底色、同一套键帽样式。
-    // 取不到该成员的宿主回落各按钮原来的原生 title（不挡启动）。
+    // 取不到该成员时回落各按钮原来的原生 title（不挡启动）。
     const dswTooltip = dswPrim && typeof dswPrim.Tooltip === "function" ? dswPrim.Tooltip : null;
     // 宿主 shortcuts 目录镜像：apply 期 inject 到位后接管（服务可能晚于首次渲染），
     // 之后活读——官方「快捷键」页里改了键，悬停气泡当场跟着变。
@@ -244,7 +243,7 @@ window.__ModuleLoader__.load({
       }).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
     }
 
-    /** 主视图会话行（0.1.6 会话面多实例化后 sessions.list 快照没有 current）：
+    /** 主视图会话行（sessions.list 快照没有 current）：
      *  主视图会话 = retainedBy.mainView > 0 的行（与官方 ui-session publishMain
      *  同判据）。选择器返回 byId 里的行对象本身——引用稳定，uSES getSnapshot 可用；
      *  retainedBy 是本地引用计数、不在 list 快照变更里，切会话要订阅 retainInfo。 */
@@ -257,10 +256,9 @@ window.__ModuleLoader__.load({
     }
 
     // ─────────── 插件行配置页骨架 ───────────
-    // 官方表单原语解析：老宿主 primitives 缺成员时配置页降级为提示，不影响其余。
+    // 官方表单原语解析：缺成员时配置页降级为提示，不影响其余。
     const cfgUiPrim =
-      dswPrim
-      && typeof dswPrim.SettingsForm === "function"
+      typeof dswPrim.SettingsForm === "function"
       && typeof dswPrim.SettingsValueField === "function"
       && typeof dswPrim.Switch === "function"
       && typeof dswPrim.SegmentedTabs === "function"
@@ -587,7 +585,7 @@ window.__ModuleLoader__.load({
     const RB_FEATURES = [
       { id: "dsh-kit-file", kind: "dshk-file", feature: "file", titleKey: "fileTabLabel" },
     ];
-    // ─────────── 官方右侧边栏（宿主 0.1.5+，本插件唯一工作台形态）───────────
+    // ─────────── 官方右侧边栏（本插件唯一工作台形态）───────────
     // 每个功能一张 dock 签（页类型），pane 正文是我们的组件。服务是宿主内部实现，
     // **运行期探测取用、绝不写进 dsh.client.inject**——硬声明缺失服务会让整个插件
     // 起不来。不可用则只剩 getKitUi() 侧的存在性补丁（入口不报错，
@@ -785,12 +783,11 @@ window.__ModuleLoader__.load({
 
     // ─────────── 官方 primitives 图标复用（能复用就不自绘）───
     // primitives 随宿主前端注册进 ModuleLoader（官方各 client lib 同款 require）；
-    // 取不到（宿主未注册 primitives / 异常环境）时各图标回退自绘版本，不挡启动。
-    let dswPrimIcons = null;
-    try { dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 回退自绘 */ }
+    // 宿主没这个图标成员时回退自绘版本，不挡启动。
+    const dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives");
     const dswIcon = (...names) => {
       for (const n of names) {
-        const c = dswPrimIcons ? dswPrimIcons[n] : null;
+        const c = dswPrimIcons[n];
         if (typeof c === "function" || typeof c === "object") return c;
       }
       return null;
@@ -1429,7 +1426,7 @@ ellipsis，窄列只截字不破版 */
     const { flashToast, writeClipboard } = dock;
 
     // ─────────── 当前会话工作区 ───────────
-    // 主视图会话行判定随会话行共享收进 dock（0.1.6 多实例化判据见 dock 注释）
+    // 主视图会话行判定随会话行共享收进 dock（判据见 dock 注释）
     const mainRowOf = dock.mainRowOf;
 
     /** 当前主视图会话 id（点击类一次性动作用：浏览器分区、文件地址等）；拿不到给空串 */
@@ -2327,7 +2324,7 @@ ellipsis，窄列只截字不破版 */
     return module.exports;
     };
 
-    // ─────────── 官方右侧边栏注册（宿主 0.1.5+）───────────
+    // ─────────── 官方右侧边栏注册 ───────────
     // 根行只剩文件签（被动签，不给开始页条目——入口在左侧边栏）；知识库 / 日程 /
     // 浏览器的签与条目各归各自组件半边。服务运行期探测（见 RB_FEATURES 处注释）。
     const RB_BODY = {
@@ -5355,7 +5352,7 @@ ellipsis，窄列只截字不破版 */
       return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(ScheduleView, { active: true }) });
     }
 
-    // ─────────── 本组件生效配置（0.1.7 声明式模型）───────────
+    // ─────────── 本组件生效配置（声明式模型）───────────
     // 配置真源 = 本组件宿主 Config（src/vault/index.ts）。client 启动拉
     // /dsh-kit-vault/config 喂快照；行开关关闭时该端点随宿主半边不物化而 404，
     // apply 据此整体不注册（侧栏索引、右栏签、入口按钮、对话改投全不出现）。
@@ -5424,10 +5421,10 @@ ellipsis，窄列只截字不破版 */
       }
     }
 
-    // ─────────── 官方快捷键服务（0.1.7-rc.2+）───────────
+    // ─────────── 官方快捷键服务 ───────────
     // 知识库索引开合命令注册进宿主 shortcuts 服务 = 进官方「快捷键」页（Ctrl+/）：
     // 录制、冲突检测、持久化全归官方。默认键只给 web:macos/web:windows（web 端放行表
-    // 内）与 desktop 三档；运行期 inject，服务缺位时这条命令不存在。
+    // 内）与 desktop 三档；运行期 inject。
     const VAULT_SHORTCUT_DEFAULTS = (code) => ({
       "web:macos": { code, modifiers: ["primary", "alt"] },
       "web:windows": { code, modifiers: ["primary", "alt"] },
@@ -5778,7 +5775,7 @@ ellipsis，窄列只截字不破版 */
       const [notice, setNotice] = react.useState("");
       const canvasRef = react.useRef(null);
       // 网关启停开关（POST /dsh-kit/phone/gateway；状态文件直管，不经 settings）。
-      // 远程域名/端口属插件配置，编辑入口在原生设置页（0.1.7 起 Config schema 自动生成）
+      // 远程域名/端口属插件配置，编辑入口在原生设置页（Config schema 自动生成）
       const [gateBusy, setGateBusy] = react.useState(false);
       const toggleGateway = async (next) => {
         if (gateBusy) return;
@@ -6033,11 +6030,10 @@ ellipsis，窄列只截字不破版 */
       expandSidebarNow, TreeRowMenu, TreeFolderIcon, FileTypeIcon16, ChevronIcon,
       rightbarSeat,
     } = dock;
-    let dswPrimIcons = null;
-    try { dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 回退自绘 */ }
+    const dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives");
     const dswIcon = (...names) => {
       for (const n of names) {
-        const c = dswPrimIcons ? dswPrimIcons[n] : null;
+        const c = dswPrimIcons[n];
         if (typeof c === "function" || typeof c === "object") return c;
       }
       return null;
@@ -6455,10 +6451,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       },
     });
 
-    // ─────────── 官方快捷键服务（0.1.7-rc.2+）───────
+    // ─────────── 官方快捷键服务 ───────
     // 文件树 / 源代码管理两条命令注册进宿主 shortcuts 服务 = 进官方「快捷键」页
-    // （Ctrl+/）：录制、冲突检测、跨设备默认值、持久化都归官方。运行期 inject：
-    // 服务缺位时只是没键位。
+    // （Ctrl+/）：录制、冲突检测、跨设备默认值、持久化都归官方。运行期 inject。
     // 默认键只给 web:macos/web:windows（web 端放行表只认三键组合或 primary+alt/shift）
     // 与 desktop 三档。
     function registerShortcuts(scCtx) {
@@ -8449,8 +8444,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         }
         return null;
       };
-      // 官方快捷键服务（0.1.7-rc.2+）：文件树/源代码管理两条命令注册进官方页。
-      // 运行期 inject：服务缺位时只是没键位，其余功能照常。
+      // 官方快捷键服务：文件树/源代码管理两条命令注册进官方页。运行期 inject。
       ctx.inject(["shortcuts"], registerShortcuts);
       // 官方入口掩码跟随本组件配置：配置页保存 → 重拉快照 → 广播 → 标记类即时切换
       subscribeCfg(syncOfficialFilesMask);
@@ -8493,7 +8487,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 // 数值（¥余额 / 5h 窗口百分比），全名在悬停提示；点芯片浮层贴正上方只出该家
 // 明细——定位与关闭复用官方 primitives 的 useAnchoredPosition /
 // useDismissOnOutsidePointer / Tooltip，面板样式复刻官方 ContextMeter 浮层
-// （哈希类名复用不了，CSS 原样抄）；primitives 缺位（老宿主）降级为右下角
+// （哈希类名复用不了，CSS 原样抄）；primitives 缺位时降级为右下角
 // 固定浮层、无 Tooltip。modelDirectories 是懒就绪服务：就绪时 version++ 通知
 // 订阅者重跑 effect，否则「服务后到」的挂载永远拿不到数据源。
 //
@@ -8508,11 +8502,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const reactDom = require("react-dom");
     const dock = kit;
     const { kitJson, resolveZh, subscribeLocale, getLocaleVersion } = dock;
-    let dswPrimIcons = null;
-    try { dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 回退自绘 */ }
+    const dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives");
     const dswIcon = (...names) => {
       for (const n of names) {
-        const c = dswPrimIcons ? dswPrimIcons[n] : null;
+        const c = dswPrimIcons[n];
         if (typeof c === "function" || typeof c === "object") return c;
       }
       return null;
@@ -8703,7 +8696,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       for (const [name, value] of Object.entries(vars ?? {})) s = s.split(`{${name}}`).join(String(value));
       return s;
     };
-    // 主视图会话行判定（0.1.6 会话面多实例化）随会话行共享收进 dock
+    // 主视图会话行判定随会话行共享收进 dock
     const mainRowOf = dock.mainRowOf;
 
     // ─────────── 会话监视：429 续跑器（所有会话）+ 死循环停止（仅当前会话）───────────
@@ -8713,7 +8706,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // ─────────── 全局 429 续跑器（所有会话）+ 死循环停止（仅当前会话）───────────
     // 续跑是单一全局机制（monitorTick 轮询）：监视会话列表里【所有】会话——人
     // 发起任务后离开，任何会话被 429 打断都自动续到任务完成，不要求该会话页开着。
-    // 数据源全是官方面（宿主 0.1.5-rc.2 运行时实证）：
+    // 数据源全是官方面：
     //   枚举+running ← sessions.list 快照（宿主经 api-session/status 推送，与
     //                  会话页是否打开无关）；
     //   失败判定    ← binding(id).session 快照 lastAgentError——agent-loop 对每次
@@ -9984,7 +9977,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         try {
           void Promise.resolve(dir.load()).catch(() => {});
         } catch {
-          /* 老宿主形态差异：读不到就靠投影 */
+          /* 读不到就靠投影 */
         }
         return () => {
           alive = false;
@@ -10234,7 +10227,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       // 全局 429 续跑器主循环：轮询自守卫（服务未就绪直接跳过），monitorEnabled 关时空转
       setInterval(monitorTick, MONITOR_TICK_MS);
       // 会话通知：订阅官方两个数据源（就绪时机不保证，用 inject 等）。uiSession
-      // 缺位（精简组合/老宿主）时只订阅列表——完成通知照发，提问通知降级为不发
+      // 缺位（精简组合）时只订阅列表——完成通知照发，提问通知降级为不发
       ctx.inject(["sessions"], (sctx) => {
         const offs = [];
         let pendingStore = null;
@@ -10310,7 +10303,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       window.addEventListener("focus", notifyMaybeUnflash);
       // 提问 / 批准事件：旁听官方 remote 瀑布（根 ctx 上收全部会话的请求，含后台
       // 会话——官方 UI 只在会话上台时接管，那半边它接不到）。remote 服务缺位
-      // （老宿主）时静默降级：只剩完成通知与官方待回应投影那一半
+      // 时静默降级：只剩完成通知与官方待回应投影那一半
       ctx.inject(["remote", "sessions"], (rctx) => {
         try {
           rctx.remote.$on("user-questions/request", notifyRequestListener(rctx.sessions, "question"));
@@ -10410,11 +10403,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       closeFeatureTab, openFeatureTab, openFeatureDock, closeRightbarTab,
       useCurrentRow, currentSessionId, shellShare,
     } = dock;
-    let dswPrimIcons = null;
-    try { dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 回退自绘 */ }
+    const dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives");
     const dswIcon = (...names) => {
       for (const n of names) {
-        const c = dswPrimIcons ? dswPrimIcons[n] : null;
+        const c = dswPrimIcons[n];
         if (typeof c === "function" || typeof c === "object") return c;
       }
       return null;
@@ -10466,7 +10458,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? key;
 
-    // ─────────── 本组件生效配置（0.1.7 声明式模型）───────────
+    // ─────────── 本组件生效配置（声明式模型）───────────
     // 配置真源 = 本组件宿主 Config（src/browser/index.ts）。client 启动拉
     // /dsh-kit-browser/config 喂快照；行开关关闭时该端点随宿主半边不物化而 404，
     // apply 据此整体不注册。快照未就绪/拉取失败一律回退内置默认（功能全开）。
@@ -10559,7 +10551,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // 不上，据此弹「agent 在用」确认只会误拦；agent 被关页后按 URL 重走即可
 
     // 工具栏图标 = 官方浏览器签同一套 primitives（后退/前进 Chevron14、刷新
-    // Refresh14、前往 Link14、外部打开 RightUp16 传 size 14）；取不到（老宿主）
+    // Refresh14、前往 Link14、外部打开 RightUp16 传 size 14）；取不到该成员
     // 时回退同尺寸自绘，不挡渲染
     const BRW_ICON_NAME = {
       back: "IconChevronLeftOutline14",
@@ -11328,7 +11320,7 @@ body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{displ
       termTabClose: "结束此终端",
       termCloseAll: "结束全部终端",
       vendorFail: "终端组件加载失败",
-      officialTermUnavailable: "官方终端服务不可用：此功能需要 DSH 0.1.6+",
+      officialTermUnavailable: "官方终端服务不可用",
       termLimit: "宿主终端数量已达上限：先结束一些再新建",
       contentFail: "读取失败",
       scTerminal: "终端",
@@ -11346,7 +11338,7 @@ body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{displ
       termTabClose: "Kill this terminal",
       termCloseAll: "Kill all terminals",
       vendorFail: "Failed to load terminal components",
-      officialTermUnavailable: "Official terminal service unavailable: requires DSH 0.1.6+",
+      officialTermUnavailable: "Official terminal service unavailable",
       termLimit: "Host terminal limit reached: kill some terminals first",
       contentFail: "Failed to read",
       scTerminal: "Terminal",
@@ -11552,7 +11544,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     }
     // 快捷键的 resolve 在渲染之外调用，闭包拿不到当前会话——由入口/坞渲染期回填
     let lastSession = { id: null, cwd: null };
-    /** 官方终端模型服务（0.1.6+）：apply 期 inject 捕获，缺服务 = 坞报版本提示 */
+    /** 官方终端模型服务：apply 期 inject 捕获 */
     let webTerminalsSvc = null;
 
     // ─────────── 终端坞（多标签）───────────
@@ -12060,10 +12052,9 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       });
     }
 
-    // ─────────── 官方快捷键服务（0.1.7-rc.2+）───────
+    // ─────────── 官方快捷键服务 ───────
     // 终端命令注册进宿主 shortcuts 服务 = 进官方「快捷键」页（Ctrl+/）：录制、冲突
-    // 检测、跨设备默认值、持久化都归官方；运行期 inject——服务缺位时只是没键位。
-    // 默认键只给 web:macos/web:windows（web 端放行表只认三键组合或
+    // 检测、跨设备默认值、持久化都归官方；运行期 inject。默认键只给 web:macos/web:windows（web 端放行表只认三键组合或
     // primary+alt/shift）与 desktop 三档。
     function registerShortcuts(scCtx) {
       const shortcuts = scCtx.shortcuts;
@@ -12102,9 +12093,9 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       ctx.slots.inject("shell.overlay", () =>
         ctx.slots.register({ name: "shell.overlay", id: "dsh-kit-terminal", order: 910 }, TerminalSurfaces),
       );
-      // 官方终端模型服务（0.1.6+）：缺服务时坞报版本提示，其余功能照常
+      // 官方终端模型服务：apply 期 inject 捕获
       ctx.inject(["webTerminals"], (tctx) => { webTerminalsSvc = tctx.webTerminals; });
-      // 官方快捷键服务：运行期 inject，老宿主只是没键位
+      // 官方快捷键服务：运行期 inject
       ctx.inject(["shortcuts"], registerShortcuts);
       void loadCfg(); // 拉配置喂门控（失败保持内置默认）
       injectStyles();

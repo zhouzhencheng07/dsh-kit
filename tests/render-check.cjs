@@ -161,7 +161,7 @@ check("VaultEntry 渲染无异常且悬停走官方气泡（KitTip + 命令 id �
 const svp = comps.sidebarViewPatch("vault");
 check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultIdxOpen === true && svp.treeOpen === false && svp.gitOpen === false);
 // 7.1) 功能签入口补丁（openFeatureTab）：置存在 + 置激活位，纯补丁不触碰别的签。
-// 后台任务不做签（0.1.7 官方会话头部自带任务清单 + 实时输出 + 停止），无 jobs 分支
+// 后台任务无插件分支：官方会话头部自带任务清单 + 实时输出 + 停止
 const ots = comps.openFeatureTab({ files: [], browserOpen: false, schedOpen: false, activeFeature: null }, "schedule");
 check("openFeatureTab 日程：置存在+激活", ots.schedOpen === true && ots.activeFeature === "schedule" && ots.browserOpen === undefined);
 const otb = comps.openFeatureTab({ files: [], browserOpen: false, schedOpen: true, activeFeature: "schedule" }, "browser");
@@ -305,7 +305,7 @@ comps.setKitUi({ files: [], activeFile: null, vaultOpen: false, vaultPages: [], 
 // 再挂 mounted 验首选关系。断言后恢复在场，后面用例按默认态跑。
 {
   const seat = comps.rightbarSeat;
-  check("在场信号未挂上时按可用（老宿主 / 极简组合不误伤）", seat.available === true);
+  check("在场信号未挂上时按可用（极简组合不误伤）", seat.available === true);
   let panelVal = { activePanelId: null };
   comps.attachSeatSignal("panel", { getSnapshot: () => panelVal });
   check("回落源 layout.panelInfo：对话在前台（activePanelId=null）＝在场", seat.available === true);
@@ -993,7 +993,7 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
 }
 
 
-// 9) 插件配置（0.1.7 声明式模型）：主行没有可调参数，因此不导出 Config、也没有配置页
+// 9) 插件配置（声明式模型）：主行没有可调参数，因此不导出 Config、也没有配置页
 //    （手机访问在 dsh-kit/phone 组件，字段与探针都在 src/phone/index.ts）。
 //    这里钉住「主行不再持有任何配置字段 / 默认表 / 配置页骨架」，避免退役字段借道回来。
 {
@@ -1072,7 +1072,7 @@ check(
   "日程侧栏索引与专属快捷键不存在（schedIdxOpen/schedShortcut 全链移除）",
   !src.includes("schedIdxOpen") && !src.includes("schedShortcut") && !src.includes("cfgSchedShortcut") && !src.includes("ScheduleIndexView"),
 );
-// 键位整体改由宿主 shortcuts 服务持有（0.1.7-rc.2+ 官方「快捷键」页）：自带快捷键
+// 键位整体改由宿主 shortcuts 服务持有（官方「快捷键」页）：自带快捷键
 // 配置项/全局 keydown 匹配/左栏键都不该再出现，注册面在 client 半边（见下方 apply 钉子）
 check(
   "自带快捷键配置项全退役（terminal/vault/rightbar/sidebar Shortcut 字段与自绘匹配都不在）",

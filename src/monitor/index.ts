@@ -81,7 +81,7 @@ function loadDep(spec: string): any {
   return null
 }
 
-// ── 组件设置 schema（0.1.7 声明式模型）──
+// ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile
 // 写入 = 热提交（fiber config 里的稳定 ref），readSettings 统一解引用。
 const schemastery = loadDep('@deepseek-ai/schemastery')
@@ -164,18 +164,12 @@ export async function apply(ctx: any, config: KitSettings = {}): Promise<void> {
               | { configuration?: () => Array<{ entry?: { options?: { id?: string } }; inherited?: unknown; override?: unknown }> }
               | undefined
             const row = editor?.configuration?.().find((r) => r.entry?.options?.id === 'llm-pi-ai')
-            if (row) {
-              const providers: Record<string, unknown> = {}
-              for (const layer of [row.inherited, row.override]) {
-                if (layer !== null && typeof layer === 'object') Object.assign(providers, (layer as { providers?: unknown }).providers)
-              }
-              return { providers }
+            if (!row) return null
+            const providers: Record<string, unknown> = {}
+            for (const layer of [row.inherited, row.override]) {
+              if (layer !== null && typeof layer === 'object') Object.assign(providers, (layer as { providers?: unknown }).providers)
             }
-          } catch { /* 服务缺位/读取失败落 settings 兜底 */ }
-          try {
-            const settings = ctx.get('settings') as { get?: (ns: string) => unknown } | undefined
-            const value = settings?.get?.('llm-pi-ai')
-            return value !== null && typeof value === 'object' ? (value as { providers?: unknown }) : null
+            return { providers }
           } catch {
             return null
           }

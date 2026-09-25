@@ -41,7 +41,7 @@ interface SeamSearchProvider {
 
 /** web 服务里本层触达的最小面（其余成员不声明） */
 interface SeamWebService {
-  registerSearchProvider?: (provider: SeamSearchProvider) => unknown
+  registerSearchProvider: (provider: SeamSearchProvider) => unknown
   searchProviders?: Map<string, SeamSearchProvider>
   /** provider 选择：seam 每次 search() 现读；未配置时为 undefined */
   searchProviderId?: string
@@ -49,7 +49,7 @@ interface SeamWebService {
 
 /** cordis ctx 里本层用到的最小面（effect 可缺：缺失时不做还原） */
 interface KitCtx {
-  inject(deps: string[], cb: (webCtx: { web?: SeamWebService }) => void): void
+  inject(deps: string[], cb: (webCtx: { web: SeamWebService }) => void): void
   effect?(fn: () => void | (() => void), label?: string): void
 }
 
@@ -89,12 +89,7 @@ export function applyWebSearch(ctx: KitCtx, options: ApplyWebSearchOptions = {})
   const disposers: Array<() => void> = []
   ctx.inject(['web'], (webCtx) => {
     const web = webCtx.web
-    const register = web ? web.registerSearchProvider : undefined
-    if (!web || typeof register !== 'function') {
-      // developer-preview 面挪走了：降级为日志，不让整个插件消失
-      log?.('web seam 没有 registerSearchProvider，免费搜索未启用')
-      return
-    }
+    const register = web.registerSearchProvider
     if (web.searchProviders?.has(SEARCH_PROVIDER_ID)) {
       log?.(`"${SEARCH_PROVIDER_ID}" 已被注册（该 id 已被占用），免费搜索未启用`)
       return

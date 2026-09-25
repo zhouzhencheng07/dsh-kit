@@ -122,7 +122,7 @@ function loadDep(spec: string): any {
   return null
 }
 
-// ── 组件设置 schema（0.1.7 声明式模型）──
+// ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile 写入 =
 // 热提交（fiber config 里的稳定 ref），readSettings 统一解引用后每次现读。
 // 行开关 = 本组件的总开关：关行即整块消失。
@@ -193,7 +193,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
           return true
         }
       }
-      // dsh web ≥ v0.1.2-alpha.5 的浏览器鉴权：网关反代须自带签名会话 cookie，
+      // dsh web 的浏览器鉴权：网关反代须自带签名会话 cookie，
       // 否则手机端访问 index 一律 401。密钥即 credentials 服务的
       // client-connection/browser-session 记录（与 dsh web 共享），b64url 解码回
       // 32 字节原始密钥。读不到时按降级处理：网关其余功能不受影响，仅手机访问 401。

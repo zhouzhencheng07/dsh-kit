@@ -18,7 +18,7 @@
 // 认证层，持有链接者本就能借 agent 对话执行任意命令，特权钉死对该威胁模型无增量；
 // 而直连回环的本机访问不受影响，dsh 本体零改动。
 //
-// dsh web ≥ v0.1.2-alpha.5 起带浏览器会话鉴权：回环直连请求也必须携带
+// dsh web 带浏览器会话鉴权：回环直连请求也必须携带
 // client-connection 签名 cookie，否则 index 一律 401（手机端会看到
 // "dsh web authentication required; reopen the URL printed by dsh web"）。
 // 网关自铸该会话 cookie（与 dsh web 共享 credentials 的
@@ -119,8 +119,7 @@ const POLYFILL_SCRIPT =
  * 全部——按钮文案带应用名（"用 VS Code 打开" / "更多打开方式"），按 aria-label 匹配逐版漂移。
  */
 const HOST_ONLY_LOCKED = ['[data-open-target]']
-// 官方右栏「工作区文件」胶囊不锁：宿主 0.1.6 起手机上文件预览（md/PDF）可用，
-// 0.1.5-rc.2 只能看目录——那是当初锁它的原因
+// 官方右栏「工作区文件」胶囊不锁：手机上文件预览（md/PDF）可用
 
 /**
  * 「添加工作区」入口：只在宿主 picker 服务不了远程客户端时并入。browse 后端让远程
