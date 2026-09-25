@@ -405,6 +405,15 @@ async function checkApply() {
   if (resolved.status === "handled") resolved.run();
   check("resolve 在功能开时 handled 且 run 切侧栏单槽", resolved.status === "handled" && dockExports.getKitUi().treeOpen === true && before !== JSON.stringify({ tree: dockExports.getKitUi().treeOpen, git: dockExports.getKitUi().gitOpen }));
   dockExports.setKitUi({ treeOpen: false });
+  // 官方右栏不在场（全局面板在前台 / 没选会话）：索引视图与右栏同生灭，命令 blocked
+  dockExports.rightbarSeat.set(false);
+  const gatedTree = treeCmd.resolve({ region: "page", modal: null });
+  const gatedScm = scmCmd.resolve({ region: "page", modal: null });
+  check(
+    "右栏不在场：文件树/源代码管理命令 blocked 带说明且不切侧栏",
+    gatedTree.status === "blocked" && ["当前不在对话中", "Not in a conversation"].includes(gatedTree.reason) && gatedScm.status === "blocked" && dockExports.getKitUi().treeOpen === false && dockExports.getKitUi().gitOpen === false,
+  );
+  dockExports.rightbarSeat.set(true);
   // 渲染器座：apply 后 root 单槽分发到 files 的 tree/git 分支
   const renderer = dockExports.sidebarView.renderer;
   check("files apply 接管 sidebarView 渲染器座", typeof renderer === "function");
