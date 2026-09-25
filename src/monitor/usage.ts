@@ -2,14 +2,13 @@
 //
 // 从模型配置发现 provider（llm-pi-ai entry 配置经宿主 configEditor 读，providers.<id>.apiKeyEnv
 // 是凭证引用名），经 credentials 服务按引用解析 key（每请求现读，改配置即生效、
-// key 不出宿主进程），聚合三家上游给浏览器芯片：
+// key 不出宿主进程），聚合两家上游给浏览器芯片：
 //   deepseek  GET {base|api.deepseek.com}/user/balance    Bearer        余额（币种/总额/赠送/充值）
 //   opencode  GET {provider.baseURL}/usage                Bearer        rolling(5h)/weekly/monthly 百分比+重置
-//   zai       GET {站}/api/monitor/usage/quota/limit      Authorization 原值   5小时/周窗口 credits 用量+重置
-// 两家配额上游都是非官方承诺的契约（失效只挂对应卡，见知识库「dsh-kit 用量」页）。
+// opencode 的配额上游是非官方承诺的契约（失效只挂对应卡，见知识库「dsh-kit 用量」页）。
 //
 // 端点（同源校验同 index.ts；webserver 默认只绑 loopback）：
-//   GET /dsh-kit/usage[?fresh=1] → { providers:{deepseek?|opencode?|zai?}, at }
+//   GET /dsh-kit/usage[?fresh=1] → { providers:{deepseek?|opencode?}, at }
 //   卡按配置出现：模型配置里没配对应 provider（且无 DEEPSEEK_API_KEY 引用）就不出卡。
 //   usageEnabled 总开关关闭时 403 usage-disabled（前端入口同步隐藏）。
 //
@@ -23,10 +22,6 @@ import { sameOrigin } from '../core/index.ts'
 /** 宿主对象最小依赖面（与其它模块同约定：只声明实际触达的成员） */
 interface UsageWebServer {
   register(route: { kind: 'exact' | 'prefix'; path: string; handler: (req: http.IncomingMessage, res: http.ServerResponse) => void | Promise<void> }): () => void
-}
-/** 站点选择：provider id 以 -cn 结尾（如 zai-coding-cn）或名字含 bigmodel 走国内站 */
-function zaiBase(id: string): string {
-  return /cn$/i.test(id) || /bigmodel/i.test(id) ? 'https://open.bigmodel.cn' : 'https://api.z.ai'
 }
 export interface UsageDeps {
   webServer: UsageWebServer
@@ -46,21 +41,19 @@ const UPSTREAM_TIMEOUT_MS = 15000
 /** 每家上游结果缓存时长：配额窗口变化慢，多客户端同看也不该反复打 */
 const CACHE_TTL_MS = 60000
 
-type ProviderKind = 'deepseek' | 'opencode' | 'zai'
+type ProviderKind = 'deepseek' | 'opencode'
 
 /** 发现出的一个上游卡位：kind 是浏览器侧固定卡位；ref+base 标识缓存身份（配置改了自然换缓存键） */
 interface Discovered {
   kind: ProviderKind
   envRef: string
   base: string
-  /** z.ai 监控端点的鉴权头吃凭证原值，带 "Bearer " 前缀会 401 */
-  bearer: boolean
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
 
 /**
- * 扫模型配置里的 providers，按 id / 凭证引用名归类到三种卡位（子串匹配）。
+ * 扫模型配置里的 providers，按 id / 凭证引用名归类到两种卡位（子串匹配）。
  * 官方内置 deepseek 不在 llm-pi-ai 里，另用标准引用名 DEEPSEEK_API_KEY 兜底探测
  * （resolve 不中即不出卡）。识别不出的一律忽略（如 sensenova 这类无关 provider）。
  */
@@ -77,18 +70,16 @@ async function discoverProviders(deps: UsageDeps): Promise<Discovered[]> {
       if (envRef === '') continue
       const base = str(raw?.baseURL)
       if (/deepseek/i.test(id) || /deepseek/i.test(envRef)) {
-        add({ kind: 'deepseek', envRef, base: base !== '' ? base.replace(/\/+$/, '') : 'https://api.deepseek.com', bearer: true })
+        add({ kind: 'deepseek', envRef, base: base !== '' ? base.replace(/\/+$/, '') : 'https://api.deepseek.com' })
       } else if (/opencode/i.test(id) || /opencode/i.test(envRef)) {
-        add({ kind: 'opencode', envRef, base: base !== '' ? base.replace(/\/+$/, '') : 'https://opencode.ai/zen/go/v1', bearer: true })
-      } else if (/zai|glm|bigmodel/i.test(id) || /zai|glm|bigmodel/i.test(envRef)) {
-        add({ kind: 'zai', envRef, base: zaiBase(id), bearer: false })
+        add({ kind: 'opencode', envRef, base: base !== '' ? base.replace(/\/+$/, '') : 'https://opencode.ai/zen/go/v1' })
       }
     }
   }
   if (!found.has('deepseek')) {
     // 模型配置没写 deepseek provider 时探测标准引用名（官方内置适配器同款），有才出卡
     const hit = await deps.credentials.resolve?.('DEEPSEEK_API_KEY').catch(() => undefined)
-    if (hit?.value) add({ kind: 'deepseek', envRef: 'DEEPSEEK_API_KEY', base: 'https://api.deepseek.com', bearer: true })
+    if (hit?.value) add({ kind: 'deepseek', envRef: 'DEEPSEEK_API_KEY', base: 'https://api.deepseek.com' })
   }
   return [...found.values()]
 }
@@ -103,9 +94,7 @@ interface CacheEntry {
 type ProviderResult = { ok: true } & Record<string, unknown> | { ok: false; error: string }
 
 async function fetchUpstream(d: Discovered, key: string): Promise<ProviderResult> {
-  const headers: Record<string, string> = { accept: 'application/json' }
-  if (d.bearer) headers.authorization = `Bearer ${key}`
-  else headers.authorization = key
+  const headers: Record<string, string> = { accept: 'application/json', authorization: `Bearer ${key}` }
   let url: string
   try {
     url = new URL(d.base + pathOf(d)).href
@@ -139,34 +128,16 @@ async function fetchUpstream(d: Discovered, key: string): Promise<ProviderResult
       : []
     return { ok: true, available: body?.is_available === true, infos }
   }
-  if (d.kind === 'opencode') {
-    const u = body?.usage
-    const win = (w: any) =>
-      w === null || typeof w !== 'object'
-        ? null
-        : { status: str(w.status) || null, percent: Number.isFinite(w.percent) ? w.percent : null, resetsAt: str(w.resetsAt) || null }
-    return { ok: true, windows: { rolling: win(u?.rolling), weekly: win(u?.weekly), monthly: win(u?.monthly) } }
-  }
-  // z.ai：limits[] 里 unit=3 是小时窗（number=5 即 5 小时）、unit=6 是周窗；
-  // 百分比/剩余 credits/重置时刻都是现成的
-  const limits = Array.isArray(body?.data?.limits)
-    ? body.data.limits.map((l: Record<string, unknown>) => ({
-        kind: l.unit === 3 ? 'hours' : l.unit === 6 ? 'week' : `unit-${String(l.unit)}`,
-        number: Number(l.number) || null,
-        usage: Number(l.usage) || 0,
-        currentValue: Number(l.currentValue) || 0,
-        remaining: Number(l.remaining) || 0,
-        percentage: Number(l.percentage) || 0,
-        nextResetTime: Number(l.nextResetTime) || null,
-      }))
-    : []
-  return { ok: true, level: str(body?.data?.level) || null, limits }
+  const u = body?.usage
+  const win = (w: any) =>
+    w === null || typeof w !== 'object'
+      ? null
+      : { status: str(w.status) || null, percent: Number.isFinite(w.percent) ? w.percent : null, resetsAt: str(w.resetsAt) || null }
+  return { ok: true, windows: { rolling: win(u?.rolling), weekly: win(u?.weekly), monthly: win(u?.monthly) } }
 }
 
 function pathOf(d: Discovered): string {
-  if (d.kind === 'deepseek') return '/user/balance'
-  if (d.kind === 'opencode') return '/usage'
-  return '/api/monitor/usage/quota/limit'
+  return d.kind === 'deepseek' ? '/user/balance' : '/usage'
 }
 
 /** 注册 /dsh-kit/usage；返回注销函数（插件卸载时撤路由） */

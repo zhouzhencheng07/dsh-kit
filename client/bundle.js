@@ -9125,8 +9125,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 //
 // 数据走宿主 /dsh-kit/usage（key 在宿主侧复用模型配置，浏览器拿不到）。状态带
 // 右缘只出**一张**芯片：当前会话选中的模型 provider（modelDirectories 服务按
-// sessionId 给的共享目录 store，composer 模型座同源）归类出 deepseek/opencode/
-// zai 卡位，端点没配对应 provider 或识别不出（如 sensenova）= 不出。芯片只放
+// sessionId 给的共享目录 store，composer 模型座同源）归类出 deepseek/opencode
+// 卡位，端点没配对应 provider 或识别不出（如 sensenova）= 不出。芯片只放
 // 数值（¥余额 / 5h 窗口百分比），全名在悬停提示；点芯片浮层贴正上方只出该家
 // 明细——定位与关闭复用官方 primitives 的 useAnchoredPosition /
 // useDismissOnOutsidePointer / Tooltip，面板样式复刻官方 ContextMeter 浮层
@@ -9134,8 +9134,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 // 固定浮层、无 Tooltip。modelDirectories 是懒就绪服务：就绪时 version++ 通知
 // 订阅者重跑 effect，否则「服务后到」的挂载永远拿不到数据源。
 //
-// 开关 = 本组件自己的 Config（usageEnabled），经 /dsh-kit-monitor/config 拉取：
-// 关 = 端点 403 + 芯片不注册数据源，两者一致由同一份配置驱动。
+// 开关 = 本组件自己的 Config（usageEnabled，默认开），经 /dsh-kit-monitor/config
+// 拉取：关 = 端点 403 + 芯片不出，两者由同一份配置驱动。
     const monitorModule = (kit, require) => {
     var module = { exports: {} };
     var exports = module.exports;
@@ -9161,7 +9161,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       usageUpdatedAt: "更新于",
       usageDeepseek: "DeepSeek 余额",
       usageOpencode: "OpenCode Go",
-      usageZai: "GLM Coding Plan",
       usageAvailable: "可用",
       usagePaused: "余额不足或已停机",
       usageBalanceTotal: "总余额",
@@ -9171,7 +9170,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       usageWeek: "本周窗口",
       usageMonth: "本月窗口",
       usageResets: "重置",
-      usageLevel: "套餐",
       usageNoCard: "模型配置未提供此服务的用量数据",
       usageOfficialPage: "官方用量页",
       // 会话监视（429 续跑 / 死循环打断）
@@ -9203,6 +9201,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       notifyPlanBody: "agent 提交了计划等你批准",
       notifyToolFallback: "工具调用",
       // 本组件配置页字段（骨架通用文案在 dock）
+      kcfgGroupUsage: "用量与余额",
+      kcfgUsageEnabled: "余额与用量芯片",
+      kcfgUsageEnabledHint: "composer 下方状态带显示当前会话 provider 的余额/配额芯片。",
       kcfgGroupMonitor: "会话监视与通知",
       kcfgNotifyEnabled: "会话桌面通知",
       kcfgNotifyEnabledHint: "页面不在前台时，回合收尾/压缩完成/agent 提问弹桌面通知。",
@@ -9220,7 +9221,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       usageUpdatedAt: "Updated",
       usageDeepseek: "DeepSeek balance",
       usageOpencode: "OpenCode Go",
-      usageZai: "GLM Coding Plan",
       usageAvailable: "available",
       usagePaused: "low balance or suspended",
       usageBalanceTotal: "Total",
@@ -9230,7 +9230,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       usageWeek: "Weekly window",
       usageMonth: "Monthly window",
       usageResets: "resets",
-      usageLevel: "Plan",
       usageNoCard: "No usage data for this service in the model config",
       usageOfficialPage: "Usage dashboard",
       monitorContinueText: "Continue",
@@ -9259,6 +9258,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       notifyPlanTitle: "{title} · plan awaiting approval",
       notifyPlanBody: "The agent submitted a plan for your approval",
       notifyToolFallback: "A tool call",
+      kcfgGroupUsage: "Usage & balance",
+      kcfgUsageEnabled: "Balance & usage chip",
+      kcfgUsageEnabledHint: "Shows a balance/quota chip for the session's provider under the composer.",
       kcfgGroupMonitor: "Session monitor & notifications",
       kcfgNotifyEnabled: "Session desktop notifications",
       kcfgNotifyEnabledHint: "Desktop-notify on turn completion / compaction / agent questions while the page is in the background.",
@@ -9278,7 +9280,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // 全部字段——组件的 Config schema 是唯一真源）。快照形状与主包同款
     // { status:'ready', value }；端点不可达按全默认处理（与门控同源语义）。
     const M_CFG_DEFAULTS = {
-      usageEnabled: false,
+      usageEnabled: true,
       monitorEnabled: true,
       monitorWaitMs: 15000,
       monitorMaxAuto: 5,
@@ -10383,13 +10385,14 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     // 本组件配置页（插件页 dsh-kit-monitor 行「配置」）：骨架在 dock，这里只喂字段表
     const MONITOR_CFG_FIELDS = [
+      { key: "usageEnabled", type: "bool", group: "kcfgGroupUsage", labelKey: "kcfgUsageEnabled", hintKey: "kcfgUsageEnabledHint" },
       { key: "monitorEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgMonitorEnabled", hintKey: "kcfgMonitorEnabledHint" },
       { key: "monitorWaitMs", type: "number", min: 5000, max: 600000, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorWaitMs", hintKey: "kcfgMonitorWaitMsHint" },
       { key: "monitorMaxAuto", type: "number", min: 1, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorMaxAuto", hintKey: "kcfgMonitorMaxAutoHint" },
       { key: "monitorRepeatThreshold", type: "number", min: 2, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorRepeatThreshold", hintKey: "kcfgMonitorRepeatThresholdHint" },
       { key: "notifyEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgNotifyEnabled", hintKey: "kcfgNotifyEnabledHint" },
     ];
-    const MONITOR_CFG_GROUPS = ["kcfgGroupMonitor"];
+    const MONITOR_CFG_GROUPS = ["kcfgGroupUsage", "kcfgGroupMonitor"];
     const MonitorConfigPage = dock.createConfigPage({
       fields: MONITOR_CFG_FIELDS,
       groups: MONITOR_CFG_GROUPS,
@@ -10471,7 +10474,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const s = String(providerId ?? "");
       if (/deepseek/i.test(s)) return "deepseek";
       if (/opencode/i.test(s)) return "opencode";
-      if (/zai|glm|bigmodel/i.test(s)) return "zai";
       return null;
     }
 
@@ -10483,7 +10485,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const USAGE_LINKS = {
       deepseek: "https://platform.deepseek.com/usage",
       opencode: "https://opencode.ai/zh/go",
-      zai: "https://bigmodel.cn/coding-plan/personal/usage",
     };
     const usageUseAnchoredPosition =
       dswPrimIcons && typeof dswPrimIcons.useAnchoredPosition === "function" ? dswPrimIcons.useAnchoredPosition : null;
@@ -10507,7 +10508,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     /**
      * 高峰时段（本地时区，仅工作日，[起,止) 分钟数）：只标 DeepSeek 工作日
-     *   9:00–12:00、14:00–18:00（z.ai / opencode 无公开口径不标）。
+     *   9:00–12:00、14:00–18:00（opencode 无公开口径不标）。
      *   高峰时芯片前加红色「峰」字提示限流风险。
      * DeepSeek 峰谷补充（官方 2026-09-19 说明）：周六日全天、调休上班的周末、
      *   中国法定节假日全天均按空闲时段计费——前两者被周末判定覆盖，落在工作日的
@@ -10559,7 +10560,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     /**
      * 芯片内容（官方 trigger 同款字体高度，纯数值）：
-     *   deepseek → 单文本 ¥余额；opencode/zai → 全部窗口百分比数组（5h、周、月顺序，zai 无月窗）。
+     *   deepseek → 单文本 ¥余额；opencode → 全部窗口百分比数组（5h、周、月顺序）。
      * 返回 { text, hot? } 或 { wins:[percent] , }；null = 该家没数、不出芯片。
      */
     function usageChipParts(kind, card) {
@@ -10570,16 +10571,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         if (!info) return null;
         return { text: `${USAGE_CURRENCY_SYMBOL[info.currency] || (info.currency ? info.currency + " " : "")}${info.total}`, hot: card.available === false };
       }
-      const wins =
-        kind === "opencode"
-          ? [card.windows && card.windows.rolling, card.windows && card.windows.weekly, card.windows && card.windows.monthly]
-          : [card.limits && card.limits.find((l) => l.kind === "hours"), card.limits && card.limits.find((l) => l.kind === "week")];
-      const parts = wins
-        .map((win) => {
-          const percent = win ? (Number.isFinite(win.percent) ? win.percent : Number.isFinite(win.percentage) ? win.percentage : null) : null;
-          return percent;
-        })
-        .filter((p) => p !== null);
+      const wins = [card.windows && card.windows.rolling, card.windows && card.windows.weekly, card.windows && card.windows.monthly];
+      const parts = wins.map((win) => (win && Number.isFinite(win.percent) ? win.percent : null)).filter((p) => p !== null);
       return parts.length > 0 ? { wins: parts } : null;
     }
 
@@ -10717,18 +10710,14 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       if (parts === null) return null;
       const now = Date.now();
       const peak = usageIsPeak(kind, new Date()); // forceTick 每分钟重渲染，跨过时段边界一分钟内变色
-      const kindTitle = () => (kind === "deepseek" ? t("usageDeepseek") : kind === "opencode" ? t("usageOpencode") : t("usageZai"));
+      const kindTitle = () => (kind === "deepseek" ? t("usageDeepseek") : t("usageOpencode"));
 
-      /** 浮层里的窗口行：dt/dd 官方行 + 进度条（官方 bar/segment 样式），sub 行放 credits 与重置 */
+      /** 浮层里的窗口行：dt/dd 官方行 + 进度条（官方 bar/segment 样式），sub 行放重置倒计时 */
       const windowBlock = (label, win) => {
         if (!win) return null;
-        const percent = Number.isFinite(win.percent) ? win.percent : Number.isFinite(win.percentage) ? win.percentage : null;
-        const resetAt = win.resetsAt ? Date.parse(win.resetsAt) : win.nextResetTime;
-        const credits =
-          win.currentValue !== undefined && Number.isFinite(win.currentValue)
-            ? `${win.currentValue}/${win.usage || "—"} credits`
-            : null;
-        const sub = [credits, resetAt ? `${t("usageResets")} ${usageFmtCountdown(resetAt, now)}` : null].filter(Boolean).join(" · ");
+        const percent = Number.isFinite(win.percent) ? win.percent : null;
+        const resetAt = win.resetsAt ? Date.parse(win.resetsAt) : null;
+        const sub = resetAt ? `${t("usageResets")} ${usageFmtCountdown(resetAt, now)}` : "";
         return jsxRuntime.jsxs("div", { children: [
           jsxRuntime.jsxs("dl", { className: "dshk-usage-row", children: [
             jsxRuntime.jsx("dt", { children: label }),
@@ -10775,7 +10764,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
                   ] })
                 : null,
             ] }, info.currency));
-        } else if (kind === "opencode") {
+        } else {
           const win = card.windows && card.windows.rolling;
           const percent = win ? (Number.isFinite(win.percent) ? win.percent : null) : null;
           if (percent !== null) figure = `${percent}%`;
@@ -10784,14 +10773,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
             windowBlock(t("usageWeek"), card.windows && card.windows.weekly),
             windowBlock(t("usageMonth"), card.windows && card.windows.monthly),
           ];
-        } else {
-          const hours = card.limits && card.limits.find((l) => l.kind === "hours");
-          const percent = hours ? (Number.isFinite(hours.percentage) ? hours.percentage : null) : null;
-          if (percent !== null) figure = `${percent}%`;
-          badge = card.level ? { text: `${t("usageLevel")} ${card.level}` } : badge;
-          body = (card.limits || []).map((l) =>
-            windowBlock(l.kind === "hours" ? (l.number && l.number !== 5 ? `${l.number} ${t("usageW5h")}` : t("usageW5h")) : t("usageWeek"), l),
-          );
         }
         return reactDom.createPortal(
           jsxRuntime.jsxs("div", {
@@ -10822,9 +10803,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       })();
 
       const tooltipLabel =
-        (kind === "deepseek"
-          ? t("usageDeepseek")
-          : `${kindTitle()} · ${resolveZh() ? (kind === "opencode" ? "5小时/周/月窗口" : "5小时/周窗口") : kind === "opencode" ? "5h/week/month" : "5h/week"}`) +
+        (kind === "deepseek" ? t("usageDeepseek") : `${kindTitle()} · ${resolveZh() ? "5小时/周/月窗口" : "5h/week/month"}`) +
         (peak ? ` · ${resolveZh() ? "高峰时段" : "peak hours"}` : "");
       const trigger = jsxRuntime.jsx("button", {
         type: "button",
@@ -10995,6 +10974,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     exports.monitorStore = monitorStore; // 测试注入活动快照用
     exports.monitorSessions = monitorSessions;
     exports.usageIsPeak = usageIsPeak;
+    // 配置面（内置默认表 / 组件行配置页 / 快照解析）供测试断言与宿主默认同源比对
+    exports.M_CFG_DEFAULTS = M_CFG_DEFAULTS;
+    exports.MonitorConfigPage = MonitorConfigPage;
+    exports.cfgFromSnapshot = cfgFromSnapshot;
     return exports;
 };
 

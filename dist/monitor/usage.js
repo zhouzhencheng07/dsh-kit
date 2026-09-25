@@ -2,14 +2,13 @@
 //
 // 从模型配置发现 provider（llm-pi-ai entry 配置经宿主 configEditor 读，providers.<id>.apiKeyEnv
 // 是凭证引用名），经 credentials 服务按引用解析 key（每请求现读，改配置即生效、
-// key 不出宿主进程），聚合三家上游给浏览器芯片：
+// key 不出宿主进程），聚合两家上游给浏览器芯片：
 //   deepseek  GET {base|api.deepseek.com}/user/balance    Bearer        余额（币种/总额/赠送/充值）
 //   opencode  GET {provider.baseURL}/usage                Bearer        rolling(5h)/weekly/monthly 百分比+重置
-//   zai       GET {站}/api/monitor/usage/quota/limit      Authorization 原值   5小时/周窗口 credits 用量+重置
-// 两家配额上游都是非官方承诺的契约（失效只挂对应卡，见知识库「dsh-kit 用量」页）。
+// opencode 的配额上游是非官方承诺的契约（失效只挂对应卡，见知识库「dsh-kit 用量」页）。
 //
 // 端点（同源校验同 index.ts；webserver 默认只绑 loopback）：
-//   GET /dsh-kit/usage[?fresh=1] → { providers:{deepseek?|opencode?|zai?}, at }
+//   GET /dsh-kit/usage[?fresh=1] → { providers:{deepseek?|opencode?}, at }
 //   卡按配置出现：模型配置里没配对应 provider（且无 DEEPSEEK_API_KEY 引用）就不出卡。
 //   usageEnabled 总开关关闭时 403 usage-disabled（前端入口同步隐藏）。
 //
@@ -17,17 +16,13 @@
 // 单飞：同一家的并发请求共享一次上游调用。
 import http from 'node:http';
 import { sameOrigin } from "../core/index.js";
-/** 站点选择：provider id 以 -cn 结尾（如 zai-coding-cn）或名字含 bigmodel 走国内站 */
-function zaiBase(id) {
-    return /cn$/i.test(id) || /bigmodel/i.test(id) ? 'https://open.bigmodel.cn' : 'https://api.z.ai';
-}
 /** 上游请求超时 */
 const UPSTREAM_TIMEOUT_MS = 15000;
 /** 每家上游结果缓存时长：配额窗口变化慢，多客户端同看也不该反复打 */
 const CACHE_TTL_MS = 60000;
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
 /**
- * 扫模型配置里的 providers，按 id / 凭证引用名归类到三种卡位（子串匹配）。
+ * 扫模型配置里的 providers，按 id / 凭证引用名归类到两种卡位（子串匹配）。
  * 官方内置 deepseek 不在 llm-pi-ai 里，另用标准引用名 DEEPSEEK_API_KEY 兜底探测
  * （resolve 不中即不出卡）。识别不出的一律忽略（如 sensenova 这类无关 provider）。
  */
@@ -46,13 +41,10 @@ async function discoverProviders(deps) {
                 continue;
             const base = str(raw?.baseURL);
             if (/deepseek/i.test(id) || /deepseek/i.test(envRef)) {
-                add({ kind: 'deepseek', envRef, base: base !== '' ? base.replace(/\/+$/, '') : 'https://api.deepseek.com', bearer: true });
+                add({ kind: 'deepseek', envRef, base: base !== '' ? base.replace(/\/+$/, '') : 'https://api.deepseek.com' });
             }
             else if (/opencode/i.test(id) || /opencode/i.test(envRef)) {
-                add({ kind: 'opencode', envRef, base: base !== '' ? base.replace(/\/+$/, '') : 'https://opencode.ai/zen/go/v1', bearer: true });
-            }
-            else if (/zai|glm|bigmodel/i.test(id) || /zai|glm|bigmodel/i.test(envRef)) {
-                add({ kind: 'zai', envRef, base: zaiBase(id), bearer: false });
+                add({ kind: 'opencode', envRef, base: base !== '' ? base.replace(/\/+$/, '') : 'https://opencode.ai/zen/go/v1' });
             }
         }
     }
@@ -60,16 +52,12 @@ async function discoverProviders(deps) {
         // 模型配置没写 deepseek provider 时探测标准引用名（官方内置适配器同款），有才出卡
         const hit = await deps.credentials.resolve?.('DEEPSEEK_API_KEY').catch(() => undefined);
         if (hit?.value)
-            add({ kind: 'deepseek', envRef: 'DEEPSEEK_API_KEY', base: 'https://api.deepseek.com', bearer: true });
+            add({ kind: 'deepseek', envRef: 'DEEPSEEK_API_KEY', base: 'https://api.deepseek.com' });
     }
     return [...found.values()];
 }
 async function fetchUpstream(d, key) {
-    const headers = { accept: 'application/json' };
-    if (d.bearer)
-        headers.authorization = `Bearer ${key}`;
-    else
-        headers.authorization = key;
+    const headers = { accept: 'application/json', authorization: `Bearer ${key}` };
     let url;
     try {
         url = new URL(d.base + pathOf(d)).href;
@@ -106,34 +94,14 @@ async function fetchUpstream(d, key) {
             : [];
         return { ok: true, available: body?.is_available === true, infos };
     }
-    if (d.kind === 'opencode') {
-        const u = body?.usage;
-        const win = (w) => w === null || typeof w !== 'object'
-            ? null
-            : { status: str(w.status) || null, percent: Number.isFinite(w.percent) ? w.percent : null, resetsAt: str(w.resetsAt) || null };
-        return { ok: true, windows: { rolling: win(u?.rolling), weekly: win(u?.weekly), monthly: win(u?.monthly) } };
-    }
-    // z.ai：limits[] 里 unit=3 是小时窗（number=5 即 5 小时）、unit=6 是周窗；
-    // 百分比/剩余 credits/重置时刻都是现成的
-    const limits = Array.isArray(body?.data?.limits)
-        ? body.data.limits.map((l) => ({
-            kind: l.unit === 3 ? 'hours' : l.unit === 6 ? 'week' : `unit-${String(l.unit)}`,
-            number: Number(l.number) || null,
-            usage: Number(l.usage) || 0,
-            currentValue: Number(l.currentValue) || 0,
-            remaining: Number(l.remaining) || 0,
-            percentage: Number(l.percentage) || 0,
-            nextResetTime: Number(l.nextResetTime) || null,
-        }))
-        : [];
-    return { ok: true, level: str(body?.data?.level) || null, limits };
+    const u = body?.usage;
+    const win = (w) => w === null || typeof w !== 'object'
+        ? null
+        : { status: str(w.status) || null, percent: Number.isFinite(w.percent) ? w.percent : null, resetsAt: str(w.resetsAt) || null };
+    return { ok: true, windows: { rolling: win(u?.rolling), weekly: win(u?.weekly), monthly: win(u?.monthly) } };
 }
 function pathOf(d) {
-    if (d.kind === 'deepseek')
-        return '/user/balance';
-    if (d.kind === 'opencode')
-        return '/usage';
-    return '/api/monitor/usage/quota/limit';
+    return d.kind === 'deepseek' ? '/user/balance' : '/usage';
 }
 /** 注册 /dsh-kit/usage；返回注销函数（插件卸载时撤路由） */
 export function registerUsageRoutes(deps) {
