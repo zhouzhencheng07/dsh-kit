@@ -75,9 +75,12 @@ agent tools and UI entries together; with all rows off, dsh is stock again.
   operating (shared control); every agent navigation brings the tab to the front
 - **Skill pool** (new Settings page): workspace / user-level / skill-pool groups
   with copy, move, delete, disable/enable; shadowed same-name skills get a dashed badge
-- **Phone access** (new Settings page): scan a QR code to reach the local dsh web —
-  token-gated gateway (default port 3090, editable), off on every startup by default;
-  LAN and remote dual links, full HTTP/WS passthrough
+- **Phone access** (new Settings page; the component row switch is the master switch —
+  turn it off and both the gateway and the page are gone): scan a QR code to reach the
+  local dsh web — token-gated gateway (editable port), off on every startup by default;
+  LAN and remote dual links, full HTTP/WS passthrough; in remote view, entries that only
+  act on the computer (open in app, add workspace, open configuration file) are greyed out
+  with a "do this on the computer" hint
 - **Web search** (merged from dsh-free-search; the component row switch is the master
   switch — turn it off and the official search takes over): a keyless engine chain
   replaces the paid `deepseek-official` — specialized engines first when the query
@@ -111,7 +114,8 @@ agent tools and UI entries together; with all rows off, dsh is stock again.
   commands carry their current keys and follow rebinding) — plain truncation hints keep the native
   `title`
 - **Config pages**: component rows that take settings each carry their own config page in the
-  Plugins page — the main row covers phone access; the **knowledge base · schedule row**
+  Plugins page — the **phone-access row** covers the outward port, remote domain and
+  keep-gateway-on (row switch = master switch); the **knowledge base · schedule row**
   covers the vault root directory (row switch = master switch);
   the **web search row** only holds the result count (row switch = master switch, turning it
   off restores the official search); the **built-in browser row** covers "open chat links in
@@ -120,7 +124,8 @@ agent tools and UI entries together; with all rows off, dsh is stock again.
   switch, monitor parameters and desktop notifications; the **file tree · source control row**
   covers the file-tree and source-control switches plus hiding the official Workspace Files
   entry. The **terminal** and **skills** rows have no config field (the row switch is the only
-  switch — turning it off hides the entry). Saving writes to the profile and takes effect
+  switch — turning it off hides the entry), and neither has the **main row**, which only
+  serves static assets and session-header injection. Saving writes to the profile and takes effect
   immediately (a few startup-time gates need a dsh restart)
 
 ## Install & update
@@ -155,21 +160,21 @@ appear and the toggles have nothing to open — upgrade dsh first.
 
 ## How it works
 
-- `src/*.ts` → `dist/` (committed tsc output): host side — the main row serves
-  `/phone/*` (phone gateway), `/config` (read-only config snapshot) and `/vendor/*`
-  (xterm / TipTap / KaTeX / qrcode); file-tree (`/tree`, `/read`, `/raw`, `/fs/op`,
+- `src/*.ts` → `dist/` (committed tsc output): host side — the main row serves only
+  `/vendor/*` (xterm / TipTap / KaTeX / qrcode) plus OpenCode session-header injection;
+  file-tree (`/tree`, `/read`, `/raw`, `/fs/op`,
   `/upload`, `/git/*`), skill-pool, vault (`/vault/*`), schedule (`/schedule/*`) and
   browser endpoints belong to their components
 - `client/bundle.js`: browser side (hand-written ModuleLoader bundle, **no build**) —
   the root package keeps only the cross-slot base (kitUi open/close state, the config-page
-  skeleton, entry seats) plus the phone-access page; the client halves of the file-tree /
-  source-control, terminal, skills, usage-monitor, web-search, built-in-browser and
-  knowledge-base · schedule components live in this same bundle as isolated component
+  skeleton, entry seats, the preview download button); the client halves of the file-tree /
+  source-control, terminal, skills, usage-monitor, web-search, built-in-browser,
+  knowledge-base · schedule and phone-access components live in this same bundle as isolated component
   modules (right-bar pane bodies are served through `sidebar.right.pane.tab`, config pages
   through `plugins.row.config`; the terminal dock renders over the official
   `webTerminals` engine)
 - `src/core`, `src/files`, `src/skills`, `src/terminal`, `src/monitor`, `src/browser`,
-  `src/vault`: component boundaries as directories (0.5.3 single-package components — a component is a patch
+  `src/vault`, `src/phone`: component boundaries as directories (0.5.3 single-package components — a component is a patch
   row, not a package) — `core` is the host shared library (same-origin check, recycle-bin
   delete, text decoding, session-header injection, dsh-tools loading);
   `files` serves tree/read/raw/fs-op/
@@ -182,7 +187,10 @@ appear and the toggles have nothing to open — upgrade dsh first.
   browser tab, shared control, link redirection); `vault` serves `/dsh-kit/vault/*`
   (index / search / per-page mtime / directory-level file management), `/dsh-kit/schedule/*`
   (read-only data and stats) and the `/dsh-kit-vault/config` probe, and registers the four
-  `schedule_*` agent tools (knowledge base · schedule row). Rows are materialized by the root
+  `schedule_*` agent tools (knowledge base · schedule row); `phone` serves
+  `/dsh-kit/phone/*` (status / links / rotation / start-stop) plus the
+  `/dsh-kit-phone/config` probe and starts the outward gateway (phone-access row).
+  Rows are materialized by the root
   `cordis.patch.yml` through package exports subpaths (`dsh-kit/files` etc.)
 - `client/vendor/*`: xterm / TipTap rich text / KaTeX / qrcode, all lazily loaded
   and served from `/dsh-kit/vendor/*`
@@ -190,8 +198,8 @@ appear and the toggles have nothing to open — upgrade dsh first.
   provider at `free-search` and registers the keyless engine chain (`engine-chain.ts` +
   `engines/*`); disabling the component row leaves the seam untouched, so the official
   provider pinned by the base layer keeps serving
-- `cordis.patch.yml`: inserts the dsh-kit row and the seven component rows
-  (files / skills / terminal / monitor / search / browser / vault) into the bundle layer;
+- `cordis.patch.yml`: inserts the dsh-kit row and the eight component rows
+  (files / skills / terminal / monitor / search / browser / vault / phone) into the bundle layer;
   no official row is patched
 - Host-side `node-pty`/`ws`/`@deepseek-ai/*` declare no dependencies: resolved at
   runtime from the profile fallback node_modules (declaring them would install a

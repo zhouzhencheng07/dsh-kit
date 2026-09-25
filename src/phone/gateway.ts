@@ -113,17 +113,12 @@ const POLYFILL_SCRIPT =
  * 「远端点了也只会落到电脑上」的宿主专属入口：这些入口的作用对象是运行 dsh 的那台机器，
  * 从网关进来的客户端点了只会落到电脑上（或什么都不发生）。处置是**置灰 + 点击
  * 给一句提示**，不是隐藏——这些位置同时承担信息显示（比如"当前在哪个工作区"），
- * 删掉就是凭空少一块，而判据一旦变化还得靠人重新发现。选择器只用语义属性：
- * 「在应用中打开」（`dsh-client-ui-open-in-app`）的主键 aria-label 带应用名
- * （"在 VS Code 中打开工作目录"，出错时还会变成"打开失败"）故按前后缀匹配；
- * 下拉键（"选择打开方式"）标签固定。
+ * 删掉就是凭空少一块，而判据一旦变化还得靠人重新发现。
+ * 判据取官方 open-in-app 分体按钮容器的语义属性 `data-open-target`：directory = 会话头部
+ * 的「在应用中打开」，file = 文档预览 / 交付卡 / 变更对比页的打开与定位。一个选择器覆盖
+ * 全部——按钮文案带应用名（"用 VS Code 打开" / "更多打开方式"），按 aria-label 匹配逐版漂移。
  */
-const HOST_ONLY_LOCKED = [
-  'button[aria-label="选择打开方式"]',
-  'button[aria-label="Choose an app to open in"]',
-  'button[aria-label^="在 "][aria-label$=" 中打开工作目录"]',
-  'button[aria-label^="Open workspace in "]',
-]
+const HOST_ONLY_LOCKED = ['[data-open-target]']
 // 官方右栏「工作区文件」胶囊不锁：宿主 0.1.6 起手机上文件预览（md/PDF）可用，
 // 0.1.5-rc.2 只能看目录——那是当初锁它的原因
 
@@ -151,12 +146,6 @@ const ADD_MENU_ITEM_RE = '^(?:添加工作区|Add workspace)'
  */
 const OPEN_DOCUMENT_RE = '^(?:打开配置文件|Open configuration file)$'
 
-/**
- * 交付卡片下拉里的宿主动作——卡片本体已放行（预览改投 kit 文件签），这里锁的是
- * 那几个只在电脑上执行的动作；菜单走 portal 渲染在卡片之外，故按项文本命中。
- */
-const PRESENTED_HOST_ACTION_RE = '^(?:用默认应用打开|打开所在文件夹|在文件资源管理器中显示|在 Finder 中显示|Open in default app|Open containing folder|Show in File Explorer|Show in Finder)$'
-
 /** 锁住的提示只有一句：这些入口的性质一样（都在电脑那台机器上执行），不必一钮一文案 */
 const LOCK_HINT = '请在电脑端操作'
 
@@ -174,7 +163,7 @@ export interface PhoneAssistOptions {
 /**
  * 网关注入的辅助脚本。锚点是宿主前端的 DOM 实现细节（hashed class 不用、只用语义
  * 属性/文本），宿主升级改版会静默失效——失效表现是"弹窗又出现/入口又能点"，无副作用；
- * 复核基线 dsh 0.1.5-rc.2。
+ * 复核基线 dsh 0.1.7-rc.2（open-in-app 的置灰判据在这一版换成了 data-open-target）。
  * ① 内测声明弹窗（welcome notice）：远程浏览器的 settings scope 是内存模式，已读状态
  *    存不住，每次加载都会弹——脚本轮询自动点「继续」。
  * ② 宿主专属入口置灰（见 HOST_ONLY_LOCKED / PICKER_LOCKED / 两个
@@ -202,7 +191,7 @@ export interface PhoneAssistOptions {
  */
 export function phoneAssistScript({ remoteView, pickerLocked }: PhoneAssistOptions): string {
   const sels = [...HOST_ONLY_LOCKED, ...(pickerLocked ? PICKER_LOCKED : [])]
-  const texts = [...(pickerLocked ? [ADD_MENU_ITEM_RE] : []), OPEN_DOCUMENT_RE, PRESENTED_HOST_ACTION_RE]
+  const texts = [...(pickerLocked ? [ADD_MENU_ITEM_RE] : []), OPEN_DOCUMENT_RE]
   const data = JSON.stringify({
     // 非远程视图时数据为空：脚本只剩内测弹窗那段
     sels: remoteView ? sels : [],
