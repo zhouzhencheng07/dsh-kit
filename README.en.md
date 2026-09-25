@@ -16,7 +16,9 @@ the agent do it.
 Index views (file tree, source control, vault directory) share a single left-sidebar
 slot; the conversation column stays put. Every capability is a **component row** you can
 switch off independently on the Plugins page — turning a row off removes its endpoints,
-agent tools and UI entries together; with all rows off, dsh is stock again.
+agent tools and UI entries together; with all rows off, dsh is stock again. The pack shows
+exactly **eight component rows** (static assets and session-header injection are infrastructure
+and take no component slot).
 
 - **Terminal** (composer-row toggle / default **Ctrl+Alt+\`**): a tabbed bottom terminal dock
   bound to the session it was opened in (width follows the chat column); hidden
@@ -124,8 +126,8 @@ agent tools and UI entries together; with all rows off, dsh is stock again.
   switch, monitor parameters and desktop notifications; the **file tree · source control row**
   covers the file-tree and source-control switches plus hiding the official Workspace Files
   entry. The **terminal** and **skills** rows have no config field (the row switch is the only
-  switch — turning it off hides the entry), and neither has the **main row**, which only
-  serves static assets and session-header injection. Saving writes to the profile and takes effect
+  switch — turning it off hides the entry), and neither has the **infrastructure row** (no id, so it never shows up in the component
+  list), which only serves static assets and session-header injection. Saving writes to the profile and takes effect
   immediately (a few startup-time gates need a dsh restart)
 
 ## Install & update
@@ -198,8 +200,9 @@ appear and the toggles have nothing to open — upgrade dsh first.
   provider at `free-search` and registers the keyless engine chain (`engine-chain.ts` +
   `engines/*`); disabling the component row leaves the seam untouched, so the official
   provider pinned by the base layer keeps serving
-- `cordis.patch.yml`: inserts the dsh-kit row and the eight component rows
-  (files / skills / terminal / monitor / search / browser / vault / phone) into the bundle layer;
+- `cordis.patch.yml`: inserts the dsh-kit infrastructure row (no id, so it never shows up in the component list)
+  and the eight component rows (files / vault / terminal / browser / skills / phone /
+  monitor / search — row order is the Plugins-page order) into the bundle layer;
   no official row is patched
 - Host-side `node-pty`/`ws`/`@deepseek-ai/*` declare no dependencies: resolved at
   runtime from the profile fallback node_modules (declaring them would install a

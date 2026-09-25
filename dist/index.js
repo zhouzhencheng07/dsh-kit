@@ -1,13 +1,14 @@
-// dsh-kit — DSH 页面能力套件（主行宿主半边）
+// dsh-kit — DSH 页面能力套件（基础设施行宿主半边）
 //
-// 主行只剩套件自己那点基础设施：vendor 静态资源（xterm / qrcode / 知识库阅读器的
-// TipTap 与 KaTeX）、OpenCode Go 会话头注入（./core/opencode-session.ts）。
+// 本行只有套件自己那点基础设施：vendor 静态资源（xterm / qrcode / 知识库阅读器的
+// TipTap 与 KaTeX）、OpenCode Go 会话头注入（./core/opencode-session.ts）。它没有页面
+// 能力，所以 patch 里不给 id、不进插件页组件列表（宿主只把带 id 的行当组件）。
 // 页面能力本身全部按组件行拆开（cordis.patch.yml 里 insert 八行，行 name = 包名 +
-// exports 子路径）：dsh-kit/files（文件树 · 源代码管理）、dsh-kit/skills（技能）、
-// dsh-kit/terminal（终端）、dsh-kit/monitor（用量与监视）、dsh-kit/search（网页搜索）、
-// dsh-kit/browser（内置浏览器）、dsh-kit/vault（知识库 · 日程）、dsh-kit/phone（手机访问）
-// ——行关闭 = 该子模块不物化 = 它的端点与 agent 工具一起消失。
-// 组件各有自己的 Config（src/<组件>/index.ts）；主行没有可调参数，因此不导出 Config、
+// exports 子路径，行序即插件页显示顺序）：dsh-kit/files（文件树 · 源代码管理）、
+// dsh-kit/vault（知识库 · 日程）、dsh-kit/terminal（终端）、dsh-kit/browser（内置浏览器）、
+// dsh-kit/skills（技能）、dsh-kit/phone（手机访问）、dsh-kit/monitor（用量与监视）、
+// dsh-kit/search（网页搜索）——行关闭 = 该子模块不物化 = 它的端点与 agent 工具一起消失。
+// 组件各有自己的 Config（src/<组件>/index.ts）；本行没有可调参数，因此不导出 Config、
 // 也没有配置页（同终端 / 技能行）。
 //
 // 浏览器半边（client/bundle.js）：各功能入口注册在对话输入框工具行
