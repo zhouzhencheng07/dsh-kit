@@ -946,8 +946,6 @@ window.__ModuleLoader__.load({
     const CFG_DEFAULTS = {
       hideOfficialBrowserEntry: false,
       chatOpenLinkInBrowser: true,
-      searchEnabled: true,
-      searchMaxResults: 2,
       phoneEnabled: true,
       phoneRemoteDomain: "",
       phonePort: 3090,
@@ -963,7 +961,6 @@ window.__ModuleLoader__.load({
       return {
         hideOfficialBrowserEntry: v.hideOfficialBrowserEntry === true,
         chatOpenLinkInBrowser: v.chatOpenLinkInBrowser === true,
-        searchEnabled: v.searchEnabled !== false,
         phoneEnabled: v.phoneEnabled === true,
         phoneRemoteDomain: typeof v.phoneRemoteDomain === "string" ? v.phoneRemoteDomain : "",
         browserEnabled: v.browserEnabled !== false,
@@ -1575,10 +1572,6 @@ window.__ModuleLoader__.load({
       kcfgGroupFeatures: "功能开关",
       kcfgGroupPhone: "手机访问",
       kcfgGroupVault: "知识库",
-      kcfgSearchEnabled: "免费网页搜索",
-      kcfgSearchEnabledHint: "关 = 网页搜索转发官方付费渠道；开 = 免费引擎链。",
-      kcfgSearchMaxResults: "搜索结果条数（1–8）",
-      kcfgSearchMaxResultsHint: "每次搜索保留的条数。",
       kcfgBrowserEnabled: "内置浏览器",
       kcfgBrowserEnabledHint: "内置浏览器工具与面板；改后重启生效。",
       kcfgChatOpenLinkInBrowser: "对话链接改投内置浏览器",
@@ -1749,10 +1742,6 @@ window.__ModuleLoader__.load({
       kcfgGroupFeatures: "Features",
       kcfgGroupPhone: "Phone access",
       kcfgGroupVault: "Vault",
-      kcfgSearchEnabled: "Free web search",
-      kcfgSearchEnabledHint: "Off forwards web search to the official paid channel; on uses the free engine chain.",
-      kcfgSearchMaxResults: "Search results (1–8)",
-      kcfgSearchMaxResultsHint: "How many results each search keeps.",
       kcfgBrowserEnabled: "Built-in browser",
       kcfgBrowserEnabledHint: "Built-in browser tools and panel; takes effect after a restart.",
       kcfgChatOpenLinkInBrowser: "Open chat links in the built-in browser",
@@ -6502,8 +6491,6 @@ ellipsis，窄列只截字不破版 */
     // （快捷键消费端本就「非法/空 → 回默认」）。字段清单与 src/index.ts 的 Config
     // schema 同源（render-check 钉住）。
     const KIT_CFG_FIELDS = [
-      { key: "searchEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSearchEnabled", hintKey: "kcfgSearchEnabledHint" },
-      { key: "searchMaxResults", type: "number", min: 1, max: 8, group: "kcfgGroupFeatures", labelKey: "kcfgSearchMaxResults", hintKey: "kcfgSearchMaxResultsHint" },
       { key: "browserEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgBrowserEnabled", hintKey: "kcfgBrowserEnabledHint" },
       { key: "chatOpenLinkInBrowser", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgChatOpenLinkInBrowser", hintKey: "kcfgChatOpenLinkInBrowserHint" },
       { key: "hideOfficialBrowserEntry", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgHideOfficialBrowserEntry", hintKey: "kcfgHideOfficialBrowserEntryHint" },
@@ -6631,9 +6618,9 @@ ellipsis，窄列只截字不破版 */
         });
         scanPreviewDownload();
       }
-      // 组件半边激活（单包收回的 files/monitor/terminal/skills）：与多包时代等价——
+      // 组件半边激活（单包收回的 files/monitor/terminal/skills/search）：与多包时代等价——
       // client 入口注册总是发生，功能存在性由各组件自己的配置门控（行禁用只摘宿主半边端点）
-      for (const componentMod of [exports.files, exports.monitor, exports.terminal, exports.skills]) {
+      for (const componentMod of [exports.files, exports.monitor, exports.terminal, exports.skills, exports.search]) {
         if (componentMod && typeof componentMod.apply === "function") componentMod.apply(ctx);
       }
     }
@@ -10981,6 +10968,59 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     return exports;
 };
 
+    // ── dsh-kit-search 组件（网页搜索）──
+// dsh-kit-search 浏览器半边 —— 网页搜索组件的 client 面。
+// 搜索本体全在宿主半边（web seam 接管 + 引擎链，src/search/），client 面只有本组件行
+// 的「配置」页（搜索结果条数）。行开关即总开关：关行 = 宿主模块不物化 = 不接管 seam，
+// base 钉的官方搜索原样生效——因此这里没有要门控的客户端 UI，也没有配置快照端点。
+    const searchModule = (kit, require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+    const dock = kit;
+
+    // 组件私有文案（配置页骨架文案在 dock）
+    const zh = {
+      kcfgGroupSearch: "网页搜索",
+      kcfgSearchMaxResults: "搜索结果条数（1–8）",
+      kcfgSearchMaxResultsHint: "每次搜索保留的条数。",
+    };
+    const en = {
+      kcfgGroupSearch: "Web search",
+      kcfgSearchMaxResults: "Search results (1–8)",
+      kcfgSearchMaxResultsHint: "How many results each search keeps.",
+    };
+    const lang = () => (dock.resolveZh() ? zh : en);
+    const t = (key) => lang()[key] ?? key;
+
+    // 本组件配置页（插件页本组件行「配置」）：骨架在 dock，这里只喂字段表与词条
+    const SEARCH_CFG_FIELDS = [
+      { key: "searchMaxResults", type: "number", min: 1, max: 8, group: "kcfgGroupSearch", labelKey: "kcfgSearchMaxResults", hintKey: "kcfgSearchMaxResultsHint" },
+    ];
+    const SEARCH_CFG_GROUPS = ["kcfgGroupSearch"];
+    const SearchConfigPage = dock.createConfigPage({
+      fields: SEARCH_CFG_FIELDS,
+      groups: SEARCH_CFG_GROUPS,
+      t,
+    });
+
+    exports.inject = ["slots"];
+    exports.apply = async (ctx) => {
+      // 配置页挂在插件页本组件行上：槽位 key = <包名>#<行id>——两种包名口径各挂一枚
+      // （页面按精确 key 匹配，未命中的那枚永远不渲染），宿主改口径也不用动组件
+      for (const key of ["dsh-kit#search", "dsh-kit-search#search"]) {
+        ctx.slots.inject("plugins.row.config", () =>
+          ctx.slots.register({ name: "plugins.row.config", key }, SearchConfigPage),
+        );
+      }
+    };
+
+    // 渲染级检查取用
+    exports.SearchConfigPage = SearchConfigPage;
+    exports.SEARCH_CFG_FIELDS = SEARCH_CFG_FIELDS;
+    return exports;
+};
+
     // ── dsh-kit-terminal 组件（终端）──
 // dsh-kit-terminal 浏览器半边 —— 终端组件的 client 面。
 // 收纳：对话输入行的终端入口（多会话角标）+ 底部停靠多标签终端坞 + xterm 胶水
@@ -11838,12 +11878,13 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.OfficialIcon = OfficialIcon;
     exports.openTreeFile = openTreeFile;
     exports.registerNavIcon = registerNavIcon;
-    // 组件模块执行（files/monitor/terminal/skills）：必须在 kitBase 浅拷贝与 root 设施
+    // 组件模块执行（files/monitor/terminal/skills/search）：必须在 kitBase 浅拷贝与 root 设施
     // 都挂上 exports 之后——组件体执行期会读 dock.createConfigPage 等成员
     exports.files = filesModule(exports, require);
     exports.monitor = monitorModule(exports, require);
     exports.terminal = terminalModule(exports, require);
     exports.skills = skillsModule(exports, require);
+    exports.search = searchModule(exports, require);
     exports.inject = ["slots"];
     exports.apply = apply;
     return module.exports;

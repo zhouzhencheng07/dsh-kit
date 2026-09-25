@@ -1,13 +1,10 @@
-# dsh-kit bundle patch: register the kit plugin row, and route the web seam's
-# search capability to the free-search provider merged from dsh-free-search
-# (src/web-search.js). The base layer pins `searchProvider: deepseek-official`
-# (a paid DeepSeek model call per search); this patch replaces that row's
-# config — `searchProvider` is its only base key — with our free engine chain.
-# A later profile patch can pin any provider back.
-- id: web
-  config:
-    searchProvider: free-search
-
+# dsh-kit bundle patch：把套件主行与各组件行 insert 进 bundle 层。
+# 组件行是同一个包（单包组件化）的 exports 子路径：行 name = dsh-kit/<行id>，exports 与
+# locale/<行id>/*.json 由 package.json 声明；行的中文显示名由宿主按行 name 解析 locale
+# meta（子路径名查不到包 → 回退显示 name 原文）。
+# 这里不 patch 任何官方行：网页搜索对 web seam 的接管由 dsh-kit/search 组件在加载时完成
+# ——静态把 web 行的 searchProvider 钉成 free-search 会让「关掉该组件行」变成搜索直接抛
+# WEB_PROVIDER_CONFIGURED_MISSING（详见 src/search/web-search.ts 头注释）。
 - insert:
     # 行 id 用短语义名（官方同款，如 agent-team）：插件页组件行显示「显示名 +
     # 行id + 模块名」，id 与包名同文会两行重复
@@ -21,10 +18,5 @@
       name: dsh-kit/terminal
     - id: monitor
       name: dsh-kit/monitor
-# 组件行统一由本 bundle 声明——插件页 dsh-kit 详情页列出全部组件。行 name 支持包名 +
-# exports 子路径（官方先例 dsh-tool-subagent-control/list-agents），组件即本包子模块，
-# 不必独立成包。行的中文显示名走包 locale meta（宿主按行 name 的包名装配），子路径名
-# 查不到包 → 组件行显示 name 原文（官方多行显示名恰以多包为前提，单包形态无此通道）
-# 组件行统一由本 bundle 声明——插件页 dsh-kit 详情页列出全部组件。行 name 支持包名 +
-# exports 子路径（官方先例 dsh-tool-subagent-control/list-agents），组件即本包子模块，
-# 不必独立成包。组件显示名取 locale/*.json meta；组件配置页经 plugins.row.config 挂行上
+    - id: search
+      name: dsh-kit/search

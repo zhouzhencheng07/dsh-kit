@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Web search",
+    "description": "Free multi-source search: replaces the paid official provider with an auto-failover chain (Tavily / Bing / Sogou / GitHub / arXiv …)."
+  }
+}

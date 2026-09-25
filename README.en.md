@@ -76,10 +76,11 @@ slot; the conversation column stays put.
 - **Phone access** (new Settings page): scan a QR code to reach the local dsh web —
   token-gated gateway (default port 3090, editable), off on every startup by default;
   LAN and remote dual links, full HTTP/WS passthrough
-- **Web search** (merged from dsh-free-search): a keyless engine chain replaces the
-  paid `deepseek-official` — specialized engines first when the query matches
-  (GitHub / arXiv / StackExchange / HN), then the general ones (Tavily keyless → Bing →
-  Sogou) with automatic failover; toggle and result count via the settings card
+- **Web search** (merged from dsh-free-search; the component row switch is the master
+  switch — turn it off and the official search takes over): a keyless engine chain
+  replaces the paid `deepseek-official` — specialized engines first when the query
+  matches (GitHub / arXiv / StackExchange / HN), then the general ones (Tavily keyless →
+  Bing → Sogou) with automatic failover; its config page only holds the result count
 - **Session monitor** (on by default): after a turn ends in a retryable error (429 etc.)
   it waits and sends "continue" automatically (capped consecutive retries) — every
   session is watched, so it keeps going while the page is in the background; only the
@@ -108,12 +109,14 @@ slot; the conversation column stays put.
   commands carry their current keys and follow rebinding) — plain truncation hints keep the native
   `title`
 - **Config pages**: component rows that take settings each carry their own config page in the
-  Plugins page — the main row covers per-feature switches, search result count, vault directory,
-  session notifications and phone access; the **file tree · source control row** covers the
-  file-tree and source-control switches plus hiding the official Workspace Files entry. The
-  **terminal** and **skills** rows have no config field (the row switch is the only switch —
-  turning it off hides the entry). Saving writes to the profile and takes effect immediately
-  (a few startup-time gates need a dsh restart)
+  Plugins page — the main row covers per-feature switches, vault directory and phone access;
+  the **web search row** only holds the result count (row switch = master switch, turning it
+  off restores the official search); the **usage & monitoring row** covers the balance chip
+  switch, monitor parameters and desktop notifications; the **file tree · source control row**
+  covers the file-tree and source-control switches plus hiding the official Workspace Files
+  entry. The **terminal** and **skills** rows have no config field (the row switch is the only
+  switch — turning it off hides the entry). Saving writes to the profile and takes effect
+  immediately (a few startup-time gates need a dsh restart)
 
 ## Install & update
 
@@ -167,8 +170,10 @@ appear and the toggles have nothing to open — upgrade dsh first.
   package exports subpaths (`dsh-kit/files` etc.)
 - `client/vendor/*`: xterm / TipTap rich text / KaTeX / qrcode, all lazily loaded
   and served from `/dsh-kit/vendor/*`
-- `src/web-search.ts` + `src/engine-chain.ts` + `src/engines/*`: registers the
-  `free-search` provider on the web seam, gated by the settings card's `searchEnabled`
+- `src/search/`: the web-search component — `web-search.ts` points the web seam's
+  provider at `free-search` and registers the keyless engine chain (`engine-chain.ts` +
+  `engines/*`); disabling the component row leaves the seam untouched, so the official
+  provider pinned by the base layer keeps serving
 - `cordis.patch.yml`: inserts the dsh-kit row into the bundle layer and rewrites
   the web row's `searchProvider` to `free-search`
 - Host-side `node-pty`/`ws`/`@deepseek-ai/*` declare no dependencies: resolved at

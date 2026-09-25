@@ -52,9 +52,10 @@
   禁用/启用；被同名技能覆盖者打虚线徽标
 - **手机访问**（设置面板新页）：手机扫码连上本机 dsh web——令牌鉴权网关（默认端口
   3090，可改），默认每次启动关闭；局域网与远程双通道，HTTP/WS 全量透传
-- **网页搜索**（自 dsh-free-search 并入）：免 key 引擎链替换付费的 `deepseek-official`——
-  专用引擎（GitHub / arXiv / StackExchange / HN，按查询特征参与）优先，其后通用引擎
-  Tavily（免 key）→ Bing → Sogou 逐个故障转移；可经配置页开关与条数
+- **网页搜索**（自 dsh-free-search 并入；本组件行开关 = 总开关，关掉即回官方搜索）：免 key
+  引擎链替换付费的 `deepseek-official`——专用引擎（GitHub / arXiv / StackExchange / HN，按
+  查询特征参与）优先，其后通用引擎 Tavily（免 key）→ Bing → Sogou 逐个故障转移；本行配置页
+  只有「搜索结果条数」
 - **会话监视**（默认开）：回合因 429 限流等可重试错误终态结束后，等待自动发送
   「继续」（连续自动续跑次数有上限，超限后会话头部保留可一键忽略的「429」角标）——
   覆盖所有会话，页面切后台也能续；只认「刚把
@@ -83,10 +84,11 @@
   （方向按官方口径：面板头/工具条朝下、底部 dock 与输入行朝上、行尾动作钮右对齐；有命令的带
   当前键位，改键后跟着变），纯文本截断提示仍走原生 title
 - **配置**：插件页（侧栏「插件」）里需要可调参数的组件行各带自己的「配置」页——主行管各
-  功能开关、搜索结果条数、知识库目录、手机访问；**用量与监视行**管余额与用量芯片开关、会话
-  监视参数与桌面通知；**文件树 · 源代码管理行**管文件树 / 源代码管理开关与「隐藏官方
-  『工作区文件』入口」；**终端**与**技能**两行没有配置字段（行开关 = 唯一开关，关掉即入口
-  消失）；保存即写入 profile 并热生效（部分启动期门控在重启 dsh 后生效）
+  功能开关、知识库目录、手机访问；**网页搜索行**只有搜索结果条数（行开关 = 总开关，关掉即
+  回官方搜索）；**用量与监视行**管余额与用量芯片开关、会话监视参数与桌面通知；**文件树 ·
+  源代码管理行**管文件树 / 源代码管理开关与「隐藏官方『工作区文件』入口」；**终端**与**技能**
+  两行没有配置字段（行开关 = 唯一开关，关掉即入口消失）；保存即写入 profile 并热生效
+  （部分启动期门控在重启 dsh 后生效）
 
 ## 安装与更新
 
@@ -135,10 +137,11 @@ dsh plugin --profile web update dsh-kit
   由 `cordis.patch.yml` 物化
 - `client/vendor/*`：xterm / TipTap 富文本 / KaTeX / qrcode，全部按需懒加载，
   由 `/dsh-kit/vendor/*` 静态伺服
-- `src/web-search.ts` + `src/engine-chain.ts` + `src/engines/*`：向 web seam 注册
-  `free-search` provider，受配置页 `searchEnabled` 门控
-- `cordis.patch.yml`：把 dsh-kit 插件行 insert 进 bundle 层，web 行 `searchProvider`
-  改为 `free-search`
+- `src/search/`：网页搜索组件——`web-search.ts` 把 web seam 的 provider 指向 `free-search`
+  并注册免 key 引擎链（`engine-chain.ts` + `engines/*`）；组件行关掉 = 不接管 seam =
+  base 钉的官方搜索原样生效
+- `cordis.patch.yml`：把 dsh-kit 主行与各组件行 insert 进 bundle 层（组件 = 本包的 exports
+  子路径，见 `dsh-kit/terminal` 等）
 - 宿主侧 `node-pty`/`ws`/`@deepseek-ai/*` 不声明依赖：运行时从 profile fallback
   node_modules 解析（声明了 pnpm 会装出第二份实例）
 
