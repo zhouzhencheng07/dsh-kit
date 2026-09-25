@@ -5,7 +5,7 @@
 // /dsh-kit/*）。入口按钮经 slots.inject 自注册，开关 = 本组件自己的 Config
 // （fileTreeEnabled/sourceControlEnabled，经 /dsh-kit-files/config 拉取）；
 // 侧栏浏览区的 tree/git 分支经 kitBase.sidebarView 座交给 root 单槽分发，
-// 全局快捷键（Ctrl+, / Ctrl+Shift+.）在这里自挂，组合键读组件自己的配置。
+// 全局快捷键（Ctrl+Alt+, / Ctrl+Alt+.）在这里自挂，组合键读组件自己的配置。
 window.__ModuleLoader__.load({
   id: "dsh-kit-files",
   factory: (require) => {
@@ -114,9 +114,9 @@ window.__ModuleLoader__.load({
       kcfgSourceControlEnabled: "源代码管理",
       kcfgSourceControlEnabledHint: "源代码管理签（状态/差异/提交图谱/分支）。",
       kcfgFileTreeShortcut: "文件树",
-      kcfgFileTreeShortcutHint: "点方框后按组合键；默认 Ctrl+,",
+      kcfgFileTreeShortcutHint: "点方框后按组合键；默认 Ctrl+Alt+,（宿主占用 Ctrl+,）",
       kcfgScShortcut: "源代码管理",
-      kcfgScShortcutHint: "点方框后按组合键；默认 Ctrl+Shift+.（句点）",
+      kcfgScShortcutHint: "点方框后按组合键；默认 Ctrl+Alt+.（句点）",
     };
     const en = {
       noCwd: "No session workspace available: open or create a session first",
@@ -198,9 +198,9 @@ window.__ModuleLoader__.load({
       kcfgSourceControlEnabled: "Source control",
       kcfgSourceControlEnabledHint: "The source control tab (status, diffs, commit graph, branches).",
       kcfgFileTreeShortcut: "File tree",
-      kcfgFileTreeShortcutHint: "Click the box, then press the combo; default Ctrl+,",
+      kcfgFileTreeShortcutHint: "Click the box, then press the combo; default Ctrl+Alt+, (the host takes Ctrl+,)",
       kcfgScShortcut: "Source control",
-      kcfgScShortcutHint: "Click the box, then press the combo; default Ctrl+Shift+. (period)",
+      kcfgScShortcutHint: "Click the box, then press the combo; default Ctrl+Alt+. (period)",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? key;
@@ -215,8 +215,8 @@ window.__ModuleLoader__.load({
     const F_CFG_DEFAULTS = {
       fileTreeEnabled: true,
       sourceControlEnabled: true,
-      fileTreeShortcut: "Ctrl+,",
-      scShortcut: "Ctrl+Shift+.",
+      fileTreeShortcut: "Ctrl+Alt+,",
+      scShortcut: "Ctrl+Alt+.",
     };
     let cfgSnap = null;
     const cfgSubs = new Set();
@@ -414,7 +414,7 @@ window.__ModuleLoader__.load({
       },
     });
 
-    // ─────────── 全局快捷键（Ctrl+, / Ctrl+Shift+.，组合键读组件配置）───────
+    // ─────────── 全局快捷键（Ctrl+Alt+, / Ctrl+Alt+.，组合键读组件配置）───────
     const onFilesShortcutKey = (e) => {
       if (dock.inlineEdit.active || dock.shortcutCapture.active) return; // 树行改名输入 / 配置页录制组合键时让路
       const cfg = cfgFromSnapshot(getCfgSnapshot());

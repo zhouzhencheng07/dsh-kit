@@ -118,10 +118,10 @@ export const Config =
         fileTreeEnabled: z.boolean().default(true).volatile(),
         // 源代码管理签（状态/差异/提交图谱/分支）总开关
         sourceControlEnabled: z.boolean().default(true).volatile(),
-        // 文件树全局快捷键（空/非法 → 回默认 Ctrl+,）
-        fileTreeShortcut: z.string().default('Ctrl+,').volatile(),
+        // 文件树全局快捷键（空/非法 → 回默认 Ctrl+Alt+,；Ctrl+, 归宿主设置页）
+        fileTreeShortcut: z.string().default('Ctrl+Alt+,').volatile(),
         // 源代码管理全局快捷键
-        scShortcut: z.string().default('Ctrl+Shift+.').volatile(),
+        scShortcut: z.string().default('Ctrl+Alt+.').volatile(),
       })
     : undefined
 
@@ -131,7 +131,7 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
   // volatile 字段在 fiber config 里是稳定 ref（{get}），统一解引用
   const defaults: KitSettings = Config
     ? Config({})
-    : { fileTreeEnabled: true, sourceControlEnabled: true, fileTreeShortcut: 'Ctrl+,', scShortcut: 'Ctrl+Shift+.' }
+    : { fileTreeEnabled: true, sourceControlEnabled: true, fileTreeShortcut: 'Ctrl+Alt+,', scShortcut: 'Ctrl+Alt+.' }
   const readRef = (v: unknown): any =>
     v !== null && typeof v === 'object' && typeof (v as { get?: unknown }).get === 'function'
       ? (v as { get: () => unknown }).get()

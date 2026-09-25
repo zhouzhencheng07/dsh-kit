@@ -16,16 +16,16 @@ the agent do it.
 Index views (file tree, source control, vault directory) share a single left-sidebar
 slot; the conversation column stays put.
 
-- **Terminal** (composer-row toggle / **Ctrl+/**): a tabbed bottom terminal dock
+- **Terminal** (composer-row toggle / **Ctrl+Alt+\`**): a tabbed bottom terminal dock
   bound to the session it was opened in (width follows the chat column); hidden
   docks keep running; powered by the **official webTerminals service** (host-owned
   PTY: system-user permissions, survives page refreshes, shell selection) —
   requires DSH 0.1.6+
-- **File tree** (composer-row toggle / **Ctrl+,**): browse the session workspace;
+- **File tree** (composer-row toggle / **Ctrl+Alt+,**): browse the session workspace;
   create/rename/delete (to Recycle Bin)/copy path / @-mention to chat; clicking a file
   opens it in the **official right-sidebar preview**, while md pages inside the vault
   go to the read-only knowledge-base reader
-- **Source control** (composer-row toggle / **Ctrl+Shift+.**): an in-page git
+- **Source control** (composer-row toggle / **Ctrl+Alt+.**): an in-page git
   workbench — stage/unstage/discard/commit, click a file to see its diff in a
   right-dock diff tab (full-file coloring; pin any commit from the graph to diff
   against it), branch switch/create/delete, ↑↓ sync (pull then push), commit graph;
@@ -37,7 +37,7 @@ slot; the conversation column stays put.
   support "skip this one"; the agent gets `schedule_query`, `schedule_create`,
   `schedule_update` and `schedule_delete`; data is stored one-entry-per-file under
   `$DSH_HOME/dsh-kit/schedule/` (`events/` + `entries/` + `timer.json`)
-- **Knowledge base** (composer-row toggle / **Ctrl+Alt+K**, off by default): ready out
+- **Knowledge base** (composer-row toggle / **Ctrl+Alt+/**, off by default): ready out
   of the box (data-directory `dsh-kit\vault`, configurable absolute path) — a one-row search
   plus a tree on the left, pages read as document tabs inside the right-dock **Knowledge
   base** tab (multiple tabs, ✕ per tab); `[[wikilinks]]` jumping to sections
@@ -99,8 +99,8 @@ slot; the conversation column stays put.
   compaction is invisible). Permission is requested from the settings card (without it an
   unread count is shown in the tab title instead)
 - **Settings card**: dsh-kit config card — per-feature switches, shortcut
-  customization (terminal / file tree / source control / knowledge base / both
-  sidebars; click the box and **press the combo**, Esc cancels), hide-the-official-Workspace-Files-entry, search result count, vault directory,
+  customization (terminal / file tree / source control / knowledge base / right
+  bar; click the box and **press the combo**, Esc cancels — the left sidebar toggle is the host's own key), hide-the-official-Workspace-Files-entry, search result count, vault directory,
   monitor parameters, session notifications and their
   permission, phone access
 

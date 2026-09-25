@@ -228,12 +228,12 @@ out = renderCfgTab("kcfgGroupVault", fakeForm);
 check("知识库页签：1 Switch + 1 文本", cfgSw().length === 1 && cfgVf().length === 1);
 out = renderCfgTab("kcfgGroupShortcuts", fakeForm);
 const cfgKbd = () => callLog.filter((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-cfgp-kbd");
-check("快捷键页签：4 个组合键录制框（不是文本输入）", cfgSw().length === 0 && cfgVf().length === 0 && cfgKbd().length === 4);
+check("快捷键页签：3 个组合键录制框（不是文本输入；左栏开合归宿主）", cfgSw().length === 0 && cfgVf().length === 0 && cfgKbd().length === 3);
 {
-  const kbd = cfgKbd().find((c) => c[2].id === "dshk-cfgp-sidebarShortcut");
+  const kbd = cfgKbd().find((c) => c[2].id === "dshk-cfgp-rightbarShortcut");
   check("录制框回显受理键位且是按钮（点它才开始录）", !!kbd && kbd[2].type === "button" && kbd[2].children === "Ctrl+B" && kbd[2]["data-armed"] === undefined);
   kbd[2].onClick();
-  check("点击录制框进入录制态（capture state = {key}）", stateStore.get(4) != null && stateStore.get(4).key === "sidebarShortcut");
+  check("点击录制框进入录制态（capture state = {key}）", stateStore.get(4) != null && stateStore.get(4).key === "rightbarShortcut");
   // 录制态渲染：框打 data-armed 并换成提示文案；裸键被拒时换提示
   const renderArmed = (capture) => {
     stateSeq = 0;
@@ -244,9 +244,9 @@ check("快捷键页签：4 个组合键录制框（不是文本输入）", cfgSw
     comps.KitConfigPage({ view: "page", form: fakeForm });
     return cfgKbd().find((c) => c[2].id === "dshk-cfgp-" + capture.key);
   };
-  const armedBox = renderArmed({ key: "sidebarShortcut", warn: false });
+  const armedBox = renderArmed({ key: "rightbarShortcut", warn: false });
   check("录制中：方框打标并提示按组合键/Esc 取消", !!armedBox && armedBox[2]["data-armed"] === "" && ["按下组合键…（Esc 取消）", "Press the combo… (Esc cancels)"].includes(armedBox[2].children));
-  const warnBox = renderArmed({ key: "sidebarShortcut", warn: true });
+  const warnBox = renderArmed({ key: "rightbarShortcut", warn: true });
   check("裸键被拒：方框提示需带修饰键", !!warnBox && ["要带 Ctrl / Alt / Shift / Meta", "Include Ctrl / Alt / Shift / Meta"].includes(warnBox[2].children));
   stateSeq = 0;
   stateStore.clear();
@@ -259,7 +259,8 @@ check("快捷键页签：4 个组合键录制框（不是文本输入）", cfgSw
   check("comboTextOf 录制 Ctrl+Shift+.（e.key 是 \">\" 也归一成句点）", comps.comboTextOf(shiftPeriod) === "Ctrl+Shift+.");
   check("comboMatches 命中同一配置（录制口径 = 匹配口径）", comps.comboMatches(shiftPeriod, comps.parseCombo("Ctrl+Shift+.")) === true);
   check("comboTextOf 录制字母键/拒绝裸键与纯修饰键", comps.comboTextOf(ev({ ctrlKey: true, key: "b", code: "KeyB" })) === "Ctrl+B" && comps.comboTextOf(ev({ key: "b", code: "KeyB" })) === null && comps.comboTextOf(ev({ ctrlKey: true, key: "Control", code: "ControlLeft" })) === null);
-  check("comboMatches 修饰键必须完全一致（少按不命中）", comps.comboMatches(ev({ ctrlKey: true, key: ".", code: "Period" }), comps.parseCombo("Ctrl+Shift+.")) === false);
+  check("comboTextOf 录制 Ctrl+Alt+` / Ctrl+Alt+/（Backquote 与 Slash 归一到键面字符）", comps.comboTextOf(ev({ ctrlKey: true, altKey: true, key: "`", code: "Backquote" })) === "Ctrl+Alt+`" && comps.comboTextOf(ev({ ctrlKey: true, altKey: true, key: "/", code: "Slash" })) === "Ctrl+Alt+/");
+  check("comboMatches 修饰键必须完全一致（少按不命中）", comps.comboMatches(ev({ ctrlKey: true, key: ".", code: "Period" }), comps.parseCombo("Ctrl+Alt+.")) === false);
   check("配置页录制让路座（shortcutCapture）在场", !!comps.shortcutCapture && comps.shortcutCapture.active === false);
 }
 // 草稿 ops 组装：bool→set、number "4"→set 4、空文本→unset（回 schema 默认）；
@@ -272,7 +273,7 @@ const savingForm = {
 };
 stateSeq = 0;
 stateStore.clear();
-stateStore.set(0, { searchMaxResults: { text: "4" }, phoneRemoteDomain: { text: "" }, vaultEnabled: { set: false }, sidebarShortcut: { text: "Ctrl+9" } });
+stateStore.set(0, { searchMaxResults: { text: "4" }, phoneRemoteDomain: { text: "" }, vaultEnabled: { set: false }, rightbarShortcut: { text: "Ctrl+9" } });
 stateStore.set(3, "kcfgGroupShortcuts");
 callLog = [];
 out = comps.KitConfigPage({ view: "page", form: savingForm });
@@ -283,7 +284,7 @@ check("保存 ops：number set / 清空 unset / bool set / 文本 set（按字�
   { op: "set", path: ["searchMaxResults"], value: 4 },
   { op: "unset", path: ["phoneRemoteDomain"] },
   { op: "set", path: ["vaultEnabled"], value: false },
-  { op: "set", path: ["sidebarShortcut"], value: "Ctrl+9" },
+  { op: "set", path: ["rightbarShortcut"], value: "Ctrl+9" },
 ]));
 check("保存带读取时 revision 围栏", capturedRev === 7);
 // 非法数字草稿：字段 invalid + 框架 invalid 置位（SettingsForm blocked 挡保存）
@@ -1132,7 +1133,7 @@ check("SkillsManager 带cwd渲染无异常", !!out && typeof out === "object");
     compared++;
     if (comps.CFG_DEFAULTS[key] !== expected) drift.push(key + "(bundle=" + comps.CFG_DEFAULTS[key] + ",host=" + expected + ")");
   }
-  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 17);
+  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 16);
 }
 // 过时文案清理：现行说明不得出现「侧栏底部『任务』钮」、日程索引标题键、搜索默认 5
 check(
@@ -1156,12 +1157,18 @@ check(
 );
 
 // 日程只有右栏 dock 签（入口归右栏开始页与待办卡）：侧栏待办索引、日程快捷键及其
-// 设置项都不得出现；开合走右栏快捷键（Ctrl+Alt+B，可配置）
+// 设置项都不得出现；开合走右栏快捷键（Ctrl+B，可配置）
 check(
   "日程侧栏索引与专属快捷键不存在（schedIdxOpen/schedShortcut 全链移除）",
   !src.includes("schedIdxOpen") && !src.includes("schedShortcut") && !src.includes("cfgSchedShortcut") && !src.includes("ScheduleIndexView"),
 );
-check("右栏收起/展开快捷键已接入（默认 Ctrl+Alt+B，走 sidebarRight.toggleExpanded）", src.includes('rightbarShortcut: "Ctrl+Alt+B"') && src.includes("sr.toggleExpanded()"));
+check("右栏收起/展开快捷键已接入（默认 Ctrl+B，走 sidebarRight.toggleExpanded）", src.includes('rightbarShortcut: "Ctrl+B"') && src.includes("sr.toggleExpanded()"));
+// 左侧边栏开合不做：宿主 shortcuts 服务自带（web Ctrl+Alt+B / 桌面 Ctrl+B），
+// 本插件不得再占这个位（字段/处理分支/词条全删）
+check(
+  "左栏开合快捷键已让给宿主（sidebarShortcut 字段与处理分支全删）",
+  !src.includes("sidebarShortcut") && !src.includes("kcfgSidebarShortcut") && !src.includes("function toggleSidebar"),
+);
 // 文件树没有「上传文件到当前目录」：按钮/隐藏 input/上传逻辑/i18n 键都不得存在；
 // vault 附件上传仍走 /dsh-kit/upload（端点保留）
 check(
