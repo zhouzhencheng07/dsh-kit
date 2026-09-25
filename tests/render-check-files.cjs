@@ -90,10 +90,6 @@ check(
   "dock 跨组件服务座（sidebarView 渲染器座 / inlineEdit 让路座 / diffPane 正文座）形状",
   dockExports.sidebarView && typeof dockExports.sidebarView === "object" && dockExports.sidebarView.renderer === null && dockExports.inlineEdit && dockExports.inlineEdit.active === false && dockExports.diffPane && typeof dockExports.diffPane === "object" && dockExports.diffPane.Component === null,
 );
-check(
-  "dock 组合键共享面（解析/匹配 + 录制让路座）：组件包不再各留一份复刻",
-  typeof dockExports.parseCombo === "function" && typeof dockExports.comboMatches === "function" && typeof dockExports.comboTextOf === "function" && !!dockExports.shortcutCapture && dockExports.shortcutCapture.active === false,
-);
 
 const comps = loadBundle(__dirname + "/../packages/dsh-kit-files/client/bundle.js", (name) => {
   if (name === "react") return reactStub;
@@ -341,26 +337,30 @@ check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
 {
   const filesSrc = fs.readFileSync(__dirname + "/../packages/dsh-kit-files/client/bundle.js", "utf8");
   check("分支按钮不被 .dshk-btn 定宽压扁（width:auto 修正恒在）", filesSrc.includes(".dshk-branchbtn{display:inline-flex;flex:none;width:auto"));
-  // 组件默认键位与宿主 Config schema 同源（两处不同步会出现默认键位漂移）
+  // 键位整体改由宿主 shortcuts 服务持有（0.1.7-rc.2+ 官方「快捷键」页）：本组件
+  // 不再有键位配置项（宿主 schema 同删），注册面见下方 apply 钉子
   const hostSrc = fs.readFileSync(__dirname + "/../packages/dsh-kit-files/src/index.ts", "utf8");
   check(
-    "快捷键默认键位 client 与宿主 schema 同源（文件树 Ctrl+Alt+, / 源代码管理 Ctrl+Alt+.）",
-    filesSrc.includes('fileTreeShortcut: "Ctrl+Alt+,"') && filesSrc.includes('scShortcut: "Ctrl+Alt+."') && hostSrc.includes("fileTreeShortcut: z.string().default('Ctrl+Alt+,').volatile()") && hostSrc.includes("scShortcut: z.string().default('Ctrl+Alt+.').volatile()"),
-  );
-  check(
-    "快捷键字段走组合键录制控件（type: \"combo\"，不是文本输入）",
-    filesSrc.includes('{ key: "fileTreeShortcut", type: "combo"') && filesSrc.includes('{ key: "scShortcut", type: "combo"'),
+    "键位配置项全退役（client 与宿主 schema 都不再有键位字段与录制控件）",
+    !filesSrc.includes("fileTreeShortcut") && !filesSrc.includes("scShortcut") && !filesSrc.includes("kcfgGroupShortcuts") &&
+      !filesSrc.includes('type: "combo"') && !hostSrc.includes("fileTreeShortcut") && !hostSrc.includes("scShortcut"),
   );
 }
 
-// —— apply 激活契约 + sidebarView 渲染器座桥 ——
+// —— apply 激活契约 + 官方快捷键注册 + sidebarView 渲染器座桥 ——
 async function checkApply() {
-  const injects = [];
   const registered = [];
+  const shortcutCmds = [];
   const seatInjects = [];
-  const listeners = [];
   const ctxStub = {
-    inject: (deps, cb) => injects.push(deps),
+    inject: (deps, cb) => {
+      if (deps.includes("shortcuts")) {
+        cb({
+          shortcuts: { register: (cmd) => { shortcutCmds.push(cmd); return () => {}; } },
+          effect: (fn) => { fn(); },
+        });
+      }
+    },
     slots: {
       register: (seat, comp) => registered.push(seat),
       inject: (key, cb) => { seatInjects.push(key); cb(); },
@@ -368,7 +368,7 @@ async function checkApply() {
     effect: (fn) => {},
   };
   const prevDoc = global.document;
-  global.document = { ...prevDoc, addEventListener: (k, fn) => listeners.push(["doc", k]) };
+  global.document = { ...prevDoc, addEventListener: () => {} };
   let applyErr = null;
   try { await comps.apply(ctxStub); } catch (e) { applyErr = e; }
   global.document = prevDoc;
@@ -379,7 +379,21 @@ async function checkApply() {
   check("files 槽位座席：源代码管理入口 order 11", seat("dsh-kit-scm") && seat("dsh-kit-scm").order === 11);
   const cfgKeys = registered.filter((s) => s.name === "plugins.row.config").map((s) => s.key);
   check("files 配置页挂本组件行（两种包名口径的 key 都在）", cfgKeys.includes("dsh-kit#files") && cfgKeys.includes("dsh-kit-files#files"));
-  check("files apply 挂全局快捷键监听（keydown capture）", listeners.some(([t, k]) => t === "doc" && k === "keydown"));
+  // 官方快捷键注册（不经自挂 keydown）：两条命令进官方「快捷键」页
+  const sc = (id) => shortcutCmds.find((c) => c.id === id);
+  const treeCmd = sc("dsh-kit-files.tree.toggle");
+  const scmCmd = sc("dsh-kit-files.scm.toggle");
+  check("files apply 向官方 shortcuts 注册文件树/源代码管理两条命令", !!treeCmd && !!scmCmd && typeof treeCmd.label === "function" && typeof scmCmd.label() === "string");
+  check(
+    "默认键：文件树 Ctrl+Alt+,、源代码管理 Ctrl+Alt+.（primary+alt 口径）",
+    treeCmd.defaults["web:windows"].code === "Comma" && String(treeCmd.defaults["web:windows"].modifiers) === "primary,alt" && scmCmd.defaults["web:windows"].code === "Period" && !!scmCmd.defaults["desktop:linux"] && ["page", "editable", "terminal"].every((r) => treeCmd.regions.includes(r)),
+  );
+  // resolve 门控：组件配置在测试里未就绪 → 走内置默认（两个功能都开）→ handled
+  const before = JSON.stringify({ tree: dockExports.getKitUi().treeOpen, git: dockExports.getKitUi().gitOpen });
+  const resolved = treeCmd.resolve({ region: "page", modal: null });
+  if (resolved.status === "handled") resolved.run();
+  check("resolve 在功能开时 handled 且 run 切侧栏单槽", resolved.status === "handled" && dockExports.getKitUi().treeOpen === true && before !== JSON.stringify({ tree: dockExports.getKitUi().treeOpen, git: dockExports.getKitUi().gitOpen }));
+  dockExports.setKitUi({ treeOpen: false });
   // 渲染器座：apply 后 root 单槽分发到 files 的 tree/git 分支
   const renderer = dockExports.sidebarView.renderer;
   check("files apply 接管 sidebarView 渲染器座", typeof renderer === "function");

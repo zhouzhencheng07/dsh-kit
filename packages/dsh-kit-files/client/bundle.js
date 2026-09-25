@@ -21,7 +21,6 @@ window.__ModuleLoader__.load({
       flashToast, writeClipboard, kitGetJson, kitPostJson, kitJson,
       resolveZh, currentComposerShell, chatMentionText,
       expandSidebarNow, TreeRowMenu, TreeFolderIcon, FileTypeIcon16, ChevronIcon,
-      parseCombo, comboMatches,
     } = dock;
     let dswPrimIcons = null;
     try { dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 回退自绘 */ }
@@ -106,17 +105,15 @@ window.__ModuleLoader__.load({
       contentEmpty: "（空文件）",
       pvDeletedNote: "文件已删除——此标签仅展示删除 diff；可在源代码管理里 ↩ 恢复文件",
       kcfgGroupFeatures: "功能开关",
-      kcfgGroupShortcuts: "快捷键",
-
 
       kcfgFileTreeEnabled: "文件树",
       kcfgFileTreeEnabledHint: "侧栏文件树与文件打开入口的总开关。",
       kcfgSourceControlEnabled: "源代码管理",
       kcfgSourceControlEnabledHint: "源代码管理签（状态/差异/提交图谱/分支）。",
-      kcfgFileTreeShortcut: "文件树",
-      kcfgFileTreeShortcutHint: "点方框后按组合键；默认 Ctrl+Alt+,（宿主占用 Ctrl+,）",
-      kcfgScShortcut: "源代码管理",
-      kcfgScShortcutHint: "点方框后按组合键；默认 Ctrl+Alt+.（句点）",
+      // 命令名复用面板标题（treeLabel/scTitle）；这两条是官方「快捷键」页里
+      // 「按不动」时显示的说明
+      scTreeOff: "文件树已在配置页关闭",
+      scScmOff: "源代码管理已在配置页关闭",
     };
     const en = {
       noCwd: "No session workspace available: open or create a session first",
@@ -192,15 +189,12 @@ window.__ModuleLoader__.load({
 
 
       kcfgGroupFeatures: "Features",
-      kcfgGroupShortcuts: "Shortcuts",
       kcfgFileTreeEnabled: "File tree",
       kcfgFileTreeEnabledHint: "Master switch for the sidebar file tree and file entries.",
       kcfgSourceControlEnabled: "Source control",
       kcfgSourceControlEnabledHint: "The source control tab (status, diffs, commit graph, branches).",
-      kcfgFileTreeShortcut: "File tree",
-      kcfgFileTreeShortcutHint: "Click the box, then press the combo; default Ctrl+Alt+, (the host takes Ctrl+,)",
-      kcfgScShortcut: "Source control",
-      kcfgScShortcutHint: "Click the box, then press the combo; default Ctrl+Alt+. (period)",
+      scTreeOff: "File tree is switched off in the config page",
+      scScmOff: "Source control is switched off in the config page",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? key;
@@ -212,11 +206,11 @@ window.__ModuleLoader__.load({
     };
 
     // ─────────── 组件配置（/dsh-kit-files/config，Config schema 唯一真源）───────
+    // 键位不在这里：两条命令注册进官方 shortcuts 服务（见 registerShortcuts），
+    // 录制与持久化归官方「快捷键」页。
     const F_CFG_DEFAULTS = {
       fileTreeEnabled: true,
       sourceControlEnabled: true,
-      fileTreeShortcut: "Ctrl+Alt+,",
-      scShortcut: "Ctrl+Alt+.",
     };
     let cfgSnap = null;
     const cfgSubs = new Set();
@@ -253,14 +247,6 @@ window.__ModuleLoader__.load({
       const v = snap.value;
       out.fileTreeEnabled = v.fileTreeEnabled !== false;
       out.sourceControlEnabled = v.sourceControlEnabled !== false;
-      out.fileTreeShortcut =
-        typeof v.fileTreeShortcut === "string" && parseCombo(v.fileTreeShortcut)
-          ? v.fileTreeShortcut
-          : F_CFG_DEFAULTS.fileTreeShortcut;
-      out.scShortcut =
-        typeof v.scShortcut === "string" && parseCombo(v.scShortcut)
-          ? v.scShortcut
-          : F_CFG_DEFAULTS.scShortcut;
       return out;
     }
     /** 配置关但侧栏视图还开着（配置页保存 / entry 重启瞬间）：立即归位，文件随来源清掉 */
@@ -392,10 +378,8 @@ window.__ModuleLoader__.load({
     const FILES_CFG_FIELDS = [
       { key: "fileTreeEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgFileTreeEnabled", hintKey: "kcfgFileTreeEnabledHint" },
       { key: "sourceControlEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSourceControlEnabled", hintKey: "kcfgSourceControlEnabledHint" },
-      { key: "fileTreeShortcut", type: "combo", group: "kcfgGroupShortcuts", labelKey: "kcfgFileTreeShortcut", hintKey: "kcfgFileTreeShortcutHint" },
-      { key: "scShortcut", type: "combo", group: "kcfgGroupShortcuts", labelKey: "kcfgScShortcut", hintKey: "kcfgScShortcutHint" },
     ];
-    const FILES_CFG_GROUPS = ["kcfgGroupFeatures", "kcfgGroupShortcuts"];
+    const FILES_CFG_GROUPS = ["kcfgGroupFeatures"];
     const FilesConfigPage = dock.createConfigPage({
       fields: FILES_CFG_FIELDS,
       groups: FILES_CFG_GROUPS,
@@ -414,27 +398,64 @@ window.__ModuleLoader__.load({
       },
     });
 
-    // ─────────── 全局快捷键（Ctrl+Alt+, / Ctrl+Alt+.，组合键读组件配置）───────
-    const onFilesShortcutKey = (e) => {
-      if (dock.inlineEdit.active || dock.shortcutCapture.active) return; // 树行改名输入 / 配置页录制组合键时让路
-      const cfg = cfgFromSnapshot(getCfgSnapshot());
-      const treeCombo = parseCombo(cfg.fileTreeShortcut);
-      const scCombo = parseCombo(cfg.scShortcut);
-      if (treeCombo && cfg.fileTreeEnabled && comboMatches(e, treeCombo)) {
-        e.preventDefault();
-        e.stopPropagation();
-        // 与入口按钮同语义：单槽互斥，收起态先展开侧栏
-        if (!getKitUi().treeOpen) expandSidebarNow();
-        setKitUi(sidebarViewPatch(getKitUi().treeOpen ? null : "tree"));
-        return;
+    // ─────────── 官方快捷键服务（0.1.7-rc.2+）───────
+    // 文件树 / 源代码管理两条命令注册进宿主 shortcuts 服务 = 进官方「快捷键」页
+    // （Ctrl+/）：录制、冲突检测、跨设备默认值、持久化都归官方，本组件不再自持键位
+    // 配置项、也不再自挂全局 keydown。运行期 inject：老宿主没有该服务时只是没键位。
+    // 默认键只给 web:macos/web:windows（web 端放行表只认三键组合或 primary+alt/shift）
+    // 与 desktop 三档。
+    function registerShortcuts(scCtx) {
+      const shortcuts = scCtx.shortcuts;
+      if (!shortcuts || typeof shortcuts.register !== "function") return;
+      const commands = [
+        {
+          id: "dsh-kit-files.tree.toggle",
+          labelKey: "treeLabel",
+          aliases: ["file tree", "workspace files", "dsh-kit"],
+          code: "Comma",
+          enabled: (cfg) => cfg.fileTreeEnabled,
+          offKey: "scTreeOff",
+          // 与入口按钮同语义：单槽互斥，收起态先展开侧栏
+          run: () => {
+            if (!getKitUi().treeOpen) expandSidebarNow();
+            setKitUi(sidebarViewPatch(getKitUi().treeOpen ? null : "tree"));
+          },
+        },
+        {
+          id: "dsh-kit-files.scm.toggle",
+          labelKey: "scTitle",
+          aliases: ["source control", "git", "dsh-kit"],
+          code: "Period",
+          enabled: (cfg) => cfg.sourceControlEnabled,
+          offKey: "scScmOff",
+          run: () => {
+            if (!getKitUi().gitOpen) expandSidebarNow();
+            setKitUi(sidebarViewPatch(getKitUi().gitOpen ? null : "scm"));
+          },
+        },
+      ];
+      const defaultsOf = (code) => ({
+        "web:macos": { code, modifiers: ["primary", "alt"] },
+        "web:windows": { code, modifiers: ["primary", "alt"] },
+        "desktop:macos": { code, modifiers: ["primary", "alt"] },
+        "desktop:windows": { code, modifiers: ["primary", "alt"] },
+        "desktop:linux": { code, modifiers: ["primary", "alt"] },
+      });
+      for (const cmd of commands) {
+        scCtx.effect(() => shortcuts.register({
+          id: cmd.id,
+          label: () => t(cmd.labelKey),
+          aliases: cmd.aliases,
+          defaults: defaultsOf(cmd.code),
+          regions: ["page", "editable", "terminal"],
+          modals: [],
+          resolve: () => {
+            if (!cmd.enabled(cfgFromSnapshot(getCfgSnapshot()))) return { status: "blocked", reason: t(cmd.offKey) };
+            return { status: "handled", run: cmd.run };
+          },
+        }), `dsh-kit-files: shortcut ${cmd.id}`);
       }
-      if (scCombo && cfg.sourceControlEnabled && comboMatches(e, scCombo)) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!getKitUi().gitOpen) expandSidebarNow();
-        setKitUi(sidebarViewPatch(getKitUi().gitOpen ? null : "scm"));
-      }
-    };
+    }
 
     // ─────────── 文件树 ───────────
     // 数据走宿主半边只读端点 /dsh-kit/tree（官方 browse RPC 只列目录不列文件）。
@@ -1006,8 +1027,8 @@ window.__ModuleLoader__.load({
         loadDir(dirPath);
       };
       // ── 行内改名（✎ 触发）：聚焦时只选中最后一个扩展名分隔符之前的
-      // 主名（目录/隐藏文件选全名），Enter 提交、Esc/失焦取消；改名期间面板快捷键
-      // 让路（inlineEditCapture），Esc 不会顺手关掉树/预览 ──
+      // 主名（目录/隐藏文件选全名），Enter 提交、Esc/失焦取消；改名期间把
+      // dock.inlineEdit 座置真，root 的 Esc 分层据此让路（不会顺手关掉树/预览）──
       const startRename = (entry) => {
         if (!cwd) return;
         setRenamingPath(entry.path);
@@ -2345,7 +2366,9 @@ window.__ModuleLoader__.load({
         }
         return null;
       };
-      document.addEventListener("keydown", onFilesShortcutKey, true);
+      // 官方快捷键服务（0.1.7-rc.2+）：文件树/源代码管理两条命令注册进官方页。
+      // 运行期 inject：老宿主没有该服务时只是没键位，其余功能照常。
+      ctx.inject(["shortcuts"], registerShortcuts);
       void loadCfg(); // 拉配置喂门控（失败保持内置默认）
       injectStyles();
     }
