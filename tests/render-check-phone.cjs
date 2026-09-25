@@ -99,7 +99,7 @@ check(
 
 // 2) 配置页：单组（不出页签）、三字段（端口数值 / 远程域名文本 / 网关常驻开关）
 {
-  const fakeForm = { state: { status: "ready", value: { phonePort: 3091, phoneRemoteDomain: "dsh.example.com", phoneKeepGatewayOn: true }, revision: 7, writable: true }, mutate: async () => true };
+  const fakeForm = { state: { status: "ready", value: { phonePort: 3091, phoneRemoteDomain: "dsh.example.com", phoneKeepGatewayOn: true }, base: { phonePort: 3090, phoneRemoteDomain: "", phoneKeepGatewayOn: false }, user: { phonePort: 3091, phoneKeepGatewayOn: true }, revision: 7, writable: true }, mutate: async () => true };
   stateSeq = 0;
   stateStore.clear();
   callLog = [];
@@ -122,7 +122,7 @@ check(
   const savingForm = { state: fakeForm.state, mutate: async (ops, rev) => { capturedOps = ops; capturedRev = rev; return true; } };
   stateSeq = 0;
   stateStore.clear();
-  stateStore.set(0, { phonePort: { text: "4" }, phoneRemoteDomain: { text: "" } });
+  stateStore.set(0, { phonePort: { kind: "set", text: "4" }, phoneRemoteDomain: { kind: "set", text: "" } });
   callLog = [];
   comps.PhoneConfigPage({ view: "page", form: savingForm });
   const saveFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
@@ -133,9 +133,40 @@ check(
     JSON.stringify(capturedOps) === JSON.stringify([{ op: "set", path: ["phonePort"], value: 4 }, { op: "unset", path: ["phoneRemoteDomain"] }]),
   );
   check("保存带读取时 revision 围栏", capturedRev === 7);
+  // 恢复默认 = 官方 SettingsFormModel 语义：草稿记 clear，控件回显**合成层**（默认）值
+  // 而不是上次保存值；保存发 unset；用户层本来没这个键就一个 op 都不发
   stateSeq = 0;
   stateStore.clear();
-  stateStore.set(0, { phonePort: { text: "abc" } });
+  stateStore.set(0, { phonePort: { kind: "clear" } });
+  callLog = [];
+  comps.PhoneConfigPage({ view: "page", form: savingForm });
+  const resetField = callLog.find((c) => c[1] === primStub.SettingsValueField && c[2].id === "dshk-cfgp-phonePort");
+  const resetFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
+  check("恢复默认：字段回显合成层值（不是上次保存的 3091）", !!resetField && resetField[2].text === "3090" && resetField[2].overridden === false);
+  check("恢复默认算脏（可保存）", !!resetFrm && resetFrm[2].state.dirty === true);
+  capturedOps = null;
+  resetFrm[2].onSave();
+  check("恢复默认保存为 unset", JSON.stringify(capturedOps) === JSON.stringify([{ op: "unset", path: ["phonePort"] }]));
+  stateSeq = 0;
+  stateStore.clear();
+  stateStore.set(0, { phoneRemoteDomain: { kind: "clear" } });
+  callLog = [];
+  comps.PhoneConfigPage({ view: "page", form: savingForm });
+  const clearNone = callLog.find((c) => c[1] === primStub.SettingsForm);
+  check("恢复默认：用户层没有该键时不算脏", !!clearNone && clearNone[2].state.dirty === false);
+  capturedOps = null;
+  clearNone[2].onSave();
+  check("恢复默认：无 op 的保存不写盘", capturedOps === null);
+  // 覆盖标记 = 用户层有键（值等于合成层默认也是覆盖）
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  comps.PhoneConfigPage({ view: "page", form: { state: { ...fakeForm.state, value: { phonePort: 3090, phoneRemoteDomain: "", phoneKeepGatewayOn: false }, user: { phoneRemoteDomain: "" } }, mutate: async () => true } });
+  const eqField = callLog.find((c) => c[1] === primStub.SettingsValueField && c[2].id === "dshk-cfgp-phoneRemoteDomain");
+  check("覆盖标记看用户层有没有键（值等于默认也算覆盖）", !!eqField && eqField[2].overridden === true);
+  stateSeq = 0;
+  stateStore.clear();
+  stateStore.set(0, { phonePort: { kind: "set", text: "abc" } });
   callLog = [];
   comps.PhoneConfigPage({ view: "page", form: fakeForm });
   const badField = callLog.find((c) => c[1] === primStub.SettingsValueField && c[2].id === "dshk-cfgp-phonePort");

@@ -323,39 +323,52 @@ window.__ModuleLoader__.load({
           return jsxRuntime.jsx("div", { className: "dshk-cfgp", children:
             jsxRuntime.jsx("div", { className: "dshk-note", children: cfgUiT("needHost") }) });
         }
-        const base = snap.value;
+        // 官方语义（ui-primitives 的 SettingsFormModel）：value = 生效值（schema 默认 →
+        // 合成层 → 用户层），base = 合成层（清掉后回落到的值），user 里**有键**才算覆盖
+        //（值等于默认也是覆盖，不能比值）。草稿三态：set / clear（恢复默认）/ 无草稿。
+        const value = snap.value;
+        const baseLayer = snap.base && typeof snap.base === "object" ? snap.base : {};
+        const userLayer = snap.user && typeof snap.user === "object" ? snap.user : null;
         const writable = snap.writable !== false;
         const draftOf = (key) => (draft && Object.prototype.hasOwnProperty.call(draft, key) ? draft[key] : null);
-        // entry null = 撤销该字段的草稿；改回与受理值同文/同值也走撤销（不是记同值覆盖）。
-        // 官方语义：失败提示由下一次编辑或保存清除
+        const stored = (key) => userLayer !== null && Object.prototype.hasOwnProperty.call(userLayer, key);
+        const textOf = (v) => (v == null ? "" : String(v));
         const stage = (key, entry) => {
           setFailed(false);
-          setDraft((prev) => {
-            const next = { ...(prev ?? {}) };
-            if (entry == null) delete next[key];
-            else next[key] = entry;
-            return Object.keys(next).length > 0 ? next : null;
-          });
+          setDraft((prev) => ({ ...(prev ?? {}), [key]: entry }));
         };
-        const baseText = (f) => (base[f.key] == null ? "" : String(base[f.key]));
-        const numBad = (f, d) => f.type === "number" && d != null && d.text.trim() !== "" && !Number.isFinite(Number(d.text));
+        const shownBool = (f) => { const d = draftOf(f.key); if (!d) return value[f.key] === true; if (d.kind === "clear") return baseLayer[f.key] === true; return d.bool === true; };
+        const shownText = (f) => { const d = draftOf(f.key); if (!d) return textOf(value[f.key]); if (d.kind === "clear") return textOf(baseLayer[f.key]); return d.text; };
+        const overriddenOf = (f) => { const d = draftOf(f.key); return d ? d.kind === "set" : stored(f.key); };
+        const numBad = (f, d) => f.type === "number" && d != null && d.kind === "set" && d.text.trim() !== "" && !Number.isFinite(Number(d.text));
         const invalid = fields.some((f) => numBad(f, draftOf(f.key)));
-        const save = async () => {
-          if (!draft || !writable || saving || invalid) return;
-          // bool → set；number 空串 → unset、有限数 → set 截断整数（非法草稿挡在
-          // invalid）；string 空 → unset、否则 set 原文。unset = 回 schema 默认
+        // 官方 plan 同序同判：clear 只在用户层真有这个键时发 unset；set 草稿与生效值
+        // 同值就不发（等于没改）；空 plan 直接丢弃草稿
+        const planOps = () => {
           const ops = [];
           for (const f of fields) {
             const d = draftOf(f.key);
             if (!d) continue;
-            if (f.type === "bool") ops.push({ op: "set", path: [f.key], value: d.set });
-            else if (f.type === "number") {
+            if (d.kind === "clear") {
+              if (stored(f.key)) ops.push({ op: "unset", path: [f.key] });
+            } else if (f.type === "bool") {
+              if (d.bool !== (value[f.key] === true)) ops.push({ op: "set", path: [f.key], value: d.bool === true });
+            } else if (f.type === "number") {
+              if (d.text === textOf(value[f.key])) continue;
               const txt = d.text.trim();
               if (txt === "") ops.push({ op: "unset", path: [f.key] });
               else ops.push({ op: "set", path: [f.key], value: Math.trunc(Number(txt)) });
-            } else if (d.text === "") ops.push({ op: "unset", path: [f.key] });
-            else ops.push({ op: "set", path: [f.key], value: d.text });
+            } else {
+              if (d.text === textOf(value[f.key])) continue;
+              if (d.text.trim() === "") ops.push({ op: "unset", path: [f.key] });
+              else ops.push({ op: "set", path: [f.key], value: d.text.trim() });
+            }
           }
+          return ops;
+        };
+        const save = async () => {
+          if (!draft || !writable || saving || invalid) return;
+          const ops = planOps();
           if (ops.length === 0) { setDraft(null); return; }
           setSaving(true);
           try {
@@ -373,20 +386,20 @@ window.__ModuleLoader__.load({
           }
         };
         const boolRow = (f) => {
-          const d = draftOf(f.key);
+          const over = overriddenOf(f);
           const dis = !writable || saving;
           return jsxRuntime.jsxs("div", { className: "dshk-cfgp-bfield", children: [
             jsxRuntime.jsxs("div", { className: "dshk-cfgp-bhead", children: [
               jsxRuntime.jsx("span", { className: "dshk-cfgp-blabel", children: t(f.labelKey) }),
-              d ? jsxRuntime.jsxs("span", { className: "dshk-cfgp-badges", children: [
+              over ? jsxRuntime.jsxs("span", { className: "dshk-cfgp-badges", children: [
                 jsxRuntime.jsx(cfgUiPrim.Tag, { tone: "neutral", children: cfgUiT("overridden") }),
-                jsxRuntime.jsx("button", { type: "button", className: "dshk-cfgp-reset", disabled: dis, onClick: () => stage(f.key, null), children: cfgUiT("reset") }),
+                jsxRuntime.jsx("button", { type: "button", className: "dshk-cfgp-reset", disabled: dis, onClick: () => stage(f.key, { kind: "clear" }), children: cfgUiT("reset") }),
               ] }) : null,
               jsxRuntime.jsx(cfgUiPrim.Switch, {
-                checked: d ? d.set : base[f.key] === true,
+                checked: shownBool(f),
                 label: t(f.labelKey),
                 disabled: dis,
-                onChange: (next) => stage(f.key, next === (base[f.key] === true) ? null : { set: next }),
+                onChange: (next) => stage(f.key, { kind: "set", bool: next === true }),
               }),
             ] }),
             jsxRuntime.jsx("p", { className: "dshk-cfgp-hintline", children: t(f.hintKey) }),
@@ -398,16 +411,16 @@ window.__ModuleLoader__.load({
             id: "dshk-cfgp-" + f.key,
             label: t(f.labelKey),
             hint: t(f.hintKey),
-            text: d ? d.text : baseText(f),
-            overridden: d != null,
+            text: shownText(f),
+            overridden: overriddenOf(f),
             invalid: numBad(f, d),
             numeric: f.type === "number",
             disabled: !writable || saving,
             overriddenLabel: cfgUiT("overridden"),
             resetLabel: cfgUiT("reset"),
             invalidLabel: cfgUiT("invalidNumber"),
-            onEdit: (txt) => stage(f.key, txt === baseText(f) ? null : { text: txt }),
-            onReset: () => stage(f.key, null),
+            onEdit: (txt) => stage(f.key, { kind: "set", text: txt }),
+            onReset: () => stage(f.key, { kind: "clear" }),
           }, f.key);
         };
         const fieldRows = (g) => fields.filter((f) => f.group === g).map((f) => (f.type === "bool" ? boolRow(f) : valueField(f)));
@@ -429,7 +442,7 @@ window.__ModuleLoader__.load({
               save: cfgUiT("save"),
               saving: cfgUiT("saving"),
             },
-            state: { available: true, writable, dirty: draft != null, invalid, saving, failed },
+            state: { available: true, writable, dirty: draft != null && planOps().length > 0, invalid, saving, failed },
             onSave: save,
             onDiscard: () => setDraft(null),
             children: groups.length > 1 ? panel(active) : panel(groups[0]),
