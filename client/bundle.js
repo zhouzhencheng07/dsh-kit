@@ -8876,13 +8876,11 @@ ellipsis，窄列只截字不破版 */
 
     // ─────────── 插件体 ───────────
     function apply(ctx) {
-      // 组件配置页：挂本组件行（行由 dsh-kit bundle 的 patch 声明，槽位 key =
-      // <包名>#<行id>，两种包名口径各挂一枚防宿主改口径）
-      for (const key of ["dsh-kit#files", "dsh-kit-files#files"]) {
-        ctx.slots.inject("plugins.row.config", () =>
-          ctx.slots.register({ name: "plugins.row.config", key }, FilesConfigPage),
-        );
-      }
+      // 组件配置页：挂本组件行（槽位 key = dsh-kit#<行id>；多包时代的第二种
+      // 包名口径已随单包收回撤销）
+      ctx.slots.inject("plugins.row.config", () =>
+        ctx.slots.register({ name: "plugins.row.config", key: "dsh-kit#files" }, FilesConfigPage),
+      );
       // 输入框入口（官方 conversation 挂载期声明槽位，inject 等声明落地再注册——
       // 直接 register 会炸整树 boot）。开关门控在组件内读本组件配置（关 = 渲染
       // null，volatile 热提交即时生效）
@@ -10850,11 +10848,8 @@ ellipsis，窄列只截字不破版 */
       officialTermUnavailable: "官方终端服务不可用：此功能需要 DSH 0.1.6+",
       termLimit: "宿主终端数量已达上限：先结束一些再新建",
       contentFail: "读取失败",
-      kcfgGroupFeatures: "功能开关",
-      kcfgTerminalEnabled: "终端面板",
-      kcfgTerminalEnabledHint: "对话输入行出终端入口，面板停靠底部（引擎为官方 webTerminals）。",
-      scTerminal: "终端面板",
-      scTerminalOff: "终端面板已在配置页关闭",
+      scTerminal: "终端",
+      scTerminalOff: "终端组件已在插件页停用",
     };
     const en = {
       label: "Terminal",
@@ -10871,21 +10866,15 @@ ellipsis，窄列只截字不破版 */
       officialTermUnavailable: "Official terminal service unavailable: requires DSH 0.1.6+",
       termLimit: "Host terminal limit reached: kill some terminals first",
       contentFail: "Failed to read",
-      kcfgGroupFeatures: "Features",
-      kcfgTerminalEnabled: "Terminal panel",
-      kcfgTerminalEnabledHint: "Adds the terminal entry to the composer; the panel docks at the bottom (official webTerminals engine).",
-      scTerminal: "Terminal dock",
-      scTerminalOff: "Terminal dock is switched off in the config page",
+      scTerminal: "Terminal",
+      scTerminalOff: "Terminal component is disabled on the plugin page",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? key;
 
-    // ─────────── 组件配置（/dsh-kit-terminal/config，Config schema 唯一真源）───────
-    // 键位不在这里：终端命令注册进官方 shortcuts 服务（见 registerShortcuts），
-    // 录制与持久化归官方「快捷键」页。
-    const T_CFG_DEFAULTS = {
-      terminalEnabled: true,
-    };
+    // ─────────── 组件配置（/dsh-kit-terminal/config）───────
+    // 终端没有独立配置字段：行开关（插件页组件行 switch）= 唯一开关。拉端点只为
+    // 可达性——200 = 行启用；404（行禁用 → 子模块不物化）= 隐藏入口并结束会话。
     let cfgSnap = null;
     const cfgSubs = new Set();
     const emitCfg = () => {
@@ -10903,9 +10892,9 @@ ellipsis，窄列只截字不破版 */
         const v = await kitJson("/dsh-kit-terminal/config", undefined, (b) => b !== null && typeof b === "object");
         value = v;
       } catch {
-        value = null; // 端点不可达：null → cfgFromSnapshot 走内置默认
+        value = null; // 端点不可达（行禁用 404）：探明不可用
       }
-      cfgSnap = value && typeof value === "object" ? { status: "ready", value } : null;
+      cfgSnap = value && typeof value === "object" ? { status: "ready", value } : { status: "unavailable" };
       emitCfg();
       sweepDisabledTerm();
     }
@@ -10914,17 +10903,15 @@ ellipsis，窄列只截字不破版 */
       return () => cfgSubs.delete(fn);
     };
     const getCfgSnapshot = () => cfgSnap;
-    /** 从快照提取生效配置（字段缺失/非法逐项回退默认） */
+    /** 组件可用性：端点 200（行启用）或未探明（乐观，apply 前的渲染窗口）= true；
+     *  探明 404（行禁用 → 子模块不物化）= false */
     function cfgFromSnapshot(snap) {
-      const out = { ...T_CFG_DEFAULTS };
-      if (!snap || snap.status !== "ready" || !snap.value || typeof snap.value !== "object") return out;
-      out.terminalEnabled = snap.value.terminalEnabled !== false;
-      return out;
+      return { available: !snap || snap.status === "ready" };
     }
-    /** 配置关但会话还开着（配置页保存 / entry 重启瞬间）：立即清场——结束全部终端，
-     *  与「关 = 入口消失」的语义一致。每条配置通道都经 loadCfg，故清场挂在那里 */
+    /** 行禁用但会话还开着（entry 重启 / 探针失败翻转）：立即清场——结束全部终端，
+     *  与「行关 = 入口消失」的语义一致。每条配置通道都经 loadCfg，故清场挂在那里 */
     function sweepDisabledTerm() {
-      if (cfgFromSnapshot(getCfgSnapshot()).terminalEnabled) return;
+      if (cfgFromSnapshot(getCfgSnapshot()).available) return;
       const ui = getKitUi();
       if (ui.terminals.length > 0 || ui.termDockOpen) {
         setKitUi({ terminals: [], activeTermId: null, termDockOpen: false });
@@ -11524,7 +11511,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       const sessionId = row?.id ?? null;
       const cwd = typeof row?.cwd === "string" ? row.cwd : null;
       lastSession = { id: sessionId, cwd };
-      if (cfg.terminalEnabled === false) return null;
+      if (!cfg.available) return null;
       const count = ui.terminals.length;
       const dockOn = ui.termDockOpen && count > 0;
       return jsxRuntime.jsx(KitTip, {
@@ -11563,16 +11550,16 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       lastSession = { id: sessionId, cwd };
 
       react.useEffect(() => {
-        if (ui.terminals.length === 0 || !ui.termDockOpen || !cfg.terminalEnabled) return undefined;
+        if (ui.terminals.length === 0 || !ui.termDockOpen || !cfg.available) return undefined;
         document.documentElement.style.setProperty("--dshk-dock-h", DOCK_H);
         document.body.classList.add("dshk-open");
         return () => {
           document.body.classList.remove("dshk-open");
           document.documentElement.style.removeProperty("--dshk-dock-h");
         };
-      }, [ui.termDockOpen, ui.terminals.length, cfg.terminalEnabled]);
+      }, [ui.termDockOpen, ui.terminals.length, cfg.available]);
 
-      if (!cfg.terminalEnabled || ui.terminals.length === 0) return null;
+      if (!cfg.available || ui.terminals.length === 0) return null;
       return jsxRuntime.jsx(TerminalDock, {
         open: ui.termDockOpen,
         cwd,
@@ -11589,21 +11576,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
         onKillAll: () => setKitUi({ terminals: [], activeTermId: null, termDockOpen: false }),
       });
     }
-
-    // ─────────── 配置页（挂组件行，骨架在 dock）───────
-    const TERMINAL_CFG_FIELDS = [
-      { key: "terminalEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgTerminalEnabled", hintKey: "kcfgTerminalEnabledHint" },
-    ];
-    const TERMINAL_CFG_GROUPS = ["kcfgGroupFeatures"];
-    const TerminalConfigPage = dock.createConfigPage({
-      fields: TERMINAL_CFG_FIELDS,
-      groups: TERMINAL_CFG_GROUPS,
-      t,
-      onSaved: async () => {
-        // 重拉自家快照喂门控（volatile 热提交即时生效）；端点不可达时快照不动
-        await loadCfg();
-      },
-    });
 
     // ─────────── 官方快捷键服务（0.1.7-rc.2+）───────
     // 终端命令注册进宿主 shortcuts 服务 = 进官方「快捷键」页（Ctrl+/）：录制、冲突
@@ -11629,7 +11601,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
         regions: ["page", "editable", "terminal"],
         modals: [],
         resolve: () => {
-          if (!cfgFromSnapshot(getCfgSnapshot()).terminalEnabled) return { status: "blocked", reason: t("scTerminalOff") };
+          if (!cfgFromSnapshot(getCfgSnapshot()).available) return { status: "blocked", reason: t("scTerminalOff") };
           // 会话在 run 期读：resolve 与 run 之间隔着宿主调度，按钮可能已重渲染换过会话
           return { status: "handled", run: () => setKitUi(toggleTermDock(getKitUi(), lastSession.id, lastSession.cwd)) };
         },
@@ -11638,13 +11610,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 
     // ─────────── 插件体 ───────────
     function apply(ctx) {
-      // 组件配置页：挂本组件行（行由 dsh-kit bundle 的 patch 声明，槽位 key =
-      // <包名>#<行id>，两种包名口径各挂一枚防宿主改口径）
-      for (const key of ["dsh-kit#terminal", "dsh-kit-terminal#terminal"]) {
-        ctx.slots.inject("plugins.row.config", () =>
-          ctx.slots.register({ name: "plugins.row.config", key }, TerminalConfigPage),
-        );
-      }
+      // 行禁用（子模块不物化）时本组件 client 面的可达性探针 404，入口与坞自行隐藏
       // 输入框入口与坞：官方 conversation / shell 挂载期声明槽位，inject 等声明
       // 落地再注册——直接 register 抛 not declared 且炸掉整个 web boot
       ctx.slots.inject("conversation.input.left", () =>
@@ -11669,7 +11635,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.TerminalPane = TerminalPane;
     exports.TerminalSurfaces = TerminalSurfaces;
     exports.TerminalIcon = TerminalIcon;
-    exports.TerminalConfigPage = TerminalConfigPage;
     exports.termTabLabel = termTabLabel;
     exports.makeTerm = makeTerm;
     exports.toggleTermDock = toggleTermDock;
@@ -11678,9 +11643,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.cfgFromSnapshot = cfgFromSnapshot;
     exports.registerShortcuts = registerShortcuts;
     exports.xtermTheme = xtermTheme;
-    exports.T_CFG_DEFAULTS = T_CFG_DEFAULTS;
-    exports.TERMINAL_CFG_FIELDS = TERMINAL_CFG_FIELDS;
-    exports.TERMINAL_CFG_GROUPS = TERMINAL_CFG_GROUPS;
     return module.exports;
 };
 

@@ -252,7 +252,7 @@ check("ScmEntry 悬停走官方气泡（同一条 KitTip 链路）", out.type ==
   check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultIdxOpen === true && svp.treeOpen === false && svp.gitOpen === false);
   dockExports.setKitUi({ vaultIdxOpen: true, vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", gitOpen: false, treeOpen: false });
   callLog = [];
-  comps.ScmEntry({});
+  comps.ScmEntry({ useSessions: () => ({ id: "s1", cwd: "C:/x" }) });
   const scmBtnEl = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-enbtn"));
   scmBtnEl[2].onClick();
   check("ScmEntry 点击后侧栏单槽互斥（知识库索引位让出，两个钮不会同时亮）", dockExports.getKitUi().gitOpen === true && dockExports.getKitUi().vaultIdxOpen === false && dockExports.getKitUi().vaultOpen === true);
@@ -384,12 +384,12 @@ async function checkApply() {
   try { await comps.apply(ctxStub); } catch (e) { applyErr = e; }
   global.document = prevDoc;
   check("files apply 激活不抛错", applyErr === null);
-  check("files apply 三个槽位与配置页都经 slots.inject 等声明", seatInjects.filter((k) => k === "conversation.input.left").length === 2 && seatInjects.filter((k) => k === "plugins.row.config").length === 2);
+  check("files apply 三个槽位与配置页都经 slots.inject 等声明", seatInjects.filter((k) => k === "conversation.input.left").length === 2 && seatInjects.filter((k) => k === "plugins.row.config").length === 1);
   const seat = (id) => registered.find((s) => s.id === id);
   check("files 槽位座席：文件树入口 order 10", seat("dsh-kit-filetree") && seat("dsh-kit-filetree").order === 10);
   check("files 槽位座席：源代码管理入口 order 11", seat("dsh-kit-scm") && seat("dsh-kit-scm").order === 11);
   const cfgKeys = registered.filter((s) => s.name === "plugins.row.config").map((s) => s.key);
-  check("files 配置页挂本组件行（两种包名口径的 key 都在）", cfgKeys.includes("dsh-kit#files") && cfgKeys.includes("dsh-kit-files#files"));
+  check("files 配置页挂本组件行（单包单口径 key）", cfgKeys.includes("dsh-kit#files") && cfgKeys.length === 1);
   // 官方快捷键注册（不经自挂 keydown）：两条命令进官方「快捷键」页
   const sc = (id) => shortcutCmds.find((c) => c.id === id);
   const treeCmd = sc("dsh-kit-files.tree.toggle");
