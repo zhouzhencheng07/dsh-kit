@@ -1028,10 +1028,9 @@ window.__ModuleLoader__.load({
       browserEnabled: true,
       vaultEnabled: false,
       vaultRoot: "",
-      terminalShortcut: "Ctrl+/",
-      vaultShortcut: "Ctrl+Alt+K",
-      rightbarShortcut: "Ctrl+Alt+B",
-      sidebarShortcut: "Ctrl+B",
+      terminalShortcut: "Ctrl+Alt+`",
+      vaultShortcut: "Ctrl+Alt+/",
+      rightbarShortcut: "Ctrl+B",
     };
     /** 从官方 scope 快照提取生效配置（字段缺失/非法逐项回退默认） */
     function cfgFromSnapshot(snap) {
@@ -1061,10 +1060,6 @@ window.__ModuleLoader__.load({
           typeof v.rightbarShortcut === "string" && parseCombo(v.rightbarShortcut)
             ? v.rightbarShortcut
             : CFG_DEFAULTS.rightbarShortcut,
-        sidebarShortcut:
-          typeof v.sidebarShortcut === "string" && parseCombo(v.sidebarShortcut)
-            ? v.sidebarShortcut
-            : CFG_DEFAULTS.sidebarShortcut,
       };
     }
     // 模块级通道（apply 注入 / KitSurfaces 订阅）
@@ -1735,14 +1730,12 @@ window.__ModuleLoader__.load({
       kcfgVaultEnabledHint: "开 = 右栏「知识库」签与只读索引/搜索；改后重启生效。",
       kcfgVaultRoot: "知识库根目录（绝对路径）",
       kcfgVaultRootHint: "普通 md 目录，指向哪里读哪里；清空恢复默认根。",
-      kcfgSidebarShortcut: "侧栏开合",
-      kcfgSidebarShortcutHint: "点方框后按组合键；默认 Ctrl+B。",
       kcfgRightbarShortcut: "右栏开合",
-      kcfgRightbarShortcutHint: "点方框后按组合键；默认 Ctrl+Alt+B。",
+      kcfgRightbarShortcutHint: "点方框后按组合键；默认 Ctrl+B。",
       kcfgTerminalShortcut: "终端",
-      kcfgTerminalShortcutHint: "点方框后按组合键；默认 Ctrl+/。",
+      kcfgTerminalShortcutHint: "点方框后按组合键；默认 Ctrl+Alt+`。",
       kcfgVaultShortcut: "知识库",
-      kcfgVaultShortcutHint: "点方框后按组合键；默认 Ctrl+Alt+K。",
+      kcfgVaultShortcutHint: "点方框后按组合键；默认 Ctrl+Alt+/。",
       schedTab: "日程",
       schedToday: "今天",
       schedNoDue: "无期限",
@@ -1960,14 +1953,12 @@ window.__ModuleLoader__.load({
       kcfgVaultEnabledHint: "On = the Vault tab plus read-only index/search; takes effect after a restart.",
       kcfgVaultRoot: "Vault root directory (absolute path)",
       kcfgVaultRootHint: "A plain md directory read as-is; blank restores the default root.",
-      kcfgSidebarShortcut: "Toggle sidebar",
-      kcfgSidebarShortcutHint: "Click the box, then press the combo; default Ctrl+B.",
       kcfgRightbarShortcut: "Toggle right bar",
-      kcfgRightbarShortcutHint: "Click the box, then press the combo; default Ctrl+Alt+B.",
+      kcfgRightbarShortcutHint: "Click the box, then press the combo; default Ctrl+B.",
       kcfgTerminalShortcut: "Terminal",
-      kcfgTerminalShortcutHint: "Click the box, then press the combo; default Ctrl+/.",
+      kcfgTerminalShortcutHint: "Click the box, then press the combo; default Ctrl+Alt+`.",
       kcfgVaultShortcut: "Vault",
-      kcfgVaultShortcutHint: "Click the box, then press the combo; default Ctrl+Alt+K.",
+      kcfgVaultShortcutHint: "Click the box, then press the combo; default Ctrl+Alt+/.",
       schedTab: "Schedule",
       schedToday: "Today",
       schedNoDue: "No due date",
@@ -3411,11 +3402,6 @@ ellipsis，窄列只截字不破版 */
     function expandSidebarNow() {
       const { collapsed, btn } = sidebarBtn();
       if (collapsed && btn) btn.click();
-    }
-    /** 快捷键用：展开/收起侧边栏切换 */
-    function toggleSidebar() {
-      const { btn } = sidebarBtn();
-      if (btn) btn.click();
     }
 
 
@@ -6469,8 +6455,9 @@ ellipsis，窄列只截字不破版 */
         };
       }, [ui.termDockOpen, ui.terminals.length, cfg.terminalEnabled]);
 
-      // 快捷键统一在此监听：组合键来自配置（默认 Ctrl+E / Ctrl+Alt+. 等，capture
-      // 拦截避免页面其它快捷键抢先），对应功能关闭时不响应。
+      // 快捷键统一在此监听：组合键来自配置（终端/知识库/右栏开合，capture 拦截
+      // 避免页面其它快捷键抢先），对应功能关闭时不响应。左侧边栏开合不做——
+      // 宿主的 shortcuts 服务自带该键（web Ctrl+Alt+B）。
       // Esc 分层：先关当前激活那张文档签（知识库关当前页那张、文件关当前文件那张），
       // 再关侧栏视图（不拦截，避免挡掉其它 Esc 行为）。功能签归官方 ✕，Esc 不碰。
 
@@ -6478,7 +6465,6 @@ ellipsis，窄列只截字不破版 */
         const termCombo = parseCombo(cfg.terminalShortcut);
         const vaultCombo = parseCombo(cfg.vaultShortcut);
         const rbCombo = parseCombo(cfg.rightbarShortcut);
-        const sidebarCombo = parseCombo(cfg.sidebarShortcut);
         const onKey = (e) => {
           if (dock.inlineEdit.active || dock.shortcutCapture.active) return; // 树行改名输入 / 配置页录制组合键时让路
           if (termCombo && cfg.terminalEnabled && comboMatches(e, termCombo)) {
@@ -6509,12 +6495,6 @@ ellipsis，窄列只截字不破版 */
                 /* 右栏异常不拖垮其它快捷键 */
               }
             }
-            return;
-          }
-          if (sidebarCombo && comboMatches(e, sidebarCombo)) {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleSidebar();
             return;
           }
           if (e.key === "Escape") {
@@ -7056,7 +7036,6 @@ ellipsis，窄列只截字不破版 */
       { key: "phoneKeepGatewayOn", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneKeepGatewayOn", hintKey: "kcfgPhoneKeepGatewayOnHint" },
       { key: "vaultEnabled", type: "bool", group: "kcfgGroupVault", labelKey: "kcfgVaultEnabled", hintKey: "kcfgVaultEnabledHint" },
       { key: "vaultRoot", type: "string", group: "kcfgGroupVault", labelKey: "kcfgVaultRoot", hintKey: "kcfgVaultRootHint" },
-      { key: "sidebarShortcut", type: "combo", group: "kcfgGroupShortcuts", labelKey: "kcfgSidebarShortcut", hintKey: "kcfgSidebarShortcutHint" },
       { key: "rightbarShortcut", type: "combo", group: "kcfgGroupShortcuts", labelKey: "kcfgRightbarShortcut", hintKey: "kcfgRightbarShortcutHint" },
       { key: "terminalShortcut", type: "combo", group: "kcfgGroupShortcuts", labelKey: "kcfgTerminalShortcut", hintKey: "kcfgTerminalShortcutHint" },
       { key: "vaultShortcut", type: "combo", group: "kcfgGroupShortcuts", labelKey: "kcfgVaultShortcut", hintKey: "kcfgVaultShortcutHint" },
@@ -7192,7 +7171,6 @@ ellipsis，窄列只截字不破版 */
     exports.chatMentionText = chatMentionText;
     exports.sidebarBtn = sidebarBtn;
     exports.expandSidebarNow = expandSidebarNow;
-    exports.toggleSidebar = toggleSidebar;
     exports.TreeRowMenu = TreeRowMenu;
     exports.TreeFolderIcon = TreeFolderIcon;
     exports.FileTypeIcon16 = FileTypeIcon16;

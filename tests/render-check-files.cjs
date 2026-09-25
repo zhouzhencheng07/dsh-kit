@@ -344,8 +344,8 @@ check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
   // 组件默认键位与宿主 Config schema 同源（两处不同步会出现默认键位漂移）
   const hostSrc = fs.readFileSync(__dirname + "/../packages/dsh-kit-files/src/index.ts", "utf8");
   check(
-    "快捷键默认键位 client 与宿主 schema 同源（源代码管理 Ctrl+Shift+.）",
-    filesSrc.includes('scShortcut: "Ctrl+Shift+."') && hostSrc.includes("scShortcut: z.string().default('Ctrl+Shift+.').volatile()") && !hostSrc.includes("Ctrl+Alt+."),
+    "快捷键默认键位 client 与宿主 schema 同源（文件树 Ctrl+Alt+, / 源代码管理 Ctrl+Alt+.）",
+    filesSrc.includes('fileTreeShortcut: "Ctrl+Alt+,"') && filesSrc.includes('scShortcut: "Ctrl+Alt+."') && hostSrc.includes("fileTreeShortcut: z.string().default('Ctrl+Alt+,').volatile()") && hostSrc.includes("scShortcut: z.string().default('Ctrl+Alt+.').volatile()"),
   );
   check(
     "快捷键字段走组合键录制控件（type: \"combo\"，不是文本输入）",
