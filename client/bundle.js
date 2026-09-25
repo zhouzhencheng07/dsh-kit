@@ -1220,16 +1220,18 @@ window.__ModuleLoader__.load({
     }
 
     /** base 内的相对路径（`/` 分隔、无前导分隔符；base 本身回 ""）：不在 base 内回 null。
-     *  Windows 形根（盘符/UNC）大小写不敏感，POSIX 根大小写敏感。 */
+     *  Windows 形根（盘符/UNC）只有**比较**大小写不敏感，返回段保留原样大小写——
+     *  调用方拿它跟索引里的 rel（保留原样）做前缀比较，折了大小写就永远对不上。 */
     function relUnder(base, p) {
       if (typeof base !== "string" || typeof p !== "string" || base === "" || p === "") return null;
       const win = /^[A-Za-z]:[\\/]/.test(base) || base.startsWith("\\\\");
-      const lc = (arr) => (win ? arr.map((s) => s.toLowerCase()) : arr);
-      const r = lc(pathSegs(base));
-      const t = lc(pathSegs(p));
+      const fold = (arr) => (win ? arr.map((s) => s.toLowerCase()) : arr);
+      const r = fold(pathSegs(base));
+      const segs = pathSegs(p);
+      const t = fold(segs);
       if (t.length < r.length) return null;
       if (!r.every((seg, i) => t[i] === seg)) return null;
-      return t.slice(r.length).join("/");
+      return segs.slice(r.length).join("/");
     }
 
     /** M4 路由判据：path 是否落在 vault root 内（根本身不算内） */
@@ -12031,6 +12033,8 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.shellShare = shellShare;
     exports.currentComposerShell = currentComposerShell;
     exports.chatMentionText = chatMentionText;
+    exports.pathSegs = pathSegs;
+    exports.relUnder = relUnder;
     exports.sidebarBtn = sidebarBtn;
     exports.expandSidebarNow = expandSidebarNow;
     exports.TreeRowMenu = TreeRowMenu;

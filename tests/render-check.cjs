@@ -914,6 +914,25 @@ let vaultFetchPrev = null;
   stateSeq = 0;
   stateStore.clear();
 }
+// 目录行有没有展开箭头靠 dirHasChildren 的前缀比较（relUnder 的结果 vs 索引里的
+// 页 rel）：Windows 的大小写不敏感只能用于**比较**，返回段折了大小写就跟
+// Project / R / 本机（DESKTOP-…）这类带大写的目录永远对不上——行上没箭头，
+// 点了也不展开，整棵子树都看不见
+{
+  const V = "D:\\agent\\.dsh\\dsh-kit\\vault";
+  check(
+    "relUnder：Windows 折叠大小写只用于比较，返回段保留原样",
+    comps.relUnder(V, "D:/AGENT/.dsh/DSH-KIT/VAULT/Project") === "Project" &&
+      comps.relUnder(V, V + "\\本机（DESKTOP-6EMI7H3）") === "本机（DESKTOP-6EMI7H3）" &&
+      comps.relUnder(V, V + "\\Project\\dsh-kit") === "Project/dsh-kit" &&
+      comps.relUnder(V, V) === "" &&
+      comps.relUnder(V, "D:\\agent\\.dsh\\dsh-kit\\other") === null,
+  );
+  check(
+    "relUnder：POSIX 根仍大小写敏感（Linux 上同名不同大小写是两个目录）",
+    comps.relUnder("/a/Vault", "/a/vault/x") === null && comps.relUnder("/a/Vault", "/a/Vault/x") === "x",
+  );
+}
 // 6.9a2c) 侧栏搜索命中合成（vaultSearchHits）：笔记命中（宿主全文搜索，已打分）+
 // 笔记目录 + 资料库文件/目录（只按名字匹配）合成一张表，一把尺子排序
 {
