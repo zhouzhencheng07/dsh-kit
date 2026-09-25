@@ -94,10 +94,8 @@ export const Config = z && typeof z.object === 'function'
         fileTreeEnabled: z.boolean().default(true).volatile(),
         // 源代码管理签（状态/差异/提交图谱/分支）总开关
         sourceControlEnabled: z.boolean().default(true).volatile(),
-        // 文件树全局快捷键（空/非法 → 回默认 Ctrl+Alt+,；Ctrl+, 归宿主设置页）
-        fileTreeShortcut: z.string().default('Ctrl+Alt+,').volatile(),
-        // 源代码管理全局快捷键
-        scShortcut: z.string().default('Ctrl+Alt+.').volatile(),
+        // 键位不在这里：文件树/源代码管理两条命令在 client 半边注册进宿主
+        // shortcuts 服务（官方「快捷键」页录制与持久化）
     })
     : undefined;
 export const name = 'dsh-kit-files';
@@ -105,7 +103,7 @@ export function apply(ctx, config = {}) {
     // volatile 字段在 fiber config 里是稳定 ref（{get}），统一解引用
     const defaults = Config
         ? Config({})
-        : { fileTreeEnabled: true, sourceControlEnabled: true, fileTreeShortcut: 'Ctrl+Alt+,', scShortcut: 'Ctrl+Alt+.' };
+        : { fileTreeEnabled: true, sourceControlEnabled: true };
     const readRef = (v) => v !== null && typeof v === 'object' && typeof v.get === 'function'
         ? v.get()
         : v;

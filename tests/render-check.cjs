@@ -95,7 +95,7 @@ if (!global.location) {
 //    setKitUi/makeTerm 用于预置终端坞等依赖状态的渲染分支
 const wrapper = body.replace(
   "return module.exports;",
-  "return Object.assign({ vaultSideSlot, vaultPaneSlot, TerminalEntry, VaultEntry, PhoneSection, KitSurfaces, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, KitConfigPage, KIT_CFG_FIELDS, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref }, kitBase);",
+  "return Object.assign({ vaultSideSlot, vaultPaneSlot, TerminalEntry, VaultEntry, PhoneSection, KitSurfaces, SkillsManager, TerminalDock, TerminalPane, TreeRowMenu, BrowserPanel, RteEditor, VaultPagePane, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, toggleVaultEntry, openVaultEntry, sidebarViewPatch, maybeAutoOpenBrowser, closeBrowserDockForGone, CFG_DEFAULTS, kitGetJson, kitPostJson, kitJson, fetchSkillsPage, getKitUi, setKitUi, makeTerm, ScheduleView, timerMinsOfDT, schedAssignLanes, VaultView, VaultRootView, vaultSplitFrontmatter, resolveVaultLink, vaultBacklinks, vaultOutline, vaultHeadingSlug, vaultSearchHits, relUnder, pathUnder, absParent, vaultTabsRetarget, vaultTabsClose, vaultDirChoices, VaultDialog, KitConfigPage, KIT_CFG_FIELDS, readPosStore, recordReadPos, FilePaneBody, VaultPaneBody, SchedulePaneBody, BrowserPaneBody, ScheduleTasksCard, openFeatureDock, openFileAndDock, openVaultPageAndDock, closeRightbarTab, isPathInsideVaultRoot, vaultCiteText, resolveMdLink, isDocHref, registerShortcuts, shortcutRun }, kitBase);",
 );
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -212,7 +212,7 @@ const cfgSw = () => callLog.filter((c) => c[1] === primStub.Switch);
 const cfgVf = () => callLog.filter((c) => c[1] === primStub.SettingsValueField);
 out = renderCfgTab(null, fakeForm); // 默认首组
 const cfgTabs = callLog.find((c) => c[1] === primStub.SegmentedTabs);
-check("KitConfigPage SegmentedTabs：4 组页签、默认首组、带可访问名", !!cfgTabs && cfgTabs[2].items.length === 4 && cfgTabs[2].value === "kcfgGroupFeatures" && typeof cfgTabs[2].label === "string" && cfgTabs[2].items.every((it) => typeof it.label === "string" && it.label.length > 0 && it.id === "dshk-cfgp-tab-" + it.value && it.panelId === "dshk-cfgp-panel-" + it.value));
+check("KitConfigPage SegmentedTabs：3 组页签、默认首组、带可访问名", !!cfgTabs && cfgTabs[2].items.length === 3 && cfgTabs[2].value === "kcfgGroupFeatures" && typeof cfgTabs[2].label === "string" && cfgTabs[2].items.every((it) => typeof it.label === "string" && it.label.length > 0 && it.id === "dshk-cfgp-tab-" + it.value && it.panelId === "dshk-cfgp-panel-" + it.value));
 cfgTabs[2].onChange("kcfgGroupVault");
 check("KitConfigPage 页签切换落 state", stateStore.get(3) === "kcfgGroupVault");
 const cfgFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
@@ -226,42 +226,31 @@ out = renderCfgTab("kcfgGroupPhone", fakeForm);
 check("手机访问页签：2 Switch + 1 数值 + 1 文本（文本回显受理域名）", cfgSw().length === 2 && cfgVf().length === 2 && cfgVf().some((c) => c[2].id === "dshk-cfgp-phoneRemoteDomain" && c[2].text === "dsh.example.com"));
 out = renderCfgTab("kcfgGroupVault", fakeForm);
 check("知识库页签：1 Switch + 1 文本", cfgSw().length === 1 && cfgVf().length === 1);
-out = renderCfgTab("kcfgGroupShortcuts", fakeForm);
-const cfgKbd = () => callLog.filter((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-cfgp-kbd");
-check("快捷键页签：3 个组合键录制框（不是文本输入；左栏开合归宿主）", cfgSw().length === 0 && cfgVf().length === 0 && cfgKbd().length === 3);
+// 10) 键位改由宿主 shortcuts 服务持有（0.1.7-rc.2+ 官方「快捷键」页）：注册面在
+//     client 半边——命令进官方页即自动获得录制/冲突检测/跨设备默认值/持久化。
+//     这里直调注册函数（不经 apply，避开 apply 的联网/定时器副作用）。
 {
-  const kbd = cfgKbd().find((c) => c[2].id === "dshk-cfgp-rightbarShortcut");
-  check("录制框回显受理键位且是按钮（点它才开始录）", !!kbd && kbd[2].type === "button" && kbd[2].children === "Ctrl+B" && kbd[2]["data-armed"] === undefined);
-  kbd[2].onClick();
-  check("点击录制框进入录制态（capture state = {key}）", stateStore.get(4) != null && stateStore.get(4).key === "rightbarShortcut");
-  // 录制态渲染：框打 data-armed 并换成提示文案；裸键被拒时换提示
-  const renderArmed = (capture) => {
-    stateSeq = 0;
-    stateStore.clear();
-    stateStore.set(3, "kcfgGroupShortcuts");
-    stateStore.set(4, capture);
-    callLog = [];
-    comps.KitConfigPage({ view: "page", form: fakeForm });
-    return cfgKbd().find((c) => c[2].id === "dshk-cfgp-" + capture.key);
-  };
-  const armedBox = renderArmed({ key: "rightbarShortcut", warn: false });
-  check("录制中：方框打标并提示按组合键/Esc 取消", !!armedBox && armedBox[2]["data-armed"] === "" && ["按下组合键…（Esc 取消）", "Press the combo… (Esc cancels)"].includes(armedBox[2].children));
-  const warnBox = renderArmed({ key: "rightbarShortcut", warn: true });
-  check("裸键被拒：方框提示需带修饰键", !!warnBox && ["要带 Ctrl / Alt / Shift / Meta", "Include Ctrl / Alt / Shift / Meta"].includes(warnBox[2].children));
-  stateSeq = 0;
-  stateStore.clear();
-}
-// 组合键口径（录制与匹配同一套）：Shift 化的标点靠 e.code 归一到键面字符——
-// Shift+句点的 e.key 是 ">"，只认 e.key 会让「Ctrl+Shift+.」永远配不上
-{
-  const ev = (o) => Object.assign({ ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, key: "", code: "", isComposing: false }, o);
-  const shiftPeriod = ev({ ctrlKey: true, shiftKey: true, key: ">", code: "Period" });
-  check("comboTextOf 录制 Ctrl+Shift+.（e.key 是 \">\" 也归一成句点）", comps.comboTextOf(shiftPeriod) === "Ctrl+Shift+.");
-  check("comboMatches 命中同一配置（录制口径 = 匹配口径）", comps.comboMatches(shiftPeriod, comps.parseCombo("Ctrl+Shift+.")) === true);
-  check("comboTextOf 录制字母键/拒绝裸键与纯修饰键", comps.comboTextOf(ev({ ctrlKey: true, key: "b", code: "KeyB" })) === "Ctrl+B" && comps.comboTextOf(ev({ key: "b", code: "KeyB" })) === null && comps.comboTextOf(ev({ ctrlKey: true, key: "Control", code: "ControlLeft" })) === null);
-  check("comboTextOf 录制 Ctrl+Alt+` / Ctrl+Alt+/（Backquote 与 Slash 归一到键面字符）", comps.comboTextOf(ev({ ctrlKey: true, altKey: true, key: "`", code: "Backquote" })) === "Ctrl+Alt+`" && comps.comboTextOf(ev({ ctrlKey: true, altKey: true, key: "/", code: "Slash" })) === "Ctrl+Alt+/");
-  check("comboMatches 修饰键必须完全一致（少按不命中）", comps.comboMatches(ev({ ctrlKey: true, key: ".", code: "Period" }), comps.parseCombo("Ctrl+Alt+.")) === false);
-  check("配置页录制让路座（shortcutCapture）在场", !!comps.shortcutCapture && comps.shortcutCapture.active === false);
+  const registered = [];
+  comps.registerShortcuts({
+    shortcuts: { register: (cmd) => { registered.push(cmd); return () => {}; } },
+    effect: (fn) => { fn(); },
+  });
+  const byId = (id) => registered.find((c) => c.id === id);
+  const term = byId("dsh-kit.terminal.toggle");
+  const vault = byId("dsh-kit.vault.toggle");
+  const def = (cmd) => (cmd && cmd.defaults["web:windows"]) || {};
+  check("终端/知识库两条命令注册进官方 shortcuts（id/label/别名）", !!term && !!vault && typeof term.label === "function" && typeof term.label() === "string" && Array.isArray(term.aliases) && !!vault.label());
+  check("默认键：终端 Ctrl+Alt+`、知识库 Ctrl+Alt+/（primary+alt 口径，web 放行表内）", def(term).code === "Backquote" && String(def(term).modifiers) === "primary,alt" && def(vault).code === "Slash" && String(def(vault).modifiers) === "primary,alt" && !!term.defaults["desktop:windows"] && !!term.defaults["web:macos"]);
+  check("region 覆盖 page/editable/terminal（聊天输入行与终端里都生效）", ["page", "editable", "terminal"].every((r) => term.regions.includes(r)) && term.modals.length === 0);
+  // resolve 门控：功能开关关 → blocked 带说明；开 → handled 且 run 落到浮层挂上的动作
+  const ran = [];
+  comps.shortcutRun.terminal = () => ran.push("terminal");
+  const termOn = term.resolve({ region: "page", modal: null });
+  const vaultOff = vault.resolve({ region: "page", modal: null }); // 内置默认 vaultEnabled=false
+  if (termOn.status === "handled") termOn.run();
+  check("功能开：resolve handled 且 run 触发注册的动作", termOn.status === "handled" && ran.join(",") === "terminal");
+  check("功能关：resolve blocked 并带说明（不吞键也不动作）", vaultOff.status === "blocked" && typeof vaultOff.reason === "string" && vaultOff.reason.length > 0);
+  comps.shortcutRun.terminal = null;
 }
 // 草稿 ops 组装：bool→set、number "4"→set 4、空文本→unset（回 schema 默认）；
 // 保存不受当前页签限制（草稿跨页签），同步前缀即完成 ops 与 revision 围栏
@@ -273,8 +262,8 @@ const savingForm = {
 };
 stateSeq = 0;
 stateStore.clear();
-stateStore.set(0, { searchMaxResults: { text: "4" }, phoneRemoteDomain: { text: "" }, vaultEnabled: { set: false }, rightbarShortcut: { text: "Ctrl+9" } });
-stateStore.set(3, "kcfgGroupShortcuts");
+stateStore.set(0, { searchMaxResults: { text: "4" }, phoneRemoteDomain: { text: "" }, vaultEnabled: { set: false }, vaultRoot: { text: "D:/notes" } });
+stateStore.set(3, "kcfgGroupVault");
 callLog = [];
 out = comps.KitConfigPage({ view: "page", form: savingForm });
 const saveFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
@@ -284,7 +273,7 @@ check("保存 ops：number set / 清空 unset / bool set / 文本 set（按字�
   { op: "set", path: ["searchMaxResults"], value: 4 },
   { op: "unset", path: ["phoneRemoteDomain"] },
   { op: "set", path: ["vaultEnabled"], value: false },
-  { op: "set", path: ["rightbarShortcut"], value: "Ctrl+9" },
+  { op: "set", path: ["vaultRoot"], value: "D:/notes" },
 ]));
 check("保存带读取时 revision 围栏", capturedRev === 7);
 // 非法数字草稿：字段 invalid + 框架 invalid 置位（SettingsForm blocked 挡保存）
@@ -1133,7 +1122,7 @@ check("SkillsManager 带cwd渲染无异常", !!out && typeof out === "object");
     compared++;
     if (comps.CFG_DEFAULTS[key] !== expected) drift.push(key + "(bundle=" + comps.CFG_DEFAULTS[key] + ",host=" + expected + ")");
   }
-  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 16);
+  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 13);
 }
 // 过时文案清理：现行说明不得出现「侧栏底部『任务』钮」、日程索引标题键、搜索默认 5
 check(
@@ -1156,18 +1145,18 @@ check(
     !src.includes("mountPdfViewer") && !src.includes("dshk-sheetwrap") && !src.includes("dshk-docwrap"),
 );
 
-// 日程只有右栏 dock 签（入口归右栏开始页与待办卡）：侧栏待办索引、日程快捷键及其
-// 设置项都不得出现；开合走右栏快捷键（Ctrl+B，可配置）
+// 日程只有右栏 dock 签（入口归右栏开始页与待办卡）：侧栏待办索引与日程专属快捷键
+// 都不得出现
 check(
   "日程侧栏索引与专属快捷键不存在（schedIdxOpen/schedShortcut 全链移除）",
   !src.includes("schedIdxOpen") && !src.includes("schedShortcut") && !src.includes("cfgSchedShortcut") && !src.includes("ScheduleIndexView"),
 );
-check("右栏收起/展开快捷键已接入（默认 Ctrl+B，走 sidebarRight.toggleExpanded）", src.includes('rightbarShortcut: "Ctrl+B"') && src.includes("sr.toggleExpanded()"));
-// 左侧边栏开合不做：宿主 shortcuts 服务自带（web Ctrl+Alt+B / 桌面 Ctrl+B），
-// 本插件不得再占这个位（字段/处理分支/词条全删）
+// 键位整体改由宿主 shortcuts 服务持有（0.1.7-rc.2+ 官方「快捷键」页）：自带快捷键
+// 配置项/全局 keydown 匹配/左栏键都不该再出现，注册面在 client 半边（见下方 apply 钉子）
 check(
-  "左栏开合快捷键已让给宿主（sidebarShortcut 字段与处理分支全删）",
-  !src.includes("sidebarShortcut") && !src.includes("kcfgSidebarShortcut") && !src.includes("function toggleSidebar"),
+  "自带快捷键配置项全退役（terminal/vault/rightbar/sidebar Shortcut 字段与自绘匹配都不在）",
+  !src.includes("Shortcut\"") && !src.includes("parseCombo") && !src.includes("comboMatches") &&
+    !src.includes("dshk-cfgp-kbd") && !src.includes("function toggleSidebar"),
 );
 // 文件树没有「上传文件到当前目录」：按钮/隐藏 input/上传逻辑/i18n 键都不得存在；
 // vault 附件上传仍走 /dsh-kit/upload（端点保留）

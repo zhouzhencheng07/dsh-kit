@@ -233,13 +233,8 @@ export const Config =
         // 会话监视与通知（monitorEnabled/monitorWaitMs/monitorMaxAuto/
         // monitorRepeatThreshold/notifyEnabled）随组件化迁入 dsh-kit-monitor 的
         // Config（配置页在插件页该组件行）；主包不再消费这些字段。
-        // 左侧边栏开合不做：宿主自带该快捷键（web 是 Ctrl+Alt+B，桌面是 Ctrl+B）
-        rightbarShortcut: z.string().default('Ctrl+B').volatile(),
-        terminalShortcut: z.string().default('Ctrl+Alt+`').volatile(),
-        // 知识库入口（输入行）：语义是开合切换——
-        // 开=侧栏索引视图 + 舞台标签，关=两者一起收。日程无侧栏半边、故无快捷键；
-        // 右栏开合快捷键同卡（客户端消费 sidebarRight.toggleExpanded）
-        vaultShortcut: z.string().default('Ctrl+Alt+/').volatile(),
+        // 键位不在这里：左右栏开合归宿主自带快捷键，本插件的终端/知识库命令在
+        // client 半边注册进宿主 shortcuts 服务（官方「快捷键」页录制与持久化）
       })
     : undefined
 

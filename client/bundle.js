@@ -82,11 +82,6 @@ window.__ModuleLoader__.load({
         ".dshk-cfgp-reset{border:none;background:none;padding:0;font:inherit;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary);cursor:pointer}" +
         ".dshk-cfgp-reset:hover:not(:disabled){color:var(--dsw-alias-label-primary)}" +
         ".dshk-cfgp-reset:disabled{cursor:default}" +
-        // 组合键录制方框：与官方 value field 的 input 同尺寸观感（点它才进入录制）
-        ".dshk-cfgp-kbd{flex:none;min-width:150px;height:30px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.5;padding:0 10px;cursor:pointer}" +
-        ".dshk-cfgp-kbd:hover:not(:disabled){border-color:var(--dsw-alias-brand-primary)}" +
-        ".dshk-cfgp-kbd[data-armed]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}" +
-        ".dshk-cfgp-kbd:disabled{cursor:default;color:var(--dsw-alias-label-tertiary)}" +
         ".dshk-cfgp-hintline{margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}";
       document.head.appendChild(style);
     }
@@ -219,68 +214,6 @@ window.__ModuleLoader__.load({
       return null;
     }
 
-    // ─────────── 组合键（配置页录制 / 全局快捷键匹配同一套口径）───────────
-    /** 组合键规范化主键：单字符统一大写、空格记作 Space */
-    function normComboKey(key) {
-      return key === " " ? "Space" : key.length === 1 ? key.toUpperCase() : key;
-    }
-    // 主键优先认 e.code：Shift 按着时 e.key 已经换成上档字符（Shift+句点的 e.key 是
-    // ">"、Shift+1 是 "!"），而配置里存的是键面字符——只认 e.key 会永远匹配不上
-    const COMBO_CODE_KEY = {
-      Period: ".", Comma: ",", Slash: "/", Semicolon: ";", Quote: "'",
-      BracketLeft: "[", BracketRight: "]", Backslash: "\\", Minus: "-", Equal: "=", Backquote: "`", Space: "Space",
-    };
-    const COMBO_MODIFIERS = ["Control", "Alt", "Shift", "Meta"];
-    /** keydown 的主键名：e.code 认得的走键面字符，字母/数字剥离 code，其余回 e.key */
-    function comboKeyOf(e) {
-      const code = typeof e.code === "string" ? e.code : "";
-      if (Object.prototype.hasOwnProperty.call(COMBO_CODE_KEY, code)) return COMBO_CODE_KEY[code];
-      if (/^Key[A-Z]$/.test(code)) return code.slice(3);
-      if (/^Digit[0-9]$/.test(code)) return code.slice(5);
-      return normComboKey(e.key);
-    }
-    /** 解析 "Ctrl+Alt+T" 形式为匹配结构；无主键或重复修饰键返回 null */
-    function parseCombo(text) {
-      const parts = String(text ?? "").trim().split("+").map((p) => p.trim()).filter(Boolean);
-      if (parts.length < 2) return null;
-      const out = { ctrl: false, alt: false, shift: false, meta: false, key: null };
-      for (const part of parts) {
-        const lower = part.toLowerCase();
-        if (lower === "ctrl" && !out.ctrl) out.ctrl = true;
-        else if (lower === "alt" && !out.alt) out.alt = true;
-        else if (lower === "shift" && !out.shift) out.shift = true;
-        else if (lower === "meta" && !out.meta) out.meta = true;
-        else if (out.key === null) out.key = normComboKey(part);
-        else return null;
-      }
-      return out.key === null ? null : out;
-    }
-    /** keydown 是否命中组合键 */
-    function comboMatches(e, combo) {
-      return (
-        !!e.ctrlKey === combo.ctrl &&
-        !!e.altKey === combo.alt &&
-        !!e.shiftKey === combo.shift &&
-        !!e.metaKey === combo.meta &&
-        comboKeyOf(e) === combo.key
-      );
-    }
-    /** 录制取文本：keydown → "Ctrl+Shift+."；纯修饰键、无修饰主键都返回 null
-     *（至少一个修饰键与 parseCombo 同要求，裸键存下来也匹配不上） */
-    function comboTextOf(e) {
-      if (typeof e.key === "string" && COMBO_MODIFIERS.includes(e.key)) return null;
-      const parts = [];
-      if (e.ctrlKey) parts.push("Ctrl");
-      if (e.altKey) parts.push("Alt");
-      if (e.shiftKey) parts.push("Shift");
-      if (e.metaKey) parts.push("Meta");
-      if (parts.length === 0) return null;
-      parts.push(comboKeyOf(e));
-      return parts.join("+");
-    }
-    /** 配置页录制中：root/files 的全局快捷键监听据此让路（引用共享的座对象） */
-    const shortcutCapture = { active: false };
-
     // ─────────── 插件行配置页骨架 ───────────
     // 官方表单原语解析：老宿主 primitives 缺成员时配置页降级为提示，不影响其余。
     const cfgUiPrim =
@@ -303,9 +236,6 @@ window.__ModuleLoader__.load({
       overridden: "已覆盖",
       reset: "恢复默认",
       invalidNumber: "请填数字；留空表示恢复默认。",
-      comboArm: "按下组合键…（Esc 取消）",
-      comboIdle: "点击后按组合键",
-      comboNeedMod: "要带 Ctrl / Alt / Shift / Meta",
       tabs: "配置分组",
     };
     const CFG_UI_EN = {
@@ -319,16 +249,13 @@ window.__ModuleLoader__.load({
       overridden: "Overridden",
       reset: "Reset to default",
       invalidNumber: "Enter a number; leave empty to restore the default.",
-      comboArm: "Press the combo… (Esc cancels)",
-      comboIdle: "Click, then press keys",
-      comboNeedMod: "Include Ctrl / Alt / Shift / Meta",
       tabs: "Config groups",
     };
     const cfgUiT = (key) => (resolveZh() ? CFG_UI_ZH[key] : CFG_UI_EN[key]);
     /**
      * 造一个插件行配置页组件（挂 plugins.row.config 槽，props = { view, form }）。
-     * @param options.fields 字段表 [{key,type:'bool'|'number'|'string'|'combo',min?,max?,group,labelKey,hintKey}]，
-     *                        与组件宿主半边 Config schema 同源（渲染检查钉住）；combo = 组合键录制框
+     * @param options.fields 字段表 [{key,type:'bool'|'number'|'string',min?,max?,group,labelKey,hintKey}]，
+     *                        与组件宿主半边 Config schema 同源（渲染检查钉住）
      * @param options.groups 组键顺序（单组不出页签）；组名/labelKey/hintKey 经 options.t 取词
      * @param options.onSaved 保存被接受后回调（重拉自家配置快照喂门控，volatile 热提交即时生效）
      */
@@ -342,34 +269,10 @@ window.__ModuleLoader__.load({
         const view = props && props.view;
         const form = props && props.form;
         const snap = form ? form.state : null;
-        const [draft, setDraft] = react.useState(null); // 草稿：bool={set}；number/string/combo={text}
+        const [draft, setDraft] = react.useState(null); // 草稿：bool={set}；number/string={text}
         const [saving, setSaving] = react.useState(false);
         const [failed, setFailed] = react.useState(false);
         const [tab, setTab] = react.useState(groups[0]);
-        // combo 字段的录制态：null=空闲，否则 {key: 字段名, warn: 裸键被拒}
-        const [capture, setCapture] = react.useState(null);
-        // 录制期在 document 捕获相位吃键（焦点在哪都算），并让全局快捷键让路；
-        // 钩子必须排在早退之前，回调里引用的 base/stage 在本次渲染后已就绪
-        react.useEffect(() => {
-          if (capture == null) return undefined;
-          shortcutCapture.active = true;
-          const onKey = (e) => {
-            if (e.isComposing === true || e.keyCode === 229) return;
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.key === "Escape") { setCapture(null); return; }
-            const text = comboTextOf(e);
-            if (text == null) { setCapture((prev) => (prev ? { key: prev.key, warn: true } : prev)); return; }
-            const f = fields.find((x) => x.key === capture.key);
-            if (f) stage(f.key, text === baseText(f) ? null : { text });
-            setCapture(null);
-          };
-          document.addEventListener("keydown", onKey, true);
-          return () => {
-            shortcutCapture.active = false;
-            document.removeEventListener("keydown", onKey, true);
-          };
-        }, [capture]);
         if (view === "summary") return null;
         if (!form || !snap || snap.status !== "ready" || snap.value == null || typeof snap.value !== "object") {
           const msg = snap && snap.status === "unavailable" ? cfgUiT("unavailable") : cfgUiT("loading");
@@ -467,37 +370,7 @@ window.__ModuleLoader__.load({
             onReset: () => stage(f.key, null),
           }, f.key);
         };
-        // 组合键字段：不给文本输入，点方框后直接按键（Shift 类标点由 comboTextOf 归一到键面字符）
-        const comboField = (f) => {
-          const d = draftOf(f.key);
-          const dis = !writable || saving;
-          const armed = capture != null && capture.key === f.key;
-          return jsxRuntime.jsxs("div", { className: "dshk-cfgp-bfield", children: [
-            jsxRuntime.jsxs("div", { className: "dshk-cfgp-bhead", children: [
-              jsxRuntime.jsx("span", { className: "dshk-cfgp-blabel", children: t(f.labelKey) }),
-              d ? jsxRuntime.jsxs("span", { className: "dshk-cfgp-badges", children: [
-                jsxRuntime.jsx(cfgUiPrim.Tag, { tone: "neutral", children: cfgUiT("overridden") }),
-                jsxRuntime.jsx("button", {
-                  type: "button", className: "dshk-cfgp-reset", disabled: dis,
-                  onClick: () => { setCapture(null); stage(f.key, null); },
-                  children: cfgUiT("reset"),
-                }),
-              ] }) : null,
-              jsxRuntime.jsx("button", {
-                type: "button",
-                id: "dshk-cfgp-" + f.key,
-                className: "dshk-cfgp-kbd",
-                disabled: dis,
-                "aria-label": t(f.labelKey),
-                ...armed ? { "data-armed": "" } : {},
-                onClick: () => setCapture(armed ? null : { key: f.key, warn: false }),
-                children: armed ? cfgUiT(capture.warn ? "comboNeedMod" : "comboArm") : (d ? d.text : baseText(f)) || cfgUiT("comboIdle"),
-              }),
-            ] }),
-            jsxRuntime.jsx("p", { className: "dshk-cfgp-hintline", children: t(f.hintKey) }),
-          ] }, f.key);
-        };
-        const fieldRows = (g) => fields.filter((f) => f.group === g).map((f) => (f.type === "bool" ? boolRow(f) : f.type === "combo" ? comboField(f) : valueField(f)));
+        const fieldRows = (g) => fields.filter((f) => f.group === g).map((f) => (f.type === "bool" ? boolRow(f) : valueField(f)));
         const panel = (g) => jsxRuntime.jsx("div", { className: "dshk-cfgp-fields", id: "dshk-cfgp-panel-" + g, role: "tabpanel", "aria-label": t(g),
           children: fieldRows(g) });
         const active = groups.includes(tab) ? tab : groups[0];
@@ -778,9 +651,6 @@ window.__ModuleLoader__.load({
     exports.getLocaleVersion = getLocaleVersion;
     exports.mainRowOf = mainRowOf;
     exports.createConfigPage = createConfigPage;
-    exports.parseCombo = parseCombo;
-    exports.comboMatches = comboMatches;
-    exports.comboTextOf = comboTextOf;
     exports.setKitUi = setKitUi;
     exports.subscribeKitUi = subscribeKitUi;
     exports.useKitUi = useKitUi;
@@ -813,7 +683,6 @@ window.__ModuleLoader__.load({
     // （对象引用拷贝之前的键才能共享，后加组件只改得了座里的字段）
     exports.sidebarView = { renderer: null }; // 侧栏浏览区 tree/git 分支渲染器（root 单槽分发）
     exports.inlineEdit = { active: false }; // 树行内改名激活中（root 全局快捷键让路）
-    exports.shortcutCapture = shortcutCapture; // 配置页组合键录制中（同理让路）
     exports.diffPane = { Component: null }; // diff 正文组件（root 右栏「差异」签正文用）
     // 底座是活动 entry：client runner 按 client 插件形状物化本模块，必须带 apply
     //（宿主半边同款：载体 entry，本体无行为）
@@ -847,7 +716,6 @@ window.__ModuleLoader__.load({
       closeFeatureTab, openFeatureTab, RB_FEATURES,
       openRightbarTab, closeRightbarTab, openFeatureDock, openFileAndDock,
       sidebarViewPatch, toggleTermDock, spawnTerm, killTerm, makeTerm, getRightbarSr,
-      parseCombo, comboMatches,
     } = dock;
 
     /** 终端面板高度（与让位 padding 共用一个变量） */
@@ -1012,7 +880,9 @@ window.__ModuleLoader__.load({
     // dsh-kit 命名空间）。默认值与宿主 Config schema（src/index.ts）逐项同值——
     // 恢复默认拿的是宿主组合基座（base），基座只有 vaultRoot 一项，其余键在
     // cfgFormat 里回落这里的默认值，两处不同步会出现「默认值漂移」。
-    // 快照未就绪时一律回退内置默认——功能全开、默认键位。
+    // 快照未就绪时一律回退内置默认——功能全开。
+    // 快捷键不在这里：键位注册进官方 shortcuts 服务（见 registerShortcuts），
+    // 录制与持久化归官方「快捷键」页。
     const CFG_DEFAULTS = {
       terminalEnabled: true,
       hideOfficialFilesEntry: false,
@@ -1028,9 +898,6 @@ window.__ModuleLoader__.load({
       browserEnabled: true,
       vaultEnabled: false,
       vaultRoot: "",
-      terminalShortcut: "Ctrl+Alt+`",
-      vaultShortcut: "Ctrl+Alt+/",
-      rightbarShortcut: "Ctrl+B",
     };
     /** 从官方 scope 快照提取生效配置（字段缺失/非法逐项回退默认） */
     function cfgFromSnapshot(snap) {
@@ -1048,18 +915,6 @@ window.__ModuleLoader__.load({
         browserEnabled: v.browserEnabled !== false,
         vaultEnabled: v.vaultEnabled === true,
         vaultRoot: typeof v.vaultRoot === "string" ? v.vaultRoot : "",
-        terminalShortcut:
-          typeof v.terminalShortcut === "string" && parseCombo(v.terminalShortcut)
-            ? v.terminalShortcut
-            : CFG_DEFAULTS.terminalShortcut,
-        vaultShortcut:
-          typeof v.vaultShortcut === "string" && parseCombo(v.vaultShortcut)
-            ? v.vaultShortcut
-            : CFG_DEFAULTS.vaultShortcut,
-        rightbarShortcut:
-          typeof v.rightbarShortcut === "string" && parseCombo(v.rightbarShortcut)
-            ? v.rightbarShortcut
-            : CFG_DEFAULTS.rightbarShortcut,
       };
     }
     // 模块级通道（apply 注入 / KitSurfaces 订阅）
@@ -1091,6 +946,10 @@ window.__ModuleLoader__.load({
     // useSessions（任务 pane/开始页要在跑任务数做徽标；槽位注册在 effect 里，
     // 拿不到渲染期 props，用模块变量中转）
     const shellShare = { current: null };
+    // 官方 shortcuts 服务的 resolve 回调入口：注册发生在 apply（拿不到会话与
+    // cwd），动作由 KitSurfaces 每次渲染刷新（闭包带最新 sessionId/cwd）。
+    // 为空 = 浮层还没挂载，命令按 pass 放行不吞键。
+    const shortcutRun = { terminal: null, vault: null };
 
     // ── M4 会话→笔记：vault 路径点击直达知识库标签 ──
     // vault root 的客户端缓存：拦截器/文件树路由判定用（vault 内路径开知识库标签
@@ -1701,7 +1560,6 @@ window.__ModuleLoader__.load({
       kcfgGroupFeatures: "功能开关",
       kcfgGroupPhone: "手机访问",
       kcfgGroupVault: "知识库",
-      kcfgGroupShortcuts: "快捷键",
       kcfgTerminalEnabled: "终端面板",
       kcfgTerminalEnabledHint: "对话输入行出终端入口，面板停靠底部（引擎为官方 webTerminals）。",
       kcfgSkillsPageEnabled: "技能管理页",
@@ -1730,12 +1588,11 @@ window.__ModuleLoader__.load({
       kcfgVaultEnabledHint: "开 = 右栏「知识库」签与只读索引/搜索；改后重启生效。",
       kcfgVaultRoot: "知识库根目录（绝对路径）",
       kcfgVaultRootHint: "普通 md 目录，指向哪里读哪里；清空恢复默认根。",
-      kcfgRightbarShortcut: "右栏开合",
-      kcfgRightbarShortcutHint: "点方框后按组合键；默认 Ctrl+B。",
-      kcfgTerminalShortcut: "终端",
-      kcfgTerminalShortcutHint: "点方框后按组合键；默认 Ctrl+Alt+`。",
-      kcfgVaultShortcut: "知识库",
-      kcfgVaultShortcutHint: "点方框后按组合键；默认 Ctrl+Alt+/。",
+      // 官方「快捷键」页里的命令名与「为什么按不动」的说明（键位本身归官方页管）
+      scTerminal: "终端面板",
+      scTerminalOff: "终端面板已在配置页关闭",
+      scVault: "知识库索引",
+      scVaultOff: "知识库已在配置页关闭",
       schedTab: "日程",
       schedToday: "今天",
       schedNoDue: "无期限",
@@ -1924,7 +1781,6 @@ window.__ModuleLoader__.load({
       kcfgGroupFeatures: "Features",
       kcfgGroupPhone: "Phone access",
       kcfgGroupVault: "Vault",
-      kcfgGroupShortcuts: "Shortcuts",
       kcfgTerminalEnabled: "Terminal panel",
       kcfgTerminalEnabledHint: "Adds the terminal entry to the composer; the panel docks at the bottom (official webTerminals engine).",
       kcfgSkillsPageEnabled: "Skills manager page",
@@ -1953,12 +1809,10 @@ window.__ModuleLoader__.load({
       kcfgVaultEnabledHint: "On = the Vault tab plus read-only index/search; takes effect after a restart.",
       kcfgVaultRoot: "Vault root directory (absolute path)",
       kcfgVaultRootHint: "A plain md directory read as-is; blank restores the default root.",
-      kcfgRightbarShortcut: "Toggle right bar",
-      kcfgRightbarShortcutHint: "Click the box, then press the combo; default Ctrl+B.",
-      kcfgTerminalShortcut: "Terminal",
-      kcfgTerminalShortcutHint: "Click the box, then press the combo; default Ctrl+Alt+`.",
-      kcfgVaultShortcut: "Vault",
-      kcfgVaultShortcutHint: "Click the box, then press the combo; default Ctrl+Alt+/.",
+      scTerminal: "Terminal dock",
+      scTerminalOff: "Terminal dock is switched off in the config page",
+      scVault: "Vault index",
+      scVaultOff: "Vault is switched off in the config page",
       schedTab: "Schedule",
       schedToday: "Today",
       schedNoDue: "No due date",
@@ -6455,49 +6309,18 @@ ellipsis，窄列只截字不破版 */
         };
       }, [ui.termDockOpen, ui.terminals.length, cfg.terminalEnabled]);
 
-      // 快捷键统一在此监听：组合键来自配置（终端/知识库/右栏开合，capture 拦截
-      // 避免页面其它快捷键抢先），对应功能关闭时不响应。左侧边栏开合不做——
-      // 宿主的 shortcuts 服务自带该键（web Ctrl+Alt+B）。
       // Esc 分层：先关当前激活那张文档签（知识库关当前页那张、文件关当前文件那张），
       // 再关侧栏视图（不拦截，避免挡掉其它 Esc 行为）。功能签归官方 ✕，Esc 不碰。
+      // 组合键不在这里：终端/知识库两条命令注册进官方 shortcuts 服务（键位、录制、
+      // 冲突检测、持久化都归官方「快捷键」页），本处只把最新动作挂上 shortcutRun 供
+      // 其 resolve 调用——闭包要最新会话与 cwd，不能注册期固定。
+      shortcutRun.terminal = () => setKitUi(toggleTermDock(getKitUi(), sessionId, cwd));
+      shortcutRun.vault = () => setKitUi(toggleVaultEntry(getKitUi()));
 
       react.useEffect(() => {
-        const termCombo = parseCombo(cfg.terminalShortcut);
-        const vaultCombo = parseCombo(cfg.vaultShortcut);
-        const rbCombo = parseCombo(cfg.rightbarShortcut);
         const onKey = (e) => {
-          if (dock.inlineEdit.active || dock.shortcutCapture.active) return; // 树行改名输入 / 配置页录制组合键时让路
-          if (termCombo && cfg.terminalEnabled && comboMatches(e, termCombo)) {
-            e.preventDefault();
-            e.stopPropagation();
-            // 与入口按钮同语义：只开/关坞（隐藏不杀进程）；无会话时新建绑定当前会话
-            setKitUi(toggleTermDock(getKitUi(), sessionId, cwd));
-            return;
-          }
-          if (vaultCombo && cfg.vaultEnabled !== false && comboMatches(e, vaultCombo)) {
-            e.preventDefault();
-            e.stopPropagation();
-            // 与输入行知识库钮同语义：开=侧栏索引，再点=收回会话列表
-            setKitUi(toggleVaultEntry(getKitUi()));
-            return;
-          }
-          if (rbCombo && comboMatches(e, rbCombo)) {
-            e.preventDefault();
-            e.stopPropagation();
-            // 右栏收起/展开走官方 sidebarRight 服务（无参 toggle）；服务未就绪
-            // 或宿主无此能力（0.1.2）时静默。这个位给右栏开合（日程无左侧栏半边，
-            // 不需要全局键）
-            const sr = getRightbarSr();
-            if (sr && typeof sr.toggleExpanded === "function") {
-              try {
-                sr.toggleExpanded();
-              } catch {
-                /* 右栏异常不拖垮其它快捷键 */
-              }
-            }
-            return;
-          }
           if (e.key === "Escape") {
+            if (dock.inlineEdit.active) return; // 树行改名输入激活（dsh-kit-files 经底座座上报）
             // 知识库搜索浮层开着时让路：Esc 归它自己（只关自己，不收标签页）
             if (vaultSearchOpen) return;
             // Esc 关当前激活那张文档签（知识库关当前页那张、diff 关当前
@@ -6523,8 +6346,6 @@ ellipsis，窄列只截字不破版 */
         };
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
-        // cwd 必须在依赖里：否则闭包缓存首帧（会话未水化时为 null）的工作区，
-        // 之后按快捷键开终端永远绑到 null
       });
 
       // ShellBrowserEvents：壳层常驻浏览器事件源（与面板 WS 并存，不订阅帧流）。
@@ -7011,6 +6832,61 @@ ellipsis，窄列只截字不破版 */
       rightbarStore.setActive(true);
     }
 
+    // ─────────── 官方快捷键服务（0.1.7-rc.2+）───────────
+    // 命令注册进宿主 shortcuts 服务 = 进官方「快捷键」页（Ctrl+/）：录制（按下即记）、
+    // 冲突检测、跨设备默认值、持久化（web 落 localStorage dsh.keybindings.v1）全归官方，
+    // 本插件不再自持快捷键配置项。默认键只给 web:macos/web:windows（web 端只放行
+    // 三键、或 primary+alt/shift 两键这类组合，web:linux 不在放行表内）与 desktop 三档。
+    // 运行期 inject：老宿主没有该服务时这两条命令不存在，其余功能不受影响。
+    const KIT_SHORTCUT_DEFAULTS = (code) => ({
+      "web:macos": { code, modifiers: ["primary", "alt"] },
+      "web:windows": { code, modifiers: ["primary", "alt"] },
+      "desktop:macos": { code, modifiers: ["primary", "alt"] },
+      "desktop:windows": { code, modifiers: ["primary", "alt"] },
+      "desktop:linux": { code, modifiers: ["primary", "alt"] },
+    });
+    function registerShortcuts(scCtx) {
+      const shortcuts = scCtx.shortcuts;
+      if (!shortcuts || typeof shortcuts.register !== "function") return;
+      const commands = [
+        {
+          id: "dsh-kit.terminal.toggle",
+          labelKey: "scTerminal",
+          aliases: ["terminal", "terminal dock", "dsh-kit"],
+          code: "Backquote",
+          enabled: (cfg) => cfg.terminalEnabled !== false,
+          offKey: "scTerminalOff",
+          run: () => shortcutRun.terminal,
+        },
+        {
+          id: "dsh-kit.vault.toggle",
+          labelKey: "scVault",
+          aliases: ["vault", "knowledge base", "dsh-kit"],
+          code: "Slash",
+          enabled: (cfg) => cfg.vaultEnabled === true,
+          offKey: "scVaultOff",
+          run: () => shortcutRun.vault,
+        },
+      ];
+      for (const cmd of commands) {
+        scCtx.effect(() => shortcuts.register({
+          id: cmd.id,
+          label: () => t(cmd.labelKey),
+          aliases: cmd.aliases,
+          defaults: KIT_SHORTCUT_DEFAULTS(cmd.code),
+          // editable/terminal 都要：聊天输入行里、终端里按都该生效（官方左右栏键同款）
+          regions: ["page", "editable", "terminal"],
+          modals: [],
+          resolve: () => {
+            if (!cmd.enabled(cfgFromSnapshot(getCfgSnapshot()))) return { status: "blocked", reason: t(cmd.offKey) };
+            const run = cmd.run();
+            if (run == null) return { status: "pass" };
+            return { status: "handled", run };
+          },
+        }), `dsh-kit: shortcut ${cmd.id}`);
+      }
+    }
+
     // ─────────── 配置页（0.1.7 plugins.row.config）───────────
     // 插件页（侧栏「插件」）dsh-kit 行的「配置」控件进这里：页面宿主按
     // rowId（=entry id「dsh-kit」）绑定宿主命名空间，经 props.form 给已受理值
@@ -7036,12 +6912,9 @@ ellipsis，窄列只截字不破版 */
       { key: "phoneKeepGatewayOn", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneKeepGatewayOn", hintKey: "kcfgPhoneKeepGatewayOnHint" },
       { key: "vaultEnabled", type: "bool", group: "kcfgGroupVault", labelKey: "kcfgVaultEnabled", hintKey: "kcfgVaultEnabledHint" },
       { key: "vaultRoot", type: "string", group: "kcfgGroupVault", labelKey: "kcfgVaultRoot", hintKey: "kcfgVaultRootHint" },
-      { key: "rightbarShortcut", type: "combo", group: "kcfgGroupShortcuts", labelKey: "kcfgRightbarShortcut", hintKey: "kcfgRightbarShortcutHint" },
-      { key: "terminalShortcut", type: "combo", group: "kcfgGroupShortcuts", labelKey: "kcfgTerminalShortcut", hintKey: "kcfgTerminalShortcutHint" },
-      { key: "vaultShortcut", type: "combo", group: "kcfgGroupShortcuts", labelKey: "kcfgVaultShortcut", hintKey: "kcfgVaultShortcutHint" },
     ];
     /** KIT_CFG_FIELDS 的分组顺序（组名键也用于 t() 取组标题/页签文案） */
-    const KIT_CFG_GROUPS = ["kcfgGroupFeatures", "kcfgGroupPhone", "kcfgGroupVault", "kcfgGroupShortcuts"];
+    const KIT_CFG_GROUPS = ["kcfgGroupFeatures", "kcfgGroupPhone", "kcfgGroupVault"];
 
     // 配置页骨架（草稿/保存/官方表单接线）已收进 dock：这里只喂本包字段表与词条
     const KitConfigPage = dock.createConfigPage({
@@ -7136,6 +7009,8 @@ ellipsis，窄列只截字不破版 */
         ctx.inject(["sessions"], (sctx) => { sessionsSvc = sctx.sessions; });
         // 官方终端模型服务捕获：dock 终端引擎（0.1.6+，缺失时终端坞报版本提示）
         ctx.inject(["webTerminals"], (tctx) => { webTerminalsSvc = tctx.webTerminals; });
+        // 官方快捷键服务（0.1.7-rc.2+）：终端/知识库两条命令注册进官方页
+        ctx.inject(["shortcuts"], registerShortcuts);
       } else {
         registerRightbar(ctx);
       }
