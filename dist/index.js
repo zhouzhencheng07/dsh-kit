@@ -39,7 +39,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { applySkillPool } from "./skill-pool.js";
-import { applyOpenCodeSessionHeader } from 'dsh-kit-core';
+import { applyOpenCodeSessionHeader } from "./core/index.js";
 import { applyWebSearch } from "./web-search.js";
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from "./phone-gateway.js";
 import { BrowserService, normalizeScope, DEFAULT_SCOPE } from "./browser.js";
@@ -47,7 +47,7 @@ import { loadToolsModule, buildBrowserTools } from "./browser-tools.js";
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from "./schedule.js";
 import { VaultScanner, defaultVaultRoot } from "./vault.js";
 import { createEntry, renameEntry, moveEntry, importEntry, deleteEntries, parseConflict } from "./vault-fs.js";
-import { sameOrigin } from 'dsh-kit-core';
+import { sameOrigin } from "./core/index.js";
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在设置里改（phonePort，1-65535） */
 const PHONE_PORT = 3090;
 export const name = 'dsh-kit';

@@ -1,6 +1,6 @@
-// i18n 词条哨兵：client 半边 t()/tf() 用到的字面量键，必须在同包词典里有定义。
-// 组件拆包后各包 t() 只看本包词典（root 的同名词条读不到），漏词条 = 界面直接显示 key
-// （悬停气泡、toast、占位提示都吃这个亏）。用法：node tests\test-i18n-keys.mjs
+// i18n 词条哨兵：client 半边 t()/tf() 用到的字面量键，必须在词典里有定义。
+// 单包收回后多个模块词典（root + files/terminal/monitor 组件）共存于同一 bundle，
+// 按全部词典区段 union 检查；漏词条 = 界面直接显示 key。用法：node tests\test-i18n-keys.mjs
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,20 +9,25 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 const bundles = [
   "client/bundle.js",
-  "packages/dsh-kit-files/client/bundle.js",
-  "packages/dsh-kit-terminal/client/bundle.js",
-  "packages/dsh-kit-monitor/client/bundle.js",
 ];
 
-/** 取某包 zh/en 两个词典区段里定义的键；区段找不到直接报错（别静默放行） */
+/** 收集文件里全部 zh/en 词典区段定义的键（多模块词典共存，union 后比对）；
+ *  一个区段都找不到直接报错（别静默放行） */
 function dictKeys(src, file) {
   const keys = new Set();
   for (const name of ["zh", "en"]) {
-    const start = src.indexOf(`const ${name} = {`);
-    if (start < 0) throw new Error(`${file}: 找不到 ${name} 词典`);
-    const end = src.indexOf("\n    };", start);
-    if (end < 0) throw new Error(`${file}: ${name} 词典未闭合`);
-    for (const m of src.slice(start, end).matchAll(/^\s{6}([A-Za-z][A-Za-z0-9_]*):\s*"/gm)) keys.add(m[1]);
+    let from = 0;
+    let found = 0;
+    for (;;) {
+      const start = src.indexOf(`const ${name} = {`, from);
+      if (start < 0) break;
+      const end = src.indexOf("\n    };", start);
+      if (end < 0) throw new Error(`${file}: ${name} 词典未闭合`);
+      for (const m of src.slice(start, end).matchAll(/^\s{6}([A-Za-z][A-Za-z0-9_]*):\s*"/gm)) keys.add(m[1]);
+      found++;
+      from = end + 1;
+    }
+    if (found === 0) throw new Error(`${file}: 找不到 ${name} 词典`);
   }
   return keys;
 }

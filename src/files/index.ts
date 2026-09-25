@@ -14,7 +14,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 
-import { decodePreviewText, sameOrigin, recycleDelete, findProjectRoot } from 'dsh-kit-core'
+import { decodePreviewText, sameOrigin, recycleDelete, findProjectRoot } from '../core/index.ts'
 import { parseStatusBranch, parseLogRecords, parseBranchList, parseTrack } from './git.ts'
 import { rawContentType, rawDownloadContentType, rawDisposition, parseRangeHeader } from './raw-file.ts'
 import { validateCwd, validateFile, validateAny, validatePathShape, withinTree, invalidFsName } from './validate.ts'

@@ -150,15 +150,17 @@ appear and the toggles have nothing to open — upgrade dsh first.
 - `client/bundle.js`: browser side (hand-written ModuleLoader bundle, **no build**) —
   the root package registers the vault toggle, the four right-bar dock tab types with
   pane bodies served through `sidebar.right.pane.tab`, and the config page
-  (`plugins.row.config`); the file-tree / source-control and terminal components
-  register their own toggles and panels from their client halves (the terminal dock
-  renders over the official `webTerminals` engine)
-- `packages/*`: component packages (since 0.5.3; every row is inserted by the root
-  package's `cordis.patch.yml`) — `dsh-kit-core` (host shared library),
-  `dsh-kit-files` (tree/read/raw/fs-op/git endpoints + file tree and source control
-  panels), `dsh-kit-terminal` (terminal toggle and dock + `/dsh-kit-terminal/config`
-  snapshot), `dsh-kit-monitor` (`/dsh-kit/usage` + usage chip / 429 auto-resume /
-  loop breaker / session notifications)
+  (`plugins.row.config`); the client halves of the file-tree / source-control,
+  terminal and usage-monitor components live in this same bundle as component
+  modules (the terminal dock renders over the official `webTerminals` engine)
+- `src/core`, `src/files`, `src/terminal`, `src/monitor`: component boundaries as
+  directories (0.5.3 single-package components — a component is a patch row, not a
+  package) — `core` is the host shared library; `files` serves tree/read/raw/fs-op/
+  git endpoints + file tree and source control panels; `terminal` serves the
+  `/dsh-kit-terminal/config` snapshot (terminal toggle and dock); `monitor` serves
+  `/dsh-kit/usage` + usage chip / 429 auto-resume / loop breaker / session
+  notifications. Rows are materialized by the root `cordis.patch.yml` through
+  package exports subpaths (`dsh-kit/files` etc.)
 - `client/vendor/*`: xterm / TipTap rich text / KaTeX / qrcode, all lazily loaded
   and served from `/dsh-kit/vendor/*`
 - `src/web-search.ts` + `src/engine-chain.ts` + `src/engines/*`: registers the

@@ -88,13 +88,8 @@ check(
   ),
 );
 
-const comps = loadBundle(__dirname + "/../packages/dsh-kit-terminal/client/bundle.js", (name) => {
-  if (name === "react") return reactStub;
-  if (name === "react/jsx-runtime") return jsxRuntimeStub;
-  if (name === "dsh-kit") return dockExports;
-  if (name === "@deepseek-ai/dsh-client-ui-primitives") return primStub;
-  throw new Error("unexpected require: " + name);
-});
+// 单包收回：组件模块随根 bundle 一次加载组装（external 桩不再需要）
+const comps = dockExports.terminal;
 
 check("terminal 导出 apply（client 插件形状）与 inject 声明 slots", typeof comps.apply === "function" && Array.isArray(comps.inject) && comps.inject[0] === "slots");
 check(
@@ -111,7 +106,7 @@ check(
     icon.props.width === 15 && icon.props.height === 15 && icon.props.viewBox === "0 0 16 16" && icon.props.stroke === "currentColor" && icon.props.strokeWidth === 1.2 && icon.props.fill === "none",
   );
   check("终端图标中间留空（描边圆角卡 + 提示符两笔，无填充色）", rect.type === "rect" && rect.props.fill === undefined && icon.props.children.length === 3);
-  const termSrc = fs.readFileSync(__dirname + "/../packages/dsh-kit-terminal/client/bundle.js", "utf8");
+  const termSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
   check("源码里没有实心深色卡残留（填充色/白色描边都不在）", !termSrc.includes('fill: "#17191d"') && !termSrc.includes('stroke: "#fff"'));
 }
 
@@ -179,11 +174,11 @@ check(
 
 // —— 源码哨兵：xterm 静态资源仍走主包 /dsh-kit/vendor 白名单，样式随组件自带 ——
 {
-  const termSrc = fs.readFileSync(__dirname + "/../packages/dsh-kit-terminal/client/bundle.js", "utf8");
+  const termSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
   check("xterm 走主包 vendor 白名单（xterm.js/addon-fit.js/xterm.css 三个 URL 都在本包加载）", termSrc.includes("/dsh-kit/vendor/xterm.js") && termSrc.includes("/dsh-kit/vendor/addon-fit.js") && termSrc.includes("/dsh-kit/vendor/xterm.css"));
   check("坞样式随组件自带（.dshk-dock 与让位规则在本包 CSS，不在根包）", termSrc.includes(".dshk-dock{position:fixed") && termSrc.includes("body.dshk-open [class*=\"_centerCol\"]"));
   check("入口钮的悬停不再自带原生 title（全走官方气泡）", !/dshk-enbtn"[\s\S]{0,120}?\n\s*title:/.test(termSrc));
-  const hostSrc = fs.readFileSync(__dirname + "/../packages/dsh-kit-terminal/src/index.ts", "utf8");
+  const hostSrc = fs.readFileSync(__dirname + "/../src/terminal/index.ts", "utf8");
   check("宿主 schema 只有 terminalEnabled 且标了 volatile（漏标进不了配置表单）", /terminalEnabled: z\.boolean\(\)\.default\(true\)\.volatile\(\)/.test(hostSrc) && !hostSrc.includes("fileTreeEnabled"));
 }
 

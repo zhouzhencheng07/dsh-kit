@@ -91,16 +91,11 @@ check(
 );
 check(
   "dock 跨组件服务座（sidebarView 渲染器座 / inlineEdit 让路座 / diffPane 正文座）形状",
-  dockExports.sidebarView && typeof dockExports.sidebarView === "object" && dockExports.sidebarView.renderer === null && dockExports.inlineEdit && dockExports.inlineEdit.active === false && dockExports.diffPane && typeof dockExports.diffPane === "object" && dockExports.diffPane.Component === null,
+  dockExports.sidebarView && typeof dockExports.sidebarView === "object" && dockExports.sidebarView.renderer === null && dockExports.inlineEdit && dockExports.inlineEdit.active === false && dockExports.diffPane && typeof dockExports.diffPane === "object" && typeof dockExports.diffPane.Component === "function",
 );
 
-const comps = loadBundle(__dirname + "/../packages/dsh-kit-files/client/bundle.js", (name) => {
-  if (name === "react") return reactStub;
-  if (name === "react/jsx-runtime") return jsxRuntimeStub;
-  if (name === "dsh-kit") return dockExports;
-  if (name === "@deepseek-ai/dsh-client-ui-primitives") return primStub;
-  throw new Error("unexpected require: " + name);
-});
+// 单包收回：组件模块随根 bundle 一次加载组装（external 桩不再需要）
+const comps = dockExports.files;
 
 check("files 导出 apply（client 插件形状）与 DiffPane（root 右栏「差异」签正文）", typeof comps.apply === "function" && typeof comps.DiffPane === "function");
 check("files inject 声明 slots", Array.isArray(comps.inject) && comps.inject[0] === "slots");
@@ -340,11 +335,11 @@ check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
 // —— 源码哨兵：SCM 面板分支按钮会被 .dshk-btn 的 26px 方钮定宽压扁（svg/分支名
 // 0 宽只剩 ▾）——分支按钮必须显式 width:auto 反制（样式随组件在本包 FILES_CSS）
 {
-  const filesSrc = fs.readFileSync(__dirname + "/../packages/dsh-kit-files/client/bundle.js", "utf8");
+  const filesSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
   check("分支按钮不被 .dshk-btn 定宽压扁（width:auto 修正恒在）", filesSrc.includes(".dshk-branchbtn{display:inline-flex;flex:none;width:auto"));
   // 键位整体改由宿主 shortcuts 服务持有（0.1.7-rc.2+ 官方「快捷键」页）：本组件
   // 不再有键位配置项（宿主 schema 同删），注册面见下方 apply 钉子
-  const hostSrc = fs.readFileSync(__dirname + "/../packages/dsh-kit-files/src/index.ts", "utf8");
+  const hostSrc = fs.readFileSync(__dirname + "/../src/files/index.ts", "utf8");
   check(
     "键位配置项全退役（client 与宿主 schema 都不再有键位字段与录制控件）",
     !filesSrc.includes("fileTreeShortcut") && !filesSrc.includes("scShortcut") && !filesSrc.includes("kcfgGroupShortcuts") &&

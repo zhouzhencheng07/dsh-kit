@@ -123,12 +123,13 @@ dsh plugin --profile web update dsh-kit
   `/config`（只读配置快照）等端点
 - `client/bundle.js`：浏览器半边（手写 ModuleLoader bundle，**零构建**）——根包注册知识库
   入口钮、官方右栏四类 dock 签（pane 正文经 `sidebar.right.pane.tab` 提供）与配置页
-  （`plugins.row.config`）；文件树·源代码管理、终端两组件的入口钮与面板由各自 client 半边
-  自注册（终端坞引擎为官方 `webTerminals` 服务）
-- `packages/*`：组件包（0.5.3 起，行统一由根包 `cordis.patch.yml` insert）——`dsh-kit-core`
-  宿主共享库、`dsh-kit-files`（tree/read/raw/fs-op/git 端点 + 文件树·源代码管理面板）、
-  `dsh-kit-terminal`（终端入口与坞 + `/dsh-kit-terminal/config` 配置快照）、`dsh-kit-monitor`
-  （`/dsh-kit/usage` + 用量芯片 / 429 续跑 / 死循环打断 / 会话通知）
+  （`plugins.row.config`）；文件树·源代码管理、终端、用量监视三个组件的 client 半边
+  同住本 bundle（组件模块，终端坞引擎为官方 `webTerminals` 服务）
+- `src/core`、`src/files`、`src/terminal`、`src/monitor`：组件按目录分边界（0.5.3 单包
+  组件化，组件 = patch 行而非独立包）——`core` 宿主共享库；`files` 挂 tree/read/raw/
+  fs-op/git 端点 + 文件树·源代码管理面板；`terminal` 挂 `/dsh-kit-terminal/config` 快照
+  （终端入口与坞）；`monitor` 挂 `/dsh-kit/usage` + 用量芯片 / 429 续跑 / 死循环打断 /
+  会话通知。行经根包 `exports` 子路径（`dsh-kit/files` 等）由 `cordis.patch.yml` 物化
 - `client/vendor/*`：xterm / TipTap 富文本 / KaTeX / qrcode，全部按需懒加载，
   由 `/dsh-kit/vendor/*` 静态伺服
 - `src/web-search.ts` + `src/engine-chain.ts` + `src/engines/*`：向 web seam 注册

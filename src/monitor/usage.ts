@@ -18,7 +18,7 @@
 
 import http from 'node:http'
 
-import { sameOrigin } from 'dsh-kit-core'
+import { sameOrigin } from '../core/index.ts'
 
 /** 宿主对象最小依赖面（与其它模块同约定：只声明实际触达的成员） */
 interface UsageWebServer {

@@ -9,7 +9,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { recycleDeleteBatch } from 'dsh-kit-core';
+import { recycleDeleteBatch } from "./core/index.js";
 export function parseConflict(raw) {
     return raw === 'overwrite' || raw === 'rename' ? raw : 'skip';
 }
