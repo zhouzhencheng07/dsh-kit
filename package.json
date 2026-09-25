@@ -27,6 +27,11 @@
       "default": "./dist/monitor/index.js"
     },
     "./monitor/locale/*.json": "./locale/monitor/*.json",
+    "./search": {
+      "types": "./dist/search/index.d.ts",
+      "default": "./dist/search/index.js"
+    },
+    "./search/locale/*.json": "./locale/search/*.json",
     "./client": "./client/bundle.js",
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"

@@ -203,7 +203,7 @@ check("KitConfigPage 无 form 渲染降级文案", !!out && callLog.some((c) => 
 const fakeForm = {
   state: {
     status: "ready",
-    value: { ...comps.CFG_DEFAULTS, searchMaxResults: 3, phoneRemoteDomain: "dsh.example.com" },
+    value: { ...comps.CFG_DEFAULTS, phonePort: 3091, phoneRemoteDomain: "dsh.example.com" },
     revision: 7,
     writable: true,
   },
@@ -227,12 +227,10 @@ check("KitConfigPage 页签切换落 state", stateStore.get(3) === "kcfgGroupVau
 const cfgFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
 check("KitConfigPage SettingsForm 框架：labels/state/保存动作齐全", !!cfgFrm && typeof cfgFrm[2].onSave === "function" && typeof cfgFrm[2].onDiscard === "function" && cfgFrm[2].state.available === true && cfgFrm[2].state.writable === true && cfgFrm[2].state.dirty === false && !!cfgFrm[2].labels.save && !!cfgFrm[2].labels.readOnly && !!cfgFrm[2].labels.saveFailed);
 const cfgPanel = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-cfgp-fields");
-check("功能开关页签：4 Switch + 1 数值字段 + 面板 aria 挂到当前组", cfgSw().length === 4 && cfgVf().length === 1 && !!cfgPanel && cfgPanel[2].id === "dshk-cfgp-panel-kcfgGroupFeatures" && cfgPanel[2].role === "tabpanel");
-const cfgSmField = cfgVf().find((c) => c[2].id === "dshk-cfgp-searchMaxResults");
-check("数值字段回显受理值（searchMaxResults=3）", !!cfgSmField && cfgSmField[2].text === "3" && cfgSmField[2].numeric === true && cfgSmField[2].overridden === false);
-check("Switch 行回显布尔值且带说明文案（终端/技能开关已随组件迁走，首位是免费网页搜索）", cfgSw()[0][2].checked === true && ["免费网页搜索", "Free web search"].includes(cfgSw()[0][2].label));
+check("功能开关页签：3 Switch（搜索/终端/技能已随组件迁走，无数值字段）+ 面板 aria 挂到当前组", cfgSw().length === 3 && cfgVf().length === 0 && !!cfgPanel && cfgPanel[2].id === "dshk-cfgp-panel-kcfgGroupFeatures" && cfgPanel[2].role === "tabpanel");
+check("Switch 行回显布尔值且带说明文案（首位是内置浏览器）", cfgSw()[0][2].checked === true && ["内置浏览器", "Built-in browser"].includes(cfgSw()[0][2].label));
 out = renderCfgTab("kcfgGroupPhone", fakeForm);
-check("手机访问页签：2 Switch + 1 数值 + 1 文本（文本回显受理域名）", cfgSw().length === 2 && cfgVf().length === 2 && cfgVf().some((c) => c[2].id === "dshk-cfgp-phoneRemoteDomain" && c[2].text === "dsh.example.com"));
+check("手机访问页签：2 Switch + 1 数值 + 1 文本（数值回显受理值、文本回显受理域名）", cfgSw().length === 2 && cfgVf().length === 2 && cfgVf().some((c) => c[2].id === "dshk-cfgp-phonePort" && c[2].text === "3091" && c[2].numeric === true && c[2].overridden === false) && cfgVf().some((c) => c[2].id === "dshk-cfgp-phoneRemoteDomain" && c[2].text === "dsh.example.com"));
 out = renderCfgTab("kcfgGroupVault", fakeForm);
 check("知识库页签：1 Switch + 1 文本", cfgSw().length === 1 && cfgVf().length === 1);
 // 10) 键位改由宿主 shortcuts 服务持有（0.1.7-rc.2+ 官方「快捷键」页）：注册面在
@@ -283,7 +281,7 @@ const savingForm = {
 };
 stateSeq = 0;
 stateStore.clear();
-stateStore.set(0, { searchMaxResults: { text: "4" }, phoneRemoteDomain: { text: "" }, vaultEnabled: { set: false }, vaultRoot: { text: "D:/notes" } });
+stateStore.set(0, { phonePort: { text: "4" }, phoneRemoteDomain: { text: "" }, vaultEnabled: { set: false }, vaultRoot: { text: "D:/notes" } });
 stateStore.set(3, "kcfgGroupVault");
 callLog = [];
 out = comps.KitConfigPage({ view: "page", form: savingForm });
@@ -291,7 +289,7 @@ const saveFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
 check("KitConfigPage 有草稿时 dirty 置位", !!saveFrm && saveFrm[2].state.dirty === true);
 saveFrm[2].onSave();
 check("保存 ops：number set / 清空 unset / bool set / 文本 set（按字段表序）", JSON.stringify(capturedOps) === JSON.stringify([
-  { op: "set", path: ["searchMaxResults"], value: 4 },
+  { op: "set", path: ["phonePort"], value: 4 },
   { op: "unset", path: ["phoneRemoteDomain"] },
   { op: "set", path: ["vaultEnabled"], value: false },
   { op: "set", path: ["vaultRoot"], value: "D:/notes" },
@@ -300,15 +298,17 @@ check("保存带读取时 revision 围栏", capturedRev === 7);
 // 非法数字草稿：字段 invalid + 框架 invalid 置位（SettingsForm blocked 挡保存）
 stateSeq = 0;
 stateStore.clear();
-stateStore.set(0, { searchMaxResults: { text: "abc" } });
+stateStore.set(0, { phonePort: { text: "abc" } });
+stateStore.set(3, "kcfgGroupPhone"); // 数值字段在手机访问页签
 callLog = [];
 out = comps.KitConfigPage({ view: "page", form: fakeForm });
-const badField = callLog.find((c) => c[1] === primStub.SettingsValueField && c[2].id === "dshk-cfgp-searchMaxResults");
+const badField = callLog.find((c) => c[1] === primStub.SettingsValueField && c[2].id === "dshk-cfgp-phonePort");
 const badFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
 check("非法数字：字段 invalid + 框架 invalid 置位", !!badField && badField[2].invalid === true && !!badFrm && badFrm[2].state.invalid === true);
 // 只读：框架 writable=false、Switch 与数值字段禁用
 stateSeq = 0;
 stateStore.clear();
+stateStore.set(3, "kcfgGroupPhone"); // 数值/文本字段在手机访问页签（功能开关页签已无数值字段）
 callLog = [];
 out = comps.KitConfigPage({ view: "page", form: { state: { ...fakeForm.state, writable: false }, mutate: fakeForm.mutate } });
 const roSwitch = callLog.find((c) => c[1] === primStub.Switch);
@@ -1188,7 +1188,7 @@ check("KitSurfaces 带cwd渲染无异常", !!out && typeof out === "object");
     compared++;
     if (comps.CFG_DEFAULTS[key] !== expected) drift.push(key + "(bundle=" + comps.CFG_DEFAULTS[key] + ",host=" + expected + ")");
   }
-  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 10);
+  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 8);
 }
 // 过时文案清理：现行说明不得出现「侧栏底部『任务』钮」、日程索引标题键、搜索默认 5
 check(

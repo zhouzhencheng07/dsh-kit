@@ -4,17 +4,13 @@
 //   文件树（file tree）——GET /dsh-kit/tree?path=<绝对目录> 返回该层
 //     目录+文件的 JSON 列表（官方 browse RPC 只列目录不列文件，故自建）；
 //   文件预览（file preview）——GET /dsh-kit/read?path=<绝对文件> 读取文本
-//     内容（限长 + 二进制探测），浏览器端在右侧 details 列展示；
-//   网页搜索（web search）：向 web seam 注册
-//     'free-search' provider（免费引擎链），实现见 src/web-search.ts +
-//     src/engine-chain.ts + src/engines/*。
+//     内容（限长 + 二进制探测），浏览器端在右侧 details 列展示。
 //
 // 浏览器半边（client/bundle.js）：终端/文件树入口按钮注册在对话输入框工具行
 // （conversation.input.left），面板本体挂 shell.overlay 全帧浮层；终端开合底部
 // 停靠面板（Ctrl+`），文件树临时接管侧边栏浏览区（sidebar.workspaces 单槽）。
 // 插件配置页（Config schema 声明式模型，编辑面在插件页本行「配置」）提供功能开关
-// 与快捷键自定义；其中 searchEnabled 由宿主消费（开=免费引擎链，关=转发官方渠道，
-// 重启后生效），其余开关浏览器端消费。
+// 与快捷键自定义；开关都由浏览器端消费（宿主侧的门控在启动期读同一份配置）。
 //
 // 宿主半边（本文件）挂这些端点（webserver 默认只绑 loopback）：
 //   1) 静态 /dsh-kit/vendor/* —— xterm 官方预编译 UMD，按需加载；
@@ -41,7 +37,6 @@ import http from 'node:http'
 import path from 'node:path'
 
 import { applyOpenCodeSessionHeader } from './core/index.ts'
-import { applyWebSearch } from './web-search.ts'
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from './phone-gateway.ts'
 import type { PhoneGatewayHandle } from './phone-gateway.ts'
 import { BrowserService, normalizeScope, DEFAULT_SCOPE } from './browser.ts'
@@ -199,8 +194,6 @@ export const Config =
         // 对话里的 http(s) 链接点击改投内置浏览器（默认开）。门控在浏览器半边（需要
         // browserEnabled 同时开），宿主只提供 /dsh-kit/browser/open 这条管道
         chatOpenLinkInBrowser: z.boolean().default(true).volatile(),
-        searchEnabled: z.boolean().default(true).volatile(),
-        searchMaxResults: z.number().step(1).min(1).max(8).default(2).volatile(),
         // phoneEnabled = 「手机访问」页入口可见性（纯显示开关）。
         // 网关启停不走 settings（读取器回填滞后），改由状态文件 + kit 端点直管。
         phoneEnabled: z.boolean().default(true).volatile(),
@@ -233,9 +226,8 @@ export const Config =
     : undefined
 
 /** Config 缺席（schemastery 不可达）时 readSettings 的兜底：只覆盖宿主消费的关键键
- *  （搜索条数、手机端口、库根），其余键缺省行为由读取侧的比较式兜住 */
+ *  （手机端口、库根），其余键缺省行为由读取侧的比较式兜住 */
 const FALLBACK_SETTINGS: KitSettings = {
-  searchMaxResults: 2,
   phonePort: PHONE_PORT,
   vaultRoot: '',
 }
@@ -285,13 +277,9 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
     for (const [key, value] of Object.entries(config ?? {})) out[key] = readRef(value)
     return out
   }
-  applyWebSearch(ctx, {
-    getEnabled: () => readSettings().searchEnabled !== false,
-    getMaxResults: () => readSettings().searchMaxResults,
-  })
-
+  // 网页搜索已随组件化迁入 dsh-kit/search（src/search/），主包不再装配。
   // 技能池端点已随组件化迁入 dsh-kit/skills（src/skills/），主包不再装配。
-  // OpenCode Go 会话头按会话注入（实现见 src/opencode-session.ts）
+  // OpenCode Go 会话头按会话注入（实现见 src/core/opencode-session.ts）
   applyOpenCodeSessionHeader(ctx, (m) => console.warn(`dsh-kit: ${m}`))
 
   // agents 注册表（dsh-agent，宿主组合里的可选服务）：浏览器工具的分区解析
