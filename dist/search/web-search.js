@@ -64,7 +64,7 @@ export function applyWebSearch(ctx, options = {}) {
             return;
         }
         if (web.searchProviders?.has(SEARCH_PROVIDER_ID)) {
-            log?.(`"${SEARCH_PROVIDER_ID}" 已被注册（旧版独立插件未卸载？），免费搜索未启用`);
+            log?.(`"${SEARCH_PROVIDER_ID}" 已被注册（该 id 已被占用），免费搜索未启用`);
             return;
         }
         const unpin = pinProvider(web);

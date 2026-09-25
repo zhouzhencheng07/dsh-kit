@@ -88,7 +88,7 @@ check(
   ),
 );
 
-// 单包收回：组件模块随根 bundle 一次加载组装（external 桩不再需要）
+// 组件模块随根 bundle 一次加载组装
 const comps = dockExports.terminal;
 
 check("terminal 导出 apply（client 插件形状）与 inject 声明 slots", typeof comps.apply === "function" && Array.isArray(comps.inject) && comps.inject[0] === "slots");

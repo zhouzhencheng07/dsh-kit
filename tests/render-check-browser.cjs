@@ -219,7 +219,7 @@ async function checkApply() {
   const on = await run(true);
   check("apply 激活不抛错且等 sidebarRightTabs 声明（inject 而非直读）", on.svcInjects.includes("sidebarRightTabs"));
   const keys = on.registered.filter((s) => s && s.name === "plugins.row.config").map((s) => s.key);
-  check("配置页挂本组件行（两种包名口径的 key 都在）", keys.includes("dsh-kit#browser") && keys.includes("dsh-kit-browser#browser"));
+  check("配置页挂本组件行（单包单口径 key）", keys.includes("dsh-kit#browser") && keys.length === 1);
   check("壳层常驻事件源挂 shell.overlay（id 稳定）", on.registered.some((s) => s && s.name === "shell.overlay" && s.id === "dsh-kit-browser"));
   check("右栏签注册：页类型 kind=dshk-browser + pane 正文槽位", on.registered.some((s) => s && s.kind === "dshk-browser" && s.id === "dsh-kit-browser") && on.slotInjects.includes("sidebar.right.pane.tab"));
   check("槽位经 slots.inject 等声明落地（不直接 register）", on.slotInjects.every((k) => typeof k === "string" && k.length > 0));

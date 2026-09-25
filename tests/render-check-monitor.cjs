@@ -86,7 +86,7 @@ check(
   ),
 );
 
-// 单包收回：组件模块随根 bundle 一次加载组装（external 桩不再需要）
+// 组件模块随根 bundle 一次加载组装
 const comps = dockExports.monitor;
 
 check("monitor 导出 apply（client 插件形状）与 usageIsPeak", typeof comps.apply === "function" && typeof comps.usageIsPeak === "function");
@@ -126,7 +126,7 @@ async function checkApply() {
   check("U 槽位座席：监视条 composer.dock order 5", seat("dsh-kit-monitor") && seat("dsh-kit-monitor").order === 5);
   check("U 槽位座席：头部状态条 header.actions order 21", seat("dsh-kit-monitor-bg") && seat("dsh-kit-monitor-bg").order === 21);
   const cfgKeys = registered.filter((s) => s.name === "plugins.row.config").map((s) => s.key);
-  check("U 配置页挂本组件行（两种包名口径的 key 都在）", cfgKeys.includes("dsh-kit#monitor") && cfgKeys.includes("dsh-kit-monitor#monitor"));
+  check("U 配置页挂本组件行（单包单口径 key）", cfgKeys.includes("dsh-kit#monitor") && cfgKeys.length === 1);
 }
 
 // 10c) 全局 429 续跑器核心（monitorTickCore 依赖注入直测）：沿检测（running
@@ -820,7 +820,7 @@ function checkConfigSurface() {
     drift.length === 0 && compared === Object.keys(comps.M_CFG_DEFAULTS).length,
   );
   check(
-    "用量只认 DeepSeek / OpenCode Go（z.ai 卡位全退役）",
+    "用量只认 DeepSeek / OpenCode Go（无 z.ai 卡位）",
     !/zai|glm|bigmodel/i.test(usageSrc) && !bundleSrc.includes("usageZai") && !bundleSrc.includes("monitor/usage/quota/limit"),
   );
 }

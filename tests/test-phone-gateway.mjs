@@ -42,7 +42,7 @@ const check = (label, ok) => {
   const on = phoneAssistScript({ remoteView: true, pickerLocked: true })
   const off = phoneAssistScript({ remoteView: false, pickerLocked: false })
   check('辅助脚本：置灰判据用语义属性 data-open-target（覆盖会话头部/预览/交付卡的打开入口）', on.includes('"[data-open-target]"'))
-  check('辅助脚本：旧 aria-label 判据已退役（选择打开方式 / 中打开工作目录）', !on.includes('选择打开方式') && !on.includes('中打开工作目录') && !on.includes('Open workspace in '))
+  check('辅助脚本不依赖旧 aria-label 文案（选择打开方式 / 中打开工作目录）', !on.includes('选择打开方式') && !on.includes('中打开工作目录') && !on.includes('Open workspace in '))
   check(
     '辅助脚本：文本判据只剩「添加工作区…」与「打开配置文件」',
     on.includes('添加工作区|Add workspace') && on.includes('打开配置文件|Open configuration file') && !on.includes('用默认应用打开'),

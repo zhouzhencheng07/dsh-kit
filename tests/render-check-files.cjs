@@ -96,7 +96,7 @@ check(
   dockExports.sidebarView && typeof dockExports.sidebarView === "object" && dockExports.sidebarView.renderer === null && dockExports.inlineEdit && dockExports.inlineEdit.active === false && dockExports.diffPane && typeof dockExports.diffPane === "object" && typeof dockExports.diffPane.Component === "function",
 );
 
-// 单包收回：组件模块随根 bundle 一次加载组装（external 桩不再需要）
+// 组件模块随根 bundle 一次加载组装
 const comps = dockExports.files;
 
 check("files 导出 apply（client 插件形状）与 DiffPane（root 右栏「差异」签正文）", typeof comps.apply === "function" && typeof comps.DiffPane === "function");

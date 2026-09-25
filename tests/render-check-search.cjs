@@ -110,7 +110,7 @@ check("search 导出面齐全（配置页 + 字段表）", typeof comps.SearchCo
   check("summary 视图返回 null（行详情收起态）", comps.SearchConfigPage({ view: "summary", form: fakeForm }) === null);
 }
 
-// 3) apply：配置页挂本组件行（两种包名口径），不注册别的槽
+// 3) apply：配置页挂本组件行（key = dsh-kit#search），不注册别的槽
 async function checkApply() {
   const registered = [];
   const seatInjects = [];
@@ -119,8 +119,8 @@ async function checkApply() {
   try { await comps.apply(ctx); } catch (e) { err = e; }
   check("search apply 激活不抛错", err === null);
   const keys = registered.filter((s) => s.name === "plugins.row.config").map((s) => s.key);
-  check("配置页挂本组件行（两种包名口径的 key 都在）", keys.includes("dsh-kit#search") && keys.includes("dsh-kit-search#search"));
-  check("槽位经 slots.inject 等声明落地（不直接 register），只挂配置页", seatInjects.length === 2 && seatInjects.every((k) => k === "plugins.row.config") && registered.length === 2);
+  check("配置页挂本组件行（单包单口径 key）", keys.includes("dsh-kit#search") && keys.length === 1);
+  check("槽位经 slots.inject 等声明落地（不直接 register），只挂配置页", seatInjects.length === 1 && seatInjects.every((k) => k === "plugins.row.config") && registered.length === 1);
 }
 
 // 4) 源哨兵：宿主半边搬进组件目录、主包与 client 摘干净、patch 不再静态钉 provider

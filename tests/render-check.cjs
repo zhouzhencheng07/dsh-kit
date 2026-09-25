@@ -99,7 +99,7 @@ if (!global.location) {
 
 // 3) 组装可执行的 factory 闭包，并导出组件（替换防 early-return）；
 //    setKitUi 用于预置面板状态等依赖状态的渲染分支。
-//    根 return 必须取最后一处：单包收回后 files/terminal 组件模块体内各有
+//    根 return 必须取最后一处：files/terminal 组件模块体内各有
 //    一个自己的 return module.exports，replace 首处会把 factory 提前截断在组件段。
 const RETURN = "return module.exports;";
 const rootReturn = body.lastIndexOf(RETURN);
@@ -138,7 +138,7 @@ let out;
 let copiedRel = null;
 
 // 4c) TreeRowMenu：文件行菜单项含复制相对路径/重命名/删除；目录行另有新建两项
-//（文件树迁 dsh-kit-files 后 TreeRowMenu 留底座被两边共用，直测留在这里）
+//（TreeRowMenu 在底座被文件树与知识库两边共用，直测留在这里）
 callLog = [];
 out = comps.TreeRowMenu({ entry: { name: "b.js", path: "D:/w/b.js", dir: false }, rect: { top: 0, bottom: 20, left: 0, right: 100 }, actions: { onCopyPath: (_e, rel) => { copiedRel = rel; }, onRename: () => {}, onDelete: () => {} }, onClose: () => {} });
 const menuLabels = callLog.filter(([, , p]) => p && typeof p === "object" && typeof p.children === "string").map(([, , p]) => p.children);
@@ -150,14 +150,14 @@ const dirLabels = callLog.filter(([, , p]) => p && typeof p === "object" && type
 const dirHasAny = (cands) => cands.some((c) => dirLabels.includes(c));
 check("TreeRowMenu 目录行菜单(新建文件/目录单入口+复制相对/重命名/删除)", dirHasAny(["新建文件/目录", "New file/folder"]) && dirHasAny(["复制相对路径", "Copy relative path"]) && dirHasAny(["删除", "Delete"]));
 
-// 5)/6) FileTreePanel 与 DiffPane 直测随组件迁 dsh-kit-files（tests\render-check-files.cjs）
+// 5)/6) FileTreePanel 与 DiffPane 直测在 tests\render-check-files.cjs
 
 // 7) 入口按钮 / 浮层宿主顶部渲染（conversation.input.left + shell.overlay 槽位）：
-//    终端入口与坞随组件迁 dsh-kit-terminal（tests\render-check-terminal.cjs）
+//    终端入口与坞直测在 tests\render-check-terminal.cjs
 callLog = [];
 out = comps.VaultEntry({});
 check("VaultEntry 渲染无异常且悬停走官方气泡（KitTip + 命令 id 对上快捷键注册）", !!out && out.type === comps.KitTip && out.props.command === "dsh-kit.vault.toggle" && typeof out.props.label === "string");
-// 7.0) 侧栏索引单槽互斥（sidebarViewPatch 纯补丁语义；入口按钮交互随组件迁 files）
+// 7.0) 侧栏索引单槽互斥（sidebarViewPatch 纯补丁语义；入口按钮交互在 files 组件直测）
 const svp = comps.sidebarViewPatch("vault");
 check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultIdxOpen === true && svp.treeOpen === false && svp.gitOpen === false);
 // 7.1) 功能签入口补丁（openFeatureTab）：置存在 + 置激活位，纯补丁不触碰别的签。
@@ -245,7 +245,7 @@ comps.setKitUi({
   activeFile: "C:/x/b.md",
 });
 callLog = [];
-// DiffPane 已迁 dsh-kit-files：root 只从 kitBase 的 diffPane 座取（组件包物化期挂上）。
+// DiffPane 在 dsh-kit/files 组件：root 只从 kitBase 的 diffPane 座取（物化期挂上）。
 // 桩环境手动挂一枚假组件，钉住「正文类型确实来自座」——座没接线时类型是 undefined
 // （真机 React #130 白屏，桩渲染器不抛，只能这样钉）
 const fakeDiff = function FakeDiff() {};
@@ -956,14 +956,14 @@ check("openFileTab 携带 commit 钉定", commitOpen.files.length === 1 && commi
 const commitReopen = comps.openFileTab(commitOpen, "C:/x/hist.js", "scm", false);
 check("openFileTab 从 SCM 重开同路径清除钉定", commitReopen.files[0].commit === undefined);
 
-// 7.5) 终端坞（多标签）随组件迁 dsh-kit-terminal（tests\render-check-terminal.cjs）：
+// 7.5) 终端坞（多标签）直测在 tests\render-check-terminal.cjs：
 // 预置会话后的标签 map 渲染分支（曾因变量遮蔽翻译函数 t 而崩溃）在那里专测
 comps.setKitUi({ terminals: [], activeTermId: null, termDockOpen: false });
 callLog = [];
 out = comps.KitSurfaces({});
 check("KitSurfaces 无hooks渲染无异常（根壳不渲染面板本体）", out === null);
-// 更改视图/提交图谱/分支浮层直测随组件迁 dsh-kit-files（tests\render-check-files.cjs）；
-// 技能管理页直测随组件迁 dsh-kit-skills（tests\render-check-skills.cjs）
+// 更改视图/提交图谱/分支浮层直测在 tests\render-check-files.cjs；
+// 技能管理页直测在 tests\render-check-skills.cjs
 callLog = [];
 const fakeHooks = {
   useSessions: (sel) => sel({ byId: { s1: { id: "s1", cwd: "C:/x", retainedBy: { mainView: 1 } } } }),
@@ -973,7 +973,7 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
 
 
 // 10c-10f）429 续跑器（G）/ 会话通知（N）/ 收尾判定 / 压缩完成（C）判定核心
-//       已随监视组件迁入 dsh-kit-monitor——检查随之移至 tests/render-check-monitor.cjs
+//       在 dsh-kit/monitor 组件——检查在 tests/render-check-monitor.cjs
 
 
 
@@ -994,7 +994,7 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
 
 
 // 9) 插件配置（0.1.7 声明式模型）：主行没有可调参数，因此不导出 Config、也没有配置页
-//    （手机访问随组件迁 dsh-kit/phone，字段与探针都在 src/phone/index.ts）。
+//    （手机访问在 dsh-kit/phone 组件，字段与探针都在 src/phone/index.ts）。
 //    这里钉住「主行不再持有任何配置字段 / 默认表 / 配置页骨架」，避免退役字段借道回来。
 {
   const hostSrc = fs.readFileSync(__dirname + "/../src/index.ts", "utf8");
@@ -1104,8 +1104,8 @@ setTimeout(async () => {
   // kit 端点包装（kitGetJson/kitPostJson/kitJson）：回包约定收在一处后的行为契约。
   // 2xx 且形状断言通过才算成功，失败带宿主 error 原文与 status——写文件的 409
   // 冲突分流就靠 status/body，这里把契约钉死
-  // kit 端点包装契约直调（原借 fetchTree/fetchGitStatus 等业务函数当载体，
-  // 它们已迁 dsh-kit-files——契约本身收在 kitBase 的三件套里，直调覆盖同一行为）
+  // kit 端点包装契约直调（业务函数在 dsh-kit/files 组件，契约本身收在 kitBase
+  // 的三件套里，直调覆盖同一行为）
   {
     const calls = [];
     let scripted = { status: 200, body: {} };

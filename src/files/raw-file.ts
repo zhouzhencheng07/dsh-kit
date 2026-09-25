@@ -5,7 +5,7 @@
 //
 // 单独成模块：宿主侧 index.ts 消费，tests/test-raw-file.mjs 单测。
 
-/** 可 inline 渲染的类型：扩展名 → content-type（pdf/office 类型随预览通道退役移除，
+/** 可 inline 渲染的类型：扩展名 → content-type（pdf/office 不在表内，
  *  下载模式不受此表限制） */
 const RAW_TYPES = new Map([
   // 图片（vault 笔记粘贴截图/插图走 /dsh-kit/raw 渲染）

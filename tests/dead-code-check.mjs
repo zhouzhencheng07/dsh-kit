@@ -1,6 +1,5 @@
-// 死代码哨兵（client/bundle.js + packages/*/client/bundle.js）：把"功能删了、
-// 残件还留着"的东西拦在提交前。组件化后词条/函数/CSS 的消费者可能住在组件包
-// （如 dock 包的 RB_FEATURES 引用根包词条 dockBrowser），扫描面 = 根包 + 全部组件包。
+// 死代码哨兵（client/bundle.js）：把"功能删了、残件还留着"的东西拦在提交前。
+// 扫描面 = 根 bundle（组件半边都在同一个文件里）。
 // 三类发现，全部按引用计数判死，判据随每条注释：
 //   1) i18n 词条：zh/en 字典里定义了、全文件却只有定义处那两处（动态拼的键前缀除外）
 //   2) 顶层函数：全文件只出现一次（定义行），且不在 render-check 的导出表里
@@ -15,16 +14,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const rootSrc = fs.readFileSync(path.join(root, 'client', 'bundle.js'), 'utf8')
-// 组件包 client 半边并入扫描面（词条/类名的消费方可能搬过去了）
-const pkgDir = path.join(root, 'packages')
-let pkgSrc = ''
-if (fs.existsSync(pkgDir)) {
-  for (const p of fs.readdirSync(pkgDir)) {
-    const f = path.join(pkgDir, p, 'client', 'bundle.js')
-    if (fs.existsSync(f)) pkgSrc += '\n' + fs.readFileSync(f, 'utf8')
-  }
-}
-const src = rootSrc + pkgSrc
+const src = rootSrc
 const problems = []
 const notes = []
 const fail = (msg) => problems.push(msg)
@@ -60,8 +50,8 @@ const dictPairs = []
 }
 const cssStart = src.indexOf('const UI_CSS = \`')
 if (cssStart < 0) die('找不到 UI_CSS 锚点（client/bundle.js 结构变了，哨兵要同步）')
-// CSS 扫描面 = 所有 `<名字>CSS = \`...\`` 模板块（根包 UI_CSS + 各组件包 XXX_CSS）：
-// 类名消费者可能已经随组件搬到别的包，只扫根包会把搬走的规则当成"有定义无引用"
+// CSS 扫描面 = 所有 `<名字>CSS = \`...\`` 模板块（根 UI_CSS + 各组件自己的 XXX_CSS）：
+// 类名消费者住在别的模板块，只扫根包会把它们当成"有定义无引用"
 const cssRegions = []
 {
   const re = /const [A-Za-z_$][\w$]*CSS = \`/g
@@ -90,10 +80,8 @@ const exportedNames = new Set(
 if (exportAt >= 0 && exportedNames.size < 15) die('render-check 导出表只解析出 ' + exportedNames.size + ' 个名字，锚点可能失效')
 
 // ── 1) i18n 词条 ──
-// 动态拼的键（cfg 加字段名，插件设置卡时代）随设置卡退役清零；新前缀出现时
-// 加回这张表
+// 动态拼的键按前缀豁免（cfg 加字段名之类）；有新的拼接前缀时加进这张表
 const dynamicKeyPrefixes = []
-const TEMPLATE_START = '\`' + '$' + '{'
 for (const p of dynamicKeyPrefixes) {
   if (!src.includes('\`' + p + '$' + '{')) notes.push('动态键前缀 ' + p + ' 在源码里已找不到拼接处，确认后从哨兵豁免表删掉')
 }
@@ -111,7 +99,6 @@ for (const p of dynamicKeyPrefixes) {
     }
   }
   if (totalKeys < 100) fail('i18n 字典合计只解析出 ' + totalKeys + ' 个键，锚点可能失效')
-  if (TEMPLATE_START === '') fail('哨兵内部常量失效')
 }
 
 // ── 2) 顶层函数 ──
