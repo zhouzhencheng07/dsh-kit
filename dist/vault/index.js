@@ -96,7 +96,7 @@ function loadDep(spec) {
 }
 const require = createRequire(import.meta.url);
 export const name = 'dsh-kit/vault';
-// ── 组件设置 schema（0.1.7 声明式模型）──
+// ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile
 // 写入 = 热提交（fiber config 里的稳定 ref），readSettings 统一解引用后每次现读。
 const schemastery = loadDep('@deepseek-ai/schemastery');

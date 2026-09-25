@@ -339,7 +339,7 @@ check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
 {
   const filesSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
   check("分支按钮不被 .dshk-btn 定宽压扁（width:auto 修正恒在）", filesSrc.includes(".dshk-branchbtn{display:inline-flex;flex:none;width:auto"));
-  // 键位整体改由宿主 shortcuts 服务持有（0.1.7-rc.2+ 官方「快捷键」页）：本组件
+  // 键位整体改由宿主 shortcuts 服务持有（官方「快捷键」页）：本组件
   // 不再有键位配置项（宿主 schema 同删），注册面见下方 apply 钉子
   const hostSrc = fs.readFileSync(__dirname + "/../src/files/index.ts", "utf8");
   check(

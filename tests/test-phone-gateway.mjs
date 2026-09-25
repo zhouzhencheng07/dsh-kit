@@ -222,10 +222,10 @@ try {
   // 远程视图辅助脚本：自动关内测声明弹窗 + 锁住宿主专属入口（置灰 + 点击同一句提示，不隐藏）
   // 「在应用中打开」与设置页「打开配置文件」一律锁；宿主 picker 非 browse 时连挑选入口一起锁
   check('HTML 页注入了远程视图辅助脚本', page.body.includes('dismissNotice') && page.body.includes('[data-open-target]') && page.body.includes('添加工作区') && page.body.includes('打开配置文件'))
-  // 官方右栏「工作区文件」不锁：宿主 0.1.6 起手机可预览文件内容（0.1.5-rc.2 只能看目录，旧版曾锁）
-  check('官方「工作区文件」不入列置灰（宿主 0.1.6 起手机可预览）', !page.body.includes('data-sidebar-right-guide-entry'))
+  // 官方右栏「工作区文件」不锁：手机可预览文件内容
+  check('官方「工作区文件」不入列置灰（手机可预览文件内容）', !page.body.includes('data-sidebar-right-guide-entry'))
   // 交付卡片（PresentedFileCard）**不锁**：卡片点击非官即 vault——工作区文件卡走
-  // 官方右栏文件签（宿主 0.1.6 起手机可预览，与「工作区文件」入口放行同一前提），
+  // 官方右栏文件签（与「工作区文件」入口放行同一前提），
   // vault 卡由客户端拦截器改道知识库编辑器；官方预览不可用的旧宿主上会看到
   // 官方报错，与「工作区文件」入口同一取舍。
   // 卡下拉里的宿主动作就是 open-in-app 的文件控件（data-open-target），随它一起锁：

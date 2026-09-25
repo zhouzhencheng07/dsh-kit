@@ -82,7 +82,7 @@ function loadDep(spec) {
     }
     return null;
 }
-// ── 组件设置 schema（0.1.7 声明式模型）──
+// ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile
 // 写入 = 热提交（fiber config 里的稳定 ref），readSettings 统一解引用。默认值与
 // client 半边 F_CFG_DEFAULTS 逐项同值（两处不同步会出现默认值漂移）。

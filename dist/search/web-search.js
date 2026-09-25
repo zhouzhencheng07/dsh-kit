@@ -56,12 +56,7 @@ export function applyWebSearch(ctx, options = {}) {
     const disposers = [];
     ctx.inject(['web'], (webCtx) => {
         const web = webCtx.web;
-        const register = web ? web.registerSearchProvider : undefined;
-        if (!web || typeof register !== 'function') {
-            // developer-preview 面挪走了：降级为日志，不让整个插件消失
-            log?.('web seam 没有 registerSearchProvider，免费搜索未启用');
-            return;
-        }
+        const register = web.registerSearchProvider;
         if (web.searchProviders?.has(SEARCH_PROVIDER_ID)) {
             log?.(`"${SEARCH_PROVIDER_ID}" 已被注册（该 id 已被占用），免费搜索未启用`);
             return;

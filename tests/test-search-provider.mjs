@@ -102,15 +102,6 @@ const silent = () => {}
   console.log('PASS  只读 searchProviderId → 不注册（不留下无人选择的 provider）')
 }
 
-// 6) 注册面缺失（老/精简宿主）→ 只告警
-{
-  const { ctx } = makeCtx({})
-  const logs = []
-  applyWebSearch(ctx, { getMaxResults: () => 3, log: (m) => logs.push(m) })
-  assert.ok(logs.some((m) => m.includes('registerSearchProvider')), '应告警：' + logs.join(' | '))
-  console.log('PASS  web seam 无 registerSearchProvider → 告警降级')
-}
-
 // 7) provider 契约与条数上限：桩 fetch 喂 Tavily 结果，条数取「请求量与设置上限的较小值」
 {
   const originalFetch = globalThis.fetch
