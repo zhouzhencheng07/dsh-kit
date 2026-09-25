@@ -5,11 +5,14 @@
 // 单文件文本（限长 + 二进制探测）、GET /dsh-kit/raw 原始字节（下载/附件预览）、
 // POST /dsh-kit/fs/op 文件管理（create/rename/move/delete，子树校验见
 // validate.ts）、git 联动端点（status/log/graph/branch/commit/diff）。
+// 另有 GET /dsh-kit-files/config 只读配置快照（client 半边的入口门控与快捷键
+// 真源），字段 = 本组件 Config schema。
 
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
+import { createRequire } from 'node:module'
 
 import { decodePreviewText, sameOrigin, recycleDelete, findProjectRoot } from 'dsh-kit-core'
 import { parseStatusBranch, parseLogRecords, parseBranchList, parseTrack } from './git.ts'
@@ -42,10 +45,129 @@ interface GitRunResult {
 /** 插件设置的运行时形状（loader 按 Config schema 解析后传入 apply 第二参） */
 type KitSettings = Record<string, unknown>
 
+/**
+ * 定位运行中 DSH 的 monorepo 根（含 pnpm-workspace.yaml 的目录），loadDep 的
+ * 第三锚点用。非 DSH 环境返回 null。
+ */
+function findMonorepoRoot(): string | null {
+  const anchor = process.argv[1]
+  if (!anchor) return null
+  const abs = path.isAbsolute(anchor) ? anchor : path.resolve(process.cwd(), anchor)
+  let dir = path.dirname(abs)
+  for (let i = 0; i < 10; i++) {
+    if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) return dir
+    const parent = path.dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return null
+}
+
+/** 多锚点加载宿主运行时依赖（schemastery，不在本包 dependencies 里），同主包口径 */
+function loadDep(spec: string): any {
+  try {
+    return require(spec)
+  } catch {
+    // 落到后续锚点
+  }
+  const anchor = process.argv[1]
+  if (anchor) {
+    const abs = path.isAbsolute(anchor) ? anchor : path.resolve(process.cwd(), anchor)
+    try {
+      return createRequire(abs)(spec)
+    } catch {
+      // 落到 monorepo store
+    }
+  }
+  const root = findMonorepoRoot()
+  if (root) {
+    const pnpm = path.join(root, 'node_modules', '.pnpm')
+    if (fs.existsSync(pnpm)) {
+      let entries: string[] = []
+      try {
+        entries = fs.readdirSync(pnpm)
+      } catch {
+        /* ignore */
+      }
+      for (const e of entries) {
+        if (!(e === spec + '@' || e.startsWith(spec + '@'))) continue
+        const pkgJson = path.join(pnpm, e, 'node_modules', spec, 'package.json')
+        if (!fs.existsSync(pkgJson)) continue
+        try {
+          return createRequire(pkgJson)(spec)
+        } catch {
+          // 试下一个候选版本
+        }
+      }
+    }
+  }
+  return null
+}
+
+// ── 组件设置 schema（0.1.7 声明式模型）──
+// **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile
+// 写入 = 热提交（fiber config 里的稳定 ref），readSettings 统一解引用。默认值与
+// client 半边 F_CFG_DEFAULTS 逐项同值（两处不同步会出现默认值漂移）。
+const schemastery = loadDep('@deepseek-ai/schemastery')
+const z = (schemastery?.default ?? schemastery ?? null) as any
+
+export const Config =
+  z && typeof z.object === 'function'
+    ? z.object({
+        // 文件树总开关（侧栏文件树与文件打开入口）。纯浏览器端消费，宿主不读
+        fileTreeEnabled: z.boolean().default(true).volatile(),
+        // 源代码管理签（状态/差异/提交图谱/分支）总开关
+        sourceControlEnabled: z.boolean().default(true).volatile(),
+        // 文件树全局快捷键（空/非法 → 回默认 Ctrl+,）
+        fileTreeShortcut: z.string().default('Ctrl+,').volatile(),
+        // 源代码管理全局快捷键
+        scShortcut: z.string().default('Ctrl+Alt+.').volatile(),
+      })
+    : undefined
+
 export const name = 'dsh-kit-files'
 
-export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void): void }, _config: KitSettings) {
+export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void): void; effect(fn: () => void | (() => void), label?: string): void }, config: KitSettings = {}) {
+  // volatile 字段在 fiber config 里是稳定 ref（{get}），统一解引用
+  const defaults: KitSettings = Config
+    ? Config({})
+    : { fileTreeEnabled: true, sourceControlEnabled: true, fileTreeShortcut: 'Ctrl+,', scShortcut: 'Ctrl+Alt+.' }
+  const readRef = (v: unknown): any =>
+    v !== null && typeof v === 'object' && typeof (v as { get?: unknown }).get === 'function'
+      ? (v as { get: () => unknown }).get()
+      : v
+  const readSettings = (): any => {
+    const out: Record<string, unknown> = { ...defaults }
+    for (const [key, value] of Object.entries(config ?? {})) out[key] = readRef(value)
+    return out
+  }
+
+  const disposers: Array<() => void> = []
   ctx.inject(['webServer'], (webCtx: KitWebCtx) => {
+    // ── 组件配置快照端点：GET /dsh-kit-files/config ──
+    // client 半边拉它做入口门控与快捷键（同 root 的 /dsh-kit/config 口径）
+    disposers.push(
+      webCtx.webServer.register({
+        kind: 'exact',
+        path: '/dsh-kit-files/config',
+        handler: (req, res) => {
+          const json = (code: number, obj: unknown) => {
+            res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+            res.end(JSON.stringify(obj))
+          }
+          if (req.method !== 'GET') {
+            json(405, { error: 'method not allowed' })
+            return
+          }
+          if (typeof req.headers.origin === 'string' && req.headers.origin !== '' && !sameOrigin(req)) {
+            json(403, { error: 'cross-origin denied' })
+            return
+          }
+          json(200, readSettings())
+        },
+      }),
+    )
+
     webCtx.effect(() => {
       // ── 文件树端点：GET /dsh-kit/tree?path=<绝对目录> ──
       // 只读单层列表（目录+文件，目录在前）。官方 browse RPC（ctx.workspaces
@@ -1096,6 +1218,7 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
       })
 
       return () => {
+        for (const dispose of disposers) dispose()
         disposeTree()
         disposeRead()
         disposeRaw()

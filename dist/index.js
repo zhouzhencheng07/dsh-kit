@@ -148,8 +148,6 @@ const z = (schemastery?.default ?? schemastery ?? null);
 export const Config = z && typeof z.object === 'function'
     ? z.object({
         terminalEnabled: z.boolean().default(true).volatile(),
-        fileTreeEnabled: z.boolean().default(true).volatile(),
-        sourceControlEnabled: z.boolean().default(true).volatile(),
         // 隐藏官方右栏「工作区文件」入口胶囊（纯浏览器端消费，宿主不读）：那只是个
         // 目录按钮，与文件树功能重复；隐藏后文件仍可从对话/文件树/搜索进入
         hideOfficialFilesEntry: z.boolean().default(false).volatile(),
@@ -188,8 +186,6 @@ export const Config = z && typeof z.object === 'function'
         sidebarShortcut: z.string().default('Ctrl+B').volatile(),
         rightbarShortcut: z.string().default('Ctrl+Alt+B').volatile(),
         terminalShortcut: z.string().default('Ctrl+/').volatile(),
-        fileTreeShortcut: z.string().default('Ctrl+,').volatile(),
-        scShortcut: z.string().default('Ctrl+Alt+.').volatile(),
         // 知识库入口（输入行）：语义是开合切换——
         // 开=侧栏索引视图 + 舞台标签，关=两者一起收。日程无侧栏半边、故无快捷键；
         // 右栏开合快捷键同卡（客户端消费 sidebarRight.toggleExpanded）
