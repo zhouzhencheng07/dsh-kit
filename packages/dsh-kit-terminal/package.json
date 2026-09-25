@@ -1,12 +1,15 @@
 {
-  "name": "dsh-kit",
+  "name": "dsh-kit-terminal",
   "version": "0.5.3-alpha.2",
-  "description": "Page capability kit for DeepSeek Harness (dsh): composer-docked file tree / source control / terminal panels for the current session workspace, plus free multi-source web search (merged from dsh-free-search)",
+  "description": "dsh-kit 终端组件：输入行终端入口与底部多标签终端坞（引擎为官方 webTerminals）",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "exports": {
-    ".": "./dist/index.js",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
     "./client": "./client/bundle.js",
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
@@ -15,11 +18,7 @@
     "dist",
     "src",
     "client",
-    "host-vendor",
-    "locale",
-    "cordis.patch.yml",
-    "README.md",
-    "LICENSE"
+    "locale"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -32,29 +31,14 @@
   "dependencies": {
     "dsh-kit-core": "workspace:*"
   },
-  "keywords": [
-    "dsh",
-    "deepseek",
-    "deepseek-harness",
-    "dsh-plugin",
-    "plugin",
-    "terminal",
-    "file-tree",
-    "skills",
-    "skill-pool",
-    "settings",
-    "search",
-    "web-search",
-    "tavily"
-  ],
   "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
     "client": {
       "platform": "web",
       "inject": [
         "slots"
+      ],
+      "external": [
+        "dsh-kit"
       ]
     }
   }

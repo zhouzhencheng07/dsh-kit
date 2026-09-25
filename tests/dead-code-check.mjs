@@ -46,8 +46,20 @@ if (zhStart < 0 || zhEnd < 0) die('找不到 zh 字典锚点（client/bundle.js 
 const enStart = src.indexOf('const en = {')
 if (enStart < 0) die('找不到 en 字典锚点')
 const cssStart = src.indexOf('const UI_CSS = \`')
-const cssEnd = src.indexOf('\`;', cssStart)
-if (cssStart < 0 || cssEnd < 0) die('找不到 UI_CSS 锚点（client/bundle.js 结构变了，哨兵要同步）')
+if (cssStart < 0) die('找不到 UI_CSS 锚点（client/bundle.js 结构变了，哨兵要同步）')
+// CSS 扫描面 = 所有 `<名字>CSS = \`...\`` 模板块（根包 UI_CSS + 各组件包 XXX_CSS）：
+// 类名消费者可能已经随组件搬到别的包，只扫根包会把搬走的规则当成"有定义无引用"
+const cssRegions = []
+{
+  const re = /const [A-Za-z_$][\w$]*CSS = \`/g
+  let m
+  while ((m = re.exec(src)) !== null) {
+    const end = src.indexOf('\`;', m.index)
+    if (end < 0) die('CSS 模板块未闭合（结构变了，哨兵要同步）')
+    cssRegions.push([m.index, end + 2])
+  }
+  if (cssRegions.length < 2) die('只找到 ' + cssRegions.length + ' 个 CSS 模板块，锚点可能失效')
+}
 // render-check 用 body.replace("return module.exports;", "return {...};") 注入导出表，
 // 里面列到的名字算"被测试引用"——否则测试专用的 getKitUi 这类会被误判成零调用。
 // 锚点必须认准那一条（文件里还有别的 return {...}，比如 jsx 桩）
@@ -99,8 +111,16 @@ for (const p of dynamicKeyPrefixes) {
 
 // ── 3) CSS 类 ──
 {
-  const css = src.slice(cssStart, cssEnd)
-  const jsOnly = src.slice(0, cssStart) + src.slice(cssEnd)
+  const css = cssRegions.map(([s, e]) => src.slice(s, e)).join('\n')
+  let jsOnly = ''
+  {
+    let pos = 0
+    for (const [s, e] of cssRegions) {
+      jsOnly += src.slice(pos, s)
+      pos = e
+    }
+    jsOnly += src.slice(pos)
+  }
   const vendorDir = path.join(root, 'client', 'vendor')
   let vendor = ''
   if (fs.existsSync(vendorDir)) {

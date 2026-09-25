@@ -197,7 +197,6 @@ const z = (schemastery?.default ?? schemastery ?? null) as any
 export const Config =
   z && typeof z.object === 'function'
     ? z.object({
-        terminalEnabled: z.boolean().default(true).volatile(),
         // 隐藏官方右栏「工作区文件」入口胶囊（纯浏览器端消费，宿主不读）：那只是个
         // 目录按钮，与文件树功能重复；隐藏后文件仍可从对话/文件树/搜索进入
         hideOfficialFilesEntry: z.boolean().default(false).volatile(),
@@ -232,7 +231,8 @@ export const Config =
         browserEnabled: z.boolean().default(true).volatile(),
         // 会话监视与通知（monitorEnabled/monitorWaitMs/monitorMaxAuto/
         // monitorRepeatThreshold/notifyEnabled）随组件化迁入 dsh-kit-monitor 的
-        // Config（配置页在插件页该组件行）；主包不再消费这些字段。
+        // Config（配置页在插件页该组件行）；终端开关（terminalEnabled）同理随
+        // dsh-kit-terminal 迁出，主包不再消费这两组字段。
         // 键位不在这里：左右栏开合归宿主自带快捷键，本插件的终端/知识库命令在
         // client 半边注册进宿主 shortcuts 服务（官方「快捷键」页录制与持久化）
       })

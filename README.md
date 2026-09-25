@@ -121,10 +121,14 @@ dsh plugin --profile web update dsh-kit
   （Range/206）、`/fs/op`、`/upload`、`/git/*`、`/browser`（内置浏览器 WS）、
   `/schedule/*`、`/vault/*`（知识库）、`/skills`、`/phone/*`（手机网关）、
   `/config`（只读配置快照）等端点
-- `client/bundle.js`：浏览器半边（手写 ModuleLoader bundle，**零构建**）——
-  `conversation.input.left` 注册四个入口钮；官方右栏 `sidebarRightTabs` 注册四类 dock 签、
-  pane 正文经 `sidebar.right.pane.tab` 提供；终端坞引擎为官方 `webTerminals` 服务；
-  配置页注册进插件管理页 `plugins.row.config` 槽位（dsh-kit 行的「配置」控件）
+- `client/bundle.js`：浏览器半边（手写 ModuleLoader bundle，**零构建**）——根包注册知识库
+  入口钮、官方右栏四类 dock 签（pane 正文经 `sidebar.right.pane.tab` 提供）与配置页
+  （`plugins.row.config`）；文件树·源代码管理、终端两组件的入口钮与面板由各自 client 半边
+  自注册（终端坞引擎为官方 `webTerminals` 服务）
+- `packages/*`：组件包（0.5.3 起，行统一由根包 `cordis.patch.yml` insert）——`dsh-kit-core`
+  宿主共享库、`dsh-kit-files`（tree/read/raw/fs-op/git 端点 + 文件树·源代码管理面板）、
+  `dsh-kit-terminal`（终端入口与坞 + `/dsh-kit-terminal/config` 配置快照）、`dsh-kit-monitor`
+  （`/dsh-kit/usage` + 用量芯片 / 429 续跑 / 死循环打断 / 会话通知）
 - `client/vendor/*`：xterm / TipTap 富文本 / KaTeX / qrcode，全部按需懒加载，
   由 `/dsh-kit/vendor/*` 静态伺服
 - `src/web-search.ts` + `src/engine-chain.ts` + `src/engines/*`：向 web seam 注册

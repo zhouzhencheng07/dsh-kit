@@ -148,10 +148,17 @@ appear and the toggles have nothing to open — upgrade dsh first.
   (Range/206), `/fs/op`, `/upload`, `/git/*`, `/browser` (built-in browser WS),
   `/jobs/*`, `/schedule/*`, `/vault/*`, `/skills`, `/phone/*` endpoints
 - `client/bundle.js`: browser side (hand-written ModuleLoader bundle, **no build**) —
-  four toggles on `conversation.input.left`; five dock tab types registered on
-  `sidebarRightTabs` with pane bodies served through `sidebar.right.pane.tab`; the
-  terminal dock renders over the official `webTerminals` engine; settings card on
-  the plugin manager's `plugins.bundle.config` slot
+  the root package registers the vault toggle, the four right-bar dock tab types with
+  pane bodies served through `sidebar.right.pane.tab`, and the config page
+  (`plugins.row.config`); the file-tree / source-control and terminal components
+  register their own toggles and panels from their client halves (the terminal dock
+  renders over the official `webTerminals` engine)
+- `packages/*`: component packages (since 0.5.3; every row is inserted by the root
+  package's `cordis.patch.yml`) — `dsh-kit-core` (host shared library),
+  `dsh-kit-files` (tree/read/raw/fs-op/git endpoints + file tree and source control
+  panels), `dsh-kit-terminal` (terminal toggle and dock + `/dsh-kit-terminal/config`
+  snapshot), `dsh-kit-monitor` (`/dsh-kit/usage` + usage chip / 429 auto-resume /
+  loop breaker / session notifications)
 - `client/vendor/*`: xterm / TipTap rich text / KaTeX / qrcode, all lazily loaded
   and served from `/dsh-kit/vendor/*`
 - `src/web-search.ts` + `src/engine-chain.ts` + `src/engines/*`: registers the
