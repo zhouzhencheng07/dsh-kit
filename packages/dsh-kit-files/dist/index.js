@@ -97,7 +97,7 @@ export const Config = z && typeof z.object === 'function'
         // 文件树全局快捷键（空/非法 → 回默认 Ctrl+,）
         fileTreeShortcut: z.string().default('Ctrl+,').volatile(),
         // 源代码管理全局快捷键
-        scShortcut: z.string().default('Ctrl+Alt+.').volatile(),
+        scShortcut: z.string().default('Ctrl+Shift+.').volatile(),
     })
     : undefined;
 export const name = 'dsh-kit-files';
@@ -105,7 +105,7 @@ export function apply(ctx, config = {}) {
     // volatile 字段在 fiber config 里是稳定 ref（{get}），统一解引用
     const defaults = Config
         ? Config({})
-        : { fileTreeEnabled: true, sourceControlEnabled: true, fileTreeShortcut: 'Ctrl+,', scShortcut: 'Ctrl+Alt+.' };
+        : { fileTreeEnabled: true, sourceControlEnabled: true, fileTreeShortcut: 'Ctrl+,', scShortcut: 'Ctrl+Shift+.' };
     const readRef = (v) => v !== null && typeof v === 'object' && typeof v.get === 'function'
         ? v.get()
         : v;

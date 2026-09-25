@@ -227,7 +227,41 @@ check("手机访问页签：2 Switch + 1 数值 + 1 文本（文本回显受理�
 out = renderCfgTab("kcfgGroupVault", fakeForm);
 check("知识库页签：1 Switch + 1 文本", cfgSw().length === 1 && cfgVf().length === 1);
 out = renderCfgTab("kcfgGroupShortcuts", fakeForm);
-check("快捷键页签：4 文本字段", cfgSw().length === 0 && cfgVf().length === 4);
+const cfgKbd = () => callLog.filter((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-cfgp-kbd");
+check("快捷键页签：4 个组合键录制框（不是文本输入）", cfgSw().length === 0 && cfgVf().length === 0 && cfgKbd().length === 4);
+{
+  const kbd = cfgKbd().find((c) => c[2].id === "dshk-cfgp-sidebarShortcut");
+  check("录制框回显受理键位且是按钮（点它才开始录）", !!kbd && kbd[2].type === "button" && kbd[2].children === "Ctrl+B" && kbd[2]["data-armed"] === undefined);
+  kbd[2].onClick();
+  check("点击录制框进入录制态（capture state = {key}）", stateStore.get(4) != null && stateStore.get(4).key === "sidebarShortcut");
+  // 录制态渲染：框打 data-armed 并换成提示文案；裸键被拒时换提示
+  const renderArmed = (capture) => {
+    stateSeq = 0;
+    stateStore.clear();
+    stateStore.set(3, "kcfgGroupShortcuts");
+    stateStore.set(4, capture);
+    callLog = [];
+    comps.KitConfigPage({ view: "page", form: fakeForm });
+    return cfgKbd().find((c) => c[2].id === "dshk-cfgp-" + capture.key);
+  };
+  const armedBox = renderArmed({ key: "sidebarShortcut", warn: false });
+  check("录制中：方框打标并提示按组合键/Esc 取消", !!armedBox && armedBox[2]["data-armed"] === "" && ["按下组合键…（Esc 取消）", "Press the combo… (Esc cancels)"].includes(armedBox[2].children));
+  const warnBox = renderArmed({ key: "sidebarShortcut", warn: true });
+  check("裸键被拒：方框提示需带修饰键", !!warnBox && ["要带 Ctrl / Alt / Shift / Meta", "Include Ctrl / Alt / Shift / Meta"].includes(warnBox[2].children));
+  stateSeq = 0;
+  stateStore.clear();
+}
+// 组合键口径（录制与匹配同一套）：Shift 化的标点靠 e.code 归一到键面字符——
+// Shift+句点的 e.key 是 ">"，只认 e.key 会让「Ctrl+Shift+.」永远配不上
+{
+  const ev = (o) => Object.assign({ ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, key: "", code: "", isComposing: false }, o);
+  const shiftPeriod = ev({ ctrlKey: true, shiftKey: true, key: ">", code: "Period" });
+  check("comboTextOf 录制 Ctrl+Shift+.（e.key 是 \">\" 也归一成句点）", comps.comboTextOf(shiftPeriod) === "Ctrl+Shift+.");
+  check("comboMatches 命中同一配置（录制口径 = 匹配口径）", comps.comboMatches(shiftPeriod, comps.parseCombo("Ctrl+Shift+.")) === true);
+  check("comboTextOf 录制字母键/拒绝裸键与纯修饰键", comps.comboTextOf(ev({ ctrlKey: true, key: "b", code: "KeyB" })) === "Ctrl+B" && comps.comboTextOf(ev({ key: "b", code: "KeyB" })) === null && comps.comboTextOf(ev({ ctrlKey: true, key: "Control", code: "ControlLeft" })) === null);
+  check("comboMatches 修饰键必须完全一致（少按不命中）", comps.comboMatches(ev({ ctrlKey: true, key: ".", code: "Period" }), comps.parseCombo("Ctrl+Shift+.")) === false);
+  check("配置页录制让路座（shortcutCapture）在场", !!comps.shortcutCapture && comps.shortcutCapture.active === false);
+}
 // 草稿 ops 组装：bool→set、number "4"→set 4、空文本→unset（回 schema 默认）；
 // 保存不受当前页签限制（草稿跨页签），同步前缀即完成 ops 与 revision 围栏
 let capturedOps = null;
