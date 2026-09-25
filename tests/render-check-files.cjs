@@ -352,6 +352,12 @@ check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
   );
   // 两处入口钮的悬停改由 KitTip 出官方气泡，不再自带原生 title
   check("入口钮的悬停不再自带原生 title（全走官方气泡）", !/dshk-enbtn"[\s\S]{0,120}?\n\s*title:/.test(filesSrc));
+  // 行内动作小钮同理：RowActionBtn / SCM 行钮都包 KitTip，行尾一排用 align:end 免得盖住相邻行
+  check(
+    "行内动作钮提示走官方气泡（源码哨兵：RowActionBtn 包 KitTip + align:end）",
+    /function RowActionBtn\(\{ title, onClick, children \}\) \{\s*return jsxRuntime\.jsx\(KitTip, \{\s*label: title,\s*align: "end",/.test(filesSrc) &&
+      !/jsxRuntime\.jsx\("button", \{ type: "button", title: t\("sc(Stage|Unstage|Discard)"\)/.test(filesSrc),
+  );
 }
 
 // —— apply 激活契约 + 官方快捷键注册 + sidebarView 渲染器座桥 ——
