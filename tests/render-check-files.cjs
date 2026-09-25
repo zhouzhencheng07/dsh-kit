@@ -90,6 +90,10 @@ check(
   "dock 跨组件服务座（sidebarView 渲染器座 / inlineEdit 让路座 / diffPane 正文座）形状",
   dockExports.sidebarView && typeof dockExports.sidebarView === "object" && dockExports.sidebarView.renderer === null && dockExports.inlineEdit && dockExports.inlineEdit.active === false && dockExports.diffPane && typeof dockExports.diffPane === "object" && dockExports.diffPane.Component === null,
 );
+check(
+  "dock 组合键共享面（解析/匹配 + 录制让路座）：组件包不再各留一份复刻",
+  typeof dockExports.parseCombo === "function" && typeof dockExports.comboMatches === "function" && typeof dockExports.comboTextOf === "function" && !!dockExports.shortcutCapture && dockExports.shortcutCapture.active === false,
+);
 
 const comps = loadBundle(__dirname + "/../packages/dsh-kit-files/client/bundle.js", (name) => {
   if (name === "react") return reactStub;
@@ -337,6 +341,16 @@ check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
 {
   const filesSrc = fs.readFileSync(__dirname + "/../packages/dsh-kit-files/client/bundle.js", "utf8");
   check("分支按钮不被 .dshk-btn 定宽压扁（width:auto 修正恒在）", filesSrc.includes(".dshk-branchbtn{display:inline-flex;flex:none;width:auto"));
+  // 组件默认键位与宿主 Config schema 同源（两处不同步会出现默认键位漂移）
+  const hostSrc = fs.readFileSync(__dirname + "/../packages/dsh-kit-files/src/index.ts", "utf8");
+  check(
+    "快捷键默认键位 client 与宿主 schema 同源（源代码管理 Ctrl+Shift+.）",
+    filesSrc.includes('scShortcut: "Ctrl+Shift+."') && hostSrc.includes("scShortcut: z.string().default('Ctrl+Shift+.').volatile()") && !hostSrc.includes("Ctrl+Alt+."),
+  );
+  check(
+    "快捷键字段走组合键录制控件（type: \"combo\"，不是文本输入）",
+    filesSrc.includes('{ key: "fileTreeShortcut", type: "combo"') && filesSrc.includes('{ key: "scShortcut", type: "combo"'),
+  );
 }
 
 // —— apply 激活契约 + sidebarView 渲染器座桥 ——

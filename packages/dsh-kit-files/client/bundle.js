@@ -5,7 +5,7 @@
 // /dsh-kit/*）。入口按钮经 slots.inject 自注册，开关 = 本组件自己的 Config
 // （fileTreeEnabled/sourceControlEnabled，经 /dsh-kit-files/config 拉取）；
 // 侧栏浏览区的 tree/git 分支经 kitBase.sidebarView 座交给 root 单槽分发，
-// 全局快捷键（Ctrl+, / Ctrl+Alt+.）在这里自挂，组合键读组件自己的配置。
+// 全局快捷键（Ctrl+, / Ctrl+Shift+.）在这里自挂，组合键读组件自己的配置。
 window.__ModuleLoader__.load({
   id: "dsh-kit-files",
   factory: (require) => {
@@ -21,6 +21,7 @@ window.__ModuleLoader__.load({
       flashToast, writeClipboard, kitGetJson, kitPostJson, kitJson,
       resolveZh, currentComposerShell, chatMentionText,
       expandSidebarNow, TreeRowMenu, TreeFolderIcon, FileTypeIcon16, ChevronIcon,
+      parseCombo, comboMatches,
     } = dock;
     let dswPrimIcons = null;
     try { dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { /* 回退自绘 */ }
@@ -113,9 +114,9 @@ window.__ModuleLoader__.load({
       kcfgSourceControlEnabled: "源代码管理",
       kcfgSourceControlEnabledHint: "源代码管理签（状态/差异/提交图谱/分支）。",
       kcfgFileTreeShortcut: "文件树",
-      kcfgFileTreeShortcutHint: "清空恢复 Ctrl+,。",
+      kcfgFileTreeShortcutHint: "点方框后按组合键；默认 Ctrl+,",
       kcfgScShortcut: "源代码管理",
-      kcfgScShortcutHint: "清空恢复 Ctrl+Alt+.。",
+      kcfgScShortcutHint: "点方框后按组合键；默认 Ctrl+Shift+.（句点）",
     };
     const en = {
       noCwd: "No session workspace available: open or create a session first",
@@ -197,9 +198,9 @@ window.__ModuleLoader__.load({
       kcfgSourceControlEnabled: "Source control",
       kcfgSourceControlEnabledHint: "The source control tab (status, diffs, commit graph, branches).",
       kcfgFileTreeShortcut: "File tree",
-      kcfgFileTreeShortcutHint: "Blank restores Ctrl+,.",
+      kcfgFileTreeShortcutHint: "Click the box, then press the combo; default Ctrl+,",
       kcfgScShortcut: "Source control",
-      kcfgScShortcutHint: "Blank restores Ctrl+Alt+..",
+      kcfgScShortcutHint: "Click the box, then press the combo; default Ctrl+Shift+. (period)",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? key;
@@ -209,41 +210,13 @@ window.__ModuleLoader__.load({
       for (const [name, value] of Object.entries(vars ?? {})) s = s.split("{" + name + "}").join(String(value));
       return s;
     };
-    /** 组合键解析/匹配（root 同款口径的本地复刻，快捷键消费端唯一） */
-    function normComboKey(key) {
-      return key === " " ? "Space" : key.length === 1 ? key.toUpperCase() : key;
-    }
-    function parseCombo(text) {
-      const parts = String(text ?? "").trim().split("+").map((p) => p.trim()).filter(Boolean);
-      if (parts.length < 2) return null;
-      const out = { ctrl: false, alt: false, shift: false, meta: false, key: null };
-      for (const part of parts) {
-        const lower = part.toLowerCase();
-        if (lower === "ctrl" && !out.ctrl) out.ctrl = true;
-        else if (lower === "alt" && !out.alt) out.alt = true;
-        else if (lower === "shift" && !out.shift) out.shift = true;
-        else if (lower === "meta" && !out.meta) out.meta = true;
-        else if (out.key === null) out.key = normComboKey(part);
-        else return null;
-      }
-      return out.key === null ? null : out;
-    }
-    function comboMatches(e, combo) {
-      return (
-        !!e.ctrlKey === combo.ctrl &&
-        !!e.altKey === combo.alt &&
-        !!e.shiftKey === combo.shift &&
-        !!e.metaKey === combo.meta &&
-        normComboKey(e.key) === combo.key
-      );
-    }
 
     // ─────────── 组件配置（/dsh-kit-files/config，Config schema 唯一真源）───────
     const F_CFG_DEFAULTS = {
       fileTreeEnabled: true,
       sourceControlEnabled: true,
       fileTreeShortcut: "Ctrl+,",
-      scShortcut: "Ctrl+Alt+.",
+      scShortcut: "Ctrl+Shift+.",
     };
     let cfgSnap = null;
     const cfgSubs = new Set();
@@ -419,8 +392,8 @@ window.__ModuleLoader__.load({
     const FILES_CFG_FIELDS = [
       { key: "fileTreeEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgFileTreeEnabled", hintKey: "kcfgFileTreeEnabledHint" },
       { key: "sourceControlEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSourceControlEnabled", hintKey: "kcfgSourceControlEnabledHint" },
-      { key: "fileTreeShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgFileTreeShortcut", hintKey: "kcfgFileTreeShortcutHint" },
-      { key: "scShortcut", type: "string", group: "kcfgGroupShortcuts", labelKey: "kcfgScShortcut", hintKey: "kcfgScShortcutHint" },
+      { key: "fileTreeShortcut", type: "combo", group: "kcfgGroupShortcuts", labelKey: "kcfgFileTreeShortcut", hintKey: "kcfgFileTreeShortcutHint" },
+      { key: "scShortcut", type: "combo", group: "kcfgGroupShortcuts", labelKey: "kcfgScShortcut", hintKey: "kcfgScShortcutHint" },
     ];
     const FILES_CFG_GROUPS = ["kcfgGroupFeatures", "kcfgGroupShortcuts"];
     const FilesConfigPage = dock.createConfigPage({
@@ -441,9 +414,9 @@ window.__ModuleLoader__.load({
       },
     });
 
-    // ─────────── 全局快捷键（Ctrl+, / Ctrl+Alt+.，组合键读组件配置）───────
+    // ─────────── 全局快捷键（Ctrl+, / Ctrl+Shift+.，组合键读组件配置）───────
     const onFilesShortcutKey = (e) => {
-      if (dock.inlineEdit.active) return; // 树行改名输入激活时让路
+      if (dock.inlineEdit.active || dock.shortcutCapture.active) return; // 树行改名输入 / 配置页录制组合键时让路
       const cfg = cfgFromSnapshot(getCfgSnapshot());
       const treeCombo = parseCombo(cfg.fileTreeShortcut);
       const scCombo = parseCombo(cfg.scShortcut);

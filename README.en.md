@@ -25,7 +25,7 @@ slot; the conversation column stays put.
   create/rename/delete (to Recycle Bin)/copy path / @-mention to chat; clicking a file
   opens it in the **official right-sidebar preview**, while md pages inside the vault
   go to the read-only knowledge-base reader
-- **Source control** (composer-row toggle / **Ctrl+Alt+.**): an in-page git
+- **Source control** (composer-row toggle / **Ctrl+Shift+.**): an in-page git
   workbench — stage/unstage/discard/commit, click a file to see its diff in a
   right-dock diff tab (full-file coloring; pin any commit from the graph to diff
   against it), branch switch/create/delete, ↑↓ sync (pull then push), commit graph;
@@ -100,7 +100,7 @@ slot; the conversation column stays put.
   unread count is shown in the tab title instead)
 - **Settings card**: dsh-kit config card — per-feature switches, shortcut
   customization (terminal / file tree / source control / knowledge base / both
-  sidebars), hide-the-official-Workspace-Files-entry, search result count, vault directory,
+  sidebars; click the box and **press the combo**, Esc cancels), hide-the-official-Workspace-Files-entry, search result count, vault directory,
   monitor parameters, session notifications and their
   permission, phone access
 
