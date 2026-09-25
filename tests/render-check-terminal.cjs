@@ -93,8 +93,8 @@ const comps = dockExports.terminal;
 
 check("terminal 导出 apply（client 插件形状）与 inject 声明 slots", typeof comps.apply === "function" && Array.isArray(comps.inject) && comps.inject[0] === "slots");
 check(
-  "terminal 导出面齐全（入口/坞/pane/浮层宿主/图标/配置页/会话模型/快捷键）",
-  [comps.TerminalEntry, comps.TerminalDock, comps.TerminalPane, comps.TerminalSurfaces, comps.TerminalIcon, comps.TerminalConfigPage, comps.termTabLabel, comps.makeTerm, comps.toggleTermDock, comps.spawnTerm, comps.killTerm, comps.cfgFromSnapshot, comps.registerShortcuts, comps.xtermTheme].every((fn) => typeof fn === "function"),
+  "terminal 导出面齐全（入口/坞/pane/浮层宿主/图标/会话模型/快捷键）",
+  [comps.TerminalEntry, comps.TerminalDock, comps.TerminalPane, comps.TerminalSurfaces, comps.TerminalIcon, comps.termTabLabel, comps.makeTerm, comps.toggleTermDock, comps.spawnTerm, comps.killTerm, comps.cfgFromSnapshot, comps.registerShortcuts, comps.xtermTheme].every((fn) => typeof fn === "function"),
 );
 
 // —— 图标：与文件树/源代码管理/知识库三枚入口钮同一套描边画法 ——
@@ -179,7 +179,7 @@ check(
   check("坞样式随组件自带（.dshk-dock 与让位规则在本包 CSS，不在根包）", termSrc.includes(".dshk-dock{position:fixed") && termSrc.includes("body.dshk-open [class*=\"_centerCol\"]"));
   check("入口钮的悬停不再自带原生 title（全走官方气泡）", !/dshk-enbtn"[\s\S]{0,120}?\n\s*title:/.test(termSrc));
   const hostSrc = fs.readFileSync(__dirname + "/../src/terminal/index.ts", "utf8");
-  check("宿主 schema 只有 terminalEnabled 且标了 volatile（漏标进不了配置表单）", /terminalEnabled: z\.boolean\(\)\.default\(true\)\.volatile\(\)/.test(hostSrc) && !hostSrc.includes("fileTreeEnabled"));
+  check("终端无独立配置字段（行开关 = 唯一开关，宿主只剩可达性探针）", !hostSrc.includes("terminalEnabled") && hostSrc.includes("/dsh-kit-terminal/config") && !hostSrc.includes("fileTreeEnabled"));
 }
 
 // —— 配置门控 + 官方快捷键注册 + apply 激活契约（配置端点走 fetch 桩）——
@@ -206,10 +206,12 @@ async function checkApply() {
     },
     effect: () => {},
   };
-  let scripted = { terminalEnabled: true };
+  let scripted = {};
+  let failFetch = false;
   const calls = [];
   global.fetch = async (url, opts) => {
     calls.push({ url: String(url), opts: opts || {} });
+    if (failFetch) return { ok: false, status: 404, json: async () => ({}) };
     return { ok: true, status: 200, json: async () => scripted };
   };
   const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -219,19 +221,18 @@ async function checkApply() {
   check("apply 拉自家配置端点喂门控", calls.some((c) => c.url === "/dsh-kit-terminal/config"));
   check("apply 捕获官方终端模型服务与快捷键服务（运行期 inject）", injected.includes("webTerminals") && injected.includes("shortcuts"));
   check(
-    "apply 座席：入口 order 14、坞挂 shell.overlay（order 910）、配置页两种包名口径",
+    "apply 座席：入口 order 14、坞挂 shell.overlay（order 910），无配置页（行开关 = 唯一开关）",
     (() => {
       const entry = seats.find((s) => s.name === "conversation.input.left" && s.id === "dsh-kit-terminal");
       const overlay = seats.find((s) => s.name === "shell.overlay" && s.id === "dsh-kit-terminal");
-      const cfgKeys = seats.filter((s) => s.name === "plugins.row.config").map((s) => s.key);
-      return !!entry && entry.order === 14 && !!overlay && overlay.order === 910 && cfgKeys.includes("dsh-kit#terminal") && cfgKeys.includes("dsh-kit-terminal#terminal");
+      return !!entry && entry.order === 14 && !!overlay && overlay.order === 910 && seats.every((s) => s.name !== "plugins.row.config");
     })(),
   );
-  check("槽位都经 slots.inject 等声明落地（不直接 register）", seatInjects.filter((k) => k === "conversation.input.left").length === 1 && seatInjects.filter((k) => k === "shell.overlay").length === 1 && seatInjects.filter((k) => k === "plugins.row.config").length === 2);
+  check("槽位都经 slots.inject 等声明落地（不直接 register）", seatInjects.filter((k) => k === "conversation.input.left").length === 1 && seatInjects.filter((k) => k === "shell.overlay").length === 1);
 
-  // 配置开：客户端快照生效 → cfgFromSnapshot 真值；入口与坞正常渲染
-  check("cfgFromSnapshot 默认开、端点回包读真值", comps.cfgFromSnapshot(null).terminalEnabled === true && comps.cfgFromSnapshot({ status: "ready", value: { terminalEnabled: true } }).terminalEnabled === true && comps.cfgFromSnapshot({ status: "ready", value: { terminalEnabled: false } }).terminalEnabled === false);
-  check("配置开：TerminalEntry 正常渲染、浮层宿主空列表返回 null", !!comps.TerminalEntry({}) && comps.TerminalSurfaces({}) === null);
+  // 行启用：端点可达 → available；入口与坞正常渲染
+  check("cfgFromSnapshot：未探明乐观可用、404 不可用、就绪可用", comps.cfgFromSnapshot(null).available === true && comps.cfgFromSnapshot({ status: "unavailable" }).available === false && comps.cfgFromSnapshot({ status: "ready" }).available === true);
+  check("行启用：TerminalEntry 正常渲染、浮层宿主空列表返回 null", !!comps.TerminalEntry({}) && comps.TerminalSurfaces({}) === null);
 
   // 快捷键：命令进官方「快捷键」页 + 键帽从宿主目录活读
   const cmd = shortcutCmds.find((c) => c.id === "dsh-kit.terminal.toggle");
@@ -240,28 +241,20 @@ async function checkApply() {
   const resolved = cmd.resolve({ region: "page", modal: null });
   // 会话绑定靠按钮渲染期回填（shortcuts 的 resolve 在渲染之外调用，拿不到会话）
   comps.TerminalEntry({ useSessions: () => ({ id: "s1", cwd: "C:/x" }) });
-  check("配置开：resolve handled，run 开坞并绑当前会话（按钮渲染期回填）", resolved.status === "handled" && (resolved.run(), dockExports.getKitUi().termDockOpen === true && dockExports.getKitUi().terminals.length === 1 && dockExports.getKitUi().terminals[0].sessionId === "s1"));
+  check("行启用：resolve handled，run 开坞并绑当前会话（按钮渲染期回填）", resolved.status === "handled" && (resolved.run(), dockExports.getKitUi().termDockOpen === true && dockExports.getKitUi().terminals.length === 1 && dockExports.getKitUi().terminals[0].sessionId === "s1"));
   dockExports.setKitUi({ terminals: [], activeTermId: null, termDockOpen: false });
   const tipEl = dockExports.KitTip({ label: "终端", command: "dsh-kit.terminal.toggle", side: "top", children: jsxRuntimeStub.jsx("button", { type: "button" }) });
   check("键帽座跨包共享：root 的 KitTip 读得到本组件命令的键位", tipEl.type === primStub.Tooltip && tipEl.props.shortcutKeys.join("") === "Ctrl+Alt+`" && tipEl.props.children.props["aria-keyshortcuts"] === "Control+Alt+`");
 
-  // 配置页（plugins.row.config）：字段清单与宿主 schema 同源，summary 视图 null
-  check("配置页字段清单与内置默认同源（唯一字段 terminalEnabled）", comps.TERMINAL_CFG_FIELDS.length === 1 && comps.TERMINAL_CFG_FIELDS[0].key === "terminalEnabled" && Object.keys(comps.T_CFG_DEFAULTS).join(",") === "terminalEnabled");
-  check("TerminalConfigPage summary 视图返回 null", comps.TerminalConfigPage({ view: "summary", form: null }) === null);
-  callLog = [];
-  const cfgPage = comps.TerminalConfigPage({ view: "page", form: { state: { status: "ready", value: { terminalEnabled: true }, revision: 1, writable: true }, mutate: async () => true } });
-  const sw = callLog.find((c) => c[1] === primStub.Switch);
-  check("配置页渲染出终端开关（官方表单原语 + 中文/英文文案）", !!cfgPage && !!sw && sw[2].checked === true && ["终端面板", "Terminal panel"].includes(sw[2].label));
-
-  // 配置关：入口与坞都不渲染，命令 blocked 带说明，已有会话被清场
+  // 行禁用（端点 404）：入口与坞都不渲染，命令 blocked 带说明，已有会话被清场
   dockExports.setKitUi(comps.spawnTerm({ terminals: [], activeTermId: null, termDockOpen: false }, "s1", "C:/x"));
-  scripted = { terminalEnabled: false };
+  failFetch = true;
   await comps.apply(ctxStub);
   await tick();
-  check("配置关：TerminalEntry 渲染 null（入口消失）", comps.TerminalEntry({}) === null);
+  check("行禁用：TerminalEntry 渲染 null（入口消失）", comps.TerminalEntry({}) === null);
   const offResolve = shortcutCmds[shortcutCmds.length - 1].resolve({ region: "page", modal: null });
-  check("配置关：命令 resolve blocked 并带说明（不吞键也不动作）", offResolve.status === "blocked" && typeof offResolve.reason === "string" && offResolve.reason.length > 0);
-  check("配置关：浮层宿主清场（结束全部终端会话）", dockExports.getKitUi().terminals.length === 0 && dockExports.getKitUi().termDockOpen === false && comps.TerminalSurfaces({}) === null);
+  check("行禁用：命令 resolve blocked 并带说明（不吞键也不动作）", offResolve.status === "blocked" && typeof offResolve.reason === "string" && offResolve.reason.length > 0);
+  check("行禁用：浮层宿主清场（结束全部终端会话）", dockExports.getKitUi().terminals.length === 0 && dockExports.getKitUi().termDockOpen === false && comps.TerminalSurfaces({}) === null);
 }
 
 checkApply().then(() => {

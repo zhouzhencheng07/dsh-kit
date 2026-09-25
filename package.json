@@ -11,14 +11,17 @@
       "types": "./dist/files/index.d.ts",
       "default": "./dist/files/index.js"
     },
+    "./files/locale/*.json": "./locale/files/*.json",
     "./terminal": {
       "types": "./dist/terminal/index.d.ts",
       "default": "./dist/terminal/index.js"
     },
+    "./terminal/locale/*.json": "./locale/terminal/*.json",
     "./monitor": {
       "types": "./dist/monitor/index.d.ts",
       "default": "./dist/monitor/index.js"
     },
+    "./monitor/locale/*.json": "./locale/monitor/*.json",
     "./client": "./client/bundle.js",
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
