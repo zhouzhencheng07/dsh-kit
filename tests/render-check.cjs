@@ -227,7 +227,7 @@ check("KitConfigPage 页签切换落 state", stateStore.get(3) === "kcfgGroupVau
 const cfgFrm = callLog.find((c) => c[1] === primStub.SettingsForm);
 check("KitConfigPage SettingsForm 框架：labels/state/保存动作齐全", !!cfgFrm && typeof cfgFrm[2].onSave === "function" && typeof cfgFrm[2].onDiscard === "function" && cfgFrm[2].state.available === true && cfgFrm[2].state.writable === true && cfgFrm[2].state.dirty === false && !!cfgFrm[2].labels.save && !!cfgFrm[2].labels.readOnly && !!cfgFrm[2].labels.saveFailed);
 const cfgPanel = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-cfgp-fields");
-check("功能开关页签：6 Switch + 1 数值字段 + 面板 aria 挂到当前组", cfgSw().length === 6 && cfgVf().length === 1 && !!cfgPanel && cfgPanel[2].id === "dshk-cfgp-panel-kcfgGroupFeatures" && cfgPanel[2].role === "tabpanel");
+check("功能开关页签：5 Switch + 1 数值字段 + 面板 aria 挂到当前组", cfgSw().length === 5 && cfgVf().length === 1 && !!cfgPanel && cfgPanel[2].id === "dshk-cfgp-panel-kcfgGroupFeatures" && cfgPanel[2].role === "tabpanel");
 const cfgSmField = cfgVf().find((c) => c[2].id === "dshk-cfgp-searchMaxResults");
 check("数值字段回显受理值（searchMaxResults=3）", !!cfgSmField && cfgSmField[2].text === "3" && cfgSmField[2].numeric === true && cfgSmField[2].overridden === false);
 check("Switch 行回显布尔值且带说明文案（终端开关已随组件迁走，首位是技能页）", cfgSw()[0][2].checked === true && ["技能管理页", "Skills manager page"].includes(cfgSw()[0][2].label));
@@ -1194,7 +1194,7 @@ check("SkillsManager 带cwd渲染无异常", !!out && typeof out === "object");
     compared++;
     if (comps.CFG_DEFAULTS[key] !== expected) drift.push(key + "(bundle=" + comps.CFG_DEFAULTS[key] + ",host=" + expected + ")");
   }
-  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 12);
+  check("内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "；schema 独有 " + (missing.join("/") || "无") + "）", drift.length === 0 && missing.length === 0 && compared >= 11);
 }
 // 过时文案清理：现行说明不得出现「侧栏底部『任务』钮」、日程索引标题键、搜索默认 5
 check(

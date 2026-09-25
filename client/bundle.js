@@ -944,7 +944,6 @@ window.__ModuleLoader__.load({
     // 快捷键不在这里：键位注册进官方 shortcuts 服务（见 registerShortcuts），
     // 录制与持久化归官方「快捷键」页。
     const CFG_DEFAULTS = {
-      hideOfficialFilesEntry: false,
       hideOfficialBrowserEntry: false,
       chatOpenLinkInBrowser: true,
       skillsPageEnabled: true,
@@ -963,7 +962,6 @@ window.__ModuleLoader__.load({
       if (!snap || snap.status !== "ready" || !snap.value || typeof snap.value !== "object") return { ...CFG_DEFAULTS };
       const v = snap.value;
       return {
-        hideOfficialFilesEntry: v.hideOfficialFilesEntry === true,
         hideOfficialBrowserEntry: v.hideOfficialBrowserEntry === true,
         chatOpenLinkInBrowser: v.chatOpenLinkInBrowser === true,
         skillsPageEnabled: v.skillsPageEnabled !== false,
@@ -1620,8 +1618,6 @@ window.__ModuleLoader__.load({
       kcfgBrowserEnabledHint: "内置浏览器工具与面板；改后重启生效。",
       kcfgChatOpenLinkInBrowser: "对话链接改投内置浏览器",
       kcfgChatOpenLinkInBrowserHint: "对话里点 http(s) 链接改在内置浏览器打开。",
-      kcfgHideOfficialFilesEntry: "隐藏官方「工作区文件」入口",
-      kcfgHideOfficialFilesEntryHint: "那只是个目录按钮；隐藏后文件仍可从对话/文件树/搜索进入。",
       kcfgHideOfficialBrowserEntry: "隐藏官方「浏览器」入口",
       kcfgHideOfficialBrowserEntryHint: "避免与内置浏览器重复。",
       kcfgPhoneEnabled: "「手机访问」页入口",
@@ -1829,8 +1825,6 @@ window.__ModuleLoader__.load({
       kcfgBrowserEnabledHint: "Built-in browser tools and panel; takes effect after a restart.",
       kcfgChatOpenLinkInBrowser: "Open chat links in the built-in browser",
       kcfgChatOpenLinkInBrowserHint: "http(s) links in chat open in the built-in browser.",
-      kcfgHideOfficialFilesEntry: "Hide the official Workspace files entry",
-      kcfgHideOfficialFilesEntryHint: "That entry is just a directory button; files stay reachable from chat, the tree, and search.",
       kcfgHideOfficialBrowserEntry: "Hide the official Browser entry",
       kcfgHideOfficialBrowserEntryHint: "Avoids duplicating the built-in browser.",
       kcfgPhoneEnabled: "Show the Phone access page",
@@ -1944,8 +1938,6 @@ window.__ModuleLoader__.load({
 .dshk-preview-dl{appearance:none;background:transparent;border:0;color:var(--dsw-alias-label-secondary);width:28px;height:28px;border-radius:28px;cursor:pointer;flex:none;display:inline-flex;align-items:center;justify-content:center;padding:6px;line-height:1}
 .dshk-preview-dl:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-preview-dl svg{width:15px;height:15px;display:block}
-/* 隐藏官方右栏「工作区文件」入口（hideOfficialFilesEntry 开时 body 挂标记类） */
-body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:none}
 /* 隐藏官方右栏「浏览器」入口（hideOfficialBrowserEntry）：iframe 预览框，站点覆盖面天然受限 */
 body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{display:none}
 /* 多终端：入口图标数量角标 + 标签条 + 堆叠 pane（隐藏 pane 离屏缓冲输出） */
@@ -5829,17 +5821,15 @@ ellipsis，窄列只截字不破版 */
         };
       }, [ui.treeOpen, ui.gitOpen, ui.vaultIdxOpen, cwd, rightbarUp]);
 
-      // 隐藏官方右栏「工作区文件」入口（hideOfficialFilesEntry）：那只是个目录
-      // 按钮，与文件树功能重复。body 标记 + CSS display:none，锚点
-      // data-sidebar-right-guide-entry 是官方胶囊的稳定属性（旧置灰方案同款）
+      // 隐藏官方右栏「浏览器」入口（hideOfficialBrowserEntry）：body 标记 + CSS
+      // display:none，锚点 data-sidebar-right-guide-entry 是官方胶囊的稳定属性
+      // （旧置灰方案同款）。「工作区文件」入口的同类标记归 dsh-kit-files 组件
       react.useEffect(() => {
-        document.body.classList.toggle("dshk-hide-official-files", cfg.hideOfficialFilesEntry === true);
         document.body.classList.toggle("dshk-hide-official-browser", cfg.hideOfficialBrowserEntry === true);
         return () => {
-          document.body.classList.remove("dshk-hide-official-files");
           document.body.classList.remove("dshk-hide-official-browser");
         };
-      }, [cfg.hideOfficialFilesEntry, cfg.hideOfficialBrowserEntry]);
+      }, [cfg.hideOfficialBrowserEntry]);
 
       // Esc 分层：先关当前激活那张文档签（知识库关当前页那张、文件关当前文件那张），
       // 再关侧栏视图，最后收起终端坞（不拦截，避免挡掉其它 Esc 行为）。功能签归官方
@@ -6409,7 +6399,6 @@ ellipsis，窄列只截字不破版 */
       { key: "searchMaxResults", type: "number", min: 1, max: 8, group: "kcfgGroupFeatures", labelKey: "kcfgSearchMaxResults", hintKey: "kcfgSearchMaxResultsHint" },
       { key: "browserEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgBrowserEnabled", hintKey: "kcfgBrowserEnabledHint" },
       { key: "chatOpenLinkInBrowser", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgChatOpenLinkInBrowser", hintKey: "kcfgChatOpenLinkInBrowserHint" },
-      { key: "hideOfficialFilesEntry", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgHideOfficialFilesEntry", hintKey: "kcfgHideOfficialFilesEntryHint" },
       { key: "hideOfficialBrowserEntry", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgHideOfficialBrowserEntry", hintKey: "kcfgHideOfficialBrowserEntryHint" },
       { key: "phoneEnabled", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneEnabled", hintKey: "kcfgPhoneEnabledHint" },
       { key: "phonePort", type: "number", min: 1, max: 65535, group: "kcfgGroupPhone", labelKey: "kcfgPhonePort", hintKey: "kcfgPhonePortHint" },
@@ -6666,6 +6655,8 @@ ellipsis，窄列只截字不破版 */
       kcfgFileTreeEnabledHint: "侧栏文件树与文件打开入口的总开关。",
       kcfgSourceControlEnabled: "源代码管理",
       kcfgSourceControlEnabledHint: "源代码管理签（状态/差异/提交图谱/分支）。",
+      kcfgHideOfficialFilesEntry: "隐藏官方「工作区文件」入口",
+      kcfgHideOfficialFilesEntryHint: "那只是个目录按钮；隐藏后文件仍可从对话/文件树/搜索进入。",
       // 命令名复用面板标题（treeLabel/scTitle）；这两条是官方「快捷键」页里
       // 「按不动」时显示的说明
       scTreeOff: "文件树已在配置页关闭",
@@ -6764,6 +6755,8 @@ ellipsis，窄列只截字不破版 */
       kcfgFileTreeEnabledHint: "Master switch for the sidebar file tree and file entries.",
       kcfgSourceControlEnabled: "Source control",
       kcfgSourceControlEnabledHint: "The source control tab (status, diffs, commit graph, branches).",
+      kcfgHideOfficialFilesEntry: "Hide the official Workspace files entry",
+      kcfgHideOfficialFilesEntryHint: "That entry is just a directory button; files stay reachable from chat, the tree, and search.",
       scTreeOff: "File tree is switched off in the config page",
       scScmOff: "Source control is switched off in the config page",
       scNoSeat: "Not in a conversation",
@@ -6790,6 +6783,7 @@ ellipsis，窄列只截字不破版 */
     const F_CFG_DEFAULTS = {
       fileTreeEnabled: true,
       sourceControlEnabled: true,
+      hideOfficialFilesEntry: false,
     };
     let cfgSnap = null;
     const cfgSubs = new Set();
@@ -6826,6 +6820,7 @@ ellipsis，窄列只截字不破版 */
       const v = snap.value;
       out.fileTreeEnabled = v.fileTreeEnabled !== false;
       out.sourceControlEnabled = v.sourceControlEnabled !== false;
+      out.hideOfficialFilesEntry = v.hideOfficialFilesEntry === true;
       return out;
     }
     /** 配置关但侧栏视图还开着（配置页保存 / entry 重启瞬间）：立即归位，文件随来源清掉 */
@@ -6835,9 +6830,18 @@ ellipsis，窄列只截字不破版 */
       if (!cfg.fileTreeEnabled && ui.treeOpen) setKitUi({ treeOpen: false, files: [], activeFile: null });
       if (!cfg.sourceControlEnabled && ui.gitOpen) setKitUi({ gitOpen: false, files: [], activeFile: null });
     }
+    /** 隐藏官方右栏「工作区文件」入口：body 标记 + FILES_CSS 的 display:none。
+        锚点 data-sidebar-right-guide-entry 是官方胶囊的稳定属性（失效形态 = 静默不隐藏） */
+    function syncOfficialFilesMask() {
+      if (typeof document === "undefined" || !document.body) return;
+      document.body.classList.toggle("dshk-hide-official-files", cfgFromSnapshot(getCfgSnapshot()).hideOfficialFilesEntry === true);
+    }
 
     // ─────────── 组件样式 ───────────
     const FILES_CSS = `
+/* 隐藏官方右栏「工作区文件」入口（hideOfficialFilesEntry 开时 body 挂标记类）：
+   那只是个目录按钮，与文件树功能重复 */
+body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:none}
 /* 文件树：作为 sidebar.workspaces 单槽 occupant 填满侧边栏浏览区（非浮层）。
    行/箭头对齐原生工作区树（Radius 8、padding 0 8、gap 6、hover 用 interactive-bg-hover） */
 .dshk-tree{width:100%;height:100%;display:flex;flex-direction:column;pointer-events:auto}
@@ -6957,6 +6961,7 @@ ellipsis，窄列只截字不破版 */
     const FILES_CFG_FIELDS = [
       { key: "fileTreeEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgFileTreeEnabled", hintKey: "kcfgFileTreeEnabledHint" },
       { key: "sourceControlEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSourceControlEnabled", hintKey: "kcfgSourceControlEnabledHint" },
+      { key: "hideOfficialFilesEntry", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgHideOfficialFilesEntry", hintKey: "kcfgHideOfficialFilesEntryHint" },
     ];
     const FILES_CFG_GROUPS = ["kcfgGroupFeatures"];
     const FilesConfigPage = dock.createConfigPage({
@@ -8975,6 +8980,9 @@ ellipsis，窄列只截字不破版 */
       // 官方快捷键服务（0.1.7-rc.2+）：文件树/源代码管理两条命令注册进官方页。
       // 运行期 inject：老宿主没有该服务时只是没键位，其余功能照常。
       ctx.inject(["shortcuts"], registerShortcuts);
+      // 官方入口掩码跟随本组件配置：配置页保存 → 重拉快照 → 广播 → 标记类即时切换
+      subscribeCfg(syncOfficialFilesMask);
+      syncOfficialFilesMask();
       void loadCfg(); // 拉配置喂门控（失败保持内置默认）
       injectStyles();
     }
@@ -8995,6 +9003,9 @@ ellipsis，窄列只截字不破版 */
     exports.fetchTree = fetchTree;
     exports.FileTreeEntry = FileTreeEntry;
     exports.ScmEntry = ScmEntry;
+    // 配置面（内置默认表 / 组件行配置页）供测试断言与宿主默认同源比对
+    exports.F_CFG_DEFAULTS = F_CFG_DEFAULTS;
+    exports.FilesConfigPage = FilesConfigPage;
     return module.exports;
 };
 

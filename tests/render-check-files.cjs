@@ -13,6 +13,8 @@ if (!global.localStorage) {
   const store = new Map();
   global.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(String(k), String(v)), removeItem: (k) => store.delete(k) };
 }
+// body 标记类的 toggle 记录（官方「工作区文件」入口掩码随组件配置切换）
+const bodyClassLog = [];
 if (!global.document) {
   global.document = {
     visibilityState: "visible",
@@ -23,7 +25,7 @@ if (!global.document) {
     querySelector: () => null,
     createElement: () => ({ className: "", textContent: "", dataset: {}, setAttribute: () => {}, removeAttribute: () => {}, remove: () => {}, style: {} }),
     head: { appendChild: () => {} },
-    body: { classList: { add() {}, remove() {} }, appendChild: () => {} },
+    body: { classList: { add() {}, remove() {}, toggle: (cls, on) => bodyClassLog.push([cls, on === true]) }, appendChild: () => {} },
   };
 }
 if (!global.window) global.window = { innerWidth: 1600, requestAnimationFrame: () => 0, setTimeout: () => 0, clearTimeout: () => {} };
@@ -355,6 +357,41 @@ check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
   );
 }
 
+// —— 官方「工作区文件」入口掩码：规则与字段都住本组件（root 只留浏览器入口的同类规则）——
+{
+  const bundleSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
+  const uiCssStart = bundleSrc.indexOf("const UI_CSS = `");
+  const uiCss = bundleSrc.slice(uiCssStart, bundleSrc.indexOf("`;", uiCssStart));
+  const hostSrc = fs.readFileSync(__dirname + "/../src/files/index.ts", "utf8");
+  check(
+    "掩码 CSS 随字段搬进本组件（根 UI_CSS 只剩浏览器入口那条）",
+    uiCss.includes("body.dshk-hide-official-browser") && !uiCss.includes("dshk-hide-official-files") &&
+      bundleSrc.includes('body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:none}'),
+  );
+  check(
+    "掩码跟着配置快照活切（apply 订阅 + 标记类按快照 toggle）",
+    bundleSrc.includes("subscribeCfg(syncOfficialFilesMask)") &&
+      bundleSrc.includes('document.body.classList.toggle("dshk-hide-official-files"'),
+  );
+  // 组件内置默认与宿主 schema（src/files/index.ts）逐项同值：改必须两处同改，
+  // 漂移即红（root 侧同款比对在 render-check.cjs）
+  const drift = [];
+  let compared = 0;
+  for (const m of hostSrc.matchAll(/^ {8}(\w+): z\.(?:boolean|number|string)\(\)[^,\n]*\.default\(([^)]*)\)\.volatile\(\),?$/gm)) {
+    const key = m[1];
+    const raw = m[2].trim();
+    const expected =
+      raw === "true" ? true : raw === "false" ? false : /^-?\d+$/.test(raw) ? Number(raw) : /^'[^']*'$/.test(raw) ? raw.slice(1, -1) : undefined;
+    if (expected === undefined) continue;
+    compared++;
+    if (!Object.prototype.hasOwnProperty.call(comps.F_CFG_DEFAULTS, key) || comps.F_CFG_DEFAULTS[key] !== expected) drift.push(key);
+  }
+  check(
+    "组件内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "）",
+    drift.length === 0 && compared === Object.keys(comps.F_CFG_DEFAULTS).length,
+  );
+}
+
 // —— apply 激活契约 + 官方快捷键注册 + sidebarView 渲染器座桥 ——
 async function checkApply() {
   const registered = [];
@@ -390,6 +427,26 @@ async function checkApply() {
   check("files 槽位座席：源代码管理入口 order 11", seat("dsh-kit-scm") && seat("dsh-kit-scm").order === 11);
   const cfgKeys = registered.filter((s) => s.name === "plugins.row.config").map((s) => s.key);
   check("files 配置页挂本组件行（单包单口径 key）", cfgKeys.includes("dsh-kit#files") && cfgKeys.length === 1);
+  // 官方「工作区文件」入口掩码随本组件配置走（字段从根包 Config 迁来）：apply 期按
+  // 快照切 body 标记类，内置默认 false → 不挂
+  check(
+    "apply 期同步官方入口掩码（内置默认 false = 不挂标记类）",
+    bodyClassLog.some(([cls, on]) => cls === "dshk-hide-official-files" && on === false),
+  );
+  check(
+    "掩码字段归本组件配置页（根配置页与默认表已交出）",
+    (() => {
+      const bundleSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
+      const fieldsStart = bundleSrc.indexOf("const KIT_CFG_FIELDS = [");
+      const rootFields = bundleSrc.slice(fieldsStart, bundleSrc.indexOf("const KIT_CFG_GROUPS", fieldsStart));
+      const defaultsStart = bundleSrc.indexOf("const CFG_DEFAULTS = {");
+      const rootDefaults = bundleSrc.slice(defaultsStart, bundleSrc.indexOf("};", defaultsStart));
+      return (
+        !rootFields.includes("hideOfficialFilesEntry") && !rootDefaults.includes("hideOfficialFilesEntry") &&
+        comps.F_CFG_DEFAULTS.hideOfficialFilesEntry === false && typeof comps.FilesConfigPage === "function"
+      );
+    })(),
+  );
   // 官方快捷键注册（不经自挂 keydown）：两条命令进官方「快捷键」页
   const sc = (id) => shortcutCmds.find((c) => c.id === id);
   const treeCmd = sc("dsh-kit-files.tree.toggle");
