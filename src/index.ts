@@ -40,7 +40,6 @@ import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 
-import { applySkillPool } from './skill-pool.ts'
 import { applyOpenCodeSessionHeader } from './core/index.ts'
 import { applyWebSearch } from './web-search.ts'
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from './phone-gateway.ts'
@@ -61,8 +60,7 @@ const require = createRequire(import.meta.url)
 
 // ── 宿主对象最小依赖面 ──
 // cordis ctx / webServer / settings 等都是运行时才挂载的宿主组合对象，类型不随
-// 插件分发；这里只声明本插件实际触达的成员（与 browser-tools.ts / skill-pool.ts
-// 同一约定）。inject 回调的 services 袋按 any 传入，各回调自行具化参数类型。
+// 插件分发；这里只声明本插件实际触达的成员（与 browser-tools.ts 同一约定）。inject 回调的 services 袋按 any 传入，各回调自行具化参数类型。
 
 interface KitCtx {
   inject(deps: string[], cb: (svc: any) => void): void
@@ -201,7 +199,6 @@ export const Config =
         // 对话里的 http(s) 链接点击改投内置浏览器（默认开）。门控在浏览器半边（需要
         // browserEnabled 同时开），宿主只提供 /dsh-kit/browser/open 这条管道
         chatOpenLinkInBrowser: z.boolean().default(true).volatile(),
-        skillsPageEnabled: z.boolean().default(true).volatile(),
         searchEnabled: z.boolean().default(true).volatile(),
         searchMaxResults: z.number().step(1).min(1).max(8).default(2).volatile(),
         // phoneEnabled = 「手机访问」页入口可见性（纯显示开关）。
@@ -293,13 +290,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
     getMaxResults: () => readSettings().searchMaxResults,
   })
 
-  // 技能池端点（实现见 src/skill-pool.ts）：自带 webServer 注入与同源校验。
-  // skills 注册表是可选增强（归属展示），服务晚于本行就绪也无碍——注入回调捕获引用。
-  let skillsRegistry: unknown = null
-  ctx.inject(['skills'], (skillsCtx: { skills: unknown }) => {
-    skillsRegistry = skillsCtx.skills
-  })
-  applySkillPool(ctx, { getRegistry: () => skillsRegistry })
+  // 技能池端点已随组件化迁入 dsh-kit/skills（src/skills/），主包不再装配。
   // OpenCode Go 会话头按会话注入（实现见 src/opencode-session.ts）
   applyOpenCodeSessionHeader(ctx, (m) => console.warn(`dsh-kit: ${m}`))
 

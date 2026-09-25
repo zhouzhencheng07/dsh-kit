@@ -107,11 +107,13 @@ slot; the conversation column stays put.
   and toolbars point down, the bottom dock and the composer row point up, row-end buttons align end;
   commands carry their current keys and follow rebinding) — plain truncation hints keep the native
   `title`
-- **Config pages**: every dsh-kit component row in the Plugins page has its own config page —
-  the main row covers per-feature switches, search result count, vault directory, session
-  notifications and phone access; the **file tree · source control row** covers the file-tree
-  and source-control switches plus hiding the official Workspace Files entry. Saving writes to
-  the profile and takes effect immediately (a few startup-time gates need a dsh restart)
+- **Config pages**: component rows that take settings each carry their own config page in the
+  Plugins page — the main row covers per-feature switches, search result count, vault directory,
+  session notifications and phone access; the **file tree · source control row** covers the
+  file-tree and source-control switches plus hiding the official Workspace Files entry. The
+  **terminal** and **skills** rows have no config field (the row switch is the only switch —
+  turning it off hides the entry). Saving writes to the profile and takes effect immediately
+  (a few startup-time gates need a dsh restart)
 
 ## Install & update
 
@@ -147,19 +149,20 @@ appear and the toggles have nothing to open — upgrade dsh first.
 
 - `src/*.ts` → `dist/` (committed tsc output): host side — `/tree`, `/read`, `/raw`
   (Range/206), `/fs/op`, `/upload`, `/git/*`, `/browser` (built-in browser WS),
-  `/jobs/*`, `/schedule/*`, `/vault/*`, `/skills`, `/phone/*` endpoints
+  `/jobs/*`, `/schedule/*`, `/vault/*`, `/skills` (skill pool), `/phone/*` endpoints
 - `client/bundle.js`: browser side (hand-written ModuleLoader bundle, **no build**) —
   the root package registers the vault toggle, the four right-bar dock tab types with
   pane bodies served through `sidebar.right.pane.tab`, and the config page
   (`plugins.row.config`); the client halves of the file-tree / source-control,
-  terminal and usage-monitor components live in this same bundle as component
+  terminal, skills and usage-monitor components live in this same bundle as component
   modules (the terminal dock renders over the official `webTerminals` engine)
-- `src/core`, `src/files`, `src/terminal`, `src/monitor`: component boundaries as
-  directories (0.5.3 single-package components — a component is a patch row, not a
+- `src/core`, `src/files`, `src/skills`, `src/terminal`, `src/monitor`: component
+  boundaries as directories (0.5.3 single-package components — a component is a patch row, not a
   package) — `core` is the host shared library; `files` serves tree/read/raw/fs-op/
-  git endpoints + file tree and source control panels; `terminal` serves the
-  `/dsh-kit-terminal/config` snapshot (terminal toggle and dock); `monitor` serves
-  `/dsh-kit/usage` + usage chip / 429 auto-resume / loop breaker / session
+  git endpoints + file tree and source control panels; `skills` serves `/dsh-kit/skills` and
+  `/dsh-kit/skills/op` plus the `/dsh-kit-skills/config` probe (skill-pool manager page);
+  `terminal` serves the `/dsh-kit-terminal/config` probe (terminal toggle and dock);
+  `monitor` serves `/dsh-kit/usage` + usage chip / 429 auto-resume / loop breaker / session
   notifications. Rows are materialized by the root `cordis.patch.yml` through
   package exports subpaths (`dsh-kit/files` etc.)
 - `client/vendor/*`: xterm / TipTap rich text / KaTeX / qrcode, all lazily loaded

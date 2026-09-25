@@ -38,7 +38,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { applySkillPool } from "./skill-pool.js";
 import { applyOpenCodeSessionHeader } from "./core/index.js";
 import { applyWebSearch } from "./web-search.js";
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from "./phone-gateway.js";
@@ -151,7 +150,6 @@ export const Config = z && typeof z.object === 'function'
         // 对话里的 http(s) 链接点击改投内置浏览器（默认开）。门控在浏览器半边（需要
         // browserEnabled 同时开），宿主只提供 /dsh-kit/browser/open 这条管道
         chatOpenLinkInBrowser: z.boolean().default(true).volatile(),
-        skillsPageEnabled: z.boolean().default(true).volatile(),
         searchEnabled: z.boolean().default(true).volatile(),
         searchMaxResults: z.number().step(1).min(1).max(8).default(2).volatile(),
         // phoneEnabled = 「手机访问」页入口可见性（纯显示开关）。
@@ -239,13 +237,7 @@ export async function apply(ctx, config = {}) {
         getEnabled: () => readSettings().searchEnabled !== false,
         getMaxResults: () => readSettings().searchMaxResults,
     });
-    // 技能池端点（实现见 src/skill-pool.ts）：自带 webServer 注入与同源校验。
-    // skills 注册表是可选增强（归属展示），服务晚于本行就绪也无碍——注入回调捕获引用。
-    let skillsRegistry = null;
-    ctx.inject(['skills'], (skillsCtx) => {
-        skillsRegistry = skillsCtx.skills;
-    });
-    applySkillPool(ctx, { getRegistry: () => skillsRegistry });
+    // 技能池端点已随组件化迁入 dsh-kit/skills（src/skills/），主包不再装配。
     // OpenCode Go 会话头按会话注入（实现见 src/opencode-session.ts）
     applyOpenCodeSessionHeader(ctx, (m) => console.warn(`dsh-kit: ${m}`));
     // agents 注册表（dsh-agent，宿主组合里的可选服务）：浏览器工具的分区解析

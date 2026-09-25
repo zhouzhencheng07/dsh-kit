@@ -82,10 +82,11 @@
   （需要 DSH 0.1.7-rc.2+；老宿主上这几条键位不存在）。插件里**悬停提示统一是官方气泡**
   （方向按官方口径：面板头/工具条朝下、底部 dock 与输入行朝上、行尾动作钮右对齐；有命令的带
   当前键位，改键后跟着变），纯文本截断提示仍走原生 title
-- **配置**：插件页（侧栏「插件」）里每个 dsh-kit 组件行各带自己的「配置」页——主行管各功能
-  开关、搜索结果条数、知识库目录、会话通知、手机访问；**文件树 · 源代码管理行**管文件树 /
-  源代码管理开关与「隐藏官方『工作区文件』入口」；保存即写入
-  profile 并热生效（部分启动期门控在重启 dsh 后生效）
+- **配置**：插件页（侧栏「插件」）里需要可调参数的组件行各带自己的「配置」页——主行管各
+  功能开关、搜索结果条数、知识库目录、会话通知、手机访问；**文件树 · 源代码管理行**管文件树 /
+  源代码管理开关与「隐藏官方『工作区文件』入口」；**终端**与**技能**两行没有配置字段
+  （行开关 = 唯一开关，关掉即入口消失）；保存即写入 profile 并热生效（部分启动期门控在重启
+  dsh 后生效）
 
 ## 安装与更新
 
@@ -119,17 +120,19 @@ dsh plugin --profile web update dsh-kit
 
 - `src/*.ts` → `dist/`（tsc 构建产物入库）：宿主半边——挂 `/tree`、`/read`、`/raw`
   （Range/206）、`/fs/op`、`/upload`、`/git/*`、`/browser`（内置浏览器 WS）、
-  `/schedule/*`、`/vault/*`（知识库）、`/skills`、`/phone/*`（手机网关）、
+  `/schedule/*`、`/vault/*`（知识库）、`/skills`（技能池）、`/phone/*`（手机网关）、
   `/config`（只读配置快照）等端点
 - `client/bundle.js`：浏览器半边（手写 ModuleLoader bundle，**零构建**）——根包注册知识库
   入口钮、官方右栏四类 dock 签（pane 正文经 `sidebar.right.pane.tab` 提供）与配置页
-  （`plugins.row.config`）；文件树·源代码管理、终端、用量监视三个组件的 client 半边
+  （`plugins.row.config`）；文件树·源代码管理、终端、技能、用量监视四个组件的 client 半边
   同住本 bundle（组件模块，终端坞引擎为官方 `webTerminals` 服务）
-- `src/core`、`src/files`、`src/terminal`、`src/monitor`：组件按目录分边界（0.5.3 单包
-  组件化，组件 = patch 行而非独立包）——`core` 宿主共享库；`files` 挂 tree/read/raw/
-  fs-op/git 端点 + 文件树·源代码管理面板；`terminal` 挂 `/dsh-kit-terminal/config` 快照
-  （终端入口与坞）；`monitor` 挂 `/dsh-kit/usage` + 用量芯片 / 429 续跑 / 死循环打断 /
-  会话通知。行经根包 `exports` 子路径（`dsh-kit/files` 等）由 `cordis.patch.yml` 物化
+- `src/core`、`src/files`、`src/skills`、`src/terminal`、`src/monitor`：组件按目录分边界
+  （0.5.3 单包组件化，组件 = patch 行而非独立包）——`core` 宿主共享库；`files` 挂 tree/
+  read/raw/fs-op/git 端点 + 文件树·源代码管理面板；`skills` 挂 `/dsh-kit/skills` 与
+  `/dsh-kit/skills/op` + `/dsh-kit-skills/config` 探针（技能池管理页）；`terminal` 挂
+  `/dsh-kit-terminal/config` 探针（终端入口与坞）；`monitor` 挂 `/dsh-kit/usage` + 用量
+  芯片 / 429 续跑 / 死循环打断 / 会话通知。行经根包 `exports` 子路径（`dsh-kit/files` 等）
+  由 `cordis.patch.yml` 物化
 - `client/vendor/*`：xterm / TipTap 富文本 / KaTeX / qrcode，全部按需懒加载，
   由 `/dsh-kit/vendor/*` 静态伺服
 - `src/web-search.ts` + `src/engine-chain.ts` + `src/engines/*`：向 web seam 注册

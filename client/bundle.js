@@ -946,7 +946,6 @@ window.__ModuleLoader__.load({
     const CFG_DEFAULTS = {
       hideOfficialBrowserEntry: false,
       chatOpenLinkInBrowser: true,
-      skillsPageEnabled: true,
       searchEnabled: true,
       searchMaxResults: 2,
       phoneEnabled: true,
@@ -964,7 +963,6 @@ window.__ModuleLoader__.load({
       return {
         hideOfficialBrowserEntry: v.hideOfficialBrowserEntry === true,
         chatOpenLinkInBrowser: v.chatOpenLinkInBrowser === true,
-        skillsPageEnabled: v.skillsPageEnabled !== false,
         searchEnabled: v.searchEnabled !== false,
         phoneEnabled: v.phoneEnabled === true,
         phoneRemoteDomain: typeof v.phoneRemoteDomain === "string" ? v.phoneRemoteDomain : "",
@@ -1537,37 +1535,6 @@ window.__ModuleLoader__.load({
       contentFail: "读取失败",
       officialOpenFail: "打开失败",
       scNoSeat: "当前不在对话中",
-      skillsLabel: "技能",
-      skRefresh: "刷新",
-      skLoading: "加载中…",
-      skFail: "加载失败",
-      skEmpty: "（此组暂无技能）",
-      skNotCreated: "未创建",
-      skRankTip: "所在位置的扫描优先级（数值越小越优先）",
-      skWorkspace: "工作区",
-      skUserLevel: "用户级",
-      skPool: "技能池",
-      skOther: "其他来源（插件自带/运行时，只读）",
-      skNoCwdHint: "当前没有会话工作区：只显示用户级与技能池",
-      skDisabled: "已禁用",
-      skShadowed: "被覆盖",
-      skShadowTip: "同名技能在更高优先级位置生效（优先级：.dsh > .agents > $DSH_HOME/skills > ~/.agents/skills）",
-      skVersionTip: "技能自带版本（frontmatter version）：用来对照自己手上这份抄的是哪版",
-      skByPlugin: "随插件",
-      skHide: "收起",
-      skView: "详情",
-      skCopy: "复制",
-      skMove: "移动",
-      skPickTarget: "选择目标位置",
-      skDisable: "禁用",
-      skEnable: "启用",
-      skDelete: "删除",
-      skConfirmDelete: "确认删除？",
-      skCancel: "取消",
-      skOverwrite: "目标已存在同名技能，覆盖？",
-      skOpFail: "操作失败",
-      skDone: "完成",
-      skDeleted: "已删除",
 
       browserUrlPh: "输入 HTTP(S) 地址",
       browserGo: "前往",
@@ -1608,8 +1575,6 @@ window.__ModuleLoader__.load({
       kcfgGroupFeatures: "功能开关",
       kcfgGroupPhone: "手机访问",
       kcfgGroupVault: "知识库",
-      kcfgSkillsPageEnabled: "技能管理页",
-      kcfgSkillsPageEnabledHint: "侧栏「技能」管理页的入口。",
       kcfgSearchEnabled: "免费网页搜索",
       kcfgSearchEnabledHint: "关 = 网页搜索转发官方付费渠道；开 = 免费引擎链。",
       kcfgSearchMaxResults: "搜索结果条数（1–8）",
@@ -1741,37 +1706,6 @@ window.__ModuleLoader__.load({
       contentFail: "Failed to read",
       officialOpenFail: "Open failed",
       scNoSeat: "Not in a conversation",
-      skillsLabel: "Skills",
-      skRefresh: "Refresh",
-      skLoading: "Loading…",
-      skFail: "Failed to load",
-      skEmpty: "(no skills here)",
-      skNotCreated: "not created",
-      skRankTip: "Scan priority of this location (lower wins)",
-      skWorkspace: "Workspace",
-      skUserLevel: "User level",
-      skPool: "Skill pool",
-      skOther: "Other sources (plugin/runtime, read-only)",
-      skNoCwdHint: "No session workspace: showing user-level and pool only",
-      skDisabled: "Disabled",
-      skShadowed: "Shadowed",
-      skShadowTip: "A same-name skill at a higher-priority location takes effect (priority: .dsh > .agents > $DSH_HOME/skills > ~/.agents/skills)",
-      skVersionTip: "Skill's own version (frontmatter version), to compare against your own copy",
-      skByPlugin: "Plugin-bundled",
-      skHide: "Hide",
-      skView: "Details",
-      skCopy: "Copy",
-      skMove: "Move",
-      skPickTarget: "Pick destination",
-      skDisable: "Disable",
-      skEnable: "Enable",
-      skDelete: "Delete",
-      skConfirmDelete: "Confirm delete?",
-      skCancel: "Cancel",
-      skOverwrite: "A skill with the same name exists at the target. Overwrite?",
-      skOpFail: "Operation failed",
-      skDone: "Done",
-      skDeleted: "Deleted",
 
       browserUrlPh: "Enter an HTTP(S) address",
       browserGo: "Go",
@@ -1815,8 +1749,6 @@ window.__ModuleLoader__.load({
       kcfgGroupFeatures: "Features",
       kcfgGroupPhone: "Phone access",
       kcfgGroupVault: "Vault",
-      kcfgSkillsPageEnabled: "Skills manager page",
-      kcfgSkillsPageEnabledHint: "Entry for the skills manager page in the sidebar.",
       kcfgSearchEnabled: "Free web search",
       kcfgSearchEnabledHint: "Off forwards web search to the official paid channel; on uses the free engine chain.",
       kcfgSearchMaxResults: "Search results (1–8)",
@@ -1980,32 +1912,6 @@ body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{displ
 .dshk-rbpane .dshk-vault-panehost{flex:1 1 auto;min-height:0}
 /* 侧栏索引宿主（知识库目录/日程待办入口占 sidebar.workspaces） */
 .dshk-sidehost{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;pointer-events:auto}
-/* 技能管理页（settings.section）：三分组卡片；技能行单行布局，操作不换行、描述先收缩 */
-.dshk-sk{font-size:13px;color:var(--dsw-alias-label-primary);user-select:text}
-.dshk-sk-head{display:flex;align-items:center;gap:8px;margin:2px 0 10px}
-.dshk-sk-title{font-weight:600;font-size:14px}
-.dshk-sk-status{color:var(--dsw-alias-label-tertiary);font-size:12px}
-.dshk-sk-group{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;margin-bottom:12px;overflow:hidden}
-.dshk-sk-group-head{display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:12px}
-.dshk-sk-group-dir{font-family:ui-monospace,Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;text-align:right}
-/* 单行：名称/徽标 flex:none，描述 flex:1 收缩截断，操作区不换行 */
-.dshk-sk-row{display:flex;align-items:center;gap:8px;padding:7px 12px;min-width:0}
-.dshk-sk-row ~ .dshk-sk-row{border-top:1px solid var(--dsw-alias-border-l1)}
-.dshk-sk-name{font-weight:600;white-space:nowrap;flex:none}
-.dshk-sk-name[data-disabled]{color:var(--dsw-alias-label-tertiary);text-decoration:line-through}
-.dshk-sk-badge{flex:none;font-size:11px;line-height:16px;padding:0 7px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);white-space:nowrap;font-family:ui-monospace,Consolas,monospace}
-.dshk-sk-badge-off{border-style:dashed;color:var(--dsw-alias-label-tertiary)}
-.dshk-sk-desc{flex:1;min-width:0;color:var(--dsw-alias-label-secondary);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
-.dshk-sk-actions{flex:none;display:flex;align-items:center;gap:5px}
-.dshk-sk-btn{appearance:none;background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:12px;line-height:1;padding:4px 9px;white-space:nowrap}
-.dshk-sk-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-sk-btn[data-danger="1"]{color:var(--dsw-alias-label-primary);font-weight:600;border-color:var(--dsw-alias-label-secondary)}
-.dshk-sk-btn[disabled]{opacity:.5;cursor:default}
-/* 展开式目标选择条：点复制/移动后出现在该行下方（同一时间只展开一行） */
-.dshk-sk-target{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 12px;border-top:1px dashed var(--dsw-alias-border-l1);background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-sk-target-label{font-size:12px;color:var(--dsw-alias-label-secondary)}
-.dshk-sk-detail{padding:2px 12px 10px}
-.dshk-sk-pre{margin:0;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
 /* 手机访问页（settings.section 内联区块，与技能页同级） */
 .dshk-phone{width:100%;max-width:460px}
 .dshk-phone-head{display:flex;align-items:center;gap:8px;margin:2px 0 10px}
@@ -5744,14 +5650,9 @@ ellipsis，窄列只截字不破版 */
         const want = [
           // 输入框入口排序（左→右）：文件树、源代码管理、知识库、终端——前三者中
           // 终端入口由 dsh-kit-terminal 自注册（order 14），本表只管本包的座位。
-          // 手机访问与技能页同类，走 settings.section 页面入口（order：技能 40 → 手机 45）
+          // 技能页随组件化迁 dsh-kit/skills；手机访问走 settings.section（order 45）
           ["vault", cfg.vaultEnabled, () =>
             slotsCtx.slots.register({ name: "conversation.input.left", id: "dsh-kit-vault", order: 12 }, VaultEntry)],
-          ["skills", cfg.skillsPageEnabled, () =>
-            slotsCtx.slots.register(
-              { name: "settings.section", id: "kit-skills", order: 40, label: () => t("skillsLabel") },
-              SkillsManager,
-            )],
           ["phone", cfg.phoneEnabled, () =>
             slotsCtx.slots.register(
               { name: "settings.section", id: "kit-phone", order: 45, label: () => t("phoneTitle") },
@@ -5775,7 +5676,7 @@ ellipsis，窄列只截字不破版 */
             }
           }
         };
-      }, [cfg.phoneEnabled, cfg.skillsPageEnabled, cfg.monitorEnabled, cfg.vaultEnabled]);
+      }, [cfg.phoneEnabled, cfg.monitorEnabled, cfg.vaultEnabled]);
 
       // 配置关闭但视图还开着（如原生配置页保存、entry 重启前的瞬间）：立即归位，文件随来源跟随清掉
       // （终端功能关闭的同类清场在 dsh-kit-terminal 自己那侧）
@@ -5949,14 +5850,156 @@ ellipsis，窄列只截字不破版 */
       });
     }
 
-    // ─────────── 技能管理页（settings.section）───────────
-    // 数据走宿主半边 GET /dsh-kit/skills（白名单根枚举+注册表归属增强）与
-    // POST /dsh-kit/skills/op（copy/move/delete/disable）。分组显示：
-    // 工作区(.agents|.dsh/skills) → 用户级($DSH_HOME|~/.agents) → 技能池；
-    // 插件自带/运行时来源只读展示。删除=移入池内 .trash，禁用=改 frontmatter 双键。
+    // ── 设置导航图标：官方 navIcon(id) 硬编码映射（models/agent-presets/plugins），
+    // 未知 id 一律回退齿轮。没有注册缝，这里按标签文字找到对应行，把行内第一个
+    // svg 换成自绘分层图标——纯外观增强：任何一步失败都静默保持齿轮。
+    // 候选由各归属方注册（根包注册手机访问，组件经 dock.registerNavIcon 注册自己的）。
+    const SVG_OPEN =
+      '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+    const NAV_ICONS = [];
+    function registerNavIcon(entry) {
+      if (entry) NAV_ICONS.push(entry);
+    }
+    registerNavIcon({
+      label: () => t("phoneTitle"),
+      attr: "data-dshk-phone",
+      html:
+        SVG_OPEN +
+        '<rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/>' +
+        '<path d="M6.8 3.4h2.4"/>' +
+        '<path d="M8 12.6h.01"/>' +
+        "</svg>",
+    });
+
+    let iconSwapPending = false;
+    function swapKitNavIcons() {
+      try {
+        const rows = document.querySelectorAll('[role="dialog"][aria-modal="true"] nav button');
+        if (rows.length === 0) return;
+        for (const row of rows) {
+          const span = row.querySelector("span");
+          if (!span) continue;
+          const entry = NAV_ICONS.find((candidate) => span.textContent === candidate.label());
+          if (!entry) continue;
+          const current = row.querySelector("svg");
+          if (!current || current.getAttribute(entry.attr) === "1") continue;
+          const holder = document.createElement("span");
+          holder.innerHTML = entry.html;
+          const icon = holder.firstElementChild;
+          if (!icon) continue;
+          icon.setAttribute(entry.attr, "1");
+          current.replaceWith(icon);
+        }
+      } catch {
+        // 外观增强失败即保持默认齿轮
+      }
+    }
+    function scheduleNavIconSwap() {
+      if (iconSwapPending) return;
+      iconSwapPending = true;
+      window.setTimeout(() => {
+        iconSwapPending = false;
+        swapKitNavIcons();
+        window.setTimeout(swapKitNavIcons, 250); // React 重渲染后的二次补换
+      }, 60);
+    }
+
+    // ─────────── dsh-kit/skills 组件（技能管理页）───────────
+    // 技能池管理页（settings.section）：数据走本组件宿主半边 GET /dsh-kit/skills
+    // （白名单根枚举 + 注册表归属增强）与 POST /dsh-kit/skills/op（copy/move/delete/
+    // disable）。分组显示：工作区(.agents|.dsh/skills) → 用户级($DSH_HOME|~/.agents)
+    // → 技能池；插件自带/运行时来源只读展示。删除=移入池内 .trash，禁用=改
+    // frontmatter 双键。行禁用（宿主子模块不物化）时 /dsh-kit-skills/config 404，
+    // 本组件不注册设置页；样式与词条随本组件自带。
+    const skillsModule = (kit, require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+    const react = require("react");
+    const jsxRuntime = require("react/jsx-runtime");
+    const dock = kit;
+    const { KitTip, kitGetJson, kitPostJson, kitJson, resolveZh, subscribeLocale, getLocaleVersion, useCurrentCwd, registerNavIcon } = dock;
+
+    // 组件私有文案（技能页词条随页迁入本包，与根包字典互不依赖）
+    const zh = {
+      skillsLabel: "技能",
+      skRefresh: "刷新",
+      skLoading: "加载中…",
+      skFail: "加载失败",
+      skEmpty: "（此组暂无技能）",
+      skNotCreated: "未创建",
+      skRankTip: "所在位置的扫描优先级（数值越小越优先）",
+      skWorkspace: "工作区",
+      skUserLevel: "用户级",
+      skPool: "技能池",
+      skOther: "其他来源（插件自带/运行时，只读）",
+      skNoCwdHint: "当前没有会话工作区：只显示用户级与技能池",
+      skDisabled: "已禁用",
+      skShadowed: "被覆盖",
+      skShadowTip: "同名技能在更高优先级位置生效（优先级：.dsh > .agents > $DSH_HOME/skills > ~/.agents/skills）",
+      skVersionTip: "技能自带版本（frontmatter version）：用来对照自己手上这份抄的是哪版",
+      skByPlugin: "随插件",
+      skHide: "收起",
+      skView: "详情",
+      skCopy: "复制",
+      skMove: "移动",
+      skPickTarget: "选择目标位置",
+      skDisable: "禁用",
+      skEnable: "启用",
+      skDelete: "删除",
+      skConfirmDelete: "确认删除？",
+      skCancel: "取消",
+      skOverwrite: "目标已存在同名技能，覆盖？",
+      skOpFail: "操作失败",
+      skDone: "完成",
+      skDeleted: "已删除",
+      contentFail: "读取失败",
+      contentEmpty: "（空）",
+      contentBinary: "二进制文件，无法预览",
+    };
+    const en = {
+      skillsLabel: "Skills",
+      skRefresh: "Refresh",
+      skLoading: "Loading…",
+      skFail: "Failed to load",
+      skEmpty: "(no skills here)",
+      skNotCreated: "not created",
+      skRankTip: "Scan priority of this location (lower wins)",
+      skWorkspace: "Workspace",
+      skUserLevel: "User level",
+      skPool: "Skill pool",
+      skOther: "Other sources (plugin/runtime, read-only)",
+      skNoCwdHint: "No session workspace: showing user-level and pool only",
+      skDisabled: "Disabled",
+      skShadowed: "Shadowed",
+      skShadowTip: "A same-name skill at a higher-priority location takes effect (priority: .dsh > .agents > $DSH_HOME/skills > ~/.agents/skills)",
+      skVersionTip: "Skill's own version (frontmatter version), to compare against your own copy",
+      skByPlugin: "Plugin-bundled",
+      skHide: "Hide",
+      skView: "Details",
+      skCopy: "Copy",
+      skMove: "Move",
+      skPickTarget: "Pick destination",
+      skDisable: "Disable",
+      skEnable: "Enable",
+      skDelete: "Delete",
+      skConfirmDelete: "Confirm delete?",
+      skCancel: "Cancel",
+      skOverwrite: "A skill with the same name exists at the target. Overwrite?",
+      skOpFail: "Operation failed",
+      skDone: "Done",
+      skDeleted: "Deleted",
+      contentFail: "Failed to read",
+      contentEmpty: "(empty)",
+      contentBinary: "Binary file, preview unavailable",
+    };
+    const lang = () => (resolveZh() ? zh : en);
+    const t = (key) => lang()[key] ?? key;
+
     function fetchSkillsPage(cwd, signal) {
-      const query = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
-      return kitGetJson(`/dsh-kit/skills${query}`, signal, (b) => Array.isArray(b.groups));
+      const query = cwd ? "?cwd=" + encodeURIComponent(cwd) : "";
+      return kitGetJson("/dsh-kit/skills" + query, signal, (b) => Array.isArray(b.groups));
     }
 
     function postSkillOp(payload) {
@@ -5980,66 +6023,88 @@ ellipsis，窄列只截字不破版 */
       return groupId === "user" ? t("skUserLevel") : t("skWorkspace");
     }
 
-    // ── 设置导航图标：官方 navIcon(id) 硬编码映射（models/agent-presets/plugins），
-    // 未知 id 一律回退齿轮。没有注册缝，这里按标签文字找到对应行，把行内第一个
-    // svg 换成自绘分层图标——纯外观增强：任何一步失败都静默保持齿轮。
-    const SVG_OPEN =
-      '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" ' +
-      'stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
-    const NAV_ICON_HTML = [
-      {
-        label: () => t("skillsLabel"),
-        attr: "data-dshk-skill",
-        html:
-          SVG_OPEN +
-          '<path d="M8 1.8 14.2 5 8 8.2 1.8 5z"/>' +
-          '<path d="M1.8 8.1 8 11.2l6.2-3.1"/>' +
-          '<path d="M1.8 11.3 8 14.4l6.2-3.1"/>' +
-          "</svg>",
-      },
-      {
-        label: () => t("phoneTitle"),
-        attr: "data-dshk-phone",
-        html:
-          SVG_OPEN +
-          '<rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/>' +
-          '<path d="M6.8 3.4h2.4"/>' +
-          '<path d="M8 12.6h.01"/>' +
-          "</svg>",
-      },
-    ];
+    // 设置导航图标（官方 navIcon 无注册缝，靠标签文字换行内 svg）：纯外观增强
+    const SVG_SKILL_ICON =
+      '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M8 1.8 14.2 5 8 8.2 1.8 5z"/>' +
+      '<path d="M1.8 8.1 8 11.2l6.2-3.1"/>' +
+      '<path d="M1.8 11.3 8 14.4l6.2-3.1"/>' +
+      "</svg>";
 
-    let iconSwapPending = false;
-    function swapKitNavIcons() {
-      try {
-        const rows = document.querySelectorAll('[role="dialog"][aria-modal="true"] nav button');
-        if (rows.length === 0) return;
-        for (const row of rows) {
-          const span = row.querySelector("span");
-          if (!span) continue;
-          const entry = NAV_ICON_HTML.find((candidate) => span.textContent === candidate.label());
-          if (!entry) continue;
-          const current = row.querySelector("svg");
-          if (!current || current.getAttribute(entry.attr) === "1") continue;
-          const holder = document.createElement("span");
-          holder.innerHTML = entry.html;
-          const icon = holder.firstElementChild;
-          if (!icon) continue;
-          icon.setAttribute(entry.attr, "1");
-          current.replaceWith(icon);
+    // ─────────── 组件配置（/dsh-kit-skills/config）───────
+    // 技能没有独立配置字段：行开关（插件页组件行 switch）= 唯一开关。拉端点只为
+    // 可达性——200 = 行启用；404（行禁用 → 子模块不物化）= 不注册设置页。
+    let cfgSnap = null;
+    const cfgSubs = new Set();
+    const emitCfg = () => {
+      for (const fn of cfgSubs) {
+        try {
+          fn();
+        } catch {
+          /* 订阅者已卸载 */
         }
-      } catch {
-        // 外观增强失败即保持默认齿轮
       }
+    };
+    async function loadCfg() {
+      let value = null;
+      try {
+        const v = await kitJson("/dsh-kit-skills/config", undefined, (b) => b !== null && typeof b === "object");
+        value = v;
+      } catch {
+        value = null; // 端点不可达（行禁用 404）：探明不可用
+      }
+      cfgSnap = value && typeof value === "object" ? { status: "ready", value } : { status: "unavailable" };
+      emitCfg();
     }
-    function scheduleSkillIconSwap() {
-      if (iconSwapPending) return;
-      iconSwapPending = true;
-      window.setTimeout(() => {
-        iconSwapPending = false;
-        swapKitNavIcons();
-        window.setTimeout(swapKitNavIcons, 250); // React 重渲染后的二次补换
-      }, 60);
+    const subscribeCfg = (fn) => {
+      cfgSubs.add(fn);
+      return () => cfgSubs.delete(fn);
+    };
+    const getCfgSnapshot = () => cfgSnap;
+    /** 组件可用性：端点 200（行启用）或未探明（乐观，apply 前的渲染窗口）= true；
+     *  探明 404（行禁用 → 子模块不物化）= false */
+    function cfgFromSnapshot(snap) {
+      return { available: !snap || snap.status === "ready" };
+    }
+
+    // ─────────── 组件样式 ───────────
+    // 技能管理页（settings.section）：三分组卡片；技能行单行布局，操作不换行、描述先收缩
+    const SKS_CSS = `
+.dshk-sk{font-size:13px;color:var(--dsw-alias-label-primary);user-select:text}
+.dshk-sk-head{display:flex;align-items:center;gap:8px;margin:2px 0 10px}
+.dshk-sk-title{font-weight:600;font-size:14px}
+.dshk-sk-status{color:var(--dsw-alias-label-tertiary);font-size:12px}
+.dshk-sk-group{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;margin-bottom:12px;overflow:hidden}
+.dshk-sk-group-head{display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:12px}
+.dshk-sk-group-dir{font-family:ui-monospace,Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;text-align:right}
+/* 单行：名称/徽标 flex:none，描述 flex:1 收缩截断，操作区不换行 */
+.dshk-sk-row{display:flex;align-items:center;gap:8px;padding:7px 12px;min-width:0}
+.dshk-sk-row ~ .dshk-sk-row{border-top:1px solid var(--dsw-alias-border-l1)}
+.dshk-sk-name{font-weight:600;white-space:nowrap;flex:none}
+.dshk-sk-name[data-disabled]{color:var(--dsw-alias-label-tertiary);text-decoration:line-through}
+.dshk-sk-badge{flex:none;font-size:11px;line-height:16px;padding:0 7px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);white-space:nowrap;font-family:ui-monospace,Consolas,monospace}
+.dshk-sk-badge-off{border-style:dashed;color:var(--dsw-alias-label-tertiary)}
+.dshk-sk-desc{flex:1;min-width:0;color:var(--dsw-alias-label-secondary);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.dshk-sk-actions{flex:none;display:flex;align-items:center;gap:5px}
+.dshk-sk-btn{appearance:none;background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:12px;line-height:1;padding:4px 9px;white-space:nowrap}
+.dshk-sk-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-sk-btn[data-danger="1"]{color:var(--dsw-alias-label-primary);font-weight:600;border-color:var(--dsw-alias-label-secondary)}
+.dshk-sk-btn[disabled]{opacity:.5;cursor:default}
+/* 展开式目标选择条：点复制/移动后出现在该行下方（同一时间只展开一行） */
+.dshk-sk-target{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 12px;border-top:1px dashed var(--dsw-alias-border-l1);background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-sk-target-label{font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshk-sk-detail{padding:2px 12px 10px}
+.dshk-sk-pre{margin:0;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
+    `;
+    function injectStyles() {
+      if (typeof document === "undefined") return;
+      if (document.querySelector('style[data-plugin-css="dsh-kit-skills/ui"]') === null) {
+        const tag = document.createElement("style");
+        tag.dataset.plugin = "dsh-kit-skills";
+        tag.dataset.pluginCss = "dsh-kit-skills/ui";
+        tag.textContent = SKS_CSS;
+        document.head.appendChild(tag);
+      }
     }
 
     function SkillContent({ file }) {
@@ -6292,6 +6357,49 @@ ellipsis，窄列只截字不破版 */
       });
     }
 
+    // ─────────── 插件体 ───────────
+    function apply(ctx) {
+      // 技能设置页：官方 settings.section 是挂载期声明槽位，inject 等声明落地再注册；
+      // 行禁用（探针 404）时注销，入口从设置导航消失
+      ctx.slots.inject("settings.section", () => {
+        let unregister;
+        const update = () => {
+          if (cfgFromSnapshot(getCfgSnapshot()).available) {
+            if (!unregister) {
+              unregister = ctx.slots.register(
+                { name: "settings.section", id: "kit-skills", order: 40, label: () => t("skillsLabel") },
+                SkillsManager,
+              );
+            }
+          } else if (unregister) {
+            unregister();
+            unregister = undefined;
+          }
+        };
+        const off = subscribeCfg(update);
+        update();
+        return () => {
+          off();
+          if (unregister) {
+            unregister();
+            unregister = undefined;
+          }
+        };
+      });
+      registerNavIcon({ label: () => t("skillsLabel"), attr: "data-dshk-skill", html: SVG_SKILL_ICON });
+      injectStyles();
+      void loadCfg(); // 拉探针喂门控（404 = 行禁用，不注册设置页）
+    }
+
+    exports.apply = apply;
+    exports.inject = ["slots"];
+    // 渲染级检查与直测引用
+    exports.SkillsManager = SkillsManager;
+    exports.fetchSkillsPage = fetchSkillsPage;
+    exports.cfgFromSnapshot = cfgFromSnapshot;
+    return module.exports;
+    };
+
     // ─────────── 官方右侧边栏注册（宿主 0.1.5+）───────────
     // 四个功能各注册一张 dock 页类型（id=正文槽 key，kind=openTab 类型名）+
     // pane 正文。开始页归官方 ShippedGuide（罗盘 + 胶囊条目，条目按 order 升序）：
@@ -6394,7 +6502,6 @@ ellipsis，窄列只截字不破版 */
     // （快捷键消费端本就「非法/空 → 回默认」）。字段清单与 src/index.ts 的 Config
     // schema 同源（render-check 钉住）。
     const KIT_CFG_FIELDS = [
-      { key: "skillsPageEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSkillsPageEnabled", hintKey: "kcfgSkillsPageEnabledHint" },
       { key: "searchEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgSearchEnabled", hintKey: "kcfgSearchEnabledHint" },
       { key: "searchMaxResults", type: "number", min: 1, max: 8, group: "kcfgGroupFeatures", labelKey: "kcfgSearchMaxResults", hintKey: "kcfgSearchMaxResultsHint" },
       { key: "browserEnabled", type: "bool", group: "kcfgGroupFeatures", labelKey: "kcfgBrowserEnabled", hintKey: "kcfgBrowserEnabledHint" },
@@ -6507,7 +6614,7 @@ ellipsis，窄列只截字不破版 */
         registerRightbar(ctx);
       }
       // 导航图标替换是点击驱动的轻量方案：打开设置/面板内切换都源于一次 click
-      document.addEventListener("click", scheduleSkillIconSwap, true);
+      document.addEventListener("click", scheduleNavIconSwap, true);
       // 对话文件点击的知识库路由：vault 内路径改道知识库标签，其余放行官方
       //（门控见 onChatOpenFileClick 与 chatPreviewHook）
       document.addEventListener("click", onChatOpenFileClick, true);
@@ -6524,9 +6631,9 @@ ellipsis，窄列只截字不破版 */
         });
         scanPreviewDownload();
       }
-      // 组件半边激活（单包收回的 files/monitor/terminal）：与多包时代等价——client
-      // 入口注册总是发生，功能存在性由各组件自己的配置门控（行禁用只摘宿主半边端点）
-      for (const componentMod of [exports.files, exports.monitor, exports.terminal]) {
+      // 组件半边激活（单包收回的 files/monitor/terminal/skills）：与多包时代等价——
+      // client 入口注册总是发生，功能存在性由各组件自己的配置门控（行禁用只摘宿主半边端点）
+      for (const componentMod of [exports.files, exports.monitor, exports.terminal, exports.skills]) {
         if (componentMod && typeof componentMod.apply === "function") componentMod.apply(ctx);
       }
     }
@@ -6874,6 +6981,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 /* 「更改」清单（源代码管理视图） */
 .dshk-changes{margin:2px 4px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;overflow:hidden}
 .dshk-chg-head{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:11px}
+.dshk-chg-count{color:var(--dsw-alias-label-tertiary);font-size:12px}
 .dshk-diff{font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;padding:4px 0;white-space:pre;overflow-x:auto;user-select:text;color:var(--dsw-alias-label-secondary)}
 .dshk-diff-add{color:#0dbc79;background:rgba(13,188,121,.08)}
 .dshk-diff-del{color:#cd3131;background:rgba(205,49,49,.08)}
@@ -8339,7 +8447,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
                                         children: [
                                           jsxRuntime.jsx("span", { className: "dshk-chg-chev", "data-open": isOpen || undefined, children: "▶" }),
                                           jsxRuntime.jsx("span", { children: group.title }),
-                                          jsxRuntime.jsx("span", { className: "dshk-sk-status", children: String(group.list.length) }),
+                                          jsxRuntime.jsx("span", { className: "dshk-chg-count", children: String(group.list.length) }),
                                         ],
                                       }),
                                       isOpen ? group.list.map((item) => renderRow(item, group.isStaged)) : null,
@@ -11746,11 +11854,13 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.ChevronIcon = ChevronIcon;
     exports.OfficialIcon = OfficialIcon;
     exports.openTreeFile = openTreeFile;
-    // 组件模块执行（files/monitor/terminal）：必须在 kitBase 浅拷贝与 root 设施
+    exports.registerNavIcon = registerNavIcon;
+    // 组件模块执行（files/monitor/terminal/skills）：必须在 kitBase 浅拷贝与 root 设施
     // 都挂上 exports 之后——组件体执行期会读 dock.createConfigPage 等成员
     exports.files = filesModule(exports, require);
     exports.monitor = monitorModule(exports, require);
     exports.terminal = terminalModule(exports, require);
+    exports.skills = skillsModule(exports, require);
     exports.inject = ["slots"];
     exports.apply = apply;
     return module.exports;
