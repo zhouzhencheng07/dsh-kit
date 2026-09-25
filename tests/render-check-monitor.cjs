@@ -778,14 +778,57 @@ function checkPeaks() {
   check("U 调休上班的周末（10-10 周六）全天非峰", comps.usageIsPeak("deepseek", at(2026, 10, 10, 10, 0)) === false);
   check("U 法定节假日工作日（中秋 9-25 周五）全天非峰", comps.usageIsPeak("deepseek", at(2026, 9, 25, 10, 0)) === false);
   check("U 法定节假日工作日（国庆 10-6 周二）全天非峰", comps.usageIsPeak("deepseek", at(2026, 10, 6, 15, 0)) === false);
-  check("U z.ai 不标峰（无公开口径，工作日峰点也不标）", comps.usageIsPeak("zai", at(2026, 9, 23, 15, 0)) === false);
   check("U 表外年份工作日照常标峰", comps.usageIsPeak("deepseek", at(2027, 1, 5, 10, 0)) === true);
   check("U opencode 无时段不标", comps.usageIsPeak("opencode", at(2026, 9, 23, 10, 0)) === false);
+}
+
+// 4) 用量芯片开关回落本组件配置页（组件 Config 是唯一真源）：快照不可达按默认开；
+//    开关字段在第一组「用量与余额」页签渲染，值取内置默认；内置默认与宿主 schema
+//    （src/monitor/index.ts）逐项同值——改必须两处同改，漂移即红。
+function checkConfigSurface() {
+  const bundleSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
+  const hostSrc = fs.readFileSync(__dirname + "/../src/monitor/index.ts", "utf8");
+  const usageSrc = fs.readFileSync(__dirname + "/../src/monitor/usage.ts", "utf8");
+  check("U 快照不可达时芯片开关回落默认开", comps.cfgFromSnapshot(null).usageEnabled === true);
+  const fakeForm = { state: { status: "ready", value: { ...comps.M_CFG_DEFAULTS, monitorMaxAuto: 2 }, revision: 3, writable: true }, mutate: async () => true };
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  comps.MonitorConfigPage({ view: "page", form: fakeForm });
+  const tabs = callLog.find((c) => c[1] === primStub.SegmentedTabs);
+  check(
+    "U 配置页两组页签（用量与余额在前）",
+    !!tabs && tabs[2].items.length === 2 && tabs[2].items[0].value === "kcfgGroupUsage" && tabs[2].value === "kcfgGroupUsage",
+  );
+  const sw = callLog.filter((c) => c[1] === primStub.Switch);
+  check(
+    "U 用量开关是本页签首个开关且带说明文案",
+    sw.length === 1 && sw[0][2].checked === true && ["余额与用量芯片", "Balance & usage chip"].includes(sw[0][2].label),
+  );
+  const drift = [];
+  let compared = 0;
+  for (const m of hostSrc.matchAll(/^ {8}(\w+): z\.(?:boolean|number|string)\(\)[^,\n]*\.default\(([^)]*)\)\.volatile\(\),?$/gm)) {
+    const key = m[1];
+    const raw = m[2].trim();
+    const expected = raw === "true" ? true : raw === "false" ? false : /^-?\d+$/.test(raw) ? Number(raw) : undefined;
+    if (expected === undefined) continue;
+    compared++;
+    if (comps.M_CFG_DEFAULTS[key] !== expected) drift.push(key);
+  }
+  check(
+    "组件内置默认与宿主 schema 逐项同值（比对 " + compared + " 项；漂移 " + (drift.join("/") || "无") + "）",
+    drift.length === 0 && compared === Object.keys(comps.M_CFG_DEFAULTS).length,
+  );
+  check(
+    "用量只认 DeepSeek / OpenCode Go（z.ai 卡位全退役）",
+    !/zai|glm|bigmodel/i.test(usageSrc) && !bundleSrc.includes("usageZai") && !bundleSrc.includes("monitor/usage/quota/limit"),
+  );
 }
 
 (async () => {
   await checkApply();
   checkPeaks();
+  checkConfigSurface();
   console.log(failed === 0 ? "ALL RENDER OK (monitor)" : `FAILED: ${failed}`);
   process.exit(failed === 0 ? 0 : 1);
 })();

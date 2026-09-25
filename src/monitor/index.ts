@@ -90,10 +90,10 @@ const z = (schemastery?.default ?? schemastery ?? null) as any
 export const Config =
   z && typeof z.object === 'function'
     ? z.object({
-        // 用量与余额总开关。默认关——key 不在本组件配置里（复用模型配置
+        // 用量与余额芯片开关。默认开——key 不在本组件配置里（复用模型配置
         // llm-pi-ai.providers 的凭证引用），开 = /dsh-kit/usage 端点放行 +
-        // client 半边出余额/配额芯片。
-        usageEnabled: z.boolean().default(false).volatile(),
+        // client 半边出余额/配额芯片，关 = 端点 403 + 芯片不出。
+        usageEnabled: z.boolean().default(true).volatile(),
         // 会话监视器（纯浏览器端消费，宿主不读）：
         // ① 全局 429 续跑：监视【所有】列表内会话（不要求会话页开着），turn 因 429
         //    限流失败（客户端镜像 lastAgentError 匹配限流措辞）结束后等 monitorWaitMs
@@ -115,7 +115,7 @@ export const Config =
 export async function apply(ctx: any, config: KitSettings = {}): Promise<void> {
   const defaults: KitSettings = Config
     ? Config({})
-    : { usageEnabled: false, monitorEnabled: true, monitorWaitMs: 15000, monitorMaxAuto: 5, monitorRepeatThreshold: 3, notifyEnabled: true }
+    : { usageEnabled: true, monitorEnabled: true, monitorWaitMs: 15000, monitorMaxAuto: 5, monitorRepeatThreshold: 3, notifyEnabled: true }
   // volatile 字段在 fiber config 里是稳定 ref（{get}），统一解引用
   const readRef = (v: unknown): any =>
     v !== null && typeof v === 'object' && typeof (v as { get?: unknown }).get === 'function'
