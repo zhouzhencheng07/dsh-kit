@@ -1,6 +1,6 @@
 {
   "name": "dsh-kit",
-  "version": "0.5.3-alpha.2",
+  "version": "0.5.3",
   "description": "Page capability kit for DeepSeek Harness (dsh): one row per component — file tree & source control, terminal, knowledge base & schedule, built-in browser, usage monitor, free multi-source web search, skills, phone access",
   "license": "MIT",
   "type": "module",
