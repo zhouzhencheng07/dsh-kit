@@ -26,8 +26,8 @@
 //     sidebar.workspaces 单槽，点条目开对应右栏签。
 //   文件树/源代码管理：面板群与宿主端点归组件包 dsh-kit-files（路径沿用
 //     /dsh-kit/*），侧栏浏览区的 tree/git 分支经 kitBase.sidebarView 座回到本包
-//     的 sidebar.workspaces 渲染器单槽分发；本包保留右栏「文件」pane 正文
-//     （FilePaneBody，diff 组件经 kitBase.diffPane 座取）与 kitUi 文件签状态。
+//     的 sidebar.workspaces 渲染器单槽分发；本包保留右栏「差异」pane 正文
+//     （FilePaneBody，diff 组件经 kitBase.diffPane 座取）与 kitUi 差异签状态。
 //     文件点击改投官方右栏文件签（sidebarRight.openResource，kit 不自建
 //     预览/编辑）；vault 内 md 页直达知识库编辑器。
 // xterm 不打进 bundle，由宿主半边伺服 /dsh-kit/vendor/* 静态资源（官方预编译
@@ -426,7 +426,7 @@ window.__ModuleLoader__.load({
     /** diff 签内部上限（不外露为设置项——签只来自 SCM/提交图谱，堆积面小）：
      *  超限自动关最久没看的那张 */
     const PREVIEW_MAX = 3;
-    /** 打开文件 = 文件签条上加一个文件标签（已开过则复用、只刷新状态并激活）。
+    /** 打开文件 = 差异签条上加一个标签（已开过则复用、只刷新状态并激活）。
      *  usedAt 是 LRU 判据（超上限时关掉最久没看的那张，绝不含本次）；
      *  deleted=已删除文件，只承载删除 diff。commit（可选）= 提交钉定模式
      *  （图谱提交详情进入，diff 视图与该提交的第一父对比）；重开同路径时
@@ -591,7 +591,7 @@ window.__ModuleLoader__.load({
       return openFeatureTab(ui, feature);
     }
 
-    /** 打开 diff 签并确保「文件」dock 签在眼前（源代码管理/提交图谱统一入口；
+    /** 打开 diff 签并确保「差异」dock 签在眼前（源代码管理/提交图谱统一入口；
      *  文件树与对话区点击已改投官方右栏文件签，不再进这里） */
     function openFileAndDock(path, from, untracked, deleted, commit) {
       setKitUi(openFileTab(kitUi, path, from, untracked === true, deleted === true, typeof commit === "string" && commit !== "" ? commit : undefined));
@@ -683,7 +683,7 @@ window.__ModuleLoader__.load({
     // （对象引用拷贝之前的键才能共享，后加组件只改得了座里的字段）
     exports.sidebarView = { renderer: null }; // 侧栏浏览区 tree/git 分支渲染器（root 单槽分发）
     exports.inlineEdit = { active: false }; // 树行内改名激活中（root 全局快捷键让路）
-    exports.diffPane = { Component: null }; // diff 正文组件（root 右栏文件签正文用）
+    exports.diffPane = { Component: null }; // diff 正文组件（root 右栏「差异」签正文用）
     // 底座是活动 entry：client runner 按 client 插件形状物化本模块，必须带 apply
     //（宿主半边同款：载体 entry，本体无行为）
     exports.apply = async (ctx) => {
@@ -1581,7 +1581,7 @@ window.__ModuleLoader__.load({
       rbGuideSchedDesc: "周网格、待办与统计（只读）",
       rbGuideBrowserDesc: "agent 驱动的真实浏览器，可实时观看与接管",
       rbFeatureDisabled: "该功能已在设置中停用",
-      fileTabLabel: "文件",
+      fileTabLabel: "差异",
       browserStarting: "正在拉起浏览器…",
       phoneGateStart: "启动网关",
       phoneGateStop: "关闭网关",
@@ -1803,7 +1803,7 @@ window.__ModuleLoader__.load({
       rbGuideSchedDesc: "Weekly grid, todos, and stats (read-only)",
       rbGuideBrowserDesc: "Agent-driven real browser you can watch live and take over",
       rbFeatureDisabled: "This feature is disabled in settings",
-      fileTabLabel: "Files",
+      fileTabLabel: "Diff",
       browserStarting: "Starting browser…",
       phoneGateStart: "Start gateway",
       phoneGateStop: "Stop gateway",
@@ -6153,7 +6153,7 @@ ellipsis，窄列只截字不破版 */
      *  滚动位置不丢）。只承载源代码管理/提交图谱点开的 diff；工作区文件的
      *  预览/编辑已改投官方右栏文件签。不做存在性同步：files 状态本来就在
      *  getKitUi()，官方签关了重开，文档签原样恢复。最后一页 diff 签关掉 → 官方
-     *  「文件」dock 签一起关（同浏览器「没了就没了」，没有空页状态） */
+     *  「差异」dock 签一起关（同浏览器「没了就没了」，没有空页状态） */
     function FilePaneBody(props) {
       const ui = useKitUi();
       const cwd = useCurrentCwd(props);

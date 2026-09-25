@@ -444,7 +444,7 @@ check("ScheduleTasksCard 只读行：无勾选框、无计时钮", taskChecks.le
 // openFileAndDock / openVaultPageAndDock：kitUi 侧补丁在这里断言；右栏
 // openTab 走 sidebarRight 服务（桩环境服务未注入，静默不触）
 comps.openFileAndDock("C:/x/new.js", "tree", false);
-check("openFileAndDock 落 kitUi 文件签", comps.getKitUi().activeFile === "C:/x/new.js" && comps.getKitUi().activeFeature === "file");
+check("openFileAndDock 落 kitUi 差异签", comps.getKitUi().activeFile === "C:/x/new.js" && comps.getKitUi().activeFeature === "file");
 comps.openVaultPageAndDock("D:/v/p.md");
 check("openVaultPageAndDock 落 kitUi 知识库页签", comps.getKitUi().activeVaultPage === "D:/v/p.md" && comps.getKitUi().vaultOpen === true);
 comps.setKitUi({ files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null, activeFeature: null });

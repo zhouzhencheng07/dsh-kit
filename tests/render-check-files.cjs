@@ -99,7 +99,7 @@ const comps = loadBundle(__dirname + "/../packages/dsh-kit-files/client/bundle.j
   throw new Error("unexpected require: " + name);
 });
 
-check("files 导出 apply（client 插件形状）与 DiffPane（root 右栏文件签正文）", typeof comps.apply === "function" && typeof comps.DiffPane === "function");
+check("files 导出 apply（client 插件形状）与 DiffPane（root 右栏「差异」签正文）", typeof comps.apply === "function" && typeof comps.DiffPane === "function");
 check("files inject 声明 slots", Array.isArray(comps.inject) && comps.inject[0] === "slots");
 // 跨包单向引用只能走座对象：kitBase → module.exports 是工厂尾部的一次性浅拷贝，
 // 组件后加的键 root 读不到（正是 diffPane 白屏的成因）
