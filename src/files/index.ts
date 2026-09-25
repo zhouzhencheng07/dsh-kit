@@ -146,7 +146,7 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
   const disposers: Array<() => void> = []
   ctx.inject(['webServer'], (webCtx: KitWebCtx) => {
     // ── 组件配置快照端点：GET /dsh-kit-files/config ──
-    // client 半边拉它做入口门控与快捷键（同 root 的 /dsh-kit/config 口径）
+    // client 半边拉它做入口门控与快捷键（各组件行同一口径：200 = 行启用、404 = 行关闭）
     disposers.push(
       webCtx.webServer.register({
         kind: 'exact',

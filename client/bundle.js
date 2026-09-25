@@ -29,6 +29,9 @@
 //     （FilePaneBody，diff 组件经 kitBase.diffPane 座取）与 kitUi 差异签状态。
 //     文件点击改投官方右栏文件签（sidebarRight.openResource，kit 不自建
 //     预览/编辑）；vault 内 md 页直达知识库编辑器。
+//   组件半边：files / monitor / terminal / skills / search / browser / vault / phone
+//     各自一个 xModule 隔离壳（本 factory 尾部组装完成后执行），激活由根 apply 尾部
+//     循环触发——行禁用只摘宿主半边端点，探针 404 的组件整体不注册。
 // xterm 不打进 bundle，由宿主半边伺服 /dsh-kit/vendor/* 静态资源（官方预编译
 // UMD），终端组件首次打开终端面板时按需加载。
 //
@@ -877,42 +880,6 @@ window.__ModuleLoader__.load({
 
 
 
-    // ─────────── 插件配置（主行 = 手机访问）──────────
-    // 默认值与宿主 Config schema（src/index.ts）逐项同值；快照未就绪一律回退
-    // 内置默认。组件行的配置各自在组件半边（如知识库 vaultRoot 在 dsh-kit/vault）。
-    const CFG_DEFAULTS = {
-      phoneEnabled: true,
-      phoneRemoteDomain: "",
-      phonePort: 3090,
-      phoneKeepGatewayOn: false,
-    };
-    /** 从官方 scope 快照提取生效配置（字段缺失/非法逐项回退默认） */
-    function cfgFromSnapshot(snap) {
-      if (!snap || snap.status !== "ready" || !snap.value || typeof snap.value !== "object") return { ...CFG_DEFAULTS };
-      const v = snap.value;
-      return {
-        phoneEnabled: v.phoneEnabled === true,
-        phoneRemoteDomain: typeof v.phoneRemoteDomain === "string" ? v.phoneRemoteDomain : "",
-      };
-    }
-    // 模块级通道（apply 注入 / KitSurfaces 订阅）
-    // ── 插件配置快照（0.1.7：宿主客户端已无 settingsScope 服务）──
-    // 配置真源 = 宿主 Config schema + profile 补丁（插件页本行「配置」页编辑）。
-    // client 启动拉 GET /dsh-kit/config 喂快照，全部功能门控照旧走 cfgFromSnapshot；
-    // 快照形状保持 { status:'ready', value } 与旧 scope 相同。配置页保存成功后会
-    // 重拉一次本端点（volatile 热提交即时生效）；其余情况（profile 文件直改）刷新
-    // 页面取新值（拉取失败保持 null → 功能按内置默认）。
-    let cfgSnapshot = null;
-    const cfgListeners = new Set();
-    const subscribeCfg = (listener) => {
-      cfgListeners.add(listener);
-      return () => cfgListeners.delete(listener);
-    };
-    const getCfgSnapshot = () => cfgSnapshot;
-    function applyConfigSnapshot(value) {
-      cfgSnapshot = value && typeof value === "object" ? { status: "ready", value } : null;
-      for (const listener of [...cfgListeners]) listener();
-    }
 
     // KitSurfaces 渲染期 props 桥：右栏 pane/开始页的 inject 闭包经此取官方
     // useSessions（任务 pane/开始页要在跑任务数做徽标；槽位注册在 effect 里，
@@ -1063,41 +1030,10 @@ window.__ModuleLoader__.load({
       pvCloseTab: "关闭此标签",
       rbGuideSchedDesc: "周网格、待办与统计（只读）",
       fileTabLabel: "差异",
-      phoneGateStart: "启动网关",
-      phoneGateStop: "关闭网关",
-      phoneStoppedHint: "网关未启动。开启后可用「刷新链接」作废旧链接。",
-      phoneTitle: "手机访问",
-      phoneStatusOn: "网关运行中 · 端口 {port}",
-      phoneStatusErr: "网关未运行：{error}",
-      phoneLoading: "正在生成链接…",
-      phoneLoadFail: "读取失败：{error}",
-      phoneLan: "局域网",
-      phoneRemote: "远程",
-      phoneScanHint: "用手机浏览器扫码，或复制地址到手机打开；首次打开后该设备长期有效。",
-      phoneCopy: "复制链接",
-      phoneCopied: "已复制",
-      phoneRemoteCaution: "远程链接含访问令牌，二维码谨防被他人扫码。",
-      phoneRotate: "刷新链接",
-      phoneRotateHint: "作废当前链接并生成新链接，已授权设备将全部失效。",
-      phoneRotated: "链接已刷新，旧链接已失效",
-      phoneRotateFail: "刷新失败：{error}",
-      kcfgGroupFeatures: "功能开关",
-      kcfgGroupPhone: "手机访问",
-      kcfgPhoneEnabled: "「手机访问」页入口",
-      kcfgPhoneEnabledHint: "侧栏「手机访问」页的可见性（网关启停在页内管）。",
-      kcfgPhonePort: "手机访问端口（1–65535）",
-      kcfgPhonePortHint: "网关对外端口（绑定 0.0.0.0）。",
-      kcfgPhoneRemoteDomain: "手机远程域名",
-      kcfgPhoneRemoteDomainHint: "远程访问域名（如内网穿透地址），留空只用局域网。",
-      kcfgPhoneKeepGatewayOn: "网关常驻",
-      kcfgPhoneKeepGatewayOnHint: "页面关闭后网关继续跑。",
       // 官方「快捷键」页里的命令名与「为什么按不动」的说明（键位本身归官方页管）
       moved: "已移动",
       imported: "已导入",
       cancel: "取消",
-      save: "保存",
-      saving: "保存中…",
-      discard: "放弃修改",
     };
     const en = {
       treeNewAny: "New file/folder",
@@ -1138,37 +1074,6 @@ window.__ModuleLoader__.load({
       pvCloseTab: "Close this tab",
       rbGuideSchedDesc: "Weekly grid, todos, and stats (read-only)",
       fileTabLabel: "Diff",
-      phoneGateStart: "Start gateway",
-      phoneGateStop: "Stop gateway",
-      phoneStoppedHint: "Gateway is off. Use \"New link\" after starting to invalidate old links.",
-      save: "Save",
-      saving: "Saving…",
-      discard: "Discard",
-      phoneTitle: "Phone access",
-      phoneStatusOn: "Gateway running · port {port}",
-      phoneStatusErr: "Gateway not running: {error}",
-      phoneLoading: "Generating links…",
-      phoneLoadFail: "Failed to load: {error}",
-      phoneLan: "LAN",
-      phoneRemote: "Remote",
-      phoneScanHint: "Scan with your phone browser, or copy the address over; a device stays authorized once opened.",
-      phoneCopy: "Copy link",
-      phoneCopied: "Copied",
-      phoneRemoteCaution: "The remote link carries an access token; keep the QR code from being scanned by others.",
-      phoneRotate: "New link",
-      phoneRotateHint: "Invalidate the current link and issue a new one; all authorized devices are signed out.",
-      phoneRotated: "Link rotated; the old one is dead",
-      phoneRotateFail: "Rotate failed: {error}",
-      kcfgGroupFeatures: "Features",
-      kcfgGroupPhone: "Phone access",
-      kcfgPhoneEnabled: "Show the Phone access page",
-      kcfgPhoneEnabledHint: "Visibility of the Phone access page (gateway start/stop lives in the page).",
-      kcfgPhonePort: "Phone access port (1–65535)",
-      kcfgPhonePortHint: "Gateway port bound on 0.0.0.0.",
-      kcfgPhoneRemoteDomain: "Phone remote domain",
-      kcfgPhoneRemoteDomainHint: "Remote access domain (e.g. a tunnel host); leave blank for LAN only.",
-      kcfgPhoneKeepGatewayOn: "Keep gateway on",
-      kcfgPhoneKeepGatewayOnHint: "Keeps the gateway running after the page closes.",
       moved: "Moved",
       imported: "Imported",
       cancel: "Cancel",
@@ -1181,12 +1086,6 @@ window.__ModuleLoader__.load({
     // 会拿到旧值而把界面锁死在英文。
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? key;
-    /** 带占位符的文案变体：tf("phoneStatusOn", { port: 3090 }) */
-    const tf = (key, vars) => {
-      let s = lang()[key] ?? key;
-      for (const [name, value] of Object.entries(vars ?? {})) s = s.split(`{${name}}`).join(String(value));
-      return s;
-    };
 
     const { subscribeLocale, getLocaleVersion } = dock;
 
@@ -1205,7 +1104,7 @@ window.__ModuleLoader__.load({
 /* 多终端：入口图标数量角标 + 标签条 + 堆叠 pane（隐藏 pane 离屏缓冲输出） */
 .dshk-enbtn{position:relative}
 /* 品牌主色是单色令牌（浅色主题近黑、深色主题近白），主色底上的文字一律用 bg-base 取反——
-   写死 #fff 在深色主题就是白底白字（配置/文件/Git 的保存钮、手机设置签同此） */
+   写死 #fff 在深色主题就是白底白字（配置/文件/Git 的保存钮同此） */
 .dshk-tabs{display:inline-flex;align-items:center;gap:2px;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .dshk-tabs::-webkit-scrollbar{display:none}
 .dshk-tab{display:inline-flex;align-items:center;gap:5px;flex:none;height:22px;padding:0 5px 0 9px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap;max-width:170px;user-select:none}
@@ -1242,29 +1141,6 @@ window.__ModuleLoader__.load({
 .dshk-rbpane .dshk-vault-panehost{flex:1 1 auto;min-height:0}
 /* 侧栏索引宿主（知识库目录/日程待办入口占 sidebar.workspaces） */
 .dshk-sidehost{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;pointer-events:auto}
-/* 手机访问页（settings.section 内联区块，与技能页同级） */
-.dshk-phone{width:100%;max-width:460px}
-.dshk-phone-head{display:flex;align-items:center;gap:8px;margin:2px 0 10px}
-.dshk-phone-title{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}
-.dshk-phone-status{margin:0 0 10px;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
-.dshk-phone-notice{font-size:11px;line-height:1.5;color:var(--dsw-alias-brand-primary)}
-.dshk-phone-body{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding-bottom:4px}
-.dshk-phone-tabs{display:inline-flex;gap:4px;padding:3px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-layer-3)}
-.dshk-phone-tab{appearance:none;border:0;background:none;font:inherit;font-size:11px;line-height:1;padding:5px 12px;border-radius:999px;color:var(--dsw-alias-label-secondary);cursor:pointer}
-.dshk-phone-tab[aria-pressed="true"]{background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
-.dshk-phone-qrwrap{display:flex;align-items:center;justify-content:center;min-height:120px;border-radius:10px;background:#fff;padding:6px;align-self:center}
-.dshk-phone-urlrow{display:flex;align-items:center;gap:6px;width:100%}
-.dshk-phone-copybtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:11px;line-height:1;padding:7px 10px;border-radius:8px;cursor:pointer}
-.dshk-phone-copybtn:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-phone-copybtn[disabled]{opacity:.5;cursor:default}
-.dshk-phone-hint{margin:0;font-size:11px;line-height:1.55;color:var(--dsw-alias-label-tertiary)}
-.dshk-phone-gatebtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;padding:9px 10px;border-radius:8px;cursor:pointer;width:100%;margin-bottom:10px}
-.dshk-phone-rotate{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap}
-.dshk-phone-rotate:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-phone-rotate[disabled]{opacity:.5;cursor:default}
-.dshk-phone-gatebtn:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-phone-gatebtn[disabled]{opacity:.5;cursor:default}
-.dshk-phone-gatebtn-stop{border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
 /* 知识库（vault）：工具条+目录树投侧栏索引宿主，页编辑器投右栏 pane 宿主（拆两半 portal）。 */
    「选库进入阅读」——空间=顶层目录，树懒加载，[[wikilink]] 页内跳转带历史 */
 .dshk-vault{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
@@ -1755,240 +1631,6 @@ ellipsis，窄列只截字不破版 */
 
 
 
-    // ─────────── 手机访问页（settings.section，与技能页同类）───────────
-    // 数据源：宿主半边 /dsh-kit/phone/info|link（rotate 无 UI 入口——轮换在
-    // 宿主侧随「关闭→开启」自动触发）。这些端点挂在主 webserver
-    // （只绑回环，LAN 够不到），宿主侧另有同源校验。二维码用 vendored
-    // qrcode-generator（/dsh-kit/vendor/qrcode.js），首次打开面板时按需加载，
-    // 与终端组件的 xterm 同策略。
-    function fetchPhoneInfo(signal) {
-      // 字段以宿主回包为准：visible 是页面可见性，网关状态看 gatewayOn/running
-      return kitGetJson("/dsh-kit/phone/info", signal, (b) => typeof b.visible === "boolean");
-    }
-    function fetchPhoneLinks(signal) {
-      return kitGetJson("/dsh-kit/phone/link", signal, (b) => Array.isArray(b.links));
-    }
-    /** 把链接画上 canvas：白色静区 + 码点，按 devicePixelRatio 输出清晰图 */
-    function drawPhoneQr(canvas, text) {
-      const qrcode = window.qrcode;
-      if (typeof qrcode !== "function") throw new Error("qrcode lib not loaded");
-      const qr = qrcode(0, "M");
-      qr.addData(text);
-      qr.make();
-      const count = qr.getModuleCount();
-      const quiet = 4;
-      const cell = Math.max(3, Math.floor(220 / (count + quiet * 2)));
-      const size = cell * (count + quiet * 2);
-      const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
-      canvas.width = size * dpr;
-      canvas.height = size * dpr;
-      canvas.style.width = `${size}px`;
-      canvas.style.height = `${size}px`;
-      const ctx = canvas.getContext("2d");
-      ctx.scale(dpr, dpr);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, size, size);
-      ctx.fillStyle = "#111111";
-      for (let row = 0; row < count; row++) {
-        for (let col = 0; col < count; col++) {
-          if (qr.isDark(row, col)) ctx.fillRect((col + quiet) * cell, (row + quiet) * cell, cell, cell);
-        }
-      }
-    }
-    function PhoneSection() {
-      const [info, setInfo] = react.useState(null);
-      const [linkData, setLinkData] = react.useState(null);
-      const [loadErr, setLoadErr] = react.useState("");
-      const [activeIdx, setActiveIdx] = react.useState(0);
-      const [qrReady, setQrReady] = react.useState(false);
-      const [copied, setCopied] = react.useState(false);
-      const [notice, setNotice] = react.useState("");
-      const canvasRef = react.useRef(null);
-      // 网关启停开关（POST /dsh-kit/phone/gateway；状态文件直管，不经 settings）。
-      // 远程域名/端口属插件配置，编辑入口在原生设置页（0.1.7 起 Config schema 自动生成）
-      const [gateBusy, setGateBusy] = react.useState(false);
-      const toggleGateway = async (next) => {
-        if (gateBusy) return;
-        setGateBusy(true);
-        try {
-          const body = await kitPostJson("/dsh-kit/phone/gateway", { on: next }, (b) => typeof b.gatewayOn === "boolean");
-          // 以端点回包为准更新状态（不依赖 settings 读取器，无滞后）
-          setInfo((info) =>
-            info === null
-              ? info
-              : { ...info, gatewayOn: body.gatewayOn, running: body.running === true, error: body.error ?? null },
-          );
-          if (body.gatewayOn && body.running) {
-            fetchPhoneLinks(new AbortController().signal).then(setLinkData).catch(() => {});
-          } else {
-            setLinkData(null);
-          }
-        } catch {
-          // 失败保持原状：下一次 info 刷新为准
-        }
-        setGateBusy(false);
-      };
-      // 手动轮换令牌：作废旧链接生成新链接（启停不再自动轮换，见宿主 setGatewayEnabled）
-      const rotateLink = async () => {
-        if (gateBusy) return;
-        setGateBusy(true);
-        try {
-          const body = await kitPostJson("/dsh-kit/phone/rotate", {}, (b) => Array.isArray(b.links));
-          setLinkData(body);
-          setNotice(t("phoneRotated"));
-          setTimeout(() => setNotice(""), 3000);
-        } catch (e) {
-          setNotice(tf("phoneRotateFail", { error: String(e?.message ?? e) }));
-          setTimeout(() => setNotice(""), 3000);
-        }
-        setGateBusy(false);
-      };
-
-      // 打开即取状态与链接；网关未跑时只显示原因
-      react.useEffect(() => {
-        const ctrl = new AbortController();
-        fetchPhoneInfo(ctrl.signal)
-          .then((body) => {
-            setInfo(body);
-            if (body.gatewayOn && body.running) {
-              return fetchPhoneLinks(ctrl.signal).then(setLinkData).catch((e) => setLoadErr(String(e?.message ?? e)));
-            }
-            return undefined;
-          })
-          .catch((e) => setLoadErr(String(e?.message ?? e)));
-        return () => ctrl.abort();
-      }, []);
-      // vendored 二维码库按需加载一次
-      react.useEffect(() => {
-        if (typeof window !== "undefined" && typeof window.qrcode === "function") {
-          setQrReady(true);
-          return undefined;
-        }
-        loadScript("/dsh-kit/vendor/qrcode.js")
-          .then(() => setQrReady(true))
-          .catch(() => {});
-        return undefined;
-      }, []);
-
-      const links = linkData && Array.isArray(linkData.links) ? linkData.links : [];
-      const activeUrl = links[activeIdx] ? links[activeIdx].url : "";
-      // 链接统一出二维码（LAN/远程同等待遇）；远程链接公网可达，页面提示谨防
-      // 他人扫码（见 phoneRemoteCaution）。悬停复制按钮 title 可查看完整链接。
-      const activeIsRemote = !!(links[activeIdx] && links[activeIdx].label === "remote");
-      react.useEffect(() => {
-        if (!qrReady || activeUrl === "" || !canvasRef.current) return;
-        try {
-          drawPhoneQr(canvasRef.current, activeUrl);
-        } catch {
-          // 绘制失败不阻塞面板：仍可点「复制链接」获取
-        }
-      }, [qrReady, activeUrl]);
-
-      const copyActive = () => {
-        if (activeUrl === "") return;
-        writeClipboard(activeUrl).then((ok) => {
-          if (ok) {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1600);
-          }
-        });
-      };
-
-      const gatewayOn = info !== null && info.gatewayOn === true;
-      let statusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: t("phoneLoading") });
-      if (info !== null) {
-        if (!gatewayOn) statusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: t("phoneStoppedHint") });
-        else if (!info.running) statusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: tf("phoneStatusErr", { error: info.error ?? "unknown" }) });
-        else statusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: tf("phoneStatusOn", { port: info.port }) });
-      }
-      if (loadErr !== "") {
-        statusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: tf("phoneLoadFail", { error: loadErr }) });
-      }
-
-      return jsxRuntime.jsxs("div", {
-        className: "dshk-phone",
-        children: [
-          jsxRuntime.jsxs("div", {
-            className: "dshk-phone-head",
-            children: [
-              jsxRuntime.jsx("span", { className: "dshk-phone-title", children: t("phoneTitle") }),
-              jsxRuntime.jsx("span", { style: { flex: 1 } }),
-              notice !== ""
-                ? jsxRuntime.jsx("span", { className: "dshk-phone-notice", role: "status", children: notice })
-                : null,
-            ],
-          }),
-          jsxRuntime.jsx("button", {
-            type: "button",
-            className: gatewayOn ? "dshk-phone-gatebtn dshk-phone-gatebtn-stop" : "dshk-phone-gatebtn",
-            disabled: gateBusy,
-            onClick: () => {
-              toggleGateway(!gatewayOn);
-            },
-            children: t(gatewayOn ? "phoneGateStop" : "phoneGateStart"),
-          }),
-          statusNode,
-          links.length > 0
-            ? jsxRuntime.jsxs(
-                "div",
-                {
-                  className: "dshk-phone-body",
-                  children: [
-                    links.length > 1
-                      ? jsxRuntime.jsx("div", {
-                          className: "dshk-phone-tabs",
-                          children: links.map((item, index) =>
-                            jsxRuntime.jsx(
-                              "button",
-                              {
-                                type: "button",
-                                className: "dshk-phone-tab",
-                                "aria-pressed": index === activeIdx,
-                                onClick: () => setActiveIdx(index),
-                                children: item.label === "remote" ? t("phoneRemote") : t("phoneLan"),
-                              },
-                              item.url,
-                            ),
-                          ),
-                        })
-                      : null,
-                    jsxRuntime.jsx("div", { className: "dshk-phone-qrwrap", children: jsxRuntime.jsx("canvas", { ref: canvasRef, "aria-label": "QR code" }) }),
-                    jsxRuntime.jsxs("div", {
-                      className: "dshk-phone-urlrow",
-                      children: [
-                        jsxRuntime.jsx("button", {
-                          type: "button",
-                          className: "dshk-phone-copybtn",
-                          title: activeUrl,
-                          onClick: copyActive,
-                          children: copied ? t("phoneCopied") : t("phoneCopy"),
-                        }),
-                        gatewayOn
-                          ? jsxRuntime.jsx(KitTip, {
-                              label: t("phoneRotateHint"),
-                              children: jsxRuntime.jsx("button", {
-                                type: "button",
-                                className: "dshk-phone-rotate",
-                                disabled: gateBusy,
-                                onClick: () => {
-                                  rotateLink();
-                                },
-                                children: t("phoneRotate"),
-                              }),
-                            })
-                          : null,
-                      ],
-                    }),
-                    jsxRuntime.jsx("p", { className: "dshk-phone-hint", children: t(activeIsRemote ? "phoneRemoteCaution" : "phoneScanHint") }),
-                  ],
-                },
-              )
-            : null,
-        ],
-      });
-    }
-
-
     /** 内容区文档签条（浏览器式页签）：一文档一签、点击切换、✕ 单关；
      *  label(path) 决定签名（文件带后缀、知识库页去掉 .md）。文件区与知识库区
      *  的 pane 正文共用 */
@@ -2067,44 +1709,9 @@ ellipsis，窄列只截字不破版 */
       // 官方右栏可用时机：seat 不在场（全局面板占住中栏 / 没选会话）时，索引视图
       // 一并让位给官方会话列表，与「右栏不存在」这件事保持同一时机
       const rightbarUp = useRightbarSeat();
-      const snap = react.useSyncExternalStore(subscribeCfg, getCfgSnapshot);
-      const cfg = cfgFromSnapshot(snap);
       // useSessions 透传给右栏 pane（浏览器 pane 定位当前会话用）：inject 闭包
       // 从这里取最新值（槽位注册发生在 effect，渲染期的 props 用模块变量桥接）
       shellShare.current = props;
-      // 座位门控：按配置动态注册/注销输入框入口与技能页（配置页
-      // 本体不受门控，否则关掉就再也打不开）。快照未就绪按默认全开处理，首个
-      // ready 快照到达后本效果自动重跑纠正。
-      react.useEffect(() => {
-        if (!slotsCtx) return undefined;
-        const handles = [];
-        const want = [
-          // 手机访问走 settings.section（order 45）；输入行入口各归各组件
-          //（文件树 dsh-kit/files、知识库 dsh-kit/vault、终端 dsh-kit/terminal 自注册）
-          ["phone", cfg.phoneEnabled, () =>
-            slotsCtx.slots.register(
-              { name: "settings.section", id: "kit-phone", order: 45, label: () => t("phoneTitle") },
-              PhoneSection,
-            )],
-        ];
-        for (const [key, enabled, make] of want) {
-          if (!enabled) continue;
-          try {
-            handles.push(make());
-          } catch (error) {
-            console.error(`[dsh-kit] 注册座位失败：${key}`, error);
-          }
-        }
-        return () => {
-          for (const dispose of handles) {
-            try {
-              dispose();
-            } catch {
-              // 忽略注销异常
-            }
-          }
-        };
-      }, [cfg.phoneEnabled]);
 
       // 侧边栏浏览区占用：单槽轮换——源代码管理 ↔ 文件树 ↔ 知识库
       // 目录，全关回官方会话列表。右栏不在场时不占（全局面板在前台时左栏该是
@@ -2184,7 +1791,7 @@ ellipsis，窄列只截字不破版 */
     // ── 设置导航图标：官方 navIcon(id) 硬编码映射（models/agent-presets/plugins），
     // 未知 id 一律回退齿轮。没有注册缝，这里按标签文字找到对应行，把行内第一个
     // svg 换成自绘分层图标——纯外观增强：任何一步失败都静默保持齿轮。
-    // 候选由各归属方注册（根包注册手机访问，组件经 dock.registerNavIcon 注册自己的）。
+    // 候选由各归属方注册（组件经 dock.registerNavIcon 注册自己的）。
     const SVG_OPEN =
       '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" ' +
       'stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
@@ -2192,16 +1799,6 @@ ellipsis，窄列只截字不破版 */
     function registerNavIcon(entry) {
       if (entry) NAV_ICONS.push(entry);
     }
-    registerNavIcon({
-      label: () => t("phoneTitle"),
-      attr: "data-dshk-phone",
-      html:
-        SVG_OPEN +
-        '<rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/>' +
-        '<path d="M6.8 3.4h2.4"/>' +
-        '<path d="M8 12.6h.01"/>' +
-        "</svg>",
-    });
 
     let iconSwapPending = false;
     function swapKitNavIcons() {
@@ -2759,51 +2356,11 @@ ellipsis，窄列只截字不破版 */
       }
     }
 
-    // ─────────── 配置页（0.1.7 plugins.row.config）───────────
-    // 插件页（侧栏「插件」）dsh-kit 行的「配置」控件进这里：页面宿主按
-    // rowId（=entry id「dsh-kit」）绑定宿主命名空间，经 props.form 给已受理值
-    // （form.state）与原子写回（form.mutate）。渲染走官方表单原语
-    // （SettingsForm/SettingsValueField/Switch/SegmentedTabs，与图标同一 require），
-    // SegmentedTabs 按 KIT_CFG_GROUPS 页签分组。草稿本地自持（bool 记布尔值，
-    // number/string 文本暂存、保存期解析），只有「保存」才写入——离开页面即丢
-    // （SettingsForm 卸载自动 onDiscard）；清空文本保存 = unset 回 schema 默认
-    // （快捷键消费端本就「非法/空 → 回默认」）。字段清单与 src/index.ts 的 Config
-    // schema 同源（render-check 钉住）。
-    const KIT_CFG_FIELDS = [
-      { key: "phoneEnabled", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneEnabled", hintKey: "kcfgPhoneEnabledHint" },
-      { key: "phonePort", type: "number", min: 1, max: 65535, group: "kcfgGroupPhone", labelKey: "kcfgPhonePort", hintKey: "kcfgPhonePortHint" },
-      { key: "phoneRemoteDomain", type: "string", group: "kcfgGroupPhone", labelKey: "kcfgPhoneRemoteDomain", hintKey: "kcfgPhoneRemoteDomainHint" },
-      { key: "phoneKeepGatewayOn", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneKeepGatewayOn", hintKey: "kcfgPhoneKeepGatewayOnHint" },
-    ];
-    /** KIT_CFG_FIELDS 的分组顺序（组名键也用于 t() 取组标题/页签文案） */
-    const KIT_CFG_GROUPS = ["kcfgGroupPhone"];
-
-    // 配置页骨架（草稿/保存/官方表单接线）已收进 dock：这里只喂本包字段表与词条
-    const KitConfigPage = dock.createConfigPage({
-      fields: KIT_CFG_FIELDS,
-      groups: KIT_CFG_GROUPS,
-      t,
-      onSaved: async () => {
-        try {
-          const body = await kitJson("/dsh-kit/config");
-          if (body && typeof body === "object") applyConfigSnapshot(body);
-        } catch {
-          // 重拉失败不动快照：下次页面刷新自然取到
-        }
-      },
-    });
 
     // ─────────── 插件体 ───────────
     function apply(ctx) {
       slotsCtx = ctx;
       kitBase.apply(ctx); // 底座服务捕获（官方右栏 sidebarRight）
-      // 配置页（0.1.7）：挂进插件页的 plugins.row.config 槽，key 由页面宿主按
-      // <包名>#<行id> 匹配（本插件单行，行 id = kit）。命名空间未伺服时页面
-      // 宿主不传 form，组件自带降级文案；注册随本 entry 生命周期生灭。
-      ctx.slots.inject("plugins.row.config", () => ctx.slots.register(
-        { name: "plugins.row.config", key: "dsh-kit#kit" },
-        KitConfigPage,
-      ));
 
       // 会话监视（429 续跑/死循环/通知）已随组件化迁入 dsh-kit-monitor 的 client 半边
 
@@ -2847,12 +2404,6 @@ ellipsis，窄列只截字不破版 */
         }, 5000);
       });
       injectStyles();
-      // 拉一次生效配置喂功能门控（见模块顶 cfgSnapshot 注释）；失败保持内置默认
-      kitJson("/dsh-kit/config")
-        .then((body) => {
-          if (body && typeof body === "object") applyConfigSnapshot(body);
-        })
-        .catch(() => {});
       // 全帧浮层宿主：面板渲染、输入框入口与技能页的座位门控、快捷键监听全在
       // KitSurfaces（根作用域常驻，fiber 上下文内做动态 register/dispose）。
       ctx.slots.inject("shell.overlay", () =>
@@ -2885,10 +2436,10 @@ ellipsis，窄列只截字不破版 */
         });
         scanPreviewDownload();
       }
-      // 组件半边激活（单包收回的 files/monitor/terminal/skills/search/browser/vault）：
+      // 组件半边激活（单包收回的 files/monitor/terminal/skills/search/browser/vault/phone）：
       // 与多包时代等价——client 入口注册总是发生，功能存在性由各组件自己的探针门控
       // （行禁用只摘宿主半边端点，探针 404 的组件整体不注册）
-      for (const componentMod of [exports.files, exports.monitor, exports.terminal, exports.skills, exports.search, exports.browser, exports.vault]) {
+      for (const componentMod of [exports.files, exports.monitor, exports.terminal, exports.skills, exports.search, exports.browser, exports.vault, exports.phone]) {
         if (componentMod && typeof componentMod.apply === "function") componentMod.apply(ctx);
       }
     }
@@ -6024,6 +5575,445 @@ ellipsis，窄列只截字不破版 */
     return module.exports;
 };
 
+    // ── dsh-kit/phone 组件（手机访问）──
+    // dsh-kit/phone 浏览器半边 —— 手机访问组件的 client 面。
+    // 收纳：设置页「手机访问」整块（网关启停 / 二维码 / 链接复制与轮换）、组件配置页
+    // （端口 / 远程域名 / 网关常驻）与设置导航的手机图标。
+    // 数据走本组件宿主半边 /dsh-kit/phone/*；行开关即总开关：宿主半边不物化时
+    // /dsh-kit-phone/config 404，apply 直接不注册任何槽位（设置页整块与配置页都不出现）。
+    const phoneModule = (kit, require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+    const react = require("react");
+    const jsxRuntime = require("react/jsx-runtime");
+    const dock = kit;
+    const {
+      KitTip, kitGetJson, kitPostJson, kitJson, resolveZh, subscribeLocale, getLocaleVersion,
+      writeClipboard, registerNavIcon, t: rootT,
+    } = dock;
+
+    // 组件私有文案（手机访问页与配置页）
+    const zh = {
+      phoneGateStart: "启动网关",
+      phoneGateStop: "关闭网关",
+      phoneStoppedHint: "网关未启动。开启后可用「刷新链接」作废旧链接。",
+      phoneTitle: "手机访问",
+      phoneStatusOn: "网关运行中 · 端口 {port}",
+      phoneStatusErr: "网关未运行：{error}",
+      phoneLoading: "正在生成链接…",
+      phoneLoadFail: "读取失败：{error}",
+      phoneLan: "局域网",
+      phoneRemote: "远程",
+      phoneScanHint: "用手机浏览器扫码，或复制地址到手机打开；首次打开后该设备长期有效。",
+      phoneCopy: "复制链接",
+      phoneCopied: "已复制",
+      phoneRemoteCaution: "远程链接含访问令牌，二维码谨防被他人扫码。",
+      phoneRotate: "刷新链接",
+      phoneRotateHint: "作废当前链接并生成新链接，已授权设备将全部失效。",
+      phoneRotated: "链接已刷新，旧链接已失效",
+      phoneRotateFail: "刷新失败：{error}",
+      kcfgGroupPhone: "手机访问",
+      kcfgPhonePort: "手机访问端口（1–65535）",
+      kcfgPhonePortHint: "网关对外端口（绑定 0.0.0.0）。",
+      kcfgPhoneRemoteDomain: "手机远程域名",
+      kcfgPhoneRemoteDomainHint: "远程访问域名（如内网穿透地址），留空只用局域网。",
+      kcfgPhoneKeepGatewayOn: "网关常驻",
+      kcfgPhoneKeepGatewayOnHint: "页面关闭后网关继续跑。",
+    };
+    const en = {
+      phoneGateStart: "Start gateway",
+      phoneGateStop: "Stop gateway",
+      phoneStoppedHint: "Gateway is off. Use \"New link\" after starting to invalidate old links.",
+      phoneTitle: "Phone access",
+      phoneStatusOn: "Gateway running · port {port}",
+      phoneStatusErr: "Gateway not running: {error}",
+      phoneLoading: "Generating links…",
+      phoneLoadFail: "Failed to load: {error}",
+      phoneLan: "LAN",
+      phoneRemote: "Remote",
+      phoneScanHint: "Scan with your phone browser, or copy the address over; a device stays authorized once opened.",
+      phoneCopy: "Copy link",
+      phoneCopied: "Copied",
+      phoneRemoteCaution: "The remote link carries an access token; keep the QR code from being scanned by others.",
+      phoneRotate: "New link",
+      phoneRotateHint: "Invalidate the current link and issue a new one; all authorized devices are signed out.",
+      phoneRotated: "Link rotated; the old one is dead",
+      phoneRotateFail: "Rotate failed: {error}",
+      kcfgGroupPhone: "Phone access",
+      kcfgPhonePort: "Phone access port (1–65535)",
+      kcfgPhonePortHint: "Gateway port bound on 0.0.0.0.",
+      kcfgPhoneRemoteDomain: "Phone remote domain",
+      kcfgPhoneRemoteDomainHint: "Remote access domain (e.g. a tunnel host); leave blank for LAN only.",
+      kcfgPhoneKeepGatewayOn: "Keep gateway on",
+      kcfgPhoneKeepGatewayOnHint: "Keeps the gateway running after the page closes.",
+    };
+    const lang = () => (resolveZh() ? zh : en);
+    const t = (key) => lang()[key] ?? rootT(key);
+    /** 带占位符的文案变体：tf("phoneStatusOn", { port: 3090 }) */
+    const tf = (key, vars) => {
+      let s = lang()[key] ?? rootT(key);
+      for (const [name, value] of Object.entries(vars ?? {})) s = s.split("{" + name + "}").join(String(value));
+      return s;
+    };
+
+    // ─────────── 组件配置（/dsh-kit-phone/config）───────────
+    // 网关状态与链接不走这里（走 /dsh-kit/phone/info|link）；本端点只做可达性探针：
+    // 200 = 行启用；404（行禁用 → 子模块不物化）= 设置页整块与配置页都不注册。
+    let pAvailable = false;
+    async function loadCfg() {
+      try {
+        const body = await kitJson("/dsh-kit-phone/config");
+        pAvailable = !!(body && typeof body === "object");
+      } catch {
+        pAvailable = false;
+      }
+      return pAvailable;
+    }
+
+    // ─────────── 配置页（plugins.row.config）───────────
+    // 骨架（草稿/保存/官方表单接线）在 dock，这里只喂本组件字段表与词条；
+    // 字段清单与 src/phone/index.ts 的 Config schema 同源（render-check 钉住）。
+    const PHONE_CFG_FIELDS = [
+      { key: "phonePort", type: "number", min: 1, max: 65535, group: "kcfgGroupPhone", labelKey: "kcfgPhonePort", hintKey: "kcfgPhonePortHint" },
+      { key: "phoneRemoteDomain", type: "string", group: "kcfgGroupPhone", labelKey: "kcfgPhoneRemoteDomain", hintKey: "kcfgPhoneRemoteDomainHint" },
+      { key: "phoneKeepGatewayOn", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneKeepGatewayOn", hintKey: "kcfgPhoneKeepGatewayOnHint" },
+    ];
+    const PHONE_CFG_GROUPS = ["kcfgGroupPhone"];
+    const PhoneConfigPage = dock.createConfigPage({
+      fields: PHONE_CFG_FIELDS,
+      groups: PHONE_CFG_GROUPS,
+      t,
+      onSaved: async () => { await loadCfg(); },
+    });
+
+    // ─────────── 组件样式 ───────────
+    const PHONE_CSS = `
+/* 手机访问页（settings.section 内联区块，与技能页同级） */
+.dshk-phone{width:100%;max-width:460px}
+.dshk-phone-head{display:flex;align-items:center;gap:8px;margin:2px 0 10px}
+.dshk-phone-title{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}
+.dshk-phone-status{margin:0 0 10px;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
+.dshk-phone-notice{font-size:11px;line-height:1.5;color:var(--dsw-alias-brand-primary)}
+.dshk-phone-body{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding-bottom:4px}
+.dshk-phone-tabs{display:inline-flex;gap:4px;padding:3px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-layer-3)}
+.dshk-phone-tab{appearance:none;border:0;background:none;font:inherit;font-size:11px;line-height:1;padding:5px 12px;border-radius:999px;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.dshk-phone-tab[aria-pressed="true"]{background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
+.dshk-phone-qrwrap{display:flex;align-items:center;justify-content:center;min-height:120px;border-radius:10px;background:#fff;padding:6px;align-self:center}
+.dshk-phone-urlrow{display:flex;align-items:center;gap:6px;width:100%}
+.dshk-phone-copybtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:11px;line-height:1;padding:7px 10px;border-radius:8px;cursor:pointer}
+.dshk-phone-copybtn:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-phone-copybtn[disabled]{opacity:.5;cursor:default}
+.dshk-phone-hint{margin:0;font-size:11px;line-height:1.55;color:var(--dsw-alias-label-tertiary)}
+.dshk-phone-gatebtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;padding:9px 10px;border-radius:8px;cursor:pointer;width:100%;margin-bottom:10px}
+.dshk-phone-rotate{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.dshk-phone-rotate:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-phone-rotate[disabled]{opacity:.5;cursor:default}
+.dshk-phone-gatebtn:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-phone-gatebtn[disabled]{opacity:.5;cursor:default}
+.dshk-phone-gatebtn-stop{border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
+`;
+    /** 注入本组件样式（幂等；行关闭时不注册槽位也就不会注入） */
+    function injectStyles() {
+      if (typeof document === "undefined") return;
+      if (document.querySelector('style[data-plugin-css="dsh-kit-phone/ui"]') === null) {
+        const tag = document.createElement("style");
+        tag.dataset.plugin = "dsh-kit-phone";
+        tag.dataset.pluginCss = "dsh-kit-phone/ui";
+        tag.textContent = PHONE_CSS;
+        document.head.appendChild(tag);
+      }
+    }
+
+    // ─────────── vendor 按需加载 ───────────
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = src;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error("load failed: " + src));
+        document.head.appendChild(s);
+      });
+    }
+
+    // ─────────── 手机访问页（settings.section，与技能页同类）───────────
+    // 数据源：本组件宿主半边 /dsh-kit/phone/info|link（网关状态与带令牌链接）。
+    // 这些端点挂在主 webserver（只绑回环，LAN 够不到），宿主侧另有同源校验。
+    // 二维码用 vendored qrcode-generator（/dsh-kit/vendor/qrcode.js），首次打开
+    // 面板时按需加载，与终端组件的 xterm 同策略。
+    function fetchPhoneInfo(signal) {
+      // 字段以宿主回包为准：网关状态看 gatewayOn/running
+      return kitGetJson("/dsh-kit/phone/info", signal, (b) => typeof b.gatewayOn === "boolean");
+    }
+    function fetchPhoneLinks(signal) {
+      return kitGetJson("/dsh-kit/phone/link", signal, (b) => Array.isArray(b.links));
+    }
+    /** 把链接画上 canvas：白色静区 + 码点，按 devicePixelRatio 输出清晰图 */
+    function drawPhoneQr(canvas, text) {
+      const qrcode = window.qrcode;
+      if (typeof qrcode !== "function") throw new Error("qrcode lib not loaded");
+      const qr = qrcode(0, "M");
+      qr.addData(text);
+      qr.make();
+      const count = qr.getModuleCount();
+      const quiet = 4;
+      const cell = Math.max(3, Math.floor(220 / (count + quiet * 2)));
+      const size = cell * (count + quiet * 2);
+      const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+      canvas.width = size * dpr;
+      canvas.height = size * dpr;
+      canvas.style.width = `${size}px`;
+      canvas.style.height = `${size}px`;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(dpr, dpr);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = "#111111";
+      for (let row = 0; row < count; row++) {
+        for (let col = 0; col < count; col++) {
+          if (qr.isDark(row, col)) ctx.fillRect((col + quiet) * cell, (row + quiet) * cell, cell, cell);
+        }
+      }
+    }
+    function PhoneSection() {
+      react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
+      const [info, setInfo] = react.useState(null);
+      const [linkData, setLinkData] = react.useState(null);
+      const [loadErr, setLoadErr] = react.useState("");
+      const [activeIdx, setActiveIdx] = react.useState(0);
+      const [qrReady, setQrReady] = react.useState(false);
+      const [copied, setCopied] = react.useState(false);
+      const [notice, setNotice] = react.useState("");
+      const canvasRef = react.useRef(null);
+      // 网关启停开关（POST /dsh-kit/phone/gateway；状态文件直管，不经 settings）。
+      // 远程域名/端口属插件配置，编辑入口在原生设置页（0.1.7 起 Config schema 自动生成）
+      const [gateBusy, setGateBusy] = react.useState(false);
+      const toggleGateway = async (next) => {
+        if (gateBusy) return;
+        setGateBusy(true);
+        try {
+          const body = await kitPostJson("/dsh-kit/phone/gateway", { on: next }, (b) => typeof b.gatewayOn === "boolean");
+          // 以端点回包为准更新状态（不依赖 settings 读取器，无滞后）
+          setInfo((info) =>
+            info === null
+              ? info
+              : { ...info, gatewayOn: body.gatewayOn, running: body.running === true, error: body.error ?? null },
+          );
+          if (body.gatewayOn && body.running) {
+            fetchPhoneLinks(new AbortController().signal).then(setLinkData).catch(() => {});
+          } else {
+            setLinkData(null);
+          }
+        } catch {
+          // 失败保持原状：下一次 info 刷新为准
+        }
+        setGateBusy(false);
+      };
+      // 手动轮换令牌：作废旧链接生成新链接（启停不再自动轮换，见宿主 setGatewayEnabled）
+      const rotateLink = async () => {
+        if (gateBusy) return;
+        setGateBusy(true);
+        try {
+          const body = await kitPostJson("/dsh-kit/phone/rotate", {}, (b) => Array.isArray(b.links));
+          setLinkData(body);
+          setNotice(t("phoneRotated"));
+          setTimeout(() => setNotice(""), 3000);
+        } catch (e) {
+          setNotice(tf("phoneRotateFail", { error: String(e?.message ?? e) }));
+          setTimeout(() => setNotice(""), 3000);
+        }
+        setGateBusy(false);
+      };
+
+      // 打开即取状态与链接；网关未跑时只显示原因
+      react.useEffect(() => {
+        const ctrl = new AbortController();
+        fetchPhoneInfo(ctrl.signal)
+          .then((body) => {
+            setInfo(body);
+            if (body.gatewayOn && body.running) {
+              return fetchPhoneLinks(ctrl.signal).then(setLinkData).catch((e) => setLoadErr(String(e?.message ?? e)));
+            }
+            return undefined;
+          })
+          .catch((e) => setLoadErr(String(e?.message ?? e)));
+        return () => ctrl.abort();
+      }, []);
+      // vendored 二维码库按需加载一次
+      react.useEffect(() => {
+        if (typeof window !== "undefined" && typeof window.qrcode === "function") {
+          setQrReady(true);
+          return undefined;
+        }
+        loadScript("/dsh-kit/vendor/qrcode.js")
+          .then(() => setQrReady(true))
+          .catch(() => {});
+        return undefined;
+      }, []);
+
+      const links = linkData && Array.isArray(linkData.links) ? linkData.links : [];
+      const activeUrl = links[activeIdx] ? links[activeIdx].url : "";
+      // 链接统一出二维码（LAN/远程同等待遇）；远程链接公网可达，页面提示谨防
+      // 他人扫码（见 phoneRemoteCaution）。悬停复制按钮 title 可查看完整链接。
+      const activeIsRemote = !!(links[activeIdx] && links[activeIdx].label === "remote");
+      react.useEffect(() => {
+        if (!qrReady || activeUrl === "" || !canvasRef.current) return;
+        try {
+          drawPhoneQr(canvasRef.current, activeUrl);
+        } catch {
+          // 绘制失败不阻塞面板：仍可点「复制链接」获取
+        }
+      }, [qrReady, activeUrl]);
+
+      const copyActive = () => {
+        if (activeUrl === "") return;
+        writeClipboard(activeUrl).then((ok) => {
+          if (ok) {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1600);
+          }
+        });
+      };
+
+      const gatewayOn = info !== null && info.gatewayOn === true;
+      let statusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: t("phoneLoading") });
+      if (info !== null) {
+        if (!gatewayOn) statusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: t("phoneStoppedHint") });
+        else if (!info.running) statusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: tf("phoneStatusErr", { error: info.error ?? "unknown" }) });
+        else statusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: tf("phoneStatusOn", { port: info.port }) });
+      }
+      if (loadErr !== "") {
+        statusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: tf("phoneLoadFail", { error: loadErr }) });
+      }
+
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-phone",
+        children: [
+          jsxRuntime.jsxs("div", {
+            className: "dshk-phone-head",
+            children: [
+              jsxRuntime.jsx("span", { className: "dshk-phone-title", children: t("phoneTitle") }),
+              jsxRuntime.jsx("span", { style: { flex: 1 } }),
+              notice !== ""
+                ? jsxRuntime.jsx("span", { className: "dshk-phone-notice", role: "status", children: notice })
+                : null,
+            ],
+          }),
+          jsxRuntime.jsx("button", {
+            type: "button",
+            className: gatewayOn ? "dshk-phone-gatebtn dshk-phone-gatebtn-stop" : "dshk-phone-gatebtn",
+            disabled: gateBusy,
+            onClick: () => {
+              toggleGateway(!gatewayOn);
+            },
+            children: t(gatewayOn ? "phoneGateStop" : "phoneGateStart"),
+          }),
+          statusNode,
+          links.length > 0
+            ? jsxRuntime.jsxs(
+                "div",
+                {
+                  className: "dshk-phone-body",
+                  children: [
+                    links.length > 1
+                      ? jsxRuntime.jsx("div", {
+                          className: "dshk-phone-tabs",
+                          children: links.map((item, index) =>
+                            jsxRuntime.jsx(
+                              "button",
+                              {
+                                type: "button",
+                                className: "dshk-phone-tab",
+                                "aria-pressed": index === activeIdx,
+                                onClick: () => setActiveIdx(index),
+                                children: item.label === "remote" ? t("phoneRemote") : t("phoneLan"),
+                              },
+                              item.url,
+                            ),
+                          ),
+                        })
+                      : null,
+                    jsxRuntime.jsx("div", { className: "dshk-phone-qrwrap", children: jsxRuntime.jsx("canvas", { ref: canvasRef, "aria-label": "QR code" }) }),
+                    jsxRuntime.jsxs("div", {
+                      className: "dshk-phone-urlrow",
+                      children: [
+                        jsxRuntime.jsx("button", {
+                          type: "button",
+                          className: "dshk-phone-copybtn",
+                          title: activeUrl,
+                          onClick: copyActive,
+                          children: copied ? t("phoneCopied") : t("phoneCopy"),
+                        }),
+                        gatewayOn
+                          ? jsxRuntime.jsx(KitTip, {
+                              label: t("phoneRotateHint"),
+                              children: jsxRuntime.jsx("button", {
+                                type: "button",
+                                className: "dshk-phone-rotate",
+                                disabled: gateBusy,
+                                onClick: () => {
+                                  rotateLink();
+                                },
+                                children: t("phoneRotate"),
+                              }),
+                            })
+                          : null,
+                      ],
+                    }),
+                    jsxRuntime.jsx("p", { className: "dshk-phone-hint", children: t(activeIsRemote ? "phoneRemoteCaution" : "phoneScanHint") }),
+                  ],
+                },
+              )
+            : null,
+        ],
+      });
+    }
+
+    // ─────────── 设置导航图标 ───────────
+    // 官方 navIcon(id) 只认 models/agent-presets/plugins 三个内置 id，没有注册缝；
+    // 这里按标签文字找到设置导航里的「手机访问」行，把行内第一个 svg 换成自绘图标
+    // （消费方在根包的 swapKitNavIcons，候选表经 dock.registerNavIcon 共享）。
+    const PHONE_NAV_ICON = {
+      label: () => t("phoneTitle"),
+      attr: "data-dshk-phone",
+      html:
+        '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" ' +
+        'stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/>' +
+        '<path d="M6.8 3.4h2.4"/>' +
+        '<path d="M8 12.6h.01"/>' +
+        "</svg>",
+    };
+
+    exports.inject = ["slots"];
+    // 行开关即总开关：宿主半边不物化时 /dsh-kit-phone/config 404，这里整体不注册
+    // （设置页「手机访问」整块、组件配置页与导航图标全不出现）。
+    exports.apply = async (ctx) => {
+      if (!(await loadCfg())) return;
+      ctx.slots.inject("settings.section", () => ctx.slots.register(
+        { name: "settings.section", id: "kit-phone", order: 45, label: () => t("phoneTitle") },
+        PhoneSection,
+      ));
+      // 配置页挂本组件行：槽位 key = <包名>#<行id>——两种包名口径各挂一枚
+      //（页面按精确 key 匹配，未命中的那枚永远不渲染）
+      for (const key of ["dsh-kit#phone", "dsh-kit-phone#phone"]) {
+        ctx.slots.inject("plugins.row.config", () => ctx.slots.register({ name: "plugins.row.config", key }, PhoneConfigPage));
+      }
+      registerNavIcon(PHONE_NAV_ICON);
+      injectStyles();
+    };
+
+    // 渲染级检查取用
+    exports.PhoneSection = PhoneSection;
+    exports.PhoneConfigPage = PhoneConfigPage;
+    exports.PHONE_CFG_FIELDS = PHONE_CFG_FIELDS;
+    exports.PHONE_NAV_ICON = PHONE_NAV_ICON;
+    exports.loadCfg = loadCfg;
+    exports.drawPhoneQr = drawPhoneQr;
+    exports.fetchPhoneInfo = fetchPhoneInfo;
+    exports.fetchPhoneLinks = fetchPhoneLinks;
+    return module.exports;
+    };
     // ─────────── 组件半边模块（单包收回；原 dsh-kit-files/monitor/terminal 独立 bundle）───────────
     // 多包时代组件是独立 client entry，经 external require("dsh-kit") 取本包导出
     // （kitBase 浅拷贝 + root 侧设施）。收回后同住本 factory：kit 形参即根 exports
@@ -12165,7 +12155,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     // 组件模块执行移至本 factory 尾部 kitBase/root 设施组装完成之后（见
     // exports.files 赋值处）——组件体执行期会读 dock.createConfigPage 等成员
     // slots 是唯一依赖：settingsScope 已随宿主 0.1.7 移除（配置改走 Config
-    // schema + 原生设置页，client 拉 /dsh-kit/config 只读快照做门控）
+    // schema + 原生设置页，各组件 client 拉自己的 /dsh-kit-<行id>/config 快照做门控）
     // 共享面暴露给组件包：require("dsh-kit") 直接取（apply/inject 是插件形状，不暴露）
     for (const [k, v] of Object.entries(kitBase)) if (k !== "apply" && k !== "inject") exports[k] = v;
     // 组件包消费的 root 侧设施：闭包引用 root 模块状态（sessionsSvc/rightbarSr/
@@ -12200,6 +12190,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.search = searchModule(exports, require);
     exports.browser = browserModule(exports, require);
     exports.vault = vaultModule(exports, require);
+    exports.phone = phoneModule(exports, require);
     exports.inject = ["slots"];
     exports.apply = apply;
     return module.exports;

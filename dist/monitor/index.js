@@ -121,7 +121,7 @@ export async function apply(ctx, config = {}) {
     };
     const disposers = [];
     ctx.inject(['webServer', 'credentials'], (webCtx) => {
-        // 组件自己的只读配置快照：client 半边拉它做芯片门控（同 root 的 /dsh-kit/config 口径）
+        // 组件自己的只读配置快照：client 半边拉它做芯片门控（各组件行同一口径：200 = 行启用、404 = 行关闭）
         disposers.push(webCtx.webServer.register({
             kind: 'exact',
             path: '/dsh-kit-monitor/config',

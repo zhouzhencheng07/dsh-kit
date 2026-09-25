@@ -24,3 +24,5 @@
       name: dsh-kit/browser
     - id: vault
       name: dsh-kit/vault
+    - id: phone
+      name: dsh-kit/phone

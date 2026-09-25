@@ -10,7 +10,7 @@ import path from 'node:path'
 
 import zlib from 'node:zlib'
 
-import { startPhoneGateway, PHONE_COOKIE, PHONE_VIEW_COOKIE, lanAddresses, pickEncoding, isCompressibleType, BROTLI_QUALITY, brotliOptions } from '../src/phone-gateway.ts'
+import { startPhoneGateway, phoneAssistScript, PHONE_COOKIE, PHONE_VIEW_COOKIE, lanAddresses, pickEncoding, isCompressibleType, BROTLI_QUALITY, brotliOptions } from '../src/phone/gateway.ts'
 
 let failed = 0
 const check = (label, ok) => {
@@ -35,6 +35,20 @@ const check = (label, ok) => {
   check('lanAddresses：滤掉热点/Wi-Fi Direct 虚拟网卡（本地连接* N）', !addrs.includes('192.168.137.1'))
   check('lanAddresses：滤掉 vEthernet/VMware/VirtualBox host-only', !addrs.includes('172.20.0.1') && !addrs.includes('192.168.111.1') && !addrs.includes('192.168.56.1'))
   check('lanAddresses：保留实体网卡 IPv4、丢弃 IPv6 与回环', JSON.stringify(addrs) === JSON.stringify(['10.3.94.39', '192.168.1.7']))
+}
+
+// ── phoneAssistScript：远程视图的宿主 DOM 断言（改版即静默失效，判据换过一次）──
+{
+  const on = phoneAssistScript({ remoteView: true, pickerLocked: true })
+  const off = phoneAssistScript({ remoteView: false, pickerLocked: false })
+  check('辅助脚本：置灰判据用语义属性 data-open-target（覆盖会话头部/预览/交付卡的打开入口）', on.includes('"[data-open-target]"'))
+  check('辅助脚本：旧 aria-label 判据已退役（选择打开方式 / 中打开工作目录）', !on.includes('选择打开方式') && !on.includes('中打开工作目录') && !on.includes('Open workspace in '))
+  check(
+    '辅助脚本：文本判据只剩「添加工作区…」与「打开配置文件」',
+    on.includes('添加工作区|Add workspace') && on.includes('打开配置文件|Open configuration file') && !on.includes('用默认应用打开'),
+  )
+  check('辅助脚本：非远程视图只剩内测弹窗那段（sels/texts 空、不宣告 ownsHost）', off.includes('"sels":[]') && off.includes('"texts":[]') && !off.includes('ownsHost'))
+  check('辅助脚本：远程视图宣告 ownsHost + 挂触屏清理 + 统一提示语', on.includes('ownsHost:true') && on.includes('armTouchCleanup') && on.includes('请在电脑端操作'))
 }
 
 /** 起一个回显上游：GET 回显收到的 host/origin/cookie 头；POST 回显请求体；/ws 升级回 101 并回声 */
@@ -207,16 +221,17 @@ try {
   check('注入位置在 <head> 开标签后', page.body.indexOf('randomUUID') > page.body.indexOf('<head>') && page.body.includes('<title>'))
   // 远程视图辅助脚本：自动关内测声明弹窗 + 锁住宿主专属入口（置灰 + 点击同一句提示，不隐藏）
   // 「在应用中打开」与设置页「打开配置文件」一律锁；宿主 picker 非 browse 时连挑选入口一起锁
-  check('HTML 页注入了远程视图辅助脚本', page.body.includes('dismissNotice') && page.body.includes('选择打开方式') && page.body.includes('中打开工作目录') && page.body.includes('添加工作区') && page.body.includes('打开配置文件'))
+  check('HTML 页注入了远程视图辅助脚本', page.body.includes('dismissNotice') && page.body.includes('[data-open-target]') && page.body.includes('添加工作区') && page.body.includes('打开配置文件'))
   // 官方右栏「工作区文件」不锁：宿主 0.1.6 起手机可预览文件内容（0.1.5-rc.2 只能看目录，旧版曾锁）
   check('官方「工作区文件」不入列置灰（宿主 0.1.6 起手机可预览）', !page.body.includes('data-sidebar-right-guide-entry'))
   // 交付卡片（PresentedFileCard）**不锁**：卡片点击非官即 vault——工作区文件卡走
   // 官方右栏文件签（宿主 0.1.6 起手机可预览，与「工作区文件」入口放行同一前提），
   // vault 卡由客户端拦截器改道知识库编辑器；官方预览不可用的旧宿主上会看到
   // 官方报错，与「工作区文件」入口同一取舍。
-  // 卡下拉里的宿主动作（默认应用/所在文件夹）仍按文本拦（菜单走 portal）；
+  // 卡下拉里的宿主动作就是 open-in-app 的文件控件（data-open-target），随它一起锁：
+  // 触发键被点击拦截，走 portal 的菜单根本打不开。
   // 「本轮文件改动」chip 行（data-produced-files-row）同样不锁
-  check('交付卡片不锁（点击非官即 vault），下拉宿主动作仍有文本兜底', !page.body.includes('[data-presented-file]') && page.body.includes('用默认应用打开') && page.body.includes('打开所在文件夹'))
+  check('交付卡片不锁（点击非官即 vault），下拉宿主动作随 data-open-target 一起锁', !page.body.includes('[data-presented-file]') && page.body.includes('[data-open-target]') && !page.body.includes('用默认应用打开'))
   // 「选择工作区」是工作区切换 chip（aria-label 恒定，选中的工作区名只在文本里），锁了就没法切工作区
   check('不锁「选择工作区」chip（只能切不能新增）', !page.body.includes('选择工作区') && !page.body.includes('Select workspace'))
   check('锁的方式是置灰 + 点击提示（不是 display:none）', page.body.includes('opacity:.45!important') && !page.body.includes('display:none!important'))
@@ -252,7 +267,7 @@ try {
       await new Promise((r) => setTimeout(r, 120))
       const browsePage = await request(gwBrowse.port(), { path: '/page', headers: { cookie: cookieHeader } })
       // 挑选入口是否锁住，用只在该分支出现的文本正则判别（选择器在 JSON 里是转义过的）
-      check('宿主 picker 为 browse：挑选入口不锁、宿主专属入口仍锁', browsePage.body.includes('dismissNotice') && !browsePage.body.includes('添加工作区|Add workspace') && browsePage.body.includes('打开配置文件') && browsePage.body.includes('选择打开方式'))
+      check('宿主 picker 为 browse：挑选入口不锁、宿主专属入口仍锁', browsePage.body.includes('dismissNotice') && !browsePage.body.includes('添加工作区|Add workspace') && browsePage.body.includes('打开配置文件') && browsePage.body.includes('[data-open-target]'))
     } finally {
       gwBrowse.close()
     }
@@ -263,9 +278,9 @@ try {
     const viewSetCookie = Array.isArray(rr.headers['set-cookie']) ? rr.headers['set-cookie'][0] : rr.headers['set-cookie']
     check('?dshk_view=desktop → 302 + 落 Cookie', rr.status === 302 && String(viewSetCookie).includes(`${PHONE_VIEW_COOKIE}=desktop`))
     const desktopView = await request(gwPort, { path: '/page', headers: { cookie: `${cookieHeader}; ${PHONE_VIEW_COOKIE}=desktop` } })
-    check('desktop 视图：不锁任何入口、也不宣告 ownsHost（内测弹窗那段仍在，且不武装触屏清理）', desktopView.body.includes('dismissNotice') && !desktopView.body.includes('选择打开方式') && !desktopView.body.includes('ownsHost') && !desktopView.body.includes('applyLock();armTouchCleanup();'))
+    check('desktop 视图：不锁任何入口、也不宣告 ownsHost（内测弹窗那段仍在，且不武装触屏清理）', desktopView.body.includes('dismissNotice') && !desktopView.body.includes('data-open-target') && !desktopView.body.includes('ownsHost') && !desktopView.body.includes('applyLock();armTouchCleanup();'))
     const back = await request(gwPort, { path: '/page', headers: { cookie: cookieHeader } })
-    check('未带视图 Cookie：回到远程视图（入口又锁上）', back.body.includes('选择打开方式'))
+    check('未带视图 Cookie：回到远程视图（入口又锁上）', back.body.includes('[data-open-target]'))
   }
   const lenOk = Number(page.headers['content-length']) === Buffer.byteLength(page.body)
   check('content-length 已按注入后重算', lenOk)

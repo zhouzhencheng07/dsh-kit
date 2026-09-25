@@ -78,16 +78,16 @@ const cssRegions = []
 // 锚点必须认准那一条（文件里还有别的 return {...}，比如 jsx 桩）
 const renderPath = path.join(root, 'tests', 'render-check.cjs')
 const renderSrc = fs.existsSync(renderPath) ? fs.readFileSync(renderPath, 'utf8') : ''
-const EXPORT_ANCHOR = 'return Object.assign({ PhoneSection'
+const EXPORT_ANCHOR = 'return Object.assign({ KitSurfaces'
 const exportAt = renderSrc.indexOf(EXPORT_ANCHOR)
 if (renderSrc !== '' && exportAt < 0) die('找不到 render-check 导出表锚点（测试结构变了，哨兵要同步）')
 const exportedNames = new Set(
-  (exportAt < 0 ? '' : renderSrc.slice(exportAt + 'return Object.assign({'.length, renderSrc.indexOf('}, kitBase);', exportAt)))
+  (exportAt < 0 ? '' : renderSrc.slice(exportAt + 'return Object.assign({'.length, renderSrc.indexOf('}, kitBase,', exportAt)))
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s !== ''),
 )
-if (exportAt >= 0 && exportedNames.size < 40) die('render-check 导出表只解析出 ' + exportedNames.size + ' 个名字，锚点可能失效')
+if (exportAt >= 0 && exportedNames.size < 15) die('render-check 导出表只解析出 ' + exportedNames.size + ' 个名字，锚点可能失效')
 
 // ── 1) i18n 词条 ──
 // 动态拼的键（cfg 加字段名，插件设置卡时代）随设置卡退役清零；新前缀出现时

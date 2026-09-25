@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Phone access",
+    "description": "Token-authorized reverse proxy on the only outward port: LAN/remote links with QR codes, hot start/stop and token rotation, host-only entries greyed out in remote view."
+  }
+}
