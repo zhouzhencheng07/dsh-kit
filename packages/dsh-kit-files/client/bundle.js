@@ -93,6 +93,12 @@ window.__ModuleLoader__.load({
       scPushForceConfirm: "推送被拒绝：远程有本地没有的新提交。以本地为准强制推送？远程上本地没有的提交将丢失！",
       scPushNoUpstream: "当前分支没有上游，首次推送前需先设置",
       scPushSetUpstream: "设置上游并推送",
+      scGraph: "提交图谱",
+      scGraphFail: "图谱加载失败",
+      scGraphEmpty: "（暂无提交）",
+      scGraphMore: "加载更多",
+      scFiles: "文件",
+      scDetached: "游离 HEAD",
       scCommitDetail: "提交详情",
       scBack: "返回",
       scMergedCommit: "合并提交",
@@ -115,6 +121,14 @@ window.__ModuleLoader__.load({
       // 「按不动」时显示的说明
       scTreeOff: "文件树已在配置页关闭",
       scScmOff: "源代码管理已在配置页关闭",
+      // 本包 t() 只看本包词典（root 的同名词条读不到）：用到就得在这里备一份
+      skOpFail: "操作失败",
+      confirmDelete: "删除「{name}」？内容将移入回收站。",
+      created: "已创建",
+      renamed: "已重命名",
+      deleted: "已删除",
+      committed: "已提交",
+      saving: "保存中…",
     };
     const en = {
       noCwd: "No session workspace available: open or create a session first",
@@ -175,6 +189,12 @@ window.__ModuleLoader__.load({
       scPushForceConfirm: "Push rejected — the remote has commits not in local. Force push (local wins)? Commits only on the remote will be LOST!",
       scPushNoUpstream: "This branch has no upstream; set one before the first push",
       scPushSetUpstream: "Set upstream & push",
+      scGraph: "Commit graph",
+      scGraphFail: "Failed to load the graph",
+      scGraphEmpty: "(no commits)",
+      scGraphMore: "Load more",
+      scFiles: "Files",
+      scDetached: "Detached HEAD",
       scCommitDetail: "Commit detail",
       scBack: "Back",
       scMergedCommit: "Merge commit",
@@ -196,6 +216,13 @@ window.__ModuleLoader__.load({
       kcfgSourceControlEnabledHint: "The source control tab (status, diffs, commit graph, branches).",
       scTreeOff: "File tree is switched off in the config page",
       scScmOff: "Source control is switched off in the config page",
+      skOpFail: "Operation failed",
+      confirmDelete: "Delete \"{name}\"? It will be moved to the Recycle Bin.",
+      created: "Created",
+      renamed: "Renamed",
+      deleted: "Deleted",
+      committed: "Committed",
+      saving: "Saving…",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? key;
@@ -698,16 +725,20 @@ window.__ModuleLoader__.load({
       );
     }
 
-    /** 行悬停操作小按钮（新建/重命名/删除共用）：点击不触发行本身的打开/折叠 */
+    /** 行悬停操作小按钮（新建/重命名/删除共用）：点击不触发行本身的打开/折叠。
+     *  提示走官方气泡并右对齐——行尾一排小钮，居中的气泡会盖住相邻行 */
     function RowActionBtn({ title, onClick, children }) {
-      return jsxRuntime.jsx("button", {
-        type: "button",
-        title,
-        onClick: (e) => {
-          e.stopPropagation();
-          onClick(e); // 事件转发：⋯ 菜单需要 currentTarget 定位锚点
-        },
-        children,
+      return jsxRuntime.jsx(KitTip, {
+        label: title,
+        align: "end",
+        children: jsxRuntime.jsx("button", {
+          type: "button",
+          onClick: (e) => {
+            e.stopPropagation();
+            onClick(e); // 事件转发：⋯ 菜单需要 currentTarget 定位锚点
+          },
+          children,
+        }),
       });
     }
 
@@ -1089,20 +1120,24 @@ window.__ModuleLoader__.load({
               jsxRuntime.jsx("span", { className: "dshk-dir", title: cwd ?? "", children: cwd ?? t("treeLabel") }),
               // 根目录新建文件/目录（单入口，\ 前缀建目录）
               cwd
-                ? jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-btn",
-                    title: t("treeNewAny"),
-                    onClick: () => startCreate(cwd),
-                    children: jsxRuntime.jsx(FilePlusIcon, {}),
+                ? jsxRuntime.jsx(KitTip, {
+                    label: t("treeNewAny"),
+                    children: jsxRuntime.jsx("button", {
+                      type: "button",
+                      className: "dshk-btn",
+                      onClick: () => startCreate(cwd),
+                      children: jsxRuntime.jsx(FilePlusIcon, {}),
+                    }),
                   })
                 : null,
-              jsxRuntime.jsx("button", {
-                type: "button",
-                className: "dshk-btn",
-                title: t("treeRefresh"),
-                onClick: () => setNonce((n) => n + 1),
-                children: "⟳",
+              jsxRuntime.jsx(KitTip, {
+                label: t("treeRefresh"),
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn",
+                  onClick: () => setNonce((n) => n + 1),
+                  children: "⟳",
+                }),
               }),
             ],
           }),
@@ -1214,19 +1249,22 @@ window.__ModuleLoader__.load({
                         jsxRuntime.jsx("span", { className: "dshk-branch-ico", children: b.isHead ? "●" : "○" }),
                         jsxRuntime.jsx("span", { className: "dshk-branch-name", children: b.name }),
                         created && b.name === created
-                          ? jsxRuntime.jsx("span", { className: "dshk-branch-newtag", title: t("scBranchCreatedTag"), children: t("scBranchNewTag") })
+                          ? jsxRuntime.jsx(KitTip, { label: t("scBranchCreatedTag"), children: jsxRuntime.jsx("span", { className: "dshk-branch-newtag", children: t("scBranchNewTag") }) })
                           : null,
                         trackBadgeFor(b),
                         jsxRuntime.jsx("span", { className: "dshk-spring" }),
                         b.isHead
                           ? jsxRuntime.jsx("span", { className: "dshk-branch-curtag", children: t("scBranchCurrent") })
-                          : jsxRuntime.jsx("button", {
-                              type: "button",
-                              className: "dshk-branch-del",
-                              title: t("scBranchDelete"),
-                              disabled: busy,
-                              onClick: (e) => { e.stopPropagation(); onDelete(b.name); },
-                              children: "✕",
+                          : jsxRuntime.jsx(KitTip, {
+                              label: t("scBranchDelete"),
+                              align: "end",
+                              children: jsxRuntime.jsx("button", {
+                                type: "button",
+                                className: "dshk-branch-del",
+                                disabled: busy,
+                                onClick: (e) => { e.stopPropagation(); onDelete(b.name); },
+                                children: "✕",
+                              }),
                             }),
                       ],
                     },
@@ -1523,10 +1561,10 @@ window.__ModuleLoader__.load({
               // 悬停操作（行内命令）：暂存＋ / 放弃↩ / 取消暂存－
               jsxRuntime.jsxs("span", { className: "dshk-rowact", children: [
                 isStaged
-                  ? jsxRuntime.jsx("button", { type: "button", title: t("scUnstage"), disabled: busy, onClick: (e) => { e.stopPropagation(); runOp({ op: "unstage", path: item.abs }); }, children: "－" })
-                  : jsxRuntime.jsx("button", { type: "button", title: t("scStage"), disabled: busy, onClick: (e) => { e.stopPropagation(); runOp({ op: "stage", path: item.abs }); }, children: "＋" }),
+                  ? jsxRuntime.jsx(KitTip, { label: t("scUnstage"), align: "end", children: jsxRuntime.jsx("button", { type: "button", disabled: busy, onClick: (e) => { e.stopPropagation(); runOp({ op: "unstage", path: item.abs }); }, children: "－" }) })
+                  : jsxRuntime.jsx(KitTip, { label: t("scStage"), align: "end", children: jsxRuntime.jsx("button", { type: "button", disabled: busy, onClick: (e) => { e.stopPropagation(); runOp({ op: "stage", path: item.abs }); }, children: "＋" }) }),
                 !isStaged && !isUntracked
-                  ? jsxRuntime.jsx("button", { type: "button", title: t("scDiscard"), disabled: busy, onClick: (e) => { e.stopPropagation(); runOp({ op: "discard", path: item.abs }, t("scDiscardConfirm")); }, children: "↩" })
+                  ? jsxRuntime.jsx(KitTip, { label: t("scDiscard"), align: "end", children: jsxRuntime.jsx("button", { type: "button", disabled: busy, onClick: (e) => { e.stopPropagation(); runOp({ op: "discard", path: item.abs }, t("scDiscardConfirm")); }, children: "↩" }) })
                   : null,
               ] }),
               item.stats
@@ -1566,22 +1604,24 @@ window.__ModuleLoader__.load({
               // 分支按钮（官方分支图形 + 名称；推送计数不在这里——它有自己的
               // 推送按钮，分支显示不与推送语义重叠）：点击开固定悬浮分支浮层
               available && data
-                ? jsxRuntime.jsx("button", {
-                    type: "button",
-                    ref: branchBtnRef,
-                    className: "dshk-btn dshk-branchbtn" + (branchOpen ? " dshk-headbtn-on" : ""),
-                    title: t("scBranch"),
-                    "data-popkey": "branch",
-                    "aria-pressed": branchOpen || undefined,
-                    onClick: toggleBranch,
-                    children: [
-                      jsxRuntime.jsx(dswIcon("IconBranchOutline16") ?? BranchIcon, {}),
-                      jsxRuntime.jsx("span", {
-                        className: "dshk-branch-name",
-                        children: data.detached === true ? t("scDetached") : data.branch || "—",
-                      }),
-                      jsxRuntime.jsx("span", { className: "dshk-caret", children: "▾" }),
-                    ],
+                ? jsxRuntime.jsx(KitTip, {
+                    label: t("scBranch"),
+                    children: jsxRuntime.jsx("button", {
+                      type: "button",
+                      ref: branchBtnRef,
+                      className: "dshk-btn dshk-branchbtn" + (branchOpen ? " dshk-headbtn-on" : ""),
+                      "data-popkey": "branch",
+                      "aria-pressed": branchOpen || undefined,
+                      onClick: toggleBranch,
+                      children: [
+                        jsxRuntime.jsx(dswIcon("IconBranchOutline16") ?? BranchIcon, {}),
+                        jsxRuntime.jsx("span", {
+                          className: "dshk-branch-name",
+                          children: data.detached === true ? t("scDetached") : data.branch || "—",
+                        }),
+                        jsxRuntime.jsx("span", { className: "dshk-caret", children: "▾" }),
+                      ],
+                    }),
                   })
                 : jsxRuntime.jsx("span", { className: "dshk-dir", title: root ?? "", children: t("scTitle") }),
               available && entries.length > 0
@@ -1591,44 +1631,50 @@ window.__ModuleLoader__.load({
               // 同步钮（↑↓）：有上游=
               // 先拉后推，无上游=发布（首次推送）；错误原文 toast
               available && data && data.detached !== true
-                ? jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-btn dshk-headbtn",
-                    disabled: pushing || pulling || data.unborn === true,
-                    title: pushing || pulling
+                ? jsxRuntime.jsx(KitTip, {
+                    label: pushing || pulling
                       ? t("saving")
                       : !data.upstream
                         ? t("scPublish")
                         : ahead > 0
                           ? t("scPushAhead").replace("{n}", String(ahead))
                           : t("scSynced"),
-                    onClick: () => void (async () => {
-                      if (data.upstream) {
-                        const ok = await doPull();
-                        if (!ok) return;
-                      }
-                      await doPush(!(data.upstream));
-                    })(),
-                    children: pushing || pulling ? "…" : ahead > 0 ? `↑${ahead}` : "↑↓",
+                    children: jsxRuntime.jsx("button", {
+                      type: "button",
+                      className: "dshk-btn dshk-headbtn",
+                      disabled: pushing || pulling || data.unborn === true,
+                      onClick: () => void (async () => {
+                        if (data.upstream) {
+                          const ok = await doPull();
+                          if (!ok) return;
+                        }
+                        await doPush(!(data.upstream));
+                      })(),
+                      children: pushing || pulling ? "…" : ahead > 0 ? `↑${ahead}` : "↑↓",
+                    }),
                   })
                 : null,
-              jsxRuntime.jsx("button", {
-                type: "button",
-                className: "dshk-btn dshk-headbtn" + (view === "graph" ? " dshk-headbtn-on" : ""),
-                title: t("scGraph"),
-                "aria-pressed": view === "graph" || undefined,
-                onClick: () => setView((v) => (v === "graph" ? "changes" : "graph")),
-                children: "⧉",
+              jsxRuntime.jsx(KitTip, {
+                label: t("scGraph"),
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn dshk-headbtn" + (view === "graph" ? " dshk-headbtn-on" : ""),
+                  "aria-pressed": view === "graph" || undefined,
+                  onClick: () => setView((v) => (v === "graph" ? "changes" : "graph")),
+                  children: "⧉",
+                }),
               }),
-              jsxRuntime.jsx("button", {
-                type: "button",
-                className: "dshk-btn",
-                title: t("treeRefresh"),
-                onClick: () => {
-                  if (fetchRef.current) fetchRef.current();
-                  if (graphRef.current) graphRef.current();
-                },
-                children: "⟳",
+              jsxRuntime.jsx(KitTip, {
+                label: t("treeRefresh"),
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn",
+                  onClick: () => {
+                    if (fetchRef.current) fetchRef.current();
+                    if (graphRef.current) graphRef.current();
+                  },
+                  children: "⟳",
+                }),
               }),
             ],
           }),
@@ -1716,7 +1762,6 @@ window.__ModuleLoader__.load({
                               type: "button",
                               className: "dshk-btn-save",
                               disabled: msg.trim() === "" || busy,
-                              title: stagedList.length > 0 ? t("scCommit") : t("scCommitAll"),
                               onClick: doCommit,
                               children: t(stagedList.length > 0 ? "scCommit" : "scCommitAll"),
                             }),
@@ -2309,6 +2354,7 @@ window.__ModuleLoader__.load({
       return jsxRuntime.jsx(KitTip, {
         label: t("treeLabel"),
         command: "dsh-kit-files.tree.toggle",
+        side: "top",
         children: jsxRuntime.jsx("button", {
           type: "button",
           className: "dshk-btn dshk-enbtn",
@@ -2330,6 +2376,7 @@ window.__ModuleLoader__.load({
       return jsxRuntime.jsx(KitTip, {
         label: t("scTitle"),
         command: "dsh-kit-files.scm.toggle",
+        side: "top",
         children: jsxRuntime.jsx("button", {
           type: "button",
           className: "dshk-btn dshk-enbtn",

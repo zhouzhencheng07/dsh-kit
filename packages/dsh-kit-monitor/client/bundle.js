@@ -1731,7 +1731,7 @@ window.__ModuleLoader__.load({
       });
       return jsxRuntime.jsxs("div", { className: "dshk-usage", children: [
         usageTooltip
-          ? jsxRuntime.jsx(usageTooltip, { label: tooltipLabel, side: "top", delayMs: 200, disabled: open, children: trigger })
+          ? jsxRuntime.jsx(usageTooltip, { label: tooltipLabel, side: "top", delayMs: 500, disabled: open, children: trigger })
           : jsxRuntime.jsx("span", { title: tooltipLabel, children: trigger }),
         panel,
       ] });

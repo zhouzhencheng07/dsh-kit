@@ -261,8 +261,10 @@ check("知识库页签：1 Switch + 1 文本", cfgSw().length === 1 && cfgVf().l
   const scRows = [{ id: "dsh-kit.terminal.toggle", keys: ["Ctrl", "+", "Alt", "+", "`"], aria: "Control+Alt+`" }];
   comps.attachShortcutCatalog({ getSnapshot: () => scRows, subscribe: () => () => {} });
   const anchor = () => jsxRuntimeStub.jsx("button", { type: "button" });
-  const tipEl = comps.KitTip({ label: "终端面板", command: "dsh-kit.terminal.toggle", children: anchor() });
+  const tipEl = comps.KitTip({ label: "终端面板", command: "dsh-kit.terminal.toggle", side: "top", children: anchor() });
   check("悬停走官方 Tooltip：label + 该命令当前键帽（官方气泡样式，锚点上方）", tipEl.type === primStub.Tooltip && tipEl.props.label === "终端面板" && String(tipEl.props.shortcutKeys) === "Ctrl,+,Alt,+,`" && tipEl.props.side === "top" && tipEl.props.delayMs === 500);
+  const tipBottom = comps.KitTip({ label: "刷新", align: "end", children: anchor() });
+  check("方向按官方口径：面板头/工具条默认朝下、行尾动作钮补 align:end", tipBottom.props.side === "bottom" && tipBottom.props.align === "end" && tipBottom.props.shortcutKeys === undefined);
   check("锚点由 KitTip 补 aria-label / aria-keyshortcuts（原生 title 退役）", tipEl.props.children.props["aria-label"] === "终端面板" && tipEl.props.children.props["aria-keyshortcuts"] === "Control+Alt+`");
   const tipBare = comps.KitTip({ label: "没注册的命令", command: "dsh-kit.none", children: anchor() });
   check("目录里没有该命令时只出 label（键帽不硬编码）", tipBare.props.label === "没注册的命令" && tipBare.props.shortcutKeys === undefined);
@@ -372,7 +374,7 @@ check("页签 ✕ 直关不弹确认", threw === null);
 // 「前往」+ 在系统浏览器中打开）；外部打开拿观察页 URL，有页才可用
 const toolBtns = callLog.filter((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.split(" ").includes("dshk-brw-tool"));
 check("BrowserPanel 工具栏为官方同款图标钮（5 枚）", toolBtns.length === 5);
-const externalBtn = toolBtns.find((c) => ["在系统浏览器中打开", "Open in system browser"].includes(c[2].title));
+const externalBtn = toolBtns.find((c) => ["在系统浏览器中打开", "Open in system browser"].includes(c[2]["aria-label"]));
 check("在系统浏览器中打开：观察页 URL 就位时可用", !!externalBtn && externalBtn[2].disabled === false && typeof externalBtn[2].onClick === "function");
 check("「前往」是地址框内提交钮（官方同款）", toolBtns.some((c) => c[2].type === "submit" && c[2].className.includes("dshk-brw-go")));
 
@@ -444,7 +446,7 @@ const fpLabels = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].classNam
 check("FilePaneBody 渲染无异常（文档签条 + 两个 diff 正文实例）", !!out && fpChips.length === 2 && fpWraps.length === 2 && fpLabels.length === 2);
 check("FilePaneBody diff 正文类型取自 diffPane 座（每文件一枚，未跟踪标志透传）", fpDiffs.length === 2 && fpDiffs.some((c) => c[2].path === "C:/x/b.md" && c[2].untracked === true) && fpDiffs.some((c) => c[2].path === "C:/x/a.js" && c[2].untracked === false));
 comps.diffPane.Component = null;
-check("FilePaneBody 每文件一签、只激活当前签、每签各带 ✕ 单关", fpChips.filter((c) => c[2].className.includes("dshk-tab-on")).length === 1 && fpChips.every((c) => Array.isArray(c[2].children) && c[2].children.some((ch) => ch && ch.props && ch.props.className === "dshk-tab-x")));
+check("FilePaneBody 每文件一签、只激活当前签、每签各带 ✕ 单关", fpChips.filter((c) => c[2].className.includes("dshk-tab-on")).length === 1 && fpChips.every((c) => Array.isArray(c[2].children) && c[2].children.some((ch) => ch && ch.props && ch.props.children && ch.props.children.props && ch.props.children.props.className === "dshk-tab-x")));
 check("FilePaneBody 非激活文件仍挂载（激活 flex / 非激活 none）", fpWraps.filter((c) => c[2].style.display === "flex").length === 1 && fpWraps.some((c) => c[2].style.display === "none"));
 comps.setKitUi({ files: [], activeFile: null });
 comps.setKitUi({ files: [], activeFile: null });
@@ -462,7 +464,7 @@ const vpOnChips = vpChips.filter((c) => c[2].className.includes("dshk-tab-on"));
 const vpLabels = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-tab-label" && ["a", "b"].includes(c[2].children));
 check("VaultPaneBody 渲染 portal 宿主（VaultRootView 投页编辑器）", !!out && !!vpHost);
 check("VaultPaneBody 知识库多开：一页一签、只激活当前页、页名去 .md", vpChips.length === 2 && vpOnChips.length === 1 && vpOnChips[0][2].title === "D:/v/b.md" && vpLabels.length === 2);
-check("VaultPaneBody 每页签各带独立 ✕", vpChips.every((c) => Array.isArray(c[2].children) && c[2].children.some((ch) => ch && ch.props && ch.props.className === "dshk-tab-x")));
+check("VaultPaneBody 每页签各带独立 ✕", vpChips.every((c) => Array.isArray(c[2].children) && c[2].children.some((ch) => ch && ch.props && ch.props.children && ch.props.children.props && ch.props.children.props.className === "dshk-tab-x")));
 comps.setKitUi({ vaultOpen: false, vaultPages: [], activeVaultPage: null });
 callLog = [];
 out = comps.SchedulePaneBody({});
@@ -630,9 +632,9 @@ let vaultFetchPrev = null;
   const rows = callLog.filter((c) => c[0] === "jsxs" && c[2] && c[2].className === "dshk-vault-tbarrow");
   check("工具条只剩一行", rows.length === 1);
   const barRow = rows[0] ? rows[0][2].children : [];
-  const refreshBtn = barRow.find((ch) => ch && ch.props && ["刷新索引与目录树", "Refresh index and tree"].includes(ch.props.title));
+  const refreshWrap = barRow.find((ch) => ch && ch.props && ["刷新索引与目录树", "Refresh index and tree"].includes(ch.props.label));
   const searchBox = barRow.find((ch) => ch && ch.props && ch.props.className === "dshk-vault-search");
-  check("一行 = 搜索框 + 刷新钮（前进/后退与文件夹筛选框都退役）", barRow.length === 2 && !!searchBox && !!refreshBtn);
+  check("一行 = 搜索框 + 刷新钮（前进/后退与文件夹筛选框都退役；刷新钮走官方气泡）", barRow.length === 2 && !!searchBox && !!refreshWrap && refreshWrap.props.children.props.className === "dshk-sched-navbtn");
   check(
     "搜索占位「搜索笔记 / 资料库」",
     ["搜索笔记 / 资料库", "Search notes / library"].includes(searchBox && searchBox.props.placeholder),
@@ -667,17 +669,18 @@ let vaultFetchPrev = null;
       twoBtnSpans.length >= 4 &&
       twoBtnSpans.every((sp) => {
         const b = actsOf(sp);
-        return ["@ 到对话", "Insert @ mention"].includes(b[0].props.title) && b[1].props.children === "⋯";
+        // 两枚都包在 KitTip 里（官方气泡）：断言包层 label 与内层按钮
+        return ["@ 到对话", "Insert @ mention"].includes(b[0].props.label) && b[1].props.children.props.children === "⋯";
       }),
   );
   // 新建入口：目录行与树头都有悬停「+」（资料库那一支也有——库里建文件夹）
-  const plusButtons = callLog.filter((c) => c[2] && c[2].className === "dshk-vault-treeplus");
+  const plusWraps = callLog.filter((c) => c[0] === "jsx" && c[2] && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-vault-treeplus");
   check(
     "目录行与树头都挂了「新建」+ 钮（树头两枚：新建 + 更多操作）",
-    plusButtons.length >= 4 &&
-      plusButtons.filter((b) => ["新建", "New"].includes(b[2].title)).length >= 3 &&
-      plusButtons.some((b) => b[2].children === "+") &&
-      plusButtons.some((b) => b[2].children === "⋯"),
+    plusWraps.length >= 4 &&
+      plusWraps.filter((w) => ["新建", "New"].includes(w[2].label)).length >= 3 &&
+      plusWraps.some((w) => w[2].children.props.children === "+") &&
+      plusWraps.some((w) => w[2].children.props.children === "⋯"),
   );
   // 图标走文件树那套：自绘的页面/目录图标都不存在，行图标来自共用组件
   check(
@@ -715,9 +718,11 @@ let vaultFetchPrev = null;
   // 只挂在笔记目录上（资料库那一行与库内目录都没有）
   const anchorEl = { getBoundingClientRect: () => ({ left: 10, top: 100, bottom: 120, right: 30, width: 20, height: 20 }) };
   const clickEv = { stopPropagation: () => {}, currentTarget: anchorEl };
-  const dirMenuBtn = actsOfRow(findRow("D:/v/wiki"))[1];
-  const pageMenuBtn = actsOfRow(findRow("D:/v/wiki/a.md"))[1];
-  const libMenuBtn = actsOfRow(findRow("D:/v/library"))[1];
+  // 行内两枚钮现在包在 KitTip 里（官方气泡）：取内层按钮
+  const menuBtnOf = (row) => actsOfRow(row)[1].props.children;
+  const dirMenuBtn = menuBtnOf(findRow("D:/v/wiki"));
+  const pageMenuBtn = menuBtnOf(findRow("D:/v/wiki/a.md"));
+  const libMenuBtn = menuBtnOf(findRow("D:/v/library"));
   dirMenuBtn.props.onClick(clickEv);
   const dirOpened = stateStore.get(5);
   dirMenuBtn.props.onClick(clickEv);
@@ -759,7 +764,7 @@ let vaultFetchPrev = null;
     3: { "D:/v/wiki": [{ name: "a.md", path: "D:/v/wiki/a.md", dir: false }] },
     4: { "D:/v/wiki": true },
   });
-  const backBtn = callLog.find((c) => c[2] && ["返回知识库", "Back to knowledge base"].includes(c[2].title));
+  const backBtn = callLog.find((c) => c[2] && ["返回知识库", "Back to knowledge base"].includes(c[2].label) && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-sched-navbtn");
   const railTitle = callLog.find((c) => c[2] && c[2].className === "dshk-vault-railtitle");
   check("换根后树头给库内相对路径 + ← 回知识库", rootErr === null && !!backBtn && railTitle[2].children === "wiki");
   check(
@@ -907,6 +912,7 @@ let vaultFetchPrev = null;
     );
     renderVault(base);
   }
+  const refreshBtn = refreshWrap ? refreshWrap.props.children : null;
   if (refreshBtn) refreshBtn.props.onClick();
   // fetch 桩同步记账：loadIndex 的请求在 onClick 返回前就已发出；目录树重拉排在
   // 微任务里，桩要留到收尾结算后（提前还原会让它打真网络，落进 fetchDir 的静默失败）

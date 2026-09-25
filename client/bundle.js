@@ -93,20 +93,23 @@ window.__ModuleLoader__.load({
       refreshShortcutRows();
     }
     /** 官方气泡：label + command 当前生效的键帽（未注册或无绑定时只出 label）。
-     *  command 传命令 id；气泡在锚点上方——composer 工具行里的官方气泡同侧。 */
-    function KitTip({ label, command, children }) {
+     *  side/align 照官方口径：composer 工具行与靠在窗口底边的 dock 用 "top"，面板头部
+     *  与工具条用 "bottom"，行尾动作钮补 align:"end"（免得盖住相邻行）。 */
+    function KitTip({ label, command, side = "bottom", align, portal, children }) {
       const rows = react.useSyncExternalStore(subscribeShortcutRows, getShortcutRows);
       const row = command ? rows.find((r) => r.id === command) ?? null : null;
       if (!dswTooltip) return react.cloneElement(children, { title: label });
+      // 锚点自带 aria-label 时以它为准（可访问名与气泡文案可以不同）
+      const anchorProps = { "aria-keyshortcuts": row ? row.aria : undefined };
+      if (children.props["aria-label"] === undefined) anchorProps["aria-label"] = label;
       return jsxRuntime.jsx(dswTooltip, {
         label,
         shortcutKeys: row ? row.keys : undefined,
-        side: "top",
+        side,
+        align,
+        portal,
         delayMs: 500,
-        children: react.cloneElement(children, {
-          "aria-label": label,
-          "aria-keyshortcuts": row ? row.aria : undefined,
-        }),
+        children: react.cloneElement(children, anchorProps),
       });
     }
 
@@ -1516,6 +1519,10 @@ window.__ModuleLoader__.load({
       treeAtUnavailable: "输入框未就绪（无会话或不可用）",
       treeCopyAbs: "复制绝对路径",
       treeCopyRel: "复制相对路径",
+      treeCopied: "已复制路径",
+      treeMenu: "更多操作",
+      contentLoading: "加载中…",
+      contentEmpty: "（空）",
       confirmDelete: "删除「{name}」？内容将移入回收站。",
       created: "已创建",
       renamed: "已重命名",
@@ -1734,6 +1741,10 @@ window.__ModuleLoader__.load({
       treeAtUnavailable: "Input box not ready (no session or unavailable)",
       treeCopyAbs: "Copy absolute path",
       treeCopyRel: "Copy relative path",
+      treeCopied: "Path copied",
+      treeMenu: "More actions",
+      contentLoading: "Loading…",
+      contentEmpty: "(empty)",
       confirmDelete: "Delete \"{name}\"? It will be moved to the Recycle Bin.",
       created: "Created",
       renamed: "Renamed",
@@ -2817,26 +2828,32 @@ ellipsis，窄列只截字不破版 */
                     onClick: () => onActivate(tab.id),
                     children: [
                       jsxRuntime.jsx("span", { className: "dshk-tab-label", children: termTabLabel(tab, items) }),
-                      jsxRuntime.jsx("button", {
-                        type: "button",
-                        className: "dshk-tab-x",
-                        title: t("termTabClose"),
-                        onClick: (e) => {
-                          e.stopPropagation();
-                          onKill(tab.id);
-                        },
-                        children: "✕",
+                      jsxRuntime.jsx(KitTip, {
+                        label: t("termTabClose"),
+                        side: "top",
+                        children: jsxRuntime.jsx("button", {
+                          type: "button",
+                          className: "dshk-tab-x",
+                          onClick: (e) => {
+                            e.stopPropagation();
+                            onKill(tab.id);
+                          },
+                          children: "✕",
+                        }),
                       }),
                     ],
                   }, tab.id),
                 ),
               ] }),
-              jsxRuntime.jsx("button", {
-                type: "button",
-                className: "dshk-btn",
-                title: t("termNew"),
-                onClick: onSpawn,
-                children: "＋",
+              jsxRuntime.jsx(KitTip, {
+                label: t("termNew"),
+                side: "top",
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn",
+                  onClick: onSpawn,
+                  children: "＋",
+                }),
               }),
               activeItem
                 ? jsxRuntime.jsx("span", {
@@ -2846,29 +2863,38 @@ ellipsis，窄列只截字不破版 */
                   })
                 : null,
               jsxRuntime.jsx("span", { className: "dshk-spring" }),
-              jsxRuntime.jsx("button", {
-                type: "button",
-                className: "dshk-btn",
-                title: t("restart"),
-                onClick: () => {
-                  if (!activeId) return;
-                  setRestartMap((m) => ({ ...m, [activeId]: (m[activeId] ?? 0) + 1 }));
-                },
-                children: "⟳",
+              jsxRuntime.jsx(KitTip, {
+                label: t("restart"),
+                side: "top",
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn",
+                  onClick: () => {
+                    if (!activeId) return;
+                    setRestartMap((m) => ({ ...m, [activeId]: (m[activeId] ?? 0) + 1 }));
+                  },
+                  children: "⟳",
+                }),
               }),
-              jsxRuntime.jsx("button", {
-                type: "button",
-                className: "dshk-btn",
-                title: t("termHide"),
-                onClick: onHide,
-                children: "—",
+              jsxRuntime.jsx(KitTip, {
+                label: t("termHide"),
+                side: "top",
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn",
+                  onClick: onHide,
+                  children: "—",
+                }),
               }),
-              jsxRuntime.jsx("button", {
-                type: "button",
-                className: "dshk-btn",
-                title: t("termCloseAll"),
-                onClick: onKillAll,
-                children: "✕",
+              jsxRuntime.jsx(KitTip, {
+                label: t("termCloseAll"),
+                side: "top",
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn",
+                  onClick: onKillAll,
+                  children: "✕",
+                }),
               }),
             ],
           }),
@@ -3264,6 +3290,7 @@ ellipsis，窄列只截字不破版 */
       return jsxRuntime.jsx(KitTip, {
         label: count > 0 ? `${t("label")} · ${count}` : t("label"),
         command: "dsh-kit.terminal.toggle",
+        side: "top",
         children: jsxRuntime.jsxs("button", {
           type: "button",
           className: "dshk-btn dshk-enbtn",
@@ -3320,6 +3347,7 @@ ellipsis，窄列只截字不破版 */
       return jsxRuntime.jsx(KitTip, {
         label: t("vaultTitle"),
         command: "dsh-kit.vault.toggle",
+        side: "top",
         children: jsxRuntime.jsx("button", {
           type: "button",
           className: "dshk-btn dshk-enbtn",
@@ -3539,15 +3567,17 @@ ellipsis，窄列只截字不破版 */
                           children: copied ? t("phoneCopied") : t("phoneCopy"),
                         }),
                         gatewayOn
-                          ? jsxRuntime.jsx("button", {
-                              type: "button",
-                              className: "dshk-phone-rotate",
-                              title: t("phoneRotateHint"),
-                              disabled: gateBusy,
-                              onClick: () => {
-                                rotateLink();
-                              },
-                              children: t("phoneRotate"),
+                          ? jsxRuntime.jsx(KitTip, {
+                              label: t("phoneRotateHint"),
+                              children: jsxRuntime.jsx("button", {
+                                type: "button",
+                                className: "dshk-phone-rotate",
+                                disabled: gateBusy,
+                                onClick: () => {
+                                  rotateLink();
+                                },
+                                children: t("phoneRotate"),
+                              }),
                             })
                           : null,
                       ],
@@ -4472,27 +4502,31 @@ ellipsis，窄列只截字不破版 */
                     onClick: () => sendInput({ t: "activate", tabId: p.tabId }),
                     children: [
                       jsxRuntime.jsx("span", { className: "dshk-tab-label", children: tabLabel(p) }),
-                      jsxRuntime.jsx("button", {
-                        type: "button",
-                        className: "dshk-tab-x",
-                        "aria-label": t("browserCloseTab"),
-                        title: t("browserCloseTab"),
-                        onClick: (e) => {
-                          e.stopPropagation();
-                          sendInput({ t: "closeTab", tabId: p.tabId });
-                        },
-                        children: "✕",
+                      jsxRuntime.jsx(KitTip, {
+                        label: t("browserCloseTab"),
+                        children: jsxRuntime.jsx("button", {
+                          type: "button",
+                          className: "dshk-tab-x",
+                          "aria-label": t("browserCloseTab"),
+                          onClick: (e) => {
+                            e.stopPropagation();
+                            sendInput({ t: "closeTab", tabId: p.tabId });
+                          },
+                          children: "✕",
+                        }),
                       }),
                     ],
                   }, p.tabId),
                 ),
-                jsxRuntime.jsx("button", {
-                  type: "button",
-                  className: "dshk-tab dshk-brw-newtab",
-                  title: t("browserNewTab"),
-                  "aria-label": t("browserNewTab"),
-                  onClick: () => sendInput({ t: "newTab" }),
-                  children: "＋",
+                jsxRuntime.jsx(KitTip, {
+                  label: t("browserNewTab"),
+                  children: jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-tab dshk-brw-newtab",
+                    "aria-label": t("browserNewTab"),
+                    onClick: () => sendInput({ t: "newTab" }),
+                    children: "＋",
+                  }),
                 }),
               ],
             }),
@@ -4506,9 +4540,9 @@ ellipsis，窄列只截字不破版 */
               go(draft);
             },
             children: [
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", title: t("browserBack"), "aria-label": t("browserBack"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "back" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "back" }) }),
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", title: t("browserForward"), "aria-label": t("browserForward"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "forward" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "forward" }) }),
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", title: t("browserReload"), "aria-label": t("browserReload"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "reload" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "reload" }) }),
+              jsxRuntime.jsx(KitTip, { label: t("browserBack"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserBack"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "back" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "back" }) }) }),
+              jsxRuntime.jsx(KitTip, { label: t("browserForward"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserForward"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "forward" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "forward" }) }) }),
+              jsxRuntime.jsx(KitTip, { label: t("browserReload"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserReload"), disabled: !live, onClick: () => sendInput({ t: "nav", op: "reload" }), children: jsxRuntime.jsx(BrwToolIcon, { name: "reload" }) }) }),
               jsxRuntime.jsxs("div", {
                 className: "dshk-brw-addrbox",
                 children: [
@@ -4520,10 +4554,10 @@ ellipsis，窄列只截字不破版 */
                     spellCheck: false,
                     onChange: (e) => setDraft(e.target.value),
                   }),
-                  jsxRuntime.jsx("button", { type: "submit", className: "dshk-brw-tool dshk-brw-go", title: t("browserGo"), "aria-label": t("browserGo"), children: jsxRuntime.jsx(BrwToolIcon, { name: "go" }) }),
+                  jsxRuntime.jsx(KitTip, { label: t("browserGo"), children: jsxRuntime.jsx("button", { type: "submit", className: "dshk-brw-tool dshk-brw-go", "aria-label": t("browserGo"), children: jsxRuntime.jsx(BrwToolIcon, { name: "go" }) }) }),
                 ],
               }),
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", title: t("browserExternal"), "aria-label": t("browserExternal"), disabled: viewUrl === "", onClick: openExternal, children: jsxRuntime.jsx(BrwToolIcon, { name: "external" }) }),
+              jsxRuntime.jsx(KitTip, { label: t("browserExternal"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserExternal"), disabled: viewUrl === "", onClick: openExternal, children: jsxRuntime.jsx(BrwToolIcon, { name: "external" }) }) }),
             ],
           }),
           // 顶部提示条（官方 failure / sandboxWarning 同款）：断线取警示色、启动失败取
@@ -5419,15 +5453,18 @@ ellipsis，窄列只截字不破版 */
           className: "dshk-rowact",
           children: [
             // 保住选区：mousedown 默认行为会先塌掉编辑器里的选区
-            jsxRuntime.jsx("button", { type: "button", title: t("treeAt"), onMouseDown: (ev) => ev.preventDefault(), onClick: (ev) => { ev.stopPropagation(); citeFromTree(entry.path); }, children: "@" }),
-            jsxRuntime.jsx("button", {
-              type: "button",
-              title: t("treeMenu"),
-              onClick: (ev) => {
-                ev.stopPropagation();
-                openRowMenu(ev.currentTarget, { dir: entry.dir === true, name: label, path: entry.path });
-              },
-              children: "⋯",
+            jsxRuntime.jsx(KitTip, { label: t("treeAt"), align: "end", children: jsxRuntime.jsx("button", { type: "button", onMouseDown: (ev) => ev.preventDefault(), onClick: (ev) => { ev.stopPropagation(); citeFromTree(entry.path); }, children: "@" }) }),
+            jsxRuntime.jsx(KitTip, {
+              label: t("treeMenu"),
+              align: "end",
+              children: jsxRuntime.jsx("button", {
+                type: "button",
+                onClick: (ev) => {
+                  ev.stopPropagation();
+                  openRowMenu(ev.currentTarget, { dir: entry.dir === true, name: label, path: entry.path });
+                },
+                children: "⋯",
+              }),
             }),
           ],
         });
@@ -5508,16 +5545,19 @@ ellipsis，窄列只截字不破版 */
                   jsxRuntime.jsx(TreeFolderIcon, {}),
                   renamingPath === e.path ? renameInput(e, e.name, true) : jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
                   // 行尾「新建」（悬停显形）：落点 = 这个目录
-                  jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-vault-treeplus",
-                    title: t("vaultNew"),
-                    onMouseDown: (ev) => ev.preventDefault(),
-                    onClick: (ev) => {
-                      ev.stopPropagation();
-                      startCreate(e.path);
-                    },
-                    children: "+",
+                  jsxRuntime.jsx(KitTip, {
+                    label: t("vaultNew"),
+                    align: "end",
+                    children: jsxRuntime.jsx("button", {
+                      type: "button",
+                      className: "dshk-vault-treeplus",
+                      onMouseDown: (ev) => ev.preventDefault(),
+                      onClick: (ev) => {
+                        ev.stopPropagation();
+                        startCreate(e.path);
+                      },
+                      children: "+",
+                    }),
                   }),
                   rowActs(e, e.name),
                 ],
@@ -5625,7 +5665,7 @@ ellipsis，窄列只截字不破版 */
                 }
               },
             }),
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultRefresh"), title: t("vaultRefresh"), disabled: refreshing, onClick: () => void manualRefresh(), children: jsxRuntime.jsx(OfficialIcon, { names: ["IconRefreshOutline16", "IconRefreshOutline14"], glyph: "↻" }) }),
+            jsxRuntime.jsx(KitTip, { label: t("vaultRefresh"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultRefresh"), disabled: refreshing, onClick: () => void manualRefresh(), children: jsxRuntime.jsx(OfficialIcon, { names: ["IconRefreshOutline16", "IconRefreshOutline14"], glyph: "↻" }) }) }),
           ] }),
         ] }),
         searchRes !== null && searchRect
@@ -5664,25 +5704,31 @@ ellipsis，窄列只截字不破版 */
           jsxRuntime.jsxs("div", { className: "dshk-vault-railhead", children: [
             rootHere === null
               ? null
-              : jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultBackRoot"), title: t("vaultBackRoot"), onClick: () => setRootHere(null), children: jsxRuntime.jsx(OfficialIcon, { names: ["IconChevronLeftOutline14"], glyph: "←" }) }),
+              : jsxRuntime.jsx(KitTip, { label: t("vaultBackRoot"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultBackRoot"), onClick: () => setRootHere(null), children: jsxRuntime.jsx(OfficialIcon, { names: ["IconChevronLeftOutline14"], glyph: "←" }) }) }),
             jsxRuntime.jsx("span", {
               className: "dshk-vault-railtitle",
               title: treeRoot ?? "",
               children: rootHere === null ? t("vaultTitle") : relUnder(root, rootHere) || rootHere,
             }),
-            jsxRuntime.jsx("button", {
-              type: "button",
-              className: "dshk-vault-treeplus",
-              title: t("vaultNew"),
-              onClick: () => treeRoot !== null && startCreate(treeRoot),
-              children: "+",
+            jsxRuntime.jsx(KitTip, {
+              label: t("vaultNew"),
+              align: "end",
+              children: jsxRuntime.jsx("button", {
+                type: "button",
+                className: "dshk-vault-treeplus",
+                onClick: () => treeRoot !== null && startCreate(treeRoot),
+                children: "+",
+              }),
             }),
-            jsxRuntime.jsx("button", {
-              type: "button",
-              className: "dshk-vault-treeplus",
-              title: t("treeMenu"),
-              onClick: (ev) => openHeadMenu(ev.currentTarget),
-              children: "⋯",
+            jsxRuntime.jsx(KitTip, {
+              label: t("treeMenu"),
+              align: "end",
+              children: jsxRuntime.jsx("button", {
+                type: "button",
+                className: "dshk-vault-treeplus",
+                onClick: (ev) => openHeadMenu(ev.currentTarget),
+                children: "⋯",
+              }),
             }),
           ] }),
           createAt === treeRoot ? createRow() : null,
@@ -5995,22 +6041,26 @@ ellipsis，窄列只截字不破版 */
                     // 阅读条 sticky：长文滚到哪儿都够得到——目录/反链是页面级入口
                     // （「谁提到这一页」「本文有什么小节」），吊在页尾的老反链区
                     // 就是够不到才撤掉的。空了按钮留原位置灰，别忽长忽短
-                    jsxRuntime.jsx("button", {
-                      type: "button",
-                      className: `dshk-vault-tbtn${outline !== null && outline.items.length === 0 ? " is-empty" : ""}`,
-                      title: outline !== null && outline.items.length === 0 ? t("vaultTocEmpty") : t("vaultToc"),
-                      onClick: (e) => openBarMenu("toc", e),
-                      children: t("vaultToc"),
+                    jsxRuntime.jsx(KitTip, {
+                      label: outline !== null && outline.items.length === 0 ? t("vaultTocEmpty") : t("vaultToc"),
+                      children: jsxRuntime.jsx("button", {
+                        type: "button",
+                        className: `dshk-vault-tbtn${outline !== null && outline.items.length === 0 ? " is-empty" : ""}`,
+                        onClick: (e) => openBarMenu("toc", e),
+                        children: t("vaultToc"),
+                      }),
                     }),
                     // 光标所属标题链（面包屑，二级归属最近一级）：
                     // 占满余宽、超长省略，title 给全文；无标题覆盖时隐藏
                     crumb === "" ? null : jsxRuntime.jsx("span", { className: "dshk-vault-crumb", title: crumb, children: crumb }),
-                    jsxRuntime.jsx("button", {
-                      type: "button",
-                      className: `dshk-vault-tbtn dshk-vault-tbpush${backlinks.length === 0 ? " is-empty" : ""}`,
-                      title: backlinks.length === 0 ? t("vaultBlEmpty") : t("vaultBacklinks"),
-                      onClick: (e) => openBarMenu("bl", e),
-                      children: `${t("vaultBacklinks")}${backlinks.length > 0 ? ` ${backlinks.length}` : ""}`,
+                    jsxRuntime.jsx(KitTip, {
+                      label: backlinks.length === 0 ? t("vaultBlEmpty") : t("vaultBacklinks"),
+                      children: jsxRuntime.jsx("button", {
+                        type: "button",
+                        className: `dshk-vault-tbtn dshk-vault-tbpush${backlinks.length === 0 ? " is-empty" : ""}`,
+                        onClick: (e) => openBarMenu("bl", e),
+                        children: `${t("vaultBacklinks")}${backlinks.length > 0 ? ` ${backlinks.length}` : ""}`,
+                      }),
                     }),
                   ] }),
                   jsxRuntime.jsx(RteEditor, {
@@ -6109,16 +6159,18 @@ ellipsis，窄列只截字不破版 */
           onClick: () => setKitUi(activate(p)),
           children: [
             jsxRuntime.jsx("span", { className: "dshk-tab-label", children: label(p) }),
-            jsxRuntime.jsx("button", {
-              type: "button",
-              className: "dshk-tab-x",
-              "aria-label": t("pvCloseTab"),
-              title: t("pvCloseTab"),
-              onClick: (e) => {
-                e.stopPropagation();
-                setKitUi(closeOne(p));
-              },
-              children: "✕",
+            jsxRuntime.jsx(KitTip, {
+              label: t("pvCloseTab"),
+              children: jsxRuntime.jsx("button", {
+                type: "button",
+                className: "dshk-tab-x",
+                "aria-label": t("pvCloseTab"),
+                onClick: (e) => {
+                  e.stopPropagation();
+                  setKitUi(closeOne(p));
+                },
+                children: "✕",
+              }),
             }),
           ],
         }, p),
@@ -6667,15 +6719,15 @@ ellipsis，窄列只截字不破版 */
             children: [
               jsxRuntime.jsx("span", { className: "dshk-sk-name", "data-disabled": skill.disabled || undefined, children: skill.name }),
               groupId !== "pool" && typeof skill.rank === "number"
-                ? jsxRuntime.jsx("span", { className: "dshk-sk-badge", title: `${skRootShort(skill.root)} · ${t("skRankTip")}`, children: `(${skill.rank})` })
+                ? jsxRuntime.jsx(KitTip, { label: `${skRootShort(skill.root)} · ${t("skRankTip")}`, children: jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: `(${skill.rank})` }) })
                 : null,
               skill.disabled ? jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", children: t("skDisabled") }) : null,
               // 版本号（技能 frontmatter 的 version，自有约定）：池里的参考技能与个人
               // 副本靠它对照「抄的是哪版」
               typeof skill.version === "string" && skill.version !== ""
-                ? jsxRuntime.jsx("span", { className: "dshk-sk-badge", title: t("skVersionTip"), children: `v${skill.version}` })
+                ? jsxRuntime.jsx(KitTip, { label: t("skVersionTip"), children: jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: `v${skill.version}` }) })
                 : null,
-              skill.shadowed ? jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", title: t("skShadowTip"), children: t("skShadowed") }) : null,
+              skill.shadowed ? jsxRuntime.jsx(KitTip, { label: t("skShadowTip"), children: jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", children: t("skShadowed") }) }) : null,
               typeof skill.description === "string" && skill.description !== ""
                 ? jsxRuntime.jsx("span", { className: "dshk-sk-desc", title: skill.description, children: skill.description })
                 : null,
@@ -6788,7 +6840,7 @@ ellipsis，窄列只截字不破版 */
               message !== "" ? jsxRuntime.jsx("span", { className: "dshk-sk-status", children: message }) : null,
               error !== "" ? jsxRuntime.jsx("span", { className: "dshk-sk-status", title: error, children: `${t("skFail")}：${error}` }) : null,
               jsxRuntime.jsx("span", { style: { flex: 1 } }),
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, title: t("skRefresh"), onClick: () => setNonce((n) => n + 1), children: "⟳" }),
+              jsxRuntime.jsx(KitTip, { label: t("skRefresh"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setNonce((n) => n + 1), children: "⟳" }) }),
             ],
           }),
           !cwd ? jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { marginBottom: 8 }, children: t("skNoCwdHint") }) : null,
