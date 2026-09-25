@@ -40,11 +40,24 @@ const DYNAMIC_CLASS_RE = new RegExp('(dshk-[a-z0-9-]*-)' + '\\$' + '\\{', 'g')
 const dynamicPrefixes = (hay) => [...new Set([...hay.matchAll(DYNAMIC_CLASS_RE)].map((m) => m[1]))]
 
 // ── 锚点 ──
-const zhStart = src.indexOf('const zh = {')
-const zhEnd = src.indexOf('\n    };', zhStart)
-if (zhStart < 0 || zhEnd < 0) die('找不到 zh 字典锚点（client/bundle.js 结构变了，哨兵要同步）')
-const enStart = src.indexOf('const en = {')
-if (enStart < 0) die('找不到 en 字典锚点')
+// 字典成对出现（根包一份 + 各组件模块各自的私有字典）：逐对校验。只锚第一对
+// 会把组件词条漏出扫描面——组件化后根包字典本来就只剩主行那几十条
+const dictPairs = []
+{
+  const zhRe = /const zh = \{/g
+  let m
+  while ((m = zhRe.exec(src)) !== null) {
+    const zhS = m.index
+    const zhE = src.indexOf('\n    };', zhS)
+    if (zhE < 0) die('zh 字典未闭合（client/bundle.js 结构变了，哨兵要同步）')
+    const enS = src.indexOf('const en = {', zhE)
+    if (enS < 0) die('找不到 en 字典锚点（client/bundle.js 结构变了，哨兵要同步）')
+    const enE = src.indexOf('\n    };', enS)
+    if (enE < 0) die('en 字典未闭合（client/bundle.js 结构变了，哨兵要同步）')
+    dictPairs.push([zhS, zhE, enS, enE])
+  }
+  if (dictPairs.length < 3) die('只找到 ' + dictPairs.length + ' 对 zh/en 字典，锚点可能失效')
+}
 const cssStart = src.indexOf('const UI_CSS = \`')
 if (cssStart < 0) die('找不到 UI_CSS 锚点（client/bundle.js 结构变了，哨兵要同步）')
 // CSS 扫描面 = 所有 `<名字>CSS = \`...\`` 模板块（根包 UI_CSS + 各组件包 XXX_CSS）：
@@ -65,7 +78,7 @@ const cssRegions = []
 // 锚点必须认准那一条（文件里还有别的 return {...}，比如 jsx 桩）
 const renderPath = path.join(root, 'tests', 'render-check.cjs')
 const renderSrc = fs.existsSync(renderPath) ? fs.readFileSync(renderPath, 'utf8') : ''
-const EXPORT_ANCHOR = 'return Object.assign({ vaultSideSlot'
+const EXPORT_ANCHOR = 'return Object.assign({ PhoneSection'
 const exportAt = renderSrc.indexOf(EXPORT_ANCHOR)
 if (renderSrc !== '' && exportAt < 0) die('找不到 render-check 导出表锚点（测试结构变了，哨兵要同步）')
 const exportedNames = new Set(
@@ -85,15 +98,19 @@ for (const p of dynamicKeyPrefixes) {
   if (!src.includes('\`' + p + '$' + '{')) notes.push('动态键前缀 ' + p + ' 在源码里已找不到拼接处，确认后从哨兵豁免表删掉')
 }
 {
-  const zhBody = src.slice(zhStart, zhEnd)
-  const enBody = src.slice(enStart, src.indexOf('\n    };', enStart))
-  const keys = [...new Set([...zhBody.matchAll(/\n {6}([A-Za-z_$][\w$]*):/g)].map((m) => m[1]))]
-  if (keys.length < 100) fail('i18n 字典只解析出 ' + keys.length + ' 个键，锚点可能失效')
-  for (const key of keys) {
-    if (dynamicKeyPrefixes.some((p) => key.startsWith(p))) continue
-    if (count(src, key) <= 2) fail('i18n 死词条：' + key + '（只有字典定义处，无代码引用；zh/en 各一条）')
-    if (!enBody.includes(key + ':')) fail('i18n 键缺 en 侧：' + key)
+  let totalKeys = 0
+  for (const [zhS, zhE, enS, enE] of dictPairs) {
+    const zhBody = src.slice(zhS, zhE)
+    const enBody = src.slice(enS, enE)
+    const keys = [...new Set([...zhBody.matchAll(/\n {6}([A-Za-z_$][\w$]*):/g)].map((m) => m[1]))]
+    totalKeys += keys.length
+    for (const key of keys) {
+      if (dynamicKeyPrefixes.some((p) => key.startsWith(p))) continue
+      if (count(src, key) <= 2) fail('i18n 死词条：' + key + '（只有字典定义处，无代码引用；zh/en 各一条）')
+      if (!enBody.includes(key + ':')) fail('i18n 键缺 en 侧：' + key)
+    }
   }
+  if (totalKeys < 100) fail('i18n 字典合计只解析出 ' + totalKeys + ' 个键，锚点可能失效')
   if (TEMPLATE_START === '') fail('哨兵内部常量失效')
 }
 

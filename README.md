@@ -8,7 +8,9 @@
 ## 功能
 
 工作台住在**官方右侧边栏**（宿主 0.1.5+ 的 `sidebar.right`）：diff / 知识库 / 日程 /
-浏览器各一张 dock 签，知识库签里再分文档签（一页一签）。工作区文件的查看
+浏览器各一张 dock 签，知识库签里再分文档签（一页一签）。每个能力都是插件页里可单独
+开关的**组件行**——行关掉 = 该能力的端点、agent 工具与界面入口一起退场，全部关掉即
+DSH 原版形态。工作区文件的查看
 走**官方文件预览**（kit 在其头部补一枚「下载到本机」）；工作区文件不做插件内编辑——
 编辑走 VS Code 或让 agent 改。
 索引类视图（文件树、源代码管理、知识库目录）共用左侧边栏一格，对话列常驻。
@@ -23,14 +25,10 @@
   放弃/提交、点文件在右栏「**差异**」签看逐行对比（全文件着色，提交图谱可钉定任一提交的
   历史版本对比）、分支切换与新建删除、↑↓ 同步（先拉后推）、提交图谱；
   非 git 目录可一键初始化
-- **日程**（入口在右栏开始页条目；无 composer 钮、无专属快捷键）：
-  日程 pane 内清单（近三日/近一周/全部范围档）+ 周网格 + 本周统计，**面板只读**；
-  块颜色只表达状态（未到橙/进行中绿/已过蓝/逾期红）；agent 经
-  `schedule_query`/`schedule_create`/`schedule_update`/`schedule_delete` 查、建、改、删；
-  数据结构化落盘 `$DSH_HOME/dsh-kit/schedule/`（一条一文件：`events/` + `entries/`，
-  与望舒桌面端共目录——编辑与计时都归望舒端，插件只读展示）
-- **知识库**（工具行开关 / 默认 **Ctrl+Alt+/**，功能默认关）：默认地址开箱即用（数据目录下
-  `dsh-kit\vault`，可在配置页改绝对路径）——左栏一行式搜索 + 目录树选页，右栏「知识库」
+- **知识库 · 日程**（一个组件行；行开关 = 总开关，关掉即目录索引、两张 dock 签、输入行
+  入口与 4 个日程工具一起退场）
+  - **知识库**（工具行开关 / 默认 **Ctrl+Alt+/**）：默认地址开箱即用（数据目录下
+  `dsh-kit\vault`，可在本行配置页改绝对路径）——左栏一行式搜索 + 目录树选页，右栏「知识库」
   签里每页一个文档签（可多开、✕ 单关），`[[双链]]` 页内跳转（`[[页#标题]]` 落到对应
   小节）+ 阅读条「目录/反链」；搜索一次搜两侧（笔记全文 + 笔记目录 + 库根 `library/`
   资料库里的文件与目录按名字匹配），资料库文件点开走官方右栏文件签（PDF 等不在面板里
@@ -44,6 +42,12 @@
   自动加序号；页签随改名／移动／删除同步搬走或关闭；
   与对话互通——聊天里的 vault 路径点击直达、树上「@」把页面/选区插进输入框；
   正文本身不做插件内编辑（写入归 agent 文件工具或你的本地编辑器），插件也不建骨架目录、不碰 git
+  - **日程**（入口在右栏开始页条目；无 composer 钮、无专属快捷键）：
+  日程 pane 内清单（近三日/近一周/全部范围档）+ 周网格 + 本周统计，**面板只读**；
+  块颜色只表达状态（未到橙/进行中绿/已过蓝/逾期红）；agent 经
+  `schedule_query`/`schedule_create`/`schedule_update`/`schedule_delete` 查、建、改、删；
+  数据结构化落盘 `$DSH_HOME/dsh-kit/schedule/`（一条一文件：`events/` + `entries/`，
+  与望舒桌面端共目录——编辑与计时都归望舒端，插件只读展示）
 - **内置浏览器**（右栏「浏览器」签；本组件行开关 = 总开关，关掉即工具与面板整体退场、
   只剩官方浏览器入口）：agent 以 7 个 `browser_*` 工具驱动系统 Edge
   （vendored playwright-core，专用持久 profile）——快照→动作→断言的 GUI 测试循环、
@@ -85,7 +89,8 @@
   （方向按官方口径：面板头/工具条朝下、底部 dock 与输入行朝上、行尾动作钮右对齐；有命令的带
   当前键位，改键后跟着变），纯文本截断提示仍走原生 title
 - **配置**：插件页（侧栏「插件」）里需要可调参数的组件行各带自己的「配置」页——主行管
-  知识库目录与手机访问；**网页搜索行**只有搜索结果条数（行开关 = 总开关，关掉即回官方搜索）；
+  手机访问；**知识库 · 日程行**管知识库根目录（行开关 = 总开关）；
+  **网页搜索行**只有搜索结果条数（行开关 = 总开关，关掉即回官方搜索）；
   **内置浏览器行**管「对话链接改投内置浏览器」与「隐藏官方『浏览器』入口」（行开关 = 总开关）；
   **用量与监视行**管余额与用量芯片开关、会话监视参数与桌面通知；**文件树 · 源代码管理行**
   管文件树 / 源代码管理开关与「隐藏官方『工作区文件』入口」；**终端**与**技能**两行没有配置
@@ -114,7 +119,7 @@ dsh plugin --profile web update dsh-kit
 
 本包声明了 `dsh.bundle.patch`，会被激活为 profile 的 bundle 层。安装/更新后重启
 `dsh web`：工具行出现文件树/源代码管理/知识库/终端四个开关，工作台以官方右侧边栏
-承载（四类 dock 签），AI 的 `web_search` 同时切到免费多源搜索。
+承载（文件 / 知识库 / 日程 / 浏览器四类 dock 签），AI 的 `web_search` 同时切到免费多源搜索。
 
 **宿主版本要求**：dsh ≥ 0.1.5（依赖官方右侧边栏服务 `sidebar.right`）。
 老宿主没有该服务时插件照常加载，但工作台签不会出现、入口按钮点了没有面板——
@@ -122,31 +127,35 @@ dsh plugin --profile web update dsh-kit
 
 ## 工作原理
 
-- `src/*.ts` → `dist/`（tsc 构建产物入库）：宿主半边——挂 `/tree`、`/read`、`/raw`
-  （Range/206）、`/fs/op`、`/upload`、`/git/*`、`/schedule/*`、`/vault/*`（知识库）、
-  `/dsh-kit/skills`（技能池）、`/phone/*`（手机网关）、`/config`（只读配置快照）等端点
-- `client/bundle.js`：浏览器半边（手写 ModuleLoader bundle，**零构建**）——根包注册知识库
-  入口钮、官方右栏 dock 签（pane 正文经 `sidebar.right.pane.tab` 提供）与配置页
-  （`plugins.row.config`）；文件树·源代码管理、终端、技能、用量监视、网页搜索、内置浏览器
-  六个组件的 client 半边同住本 bundle（组件模块，终端坞引擎为官方 `webTerminals` 服务）
-- `src/core`、`src/files`、`src/skills`、`src/terminal`、`src/monitor`、`src/browser`：
-  组件按目录分边界（0.5.3 单包组件化，组件 = patch 行而非独立包）——`core` 宿主共享库
+- `src/*.ts` → `dist/`（tsc 构建产物入库）：宿主半边——主行挂 `/phone/*`（手机网关）、
+  `/config`（只读配置快照）与 `/vendor/*`（xterm / TipTap / KaTeX / qrcode）；文件树
+  （`/tree`、`/read`、`/raw`、`/fs/op`、`/upload`、`/git/*`）、技能池、知识库
+  （`/vault/*`）、日程（`/schedule/*`）、浏览器等端点各归组件
+- `client/bundle.js`：浏览器半边（手写 ModuleLoader bundle，**零构建**）——根包只剩跨槽
+  共享底座（kitUi 开合状态、配置页骨架、入口座）与手机访问页；文件树·源代码管理、终端、
+  技能、用量监视、网页搜索、内置浏览器、知识库·日程七个组件的 client 半边同住本 bundle
+  （各带 `module/exports` 隔离壳，右栏 pane 正文经 `sidebar.right.pane.tab` 提供、
+  配置页经 `plugins.row.config`；终端坞引擎为官方 `webTerminals` 服务）
+- `src/core`、`src/files`、`src/skills`、`src/terminal`、`src/monitor`、`src/browser`、
+  `src/vault`：组件按目录分边界（0.5.3 单包组件化，组件 = patch 行而非独立包）——`core` 宿主共享库
   （同源校验、回收站删除、文本解码、会话头注入、dsh-tools 加载）；`files` 挂 tree/
   read/raw/fs-op/git 端点 + 文件树·源代码管理面板；`skills` 挂 `/dsh-kit/skills` 与
   `/dsh-kit/skills/op` + `/dsh-kit-skills/config` 探针（技能池管理页）；`terminal` 挂
   `/dsh-kit-terminal/config` 探针（终端入口与坞）；`monitor` 挂 `/dsh-kit/usage` + 用量
   芯片 / 429 续跑 / 死循环打断 / 会话通知；`browser` 挂 7 个 `browser_*` 工具 +
   `/dsh-kit/browser`（面板 WS）、`/dsh-kit/browser/open` 与 `/dsh-kit-browser/config`
-  探针（右栏浏览器签、人机共驾、链接改投）。行经根包 `exports` 子路径（`dsh-kit/files` 等）
-  由 `cordis.patch.yml` 物化
+  探针（右栏浏览器签、人机共驾、链接改投）；`vault` 挂 `/dsh-kit/vault/*`（索引 / 搜索 /
+  单页 mtime / 目录级文件管理）、`/dsh-kit/schedule/*`（只读数据与统计）与
+  `/dsh-kit-vault/config` 探针，并注册 4 个 `schedule_*` agent 工具（知识库·日程行）。
+  行经根包 `exports` 子路径（`dsh-kit/files` 等）由 `cordis.patch.yml` 物化
 - `client/vendor/*`：xterm / TipTap 富文本 / KaTeX / qrcode，全部按需懒加载，
   由 `/dsh-kit/vendor/*` 静态伺服
 - `src/search/`：网页搜索组件——`web-search.ts` 把 web seam 的 provider 指向 `free-search`
   并注册免 key 引擎链（`engine-chain.ts` + `engines/*`）；组件行关掉 = 不接管 seam =
   base 钉的官方搜索原样生效
-- `cordis.patch.yml`：把 dsh-kit 主行与六个组件行（files / skills / terminal / monitor /
-  search / browser）insert 进 bundle 层（组件 = 本包的 exports 子路径，见 `dsh-kit/terminal` 等）；
-  不 patch 任何官方行
+- `cordis.patch.yml`：把 dsh-kit 主行与七个组件行（files / skills / terminal / monitor /
+  search / browser / vault）insert 进 bundle 层（组件 = 本包的 exports 子路径，见
+  `dsh-kit/terminal` 等）；不 patch 任何官方行
 - 宿主侧 `node-pty`/`ws`/`@deepseek-ai/*` 不声明依赖：运行时从 profile fallback
   node_modules 解析（声明了 pnpm 会装出第二份实例）
 

@@ -1,4 +1,4 @@
-// 日程模块单测：对构建产物 dist/schedule.js 跑（先 pnpm build 再跑本文件）
+// 日程模块单测：对构建产物 dist/vault/schedule.js 跑（先 pnpm build 再跑本文件）
 //   node tests/test-schedule.mjs
 // 覆盖：store CRUD、重复展开（daily/weekly/monthly × interval × days × end）、
 //       统计口径、summary 文本、计时段存量只读、持久化往返、字段清洗。
@@ -20,7 +20,7 @@ import {
   resolveScheduleDir,
   addDays,
   todayStr,
-} from '../dist/schedule.js'
+} from '../dist/vault/schedule.js'
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'dshkit-sched-'))
 

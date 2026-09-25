@@ -1,10 +1,10 @@
-// vault 宿主半边单测（只读：扫描索引 / 搜索）：跑 dist/vault.js（先 pnpm build）。
+// vault 宿主半边单测（只读：扫描索引 / 搜索）：跑 dist/vault/scanner.js（先 pnpm build）。
 // 用法：node tests/test-vault.mjs
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { extractWikiLinks, VaultScanner } from '../dist/vault.js'
+import { extractWikiLinks, VaultScanner } from '../dist/vault/scanner.js'
 
 const test = (name, fn) =>
   Promise.resolve()

@@ -1,10 +1,10 @@
-// dsh-kit 日程模块——结构化存储与查询派生（schedule.ts）
+// dsh-kit/vault 组件的日程半边——结构化存储与查询派生（schedule.ts）
 //
 // 职责：日程/待办的结构化数据持有者（一条一文件、单文件原子落盘，固定
 // $DSH_HOME/dsh-kit/schedule/，与知识库 vaultRoot 互不相干），以及派生层：
-// 区间重复展开、统计、文本汇总。UI 组件（只读面板）在
-// client/bundle.js；agent 工具（buildScheduleTools）在本文件定义、经 index.ts
-// 用宿主 defineTool 注册；HTTP 端点（只读）在 index.ts。
+// 区间重复展开、统计、文本汇总。UI 组件（只读面板）在 client/bundle.js 的
+// vaultModule；agent 工具（buildScheduleTools）在本文件定义、经 src/vault/index.ts
+// 用宿主 defineTool 注册；HTTP 端点（只读）同在该文件。
 //
 // 设计要点：
 // - 日程是强结构数据（起止/重复/位置），不是笔记——不做 md 不进 vault；
@@ -22,7 +22,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 
-import type { DefineTool, ToolDefinition } from './core/tools.ts'
+import type { DefineTool, ToolDefinition } from '../core/tools.ts'
 
 // ── 类型 ────────────────────────────────────────────────────────────────────
 

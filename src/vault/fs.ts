@@ -1,4 +1,4 @@
-// vault 文件管理（宿主半边）——树上的新建 / 重命名 / 移动 / 导入 / 删除，正文写入与
+// dsh-kit/vault 组件的文件管理半边——树上的新建 / 重命名 / 移动 / 导入 / 删除，正文写入与
 // 编辑不在此列（页面内容仍归 agent 文件工具与外部编辑器，文件即接口）。
 // 契约：所有路径都是**绝对路径**，必须落在 vault 根内（根自身只允许作为容器）；
 // 名字只收单段叶子（拒分隔符、控制字符、Windows 保留名与首尾空白），多级交给
@@ -9,7 +9,7 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { recycleDeleteBatch } from './core/index.ts'
+import { recycleDeleteBatch } from '../core/index.ts'
 
 /** 撞名策略（未知取值按 skip 处理，与前端选项一一对应） */
 export type Conflict = 'skip' | 'overwrite' | 'rename'
