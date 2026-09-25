@@ -6,7 +6,7 @@
 // 装配面：工具注册、端点、配置。
 // 组件行关闭 = 本模块不物化 = 日程工具不注册、端点全 404，client 半边探到 404 后
 // 整体不注册（侧栏索引、右栏知识库/日程签、对话路径改投全不出现）——行开关就是
-// 这块能力的总开关，没有同粒度的配置字段。
+// 这块能力的总开关。
 // 配置：vaultRoot（知识库根目录绝对路径，留空用默认根）；编辑面在插件页本组件行的
 // 「配置」。日程存储固定 $DSH_HOME/dsh-kit/schedule/（一条一文件），与知识库根无关，
 // 无配置门槛。
@@ -148,7 +148,7 @@ export async function apply(ctx, config = {}) {
     });
     // ── 知识库扫描器（./scanner.ts）：提到 apply 级——webServer 注入可能重进，
     //   知识库端点块共享同一实例（mtime 缓存也就不用重建）。
-    //   vaultRoot 留空用默认根（即开即用）；只读——不建目录不碰 git
+    //   vaultRoot 留空用默认根（即开即用）；只读
     const vaultScanner = new VaultScanner(() => {
         try {
             const configured = String(readSettings().vaultRoot ?? '').trim();

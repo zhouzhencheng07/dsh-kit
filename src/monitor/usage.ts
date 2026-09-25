@@ -32,7 +32,7 @@ export interface UsageDeps {
   }
   /** 总开关（usageEnabled），关 = 端点 403、前端入口同步隐藏 */
   readSettings: () => { usageEnabled?: boolean }
-  /** llm-pi-ai entry 配置现读（configEditor，老宿主退 settings.get），缺服务时回 null */
+  /** llm-pi-ai entry 配置现读（configEditor，不可用时退 settings.get），缺服务时回 null */
   readProviderConfig: () => unknown
 }
 

@@ -7,7 +7,7 @@ dsh browser UI, each independent and dependency-free; with none used, dsh stays 
 
 ## Features
 
-The workbench lives in the **official right sidebar** (host 0.1.5+, `sidebar.right`):
+The workbench lives in the **official right sidebar** (the official `sidebar.right` service):
 one dock tab each for Diff / Knowledge base / Schedule / Browser,
 with document tabs inside the Knowledge base tab (one per page). Workspace files are
 viewed through the **official file preview** (kit adds a "Download" button to its
@@ -23,8 +23,7 @@ and take no component slot).
 - **Terminal** (composer-row toggle / default **Ctrl+Alt+\`**): a tabbed bottom terminal dock
   bound to the session it was opened in (width follows the chat column); hidden
   docks keep running; powered by the **official webTerminals service** (host-owned
-  PTY: system-user permissions, survives page refreshes, shell selection) —
-  requires DSH 0.1.6+
+  PTY: system-user permissions, survives page refreshes, shell selection)
 - **File tree** (composer-row toggle / default **Ctrl+Alt+,**): browse the session workspace;
   create/rename/delete (to Recycle Bin)/copy path / @-mention to chat; clicking a file
   opens it in the **official right-sidebar preview**, while md pages inside the vault
@@ -110,7 +109,7 @@ and take no component slot).
   registered with the **host's shortcut page** (Ctrl+/) — pressing keys to record, conflict
   marking, per-device defaults and persistence all belong to the host; both sidebars toggle with
   the host's own keys (web: left Ctrl+Alt+B, right Ctrl+Shift+B). Rebind there, not in the plugin
-  config page (needs DSH 0.1.7-rc.2+; on older hosts these bindings do not exist). Every hover hint
+  config page. Every hover hint
   inside the plugin is the **official tooltip** (sides follow the host's own convention: panel headers
   and toolbars point down, the bottom dock and the composer row point up, row-end buttons align end;
   commands carry their current keys and follow rebinding) — plain truncation hints keep the native
@@ -156,9 +155,9 @@ Control / Knowledge base / Terminal — appear on the composer tool row, the wor
 is carried by the official right sidebar (dock tabs for diffs / vault / schedule /
 browser), and the agent's `web_search` uses the free multi-source chain.
 
-**Host requirement**: dsh ≥ 0.1.5 (the official right-sidebar service
-`sidebar.right`). On older hosts the plugin still loads, but no workbench tabs
-appear and the toggles have nothing to open — upgrade dsh first.
+**Host requirement**: dsh ≥ 0.1.7-rc.2 (component rows and per-row config pages,
+the official `shortcuts` service and the official `webTerminals` all landed by
+this version).
 
 ## How it works
 
@@ -210,7 +209,7 @@ appear and the toggles have nothing to open — upgrade dsh first.
 
 ## Requirements
 
-- dsh ≥ 0.1.5 (official right sidebar)
+- dsh ≥ 0.1.7-rc.2
 - Node.js ≥ 22 (dsh requirement)
 - Zero declared dependencies; TypeScript sources + prebuilt `dist` on the host side,
   no build step on the browser side

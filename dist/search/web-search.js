@@ -5,11 +5,10 @@
 // 消费 sources[]）。
 //
 // provider 选择：seam 的 searchProviderId 在 base 层 config 里钉成 deepseek-official
-// （付费模型调用，dsh-base/cordis.patch.yml）。本组件加载时才把它改指到 free-search——
-// 若照旧在 bundle patch 里静态钉，关掉本组件行会把搜索一起弄坏：行禁用 = 本模块不
-// 物化 = 没有 provider 顶 free-search 这个 id，seam 每次搜索抛
-// WEB_PROVIDER_CONFIGURED_MISSING。现形态下关行 = 不接管 seam = base 钉的官方
-// provider 原样服务，插件页「全部关掉 = DSH 原版形态」才成立。
+// （付费模型调用，dsh-base/cordis.patch.yml）。本组件加载时才把它改指到 free-search。
+// **不要在 bundle patch 里静态钉**：行禁用 = 本模块不物化 = 没有 provider 顶
+// free-search 这个 id，seam 每次搜索抛 WEB_PROVIDER_CONFIGURED_MISSING；加载时接管
+// 才有「关行 = base 钉的官方 provider 原样服务」。
 //
 // 宿主断言（0.1.7-alpha.2 / rc.2 代码级，见知识库「DSH 插件开发坑」）：WebRuntime 的
 // searchProviderId 是实例公开字段（构造期取 config.searchProvider ??

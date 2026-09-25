@@ -125,7 +125,7 @@ function loadDep(spec: string): any {
 // ── 组件设置 schema（0.1.7 声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile 写入 =
 // 热提交（fiber config 里的稳定 ref），readSettings 统一解引用后每次现读。
-// 行开关 = 本组件的总开关，所以没有与行同粒度的「手机访问页入口」字段：关行即整块消失。
+// 行开关 = 本组件的总开关：关行即整块消失。
 const schemastery = loadDep('@deepseek-ai/schemastery')
 const z = (schemastery?.default ?? schemastery ?? null) as any
 

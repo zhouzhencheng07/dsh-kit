@@ -157,7 +157,7 @@ export async function apply(ctx: any, config: KitSettings = {}): Promise<void> {
         credentials: webCtx.credentials,
         readSettings: () => readSettings(),
         readProviderConfig: () => {
-          // 0.1.7 起 entry 配置由 configEditor 读：inherited = bundle 层合成值，
+          // entry 配置由 configEditor 读：inherited = bundle 层合成值，
           // override = profile patch（cordis.patch.yml）层，providers 浅合并后者优先
           try {
             const editor = ctx.get('configEditor') as
@@ -171,7 +171,7 @@ export async function apply(ctx: any, config: KitSettings = {}): Promise<void> {
               }
               return { providers }
             }
-          } catch { /* 服务缺位/读取失败落老路径 */ }
+          } catch { /* 服务缺位/读取失败落 settings 兜底 */ }
           try {
             const settings = ctx.get('settings') as { get?: (ns: string) => unknown } | undefined
             const value = settings?.get?.('llm-pi-ai')
