@@ -282,7 +282,8 @@ test('summary：逾期单独点名，due 带时刻不把条目挤出当日窗口
   const late = store.create({ title: '晚交', due: `${yest}T18:00` })
   // 旧实现 due<=to 字符串比区间会把 "…T18:00" 判到日外；落窗按日期部分比
   assert.ok(store.items('day', yest).some((i) => i.id === late.id && i.kind === '待办'))
-  const hit = store.items('week', todayStr()).find((i) => i.id === late.id)
+  // 查**含该条目日期**的那一周：拿"今天所在周"会在周一（昨天属上一周）查不到
+  const hit = store.items('week', yest).find((i) => i.id === late.id)
   assert.equal(hit?.overdue, true)
   const sum = store.summary('day', yest)
   assert.match(sum, /逾期待办 1/)
