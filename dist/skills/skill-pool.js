@@ -1,35 +1,43 @@
 // dsh-kit 技能池宿主半边
 //
-// 技能池 $DSH_HOME/skill-pool 不挂任何
-// 扫描根（DSH 不会把它当技能源），只作为工作区之间流通的仓库货架；本模块提供
-// 管理面端点，浏览器半边在 settings.section 渲染"技能管理"页。
+// 技能池 $DSH_HOME/skill-pool 不挂任何扫描根（DSH 不会把它当技能源）：它是跨工作区
+// 共用技能的**本体**所在地。要让某个工作区看见池里的技能，就在该工作区的一个项目级根
+// 里建一条指向池的目录链接（载体根选择、git 体检与建链/断链见 ./mount.ts）。技能永远
+// 不进项目仓库——载体根整目录被 git 忽略。
 //
-// 端点（同源校验同 index.ts；webserver 默认只绑 loopback）：
+// 端点（同源校验；webserver 默认只绑 loopback）：
 //   GET  /dsh-kit/skills?cwd=<会话cwd>
 //       按三个逻辑组返回：workspace（.dsh/.agents 两根聚合）、user（$DSH_HOME 与
 //       ~/.agents 两根聚合）、pool。每个技能带 root（物理根）、rank（DSH 扫描
-//       优先级，越小越优先）、shadowed（同名跨根时非最优者）。另附注册表中非
-//       白名单来源的技能（插件自带/运行时/custom 目录——只读展示）。
+//       优先级，越小越优先）、shadowed（同名跨根时非最优者）；链接条目另带
+//       link/linkTarget/linkInPool。另附注册表中非白名单来源的技能（只读展示）、
+//       失效链接清单、以及载体根状态 mount。
 //   POST /dsh-kit/skills/op   body 为 JSON：
 //       {op:'copy',  src, dest, overwrite?}   复制到目标根（dest=物理根 id）
 //       {op:'move',  src, dest, overwrite?}   复制校验后移除源（数据先落目标再撤源）
-//       {op:'delete', src}                    删除；Windows 移入回收站，其它平台直接删
-//       {op:'disable', src, disabled}         改 SKILL.md frontmatter 双键：
-//                                             disable-model-invocation:true +
-//                                             user-invocable:false（chokidar 热生效）；
-//                                             disabled=false 即删掉这两个键恢复。
-//       同名冲突回 409 {error:'conflict'}，客户端确认后带 overwrite:true 重发。
+//       {op:'delete', src}                    删除；Windows 移入回收站（链接只断链）
+//       {op:'disable', src, disabled}         改 SKILL.md frontmatter 双键
+//       {op:'setcarrier', carrier}            记住本项目的载体根（两根都在用时二选一）
+//       {op:'prepare', resolve?:'move'|'untrack'}
+//                                             体检载体根：处理已进仓库的内容 + 写忽略
+//       {op:'mount', src}                     在载体根建指向池技能的链接
+//       {op:'unmount', src}                   断链（池里的本体不动）
+//       同名冲突回 409 {error:'conflict'}，客户端确认后带 overwrite:true 重发；
+//       载体根有已进仓库的内容时回 409 {error:'tracked', tracked:[...]}。
 //
 // 安全边界：
 //   - 可写范围白名单：池目录、项目级两根（自 cwd 推导）、用户级两根；之外一律拒绝。
 //   - 源必须是某根的**直接子项**（官方发现规则就是一层：dir/SKILL.md 或根下 *.md）。
-//   - 全路径 realpath 后再做包含性校验，符号链接逃逸出白名单即拒。
+//   - 路径按**父目录 realpath** 做包含性校验、条目本身按 lstat 判类型：链接条目算在它
+//     所在的根里，绝不被 realpath 带去池里当成本体（否则"删除工作区里的挂载技能"会删掉
+//     池里的本体）。
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { recycleDelete, findProjectRoot } from "../core/index.js";
 import { sameOrigin } from "../core/index.js";
+import { computeMountState, mountLink, mountPrecondition, prepareCarrier, setCarrier, unmountLink, } from "./mount.js";
 const POOL_DIRNAME = 'skill-pool';
 const PHYSICAL_ROOTS = [
     { id: 'project-dsh', group: 'workspace', rank: 100 },
@@ -44,12 +52,29 @@ function dshHome() {
     const env = process.env.DSH_HOME;
     return env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh');
 }
-/** 技能池目录（$DSH_HOME/skill-pool）：不是 DSH 扫描根，只作跨工作区流通的货架。
+/** 技能池目录（$DSH_HOME/skill-pool）：不是 DSH 扫描根，只作跨工作区共用的本体所在地。
  *  池路径真相只此一处（vault 的「知识库目录」等用户配置与它无关）。 */
 export function defaultPoolDir() {
     return path.join(dshHome(), POOL_DIRNAME);
 }
-/** 解析全部白名单物理根（带逻辑分组与 rank）；cwd 缺省则无项目组 */
+/** 项目级两根的物理位置；没有会话 cwd（或 cwd 非法）时返回 null */
+export function resolveProjectDirs(cwd) {
+    if (typeof cwd !== 'string' || cwd.trim() === '')
+        return null;
+    try {
+        const projectRoot = findProjectRoot(fs.realpathSync(path.resolve(cwd.trim())));
+        return {
+            projectRoot,
+            dshDir: path.join(projectRoot, '.dsh', 'skills'),
+            agentsDir: path.join(projectRoot, '.agents', 'skills'),
+        };
+    }
+    catch {
+        // cwd 非法就没有项目级两根
+        return null;
+    }
+}
+/** 解析全部白名单物理根（带逻辑分组与 rank） */
 export function resolveRoots(cwd) {
     const home = dshHome();
     const dirById = {
@@ -57,15 +82,10 @@ export function resolveRoots(cwd) {
         'user-dsh': path.join(home, 'skills'),
         'user-agents': path.join(os.homedir(), '.agents', 'skills'),
     };
-    if (typeof cwd === 'string' && cwd.trim() !== '') {
-        try {
-            const projectRoot = findProjectRoot(fs.realpathSync(path.resolve(cwd.trim())));
-            dirById['project-agents'] = path.join(projectRoot, '.agents', 'skills');
-            dirById['project-dsh'] = path.join(projectRoot, '.dsh', 'skills');
-        }
-        catch {
-            // cwd 非法就没有项目组
-        }
+    const project = resolveProjectDirs(cwd);
+    if (project !== null) {
+        dirById['project-dsh'] = project.dshDir;
+        dirById['project-agents'] = project.agentsDir;
     }
     const roots = [];
     for (const def of PHYSICAL_ROOTS) {
@@ -82,6 +102,30 @@ function isDir(p) {
     }
     catch {
         return false;
+    }
+}
+function isLinkAt(p) {
+    try {
+        return fs.lstatSync(p).isSymbolicLink();
+    }
+    catch {
+        return false;
+    }
+}
+function safeRealpath(p) {
+    try {
+        return fs.realpathSync(p);
+    }
+    catch {
+        return null;
+    }
+}
+function safeStat(p) {
+    try {
+        return fs.statSync(p);
+    }
+    catch {
+        return null;
     }
 }
 /**
@@ -177,16 +221,22 @@ function scanRoot(root) {
         if (ent.name.startsWith('.'))
             continue;
         const entryPath = path.join(root.dir, ent.name);
+        const isLink = isLinkAt(entryPath);
+        // 链接（含 Windows junction）在 Dirent 上 isDirectory()=false、isSymbolicLink()=true，
+        // 按 Dirent 判类型会把挂载进来的技能整条漏掉（宿主用 stat，照常发现）
+        const linkStat = isLink ? safeStat(entryPath) : null;
+        const isEntryDir = isLink ? linkStat?.isDirectory() === true : ent.isDirectory();
+        const isEntryFile = isLink ? linkStat?.isFile() === true : ent.isFile();
         let skillFile = null;
         let kind = null;
-        if (ent.isDirectory()) {
+        if (isEntryDir) {
             const candidate = path.join(entryPath, 'SKILL.md');
             if (fs.existsSync(candidate)) {
                 kind = 'dir';
                 skillFile = candidate;
             }
         }
-        else if (ent.isFile() && /\.md$/i.test(ent.name)) {
+        else if (isEntryFile && /\.md$/i.test(ent.name)) {
             kind = 'file';
             skillFile = entryPath;
         }
@@ -214,41 +264,73 @@ function scanRoot(root) {
             disabled: modelInvocable === false || userInvocable === false,
             modelInvocable,
             userInvocable,
+            ...(isLink ? { link: true, linkTarget: safeRealpath(entryPath) } : {}),
         });
     }
     skills.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     return skills;
 }
-/** 路径必须真实存在且落在某个白名单根内；返回 {root, real} 或 null */
+/** 失效链接：链接目标没了（池里的技能被改名/删除）——宿主侧会静默跳过，只有这里能看见 */
+function scanBrokenLinks(root) {
+    const out = [];
+    let dirents;
+    try {
+        dirents = fs.readdirSync(root.dir, { withFileTypes: true });
+    }
+    catch {
+        return out;
+    }
+    for (const ent of dirents) {
+        if (ent.name.startsWith('.'))
+            continue;
+        const full = path.join(root.dir, ent.name);
+        if (!isLinkAt(full))
+            continue;
+        if (fs.existsSync(path.join(full, 'SKILL.md')))
+            continue;
+        out.push({ root: root.id, name: ent.name, path: full, target: safeRealpath(full) });
+    }
+    return out;
+}
+/**
+ * 路径必须真实存在且落在某个白名单根内。包含性用**父目录**的 realpath 判定：
+ * 条目本身可能是链接（realpath 会跳到池里，导致它被误判成池的根本体）。
+ */
 function locateInside(roots, rawPath) {
     if (typeof rawPath !== 'string' || rawPath.trim() === '')
         return null;
-    let target;
+    const lexical = path.resolve(rawPath.trim());
+    let lst;
     try {
-        target = fs.realpathSync(path.resolve(rawPath.trim()));
+        lst = fs.lstatSync(lexical);
     }
     catch {
         return null;
     }
     for (const root of roots) {
         let realRoot;
+        let parentReal;
         try {
             realRoot = fs.realpathSync(root.dir);
+            parentReal = fs.realpathSync(path.dirname(lexical));
         }
         catch {
             continue;
         }
-        const rel = path.relative(realRoot, target);
-        if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel))
+        const rel = path.relative(realRoot, parentReal);
+        if (rel.startsWith('..') || path.isAbsolute(rel))
             continue;
-        return { root: { ...root, real: realRoot }, real: target };
+        const isLink = lst.isSymbolicLink();
+        return { root: { ...root, real: realRoot }, path: lexical, rel, isLink, target: isLink ? safeRealpath(lexical) : null };
     }
     return null;
 }
 /** 源必须是根的直接子项（官方技能发现只有一层） */
 function directChildOnly(located) {
-    return path.dirname(located.real) === located.root.real;
+    return located.rel === '';
 }
+/** 删除/移动链接条目时的保护：链接只断链，绝不递归进目标 */
+const LINK_DELETE_HINT = '这是链接（池挂载点）：用「卸载」断链，池里的本体不受影响';
 function jsonOf(res, code, obj) {
     res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
     res.end(JSON.stringify(obj));
@@ -288,7 +370,7 @@ export function applySkillPool(ctx, hooks) {
             const disposeList = webCtx.webServer.register({
                 kind: 'exact',
                 path: '/dsh-kit/skills',
-                handler: (req, res) => {
+                handler: async (req, res) => {
                     if (req.method !== 'GET' && req.method !== 'HEAD') {
                         jsonOf(res, 405, { error: 'method not allowed' });
                         return;
@@ -302,16 +384,26 @@ export function applySkillPool(ctx, hooks) {
                     const roots = resolveRoots(cwd);
                     const scannedDirs = [];
                     const buckets = new Map(GROUP_ORDER.map((id) => [id, []]));
+                    const brokenLinks = [];
+                    const poolReal = safeRealpath(defaultPoolDir());
                     for (const root of roots) {
                         const exists = isDir(root.dir);
                         const skills = exists ? scanRoot(root) : [];
                         for (const skill of skills) {
                             skill.root = root.id;
                             skill.rank = root.rank;
+                            const target = skill.linkTarget;
+                            if (skill.link === true) {
+                                skill.linkInPool =
+                                    typeof target === 'string' && poolReal !== null &&
+                                        (target === poolReal || target.startsWith(`${poolReal}${path.sep}`));
+                            }
                         }
                         buckets.get(root.group).push({ id: root.id, dir: root.dir, exists, rank: root.rank, skills });
-                        if (exists)
+                        if (exists) {
                             scannedDirs.push(root.dir);
+                            brokenLinks.push(...scanBrokenLinks(root));
+                        }
                     }
                     // 三逻辑组：物理根聚合；同名跨根按 rank（小者优先）标注被覆盖
                     const groups = GROUP_ORDER.map((id) => {
@@ -334,6 +426,9 @@ export function applySkillPool(ctx, hooks) {
                             skill.shadowed = typeof skill.rank === 'number' && best !== undefined && best < skill.rank;
                         }
                     }
+                    // 载体根状态（挂载入口据此渲染；无会话 cwd 时为 null）
+                    const projectDirs = resolveProjectDirs(cwd);
+                    const mount = projectDirs !== null ? await computeMountState(projectDirs) : null;
                     // 注册表增强：插件自带 / 运行时 / custom 等不在白名单根里的技能，只读展示。
                     const providers = [];
                     const registry = hooks && typeof hooks.getRegistry === 'function' ? hooks.getRegistry() : null;
@@ -366,7 +461,7 @@ export function applySkillPool(ctx, hooks) {
                             console.warn('[dsh-kit] skills registry list failed:', error instanceof Error ? error.message : error);
                         }
                     }
-                    jsonOf(res, 200, { cwd, groups, providers });
+                    jsonOf(res, 200, { cwd, groups, providers, brokenLinks, mount });
                 },
             });
             // ── POST 操作 ──
@@ -392,7 +487,93 @@ export function applySkillPool(ctx, hooks) {
                     }
                     const cwd = typeof body.cwd === 'string' ? body.cwd : '';
                     const roots = resolveRoots(cwd);
+                    const projectDirs = resolveProjectDirs(cwd);
                     try {
+                        // ── 载体根 / 挂载（机制操作，与技能条目的复制搬家分开）──
+                        if (body.op === 'setcarrier') {
+                            const carrier = body.carrier === 'project-dsh' || body.carrier === 'project-agents' ? body.carrier : null;
+                            if (carrier === null) {
+                                jsonOf(res, 400, { error: '未知载体根' });
+                                return;
+                            }
+                            if (projectDirs === null) {
+                                jsonOf(res, 400, { error: '没有会话工作区' });
+                                return;
+                            }
+                            setCarrier(projectDirs.projectRoot, carrier);
+                            jsonOf(res, 200, { ok: true, op: 'setcarrier', mount: await computeMountState(projectDirs) });
+                            return;
+                        }
+                        if (body.op === 'prepare') {
+                            if (projectDirs === null) {
+                                jsonOf(res, 400, { error: '没有会话工作区' });
+                                return;
+                            }
+                            const resolve = body.resolve === 'move' || body.resolve === 'untrack' ? body.resolve : undefined;
+                            const state = await computeMountState(projectDirs);
+                            const result = await prepareCarrier(projectDirs, state, resolve);
+                            if (!result.ok) {
+                                jsonOf(res, result.needResolve === true ? 409 : 400, {
+                                    error: result.needResolve === true ? 'tracked' : 'prepare-failed',
+                                    message: result.error ?? '载体根里有已进仓库的内容',
+                                    tracked: result.tracked ?? [],
+                                    mount: state,
+                                });
+                                return;
+                            }
+                            jsonOf(res, 200, {
+                                ok: true,
+                                op: 'prepare',
+                                moved: result.moved ?? [],
+                                skipped: result.skipped ?? [],
+                                untracked: result.untracked ?? [],
+                                ignoreFile: result.ignoreFile ?? '',
+                                wroteIgnore: result.wroteIgnore === true,
+                                mount: await computeMountState(projectDirs),
+                            });
+                            return;
+                        }
+                        if (body.op === 'mount' || body.op === 'unmount') {
+                            const located = locateInside(roots, body.src);
+                            if (!located || !directChildOnly(located)) {
+                                jsonOf(res, 400, { error: '源不是白名单根下的技能条目' });
+                                return;
+                            }
+                            if (body.op === 'unmount') {
+                                if (!located.isLink) {
+                                    jsonOf(res, 400, { error: '这不是链接（不是池挂载点）' });
+                                    return;
+                                }
+                                const result = unmountLink(located.path);
+                                if (!result.ok) {
+                                    jsonOf(res, 400, { error: result.error ?? '断链失败' });
+                                    return;
+                                }
+                                jsonOf(res, 200, { ok: true, op: 'unmount', path: located.path });
+                                return;
+                            }
+                            if (located.root.id !== 'pool') {
+                                jsonOf(res, 400, { error: '只有池里的技能能挂载到工作区' });
+                                return;
+                            }
+                            if (projectDirs === null) {
+                                jsonOf(res, 400, { error: '没有会话工作区' });
+                                return;
+                            }
+                            const state = await computeMountState(projectDirs);
+                            const pre = mountPrecondition(state);
+                            if (!pre.ok) {
+                                jsonOf(res, 400, { error: 'not-prepared', message: pre.error ?? '载体根未就绪', mount: state });
+                                return;
+                            }
+                            const mounted = mountLink(located.path, state.carrierDir);
+                            if (!mounted.ok) {
+                                jsonOf(res, 400, { error: 'mount-failed', message: mounted.error ?? '挂载失败', mount: state });
+                                return;
+                            }
+                            jsonOf(res, 200, { ok: true, op: 'mount', path: mounted.path, mount: await computeMountState(projectDirs) });
+                            return;
+                        }
                         if (body.op === 'copy' || body.op === 'move') {
                             const located = locateInside(roots, body.src);
                             if (!located || !directChildOnly(located)) {
@@ -418,7 +599,7 @@ export function applySkillPool(ctx, hooks) {
                                 jsonOf(res, 400, { error: '目标与源在同一根' });
                                 return;
                             }
-                            const name = path.basename(located.real);
+                            const name = path.basename(located.path);
                             const dst = path.join(destReal, name);
                             if (fs.existsSync(dst) && body.overwrite !== true) {
                                 jsonOf(res, 409, { error: 'conflict', message: `目标已存在同名技能：${name}`, target: dst });
@@ -426,13 +607,17 @@ export function applySkillPool(ctx, hooks) {
                             }
                             if (fs.existsSync(dst))
                                 fs.rmSync(dst, { recursive: true, force: true });
-                            fs.cpSync(located.real, dst, { recursive: true });
+                            // 链接源按内容复制（"脱离为本地副本"）：不 dereference 会把链接本身抄过去
+                            fs.cpSync(located.path, dst, located.isLink ? { recursive: true, dereference: true } : { recursive: true });
                             if (body.op === 'move') {
                                 // 移动语义的数据安全：确认目标入口文件真实存在后才撤源
-                                const marker = isDir(located.real) ? path.join(dst, 'SKILL.md') : dst;
+                                const marker = isDir(located.path) ? path.join(dst, 'SKILL.md') : dst;
                                 if (!fs.existsSync(marker))
                                     throw new Error('移动后校验失败：目标缺少技能入口文件');
-                                fs.rmSync(located.real, { recursive: true, force: true });
+                                if (located.isLink)
+                                    fs.unlinkSync(located.path);
+                                else
+                                    fs.rmSync(located.path, { recursive: true, force: true });
                             }
                             jsonOf(res, 200, { ok: true, op: body.op, dest: path.join(destReal, name) });
                             return;
@@ -443,16 +628,21 @@ export function applySkillPool(ctx, hooks) {
                                 jsonOf(res, 400, { error: '源不是白名单根下的技能条目' });
                                 return;
                             }
+                            if (located.isLink) {
+                                // 链接条目只断链：rmSync/回收站都可能顺着 reparse point 做事，不能交给它们
+                                jsonOf(res, 400, { error: LINK_DELETE_HINT });
+                                return;
+                            }
                             // Windows 移入回收站（全局约定；失败报错不静默转永久删），其它平台直接删
                             if (process.platform === 'win32') {
-                                const gone = await recycleDelete(located.real);
+                                const gone = await recycleDelete(located.path);
                                 if (!gone) {
                                     jsonOf(res, 500, { error: '移入回收站失败（文件可能被占用或路径过长）' });
                                     return;
                                 }
                             }
                             else {
-                                fs.rmSync(located.real, { recursive: true, force: true });
+                                fs.rmSync(located.path, { recursive: true, force: true });
                             }
                             jsonOf(res, 200, { ok: true, op: 'delete' });
                             return;
@@ -463,13 +653,13 @@ export function applySkillPool(ctx, hooks) {
                                 jsonOf(res, 400, { error: '源不是白名单根下的技能条目' });
                                 return;
                             }
-                            const isSkillDir = isDir(located.real) && fs.existsSync(path.join(located.real, 'SKILL.md'));
-                            const isFlatMd = located.real.toLowerCase().endsWith('.md') && fs.statSync(located.real).isFile();
+                            const isSkillDir = isDir(located.path) && fs.existsSync(path.join(located.path, 'SKILL.md'));
+                            const isFlatMd = located.path.toLowerCase().endsWith('.md') && fs.statSync(located.path).isFile();
                             if (!isSkillDir && !isFlatMd) {
                                 jsonOf(res, 400, { error: '该路径不是技能（目录需含 SKILL.md，或为根下 .md 文件）' });
                                 return;
                             }
-                            const file = isSkillDir ? path.join(located.real, 'SKILL.md') : located.real;
+                            const file = isSkillDir ? path.join(located.path, 'SKILL.md') : located.path;
                             const before = fs.readFileSync(file, 'utf8');
                             const after = setDisableFlags(before, body.disabled === true);
                             if (after !== before)
@@ -482,6 +672,8 @@ export function applySkillPool(ctx, hooks) {
                                 op: 'disable',
                                 file,
                                 disabled: disableModel === false || userInvocable === false,
+                                // 链接条目改的是池里的本体（所有挂载方同步生效），客户端据此提示
+                                link: located.isLink,
                             });
                             return;
                         }

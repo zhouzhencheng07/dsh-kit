@@ -1891,6 +1891,33 @@ ellipsis，窄列只截字不破版 */
       skOpFail: "操作失败",
       skDone: "完成",
       skDeleted: "已删除",
+      skMountTitle: "技能池挂载",
+      skCarrierTip: "技能池里的技能以链接挂在这里；这个目录被 git 忽略，技能不进项目仓库",
+      skLocalRoot: "项目技能根",
+      skNeedsChoice: "两个项目级根都在用：选一个当载体根",
+      skPickDsh: "用 .dsh/skills",
+      skPickAgents: "用 .agents/skills",
+      skIgnored: "已忽略",
+      skNotIgnored: "未忽略",
+      skPrepare: "体检并准备",
+      skCarrierOwn: "载体根里有自己的技能",
+      skCarrierOwnTip: "载体根里还有非链接的技能：它们不会进项目仓库，可一键搬到项目技能根",
+      skTracked: "载体根下有已进仓库的内容",
+      skTrackedTip: "先把它们从仓库索引移除（文件保留），或搬到项目技能根；否则挂链接会把池里的内容带进仓库",
+      skMoveLocal: "搬到项目技能根",
+      skUntrack: "仅从仓库移除",
+      skPrepared: "载体根已就绪",
+      skMount: "挂载",
+      skUnmount: "卸载",
+      skMounted: "已挂载",
+      skUnmounted: "已卸载",
+      skPoolLink: "池链接",
+      skLinkOut: "链接",
+      skLinkTip: "指向技能池的链接：改它等于改池里的本体，所有挂载它的工作区同步生效",
+      skLinkOutTip: "这是链接而不是实体：删除只断链，不影响目标",
+      skBroken: "失效链接",
+      skBrokenTip: "链接指向的池技能已不在（改名或删除），宿主发现时会静默跳过",
+      skClean: "清理",
       contentFail: "读取失败",
       contentEmpty: "（空）",
       contentBinary: "二进制文件，无法预览",
@@ -1927,6 +1954,33 @@ ellipsis，窄列只截字不破版 */
       skOpFail: "Operation failed",
       skDone: "Done",
       skDeleted: "Deleted",
+      skMountTitle: "Skill pool mount",
+      skCarrierTip: "Pool skills are linked here; this directory is git-ignored, so skills never enter the project repo",
+      skLocalRoot: "Project skill root",
+      skNeedsChoice: "Both project-level roots are in use: pick one as the carrier root",
+      skPickDsh: "Use .dsh/skills",
+      skPickAgents: "Use .agents/skills",
+      skIgnored: "ignored",
+      skNotIgnored: "not ignored",
+      skPrepare: "Check and prepare",
+      skCarrierOwn: "This root has skills of its own",
+      skCarrierOwnTip: "The carrier root also holds non-link skills: they will not enter the project repo; move them to the project skill root",
+      skTracked: "This root has content already in the repo",
+      skTrackedTip: "Remove them from the repo index (files are kept) or move them to the project skill root; otherwise linking would drag pool content into the repo",
+      skMoveLocal: "Move to project skill root",
+      skUntrack: "Remove from repo only",
+      skPrepared: "Carrier root ready",
+      skMount: "Mount",
+      skUnmount: "Unmount",
+      skMounted: "Mounted",
+      skUnmounted: "Unmounted",
+      skPoolLink: "Pool link",
+      skLinkOut: "Link",
+      skLinkTip: "A link into the skill pool: editing it edits the pool copy, so every workspace mounting it changes too",
+      skLinkOutTip: "This is a link, not a real entry: deleting only unlinks, the target is untouched",
+      skBroken: "Broken link",
+      skBrokenTip: "The pool skill it points to is gone (renamed or deleted); host discovery skips it silently",
+      skClean: "Clean",
       contentFail: "Failed to read",
       contentEmpty: "(empty)",
       contentBinary: "Binary file, preview unavailable",
@@ -2031,6 +2085,11 @@ ellipsis，窄列只截字不破版 */
 .dshk-sk-target{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 12px;border-top:1px dashed var(--dsw-alias-border-l1);background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-sk-target-label{font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-sk-detail{padding:2px 12px 10px}
+/* 挂载条：载体根 + git 忽略状态 + 体检入口（一行内换行排列） */
+.dshk-sk-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 12px;margin-bottom:12px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshk-sk-bar-title{font-weight:600;color:var(--dsw-alias-label-primary)}
+.dshk-sk-warn{color:var(--dsw-alias-label-primary);white-space:nowrap}
+.dshk-sk-spacer{flex:1}
 .dshk-sk-pre{margin:0;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
     `;
     function injectStyles() {
@@ -2095,9 +2154,13 @@ ellipsis，窄列只截字不破版 */
       const [confirming, setConfirming] = react.useState(false);
       const pickerOpen = picker !== null && picker.key === skill.path && (picker.mode === "copy" || picker.mode === "move");
       const targets = allRoots.filter((root) => root.id !== skill.root);
+      // 链接条目（池挂载点）：只断链不动本体；也不给禁用——那会写穿到池里的本体，
+      // 影响所有挂载它的工作区，要禁用请到池那一组去操作
+      const isLink = skill.link === true;
 
       const startPicker = (mode) => setPicker(pickerOpen ? null : { key: skill.path, mode });
       const onDisable = () => runOp({ op: "disable", src: skill.path, cwd, disabled: !skill.disabled });
+      const onUnmount = () => runOp({ op: "unmount", src: skill.path, cwd });
       const onDelete = () => {
         if (!confirming) {
           setConfirming(true);
@@ -2127,21 +2190,38 @@ ellipsis，窄列只截字不破版 */
                 ? jsxRuntime.jsx(KitTip, { label: t("skVersionTip"), children: jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: `v${skill.version}` }) })
                 : null,
               skill.shadowed ? jsxRuntime.jsx(KitTip, { label: t("skShadowTip"), children: jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", children: t("skShadowed") }) }) : null,
+              isLink
+                ? jsxRuntime.jsx(KitTip, {
+                    label: skill.linkInPool === false ? t("skLinkOutTip") : t("skLinkTip"),
+                    children: jsxRuntime.jsx("span", {
+                      className: "dshk-sk-badge",
+                      children: skill.linkInPool === false ? t("skLinkOut") : t("skPoolLink"),
+                    }),
+                  })
+                : null,
               typeof skill.description === "string" && skill.description !== ""
                 ? jsxRuntime.jsx("span", { className: "dshk-sk-desc", title: skill.description, children: skill.description })
                 : null,
               jsxRuntime.jsxs("div", {
                 className: "dshk-sk-actions",
                 children: [
+                  groupId === "pool"
+                    ? jsxRuntime.jsx(KitTip, {
+                        label: t("skCarrierTip"),
+                        children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => runOp({ op: "mount", src: skill.path, cwd }), children: t("skMount") }),
+                      })
+                    : null,
                   jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => startPicker("copy"), children: t("skCopy") }),
                   jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => startPicker("move"), children: t("skMove") }),
-                  groupId !== "pool"
+                  groupId !== "pool" && !isLink
                     ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onDisable, children: skill.disabled ? t("skEnable") : t("skDisable") })
                     : null,
-                  confirming
-                    ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", "data-danger": "1", disabled: busy, onClick: onDelete, children: t("skConfirmDelete") })
-                    : jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onDelete, children: t("skDelete") }),
-                  confirming
+                  isLink
+                    ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onUnmount, children: t("skUnmount") })
+                    : confirming
+                      ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", "data-danger": "1", disabled: busy, onClick: onDelete, children: t("skConfirmDelete") })
+                      : jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onDelete, children: t("skDelete") }),
+                  !isLink && confirming
                     ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setConfirming(false), children: t("skCancel") })
                     : null,
                   jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setOpen((v) => !v), children: open ? t("skHide") : t("skView") }),
@@ -2176,6 +2256,73 @@ ellipsis，窄列只截字不破版 */
       });
     }
 
+    /**
+     * 挂载条：载体根归属 + git 忽略状态 + 体检入口。只呈现事实与机制操作——
+     * 跨根同名的取舍（被覆盖、删链接还是删本体）由用户看明白后自己决定。
+     */
+    function MountBar({ mount, busy, resolvePrompt, onChoose, onPrepare, onResolve, onCancelResolve }) {
+      const needPrepare = mount.ignored === false || mount.tracked.length > 0 || mount.carrierOwn > 0;
+      return jsxRuntime.jsxs(jsxRuntime.Fragment, {
+        children: [
+          jsxRuntime.jsxs("div", {
+            className: "dshk-sk-bar",
+            children: [
+              jsxRuntime.jsx("span", { className: "dshk-sk-bar-title", children: t("skMountTitle") }),
+              mount.needsChoice
+                ? jsxRuntime.jsx("span", { className: "dshk-sk-warn", children: t("skNeedsChoice") })
+                : jsxRuntime.jsx(KitTip, {
+                    label: t("skCarrierTip"),
+                    children: jsxRuntime.jsx("span", { className: "dshk-sk-badge", title: mount.carrierDir, children: skRootShort(mount.carrierRoot) }),
+                  }),
+              mount.needsChoice
+                ? null
+                : jsxRuntime.jsx(KitTip, {
+                    label: t("skCarrierTip"),
+                    children: jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", title: mount.localDir, children: `${t("skLocalRoot")} ${skRootShort(mount.localRoot)}` }),
+                  }),
+              mount.needsChoice
+                ? null
+                : mount.ignored === false
+                  ? jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", children: t("skNotIgnored") })
+                  : jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: t("skIgnored") }),
+              !mount.needsChoice && mount.carrierOwn > 0
+                ? jsxRuntime.jsx(KitTip, { label: t("skCarrierOwnTip"), children: jsxRuntime.jsx("span", { className: "dshk-sk-warn", children: t("skCarrierOwn") }) })
+                : null,
+              !mount.needsChoice && mount.tracked.length > 0
+                ? jsxRuntime.jsx(KitTip, {
+                    label: t("skTrackedTip"),
+                    children: jsxRuntime.jsx("span", { className: "dshk-sk-warn", children: `${t("skTracked")} · ${mount.tracked.length}` }),
+                  })
+                : null,
+              jsxRuntime.jsx("span", { className: "dshk-sk-spacer" }),
+              mount.needsChoice
+                ? jsxRuntime.jsxs(jsxRuntime.Fragment, {
+                    children: [
+                      jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => onChoose("project-dsh"), children: t("skPickDsh") }),
+                      jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => onChoose("project-agents"), children: t("skPickAgents") }),
+                    ],
+                  })
+                : needPrepare
+                  ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => onPrepare(), children: t("skPrepare") })
+                  : null,
+            ],
+          }),
+          resolvePrompt !== null
+            ? jsxRuntime.jsxs("div", {
+                className: "dshk-sk-bar",
+                children: [
+                  jsxRuntime.jsx("span", { className: "dshk-sk-warn", children: t("skTrackedTip") }),
+                  jsxRuntime.jsx("span", { className: "dshk-sk-spacer" }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => onResolve("move"), children: t("skMoveLocal") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => onResolve("untrack"), children: t("skUntrack") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onCancelResolve, children: t("skCancel") }),
+                ],
+              })
+            : null,
+        ],
+      });
+    }
+
     const SK_GROUP_RANK = { workspace: 0, user: 1, pool: 2 };
 
     function SkillsManager(props) {
@@ -2187,6 +2334,8 @@ ellipsis，窄列只截字不破版 */
       const [nonce, setNonce] = react.useState(0);
       // 展开中的复制/移动目标选择条（{key,mode}）；单值保证同一时间只展开一行
       const [picker, setPicker] = react.useState(null);
+      // 载体根下有已进仓库的内容时，等用户选处理方式（[] = 已弹出，等待选择）
+      const [resolvePrompt, setResolvePrompt] = react.useState(null);
 
       react.useEffect(() => {
         const controller = new AbortController();
@@ -2201,6 +2350,13 @@ ellipsis，窄列只截字不破版 */
         return () => controller.abort();
       }, [cwd, nonce]);
 
+      /** 宿主错误里带 message 时优先用它（error 字段是机器可读的码，如 not-prepared） */
+      const opMsg = (err) =>
+        err && err.body && typeof err.body.message === "string" && err.body.message !== ""
+          ? err.body.message
+          : String(err?.message ?? err);
+      const OP_DONE_KEY = { delete: "skDeleted", mount: "skMounted", unmount: "skUnmounted", prepare: "skPrepared" };
+
       const runOp = async (payload) => {
         if (busy) return;
         setBusy(true);
@@ -2209,14 +2365,20 @@ ellipsis，窄列只截字不破版 */
           try {
             await postSkillOp(payload);
           } catch (err) {
+            // 载体根下有已进仓库的内容：不是错误而是缺一个决定（搬到项目技能根 / 仅从仓库移除）
+            if (err && err.status === 409 && err.body && err.body.error === "tracked") {
+              setResolvePrompt(Array.isArray(err.body.tracked) ? err.body.tracked : []);
+              return;
+            }
             if (err && err.status === 409 && window.confirm(t("skOverwrite"))) {
               await postSkillOp({ ...payload, overwrite: true });
             } else {
-              setMessage(`${t("skOpFail")}：${err?.message ?? err}`);
+              setMessage(`${t("skOpFail")}：${opMsg(err)}`);
               return;
             }
           }
-          setMessage(payload.op === "delete" ? t("skDeleted") : t("skDone"));
+          setMessage(t(OP_DONE_KEY[payload.op] ?? "skDone"));
+          setResolvePrompt(null);
           setPicker(null);
           setNonce((n) => n + 1);
         } finally {
@@ -2243,6 +2405,58 @@ ellipsis，窄列只截字不破版 */
             ],
           }),
           !cwd ? jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { marginBottom: 8 }, children: t("skNoCwdHint") }) : null,
+          data && data.mount
+            ? jsxRuntime.jsx(MountBar, {
+                mount: data.mount,
+                busy,
+                resolvePrompt,
+                onChoose: (carrier) => runOp({ op: "setcarrier", carrier, cwd }),
+                onPrepare: () => runOp({ op: "prepare", cwd }),
+                onResolve: (resolve) => runOp({ op: "prepare", cwd, resolve }),
+                onCancelResolve: () => setResolvePrompt(null),
+              })
+            : null,
+          data && Array.isArray(data.brokenLinks) && data.brokenLinks.length > 0
+            ? jsxRuntime.jsxs("div", {
+                className: "dshk-sk-group",
+                children: [
+                  jsxRuntime.jsxs("div", {
+                    className: "dshk-sk-group-head",
+                    children: [
+                      jsxRuntime.jsx("span", { children: t("skBroken") }),
+                      jsxRuntime.jsx("span", { children: `· ${data.brokenLinks.length}` }),
+                      jsxRuntime.jsx("span", { className: "dshk-sk-group-dir", children: t("skBrokenTip") }),
+                    ],
+                  }),
+                  data.brokenLinks.map((item) =>
+                    jsxRuntime.jsxs(
+                      "div",
+                      {
+                        className: "dshk-sk-row",
+                        children: [
+                          jsxRuntime.jsx("span", { className: "dshk-sk-name", children: item.name }),
+                          jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", children: skRootShort(item.root) }),
+                          jsxRuntime.jsx("span", { className: "dshk-sk-desc", title: item.path, children: item.target ?? item.path }),
+                          jsxRuntime.jsxs("div", {
+                            className: "dshk-sk-actions",
+                            children: [
+                              jsxRuntime.jsx("button", {
+                                type: "button",
+                                className: "dshk-sk-btn",
+                                disabled: busy,
+                                onClick: () => runOp({ op: "unmount", src: item.path, cwd }),
+                                children: t("skClean"),
+                              }),
+                            ],
+                          }),
+                        ],
+                      },
+                      item.path,
+                    ),
+                  ),
+                ],
+              })
+            : null,
           groups.map((group) =>
             jsxRuntime.jsxs(
               "div",
