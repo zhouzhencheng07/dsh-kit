@@ -87,9 +87,69 @@ const comps = dockExports.skills;
 
 check("skills 导出 apply（client 插件形状）与 inject 声明 slots", typeof comps.apply === "function" && Array.isArray(comps.inject) && comps.inject[0] === "slots");
 check(
-  "skills 导出面齐全（管理页/端点调用/探针取值/版本面板）",
-  [comps.SkillsManager, comps.SkillGitPanel, comps.fetchSkillsPage, comps.cfgFromSnapshot].every((fn) => typeof fn === "function"),
+  "skills 导出面齐全（管理页/技能行/版本面板/端点调用/探针取值）",
+  [comps.SkillsManager, comps.SkillRow, comps.SkillGitPanel, comps.fetchSkillsPage, comps.cfgFromSnapshot].every((fn) => typeof fn === "function"),
 );
+
+// —— 版本面板（池技能）：状态行 + 写提交信息记一版 + 提交列表 + 看改动 + 回滚 ——
+{
+  // diff 正文座是文件组件物化期挂的；这里手工摆上，验证"文件片点开看改动"这条接线
+  dockExports.diffPane.Component = function FakeDiff() {};
+  const nowSec = Math.floor(Date.now() / 1000);
+  const shaA = "abcdef1234567890abcdef1234567890abcdef12";
+  const shaB = "1234567890abcdef1234567890abcdef12345678";
+  const fakeGit = {
+    available: true,
+    init: true,
+    dirty: 1,
+    dirtyNames: ["SKILL.md"],
+    last: { sha: shaA, short: "abcdef1", time: nowSec - 120, subject: "改进：把触发条件写清楚" },
+    commits: [
+      { sha: shaA, short: "abcdef1", time: nowSec - 120, subject: "改进：把触发条件写清楚", files: 1, insertions: 2, deletions: 1, names: ["SKILL.md"] },
+      { sha: shaB, short: "1234567", time: nowSec - 86400 * 2, subject: "auto: 初始记录", files: 2, insertions: 5, deletions: 0, names: ["SKILL.md", "references/a.md"] },
+    ],
+  };
+  const renderPanel = (seed) => {
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    stateStore.set(0, fakeGit); // SkillGitPanel 的第一个 useState 就是版本状态
+    for (const [id, value] of Object.entries(seed ?? {})) stateStore.set(Number(id), value);
+    return comps.SkillGitPanel({ skill: { path: "C:/pool/hello-kit" }, cwd: "C:/x" });
+  };
+  const btn = (labels) => callLog.find((c) => c[0] === "jsx" && c[1] === "button" && labels.includes(c[2].children));
+  const textOf = (re) => callLog.some((c) => typeof c[2]?.children === "string" && re.test(c[2].children));
+
+  const panel = renderPanel();
+  check("版本面板渲染无异常", !!panel && typeof panel === "object");
+  check(
+    "版本面板：状态行含已记录 / 上次提交 / 未提交改动",
+    textOf(/已记录 2|commits 2/) && textOf(/未提交|uncommitted/),
+    JSON.stringify(callLog.filter((c) => c[2] && c[2].className === "dshk-sk-desc").map((c) => c[2].children)),
+  );
+  const shas = callLog.filter((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-sk-sha").map((c) => c[2].children);
+  check("版本面板：逐条列出提交（提交号）", shas.length === 2 && shas[0] === "abcdef1" && shas[1] === "1234567", shas);
+  check("版本面板：提交主题直显（人写的，不再是机器空话）", textOf(/改进：把触发条件写清楚/) && textOf(/auto: 初始记录/));
+  check("版本面板：给出「记一版」入口（提交信息由人写）", !!btn(["记一版", "Record"]));
+  check("版本面板：回滚钮在（二次确认在点击后）", !!btn(["回滚", "Roll back"]));
+  const files = callLog.filter((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-sk-file").map((c) => c[2].children);
+  check("版本面板：每次提交列出改动文件（可点开看改动）", files.includes("SKILL.md") && files.includes("references/a.md"), files);
+
+  // composing（第 5 个 useState）＝ 输入态：给提交信息框 + 提交钮
+  renderPanel({ 4: true, 5: "改进：xxx" });
+  const input = callLog.find((c) => c[0] === "jsx" && c[1] === "input" && c[2].className === "dshk-sk-input");
+  check("版本面板：输入态给提交信息框（初值回显）", !!input && input[2].value === "改进：xxx");
+  check("版本面板：输入态给提交钮", !!btn(["提交", "Commit"]));
+
+  // confirmSha（第 7 个 useState）＝ 二次确认态
+  renderPanel({ 6: shaA });
+  check("版本面板：回滚二次确认（确认回滚？）", !!btn(["确认回滚？", "Confirm rollback?"]));
+
+  // pick（第 8 个 useState）＝ 展开某次提交里某个文件的 diff
+  renderPanel({ 7: { sha: shaA, name: "SKILL.md" } });
+  const box = callLog.find((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-sk-diffbox");
+  check("版本面板：点文件展开该次提交的 diff（走 diff 座）", !!box && box[2].children.type === dockExports.diffPane.Component);
+}
 
 // —— 技能管理页渲染：无 cwd 与有 cwd；头部刷新走官方气泡 ——
 {
@@ -117,35 +177,63 @@ check(
   comps.cfgFromSnapshot(null).available === true && comps.cfgFromSnapshot({ status: "unavailable" }).available === false && comps.cfgFromSnapshot({ status: "ready" }).available === true,
 );
 
-// —— 版本面板（池技能的每技能一仓）：状态行 + 提交列表 + 回滚 ——
+// —— 技能行的动作面：一律只有移动（复制会让副本与本体分叉）+ 挂载数 + 移动前确认 ——
 {
-  const nowSec = Math.floor(Date.now() / 1000);
-  const fakeGit = {
-    available: true,
-    init: true,
-    dirty: 1,
-    dirtyNames: ["SKILL.md"],
-    last: { sha: "abcdef1234567890abcdef1234567890abcdef12", short: "abcdef1", time: nowSec - 120, subject: "auto: 同步技能内容" },
-    commits: [
-      { sha: "abcdef1234567890abcdef1234567890abcdef12", short: "abcdef1", time: nowSec - 120, subject: "auto: 同步技能内容", files: 1, insertions: 2, deletions: 0, names: ["SKILL.md"] },
-      { sha: "1234567890abcdef1234567890abcdef12345678", short: "1234567", time: nowSec - 86400 * 2, subject: "auto: 初始记录", files: 1, insertions: 1, deletions: 0, names: ["SKILL.md"] },
-    ],
+  const ROOTS = [
+    { id: "project-dsh", dir: "C:/x/.dsh/skills" },
+    { id: "project-agents", dir: "C:/x/.agents/skills" },
+    { id: "user-dsh", dir: "C:/home/.dsh/skills" },
+  ];
+  const renderRow = (skill, groupId) => {
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    return comps.SkillRow({ skill, groupId, allRoots: ROOTS, cwd: "C:/x", busy: false, runOp: () => {}, picker: null, setPicker: () => {} });
   };
+  const btn = (labels) => callLog.find((c) => c[0] === "jsx" && c[1] === "button" && labels.includes(c[2].children));
+  const textOf = (re) => callLog.some((c) => typeof c[2]?.children === "string" && re.test(c[2].children));
+
+  const poolSkill = { name: "hello-kit", root: "pool", path: "C:/home/.dsh/skill-pool/hello-kit", mounts: 2, description: "共享技能" };
+  const row = renderRow(poolSkill, "pool");
+  check("池技能行渲染无异常", !!row && typeof row === "object");
+  check("池技能行：只有移动、没有复制", !btn(["复制", "Copy"]) && !!btn(["移动", "Move"]));
+  check("池技能行：挂载数可见（被几个工作区挂着）", textOf(/^(挂载|Mounted in) 2$/));
+  check("池技能行：给「版本」入口（历史 + 写提交信息）", !!btn(["版本", "Versions"]));
+
+  // moveAsk 是 SkillRow 的第三个 useState（id 2）：直接喂出确认态
   stateSeq = 0;
   stateStore.clear();
   callLog = [];
-  stateStore.set(0, fakeGit); // SkillGitPanel 的第一个 useState 就是版本状态（避免真的去拉端点）
-  const panel = comps.SkillGitPanel({ skill: { path: "/pool/hello-kit" }, cwd: "C:/x" });
-  check("版本面板渲染无异常", !!panel && typeof panel === "object");
-  const status = callLog.find((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-sk-status" && typeof c[2].children === "string");
-  const statusText = status ? status[2].children : "";
-  check("版本面板：状态行含提交数 / 上次提交 / 未提交改动", /已记录|commits/.test(statusText) && /未提交|uncommitted/.test(statusText), statusText);
-  const shas = callLog.filter((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-sk-sha").map((c) => c[2].children);
-  check("版本面板：逐条列出提交（提交号）", shas.length === 2 && shas[0] === "abcdef1" && shas[1] === "1234567", shas);
-  const rollbackBtn = callLog.find((c) => c[0] === "jsx" && c[1] === "button" && ["回滚", "Roll back"].includes(c[2].children));
-  check("版本面板：每条提交带回滚钮（二次确认在点击后）", !!rollbackBtn);
-  const commitBtn = callLog.find((c) => c[0] === "jsx" && c[1] === "button" && ["立即提交", "Commit now"].includes(c[2].children));
-  check("版本面板：给「立即提交」入口（自动提交之外的兜底）", !!commitBtn);
+  stateStore.set(2, { dest: "project-dsh" });
+  comps.SkillRow({ skill: poolSkill, groupId: "pool", allRoots: ROOTS, cwd: "C:/x", busy: false, runOp: () => {}, picker: null, setPicker: () => {} });
+  check(
+    "池技能行：移出池前要确认（说清会断掉别的工作区的链接）",
+    textOf(/移出技能池|Move out of the skill pool/) && textOf(/别的工作区不再有它|other workspaces lose it/) && !!btn(["确认移动", "Confirm move"]),
+  );
+
+  const linkSkill = { name: "hi", root: "project-agents", path: "C:/x/.agents/skills/hi", link: true, linkInPool: true };
+  renderRow(linkSkill, "workspace");
+  check("池挂载链接行：只有移动（不给复制、不给禁用），另给卸载", !btn(["复制", "Copy"]) && !btn(["禁用", "Disable"]) && !!btn(["卸载", "Unmount"]));
+
+  renderRow({ name: "local", root: "project-dsh", path: "C:/x/.dsh/skills/local" }, "workspace");
+  check("非池实体行：也没有复制（技能一律只移动）", !btn(["复制", "Copy"]));
+  check("非池实体行：不给版本入口（版本记录只给池里的技能）", !btn(["版本", "Versions"]));
+
+  // 进池方向同样先确认（本体交出去共用 / 用户级来源不再全局可见）
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  stateStore.set(2, { dest: "pool" });
+  comps.SkillRow({ skill: { name: "local", root: "project-dsh", path: "C:/x/.dsh/skills/local" }, groupId: "workspace", allRoots: ROOTS, cwd: "C:/x", busy: false, runOp: () => {}, picker: null, setPicker: () => {} });
+  check("进池前要确认（本体进池共用、本工作区留链接）", textOf(/移入技能池|Move into the skill pool/) && textOf(/自动挂回来|link back/));
+
+  // 平铺 .md 进池：宿主会包成同名目录，确认条上要先把这件事说出来
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  stateStore.set(2, { dest: "pool" });
+  comps.SkillRow({ skill: { name: "flat", root: "project-dsh", path: "C:/x/.dsh/skills/flat.md", kind: "file" }, groupId: "workspace", allRoots: ROOTS, cwd: "C:/x", busy: false, runOp: () => {}, picker: null, setPicker: () => {} });
+  check("平铺入池前提示包成目录", textOf(/包成同名目录|wrapped into a same-name directory/));
 }
 
 // —— 端点调用：cwd 查询串 ——
@@ -219,14 +307,34 @@ async function checkApply() {
   const bundleSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
   const hostSrc = fs.readFileSync(__dirname + "/../src/index.ts", "utf8");
   const compSrc = fs.readFileSync(__dirname + "/../src/skills/index.ts", "utf8");
+  const poolSrc = fs.readFileSync(__dirname + "/../src/skills/skill-pool.ts", "utf8");
   check("技能无独立配置字段（主包 schema/配置页/client 默认表都不再出现 skillsPageEnabled）", !hostSrc.includes("skillsPageEnabled") && !bundleSrc.includes("skillsPageEnabled"));
   check("组件入口挂技能池端点与行可达性探针", compSrc.includes("applySkillPool") && compSrc.includes("/dsh-kit-skills/config"));
   check("技能页样式随组件自带（.dshk-sk 只在组件 CSS 块出现一次）", bundleSrc.includes("SKS_CSS") && bundleSrc.split(".dshk-sk{").length - 1 === 1);
+  check(
+    "版本面板走宿主版本端点（history/commit/rollback，提交带 message、回滚带 discard）",
+    ["history", "commit", "rollback"].every((op) => bundleSrc.includes(`op: "${op}"`)) &&
+      bundleSrc.includes("message }") &&
+      bundleSrc.includes("discard: discard === true"),
+  );
   check("版本入口只挂在池技能行（工作区/用户级行不给）", bundleSrc.includes("isPool && gitOpen"));
-  check("版本面板走宿主版本端点（history/commit/rollback）", ["history", "commit", "rollback"].every((op) => bundleSrc.includes(`op: "${op}"`)));
+  check("技能只有移动（源里没有复制按钮/词条，宿主不再认 copy 操作）", !bundleSrc.includes("skCopy") && poolSrc.includes("body.op === 'move'") && !poolSrc.includes("body.op === 'copy'"));
+  check("平铺 .md 进池：包成同名目录再挂回来（池挂不住单个文件）", poolSrc.includes("const wrap = destRoot.id === 'pool' && flatMd") && !poolSrc.includes("'flat-skill'"));
+  check("池行显示挂载数（宿主列表带 mounts）", bundleSrc.includes("skill.mounts") && poolSrc.includes("mountCounts[path.basename(skill.path)]"));
   const poolGitSrc = fs.readFileSync(__dirname + "/../src/skills/pool-git.ts", "utf8");
-  check("池版本记录：只给池里的技能做（组件入口按池目录起 watcher）", compSrc.includes("startPoolGitWatcher(defaultPoolDir())"));
-  check("池版本记录：身份只写技能自己的仓库、提交主题带 auto: 前缀", poolGitSrc.includes("'config', '--local'") && poolGitSrc.includes("'auto: 同步技能内容'"));
+  check("池版本记录：只给池里的技能做（组件入口按池目录补基线）", compSrc.includes("ensurePoolBaselines(defaultPoolDir())"));
+  check("池版本记录：身份只写技能自己的仓库、基线主题写明初始记录", poolGitSrc.includes("'config', '--local'") && poolGitSrc.includes("'auto: 初始记录'"));
+  check("池版本记录：不做自动提交、不挂 fs.watch（提交是有意识动作）", !poolGitSrc.includes("fs.watch") && !poolGitSrc.includes("'auto: 同步技能内容'"));
+  check("出池不带版本记录（.git 不进工作区根）与断链登记表都在宿主", poolSrc.includes("detachPoolLinks") && poolSrc.includes("skipRepo"));
+  const mountSrc = fs.readFileSync(__dirname + "/../src/skills/mount.ts", "utf8");
+  check(
+    "挂载点只由用户选（没选就问，不带哪根在用的启发式、不默认）",
+    mountSrc.includes("const carrier = readPolicy().projects[dirs.projectRoot]?.carrier ?? null") &&
+      mountSrc.includes("needsChoice: carrier === null") &&
+      !mountSrc.includes("linkedCarrier") &&
+      !mountSrc.includes("poolLinks"),
+  );
+  check("选定后一切挂载都去那儿（另一根只当搬出载体根时的落点）", mountSrc.includes("state.otherDir") && mountSrc.includes("export function setCarrier"));
 }
 
 checkEndpoint().then(checkApply).then(() => {

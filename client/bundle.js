@@ -1844,10 +1844,10 @@ ellipsis，窄列只截字不破版 */
 
     // ─────────── dsh-kit/skills 组件（技能管理页）───────────
     // 技能池管理页（settings.section）：数据走本组件宿主半边 GET /dsh-kit/skills
-    // （白名单根枚举 + 注册表归属增强）与 POST /dsh-kit/skills/op（copy/move/delete/
-    // disable）。分组显示：工作区(.agents|.dsh/skills) → 用户级($DSH_HOME|~/.agents)
-    // → 技能池；插件自带/运行时来源只读展示。删除=移入池内 .trash，禁用=改
-    // frontmatter 双键。行禁用（宿主子模块不物化）时 /dsh-kit-skills/config 404，
+    // （白名单根枚举 + 注册表归属增强）与 POST /dsh-kit/skills/op（move/delete/disable/
+    // mount/unmount/history/commit/rollback）。分组显示：工作区(.agents|.dsh/skills) →
+    // 用户级($DSH_HOME|~/.agents) → 技能池；插件自带/运行时来源只读展示。删除=移入回收站，
+    // 禁用=改 frontmatter 双键。行禁用（宿主子模块不物化）时 /dsh-kit-skills/config 404，
     // 本组件不注册设置页；样式与词条随本组件自带。
     const skillsModule = (kit, require) => {
     var module = { exports: {} };
@@ -1879,7 +1879,6 @@ ellipsis，窄列只截字不破版 */
       skByPlugin: "随插件",
       skHide: "收起",
       skView: "详情",
-      skCopy: "复制",
       skMove: "移动",
       skPickTarget: "选择目标位置",
       skDisable: "禁用",
@@ -1893,18 +1892,17 @@ ellipsis，窄列只截字不破版 */
       skDeleted: "已删除",
       skMountTitle: "技能池挂载",
       skCarrierTip: "技能池里的技能以链接挂在这里；这个目录被 git 忽略，技能不进项目仓库",
-      skLocalRoot: "项目技能根",
-      skNeedsChoice: "两个项目级根都在用：选一个当载体根",
+      skNeedsChoice: "池技能挂在哪个根？选定后这个工作区的池链接都挂这里",
       skPickDsh: "用 .dsh/skills",
       skPickAgents: "用 .agents/skills",
       skIgnored: "已忽略",
       skNotIgnored: "未忽略",
       skPrepare: "体检并准备",
       skCarrierOwn: "载体根里有自己的技能",
-      skCarrierOwnTip: "载体根里还有非链接的技能：它们不会进项目仓库，可一键搬到项目技能根",
+      skCarrierOwnTip: "载体根里还有非链接的技能：它们不会进项目仓库，要收进仓库就搬到另一个根",
       skTracked: "载体根下有已进仓库的内容",
-      skTrackedTip: "先把它们从仓库索引移除（文件保留），或搬到项目技能根；否则挂链接会把池里的内容带进仓库",
-      skMoveLocal: "搬到项目技能根",
+      skTrackedTip: "先把它们从仓库索引移除（文件保留），或搬到另一个根；否则挂链接会把池里的内容带进仓库",
+      skMoveLocalTo: "搬到",
       skUntrack: "仅从仓库移除",
       skPrepared: "载体根已就绪",
       skMount: "挂载",
@@ -1919,28 +1917,46 @@ ellipsis，窄列只截字不破版 */
       skBrokenTip: "链接指向的池技能已不在（改名或删除），宿主发现时会静默跳过",
       skClean: "清理",
       skGit: "版本",
-      skGitAuto: "改动落盘后一两秒内自动提交（也可以现在就提交）",
-      skGitNoGit: "这个环境里没有 git：不做版本记录",
-      skGitFlat: "平铺技能（单根 .md）不做版本记录",
-      skGitInitFail: "仓库初始化失败",
+      skGitNow: "记一版",
+      skGitNowTip: "提交信息写清这次改了什么——插件不会自动提交，历史就靠这句话读懂",
+      skGitSubmit: "提交",
+      skGitMsgPlaceholder: "写清这次改了什么",
+      skGitNoChange: "没有改动可提交",
+      skGitDone: "已记录",
       skGitVersions: "已记录",
       skGitLast: "上次提交",
       skGitDirty: "个文件未提交",
       skGitClean: "无未提交改动",
-      skGitNow: "立即提交",
-      skGitNowDone: "已提交",
-      skGitNoChange: "没有改动可提交",
       skGitFiles: "文件",
       skGitEmpty: "（还没有提交）",
       skGitRollback: "回滚",
       skGitRollbackConfirm: "确认回滚？",
-      skGitRollbackTip: "把内容恢复成这次提交的样子，并记一条新提交（历史不重写，回滚本身也能再回滚）",
+      skGitRollbackTip: "恢复成这次提交的样子，并记一条新提交（历史不重写，回滚本身也能再回滚）",
       skGitRolledBack: "已回滚",
+      skGitSameVer: "已经是这一版",
+      skGitDiscardAsk: "有未提交的改动会跟着一起丢掉，仍要回滚？",
+      skGitNoDiff: "（文件组件行没开：看改动请用 git）",
+      skGitDiffTip: "看这次提交对这个文件的改动",
+      skGitNoGit: "这个环境里没有 git：不做版本记录",
+      skGitFlat: "平铺技能（单根 .md）不做版本记录",
+      skGitInitFail: "仓库初始化失败",
       skGitErr: "版本记录出错",
       skAgoJust: "刚刚",
       skAgoMin: "分钟前",
       skAgoHour: "小时前",
       skAgoDay: "天前",
+      skMountCount: "挂载",
+      skNoMount: "未挂载",
+      skMountCountTip: "这个池技能被几个工作区挂着（登记表记的）。移动或删除本体时会把它们一并断掉",
+      skMoveOutAsk: "移出技能池？",
+      skMoveOutTip: "本体搬到目标根，别的工作区不再有它（挂载链接会被断开），版本记录也不再跟随",
+      skMoveInAsk: "移入技能池？",
+      skMoveInTip: "本体搬进池里共用，本工作区自动挂回来；以后改动立即对所有挂载它的工作区生效",
+      skMoveInTipUser: "从用户级搬进池后不再全局可见：要用的工作区得各自挂载它",
+      skMoveInTipFlat: "平铺 .md 会包成同名目录（入口文件改名 SKILL.md）再挂回来",
+      skMoveOutConfirm: "确认移动",
+      skMoved: "已移动",
+      skDeleteMountedTip: "这个池技能还被别的工作区挂着：删除会一并断掉那些链接",
       contentFail: "读取失败",
       contentEmpty: "（空）",
       contentBinary: "二进制文件，无法预览",
@@ -1965,7 +1981,6 @@ ellipsis，窄列只截字不破版 */
       skByPlugin: "Plugin-bundled",
       skHide: "Hide",
       skView: "Details",
-      skCopy: "Copy",
       skMove: "Move",
       skPickTarget: "Pick destination",
       skDisable: "Disable",
@@ -1979,18 +1994,17 @@ ellipsis，窄列只截字不破版 */
       skDeleted: "Deleted",
       skMountTitle: "Skill pool mount",
       skCarrierTip: "Pool skills are linked here; this directory is git-ignored, so skills never enter the project repo",
-      skLocalRoot: "Project skill root",
-      skNeedsChoice: "Both project-level roots are in use: pick one as the carrier root",
+      skNeedsChoice: "Which root should hold the pool links? Every pool link in this workspace goes there afterwards",
       skPickDsh: "Use .dsh/skills",
       skPickAgents: "Use .agents/skills",
       skIgnored: "ignored",
       skNotIgnored: "not ignored",
       skPrepare: "Check and prepare",
       skCarrierOwn: "This root has skills of its own",
-      skCarrierOwnTip: "The carrier root also holds non-link skills: they will not enter the project repo; move them to the project skill root",
+      skCarrierOwnTip: "The carrier root also holds non-link skills: they will not enter the project repo; move them to the other root to keep them in the repo",
       skTracked: "This root has content already in the repo",
-      skTrackedTip: "Remove them from the repo index (files are kept) or move them to the project skill root; otherwise linking would drag pool content into the repo",
-      skMoveLocal: "Move to project skill root",
+      skTrackedTip: "Remove them from the repo index (files are kept) or move them to the other root; otherwise linking would drag pool content into the repo",
+      skMoveLocalTo: "Move to",
       skUntrack: "Remove from repo only",
       skPrepared: "Carrier root ready",
       skMount: "Mount",
@@ -2005,28 +2019,46 @@ ellipsis，窄列只截字不破版 */
       skBrokenTip: "The pool skill it points to is gone (renamed or deleted); host discovery skips it silently",
       skClean: "Clean",
       skGit: "Versions",
-      skGitAuto: "Changes are auto-committed a second or two after they land (or commit now)",
-      skGitNoGit: "No git in this environment: no version history",
-      skGitFlat: "Flat skills (single .md) are not versioned",
-      skGitInitFail: "Repository init failed",
+      skGitNow: "Record",
+      skGitNowTip: "Say what changed: the plugin never commits on its own, so this line is how the history reads",
+      skGitSubmit: "Commit",
+      skGitMsgPlaceholder: "What changed?",
+      skGitNoChange: "Nothing to commit",
+      skGitDone: "Recorded",
       skGitVersions: "commits",
       skGitLast: "last commit",
       skGitDirty: "uncommitted file(s)",
       skGitClean: "nothing uncommitted",
-      skGitNow: "Commit now",
-      skGitNowDone: "Committed",
-      skGitNoChange: "Nothing to commit",
       skGitFiles: "files",
       skGitEmpty: "(no commits yet)",
       skGitRollback: "Roll back",
       skGitRollbackConfirm: "Confirm rollback?",
-      skGitRollbackTip: "Restore the files to this commit and record a new commit (history is never rewritten, so a rollback can itself be rolled back)",
+      skGitRollbackTip: "Restore to this commit and record a new one (history is never rewritten, so a rollback can itself be rolled back)",
       skGitRolledBack: "Rolled back",
+      skGitSameVer: "Already at this version",
+      skGitDiscardAsk: "Uncommitted changes will be lost too. Roll back anyway?",
+      skGitNoDiff: "(file component row is off: use git to inspect changes)",
+      skGitDiffTip: "See what this commit changed in this file",
+      skGitNoGit: "No git in this environment: no version history",
+      skGitFlat: "Flat skills (single .md) are not versioned",
+      skGitInitFail: "Repository init failed",
       skGitErr: "Version history failed",
       skAgoJust: "just now",
       skAgoMin: "min ago",
       skAgoHour: "h ago",
       skAgoDay: "d ago",
+      skMountCount: "Mounted in",
+      skNoMount: "Not mounted",
+      skMountCountTip: "How many workspaces mount this pool skill (from the mount registry). Moving or deleting the pool copy unlinks them all",
+      skMoveOutAsk: "Move out of the skill pool?",
+      skMoveOutTip: "The pool copy moves to the target root: other workspaces lose it (their links are removed) and the version history stops following it",
+      skMoveInAsk: "Move into the skill pool?",
+      skMoveInTip: "The copy moves into the pool and this workspace gets a link back; later edits take effect in every workspace mounting it",
+      skMoveInTipUser: "Moving a user-level skill into the pool makes it no longer global: each workspace has to mount it",
+      skMoveInTipFlat: "A flat .md is wrapped into a same-name directory (entry renamed SKILL.md) before linking back",
+      skMoveOutConfirm: "Confirm move",
+      skMoved: "Moved",
+      skDeleteMountedTip: "Other workspaces still mount this pool skill: deleting unlinks them all",
       contentFail: "Failed to read",
       contentEmpty: "(empty)",
       contentBinary: "Binary file, preview unavailable",
@@ -2067,7 +2099,7 @@ ellipsis，窄列只截字不破版 */
         : String(err?.message ?? err);
     }
 
-    /** 相对时间（超过一周给日期）；版本列表用 */
+    /** 相对时间（超过一周给日期）；提交列表用 */
     function skAgo(epochSec) {
       const diff = Math.max(0, Date.now() / 1000 - epochSec);
       if (diff < 60) return t("skAgoJust");
@@ -2080,24 +2112,32 @@ ellipsis，窄列只截字不破版 */
     }
 
     /**
-     * 池技能的版本记录面板（只对池里的技能开放）：状态 + 提交列表 + 回滚。
-     * 每次操作后宿主都回带最新状态，所以这里不依赖父组件的整页刷新。
+     * 池技能的版本面板（只对池里的技能开放）：状态行 + 提交列表 + 写提交信息记一版 +
+     * 点开某次提交里某个文件看改动 + 回滚。
+     *
+     * 插件**不自动提交**，所以这里的提交信息就是这份历史的全部信息量：信息为空不给提交。
+     * 看改动复用文件组件的 diff 正文（`dock.diffPane` 座）；那一行没启用时不摆文件片，
+     * 只留一句"用 git 看"。
      */
     function SkillGitPanel({ skill, cwd }) {
       const [git, setGit] = react.useState(null);
       const [error, setError] = react.useState("");
-      const [msg, setMsg] = react.useState("");
+      const [note, setNote] = react.useState("");
       const [busy, setBusy] = react.useState(false);
+      const [composing, setComposing] = react.useState(false);
+      const [message, setMessage] = react.useState("");
       const [confirmSha, setConfirmSha] = react.useState(null);
+      const [pick, setPick] = react.useState(null);
       const [nonce, setNonce] = react.useState(0);
+      const DiffC = dock.diffPane && dock.diffPane.Component ? dock.diffPane.Component : null;
+      /** 拼文件绝对路径：技能目录来自宿主，按它自己的分隔符拼（Windows 上别混斜杠） */
+      const filePath = (name) => (skill.path.includes("\\") ? `${skill.path}\\${name}` : `${skill.path}/${name}`);
 
       react.useEffect(() => {
         let alive = true;
         postSkillOp({ op: "history", src: skill.path, cwd })
           .then((body) => {
-            if (!alive) return;
-            if (body && body.git) setGit(body.git);
-            setError("");
+            if (alive && body && body.git) setGit(body.git);
           })
           .catch((err) => {
             if (alive) setError(skErrText(err));
@@ -2107,96 +2147,159 @@ ellipsis，窄列只截字不破版 */
         };
       }, [skill.path, cwd, nonce]);
 
-      const run = async (payload, doneKey) => {
-        if (busy) return;
+      /** 发一条版本操作：成功回带最新状态，失败原样交回调用方判（dirty 要问一句再重发） */
+      const post = async (payload) => {
         setBusy(true);
-        setMsg("");
+        setError("");
+        setNote("");
         try {
           const body = await postSkillOp(payload);
           if (body && body.git) setGit(body.git);
-          if (body && body.committed === false && doneKey === "skGitNowDone") setMsg(t("skGitNoChange"));
-          else setMsg(t(doneKey));
-          setError("");
+          setComposing(false);
+          setMessage("");
+          setConfirmSha(null);
+          setPick(null);
+          return { ok: true, body };
         } catch (err) {
-          // 失败时宿主也会回带最新状态（提交出错要能看见错误 + 当前未提交情况）
-          if (err && err.body && err.body.git) setGit(err.body.git);
-          setError(skErrText(err));
+          return { ok: false, err };
         } finally {
           setBusy(false);
+        }
+      };
+      const onCommit = async () => {
+        const res = await post({ op: "commit", src: skill.path, message });
+        if (res.ok) setNote(res.body && res.body.committed === false ? t("skGitNoChange") : t("skGitDone"));
+        else setError(skErrText(res.err));
+      };
+      const onRollback = async (sha, discard) => {
+        const res = await post({ op: "rollback", src: skill.path, sha, discard: discard === true });
+        if (res.ok) {
+          setNote(res.body && res.body.changed === false ? t("skGitSameVer") : t("skGitRolledBack"));
+          return;
+        }
+        const body = res.err && res.err.body;
+        if (body && body.error === "dirty" && discard !== true) {
+          if (window.confirm(`${t("skGitDiscardAsk")}${typeof body.dirty === "number" ? `（${body.dirty}）` : ""}`)) {
+            await onRollback(sha, true);
+            return;
+          }
           setConfirmSha(null);
+          return;
         }
+        setError(skErrText(res.err));
+        setConfirmSha(null);
+      };
+      const onRollbackClick = (sha) => {
+        if (confirmSha !== sha) {
+          setConfirmSha(sha);
+          return;
+        }
+        void onRollback(sha, false);
       };
 
-      const statusText = () => {
-        if (git === null) return t("skLoading");
-        if (git.available === false) return t("skGitNoGit");
-        if (git.init === false) {
-          if (git.reason === "not-a-dir") return t("skGitFlat");
-          return `${t("skGitInitFail")}：${git.error ?? git.reason ?? ""}`;
-        }
-        const parts = [`${t("skGitVersions")} ${git.commits.length}`];
-        if (git.last) parts.push(`${t("skGitLast")} ${skAgo(git.last.time)}`);
-        parts.push(git.dirty > 0 ? `${git.dirty} ${t("skGitDirty")}` : t("skGitClean"));
-        return parts.join(" · ");
-      };
-
-      const ready = git !== null && git.init === true;
+      if (git === null) return jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { padding: "6px 0 0" }, children: t("skLoading") });
+      const ready = git.available !== false && git.init === true;
+      const status = !ready
+        ? git.available === false
+          ? t("skGitNoGit")
+          : git.reason === "not-a-dir"
+            ? t("skGitFlat")
+            : `${t("skGitInitFail")}：${git.error ?? git.reason ?? ""}`
+        : [
+            `${t("skGitVersions")} ${git.commits.length}`,
+            git.last ? `${t("skGitLast")} ${skAgo(git.last.time)}` : "",
+            git.dirty > 0 ? `${git.dirty} ${t("skGitDirty")}` : t("skGitClean"),
+          ]
+            .filter((s) => s !== "")
+            .join(" · ");
 
       return jsxRuntime.jsxs("div", {
-        className: "dshk-sk-detail",
+        className: "dshk-sk-git",
         children: [
           jsxRuntime.jsxs("div", {
             className: "dshk-sk-bar",
             children: [
               jsxRuntime.jsx("span", { className: "dshk-sk-bar-title", children: t("skGit") }),
-              jsxRuntime.jsx("span", {
-                className: "dshk-sk-status",
-                title: git && git.dirtyNames && git.dirtyNames.length > 0 ? git.dirtyNames.join("\n") : undefined,
-                children: statusText(),
-              }),
+              jsxRuntime.jsx("span", { className: "dshk-sk-desc", children: status }),
               jsxRuntime.jsx("span", { className: "dshk-sk-spacer" }),
-              msg !== "" ? jsxRuntime.jsx("span", { className: "dshk-sk-status", children: msg }) : null,
-              error !== "" ? jsxRuntime.jsx("span", { className: "dshk-sk-warn", title: error, children: `${t("skGitErr")}：${error}` }) : null,
-              jsxRuntime.jsx(KitTip, {
-                label: t("skGitAuto"),
-                children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy || !ready, onClick: () => run({ op: "commit", src: skill.path, cwd }, "skGitNowDone"), children: t("skGitNow") }),
-              }),
-              jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setNonce((n) => n + 1), children: "⟳" }),
+              ready && !composing
+                ? jsxRuntime.jsx(KitTip, {
+                    label: t("skGitNowTip"),
+                    children: jsxRuntime.jsx("button", {
+                      type: "button",
+                      className: "dshk-sk-btn",
+                      disabled: busy,
+                      onClick: () => setComposing(true),
+                      children: t("skGitNow"),
+                    }),
+                  })
+                : null,
             ],
           }),
-          git && git.watchError
-            ? jsxRuntime.jsx("div", { className: "dshk-sk-warn", title: git.watchError, children: `${t("skGitErr")}：${git.watchError}` })
+          note !== "" ? jsxRuntime.jsx("div", { className: "dshk-sk-status", children: note }) : null,
+          error !== "" ? jsxRuntime.jsx("div", { className: "dshk-sk-warn", title: error, children: `${t("skGitErr")}：${error}` }) : null,
+          composing
+            ? jsxRuntime.jsxs("div", {
+                className: "dshk-sk-bar",
+                children: [
+                  jsxRuntime.jsx("input", {
+                    className: "dshk-sk-input",
+                    value: message,
+                    placeholder: t("skGitMsgPlaceholder"),
+                    disabled: busy,
+                    onChange: (e) => setMessage(e.target.value),
+                    onKeyDown: (e) => {
+                      if (e.key === "Enter" && message.trim() !== "") void onCommit();
+                    },
+                  }),
+                  jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-sk-btn",
+                    disabled: busy || message.trim() === "",
+                    onClick: () => void onCommit(),
+                    children: t("skGitSubmit"),
+                  }),
+                  jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-sk-btn",
+                    disabled: busy,
+                    onClick: () => {
+                      setComposing(false);
+                      setMessage("");
+                    },
+                    children: t("skCancel"),
+                  }),
+                ],
+              })
             : null,
           ready && git.commits.length === 0 ? jsxRuntime.jsx("div", { className: "dshk-sk-status", children: t("skGitEmpty") }) : null,
+          ready && git.commits.length > 0 && DiffC === null
+            ? jsxRuntime.jsx("div", { className: "dshk-sk-status", children: t("skGitNoDiff") })
+            : null,
           ready
-            ? git.commits.map((c, index) =>
+            ? git.commits.map((c) =>
                 jsxRuntime.jsxs(
                   "div",
                   {
-                    className: "dshk-sk-row",
+                    className: "dshk-sk-gitrow",
                     children: [
-                      jsxRuntime.jsx("span", { className: "dshk-sk-sha", title: c.sha, children: c.short }),
-                      index === 0 ? jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: t("skGitLast") }) : null,
-                      jsxRuntime.jsx("span", { className: "dshk-sk-desc", title: c.names.join("\n"), children: `${skAgo(c.time)} · ${c.subject}` }),
-                      c.files > 0
-                        ? jsxRuntime.jsx(KitTip, {
-                            label: c.names.join("\n"),
-                            children: jsxRuntime.jsx("span", {
-                              className: "dshk-sk-badge",
-                              children: `${c.files} ${t("skGitFiles")} +${c.insertions} −${c.deletions}`,
-                            }),
-                          })
-                        : null,
                       jsxRuntime.jsxs("div", {
-                        className: "dshk-sk-actions",
+                        className: "dshk-sk-line1",
                         children: [
+                          jsxRuntime.jsx("span", { className: "dshk-sk-sha", title: c.sha, children: c.short }),
+                          jsxRuntime.jsx("span", { className: "dshk-sk-desc", title: c.subject, children: `${skAgo(c.time)} · ${c.subject}` }),
+                          jsxRuntime.jsx(KitTip, {
+                            label: `${c.files} ${t("skGitFiles")} +${c.insertions} −${c.deletions}`,
+                            children: jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: `${c.files} · +${c.insertions} −${c.deletions}` }),
+                          }),
+                          jsxRuntime.jsx("span", { className: "dshk-sk-spacer" }),
                           confirmSha === c.sha
                             ? jsxRuntime.jsx("button", {
                                 type: "button",
                                 className: "dshk-sk-btn",
                                 "data-danger": "1",
                                 disabled: busy,
-                                onClick: () => run({ op: "rollback", src: skill.path, sha: c.sha, cwd }, "skGitRolledBack"),
+                                onClick: () => void onRollbackClick(c.sha),
                                 children: t("skGitRollbackConfirm"),
                               })
                             : jsxRuntime.jsx(KitTip, {
@@ -2205,15 +2308,48 @@ ellipsis，窄列只截字不破版 */
                                   type: "button",
                                   className: "dshk-sk-btn",
                                   disabled: busy,
-                                  onClick: () => setConfirmSha(c.sha),
+                                  onClick: () => onRollbackClick(c.sha),
                                   children: t("skGitRollback"),
                                 }),
                               }),
                           confirmSha === c.sha
-                            ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setConfirmSha(null), children: t("skCancel") })
+                            ? jsxRuntime.jsx("button", {
+                                type: "button",
+                                className: "dshk-sk-btn",
+                                disabled: busy,
+                                onClick: () => setConfirmSha(null),
+                                children: t("skCancel"),
+                              })
                             : null,
                         ],
                       }),
+                      DiffC !== null && c.names.length > 0
+                        ? jsxRuntime.jsx("div", {
+                            className: "dshk-sk-files",
+                            children: c.names.map((name) => {
+                              const on = pick !== null && pick.sha === c.sha && pick.name === name;
+                              return jsxRuntime.jsx(
+                                "button",
+                                {
+                                  type: "button",
+                                  className: "dshk-sk-file",
+                                  title: t("skGitDiffTip"),
+                                  "data-on": on ? "1" : undefined,
+                                  disabled: busy,
+                                  onClick: () => setPick(on ? null : { sha: c.sha, name }),
+                                  children: name,
+                                },
+                                name,
+                              );
+                            }),
+                          })
+                        : null,
+                      pick !== null && pick.sha === c.sha && DiffC !== null
+                        ? jsxRuntime.jsx("div", {
+                            className: "dshk-sk-diffbox",
+                            children: jsxRuntime.jsx(DiffC, { path: filePath(pick.name), cwd: skill.path, commit: c.sha }),
+                          })
+                        : null,
                     ],
                   },
                   c.sha,
@@ -2223,6 +2359,7 @@ ellipsis，窄列只截字不破版 */
         ],
       });
     }
+
 
     // 设置导航图标（官方 navIcon 无注册缝，靠标签文字换行内 svg）：纯外观增强
     const SVG_SKILL_ICON =
@@ -2301,8 +2438,16 @@ ellipsis，窄列只截字不破版 */
 .dshk-sk-warn{color:var(--dsw-alias-label-primary);white-space:nowrap}
 .dshk-sk-spacer{flex:1}
 .dshk-sk-pre{margin:0;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
-/* 版本列表里的提交号 */
+/* 版本列表：提交号 + 每次提交的文件片（点开看该文件这次改了什么）+ diff 框 */
+.dshk-sk-git{padding:4px 12px 10px}
 .dshk-sk-sha{flex:none;font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dshk-sk-gitrow{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:6px 9px;margin-top:6px}
+.dshk-sk-files{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.dshk-sk-file{font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.4;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;padding:1px 6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;appearance:none}
+.dshk-sk-file:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-sk-file[data-on="1"]{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-tertiary)}
+.dshk-sk-diffbox{display:flex;flex-direction:column;max-height:340px;overflow:auto;margin-top:6px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px}
+.dshk-sk-input{flex:1;min-width:140px;padding:4px 7px;font-size:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary)}
     `;
     function injectStyles() {
       if (typeof document === "undefined") return;
@@ -2340,11 +2485,11 @@ ellipsis，窄列只截字不破版 */
     }
 
     /** 展开式目标选择条：点选物理根即执行（不存在的根由宿主按需创建） */
-    function TargetPicker({ roots, mode, onPick }) {
+    function TargetPicker({ roots, onPick }) {
       return jsxRuntime.jsxs("div", {
         className: "dshk-sk-target",
         children: [
-          jsxRuntime.jsxs("span", { className: "dshk-sk-target-label", children: [mode === "copy" ? t("skCopy") : t("skMove"), " · ", t("skPickTarget")] }),
+          jsxRuntime.jsxs("span", { className: "dshk-sk-target-label", children: [t("skMove"), " · ", t("skPickTarget")] }),
           roots.map((root) =>
             jsxRuntime.jsx(
               "button",
@@ -2357,23 +2502,32 @@ ellipsis，窄列只截字不破版 */
     }
 
     /**
-     * 单个技能行（单行布局）：名称+徽标+描述截断+复制/移动/禁用/删除/详情。
-     * 池内技能没有禁用按钮（池不被扫描，禁用无意义）；复制/移动展开目标选择条
+     * 单个技能行（单行布局）：名称+徽标+描述截断+移动/禁用/删除/详情。
+     * 池内技能没有禁用按钮（池不被扫描，禁用无意义）；移动展开目标选择条
      * （picker 状态提升到页面级，同一时间只允许一行展开）。
+     * 技能只有移动、没有复制（副本与本体分叉，池技能的版本记录立刻失去意义），
+     * 且沾池的移动前要确认：出池会断掉别的工作区的链接（登记表里的 mounts），
+     * 进池会把本体交出去共用。
      */
     function SkillRow({ skill, groupId, allRoots, cwd, busy, runOp, picker, setPicker }) {
       const [open, setOpen] = react.useState(false);
       const [confirming, setConfirming] = react.useState(false);
+      // 沾池的移动：picker 选完目标先停在这里等确认（{dest}）
+      const [moveAsk, setMoveAsk] = react.useState(null);
       const [gitOpen, setGitOpen] = react.useState(false);
-      const pickerOpen = picker !== null && picker.key === skill.path && (picker.mode === "copy" || picker.mode === "move");
+      // picker = 展开着目标选择条的那一行（技能路径）；单值保证同一时间只展开一行
+      const pickerOpen = picker === skill.path;
       const targets = allRoots.filter((root) => root.id !== skill.root);
       // 链接条目（池挂载点）：只断链不动本体；也不给禁用——那会写穿到池里的本体，
       // 影响所有挂载它的工作区，要禁用请到池那一组去操作
       const isLink = skill.link === true;
-      // 版本记录只给池里的技能（池是本体所在地，坏改动影响所有挂载方；见 src/skills/pool-git.ts）
       const isPool = groupId === "pool";
+      // 动到池的移动（本体或挂载点，或目标就是池）要先确认
+      const touchesPool = isPool || isLink;
+      const mountCount = typeof skill.mounts === "number" ? skill.mounts : 0;
+      const isUserSource = typeof skill.root === "string" && skill.root.startsWith("user-");
 
-      const startPicker = (mode) => setPicker(pickerOpen ? null : { key: skill.path, mode });
+      const startPicker = () => setPicker(pickerOpen ? null : skill.path);
       const onDisable = () => runOp({ op: "disable", src: skill.path, cwd, disabled: !skill.disabled });
       const onUnmount = () => runOp({ op: "unmount", src: skill.path, cwd });
       const onDelete = () => {
@@ -2386,7 +2540,16 @@ ellipsis，窄列只截字不破版 */
       };
       const pickDest = (rootId) => {
         setPicker(null);
-        runOp({ op: picker.mode, src: skill.path, dest: rootId, cwd });
+        if (touchesPool || rootId === "pool") {
+          setMoveAsk({ dest: rootId });
+          return;
+        }
+        runOp({ op: "move", src: skill.path, dest: rootId, cwd });
+      };
+      const confirmMove = () => {
+        const dest = moveAsk.dest;
+        setMoveAsk(null);
+        runOp({ op: "move", src: skill.path, dest, cwd });
       };
 
       return jsxRuntime.jsxs(jsxRuntime.Fragment, {
@@ -2417,6 +2580,16 @@ ellipsis，窄列只截字不破版 */
               typeof skill.description === "string" && skill.description !== ""
                 ? jsxRuntime.jsx("span", { className: "dshk-sk-desc", title: skill.description, children: skill.description })
                 : null,
+              // 池技能被几个工作区挂着（登记表）：0 = 谁也没用，可以删
+              isPool
+                ? jsxRuntime.jsx(KitTip, {
+                    label: t("skMountCountTip"),
+                    children: jsxRuntime.jsx("span", {
+                      className: mountCount > 0 ? "dshk-sk-badge" : "dshk-sk-badge dshk-sk-badge-off",
+                      children: mountCount > 0 ? `${t("skMountCount")} ${mountCount}` : t("skNoMount"),
+                    }),
+                  })
+                : null,
               jsxRuntime.jsxs("div", {
                 className: "dshk-sk-actions",
                 children: [
@@ -2426,8 +2599,8 @@ ellipsis，窄列只截字不破版 */
                         children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => runOp({ op: "mount", src: skill.path, cwd }), children: t("skMount") }),
                       })
                     : null,
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => startPicker("copy"), children: t("skCopy") }),
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => startPicker("move"), children: t("skMove") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: startPicker, children: t("skMove") }),
+                  // 版本记录只给池里的技能（池是本体所在地，坏改动影响所有挂载方）
                   isPool
                     ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setGitOpen((v) => !v), children: t("skGit") })
                     : null,
@@ -2447,8 +2620,36 @@ ellipsis，窄列只截字不破版 */
               }),
             ],
           }),
-          pickerOpen ? jsxRuntime.jsx(TargetPicker, { roots: targets, mode: picker.mode, onPick: pickDest }) : null,
+          pickerOpen ? jsxRuntime.jsx(TargetPicker, { roots: targets, onPick: pickDest }) : null,
           isPool && gitOpen ? jsxRuntime.jsx(SkillGitPanel, { skill, cwd }) : null,
+          moveAsk !== null
+            ? jsxRuntime.jsxs("div", {
+                className: "dshk-sk-bar",
+                children: [
+                  jsxRuntime.jsx("span", { className: "dshk-sk-warn", children: moveAsk.dest === "pool" ? t("skMoveInAsk") : t("skMoveOutAsk") }),
+                  jsxRuntime.jsx("span", {
+                    className: "dshk-sk-desc",
+                    children:
+                      moveAsk.dest === "pool"
+                        ? (isUserSource ? t("skMoveInTipUser") : t("skMoveInTip")) +
+                          (skill.kind === "file" ? `；${t("skMoveInTipFlat")}` : "")
+                        : t("skMoveOutTip"),
+                  }),
+                  jsxRuntime.jsx("span", { className: "dshk-sk-spacer" }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: confirmMove, children: t("skMoveOutConfirm") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setMoveAsk(null), children: t("skCancel") }),
+                ],
+              })
+            : null,
+          isPool && confirming && mountCount > 0
+            ? jsxRuntime.jsxs("div", {
+                className: "dshk-sk-bar",
+                children: [
+                  jsxRuntime.jsx("span", { className: "dshk-sk-warn", children: `${t("skMountCount")} ${mountCount}` }),
+                  jsxRuntime.jsx("span", { className: "dshk-sk-desc", children: t("skDeleteMountedTip") }),
+                ],
+              })
+            : null,
           open ? jsxRuntime.jsx("div", { className: "dshk-sk-detail", children: jsxRuntime.jsx(SkillContent, { file: skill.file }) }) : null,
         ],
       });
@@ -2476,8 +2677,8 @@ ellipsis，窄列只截字不破版 */
     }
 
     /**
-     * 挂载条：载体根归属 + git 忽略状态 + 体检入口。只呈现事实与机制操作——
-     * 跨根同名的取舍（被覆盖、删链接还是删本体）由用户看明白后自己决定。
+     * 挂载条：挂载点（用户自己选的载体根）+ git 忽略状态 + 体检入口。只呈现事实与机制操作——
+     * 没选过就先让用户选一个根；选定后这个工作区的池链接都挂那儿，插件不再自己判断该用哪根。
      */
     function MountBar({ mount, busy, resolvePrompt, onChoose, onPrepare, onResolve, onCancelResolve }) {
       const needPrepare = mount.ignored === false || mount.tracked.length > 0 || mount.carrierOwn > 0;
@@ -2492,12 +2693,6 @@ ellipsis，窄列只截字不破版 */
                 : jsxRuntime.jsx(KitTip, {
                     label: t("skCarrierTip"),
                     children: jsxRuntime.jsx("span", { className: "dshk-sk-badge", title: mount.carrierDir, children: skRootShort(mount.carrierRoot) }),
-                  }),
-              mount.needsChoice
-                ? null
-                : jsxRuntime.jsx(KitTip, {
-                    label: t("skCarrierTip"),
-                    children: jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", title: mount.localDir, children: `${t("skLocalRoot")} ${skRootShort(mount.localRoot)}` }),
                   }),
               mount.needsChoice
                 ? null
@@ -2532,7 +2727,7 @@ ellipsis，窄列只截字不破版 */
                 children: [
                   jsxRuntime.jsx("span", { className: "dshk-sk-warn", children: t("skTrackedTip") }),
                   jsxRuntime.jsx("span", { className: "dshk-sk-spacer" }),
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => onResolve("move"), children: t("skMoveLocal") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => onResolve("move"), children: `${t("skMoveLocalTo")} ${skRootShort(mount.otherRoot)}` }),
                   jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => onResolve("untrack"), children: t("skUntrack") }),
                   jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onCancelResolve, children: t("skCancel") }),
                 ],
@@ -2551,7 +2746,7 @@ ellipsis，窄列只截字不破版 */
       const [message, setMessage] = react.useState("");
       const [busy, setBusy] = react.useState(false);
       const [nonce, setNonce] = react.useState(0);
-      // 展开中的复制/移动目标选择条（{key,mode}）；单值保证同一时间只展开一行
+      // 展开中的移动目标选择条（技能路径，单值）；单值保证同一时间只展开一行
       const [picker, setPicker] = react.useState(null);
       // 载体根下有已进仓库的内容时，等用户选处理方式（[] = 已弹出，等待选择）
       const [resolvePrompt, setResolvePrompt] = react.useState(null);
@@ -2569,30 +2764,33 @@ ellipsis，窄列只截字不破版 */
         return () => controller.abort();
       }, [cwd, nonce]);
 
-      /** 宿主错误里带 message 时优先用它（error 字段是机器可读的码，如 not-prepared） */
-      const OP_DONE_KEY = { delete: "skDeleted", mount: "skMounted", unmount: "skUnmounted", prepare: "skPrepared" };
+      /** 各操作成功后显示的那句话（带 warning 的响应用 warning） */
+      const OP_DONE_KEY = { delete: "skDeleted", mount: "skMounted", unmount: "skUnmounted", prepare: "skPrepared", move: "skMoved" };
 
       const runOp = async (payload) => {
         if (busy) return;
         setBusy(true);
         setMessage("");
         try {
+          let body = null;
           try {
-            await postSkillOp(payload);
+            body = await postSkillOp(payload);
           } catch (err) {
-            // 载体根下有已进仓库的内容：不是错误而是缺一个决定（搬到项目技能根 / 仅从仓库移除）
+            // 载体根下有已进仓库的内容：不是错误而是缺一个决定（搬到另一个根 / 仅从仓库移除）
             if (err && err.status === 409 && err.body && err.body.error === "tracked") {
               setResolvePrompt(Array.isArray(err.body.tracked) ? err.body.tracked : []);
               return;
             }
             if (err && err.status === 409 && window.confirm(t("skOverwrite"))) {
-              await postSkillOp({ ...payload, overwrite: true });
+              body = await postSkillOp({ ...payload, overwrite: true });
             } else {
               setMessage(`${t("skOpFail")}：${skErrText(err)}`);
               return;
             }
           }
-          setMessage(t(OP_DONE_KEY[payload.op] ?? "skDone"));
+          // 宿主做了但没做全（例如入池后没能挂回来）：照它的话说出来，别用"完成"糊过去
+          const warning = body && typeof body.warning === "string" && body.warning !== "" ? body.warning : null;
+          setMessage(warning ?? t(OP_DONE_KEY[payload.op] ?? "skDone"));
           setResolvePrompt(null);
           setPicker(null);
           setNonce((n) => n + 1);
@@ -2761,6 +2959,7 @@ ellipsis，窄列只截字不破版 */
     exports.inject = ["slots"];
     // 渲染级检查与直测引用
     exports.SkillsManager = SkillsManager;
+    exports.SkillRow = SkillRow;
     exports.SkillGitPanel = SkillGitPanel;
     exports.fetchSkillsPage = fetchSkillsPage;
     exports.cfgFromSnapshot = cfgFromSnapshot;

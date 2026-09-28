@@ -8,7 +8,7 @@
 import http from 'node:http'
 
 import { sameOrigin } from '../core/index.ts'
-import { startPoolGitWatcher } from './pool-git.ts'
+import { ensurePoolBaselines } from './pool-git.ts'
 import { applySkillPool, defaultPoolDir } from './skill-pool.ts'
 
 interface KitCtx {
@@ -36,12 +36,9 @@ export function apply(ctx: KitCtx): void {
   })
   applySkillPool(ctx, { getRegistry: () => skillsRegistry })
 
-  // 池技能的版本记录：watcher 跟着组件行起（行禁用 = 本模块不物化 = 不记录），
-  // 不等面板打开—— agent 经工作区链接改池里的本体时，历史要照记
-  ctx.effect(() => {
-    const stop = startPoolGitWatcher(defaultPoolDir())
-    return () => stop()
-  }, 'dsh-kit: 技能池版本记录')
+  // 池技能的版本记录：只备仓库与基线首版（**不做自动提交**，提交由人或 agent 有意识
+  // 地做）。这里先把启动时已有的池技能补齐；之后手工放进池的技能，由面板拉列表时补。
+  void ensurePoolBaselines(defaultPoolDir())
 
   const disposers: Array<() => void> = []
   ctx.inject(['webServer'], (webCtx: KitWebCtx) => {
