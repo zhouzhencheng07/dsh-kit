@@ -6,7 +6,8 @@
 // client 拉 200 = 行启用、404（行禁用 → 本子模块不物化）= 不注册设置页。
 import http from 'node:http';
 import { sameOrigin } from "../core/index.js";
-import { applySkillPool } from "./skill-pool.js";
+import { startPoolGitWatcher } from "./pool-git.js";
+import { applySkillPool, defaultPoolDir } from "./skill-pool.js";
 export const name = 'dsh-kit/skills';
 export function apply(ctx) {
     // skills 注册表是可选增强（归属展示），服务晚于本行就绪也无碍——注入回调捕获引用
@@ -15,6 +16,12 @@ export function apply(ctx) {
         skillsRegistry = skillsCtx.skills;
     });
     applySkillPool(ctx, { getRegistry: () => skillsRegistry });
+    // 池技能的版本记录：watcher 跟着组件行起（行禁用 = 本模块不物化 = 不记录），
+    // 不等面板打开—— agent 经工作区链接改池里的本体时，历史要照记
+    ctx.effect(() => {
+        const stop = startPoolGitWatcher(defaultPoolDir());
+        return () => stop();
+    }, 'dsh-kit: 技能池版本记录');
     const disposers = [];
     ctx.inject(['webServer'], (webCtx) => {
         // ── 行启用探针：GET /dsh-kit-skills/config，恒回空对象 ──

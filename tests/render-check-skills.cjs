@@ -87,8 +87,8 @@ const comps = dockExports.skills;
 
 check("skills 导出 apply（client 插件形状）与 inject 声明 slots", typeof comps.apply === "function" && Array.isArray(comps.inject) && comps.inject[0] === "slots");
 check(
-  "skills 导出面齐全（管理页/端点调用/探针取值）",
-  [comps.SkillsManager, comps.fetchSkillsPage, comps.cfgFromSnapshot].every((fn) => typeof fn === "function"),
+  "skills 导出面齐全（管理页/端点调用/探针取值/版本面板）",
+  [comps.SkillsManager, comps.SkillGitPanel, comps.fetchSkillsPage, comps.cfgFromSnapshot].every((fn) => typeof fn === "function"),
 );
 
 // —— 技能管理页渲染：无 cwd 与有 cwd；头部刷新走官方气泡 ——
@@ -116,6 +116,37 @@ check(
   "cfgFromSnapshot：未探明乐观可用、404 不可用、就绪可用",
   comps.cfgFromSnapshot(null).available === true && comps.cfgFromSnapshot({ status: "unavailable" }).available === false && comps.cfgFromSnapshot({ status: "ready" }).available === true,
 );
+
+// —— 版本面板（池技能的每技能一仓）：状态行 + 提交列表 + 回滚 ——
+{
+  const nowSec = Math.floor(Date.now() / 1000);
+  const fakeGit = {
+    available: true,
+    init: true,
+    dirty: 1,
+    dirtyNames: ["SKILL.md"],
+    last: { sha: "abcdef1234567890abcdef1234567890abcdef12", short: "abcdef1", time: nowSec - 120, subject: "auto: 同步技能内容" },
+    commits: [
+      { sha: "abcdef1234567890abcdef1234567890abcdef12", short: "abcdef1", time: nowSec - 120, subject: "auto: 同步技能内容", files: 1, insertions: 2, deletions: 0, names: ["SKILL.md"] },
+      { sha: "1234567890abcdef1234567890abcdef12345678", short: "1234567", time: nowSec - 86400 * 2, subject: "auto: 初始记录", files: 1, insertions: 1, deletions: 0, names: ["SKILL.md"] },
+    ],
+  };
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  stateStore.set(0, fakeGit); // SkillGitPanel 的第一个 useState 就是版本状态（避免真的去拉端点）
+  const panel = comps.SkillGitPanel({ skill: { path: "/pool/hello-kit" }, cwd: "C:/x" });
+  check("版本面板渲染无异常", !!panel && typeof panel === "object");
+  const status = callLog.find((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-sk-status" && typeof c[2].children === "string");
+  const statusText = status ? status[2].children : "";
+  check("版本面板：状态行含提交数 / 上次提交 / 未提交改动", /已记录|commits/.test(statusText) && /未提交|uncommitted/.test(statusText), statusText);
+  const shas = callLog.filter((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-sk-sha").map((c) => c[2].children);
+  check("版本面板：逐条列出提交（提交号）", shas.length === 2 && shas[0] === "abcdef1" && shas[1] === "1234567", shas);
+  const rollbackBtn = callLog.find((c) => c[0] === "jsx" && c[1] === "button" && ["回滚", "Roll back"].includes(c[2].children));
+  check("版本面板：每条提交带回滚钮（二次确认在点击后）", !!rollbackBtn);
+  const commitBtn = callLog.find((c) => c[0] === "jsx" && c[1] === "button" && ["立即提交", "Commit now"].includes(c[2].children));
+  check("版本面板：给「立即提交」入口（自动提交之外的兜底）", !!commitBtn);
+}
 
 // —— 端点调用：cwd 查询串 ——
 async function checkEndpoint() {
@@ -191,6 +222,11 @@ async function checkApply() {
   check("技能无独立配置字段（主包 schema/配置页/client 默认表都不再出现 skillsPageEnabled）", !hostSrc.includes("skillsPageEnabled") && !bundleSrc.includes("skillsPageEnabled"));
   check("组件入口挂技能池端点与行可达性探针", compSrc.includes("applySkillPool") && compSrc.includes("/dsh-kit-skills/config"));
   check("技能页样式随组件自带（.dshk-sk 只在组件 CSS 块出现一次）", bundleSrc.includes("SKS_CSS") && bundleSrc.split(".dshk-sk{").length - 1 === 1);
+  check("版本入口只挂在池技能行（工作区/用户级行不给）", bundleSrc.includes("isPool && gitOpen"));
+  check("版本面板走宿主版本端点（history/commit/rollback）", ["history", "commit", "rollback"].every((op) => bundleSrc.includes(`op: "${op}"`)));
+  const poolGitSrc = fs.readFileSync(__dirname + "/../src/skills/pool-git.ts", "utf8");
+  check("池版本记录：只给池里的技能做（组件入口按池目录起 watcher）", compSrc.includes("startPoolGitWatcher(defaultPoolDir())"));
+  check("池版本记录：身份只写技能自己的仓库、提交主题带 auto: 前缀", poolGitSrc.includes("'config', '--local'") && poolGitSrc.includes("'auto: 同步技能内容'"));
 }
 
 checkEndpoint().then(checkApply).then(() => {

@@ -11,46 +11,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
-const GIT_TIMEOUT = 10_000;
-/** 跑一条 git 命令；任何失败（无 git / 非仓库 / 非零 / 超时）都 resolve ok:false */
-function runGit(args, cwd, timeoutMs = GIT_TIMEOUT) {
-    return new Promise((resolve) => {
-        let child;
-        try {
-            child = spawn('git', args, { cwd, windowsHide: true });
-        }
-        catch {
-            resolve({ ok: false, out: '', err: '' });
-            return;
-        }
-        let out = '';
-        let err = '';
-        let settled = false;
-        const timer = setTimeout(() => {
-            try {
-                child.kill();
-            }
-            catch { }
-            finish(false);
-        }, timeoutMs);
-        const finish = (ok) => {
-            if (settled)
-                return;
-            settled = true;
-            clearTimeout(timer);
-            resolve({ ok, out, err });
-        };
-        child.stdout?.on('data', (d) => {
-            out += String(d);
-        });
-        child.stderr?.on('data', (d) => {
-            err += String(d);
-        });
-        child.on('error', () => finish(false));
-        child.on('close', (code) => finish(code === 0));
-    });
-}
+import { runGit } from "./git.js";
 function toPosix(p) {
     return p.split(path.sep).join('/');
 }

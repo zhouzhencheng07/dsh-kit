@@ -12,7 +12,8 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { spawn } from 'node:child_process'
+
+import { runGit } from './git.ts'
 
 /** 项目级两根（与 skill-pool 的物理根 id 同名） */
 export type ProjectRootId = 'project-dsh' | 'project-agents'
@@ -45,50 +46,6 @@ export interface MountState {
   /** 载体根里的实体条目数 / 链接条目数（实体 >0 说明用户在这个根里也放了自己的技能） */
   carrierOwn: number
   carrierLinks: number
-}
-
-interface GitResult {
-  ok: boolean
-  out: string
-  err: string
-}
-
-const GIT_TIMEOUT = 10_000
-
-/** 跑一条 git 命令；任何失败（无 git / 非仓库 / 非零 / 超时）都 resolve ok:false */
-function runGit(args: string[], cwd: string, timeoutMs: number = GIT_TIMEOUT): Promise<GitResult> {
-  return new Promise((resolve) => {
-    let child: import('node:child_process').ChildProcess
-    try {
-      child = spawn('git', args, { cwd, windowsHide: true })
-    } catch {
-      resolve({ ok: false, out: '', err: '' })
-      return
-    }
-    let out = ''
-    let err = ''
-    let settled = false
-    const timer = setTimeout(() => {
-      try {
-        child.kill()
-      } catch {}
-      finish(false)
-    }, timeoutMs)
-    const finish = (ok: boolean) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      resolve({ ok, out, err })
-    }
-    child.stdout?.on('data', (d) => {
-      out += String(d)
-    })
-    child.stderr?.on('data', (d) => {
-      err += String(d)
-    })
-    child.on('error', () => finish(false))
-    child.on('close', (code) => finish(code === 0))
-  })
 }
 
 function toPosix(p: string): string {

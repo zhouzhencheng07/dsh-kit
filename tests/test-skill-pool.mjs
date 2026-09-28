@@ -4,7 +4,9 @@
 //       白名单外路径拒绝、同根操作拒绝；
 //       挂载机制：载体根判定（在用的一根留给项目、空着的当载体、两个都在用则等选）、
 //       git 体检（写忽略 / 已进仓库内容 409 → 搬到本地根或仅从仓库移除 / 非仓库也写）、
-//       建链接与断链（池里的本体绝不被删被改）、失效链接可见、删除链接条目被拒。
+//       建链接与断链（池里的本体绝不被删被改）、失效链接可见、删除链接条目被拒；
+//       版本记录（只给池技能）：watcher 建仓与自动提交、无改动跳过、未提交可见、
+//       回滚（恢复内容 + 记一条新提交）、非池技能与平铺技能被拒。
 // 用法：node tests\test-skill-pool.mjs [baseUrl]（需 dev 环境在跑，默认 http://127.0.0.1:3081）
 import fs from "node:fs";
 import os from "node:os";
@@ -25,7 +27,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dshkit-skill-"));
 fs.mkdirSync(path.join(tmp, ".git"), { recursive: true });
 
 // 幂等清理：上次运行残留在池里的同名技能，必须先清场
-for (const name of ["hello-kit", "flat-kit"]) {
+for (const name of ["hello-kit", "flat-kit", "ver-kit", "flat-ver.md"]) {
   fs.rmSync(path.join(POOL, name), { recursive: true, force: true });
 }
 const mkSkillIn = (root, relDir, name, description) => {
@@ -44,6 +46,16 @@ const mkProject = (prefix, isRepo = true) => {
   return dir;
 };
 const git = (cwd, args) => spawnSync("git", args, { cwd, encoding: "utf8" });
+/** 轮询等待（watcher 是异步提交的）：fn 返回真值即返回它，超时返回 null */
+const waitFor = async (fn, timeoutMs = 15000) => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await fn();
+    if (value) return value;
+    if (Date.now() > deadline) return null;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+};
 mkSkill(".agents/skills", "hello-kit", "目录型测试技能"); // rank 200
 mkSkill(".dsh/skills", "dup-kit", "高优先级副本"); // rank 100
 mkSkill(".agents/skills", "dup-kit", "低优先级副本"); // rank 200 → 应被标 shadowed
@@ -292,9 +304,89 @@ try {
   check("非仓库：体检也写 .gitignore", res.status === 200 && fs.readFileSync(path.join(proj4, ".gitignore"), "utf8").includes("/.agents/skills/"));
   res = await opIn(proj4, { op: "mount", src: poolSkill.path });
   check("非仓库：写完忽略即可挂载", res.status === 200 && fs.lstatSync(path.join(proj4, ".agents", "skills", "hello-kit")).isSymbolicLink());
+
+  // ── 11) 池技能的版本记录（每技能一仓 + watcher 自动提交 + 回滚；只给池里的技能做）──
+  const verDir = mkSkillIn(POOL, "", "ver-kit", "版本记录测试技能");
+  const verFile = path.join(verDir, "SKILL.md");
+  const countCommits = () => Number(git(verDir, ["rev-list", "--count", "HEAD"]).stdout.trim() || 0);
+  const lastSubject = () => git(verDir, ["log", "-1", "--pretty=%s"]).stdout.trim();
+  const historyOf = async (payload) => bodyOf(await opIn(proj, payload));
+
+  // 11.1 watcher 建仓并记下当前内容（不等面板、不等操作——agent 经链接改池本体也是这条路）
+  const inited = await waitFor(async () => (fs.existsSync(path.join(verDir, ".git")) && countCommits() >= 1 ? countCommits() : null));
+  check("版本：新建池技能被 watcher 自动建仓并记一版", inited === 1, inited);
+  check("版本：首次记录主题标明初始记录", lastSubject() === "auto: 初始记录", lastSubject());
+  check(
+    "版本：仓库是技能目录自己的（不会替外层仓库提交）",
+    fs.realpathSync(git(verDir, ["rev-parse", "--show-toplevel"]).stdout.trim()) === fs.realpathSync(verDir),
+  );
+  check("版本：身份只写本仓，不动用户全局 git 配置", git(verDir, ["config", "--local", "user.name"]).stdout.trim() === "dsh-kit" && git(verDir, ["config", "--local", "user.email"]).stdout.trim() === "dsh-kit@localhost");
+
+  // 11.2 面板取状态：建仓 + 提交列表 + 工作区无未提交
+  let hist = await historyOf({ op: "history", src: verDir });
+  check(
+    "版本：history 回状态（已建仓、有提交、无未提交）",
+    hist.ok === true && hist.git.init === true && hist.git.commits.length === 1 && hist.git.dirty === 0 && hist.git.commits[0].subject === "auto: 初始记录",
+    hist.git,
+  );
+  check("版本：提交带文件与增删统计", hist.git.commits[0].files === 1 && hist.git.commits[0].names.includes("SKILL.md"), hist.git.commits[0]);
+
+  // 11.3 无改动不提交（不产生空提交）
+  let commitRes = await historyOf({ op: "commit", src: verDir });
+  check("版本：无改动 → committed=false", commitRes.ok === true && commitRes.committed === false, commitRes);
+
+  // 11.4 未提交改动可见（读路径不产生提交，"未提交"才是真事实）
+  fs.appendFileSync(verFile, "\n<!-- 未提交 -->\n");
+  hist = await historyOf({ op: "history", src: verDir });
+  check(
+    "版本：未提交改动在状态里看得见",
+    hist.git.dirty === 1 && hist.git.dirtyNames.includes("SKILL.md") && hist.git.commits.length === 1,
+    hist.git,
+  );
+
+  // 11.5 watcher 把外部改动自动提交（带文件名清单）
+  const grew = await waitFor(async () => (countCommits() > 1 ? true : null));
+  check("版本：外部改动被 watcher 自动提交", grew === true, countCommits());
+  check("版本：自动提交主题带 auto: 前缀", lastSubject() === "auto: 同步技能内容", lastSubject());
+  check("版本：自动提交的正文列出改动文件", git(verDir, ["log", "-1", "--pretty=%b"]).stdout.includes("SKILL.md"));
+
+  // 11.6 回滚：内容恢复 + 记一条新提交（历史不重写）
+  const beforeRollback = await historyOf({ op: "history", src: verDir });
+  const firstSha = beforeRollback.git.commits[beforeRollback.git.commits.length - 1].sha;
+  check("版本：回滚前的改动确实在文件里", fs.readFileSync(verFile, "utf8").includes("未提交"));
+  res = await opIn(proj, { op: "rollback", src: verDir, sha: firstSha });
+  const rolled = await bodyOf(res);
+  check("版本：回滚 200 且内容恢复成那次提交的样子", res.status === 200 && rolled.ok === true && rolled.changed === true && !fs.readFileSync(verFile, "utf8").includes("未提交"), rolled);
+  check(
+    "版本：回滚记一条新提交、主题标明回滚目标（历史不重写）",
+    rolled.git.commits.length === beforeRollback.git.commits.length + 1 && rolled.git.commits[0].subject === `auto: 回滚到 ${firstSha.slice(0, 7)}`,
+    rolled.git.commits.map((c) => c.subject),
+  );
+  res = await opIn(proj, { op: "rollback", src: verDir, sha: rolled.git.commits[0].sha });
+  check("版本：回滚到当前版本 → 无变化", res.status === 200 && (await bodyOf(res)).changed === false);
+  res = await opIn(proj, { op: "rollback", src: verDir, sha: "not-a-sha" });
+  check("版本：提交号非法 → 400", res.status === 400 && (await bodyOf(res)).error === "rollback-failed");
+
+  // 11.7 池内写入类操作兜底提交（禁用/启用改的是池里的本体）
+  const beforeDisable = countCommits();
+  res = await opIn(proj, { op: "disable", src: verDir, disabled: true });
+  check("版本：池技能禁用 200", res.status === 200);
+  check("版本：池内写入操作立即记一版", countCommits() === beforeDisable + 1 && lastSubject() === "auto: 同步技能内容", countCommits());
+  await opIn(proj, { op: "disable", src: verDir, disabled: false });
+
+  // 11.8 只管池里的技能：工作区/用户级的技能不给版本记录，平铺 .md 也不建仓
+  res = await opIn(proj, { op: "history", src: path.join(proj, ".dsh", "skills", "proj-kit") });
+  check("版本：工作区里的技能 → 400 not-in-pool", res.status === 400 && (await bodyOf(res)).error === "not-in-pool");
+  const flatVer = path.join(POOL, "flat-ver.md");
+  fs.writeFileSync(flatVer, "---\nname: flat-ver\ndescription: 平铺版本测试\n---\nbody\n");
+  hist = await historyOf({ op: "history", src: flatVer });
+  check("版本：平铺 .md → 不建仓（not-a-dir）", hist.ok === true && hist.git.init === false && hist.git.reason === "not-a-dir", hist.git);
 } finally {
   for (const dir of extra) fs.rmSync(dir, { recursive: true, force: true });
   fs.rmSync(tmp, { recursive: true, force: true });
+  // 版本记录测试的池技能（含它的 .git）与平铺文件都清掉，别留在 dev 环境的池里
+  fs.rmSync(path.join(POOL, "ver-kit"), { recursive: true, force: true });
+  fs.rmSync(path.join(POOL, "flat-ver.md"), { force: true });
 }
 
 console.log(failed === 0 ? "\nALL SKILL-POOL TESTS PASS" : `\n${failed} FAIL`);

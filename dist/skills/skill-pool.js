@@ -22,6 +22,10 @@
 //                                             体检载体根：处理已进仓库的内容 + 写忽略
 //       {op:'mount', src}                     在载体根建指向池技能的链接
 //       {op:'unmount', src}                   断链（池里的本体不动）
+//       {op:'history', src}                   池技能的版本状态（列表 + 未提交改动）；
+//                                             顺带建仓并补齐未提交内容
+//       {op:'commit', src}                    立刻提交池技能的当前内容
+//       {op:'rollback', src, sha}             回滚到某次提交（恢复内容 + 记一条新提交）
 //       同名冲突回 409 {error:'conflict'}，客户端确认后带 overwrite:true 重发；
 //       载体根有已进仓库的内容时回 409 {error:'tracked', tracked:[...]}。
 //
@@ -38,6 +42,7 @@ import path from 'node:path';
 import { recycleDelete, findProjectRoot } from "../core/index.js";
 import { sameOrigin } from "../core/index.js";
 import { computeMountState, mountLink, mountPrecondition, prepareCarrier, setCarrier, unmountLink, } from "./mount.js";
+import { poolGitCommitNow, poolGitRollback, poolGitState } from "./pool-git.js";
 const POOL_DIRNAME = 'skill-pool';
 const PHYSICAL_ROOTS = [
     { id: 'project-dsh', group: 'workspace', rank: 100 },
@@ -574,6 +579,48 @@ export function applySkillPool(ctx, hooks) {
                             jsonOf(res, 200, { ok: true, op: 'mount', path: mounted.path, mount: await computeMountState(projectDirs) });
                             return;
                         }
+                        // ── 池技能的版本记录（每技能一仓，只给池里的技能做；见 ./pool-git.ts）──
+                        if (body.op === 'history' || body.op === 'commit' || body.op === 'rollback') {
+                            const located = locateInside(roots, body.src);
+                            if (!located || !directChildOnly(located)) {
+                                jsonOf(res, 400, { error: '源不是白名单根下的技能条目' });
+                                return;
+                            }
+                            if (located.root.id !== 'pool') {
+                                jsonOf(res, 400, { error: 'not-in-pool', message: '只有技能池里的技能做版本记录' });
+                                return;
+                            }
+                            if (body.op === 'history') {
+                                jsonOf(res, 200, { ok: true, op: 'history', git: await poolGitState(located.path) });
+                                return;
+                            }
+                            if (body.op === 'commit') {
+                                const result = await poolGitCommitNow(located.path);
+                                const payload = {
+                                    ok: result.ok,
+                                    op: 'commit',
+                                    committed: result.committed,
+                                    git: await poolGitState(located.path),
+                                };
+                                if (!result.ok) {
+                                    payload.error = 'commit-failed';
+                                    payload.message = result.error ?? '提交失败';
+                                }
+                                jsonOf(res, result.ok ? 200 : 500, payload);
+                                return;
+                            }
+                            const result = await poolGitRollback(located.path, typeof body.sha === 'string' ? body.sha : '');
+                            if (!result.ok) {
+                                jsonOf(res, 400, {
+                                    error: 'rollback-failed',
+                                    message: result.error ?? '回滚失败',
+                                    git: await poolGitState(located.path),
+                                });
+                                return;
+                            }
+                            jsonOf(res, 200, { ok: true, op: 'rollback', changed: result.changed, git: await poolGitState(located.path) });
+                            return;
+                        }
                         if (body.op === 'copy' || body.op === 'move') {
                             const located = locateInside(roots, body.src);
                             if (!located || !directChildOnly(located)) {
@@ -619,6 +666,10 @@ export function applySkillPool(ctx, hooks) {
                                 else
                                     fs.rmSync(located.path, { recursive: true, force: true });
                             }
+                            // 落进池的目录型技能立刻记一版：watcher 只在池根存在时挂得上，
+                            // 这条操作兜底保证"进池即有历史"
+                            if (destRoot.id === 'pool' && isDir(dst))
+                                await poolGitCommitNow(dst);
                             jsonOf(res, 200, { ok: true, op: body.op, dest: path.join(destReal, name) });
                             return;
                         }
@@ -667,6 +718,9 @@ export function applySkillPool(ctx, hooks) {
                             const fm = parseFrontmatter(after);
                             const disableModel = boolFlag(fm.data['disable-model-invocation']);
                             const userInvocable = fm.data['user-invocable'] === undefined ? true : boolFlag(fm.data['user-invocable']) === true;
+                            // 改的是池里的本体的内容：紧跟着记一版（禁用/启用也是一次值得留痕的改动）
+                            if (located.root.id === 'pool' && isSkillDir)
+                                await poolGitCommitNow(located.path);
                             jsonOf(res, 200, {
                                 ok: true,
                                 op: 'disable',
