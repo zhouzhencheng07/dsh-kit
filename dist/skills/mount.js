@@ -168,13 +168,17 @@ export function liveMounts(poolDir, poolSkillDir) {
  * 返回重指了几条。
  */
 export function relinkMounts(poolDir) {
-    const { policy, mounts } = readMounts(poolDir);
+    // 读原始登记表而不是 readMounts：后者按「链接还指向池」剔除失效条目，而搬家这件事
+    // 本身就让链接全悬空，剔完就没有可修的了
+    const policy = readPolicy();
+    const mounts = policy.mounts;
     let fixed = 0;
     let changed = false;
     for (const [name, list] of Object.entries(mounts)) {
         const kept = [];
         for (const rec of list) {
-            if (!isLinkAt(rec.link) || fs.existsSync(rec.link)) {
+            // 载体根里那条路径已不是链接 = 别人的条目，不碰；指向新池的保持原样
+            if (!isLinkAt(rec.link) || mountAlive(poolDir, rec)) {
                 kept.push(rec);
                 continue;
             }
