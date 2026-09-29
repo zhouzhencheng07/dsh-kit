@@ -120,208 +120,15 @@ async function checkApply() {
   global.window = prevWin;
   check("U apply 激活不抛错", applyErr === null);
   check("U apply 声明 modelDirectories/sessions/remote 依赖", JSON.stringify(injects[0]) === JSON.stringify(["modelDirectories"]) && injects.some((d) => d[0] === "sessions") && injects.some((d) => d[0] === "remote" && d[1] === "sessions"));
-  check("U apply 三个槽位与配置页都经 slots.inject 等声明", seatInjects.filter((k) => k === "conversation.composer.dock").length === 2 && seatInjects.includes("conversation.session.header.actions") && seatInjects.includes("plugins.row.config"));
+  check("U apply 槽位与配置页都经 slots.inject 等声明", seatInjects.filter((k) => k === "conversation.composer.dock").length === 2 && seatInjects.includes("plugins.row.config") && !seatInjects.includes("conversation.session.header.actions"));
   const seat = (id) => registered.find((s) => s.id === id);
   check("U 槽位座席：用量芯片 composer.dock order 6", seat("dsh-kit-usage") && seat("dsh-kit-usage").order === 6);
-  check("U 槽位座席：监视条 composer.dock order 5", seat("dsh-kit-monitor") && seat("dsh-kit-monitor").order === 5);
-  check("U 槽位座席：头部状态条 header.actions order 21", seat("dsh-kit-monitor-bg") && seat("dsh-kit-monitor-bg").order === 21);
+  check("U 槽位座席：熔断条 composer.dock order 5", seat("dsh-kit-monitor") && seat("dsh-kit-monitor").order === 5);
+  check("U 头部状态条座位已随 429 机制退役", seat("dsh-kit-monitor-bg") === undefined);
   const cfgKeys = registered.filter((s) => s.name === "plugins.row.config").map((s) => s.key);
   check("U 配置页挂本组件行（单包单口径 key）", cfgKeys.includes("dsh-kit#monitor") && cfgKeys.length === 1);
 }
 
-// 10c) 全局 429 续跑器核心（monitorTickCore 依赖注入直测）：沿检测（running
-//      true→false）+ lastAgentError 措辞判定 + 到点发射 + 恢复清零 + capped。
-//      lastAgentError 是活镜像（prompt 即清、页面刷新即无），不是持久历史——
-//      历史错误没有可触发的沿。
-{
-  const mkSessions = (rows) => ({
-    list: {
-      getSnapshot: () => ({
-        ids: rows.map((r) => r.id),
-        byId: Object.fromEntries(rows.map((r) => [r.id, { running: r.running, displayTitle: "标题" + r.id.slice(-4) }])),
-      }),
-    },
-    binding: (id) => {
-      const row = rows.find((r) => r.id === id);
-      return {
-        session: {
-          getSnapshot: () => ({ running: row.running, lastAgentError: row.err }),
-          // 真客户端的 prompt() 第一件事就是清镜像 lastAgentError（宿主 client.js）——
-          // 桩必须同语义，否则「续跑后同文本再失败」在桩里永远看不到错误沿
-          prompt: () => {
-            row.prompts = (row.prompts ?? 0) + 1;
-            row.err = null;
-            return Promise.resolve({ accepted: true });
-          },
-        },
-      };
-    },
-  });
-  const baseCfg = { monitorEnabled: true, monitorWaitMs: 60000, monitorMaxAuto: 10 };
-  const T0 = 1_000_000;
-  const itemOf = (id) => comps.monitorStore.snapshot.items.find((x) => x.id === id);
-
-  // —— 429 失败沿 → 排等待计划 → 到点发射（sensenova 误标 quota 形态）——
-  const r1 = { id: "session-g1", running: true, err: null };
-  const s1 = mkSessions([r1]);
-  comps.monitorTickCore(s1, baseCfg, T0);
-  check("G 运行中不排计划", comps.monitorStore.snapshot.items.length === 0);
-  r1.running = false;
-  r1.err = '429: {"message":"inference exceeds tpm/rpm limit","type":"rate_limit_error","code":"insufficient_quota"}';
-  comps.monitorTickCore(s1, baseCfg, T0 + 2000);
-  check("G 429(误标quota)失败沿排等待计划", itemOf("session-g1")?.phase === "waiting");
-  comps.monitorTickCore(s1, baseCfg, T0 + 2000 + 60001);
-  check("G 到点发 prompt 续跑", r1.prompts === 1);
-  check("G 发射后计划清除", itemOf("session-g1") === undefined);
-  // —— 第二次失败：continues 累加；同文本新失败在发射后可再次触发（发射即清
-  //    handledErr 记账）——
-  r1.running = true;
-  comps.monitorTickCore(s1, baseCfg, T0 + 70000);
-  r1.running = false;
-  r1.err = '429: {"message":"inference exceeds tpm/rpm limit","type":"rate_limit_error","code":"insufficient_quota"}';
-  comps.monitorTickCore(s1, baseCfg, T0 + 72000);
-  check("G 同文本新失败再次排计划", itemOf("session-g1")?.phase === "waiting");
-  check("G 计划条目带连续计数", itemOf("session-g1")?.continues === 1);
-  comps.monitorTickCore(s1, baseCfg, T0 + 72000 + 60001);
-  check("G 第二次续跑发出", r1.prompts === 2);
-  // —— 继续成功（正常收尾）→ 连续计数清零 ——
-  r1.running = true;
-  comps.monitorTickCore(s1, baseCfg, T0 + 80000);
-  r1.running = false;
-  r1.err = null;
-  comps.monitorTickCore(s1, baseCfg, T0 + 82000);
-  check("G 正常收尾清零计数", comps.monitorSessions.get("session-g1")?.continues === 0);
-  comps.monitorSessions.delete("session-g1");
-
-  // —— 达上限转 capped：停而不续，正常收尾后解除 ——
-  const r2 = { id: "session-g2", running: true, err: null };
-  const cfg2 = { ...baseCfg, monitorMaxAuto: 2 };
-  const s2 = mkSessions([r2]);
-  comps.monitorTickCore(s2, cfg2, T0 - 1000); // 基线：运行中（沿检测需要先见过 true）
-  for (let round = 0; round < 2; round++) {
-    r2.running = false;
-    r2.err = "429: rate limited";
-    comps.monitorTickCore(s2, cfg2, T0 + round * 100000);
-    comps.monitorTickCore(s2, cfg2, T0 + round * 100000 + 60001);
-    r2.running = true; // 续跑使回合运行
-    comps.monitorTickCore(s2, cfg2, T0 + round * 100000 + 61000);
-  }
-  r2.running = false;
-  r2.err = "429: rate limited";
-  comps.monitorTickCore(s2, cfg2, T0 + 300000);
-  check("G 连续达上限转 capped 不再排计划", itemOf("session-g2")?.phase === "capped" && r2.prompts === 2);
-  r2.running = true; // 用户手动重试（prompt 清错误标记）
-  comps.monitorTickCore(s2, cfg2, T0 + 305000);
-  r2.running = false;
-  r2.err = null;
-  comps.monitorTickCore(s2, cfg2, T0 + 310000);
-  check("G 正常收尾解除 capped", itemOf("session-g2") === undefined);
-  comps.monitorSessions.delete("session-g2");
-
-  // —— 非限流失败（AUTH/终态）不自动续 ——
-  const r3 = { id: "session-g3", running: true, err: null };
-  const s3 = mkSessions([r3]);
-  comps.monitorTickCore(s3, baseCfg, T0 - 1000); // 基线：运行中
-  r3.running = false;
-  r3.err = "401: {\"message\":\"invalid api key\"}";
-  comps.monitorTickCore(s3, baseCfg, T0);
-  check("G 非限流失败不排计划", itemOf("session-g3") === undefined);
-  comps.monitorSessions.delete("session-g3");
-
-  // —— 取消按钮：计划丢弃且不重排（失败沿已消费）——
-  const r4 = { id: "session-g4", running: true, err: null };
-  const s4 = mkSessions([r4]);
-  comps.monitorTickCore(s4, baseCfg, T0 - 1000); // 基线：运行中
-  r4.running = false;
-  r4.err = "429: too many requests";
-  comps.monitorTickCore(s4, baseCfg, T0);
-  check("G 取消前有计划", itemOf("session-g4")?.phase === "waiting");
-  comps.monitorCancelPlan("session-g4");
-  check("G 取消后计划清除", itemOf("session-g4") === undefined);
-  comps.monitorTickCore(s4, baseCfg, T0 + 70000);
-  check("G 取消后同一条失败不重排", itemOf("session-g4") === undefined && r4.prompts === undefined);
-  // 用户手动重跑一轮后又失败（同文本）→ 运行即清记账，新失败重新触发（用户 prompt
-  // 同样会清镜像，桩里显式模拟）
-  r4.err = null;
-  r4.running = true;
-  comps.monitorTickCore(s4, baseCfg, T0 + 80000);
-  r4.running = false;
-  r4.err = "429: too many requests";
-  comps.monitorTickCore(s4, baseCfg, T0 + 82000);
-  check("G 取消后手动重跑再失败：重新触发", itemOf("session-g4")?.phase === "waiting");
-  comps.monitorSessions.delete("session-g4");
-
-  // —— 忽略按钮（capped）：清标记 + 计数归零；同一条失败保持静默（handledErr
-  //    保留），手动重跑后的新失败从零重新给自动续跑额度 ——
-  const r4b = { id: "session-g4b", running: true, err: null };
-  const cfg4b = { ...baseCfg, monitorMaxAuto: 2 };
-  const s4b = mkSessions([r4b]);
-  comps.monitorTickCore(s4b, cfg4b, T0 - 1000); // 基线：运行中
-  for (let round = 0; round < 2; round++) {
-    r4b.running = false;
-    r4b.err = "429: rate limited";
-    comps.monitorTickCore(s4b, cfg4b, T0 + round * 100000);
-    comps.monitorTickCore(s4b, cfg4b, T0 + round * 100000 + 60001);
-    r4b.running = true;
-    comps.monitorTickCore(s4b, cfg4b, T0 + round * 100000 + 61000);
-  }
-  r4b.running = false;
-  r4b.err = "429: rate limited";
-  comps.monitorTickCore(s4b, cfg4b, T0 + 300000);
-  check("G 忽略前 capped 在场", itemOf("session-g4b")?.phase === "capped");
-  comps.monitorCancelPlan("session-g4b");
-  check("G 忽略后条目清除且标记清、计数归零", itemOf("session-g4b") === undefined && comps.monitorSessions.get("session-g4b")?.capped === false && comps.monitorSessions.get("session-g4b")?.continues === 0);
-  comps.monitorTickCore(s4b, cfg4b, T0 + 360000);
-  check("G 忽略后同一条失败保持静默（不重排不发续跑）", itemOf("session-g4b") === undefined && r4b.prompts === 2);
-  r4b.err = null;
-  r4b.running = true; // 用户手动重跑（运行即清记账）
-  comps.monitorTickCore(s4b, cfg4b, T0 + 400000);
-  r4b.running = false;
-  r4b.err = "429: rate limited";
-  comps.monitorTickCore(s4b, cfg4b, T0 + 420000);
-  check("G 忽略后手动重跑再失败：重新排计划且计数从零起", itemOf("session-g4b")?.phase === "waiting" && itemOf("session-g4b")?.continues === 0);
-  comps.monitorSessions.delete("session-g4b");
-
-  // —— 到点时回合已被用户手动跑起来：放弃本次（不重复发）——
-  const r5 = { id: "session-g5", running: true, err: null };
-  const s5 = mkSessions([r5]);
-  comps.monitorTickCore(s5, baseCfg, T0 - 1000); // 基线：运行中
-  r5.running = false;
-  r5.err = "429: limited";
-  comps.monitorTickCore(s5, baseCfg, T0);
-  check("G 失败先排上计划（后续放弃的前提）", itemOf("session-g5")?.phase === "waiting");
-  r5.running = true; // 用户介入
-  comps.monitorTickCore(s5, baseCfg, T0 + 70000);
-  check("G 到点时回合已在跑：放弃且不发", r5.prompts === undefined && itemOf("session-g5") === undefined);
-  comps.monitorSessions.delete("session-g5");
-
-  // —— 归档会话排除（workspaces.archivedSessionIds，侧栏同款归档集）：归档不
-  //    从 sessions.list 移除会话，监视器须自行跳过；已排计划在归档 tick 作废 ——
-  const r6 = { id: "session-g6", running: true, err: null };
-  const s6 = mkSessions([r6]);
-  comps.monitorTickCore(s6, baseCfg, T0); // 基线：运行中（未归档）
-  r6.running = false;
-  r6.err = "429: limited";
-  comps.monitorTickCore(s6, baseCfg, T0 + 2000);
-  check("G 归档前照常排计划", itemOf("session-g6")?.phase === "waiting");
-  comps.monitorTickCore(s6, baseCfg, T0 + 4000, new Set(["session-g6"]));
-  check("G 归档后排队计划作废、状态回收", itemOf("session-g6") === undefined && !comps.monitorSessions.has("session-g6"));
-  comps.monitorTickCore(s6, baseCfg, T0 + 6000, new Set(["session-g6"]));
-  check("G 归档会话不排新计划不发射", itemOf("session-g6") === undefined && r6.prompts === undefined);
-  comps.monitorTickCore(s6, baseCfg, T0 + 8000);
-  check(
-    "G 取消归档恢复监视，但归档期躺着的旧错误不算新鲜失败",
-    itemOf("session-g6") === undefined,
-  );
-  r6.running = true; // 回来后重新跑一轮再失败：新失败照常续
-  r6.err = null;
-  comps.monitorTickCore(s6, baseCfg, T0 + 10000);
-  r6.running = false;
-  r6.err = "429: limited";
-  comps.monitorTickCore(s6, baseCfg, T0 + 12000);
-  check("G 取消归档后新失败照常排计划", itemOf("session-g6")?.phase === "waiting");
-  comps.monitorSessions.delete("session-g6");
-}
 // 10d) 会话通知判定核心（notifyDiffCore 依赖注入直测）：running true→false 的沿
 //      → 完成通知；待回应 key 变化 → 提问/批准通知。抑制：总开关与分类开关、
 //      页面在前台且事件就是当前会话、子会话、首帧播种；消失会话的状态回收。
@@ -480,33 +287,49 @@ async function checkApply() {
   }
   TestNote.permission = "granted";
   global.Notification = TestNote;
-  const prevSnapshot = comps.monitorStore.snapshot;
   try {
     posted.length = 0;
-    comps.monitorStore.snapshot = { items: [{ id: "n14", phase: "waiting" }] };
-    comps.notifyCompleteSettled(sessionsOf(false), ev);
-    check("N 待续跑的失败沿不发收尾通知", posted.length === 0);
-    posted.length = 0;
-    comps.monitorStore.snapshot = { items: [] };
     comps.notifyCompleteSettled(sessionsOf(true), ev);
     check("N 回合又跑起来（沿抖动）不发收尾通知", posted.length === 0);
     posted.length = 0;
-    comps.notifyCompleteSettled(sessionsOf(false), ev);
+    comps.notifyCompleteSettled(sessionsOf(false), { ...ev, kind: "complete" });
     check("N 真收尾发完成通知", posted.length === 1 && /回合完成|turn finished/.test(posted[0].title));
     posted.length = 0;
-    comps.monitorStore.snapshot = { items: [{ id: "n14", phase: "capped" }] };
-    comps.notifyCompleteSettled(sessionsOf(false), ev);
+    comps.notifyCompleteSettled(sessionsOf(false), { ...ev, kind: "error" });
     check(
-      "N 自动续跑放弃（capped）换文案提醒",
-      posted.length === 1 && /自动续跑已暂停|auto-continue paused/.test(posted[0].title) && /自动重试|auto-retry/.test(posted[0].body),
+      "N 出错的回合换文案（不报完成）",
+      posted.length === 1 && /回合出错|turn errored/.test(posted[0].title) && !/回合完成|turn finished/.test(posted[0].title),
     );
+    posted.length = 0;
+    comps.notifyCompleteSettled(sessionsOf(false), { ...ev, kind: "aborted" });
+    check("N 中止的回合换文案", posted.length === 1 && /已中止|turn stopped/.test(posted[0].title));
+    posted.length = 0;
+    comps.notifyCompleteSettled(sessionsOf(false), { ...ev, kind: "loopBreak" });
+    check("N 熔断中止的回合有专用文案", posted.length === 1 && /死循环已停止|dead loop stopped/.test(posted[0].title));
     posted.length = 0;
     comps.notifyCompleteSettled({ list: { getSnapshot: () => ({ ids: [], byId: {}, current: null }) } }, ev);
     check("N 会话已不在列表：不发", posted.length === 0);
   } finally {
-    comps.monitorStore.snapshot = prevSnapshot;
     global.Notification = prevNotification;
   }
+}
+
+// 10e) 熔断分类识别（notifyTurnKind）：宿主侧 loop-breaker 走
+//      cancel({kind:'hook', reason:'dsh-kit:dead-loop'})，turn/end 落地为
+//      {kind:'aborted', reason:{kind:'hook', reason:'dsh-kit:dead-loop'}}——
+//      必须与「人点了停止」区分开。
+{
+  const LOOP_CAUSE = { kind: "hook", reason: "dsh-kit:dead-loop" };
+  const abortedOfLoop = { kind: "aborted", reason: LOOP_CAUSE };
+  const abortedByUser = { kind: "aborted", reason: { kind: "user" } };
+  check("T 熔断 cause → loopBreak", comps.notifyTurnKind(abortedOfLoop) === "loopBreak");
+  check("T 人为停止 → aborted（不误报熔断）", comps.notifyTurnKind(abortedByUser) === "aborted");
+  check("T completed → complete", comps.notifyTurnKind({ kind: "completed" }) === "complete");
+  check("T error → error", comps.notifyTurnKind({ kind: "error" }) === "error");
+  check("T blocked → blocked", comps.notifyTurnKind({ kind: "blocked" }) === "blocked");
+  check("T max-tokens → maxTokens", comps.notifyTurnKind({ kind: "max-tokens" }) === "maxTokens");
+  check("T 无 reason（未打开过的会话）→ complete", comps.notifyTurnKind(undefined) === "complete");
+  check("T 兼容纯 kind 入参", comps.notifyTurnKind("error") === "error");
 }
 // 10f) 压缩完成（notifyCompactionCore 依赖注入直测）：事件窗口增量里的
 //      compaction/end（无 error）才算一次压缩收尾——首帧与 replace/prepend 只播种
@@ -568,36 +391,6 @@ async function checkApply() {
   check("C 规模未知时只报完成", out5.length === 1 && /压缩完成|compaction finished/i.test(out5[0].body));
 }
 
-// 7.1b) 会话头部 429 状态条（原任务签顶部状态块迁此）：
-// 无待续跑/封顶会话 → null（零常驻）；有 → 触发钮（计数），浮层默认收起
-comps.monitorStore.snapshot = { items: [] };
-out = comps.MonitorBgAction();
-check("MonitorBgAction 无后台会话渲染 null（零常驻）", out === null);
-comps.monitorStore.snapshot = {
-  items: [
-    { id: "s1", title: "跑测试", phase: "waiting", fireAt: Date.now() + 8000, continues: 1, max: 5 },
-    { id: "s2", title: "爬数据", phase: "capped", fireAt: 0, continues: 5, max: 5 },
-  ],
-};
-callLog = [];
-out = comps.MonitorBgAction();
-const mbgTrigger = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-mbg-trigger");
-const mbgLabel = mbgTrigger && Array.isArray(mbgTrigger[2].children) ? mbgTrigger[2].children.find((ch) => typeof ch === "string") : null;
-check("MonitorBgAction 有后台会话出触发钮（429 + 计数=2）", !!out && typeof mbgLabel === "string" && mbgLabel.includes("429") && /2$/.test(mbgLabel));
-check("MonitorBgAction 浮层默认收起", !callLog.some((c) => c[2] && c[2].className === "dshk-mbg-menu"));
-// 浮层展开（useState #0=open）：waiting 条目出「取消」、capped 条目出「忽略」
-stateSeq = 0;
-stateStore.clear();
-stateStore.set(0, true);
-callLog = [];
-out = comps.MonitorBgAction();
-const mbgMenu = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-mbg-menu");
-const mbgLines = mbgMenu ? callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-monitor-line") : [];
-const mbgBtns = mbgLines.map((c) => c[2].children.find((ch) => ch && ch.props && ch.props.className === "dshk-monitor-cancel")).filter(Boolean);
-check("MonitorBgAction 浮层展开：两条目各带钮（waiting=取消、capped=忽略）", !!mbgMenu && mbgLines.length === 2 && mbgBtns.length === 2 && mbgBtns.some((b) => b.props.children === "Cancel") && mbgBtns.some((b) => b.props.children === "Dismiss"));
-stateSeq = 0;
-stateStore.clear();
-comps.monitorStore.snapshot = { items: [] };
 
 // 10) MonitorLine（会话监视条）：空闲无 turn-error 时渲染 null（占位不占视觉）；
 //     桩 useEffect 不执行 → 检测逻辑不跑，只验证渲染体不抛异常。
@@ -617,36 +410,6 @@ out = comps.MonitorLine({
 });
 check("MonitorLine 空闲渲染无异常（null/条）", out === null || (typeof out === "object" && !!out));
 
-// 10a) MonitorLine 渲染全局续跑器状态：watcherStore 有本会话 waiting 条目 →
-//      输出监视条（限流文案 + 取消按钮）；capped 条目 → capped 文案
-{
-  comps.monitorStore.snapshot = {
-    items: [{ id: "s1", title: "t", phase: "waiting", fireAt: Date.now() + 30000, continues: 0, max: 10 }],
-  };
-  callLog = [];
-  out = comps.MonitorLine({
-    useChat: (sel) => sel(fakeSnap),
-    useSession: (sel) => sel({ running: false }),
-    useInput: (sel) => sel({ draft: "" }),
-    inputActions: { setDraft() {}, submit() {} },
-    sessionId: "s1",
-  });
-  const rendered = JSON.stringify(out);
-  // harness 无 documentElement → resolveZh() false → 英文文案
-  check("MonitorLine 渲染全局续跑等待条", typeof out === "object" && rendered.includes("auto-continue in") && rendered.includes("rate limit (429)") && rendered.includes("Cancel"));
-  comps.monitorStore.snapshot = {
-    items: [{ id: "s1", title: "t", phase: "capped", fireAt: 0, continues: 10, max: 10 }],
-  };
-  out = comps.MonitorLine({
-    useChat: (sel) => sel(fakeSnap),
-    useSession: (sel) => sel({ running: false }),
-    useInput: (sel) => sel({ draft: "" }),
-    inputActions: { setDraft() {}, submit() {} },
-    sessionId: "s1",
-  });
-  check("MonitorLine 渲染 capped 条 + 忽略钮", typeof out === "object" && JSON.stringify(out).includes("pausing auto-continue") && JSON.stringify(out).includes("Dismiss"));
-  comps.monitorStore.snapshot = { items: [] };
-}
 
 // 10b) monitorTailRepeatCount：死循环判定的纯函数（尾部自重叠扫描）
 const rep = (unit, n) => unit.repeat(n);
@@ -658,112 +421,33 @@ check("短分隔符块（<8字符）不误报", comps.monitorTailRepeatCount("--
 check("重复不在尾部不算（历史重复已翻篇）", comps.monitorTailRepeatCount(rep("重复片段测样", 5) + "之后是完全不同的收尾内容，正常结束。") < 3);
 check("空串安全", comps.monitorTailRepeatCount("") === 1);
 
+// 10b2) 周期复读（monitorCyclePeriod）与总判据（monitorLooksLooped）。
+// 模型陷入「重复思考/重复说话」时，重复单元的边界随流式切片漂移，尾部整块对齐
+// 的判据抓不到；周期检测对每种周期 p 找 p 位移上的等值长度，与边界无关。
+check("绕圈复读被周期检测抓到", comps.monitorCyclePeriod(rep("让我再确认一下这个结论是否正确", 12)) > 0);
+check("周期检测不误报正常长文", comps.monitorCyclePeriod("模型的正常回答通常句式变化丰富，用词与结构都不重复，句子长短也不一致，因此不会命中任何固定周期的循环判据。") === 0);
+check("短于两倍周期下限的文本不误报", comps.monitorCyclePeriod("abcabc") === 0);
+check(
+  "总判据：绕圈复读（尾部未对齐）也能命中",
+  comps.monitorLooksLooped(rep("换一种方式继续推进任务", 30), 3, 60000) === true,
+);
+check(
+  "总判据：复述一遍完整段落不误伤（只走一个周期）",
+  comps.monitorLooksLooped(rep("让我检查一下这个错误。第一步：定位文件。第二步：读取配置。", 2), 3, 60000) === false,
+);
+check(
+  "总判据：连绕三圈必被熔断（≥2 个周期）",
+  comps.monitorLooksLooped(rep("让我检查一下这个错误。第一步：定位文件。第二步：读取配置。", 3), 3, 60000) === true,
+);
+check(
+  "总判据：尾部整块重复仍命中（原有能力不回退）",
+  comps.monitorLooksLooped("前文正常。" + rep("ABCDEFGH", 5), 3, 60000) === true,
+);
+check("总判据：正常文本不误报", comps.monitorLooksLooped("这是一次完全正常的回答，内容丰富且不重复，应当顺利通过检测而不被误判为循环。", 3, 60000) === false);
+check("总判据：超长单步输出被兜住（复读尚未成周期时的退化）", comps.monitorLooksLooped("内容不重复但一直吐字".repeat(2000), 3, 60000) === true);
+check("总判据：空串与超长阈值可配", comps.monitorLooksLooped("", 3, 60000) === false && comps.monitorLooksLooped("x".repeat(20001), 3, 20000) === true);
 
-// 10c2) 429 续跑的两个误报回归（实测踩过：回合已经做完 / 被手动停止，仍发"继续"）：
-//       镜像 lastAgentError 只在 prompt() 里清，正常收尾与手动停止都不清，所以
-//       "空闲 + 有 429 文本"并不等于"这次收尾就是 429 造成的"——判据必须带上
-//       错误出现的时序（首见时刻 vs 本段空闲起点）
-{
-  const mkSessions = (rows) => {
-    const sessions = rows.map((row) => ({
-      getSnapshot: () => ({ running: row.running, lastAgentError: row.err }),
-      cancel: () => {
-        row.stopped = (row.stopped ?? 0) + 1;
-        return Promise.resolve({ ok: true });
-      },
-      prompt: () => {
-        row.prompts = (row.prompts ?? 0) + 1;
-        row.err = null; // 真客户端 prompt() 同款：同步清镜像
-        return Promise.resolve({ accepted: true });
-      },
-    }));
-    return {
-      list: {
-        getSnapshot: () => ({
-          ids: rows.map((r) => r.id),
-          byId: Object.fromEntries(rows.map((r) => [r.id, { running: r.running, displayTitle: "标题" + r.id.slice(-4) }])),
-        }),
-      },
-      // 真客户端里同一会话恒为同一实例（cancel 包装靠这一点生效）：按 id 返回稳定对象
-      binding: (id) => {
-        const i = rows.findIndex((r) => r.id === id);
-        return i < 0 ? null : { session: sessions[i] };
-      },
-    };
-  };
-  const baseCfg = { monitorEnabled: true, monitorWaitMs: 60000, monitorMaxAuto: 10 };
-  const T0 = 5_000_000;
-  const itemOf = (id) => comps.monitorStore.snapshot.items.find((x) => x.id === id);
 
-  // —— 回合中途 429（宿主内部重试 / agent 自己接着干完），最终正常收尾 ——
-  const r7 = { id: "session-g7", running: true, err: null };
-  const s7 = mkSessions([r7]);
-  comps.monitorTickCore(s7, baseCfg, T0); // 基线：运行中
-  r7.err = "429: rate limited"; // 中途失败：会话仍在跑
-  comps.monitorTickCore(s7, baseCfg, T0 + 2000);
-  check("G 运行中出现的 429 不排计划", itemOf("session-g7") === undefined);
-  r7.running = false; // 三分钟后正常收尾，镜像里那行 429 原样躺着
-  comps.monitorTickCore(s7, baseCfg, T0 + 182000);
-  check("G 中途 429 后正常收尾：不续跑（旧逻辑在这里误发）", itemOf("session-g7") === undefined && r7.prompts === undefined);
-  comps.monitorTickCore(s7, baseCfg, T0 + 242000); // 再过一个续跑窗口也不补发
-  check("G 旧错误一直躺在镜像里也不补发", r7.prompts === undefined && itemOf("session-g7") === undefined);
-  comps.monitorSessions.delete("session-g7");
-
-  // —— 用户手动停止（abort 不走 throwError，不发 agent/error；镜像里是更早的 429）——
-  const r8 = { id: "session-g8", running: true, err: null };
-  const s8 = mkSessions([r8]);
-  comps.monitorTickCore(s8, baseCfg, T0); // 基线：运行中
-  r8.err = "429: rate limited";
-  comps.monitorTickCore(s8, baseCfg, T0 + 2000); // 运行中记下这次失败
-  r8.running = false; // 用户点停止
-  comps.monitorTickCore(s8, baseCfg, T0 + 60000);
-  check("G 手动停止后不续跑", itemOf("session-g8") === undefined && r8.prompts === undefined);
-  comps.monitorSessions.delete("session-g8");
-
-  // —— 页面刷新：镜像里带着上一轮的 429，按陈旧播种，不补续 ——
-  const r9 = { id: "session-g9", running: false, err: "429: rate limited" };
-  const s9 = mkSessions([r9]);
-  comps.monitorTickCore(s9, baseCfg, T0); // 首见即"空闲 + 429"（页面刚打开）
-  check("G 刷新页面后旧 429 不补续", itemOf("session-g9") === undefined && r9.prompts === undefined);
-  r9.err = null; // 之后的新失败照常触发
-  r9.running = true;
-  comps.monitorTickCore(s9, baseCfg, T0 + 2000);
-  r9.running = false;
-  r9.err = "429: rate limited";
-  comps.monitorTickCore(s9, baseCfg, T0 + 4000);
-  check("G 刷新后新失败照常续跑", itemOf("session-g9")?.phase === "waiting");
-  comps.monitorSessions.delete("session-g9");
-
-  // —— 到达顺序反转（running 先落地、错误广播后到，同一段空闲内）：仍要续 ——
-  const r10 = { id: "session-g10", running: true, err: null };
-  const s10 = mkSessions([r10]);
-  comps.monitorTickCore(s10, baseCfg, T0); // 基线：运行中
-  r10.running = false; // 落地先到
-  comps.monitorTickCore(s10, baseCfg, T0 + 2000);
-  r10.err = "429: rate limited"; // 错误后到
-  comps.monitorTickCore(s10, baseCfg, T0 + 4000);
-  check("G 错误晚一拍到达仍算这次收尾的失败", itemOf("session-g10")?.phase === "waiting");
-  comps.monitorSessions.delete("session-g10");
-
-  // —— 用户点「停止」：429 与 abort 抢同一个回合时会留下一条很新鲜的失败沿，
-  //    停止记账必须把它挡掉（新鲜度判据挡不住这种）——
-  const r11 = { id: "session-g11", running: true, err: null };
-  const s11 = mkSessions([r11]);
-  comps.monitorTickCore(s11, baseCfg, T0); // 基线：运行中（这一步给 cancel 打包装）
-  r11.err = "429: rate limited"; // 停止瞬间落地的失败
-  void s11.binding("session-g11").session.cancel(); // 用户点停止
-  r11.running = false;
-  comps.monitorTickCore(s11, baseCfg, T0 + 2000);
-  check("G 手动停止后的失败沿不续跑", itemOf("session-g11") === undefined && r11.prompts === undefined);
-  r11.err = null; // 用户随后自己重跑一轮又失败：照常续
-  r11.running = true;
-  comps.monitorTickCore(s11, baseCfg, T0 + 4000);
-  r11.running = false;
-  r11.err = "429: rate limited";
-  comps.monitorTickCore(s11, baseCfg, T0 + 6000);
-  check("G 停止后新回合再失败：照常排计划", itemOf("session-g11")?.phase === "waiting");
-  comps.monitorSessions.delete("session-g11");
-}
 
 // 3) U 系列：用量芯片峰谷判定（usageIsPeak 直测）——工作日双峰、周末与调休
 //    上班的周末全天免标、法定节假日（落在工作日的）全天免标；只有 deepseek 标峰；

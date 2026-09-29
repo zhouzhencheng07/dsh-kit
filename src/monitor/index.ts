@@ -1,17 +1,18 @@
 // dsh-kit 用量与监视组件（宿主半边入口）
 //
-// 组件化切片：/dsh-kit/usage 聚合端点 + 用量芯片（client/bundle.js）+ 会话监视
-// （429 续跑 / 死循环打断）+ 会话通知，从 dsh-kit 主包迁出，独立成 entry
-// （bundle patch 插单，profile 里行 id: monitor）。provider 配置读取不依赖
-// 主包：经宿主 configEditor 服务现读 llm-pi-ai entry 的合成配置（inherited+
-// override 两层 providers 浅合并），凭证经宿主 credentials 按引用解析，key 不出
-// 宿主进程。
+// 组件化切片：/dsh-kit/usage 聚合端点 + 用量芯片（client/bundle.js）+ 输出侧
+// 死循环熔断（loop-breaker.ts，宿主侧覆盖全部会话）+ 会话通知，从 dsh-kit 主包
+// 迁出，独立成 entry（bundle patch 插单，profile 里行 id: monitor）。provider
+// 配置读取不依赖主包：经宿主 configEditor 服务现读 llm-pi-ai entry 的合成配置
+// （inherited+override 两层 providers 浅合并），凭证经宿主 credentials 按引用
+// 解析，key 不出宿主进程。
 
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 
 import { registerUsageRoutes } from './usage.ts'
+import { registerLoopGuard } from './loop-breaker.ts'
 import { sameOrigin } from '../core/index.ts'
 
 /** 插件设置的运行时形状（loader 按 Config schema 解析后传入 apply 第二参） */
@@ -94,20 +95,21 @@ export const Config =
         // llm-pi-ai.providers 的凭证引用），开 = /dsh-kit/usage 端点放行 +
         // client 半边出余额/配额芯片，关 = 端点 403 + 芯片不出。
         usageEnabled: z.boolean().default(true).volatile(),
-        // 会话监视器（纯浏览器端消费，宿主不读）：
-        // ① 全局 429 续跑：监视【所有】列表内会话（不要求会话页开着），turn 因 429
-        //    限流失败（客户端镜像 lastAgentError 匹配限流措辞）结束后等 monitorWaitMs
-        //    自动 prompt"继续"，连续自动续跑不超过 monitorMaxAuto 次（一轮正常收尾
-        //    即清零）；
-        // ② 死循环打断（仅当前打开的会话）：流式输出尾部自重叠达 monitorRepeatThreshold
-        //    次时停止当前回合并发循环打断话术。
+        // 死循环熔断（宿主侧 loop-breaker.ts 消费，客户端也读同名字段）：
+        // 模型输出出现复读、绕圈或单步过长时，宿主侧 cancel 该 agent 的当前
+        // 回合——覆盖全部会话，不依赖页面开着。客户端那一层只管当前会话的
+        // 补充检测与打断话术。
         monitorEnabled: z.boolean().default(true).volatile(),
-        monitorWaitMs: z.number().step(1).min(5000).max(600000).default(15000).volatile(),
-        monitorMaxAuto: z.number().step(1).min(1).max(10).default(5).volatile(),
+        // 单步输出字符兜底阈值：复读到这么长必被拦下
+        monitorStepMaxChars: z.number().step(1).min(20000).max(400000).default(60000).volatile(),
+        // 单会话最多自动打断几次（客户端话术用；宿主熔断每次都停，不受此限）
+        monitorMaxLoopBreaks: z.number().step(1).min(1).max(10).default(3).volatile(),
+        // 尾部整块重复的判定次数（另两条判据不依赖它）
         monitorRepeatThreshold: z.number().step(1).min(2).max(10).default(3).volatile(),
         // 会话通知（纯浏览器端消费，宿主不读）：回合收尾、上下文压缩完成或 agent 提问时，
         // 若页面不在前台（或事件不属于当前打开的会话）弹桌面通知——浏览器 Notification
-        // API，未授权时退标题闪烁。一个总开关管全部提醒，不分类配置。
+        // API，未授权时退标题闪烁。收尾按 turn/end 的 reason 分类（完成/出错/中止/
+        // 卡住/撞上限各有文案）。一个总开关管全部提醒，不分类配置。
         notifyEnabled: z.boolean().default(true).volatile(),
       })
     : undefined
@@ -115,7 +117,7 @@ export const Config =
 export async function apply(ctx: any, config: KitSettings = {}): Promise<void> {
   const defaults: KitSettings = Config
     ? Config({})
-    : { usageEnabled: true, monitorEnabled: true, monitorWaitMs: 15000, monitorMaxAuto: 5, monitorRepeatThreshold: 3, notifyEnabled: true }
+    : { usageEnabled: true, monitorEnabled: true, monitorStepMaxChars: 60000, monitorMaxLoopBreaks: 3, monitorRepeatThreshold: 3, notifyEnabled: true }
   // volatile 字段在 fiber config 里是稳定 ref（{get}），统一解引用
   const readRef = (v: unknown): any =>
     v !== null && typeof v === 'object' && typeof (v as { get?: unknown }).get === 'function'
@@ -176,6 +178,14 @@ export async function apply(ctx: any, config: KitSettings = {}): Promise<void> {
         },
       }),
     )
+  })
+
+  // 输出侧死循环熔断（宿主侧）：覆盖【全部】会话，与页面开没开、当前看哪个会话
+  // 无关——这是客户端那一层做不到的（它挂在当前会话的组件上，切走即失效，而
+  // 人不在正是循环白烧额度的时候）。判据与客户端同款，见 loop-guard.ts。
+  // 等 agent 服务就位再挂（它不总在本组件之前加载）
+  ctx.inject(['agent'], () => {
+    disposers.push(registerLoopGuard(ctx, { readSettings: () => readSettings() }))
   })
 
   // entry 注销时撤路由（disposers 由注入回调在 apply 期间同步填充）

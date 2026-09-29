@@ -87,21 +87,25 @@ and take no component slot).
   replaces the paid `deepseek-official` — specialized engines first when the query
   matches (GitHub / arXiv / StackExchange / HN), then the general ones (Tavily keyless →
   Bing → Sogou) with automatic failover; its config page only holds the result count
-- **Session monitor** (on by default): after a turn ends in a retryable error (429 etc.)
-  it waits and sends "continue" automatically (capped consecutive retries) — every
-  session is watched, so it keeps going while the page is in the background; only the
-  failure that actually ended that turn counts, so a stale 429 left over from a turn
-  that finished (or one you stopped by hand) is never continued; when the streamed
-  output repeats itself (a loop symptom) it stops the turn and retries (that part only
-  applies to the currently open session); a banner above the composer shows the pending
-  action and can cancel it
+- **Dead-loop guard** (on by default): when the model's output falls into a loop — verbatim
+  repetition, going in circles about the same thing, or a single step running too long — the
+  turn is stopped automatically. It applies to **every session, even with the page closed**
+  (the check lives in the host process, not in the browser). The detector is independent of
+  how the stream was chunked, so a repetition whose unit drifts with the chunk boundaries is
+  still caught, and restating something once does not count as a loop. It covers
+  **output-side** loops (text and reasoning); tool-call loops are left to the official
+  `repeat-tool-reminder`, which only warns and never stops. The currently open session also
+  gets a client-side second layer, which tells the agent to change approach after stopping it
+  (capped per session)
 - **Session notifications** (on by default; one switch covers every alert): a desktop notification when a turn finishes,
   context compaction completes, or the agent asks a question / awaits tool approval /
   submits a plan for review (browser Notification API; click it to return to that
   session) — fires while the page sits in a background tab or another window, or when the
   event belongs to a session you are not looking at; silent while you are watching that
-  very session. Auto-continue retries never report a bogus "finished" (you are told only
-  once it really stops); compaction alerts cover sessions you have opened (the official
+  very session. Turn endings are classified from the official `turn/end` reason into six
+  messages — completed / errored / stopped / blocked / output limit reached / dead loop
+  stopped — instead of always reporting "finished"; compaction alerts cover sessions you
+  have opened (the official
   client loads history only for the current session, so a never-opened session's
   compaction is invisible). Permission is requested from the settings card (without it an
   unread count is shown in the tab title instead)
@@ -155,7 +159,7 @@ Control / Knowledge base / Terminal — appear on the composer tool row, the wor
 is carried by the official right sidebar (dock tabs for diffs / vault / schedule /
 browser), and the agent's `web_search` uses the free multi-source chain.
 
-**Host requirement**: dsh ≥ 0.1.7-rc.2 (component rows and per-row config pages,
+**Host requirement**: dsh ≥ 0.2.0-rc.2 (component rows and per-row config pages,
 the official `shortcuts` service and the official `webTerminals` all landed by
 this version).
 
@@ -182,7 +186,7 @@ this version).
   git endpoints + file tree and source control panels; `skills` serves `/dsh-kit/skills` and
   `/dsh-kit/skills/op` plus the `/dsh-kit-skills/config` probe (skill-pool manager page);
   `terminal` serves the `/dsh-kit-terminal/config` probe (terminal toggle and dock);
-  `monitor` serves `/dsh-kit/usage` + usage chip / 429 auto-resume / loop breaker / session
+  `monitor` serves `/dsh-kit/usage` + usage chip / dead-loop guard / session
   notifications; `browser` serves the 7 `browser_*` tools, the `/dsh-kit/browser` panel
   WebSocket, `/dsh-kit/browser/open` and the `/dsh-kit-browser/config` probe (right-bar
   browser tab, shared control, link redirection); `vault` serves `/dsh-kit/vault/*`
@@ -209,7 +213,7 @@ this version).
 
 ## Requirements
 
-- dsh ≥ 0.1.7-rc.2
+- dsh ≥ 0.2.0-rc.2
 - Node.js ≥ 22 (dsh requirement)
 - Zero declared dependencies; TypeScript sources + prebuilt `dist` on the host side,
   no build step on the browser side
