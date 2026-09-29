@@ -62,6 +62,7 @@ import {
   type ProjectRootId,
 } from './mount.ts'
 import { ensurePoolBaseline, poolGitCommit, poolGitRollback, poolGitState } from './pool-git.ts'
+import { parseFrontmatter } from './frontmatter.ts'
 
 const POOL_DIRNAME = 'skill-pool'
 
@@ -212,40 +213,6 @@ function safeStat(p: string): fs.Stats | null {
   }
 }
 
-interface Frontmatter {
-  data: Record<string, string>
-  blockStart: number
-  blockEnd: number
-}
-
-/**
- * 宽容解析 frontmatter：返回 { data, blockStart, blockEnd }。
- * data 仅取行级 `key: value`（值去掉成对引号）；block* 是首块的字节区间（含围栏行），
- * 无 frontmatter 时三个字段为 null。不追求 YAML 完备——技能 frontmatter 本就要求
- * 平铺的 name/description/布尔开关，行级足够。
- */
-function parseFrontmatter(text: string): Frontmatter {
-  const head = text.slice(0, 4096)
-  if (!/^---[ \t]*\r?\n/.test(head)) return { data: {}, blockStart: -1, blockEnd: -1 }
-  const close = head.slice(3).match(/^---[ \t]*(?:\r?\n|$)/m)
-  if (!close) return { data: {}, blockStart: -1, blockEnd: -1 }
-  const fenceLen = close[0]!.length
-  const innerEnd = 3 + close.index!
-  const blockEnd = innerEnd + fenceLen
-  const data: Record<string, string> = {}
-  for (const rawLine of head.slice(3, innerEnd).split(/\r?\n/)) {
-    const m = /^([A-Za-z][A-Za-z0-9_-]*)[ \t]*:[ \t]*(.*)$/.exec(rawLine)
-    if (!m) continue
-    let value = m[2]!.trim()
-    if ((value.startsWith('"') && value.endsWith('"') && value.length >= 2) ||
-        (value.startsWith("'") && value.endsWith("'") && value.length >= 2)) {
-      value = value.slice(1, -1)
-    }
-    data[m[1]!.toLowerCase()] = value
-  }
-  return { data, blockStart: 0, blockEnd }
-}
-
 function boolFlag(value: unknown): boolean | null {
   if (value === undefined) return null
   const v = String(value).trim().toLowerCase()
@@ -331,14 +298,14 @@ function scanRoot(root: PhysicalRootWithDir): SkillEntry[] {
       // 读不了就保留占位信息
     }
     const fm = parseFrontmatter(text)
-    const disableModel = boolFlag(fm.data['disable-model-invocation'])
-    const userInvocableRaw = fm.data['user-invocable']
+    const disableModel = boolFlag(fm['disable-model-invocation'])
+    const userInvocableRaw = fm['user-invocable']
     const modelInvocable = disableModel === null ? true : !disableModel
     const userInvocable = userInvocableRaw === undefined ? true : boolFlag(userInvocableRaw) === true
     skills.push({
-      name: typeof fm.data.name === 'string' && fm.data.name !== '' ? fm.data.name : ent.name.replace(/\.md$/i, ''),
-      description: typeof fm.data.description === 'string' ? fm.data.description : '',
-      ...(typeof fm.data.version === 'string' && fm.data.version !== '' ? { version: fm.data.version } : {}),
+      name: typeof fm['name'] === 'string' && fm['name'] !== '' ? fm['name'] : ent.name.replace(/\.md$/i, ''),
+      description: fm['description'] ?? '',
+      ...(typeof fm['version'] === 'string' && fm['version'] !== '' ? { version: fm['version'] } : {}),
       path: entryPath,
       file: skillFile,
       kind,
@@ -973,8 +940,8 @@ export function applySkillPool(ctx: KitCtx, hooks?: SkillPoolHooks): void {
               const after = setDisableFlags(before, body.disabled === true)
               if (after !== before) fs.writeFileSync(file, after, 'utf8')
               const fm = parseFrontmatter(after)
-              const disableModel = boolFlag(fm.data['disable-model-invocation'])
-              const userInvocable = fm.data['user-invocable'] === undefined ? true : boolFlag(fm.data['user-invocable']) === true
+              const disableModel = boolFlag(fm['disable-model-invocation'])
+              const userInvocable = fm['user-invocable'] === undefined ? true : boolFlag(fm['user-invocable']) === true
               jsonOf(res, 200, {
                 ok: true,
                 op: 'disable',

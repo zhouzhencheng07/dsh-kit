@@ -9137,8 +9137,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     // ── dsh-kit/monitor 组件（用量与监视）──
 // dsh-kit/monitor 浏览器半边 —— 用量与监视组件的 client 面。
-// 现收纳：余额与用量芯片（UsageLine）+ 会话监视（429 续跑器 / 死循环打断的
-// MonitorLine 与头部 429 状态条 MonitorBgAction）+ 会话通知（桌面通知/标题闪烁）。
+// 现收纳：余额与用量芯片（UsageLine）+ 会话监视（死循环打断的 MonitorLine）
+// + 会话通知（桌面通知/标题闪烁）。
 //
 // 数据走宿主 /dsh-kit/usage（key 在宿主侧复用模型配置，浏览器拿不到）。状态带
 // 右缘只出**一张**芯片：当前会话选中的模型 provider（modelDirectories 服务按
@@ -9188,7 +9188,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       usageResets: "重置",
       usageNoCard: "模型配置未提供此服务的用量数据",
       usageOfficialPage: "官方用量页",
-      // 会话监视（429 续跑 / 死循环打断）
+      // 会话监视（死循环打断）
       monitorLoopBreakText: "检测到你的输出在重复相同内容，可能陷入了死循环。请立即停止重复，简要说明当前状态，换一种方式继续完成任务。",
       monitorCancel: "取消",
       monitorRepeatErr: "重复输出（死循环征兆）",
@@ -9283,7 +9283,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       kcfgNotifyEnabled: "Session desktop notifications",
       kcfgNotifyEnabledHint: "Desktop-notify on turn completion / compaction / agent questions while the page is in the background.",
       kcfgMonitorEnabled: "Dead-loop guard",
-      kcfgMonitorEnabledHint: "Watch every listed session: auto-resume on 429 rate limits + loop interruption for the current session.",
+      kcfgMonitorEnabledHint: "Stop the turn and nudge the agent when the current session's output repeats itself or runs away.",
       kcfgMonitorMaxLoopBreaks: "Loop-break cap (1–10)",
       kcfgMonitorMaxLoopBreaksHint: "How many times one session may be auto-broken before it only stops without speaking up again.",
       kcfgMonitorStepMaxChars: "Per-step output character cap",
@@ -9464,7 +9464,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const nodesSeqRef = react.useRef(null); // 最新「未中断」assistant 节点 seq
       const nodesTextRef = react.useRef(null); // 该节点的文本（回合内步骤落地即扫一次）
       const stoppingRef = react.useRef(false); // cancel 已发出（防重复触发；话术后复位）
-      // 会话切换：死循环链路状态归零（续跑计数在全局续跑器，随会话独立）
+      // 会话切换：死循环链路状态归零
       react.useEffect(() => {
         loopBreaksRef.current = 0;
         partialTextRef.current = null;
@@ -9570,8 +9570,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         }, 15000);
         return () => clearTimeout(giveUp);
       }, [plan, running, cfg.monitorMaxLoopBreaks]);
-      // 等待期间用户介入（手动发消息使回合运行）→ 放弃本次（仅死循环链路；失败
-      // 续跑的介入放弃在全局续跑器 tick 里）
+      // 等待期间用户介入（手动发消息使回合运行）→ 放弃本次打断话术
       react.useEffect(() => {
         if (plan?.phase === "waiting" && running) setPlan(null);
       }, [running, plan]);
@@ -10017,14 +10016,13 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       );
       for (const ev of events) {
         // 只有回合收尾要落定判定（到点仍在列表且空闲）；提问/批准是既成事实，直接发。
-        // 收尾当年要延迟 2.5s 等 429 续跑器排「继续」，续跑器退役后无需再等
         if (TURN_END_KINDS.has(ev.kind)) notifyCompleteSettled(sessions, ev);
         else notifyDeliver(ev);
       }
     }
 
     /** 压缩完成入口（事件窗口订阅回调）：读窗口快照 → 核心判定 → 逐条投递。
-     *  不走收尾那套延迟判定：压缩是已经落地的事实，没有"待续跑"的歧义 */
+     *  不走收尾那套落定判定：压缩是已经落地的事实，回合状态无关 */
     function notifyCompactionEvaluate(sessions, sessionId) {
       let cfg;
       let list;
@@ -10053,9 +10051,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       for (const ev of events) notifyDeliver(ev);
     }
 
-    /** 收尾通知的落地判定：到点仍在列表里且空闲才算真收尾（已删 2.5s 延迟——
-     *  它当年只为躲开 429 续跑器的 2s tick；续跑器已退役，收尾有 turn/end 的
-     *  reason 作准，kind 由调用方带进来，无需再猜）。 */
+    /** 收尾通知的落地判定：到点仍在列表里且空闲才算真收尾。kind 由调用方按
+     *  turn/end 的 reason 带进来，这里只判「是不是真的停了」。 */
     function notifyCompleteSettled(sessions, ev) {
       let row = null;
       try {
@@ -10163,12 +10160,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         ".dshk-usage-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",
         ".dshk-usage-refresh{appearance:none;border:.5px solid var(--dsw-alias-border-l1);background:0 0;border-radius:999px;padding:2px 10px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);cursor:pointer}",
         ".dshk-usage-refresh:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",
-        // 会话监视条（composer.dock 槽）与头部 429 状态条（session.header.actions 槽）
+        // 会话监视条（composer.dock 槽）
         ".dshk-monitor-line{display:flex;align-items:center;gap:10px;padding:5px 12px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 35%,transparent);border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 8%,transparent);font-size:12px;color:var(--dsw-alias-label-secondary)}",
         ".dshk-monitor-text{flex:1;min-width:0}",
         ".dshk-monitor-cancel{appearance:none;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:none;padding:2px 10px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer}",
         ".dshk-monitor-cancel:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-tertiary)}",
-        // 会话头部 429 状态条：仅当后台会话有待续跑/已封顶时渲染，零常驻
       ].join("\n");
       document.head.appendChild(style);
     }
@@ -10573,8 +10569,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           UsageLine,
         ),
       );
-      // 会话监视条（同槽 order 5，排官方 StatsLine 之后）与头部 429 状态条
-      // （monitorEnabled 门控在组件内，状态条零常驻）
+      // 会话监视条（同槽 order 5，排官方 StatsLine 之后；monitorEnabled 门控在组件内）
       ctx.slots.inject("conversation.composer.dock", () =>
         ctx.slots.register(
           { name: "conversation.composer.dock", id: "dsh-kit-monitor", order: 5 },

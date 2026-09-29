@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Usage & monitoring",
-    "description": "Balance usage chip, 429 auto-resume, loop breaker and session desktop notifications."
+    "description": "Balance usage chip, dead-loop auto-break and session desktop notifications."
   }
 }
