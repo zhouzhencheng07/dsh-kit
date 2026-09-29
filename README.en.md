@@ -161,7 +161,8 @@ browser), and the agent's `web_search` uses the free multi-source chain.
 
 **Host requirement**: dsh ≥ 0.2.0-rc.2 (component rows and per-row config pages,
 the official `shortcuts` service and the official `webTerminals` all landed by
-this version).
+this version; the desktop app of the same version works too — its panel takes
+the WebSocket base the host injects).
 
 ## How it works
 

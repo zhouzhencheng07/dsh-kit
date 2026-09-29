@@ -287,6 +287,14 @@ async function checkApply() {
     "配置页字段表与宿主 schema 同源（" + schemaKeys.length + " 项）",
     schemaKeys.length === 2 && schemaKeys.every((k) => fieldKeys.includes(k)),
   );
+  // 面板 WS 的取址口径：桌面版页面在 dsh-app://app/ 下，location.host 是假主机名，
+  // 真实宿主 origin 走宿主注入的 __DSH_TRANSPORT__.streamBaseUrl（官方客户端同款）
+  check(
+    "面板 WS 走 __DSH_TRANSPORT__.streamBaseUrl（桌面自定义 scheme 下不拼 location.host）",
+    bundleSrc.includes("__DSH_TRANSPORT__?.streamBaseUrl ?? document.baseURI") &&
+      bundleSrc.includes('new WebSocket(kitWsUrl("/dsh-kit/browser"))') &&
+      !bundleSrc.includes("${location.host}"),
+  );
 }
 
 (async () => {

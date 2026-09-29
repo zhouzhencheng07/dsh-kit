@@ -171,6 +171,17 @@ window.__ModuleLoader__.load({
       return Promise.resolve(fallback());
     }
 
+    /** 宿主 WebSocket 地址：桌面版页面跑在 dsh-app://app/ 自定义 scheme 上，
+        location.host 是假主机名（ws://app/… 解析不到宿主），真实宿主 origin 由
+        宿主注入 __DSH_TRANSPORT__.streamBaseUrl——取法与官方客户端同款，缺失回落
+        document.baseURI。失效条件：宿主改注入键名或不再注入（桌面启动即无流）。 */
+    function kitWsUrl(pathname) {
+      const base = globalThis.__DSH_TRANSPORT__?.streamBaseUrl ?? document.baseURI;
+      const url = new URL(pathname, base);
+      url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+      return url.href;
+    }
+
     /** GET /dsh-kit/*，按 validate 校验回包形状（形状不符 = 失败，不当半个成功）；
         （如写文件的 409 冲突） */
     async function kitGetJson(url, signal, validate) {
@@ -728,6 +739,7 @@ window.__ModuleLoader__.load({
     exports.attachShortcutCatalog = attachShortcutCatalog;
     exports.writeClipboard = writeClipboard;
     exports.kitGetJson = kitGetJson;
+    exports.kitWsUrl = kitWsUrl;
     exports.kitPostJson = kitPostJson;
     exports.kitJson = kitJson;
     exports.resolveZh = resolveZh;
@@ -809,7 +821,7 @@ window.__ModuleLoader__.load({
     // ─────────── 跨槽开合状态与操作（实现在共享底座 kitBase，单例共享）───
     const {
       setKitUi, subscribeKitUi, useKitUi, getKitUi,
-      KitTip, attachShortcutCatalog,
+      KitTip, attachShortcutCatalog, kitWsUrl,
       PREVIEW_MAX, openFileTab, activateFileTab, closeFileTab,
       baseName, pageBasename, openVaultPageTab, activateVaultPage, closeVaultPageTab,
       closeFeatureTab, openFeatureTab, RB_FEATURES,
@@ -5885,7 +5897,9 @@ ellipsis，窄列只截字不破版 */
                       if (/^(https?:|data:)/i.test(src)) return src;
                       const pageDir = () => path.split(/[\\/]/).slice(0, -1).join("\\");
                       const abs = /^attachments\//i.test(src) ? `${root}/${src}` : `${pageDir()}/${src}`;
-                      return `http://${location.host}/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
+                      // 相对地址（不带 origin）：桌面版页面在 dsh-app://app/ 下，图片走
+                      // 宿主的应用协议转发才带得上鉴权；绝对 http://<host> 在桌面没有 cookie
+                      return `/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
                     },
                     // 相对/站内链接解析到库内 md 页 → 按页打开（库外或非 md 不接管，
                     // 别把只读阅读的语义混进工作区文件）
@@ -7108,6 +7122,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           labelKey: "treeLabel",
           aliases: ["file tree", "workspace files", "dsh-kit"],
           code: "Comma",
+          // web 档不能用 Mod+Alt+,：宿主 0.2.0 起「打开设置」在 web 也是 Mod+Alt+,，
+          // shortcuts.register 跨全部档位查重，同键位直接抛错（会带走本组件两条命令）
+          webModifiers: ["primary", "shift"],
           enabled: (cfg) => cfg.fileTreeEnabled,
           offKey: "scTreeOff",
           // 与入口按钮同语义：单槽互斥，收起态先展开侧栏
@@ -7121,6 +7138,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           labelKey: "scTitle",
           aliases: ["source control", "git", "dsh-kit"],
           code: "Period",
+          webModifiers: ["primary", "alt"],
           enabled: (cfg) => cfg.sourceControlEnabled,
           offKey: "scScmOff",
           run: () => {
@@ -7129,9 +7147,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           },
         },
       ];
-      const defaultsOf = (code) => ({
-        "web:macos": { code, modifiers: ["primary", "alt"] },
-        "web:windows": { code, modifiers: ["primary", "alt"] },
+      const defaultsOf = (code, webModifiers) => ({
+        "web:macos": { code, modifiers: webModifiers },
+        "web:windows": { code, modifiers: webModifiers },
         "desktop:macos": { code, modifiers: ["primary", "alt"] },
         "desktop:windows": { code, modifiers: ["primary", "alt"] },
         "desktop:linux": { code, modifiers: ["primary", "alt"] },
@@ -7141,7 +7159,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           id: cmd.id,
           label: () => t(cmd.labelKey),
           aliases: cmd.aliases,
-          defaults: defaultsOf(cmd.code),
+          defaults: defaultsOf(cmd.code, cmd.webModifiers),
           regions: ["page", "editable", "terminal"],
           modals: [],
           resolve: () => {
@@ -9171,26 +9189,27 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       usageNoCard: "模型配置未提供此服务的用量数据",
       usageOfficialPage: "官方用量页",
       // 会话监视（429 续跑 / 死循环打断）
-      monitorContinueText: "继续",
       monitorLoopBreakText: "检测到你的输出在重复相同内容，可能陷入了死循环。请立即停止重复，简要说明当前状态，换一种方式继续完成任务。",
       monitorCancel: "取消",
-      monitorDismiss: "忽略",
       monitorRepeatErr: "重复输出（死循环征兆）",
-      monitorErr429: "请求被限流（429）",
       monitorStopping: "监视：检测到重复输出（死循环征兆），正在停止当前回合…",
-      monitorCapped: "监视：已连续自动继续 {max} 次，暂停自动续跑（重复输出仍会中止）",
       monitorAutoIn: "监视：检测到{err}，{sec} 秒后自动继续（第 {n}/{max} 次）",
-      monitorBgTitle: "429 自动续跑",
-      monitorBgItem: "{title}：{sec} 秒后自动继续（第 {n}/{max} 次）",
-      monitorBgCapped: "{title}：已连续自动继续 {max} 次，暂停（正常完成一轮后恢复）",
       // 会话通知
       notifyCompleteTitle: "{title} · 回合完成",
       notifyCompleteBody: "点击回到该会话",
+      notifyErrorTitle: "{title} · 回合出错",
+      notifyErrorBody: "这一轮没能正常做完，点开看看",
+      notifyAbortedTitle: "{title} · 回合已中止",
+      notifyAbortedBody: "这一轮被停下了",
+      notifyBlockedTitle: "{title} · 回合被卡住",
+      notifyBlockedBody: "这一轮没能推进下去，点开看看",
+      notifyMaxTokensTitle: "{title} · 撞上输出上限",
+      notifyMaxTokensBody: "这一轮因输出 token 触顶结束",
+      notifyLoopBreakTitle: "{title} · 检测到死循环已停止",
+      notifyLoopBreakBody: "模型输出陷入重复，已自动中止该轮",
       notifyCompactTitle: "{title} · 上下文压缩完成",
       notifyCompactBody: "上下文已压缩完成",
       notifyCompactBodyTokens: "已压缩约 {tokens} tokens 的历史",
-      notifyCappedTitle: "{title} · 自动续跑已暂停",
-      notifyCappedBody: "连续限流失败，已停止自动重试，点开看看",
       notifyQuestionTitle: "{title} · 等你回答",
       notifyQuestionBody: "agent 提了一个问题",
       notifyApprovalTitle: "{title} · 等你批准",
@@ -9205,12 +9224,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       kcfgGroupMonitor: "会话监视与通知",
       kcfgNotifyEnabled: "会话桌面通知",
       kcfgNotifyEnabledHint: "页面不在前台时，回合收尾/压缩完成/agent 提问弹桌面通知。",
-      kcfgMonitorEnabled: "会话监视（429 续跑 / 死循环打断）",
-      kcfgMonitorEnabledHint: "监视列表内所有会话：429 限流自动续跑 + 当前会话死循环打断。",
-      kcfgMonitorWaitMs: "429 等待毫秒（5000–600000）",
-      kcfgMonitorWaitMsHint: "429 限流后等待多少毫秒再自动续跑。",
-      kcfgMonitorMaxAuto: "429 连续续跑上限（1–10）",
-      kcfgMonitorMaxAutoHint: "一轮正常收尾即清零。",
+      kcfgMonitorEnabled: "死循环熔断",
+      kcfgMonitorEnabledHint: "当前会话的输出若陷入重复或失控（复读、绕圈、输出过长），自动停止该回合并提示。",
+      kcfgMonitorMaxLoopBreaks: "循环打断上限（1–10）",
+      kcfgMonitorMaxLoopBreaksHint: "同一会话最多自动打断几次，达上限后只停止不再发话术。",
+      kcfgMonitorStepMaxChars: "单步输出字符上限",
+      kcfgMonitorStepMaxCharsHint: "一轮里单个步骤的输出超过这个字符数即判定失控并停止。",
       kcfgMonitorRepeatThreshold: "死循环判定重复次数（2–10）",
       kcfgMonitorRepeatThresholdHint: "流式输出尾部自重叠达到该次数即停止并发打断话术。",
     };
@@ -9230,25 +9249,26 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       usageResets: "resets",
       usageNoCard: "No usage data for this service in the model config",
       usageOfficialPage: "Usage dashboard",
-      monitorContinueText: "Continue",
       monitorLoopBreakText: "Your output appears to be repeating itself, which suggests an infinite loop. Stop repeating immediately, briefly state the current status, and continue the task in a different way.",
       monitorCancel: "Cancel",
-      monitorDismiss: "Dismiss",
       monitorRepeatErr: "repeated output (dead-loop sign)",
-      monitorErr429: "rate limit (429)",
       monitorStopping: "Monitor: repeated output detected (dead-loop sign), stopping the current turn…",
-      monitorCapped: "Monitor: auto-continued {max} times in a row, pausing auto-continue (repeats are still stopped)",
       monitorAutoIn: "Monitor: {err}; auto-continue in {sec}s (attempt {n}/{max})",
-      monitorBgTitle: "429 auto-continue",
-      monitorBgItem: "{title}: auto-continue in {sec}s (attempt {n}/{max})",
-      monitorBgCapped: "{title}: paused after {max} consecutive continues (resumes after one clean round)",
       notifyCompleteTitle: "{title} · turn finished",
       notifyCompleteBody: "Click to return to this session",
+      notifyErrorTitle: "{title} · turn errored",
+      notifyErrorBody: "This turn could not finish — open it to take a look",
+      notifyAbortedTitle: "{title} · turn stopped",
+      notifyAbortedBody: "This turn was stopped",
+      notifyBlockedTitle: "{title} · turn blocked",
+      notifyBlockedBody: "This turn could not make progress — open it to take a look",
+      notifyMaxTokensTitle: "{title} · output limit reached",
+      notifyMaxTokensBody: "This turn ended at the output token ceiling",
+      notifyLoopBreakTitle: "{title} · dead loop stopped",
+      notifyLoopBreakBody: "The model output started repeating itself, so that turn was stopped",
       notifyCompactTitle: "{title} · context compacted",
       notifyCompactBody: "Context compaction finished",
       notifyCompactBodyTokens: "Compacted ~{tokens} tokens of history",
-      notifyCappedTitle: "{title} · auto-continue paused",
-      notifyCappedBody: "Repeated rate-limit failures stopped the auto-retry — open it to take a look",
       notifyQuestionTitle: "{title} · waiting for your answer",
       notifyQuestionBody: "The agent asked a question",
       notifyApprovalTitle: "{title} · waiting for approval",
@@ -9262,12 +9282,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       kcfgGroupMonitor: "Session monitor & notifications",
       kcfgNotifyEnabled: "Session desktop notifications",
       kcfgNotifyEnabledHint: "Desktop-notify on turn completion / compaction / agent questions while the page is in the background.",
-      kcfgMonitorEnabled: "Session monitor (429 resume / loop interrupt)",
+      kcfgMonitorEnabled: "Dead-loop guard",
       kcfgMonitorEnabledHint: "Watch every listed session: auto-resume on 429 rate limits + loop interruption for the current session.",
-      kcfgMonitorWaitMs: "429 wait in ms (5000–600000)",
-      kcfgMonitorWaitMsHint: "How long to wait after a 429 before auto-resuming.",
-      kcfgMonitorMaxAuto: "429 consecutive resume cap (1–10)",
-      kcfgMonitorMaxAutoHint: "One clean round resets the counter.",
+      kcfgMonitorMaxLoopBreaks: "Loop-break cap (1–10)",
+      kcfgMonitorMaxLoopBreaksHint: "How many times one session may be auto-broken before it only stops without speaking up again.",
+      kcfgMonitorStepMaxChars: "Per-step output character cap",
+      kcfgMonitorStepMaxCharsHint: "A single step producing more than this many characters is treated as runaway and stopped.",
       kcfgMonitorRepeatThreshold: "Loop detection repeat count (2–10)",
       kcfgMonitorRepeatThresholdHint: "Stop the turn and send the nudge once streamed output self-overlaps this many times.",
     };
@@ -9280,8 +9300,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const M_CFG_DEFAULTS = {
       usageEnabled: true,
       monitorEnabled: true,
-      monitorWaitMs: 15000,
-      monitorMaxAuto: 5,
+      monitorMaxLoopBreaks: 3,
+      monitorStepMaxChars: 60000,
       monitorRepeatThreshold: 3,
       notifyEnabled: true,
     };
@@ -9316,14 +9336,14 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const v = snap.value;
       out.usageEnabled = v.usageEnabled === true;
       out.monitorEnabled = v.monitorEnabled !== false;
-      out.monitorWaitMs =
-        Number.isInteger(v.monitorWaitMs) && v.monitorWaitMs >= 5000 && v.monitorWaitMs <= 600000
-          ? v.monitorWaitMs
-          : M_CFG_DEFAULTS.monitorWaitMs;
-      out.monitorMaxAuto =
-        Number.isInteger(v.monitorMaxAuto) && v.monitorMaxAuto >= 1 && v.monitorMaxAuto <= 10
-          ? v.monitorMaxAuto
-          : M_CFG_DEFAULTS.monitorMaxAuto;
+      out.monitorMaxLoopBreaks =
+        Number.isInteger(v.monitorMaxLoopBreaks) && v.monitorMaxLoopBreaks >= 1 && v.monitorMaxLoopBreaks <= 10
+          ? v.monitorMaxLoopBreaks
+          : M_CFG_DEFAULTS.monitorMaxLoopBreaks;
+      out.monitorStepMaxChars =
+        Number.isInteger(v.monitorStepMaxChars) && v.monitorStepMaxChars >= 20000 && v.monitorStepMaxChars <= 400000
+          ? v.monitorStepMaxChars
+          : M_CFG_DEFAULTS.monitorStepMaxChars;
       out.monitorRepeatThreshold =
         Number.isInteger(v.monitorRepeatThreshold) && v.monitorRepeatThreshold >= 2 && v.monitorRepeatThreshold <= 10
           ? v.monitorRepeatThreshold
@@ -9341,326 +9361,27 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // 主视图会话行判定随会话行共享收进 dock
     const mainRowOf = dock.mainRowOf;
 
-    // ─────────── 会话监视：429 续跑器（所有会话）+ 死循环停止（仅当前会话）───────────
-    // 服务捕获座（apply 时赋值）：tick / 死循环停止 / 通知都要经它取 sessions 等
-    let slotsCtx = null;
-
-    // ─────────── 全局 429 续跑器（所有会话）+ 死循环停止（仅当前会话）───────────
-    // 续跑是单一全局机制（monitorTick 轮询）：监视会话列表里【所有】会话——人
-    // 发起任务后离开，任何会话被 429 打断都自动续到任务完成，不要求该会话页开着。
-    // 数据源全是官方面：
-    //   枚举+running ← sessions.list 快照（宿主经 api-session/status 推送，与
-    //                  会话页是否打开无关）；
-    //   失败判定    ← binding(id).session 快照 lastAgentError——agent-loop 对每次
-    //                 回合失败发 agent/error → 网关 api-session/error 广播 → 客户端
-    //                 镜像置位，文本含原始错误（如 `429: {"message":"inference
-    //                 exceeds tpm/rpm limit",...}`）；binding() 对列表内会话惰性
-    //                 物化镜像，事件窗口（open）完全不参与——错误走控制流广播。
-    //   归档过滤  ← workspaces.list 快照 archivedSessionIds（侧栏同款归档集）。
-    //                 归档不从 sessions.list 移除会话（宿主只在 UI 展示层过滤），
-    //                 监视器须自行排除：不监视不续跑、待发射计划作废、状态回收，
-    //                 否则归档会话残留的 429 标记会被静默续跑。
-    //   续跑动作    ← binding.session.prompt([{"继续"}],"queue")（composer 同款
-    //                 发送通道）；prompt 第一行同步清空 lastAgentError，同一条
-    //                 失败天然不会重复触发。
-    // 判定：空闲（list running=false）+ 镜像 lastAgentError 匹配限流特征 + 这次收尾
-    // 就是它造成的（新鲜）+ 未处置过（handledErr 记账去重）。只认措辞不认
-    // body code——sensenova 的 429 形态不定（insufficient_quota/429001/
-    // quota_exceeded_error 都见过，前者会被宿主误分类成 QUOTA 而不内部重试），
-    // 稳定的只有 "429: " 前缀（宿主 formatProviderError 拼的 HTTP 状态）和限流
-    // 措辞本身。不匹配的失败（AUTH/上下文超限等终态类）不自动续。
-    // 「新鲜」是这套判定的命门：镜像只在 prompt() 里清（宿主 client.js），回合正常
-    // 收尾、被用户手动停止都不清——镜像里躺着的 429 完全可能是上一轮的旧账。只看
-    // "空闲 + 有 429 文本"就续跑，会把已经做完的任务、被手动停下的任务再续一遍
-    // （实测踩过）。判据落在观察时序上：错误文本的首次出现时刻必须在本段空闲起点前
-    // MONITOR_ERR_WINDOW_MS 内（= 回合刚因它落地）；在镜像里躺过这个窗口的旧错误
-    // 一律不触发。页面打开时镜像里已有的错误按陈旧播种（errAt=0），刷新页面不会把
-    // 早已结束的任务补续一遍——代价是刷新后不再自动接续旧失败。
-    // 另有一道显式闸门：会话被「停止」过（官方停按钮与本插件的死循环打断都调
-    // session.cancel，见 monitorWrapCancel）之后落地的失败沿不续跑——429 与 abort
-    // 抢同一个回合时会留下一条看着很新鲜的失败沿，新鲜度判据挡不住它。
-    // 计数：每会话独立，继续后一轮正常收尾（lastAgentError 为 null）
-    // 即清零；连续续跑达 monitorMaxAuto 暂停（capped）。等待期到点时回合又跑起来
-    // （用户手动介入）即放弃本次。
-    // 约束：浏览器页必须开着（浏览器端方案的天性）；页面关着的兜底是宿主
-    // provider 级 retryPolicy（retryableCodes），与本监视器无关。
-    // 死循环停止（MonitorLine，composer.dock）：仅当前打开的会话，回合运行中每
-    // 1s 扫描流文本尾部自重叠 ≥monitorRepeatThreshold 次 → sessions.cancel() 停
-    // 止当前回合，停止完成后发循环打断话术——检测→停→话术一条链，独立于续跑器。
-    const MONITOR_TICK_MS = 2000; // 轮询周期：429 是分钟级窗口，2s 跟踪绰绰有余
-    const MONITOR_RATE_LIMIT_RE = /\b429\b|rate.?limit|tpm\/rpm/i;
-    const MONITOR_ERR_WINDOW_MS = 6000; // 「失败即收尾」窗口（3 个 tick）：错误首见时刻早于
-    // 本段空闲起点这么多，说明回合不是因它结束的（旧账），不续跑
-    const MONITOR_ABORT_WINDOW_MS = 6000; // 「刚被停止」窗口：停止后落地的失败沿不续跑
-    const MONITOR_CANCEL_MARK = "__dshkMonitorCancel"; // cancel 包装标记（防重复包装）
+    // ─────────── 死循环打断（仅当前会话）───────────
+    // 回合运行中每 1s 扫描流文本尾部自重叠 ≥monitorRepeatThreshold 次 →
+    // sessions.cancel() 停止当前回合，停止完成后发循环打断话术。
     const MONITOR_SCAN_MS = 1000; // 扫描周期：检测延迟 1-2s；真实死循环以分钟计，绰绰有余
     const MONITOR_MIN_BLOCK = 8; // 重复块最短长度：放过短分隔符/标点（--- 、换行噪声）
     const MONITOR_MAX_BLOCK = 128; // 重复块最长扫描长度：兜住长句循环，扫描成本封顶
+    const MONITOR_CYCLE_WINDOW = 4000; // 周期检测的尾部窗口：够放下几个循环单元
+    const MONITOR_CYCLE_MIN = 12; // 周期下限：放过「好/是」这类短词偶然重复
+    const MONITOR_CYCLE_MAX = 400; // 周期上限：长句绕圈也抓，扫描成本 O(窗口×周期)
+    const MONITOR_STEP_MAX_CHARS = 60000; // 单步输出字符兜底：官方单请求输出上限
+    // 256k token 量级，字符远小于它，重复若还没被前两条抓到，靠这条兜住
 
-    /** 续跑器活动状态快照（仅待续跑 / capped 会话上屏）：snapshot.items ×
-     *  {id,title,phase,fireAt,continues,max}。MonitorLine（当前会话条）与工作台
-     *  状态块共同订阅。快照整体换身（不可变），uSES 靠身份对比触发重渲染。 */
-    const monitorStore = {
-      snapshot: { items: [] },
-      __sig: "[]",
-      subs: new Set(),
-      emit() {
-        for (const s of this.subs) s();
-      },
-      subscribe(s) {
-        this.subs.add(s);
-        return () => this.subs.delete(s);
-      },
-    };
-    /** 每会话运行态（只在 tick 内读写）：running 上次已知位、continues 连续续跑
-     *  计数、capped 暂停标记、plan 待发射续跑、handledErr 已处置的错误文本（去重
-     *  记账）、materialized 镜像是否已物化、title/max 失败时缓存的展示字段；
-     *  errText/errAt = 镜像错误的观察记账（当前文本 + 首次出现时刻，0 表示陈旧或
-     *  首见播种），idleSince = 本段空闲的观察起点（0 = 正在跑），primed = 是否已过
-     *  首见播种 */
-    const monitorSessions = new Map();
-    /** 各会话最近一次「被停止」的时刻（sessionId -> 毫秒）。停止是用户明确的
-     *  "别继续"：停止瞬间若正好有一条失败沿落地（429 与 abort 抢同一个回合是
-     *  有的），按新鲜度判定会把它当成真失败又续一轮——这张表把那条沿挡掉 */
-    const monitorAborts = new Map();
-
-    /** 给会话实例的 cancel 包一层记账：官方 UI 的「停止」按钮与本插件的死循环
-     *  打断走的都是它，是浏览器端唯一能观察到"用户刚说了停"的地方。包不上
-     *  （方法缺失/对象冻结）就退化为只靠新鲜度判定，不影响续跑本身。
-     *  每个 tick 调一次：标记在实例上，重复调用是空操作；实例被宿主换掉时能重包。 */
-    function monitorWrapCancel(sessions, id) {
-      let sess = null;
-      try {
-        const b = sessions.binding(id);
-        sess = b ? b.session : null;
-      } catch {
-        return; // 会话刚移除 / 服务异常
-      }
-      if (!sess || typeof sess.cancel !== "function" || sess[MONITOR_CANCEL_MARK]) return;
-      const orig = sess.cancel;
-      try {
-        sess[MONITOR_CANCEL_MARK] = true;
-        sess.cancel = function (...args) {
-          monitorAborts.set(id, Date.now());
-          return orig.apply(this, args);
-        };
-      } catch {
-        /* 只读/冻结的实例：放弃记账 */
-      }
-    }
-
-    /** 取会话镜像快照；顺带完成惰性物化（binding 对列表内会话恒成功）。异常按
-     *  无镜像处理——调用方各自兜底。 */
-    function monitorSnapOf(sessions, id, st) {
-      try {
-        const b = sessions.binding(id);
-        if (b) {
-          st.materialized = true;
-          return b.session.getSnapshot();
-        }
-      } catch {
-        /* 会话刚移除 / 服务异常：按无镜像处理 */
-      }
-      return null;
-    }
-
-    /** 续跑器主循环入口：读真实依赖（slots/settings）后进核心 */
-    function monitorTick() {
-      if (!slotsCtx) return;
-      let cfg;
-      try {
-        cfg = cfgFromSnapshot(getCfgSnapshot());
-      } catch {
-        return;
-      }
-      if (!cfg.monitorEnabled) return;
-      let sessions;
-      try {
-        sessions = slotsCtx.get("sessions");
-      } catch {
-        return;
-      }
-      // 归档集合与 sessions 同源于 slots 的 workspaces 服务；读失败按空集退回
-      // 全员监视（服务缺位只可能出现在基线之外的宿主，静默全员比误伤全员安全）
-      let archived = new Set();
-      try {
-        const ids = slotsCtx.get("workspaces").list.getSnapshot().archivedSessionIds;
-        if (Array.isArray(ids)) archived = new Set(ids);
-      } catch {
-        /* workspaces 服务缺位 / 形状不符：按无归档处理 */
-      }
-      monitorTickCore(sessions, cfg, Date.now(), archived);
-    }
-
-    /** 续跑器核心（依赖注入，render-check 直测）：单次遍历 O(会话数)，读的全是
-     *  内存快照，无网络调用（prompt 仅在发射瞬间一次）。
-     *  触发采用「错误标记驱动」而非 running 沿：list 的 running 推送（api-session/
-     *  status）与错误广播（api-session/error）到达顺序无保证，沿时刻读镜像可能
-     *  还没置位（实测踩过）。改以镜像 lastAgentError 的「新文本」为触发——以
-     *  handledErr 记账去重，免疫到达顺序；文本级去重也天然放行续跑后的再次失败
-     *  （发射即清 handledErr）。
-     *  但「新」必须叠上「这次收尾就是它造成的」：镜像不会被回合收尾清掉，新文本
-     *  也可能是回合中途的旧账（回合后来成功收尾 / 被用户停下）。判据是同一次观察里
-     *  的时序——errAt 必须落在本段空闲起点前 MONITOR_ERR_WINDOW_MS 内，见模块头。 */
-    function monitorTickCore(sessions, cfg, now, archived = new Set()) {
-      if (!sessions || !sessions.list || typeof sessions.binding !== "function") return;
-      let list;
-      try {
-        list = sessions.list.getSnapshot();
-      } catch {
-        return;
-      }
-      for (const id of list.ids ?? []) {
-        const summary = list.byId[id];
-        if (!summary) continue;
-        if (archived.has(id)) continue; // 归档会话：不监视不续跑，状态在尾部回收
-        let st = monitorSessions.get(id);
-        if (!st) {
-          st = {
-            running: false,
-            continues: 0,
-            capped: false,
-            plan: null,
-            materialized: false,
-            handledErr: null,
-            title: null,
-            max: 0,
-            errText: null,
-            errAt: 0,
-            idleSince: 0,
-            primed: false,
-          };
-          monitorSessions.set(id, st);
-        }
-        const snap = monitorSnapOf(sessions, id, st);
-        const lastErr = snap?.lastAgentError ?? null;
-        monitorWrapCancel(sessions, id); // 停止入口记账（用户点「停止」= 别继续）
-        // 错误文本的观察记账：首见只播种（页面打开时镜像里已躺着的错误算陈旧），之后
-        // 只在文本变化时刷新出现时刻——停在镜像里不改写，判据才不会把旧错误当新失败
-        if (!st.primed) {
-          st.primed = true;
-          st.errText = lastErr;
-        } else if (lastErr !== st.errText) {
-          st.errText = lastErr;
-          st.errAt = lastErr === null ? 0 : now;
-        }
-        if (summary.running) {
-          // 运行中：物化镜像（之后失败才有人接 lastAgentError）；等待期回合跑起来
-          // = 用户介入，放弃本次 plan；上一条失败的记账一并清除——新回合的失败是
-          // 新失败，即使文本相同也要重新触发。停止记账也到此用掉（回合又跑起来了）
-          if (st.plan) st.plan = null;
-          st.handledErr = null;
-          st.running = true;
-          st.idleSince = 0; // 本段空闲到此为止
-          monitorAborts.delete(id);
-          continue;
-        }
-        st.running = false;
-        if (st.idleSince === 0) st.idleSince = now; // 本段空闲的观察起点
-        const aborted = (monitorAborts.get(id) ?? 0) >= st.idleSince - MONITOR_ABORT_WINDOW_MS;
-        const fresh = !aborted && st.errAt > 0 && st.errAt >= st.idleSince - MONITOR_ERR_WINDOW_MS;
-        if (lastErr && MONITOR_RATE_LIMIT_RE.test(lastErr)) {
-          if (!fresh) {
-            // 错误早于本段空闲、或这一段空闲是被「停止」打开的：回合是别的原因收的
-            // 尾（正常做完 / 被手动停止），镜像里是旧账——不续跑，也不进 capped
-            //（capped 是要人处理的真终态，不该被旧账点亮）
-          } else if (st.handledErr === lastErr) {
-            // 已处置过的同一条失败：不重排（取消后静默，直到正常收尾）
-          } else if (!st.capped && st.continues < cfg.monitorMaxAuto) {
-            st.handledErr = lastErr;
-            st.title = summary.displayTitle;
-            st.max = cfg.monitorMaxAuto;
-            st.plan = { fireAt: now + cfg.monitorWaitMs };
-          } else if (!st.capped) {
-            st.handledErr = lastErr;
-            st.title = summary.displayTitle;
-            st.max = cfg.monitorMaxAuto;
-            st.capped = true;
-          }
-        } else if (!lastErr) {
-          // 空闲且无错误标记：一次正常收尾 → 连续计数清零、capped 解除（继续成功
-          // 即清零）。幂等，重复 tick 无害。
-          if (st.continues !== 0 || st.capped || st.handledErr !== null) {
-            st.continues = 0;
-            st.capped = false;
-            st.handledErr = null;
-          }
-        }
-        // plan 到点发射：镜像仍在失败态且没人在跑才发；prompt 同步清 lastAgentError
-        // 与 handledErr——续跑后再失败（同文本新失败）可再次触发
-        if (st.plan && now >= st.plan.fireAt) {
-          st.plan = null;
-          const snapAtFire = monitorSnapOf(sessions, id, st);
-          if (snapAtFire && !snapAtFire.running && snapAtFire.lastAgentError && MONITOR_RATE_LIMIT_RE.test(snapAtFire.lastAgentError)) {
-            st.continues += 1;
-            st.handledErr = null;
-            try {
-              const b = sessions.binding(id);
-              void b.session.prompt([{ type: "text", text: tf("monitorContinueText") }], "queue").catch(() => {});
-              // prompt 同步清镜像 lastAgentError：本插件据此把观察记账一并作废，
-              // 续跑后的失败哪怕文本一模一样，也会被认成"新出现"的一次失败。
-              // 放在 prompt 之后：同步抛错就保留旧记账，不反复重排
-              st.errText = null;
-              st.errAt = 0;
-              st.idleSince = 0;
-            } catch {
-              /* 发送通道异常：放弃本次（错误标记仍在但已不算新鲜，不会反复重排） */
-            }
-          }
-        }
-      }
-      // 已移除/已归档会话的状态回收（归档时若有待发射 plan 一并作废）
-      for (const id of [...monitorSessions.keys()]) {
-        if (!list.byId[id] || archived.has(id)) {
-          monitorSessions.delete(id);
-          monitorAborts.delete(id);
-        }
-      }
-      monitorRebuildItems();
-    }
-
-    /** 快照重建（tick 与取消按钮共用）：内容不变不 emit（轮询 2s 一次，序列化
-     *  对比成本可忽略）。条目字段取自会话态缓存（title/max 在失败沿时记录），
-     *  不依赖 list/slots——取消路径随时可调。 */
-    function monitorRebuildItems() {
-      const items = [];
-      for (const [id, st] of monitorSessions) {
-        if (!st.plan && !st.capped) continue;
-        items.push({
-          id,
-          title: st.title ?? id,
-          phase: st.plan ? "waiting" : "capped",
-          fireAt: st.plan ? st.plan.fireAt : 0,
-          continues: st.continues,
-          max: st.max ?? 10,
-        });
-      }
-      items.sort((a, b) => a.id.localeCompare(b.id));
-      const next = JSON.stringify(items);
-      if (next !== monitorStore.__sig) {
-        monitorStore.__sig = next;
-        monitorStore.snapshot = { items };
-        monitorStore.emit();
-      }
-    }
-
-    /** UI 取消/忽略按钮：待续跑 = 丢弃待发射 plan（失败沿已消费，不会重排）；
-     *  capped = 清标记 + 连续计数归零（handledErr 保留——同一条失败保持静默，
-     *  手动重跑或新失败后才重新给自动续跑额度） */
-    function monitorCancelPlan(id) {
-      const st = monitorSessions.get(id);
-      if (!st) return;
-      if (st.plan) st.plan = null;
-      else if (st.capped) {
-        st.capped = false;
-        st.continues = 0;
-      } else return;
-      monitorRebuildItems(); // 立即重建快照并 emit
-    }
 
     /** 尾部自重叠扫描：返回累计文本末尾连续重复块的最大次数（块长在
      *  MONITOR_MIN_BLOCK..MAX_BLOCK 内穷举对齐，与流式分块方式无关；文本不足
      *  两个最短块时返回 1）。死循环判定 = 返回值 ≥ monitorRepeatThreshold。 */
+    /**
+     * 尾部自重叠扫描：返回累计文本末尾连续重复块的最大次数（块长在
+     * MONITOR_MIN_BLOCK..MAX_BLOCK 内穷举对齐，与流式分块方式无关；文本不足
+     * 两个最短块时返回 1）。死循环判定 = 返回值 ≥ monitorRepeatThreshold。
+     */
     function monitorTailRepeatCount(text) {
       const len = text.length;
       let best = 1;
@@ -9671,6 +9392,54 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         if (m > best) best = m;
       }
       return best;
+    }
+
+    /**
+     * 周期性重复检测（跨块边界）：模型陷入复读时的真实形态往往不是「末尾对齐的
+     * 整块重复」，而是「一小段话绕着圈说」——重复单元的边界随流式切片漂移，
+     * monitorTailRepeatCount 只能抓到恰好对齐的那些。这里取尾部窗口，对窗口内
+     * 出现的每一种周期 p，检查 p 位移上连续相同的位置是否达 2p，即至少连走两个
+     * 完整周期；与分块方式无关，也不依赖重复起点对齐。返回命中的最大周期（0=无）。
+     * 阈值 2p 而非 p：只复述一遍刚说过的内容是正常输出，判成循环会误伤。
+     * 与 src/monitor/loop-guard.ts 同款（那里是真源，此处手抄，零构建）。
+     */
+    function monitorCyclePeriod(text) {
+      const tail = text.length > MONITOR_CYCLE_WINDOW ? text.slice(-MONITOR_CYCLE_WINDOW) : text;
+      const n = tail.length;
+      let best = 0;
+      for (let p = MONITOR_CYCLE_MIN; p * 2 <= n && p <= MONITOR_CYCLE_MAX; p++) {
+        let run = 0;
+        for (let i = p; i < n; i++) {
+          run = tail[i] === tail[i - p] ? run + 1 : 0;
+          if (run >= p * 2) {
+            if (p > best) best = p;
+            break;
+          }
+        }
+      }
+      return best;
+    }
+
+    /**
+     * 死循环判定的总入口：把各判据合成一个布尔。与 src/monitor/loop-guard.ts
+     * 同款（那里是真源，此处手抄——零构建的 bundle 没法 import）。
+     * 宿主侧 loop-breaker 已做同样判据且覆盖全部会话；本函数只作**当前会话的
+     * 补充**：它看的是整段已落定/流式文本，能兜住跨 attempt 的复读（宿主侧按
+     * attempt 重置），代价是只管当前打开的会话。
+     * ① 尾部整块重复（monitorTailRepeatCount ≥ 阈值）——逐字复读整段；
+     * ② 周期性复读（monitorCyclePeriod 命中）——绕圈说同一件事，边界漂移也抓得到
+     *    （官方讨论 #2848 描述的正是这种：跑十分钟、只有手动打断才停）；
+     * ③ 单步输出过长（长度超 MONITOR_STEP_MAX_CHARS）——复读到长度阈值必被兜住，
+     *    也是「无任何重复特征但就是不停吐字」的退化形态的唯一抓手。
+     * 纯函数，render-check 直测。
+     * @param text 本源累计文本（text+reasoning 拼接）
+     * @returns true 表示判为死循环
+     */
+    function monitorLooksLooped(text, threshold, maxChars) {
+      if (typeof text !== "string" || text === "") return false;
+      if (text.length > (maxChars ?? MONITOR_STEP_MAX_CHARS)) return true;
+      if (monitorTailRepeatCount(text) >= threshold) return true;
+      return monitorCyclePeriod(text) > 0;
     }
 
     function MonitorLine(props) {
@@ -9684,15 +9453,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const partial = typeof useChat === "function" ? useChat((s) => s.legacy.partial) : null;
       const running = typeof useSession === "function" ? useSession((s) => s.running) : false;
       const draft = typeof useInput === "function" ? useInput((s) => s.draft) : "";
-      // 全局续跑器对本会话的活动状态（waiting/capped）；null = 无。subscribe 箭头
-      // 包装保 this（方法解引用传入 uSES 会丢 this 导致订阅崩溃、条永不渲染）
-      const watcherSnap = react.useSyncExternalStore(
-        (s) => monitorStore.subscribe(s),
-        () => monitorStore.snapshot,
-      );
-      const watcherItem = watcherSnap.items.find((x) => x.id === sessionId) ?? null;
-      // plan（本地态，仅死循环链路）：null | {phase:"stopping"} | {phase:"waiting",fireAt,reason:"repeat"}；
-      // 失败续跑的 waiting/capped 一律来自 watcherItem，本地不再管
+      // plan（本地态，死循环链路）：null | {phase:"stopping"} | {phase:"waiting",fireAt,reason:"repeat"}
       const [plan, setPlan] = react.useState(null);
       const [now, setNow] = react.useState(() => Date.now());
       const loopBreaksRef = react.useRef(0); // 死循环话术已发次数（达上限只停不发，防循环烧 token）
@@ -9780,7 +9541,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           const len = text.length;
           if (len <= lastLenRef.current) return;
           lastLenRef.current = len;
-          if (monitorTailRepeatCount(text) < cfg.monitorRepeatThreshold) return;
+          if (monitorLooksLooped(text, cfg.monitorRepeatThreshold, cfg.monitorStepMaxChars) !== true) return;
           stoppingRef.current = true;
           setPlan({ phase: "stopping" });
           try {
@@ -9793,13 +9554,13 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           }
         }, MONITOR_SCAN_MS);
         return () => clearInterval(timer);
-      }, [running, cfg.monitorEnabled, cfg.monitorRepeatThreshold, sessionId]);
+      }, [running, cfg.monitorEnabled, cfg.monitorRepeatThreshold, cfg.monitorStepMaxChars, sessionId]);
       // stopping → 停止完成转等待发循环话术（连续次数达上限只停不发，防循环烧
       // token）；停止超时（cancel 失败/被拒）放弃并复位
       react.useEffect(() => {
         if (plan?.phase !== "stopping") return undefined;
         if (!running) {
-          if (loopBreaksRef.current >= cfg.monitorMaxAuto) return undefined;
+          if (loopBreaksRef.current >= cfg.monitorMaxLoopBreaks) return undefined;
           setPlan({ phase: "waiting", fireAt: Date.now() + 2500, reason: "repeat" });
           return undefined;
         }
@@ -9808,20 +9569,20 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           setPlan(null);
         }, 15000);
         return () => clearTimeout(giveUp);
-      }, [plan, running, cfg.monitorMaxAuto]);
+      }, [plan, running, cfg.monitorMaxLoopBreaks]);
       // 等待期间用户介入（手动发消息使回合运行）→ 放弃本次（仅死循环链路；失败
       // 续跑的介入放弃在全局续跑器 tick 里）
       react.useEffect(() => {
         if (plan?.phase === "waiting" && running) setPlan(null);
       }, [running, plan]);
-      // 倒计时跳动（死循环链路 waiting 与全局续跑器 waiting 都要跳）。进入等待
-      // 先立即对表一次——now 可能是组件挂载时的陈旧值，首帧会把剩余秒数显示得偏大
+      // 倒计时跳动（死循环链路 waiting）。进入等待先立即对表一次——now 可能是
+      // 组件挂载时的陈旧值，首帧会把剩余秒数显示得偏大
       react.useEffect(() => {
-        if (plan?.phase !== "waiting" && watcherItem?.phase !== "waiting") return undefined;
+        if (plan?.phase !== "waiting") return undefined;
         setNow(Date.now());
         const timer = setInterval(() => setNow(Date.now()), 500);
         return () => clearInterval(timer);
-      }, [plan, watcherItem]);
+      }, [plan]);
       // 到点执行（仅死循环链路）：草稿非空（用户在打字）或回合又跑起来都视为
       // 介入，放弃话术
       react.useEffect(() => {
@@ -9839,24 +9600,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         setPlan(null);
       }, [plan, now, running, draft, inputActions]);
       if (!cfg.monitorEnabled) return null;
-      // 展示优先级：死循环链路本地态在前（正在发生），全局续跑器状态兜底
-      let line = "";
-      let cancelLabel = ""; // 空 = 不出钮；否则为钮文案（waiting=取消、capped=忽略）
-      if (plan?.phase === "waiting") {
-        const sec = Math.max(0, Math.ceil((plan.fireAt - now) / 1000));
-        line = tf("monitorAutoIn", { err: tf("monitorRepeatErr"), sec: String(sec), n: String(loopBreaksRef.current + 1), max: String(cfg.monitorMaxAuto) });
-        cancelLabel = t("monitorCancel");
-      } else if (plan?.phase === "stopping") {
-        line = tf("monitorStopping");
-      } else if (watcherItem?.phase === "waiting") {
-        const sec = Math.max(0, Math.ceil((watcherItem.fireAt - now) / 1000));
-        line = tf("monitorAutoIn", { err: tf("monitorErr429"), sec: String(sec), n: String(watcherItem.continues + 1), max: String(watcherItem.max) });
-        cancelLabel = t("monitorCancel");
-      } else if (watcherItem?.phase === "capped") {
-        line = tf("monitorCapped", { max: String(watcherItem.max) });
-        cancelLabel = t("monitorDismiss");
-      }
-      if (!line) return null;
+      if (plan?.phase !== "waiting" && plan?.phase !== "stopping") return null;
+      const cancelLabel = plan.phase === "waiting" ? t("monitorCancel") : "";
+      const line =
+        plan.phase === "waiting"
+          ? tf("monitorAutoIn", { err: tf("monitorRepeatErr"), sec: String(Math.max(0, Math.ceil((plan.fireAt - now) / 1000))), n: String(loopBreaksRef.current + 1), max: String(cfg.monitorMaxLoopBreaks) })
+          : tf("monitorStopping");
       return jsxRuntime.jsxs("div", {
         className: "dshk-monitor-line",
         children: [
@@ -9865,7 +9614,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
             ? jsxRuntime.jsx("button", {
                 type: "button",
                 className: "dshk-monitor-cancel",
-                onClick: () => (plan ? setPlan(null) : monitorCancelPlan(sessionId)),
+                onClick: () => setPlan(null),
                 children: cancelLabel,
               })
             : null,
@@ -9898,13 +9647,17 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       pendingKey: new Map(),
       /** sessionId -> {seq}：事件窗口已读到的持久 seq（压缩沿的基线，首帧只播种） */
       compactions: new Map(),
+      /** sessionId -> 最近一次 turn/end 的 reason.kind：收尾通知的分类依据。
+       *  事件窗口只对「上台」过的会话开着，所以从未打开过的会话查不到 reason，
+       *  notifyTurnKind 会退回中性的「回合完成」。 */
+      turnEnd: new Map(),
       /** 首帧标志：页面刚打开时列表里已在跑的会话不补发通知 */
       primed: false,
       /** 标题闪烁：未读计数（0 = 未闪烁）与 <title> 观察器 */
       flashCount: 0,
       flashWatch: null,
-      /** 在途的收尾判定定时器（页面销毁无需清理，留着只为可观测） */
-      settles: new Set(),
+      /** 点通知的导航口：官方 uiWorkspace（缺位时只聚焦窗口） */
+      nav: null,
     };
     /** 事件路径已处置过的提问请求（key 用 questions 数组——待回应投影里存的是
      *  同一个引用，据此让两条观察口只提醒一次）。批准请求没有共用引用可用，靠
@@ -9912,7 +9665,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const notifySeenRequests = new WeakSet();
     const NOTIFY_BODY_MAX = 140; // 提问正文截断长度：桌面通知两行即满，长了被裁
     const NOTIFY_FLASH_RE = /^\(\d+\) /; // 闪烁前缀：复原时按它剥掉，不存旧标题
-    const NOTIFY_SETTLE_MS = 2500; // 收尾判定延迟：盖过续跑器 2s 的 tick
 
     /** 折叠空白并按上限截断（通知正文只取一行；超长补省略号） */
     function notifyClip(text, max) {
@@ -9979,7 +9731,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         state.running.set(id, row.running === true);
         // 只认 true→false 的沿：首帧播种、仍在跑、子会话都不发
         if (!state.primed || was !== true || row.running === true || row.origin === "subagent") continue;
-        if (wanted(id)) events.push({ kind: "complete", sessionId: id, title: titleOf(id) });
+        // 分类看本回合 turn/end 的 reason（事件窗口记在 state.turnEnd，见
+        // notifyCompactionCore）：出错/中止/卡住/撞上限各有各的说法，不一律报完成
+        if (wanted(id)) events.push({ kind: notifyTurnKind(state.turnEnd?.get(id)), sessionId: id, title: titleOf(id) });
       }
       for (const id of [...state.running.keys()]) if (!seen.has(id)) state.running.delete(id);
       // 待回应：key 变化即新请求（一个会话同时只投影一个待回应）。事件路径已经
@@ -10039,12 +9793,15 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     }
 
     /**
-     * 压缩完成判定核心（依赖注入，render-check 直测）：事件窗口的增量里出现
-     * `compaction/end`（不带 error）即一次压缩收尾——手动 /compact 与回合中途的
-     * 自动压缩都落这条事件，模型无关的 tool-result prune 不在其中。
+     * 事件窗口扫描核心（依赖注入，render-check 直测）：一趟增量里同时办两件事——
+     *  ① 记账 `turn/end` 的 reason（收尾通知的分类依据，见 notifyTurnKind）：任何
+     *     kind 的 turn/end 都记，只有无 reason 的才留着旧值；不产通知；
+     *  ② `compaction/end`（不带 error）即一次压缩收尾——手动 /compact 与回合中途的
+     *     自动压缩都落这条事件，模型无关的 tool-result prune 不在其中。
      * 只认 append 增量：窗口首帧（页面刚打开）与 replace/prepend（重连重放、翻旧页）
      * 一律只播种——刷新页面不重报历史压缩。
-     * 覆盖边界：官方只为「上台」过的会话开事件窗，从未打开过的会话看不到它的压缩。
+     * 覆盖边界：官方只为「上台」过的会话开事件窗，从未打开过的会话看不到它的压缩，
+     *  收尾分类对它也就退到默认的「回合完成」（不猜，见 notifyTurnKind）。
      * @param input {sessionId,title,entries,change,origin,current,foreground}
      * @returns [{kind:"compact", sessionId, title, body}]
      */
@@ -10064,6 +9821,14 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         if (seq <= st.seq) continue; // 重复投递 / 重放：同一条不报两次
         st.seq = seq;
         const event = entry.event;
+        // ① 收尾分类依据：把本回合的结束原因存下来，等 running 沿落地时取用。
+        //    存整个 reason 对象而非仅 kind——宿主侧熔断走 cancel({kind:'hook'})，
+        //    那条 cause 里带 reason 串，是「这是熔断停的、不是人停的」的唯一凭据。
+        if (event.type === "turn/end") {
+          const reason = event.data?.reason;
+          if (reason && typeof reason.kind === "string" && reason.kind !== "") state.turnEnd.set(id, reason);
+          continue;
+        }
         if (event.type !== "compaction/end") continue;
         const data = event.data;
         if (!data || data.error) continue; // 失败的压缩不算完成（那个回合的失败另有报法）
@@ -10072,6 +9837,35 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         events.push({ kind: "compact", sessionId: id, title: input.title, body: notifyCompactBody(entries, data.compactionId) });
       }
       return events;
+    }
+
+    /** 宿主侧熔断写在 cancel cause 里的标记（与 src/monitor/loop-breaker.ts 同串） */
+    const NOTIFY_LOOP_CAUSE = "dsh-kit:dead-loop";
+    /** 收尾通知按 turn/end 的 reason 分类：官方 TurnEndReason 的可读子集各有各的
+     *  文案，缺 reason 的会话（从未打开过、没有事件窗）退回「回合完成」——那不是
+     *  猜，是我们对未知结局的诚实说法。
+     *  @param reason 整条 reason 对象（kind + 可能的 cause），不是仅 kind */
+    function notifyTurnKind(reason) {
+      // turn/end 的 aborted 形如 {kind:'aborted', reason:<AgentCancelCause>}；
+      // 熔断那条 cause 是 {kind:'hook', reason:'dsh-kit:dead-loop'}
+      const cause = reason && typeof reason === "object" ? reason.reason : null;
+      if (reason && typeof reason === "object" && reason.kind === "aborted" && cause && cause.reason === NOTIFY_LOOP_CAUSE) {
+        return "loopBreak";
+      }
+      const kind = reason && typeof reason === "object" ? reason.kind : reason;
+      switch (kind) {
+        case "error":
+          return "error";
+        case "aborted":
+          return "aborted";
+        case "blocked":
+          return "blocked";
+        case "max-tokens":
+          return "maxTokens";
+        case "completed":
+        default:
+          return "complete";
+      }
     }
 
     /** 前台判据：页面可见 **且** 窗口聚焦。切到别的程序时 visibilityState 仍是
@@ -10130,15 +9924,21 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       if (notifyForeground()) notifyUnflash();
     }
 
-    /** 点通知 → 聚焦窗口并切到该会话（会话已被删除时只聚焦） */
-    function notifyOpenSession(sessions, sessionId) {
+    /** 点通知 → 聚焦窗口并切到该会话。
+     *  导航走官方 `uiWorkspace.openSession`：它是「一次 UI 导航动作」，选中会话并显示
+     *  其对话，内部管 mainView 引用计数与面板 reveal。`ctx.sessions` 上没有导航方法
+     *  （那里的 open 是私有实现类的「拉历史尾页」），而自行 retain 会与侧栏的
+     *  mainView 引用互相踩，故缺 uiWorkspace 时只聚焦窗口。 */
+    function notifyOpenSession(sessionId) {
       try {
         window.focus();
       } catch {
         /* 非浏览器环境 */
       }
+      const workspace = notifyState.nav;
+      if (!workspace || typeof workspace.openSession !== "function") return;
       try {
-        sessions.open(sessionId);
+        workspace.openSession(sessionId);
       } catch {
         /* 会话已不在列表：只聚焦 */
       }
@@ -10146,27 +9946,37 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     /** 投递一条：系统通知优先，退标题闪烁。tag 按会话归并——同一会话的新通知
      *  替换旧的，人不在时也不会堆一屏 */
-    function notifyDeliver(sessions, ev) {
-      const key =
-        ev.kind === "complete"
-          ? "notifyCompleteTitle"
-          : ev.kind === "compact"
-            ? "notifyCompactTitle"
-            : ev.kind === "capped"
-              ? "notifyCappedTitle"
-              : ev.kind === "approval"
-                ? "notifyApprovalTitle"
-                : ev.kind === "plan"
-                  ? "notifyPlanTitle"
-                  : "notifyQuestionTitle";
-      const title = tf(key, { title: ev.title });
-      const body =
-        ev.kind === "complete" ? t("notifyCompleteBody") : ev.kind === "capped" ? t("notifyCappedBody") : ev.body ?? "";
+    function notifyDeliver(ev) {
+      // 五类收尾共用「点击回到该会话」这个正文，只有提问/批准/计划评审各带自己的
+      const TITLE_BY_KIND = {
+        complete: "notifyCompleteTitle",
+        error: "notifyErrorTitle",
+        aborted: "notifyAbortedTitle",
+        blocked: "notifyBlockedTitle",
+        maxTokens: "notifyMaxTokensTitle",
+        loopBreak: "notifyLoopBreakTitle",
+        compact: "notifyCompactTitle",
+        approval: "notifyApprovalTitle",
+        plan: "notifyPlanTitle",
+        question: "notifyQuestionTitle",
+      };
+      const BODY_BY_KIND = {
+        complete: "notifyCompleteBody",
+        error: "notifyErrorBody",
+        aborted: "notifyAbortedBody",
+        blocked: "notifyBlockedBody",
+        maxTokens: "notifyMaxTokensBody",
+        loopBreak: "notifyLoopBreakBody",
+        compact: "notifyCompactBody",
+      };
+      const title = tf(TITLE_BY_KIND[ev.kind] ?? "notifyQuestionTitle", { title: ev.title });
+      const bodyKey = BODY_BY_KIND[ev.kind];
+      const body = bodyKey ? t(bodyKey) : ev.body ?? "";
       if (notifyCanPost()) {
         try {
           const note = new Notification(title, { body, tag: `dsh-kit:${ev.sessionId}`, silent: true });
           note.onclick = () => {
-            notifyOpenSession(sessions, ev.sessionId);
+            notifyOpenSession(ev.sessionId);
             try {
               note.close();
             } catch {
@@ -10180,6 +9990,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       }
       notifyFlash();
     }
+
+    /** 回合收尾的 kind：走「落定判定」再投递（notifyTurnKind 的全部取值） */
+    const TURN_END_KINDS = new Set(["complete", "error", "aborted", "blocked", "maxTokens", "loopBreak"]);
 
     /** 事件入口（订阅回调与首帧共用）：读快照 → 核心判定 → 逐条投递 */
     function notifyEvaluate(sessions, pendingStore) {
@@ -10203,17 +10016,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         cfg,
       );
       for (const ev of events) {
-        // 收尾不是立刻就能断定的：限流失败也会让 running 落地，而续跑器 2s 后才会
-        // 排上「继续」——不等这一下就会把"待续跑的失败"报成"任务完成"
-        if (ev.kind !== "complete") {
-          notifyDeliver(sessions, ev);
-          continue;
-        }
-        const timer = setTimeout(() => {
-          notifyState.settles.delete(timer);
-          notifyCompleteSettled(sessions, ev);
-        }, NOTIFY_SETTLE_MS);
-        notifyState.settles.add(timer);
+        // 只有回合收尾要落定判定（到点仍在列表且空闲）；提问/批准是既成事实，直接发。
+        // 收尾当年要延迟 2.5s 等 429 续跑器排「继续」，续跑器退役后无需再等
+        if (TURN_END_KINDS.has(ev.kind)) notifyCompleteSettled(sessions, ev);
+        else notifyDeliver(ev);
       }
     }
 
@@ -10244,12 +10050,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         },
         cfg,
       );
-      for (const ev of events) notifyDeliver(sessions, ev);
+      for (const ev of events) notifyDeliver(ev);
     }
 
-    /** 收尾通知的延迟判定：到点仍空闲、且续跑器没排「等待继续」的计划，才算真收尾。
-     *  已 capped（自动续跑放弃）确实停了，但文案要说清不是任务做完——那是要人回去
-     *  处理的终态。判定读的都是内存快照，无网络调用。 */
+    /** 收尾通知的落地判定：到点仍在列表里且空闲才算真收尾（已删 2.5s 延迟——
+     *  它当年只为躲开 429 续跑器的 2s tick；续跑器已退役，收尾有 turn/end 的
+     *  reason 作准，kind 由调用方带进来，无需再猜）。 */
     function notifyCompleteSettled(sessions, ev) {
       let row = null;
       try {
@@ -10258,9 +10064,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         return; // 服务异常：放弃本次
       }
       if (!row || row.running === true) return; // 已不在列表 / 又跑起来了：不算收尾
-      const plan = monitorStore.snapshot.items.find((x) => x.id === ev.sessionId);
-      if (plan && plan.phase === "waiting") return; // 等会儿就自动继续，别打扰
-      notifyDeliver(sessions, plan ? { ...ev, kind: "capped" } : ev);
+      notifyDeliver(ev);
     }
 
     /** 事件路径投递（提问 / 批准）：会话名从列表快照取，抑制与完成沿同一套判据 */
@@ -10274,7 +10078,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         return; // 服务异常：放弃本次（作答链路不受影响）
       }
       if (!notifyWanted(cfg, sessionId, mainRowOf(list)?.id, notifyForeground())) return;
-      notifyDeliver(sessions, {
+      notifyDeliver({
         kind,
         sessionId,
         title: list.byId?.[sessionId]?.displayTitle ?? sessionId,
@@ -10303,89 +10107,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     }
 
 
-    /** 会话头部的 429 后台会话状态条：全局续跑器有待续跑/封顶会话才渲染（零常驻），
-     *  与官方后台任务入口同域。点开小浮层逐条列出，待续跑可取消。 */
-    function MonitorBgAction() {
-      react.useSyncExternalStore(subscribeLocale, getLocaleVersion); // 跟随 DSH 语言切换重绘
-      const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
-      const watcherSnap = react.useSyncExternalStore(
-        (s) => monitorStore.subscribe(s),
-        () => monitorStore.snapshot,
-      );
-      const [open, setOpen] = react.useState(false);
-      const [now, setNow] = react.useState(() => Date.now());
-      const rootRef = react.useRef(null);
-      const hasWaiting = watcherSnap.items.some((x) => x.phase === "waiting");
-      // 倒计时跳动（有待续跑才走秒）
-      react.useEffect(() => {
-        if (!hasWaiting) return undefined;
-        setNow(Date.now());
-        const timer = setInterval(() => setNow(Date.now()), 500);
-        return () => clearInterval(timer);
-      }, [hasWaiting]);
-      // 浮层点外/Esc 收起
-      react.useEffect(() => {
-        if (!open) return undefined;
-        const onDown = (e) => {
-          if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
-        };
-        const onKey = (e) => {
-          if (e.key === "Escape") setOpen(false);
-        };
-        document.addEventListener("pointerdown", onDown, true);
-        document.addEventListener("keydown", onKey);
-        return () => {
-          document.removeEventListener("pointerdown", onDown, true);
-          document.removeEventListener("keydown", onKey);
-        };
-      }, [open]);
-      if (cfg.monitorEnabled === false || watcherSnap.items.length === 0) return null;
-      return jsxRuntime.jsxs("div", { className: "dshk-mbg", ref: rootRef, children: [
-        jsxRuntime.jsxs("button", {
-          type: "button",
-          className: "dshk-mbg-trigger",
-          "aria-expanded": open,
-          onClick: () => {
-            setNow(Date.now()); // 展开瞬间先对表，首帧倒计时才不偏大
-            setOpen((v) => !v);
-          },
-          children: [
-            jsxRuntime.jsx("span", { className: "dshk-mbg-dot", "aria-hidden": true }),
-            `${t("monitorBgTitle")} · ${String(watcherSnap.items.length)}`,
-          ],
-        }),
-        open
-          ? jsxRuntime.jsx("div", { className: "dshk-mbg-menu", children:
-              watcherSnap.items.map((x) => {
-                const line = x.phase === "waiting"
-                  ? tf("monitorBgItem", {
-                      title: x.title,
-                      sec: String(Math.max(0, Math.ceil((x.fireAt - now) / 1000))),
-                      n: String(x.continues + 1),
-                      max: String(x.max),
-                    })
-                  : tf("monitorBgCapped", { title: x.title, max: String(x.max) });
-                return jsxRuntime.jsxs("div", { className: "dshk-monitor-line", children: [
-                  jsxRuntime.jsx("span", { className: "dshk-monitor-text", children: line }),
-                  jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-monitor-cancel",
-                    onClick: () => monitorCancelPlan(x.id),
-                    children: x.phase === "waiting" ? t("monitorCancel") : t("monitorDismiss"),
-                  }),
-                ] }, x.id);
-              }),
-            })
-          : null,
-      ] });
-    }
-
     // 本组件配置页（插件页 dsh-kit/monitor 行「配置」）：骨架在 dock，这里只喂字段表
     const MONITOR_CFG_FIELDS = [
       { key: "usageEnabled", type: "bool", group: "kcfgGroupUsage", labelKey: "kcfgUsageEnabled", hintKey: "kcfgUsageEnabledHint" },
       { key: "monitorEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgMonitorEnabled", hintKey: "kcfgMonitorEnabledHint" },
-      { key: "monitorWaitMs", type: "number", min: 5000, max: 600000, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorWaitMs", hintKey: "kcfgMonitorWaitMsHint" },
-      { key: "monitorMaxAuto", type: "number", min: 1, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorMaxAuto", hintKey: "kcfgMonitorMaxAutoHint" },
+      { key: "monitorStepMaxChars", type: "number", min: 20000, max: 400000, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorStepMaxChars", hintKey: "kcfgMonitorStepMaxCharsHint" },
+      { key: "monitorMaxLoopBreaks", type: "number", min: 1, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorMaxLoopBreaks", hintKey: "kcfgMonitorMaxLoopBreaksHint" },
       { key: "monitorRepeatThreshold", type: "number", min: 2, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorRepeatThreshold", hintKey: "kcfgMonitorRepeatThresholdHint" },
       { key: "notifyEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgNotifyEnabled", hintKey: "kcfgNotifyEnabledHint" },
     ];
@@ -10442,12 +10169,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         ".dshk-monitor-cancel{appearance:none;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:none;padding:2px 10px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer}",
         ".dshk-monitor-cancel:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-tertiary)}",
         // 会话头部 429 状态条：仅当后台会话有待续跑/已封顶时渲染，零常驻
-        ".dshk-mbg{position:relative}",
-        ".dshk-mbg-trigger{display:inline-flex;align-items:center;gap:5px;min-height:26px;padding:2px 7px;border:0;background:none;border-radius:6px;color:var(--dsw-alias-label-tertiary);cursor:pointer;font:inherit;font-size:12px;line-height:18px}",
-        ".dshk-mbg-trigger:hover,.dshk-mbg-trigger[aria-expanded=\"true\"]{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-fill-l1,transparent)}",
-        ".dshk-mbg-dot{flex:none;width:7px;height:7px;border-radius:999px;background:var(--dsw-alias-state-warning,#e2c08d)}",
-        ".dshk-mbg-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:80;display:flex;flex-direction:column;gap:2px;min-width:300px;max-width:min(460px,92vw);padding:7px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-1));border:1px solid var(--dsw-alias-border-l1);border-radius:10px;box-shadow:var(--dsw-elevation-prominent,0 8px 24px rgba(0,0,0,.2))}",
-        ".dshk-mbg-menu .dshk-monitor-cancel{margin-left:auto}",
       ].join("\n");
       document.head.appendChild(style);
     }
@@ -10860,20 +10581,20 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           MonitorLine,
         ),
       );
-      ctx.slots.inject("conversation.session.header.actions", () =>
-        ctx.slots.register(
-          { name: "conversation.session.header.actions", id: "dsh-kit-monitor-bg", order: 21 },
-          MonitorBgAction,
-        ),
-      );
-      // 全局 429 续跑器主循环：轮询自守卫（服务未就绪直接跳过），monitorEnabled 关时空转
-      setInterval(monitorTick, MONITOR_TICK_MS);
       // 会话通知：订阅官方两个数据源（就绪时机不保证，用 inject 等）。uiSession
       // 缺位（精简组合）时只订阅列表——完成通知照发，提问通知降级为不发
       ctx.inject(["sessions"], (sctx) => {
         const offs = [];
         let pendingStore = null;
         const evaluate = () => notifyEvaluate(sctx.sessions, pendingStore);
+        // 点通知的导航口：uiWorkspace.openSession 是官方的一次 UI 导航动作
+        // （选中会话 + 显示对话，内部管 mainView 引用计数与面板 reveal）。
+        // 精简组合缺这个服务时，notifyOpenSession 只聚焦窗口。
+        if (typeof sctx.inject === "function") {
+          sctx.inject(["uiWorkspace"], (wctx) => {
+            notifyState.nav = wctx.uiWorkspace ?? null;
+          });
+        }
         // 压缩完成：给列表里的会话各挂一个事件窗口订阅。窗口是会话「上台」才开的
         // （历史按需拉），没上过台的窗口恒空、自然静默；上过台的即便切走也仍在收流。
         // 列表变化时对账增删——会话被移除/归档即退订
@@ -10907,6 +10628,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
             }
           }
           for (const id of [...notifyState.compactions.keys()]) if (!live.has(id)) notifyState.compactions.delete(id);
+          for (const id of [...notifyState.turnEnd.keys()]) if (!live.has(id)) notifyState.turnEnd.delete(id);
         };
         const sync = () => {
           evaluate();
@@ -10958,15 +10680,13 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     // 渲染级检查与单测取用（依赖注入的纯核心，直测不经过 apply）
     exports.MonitorLine = MonitorLine;
-    exports.MonitorBgAction = MonitorBgAction;
-    exports.monitorTickCore = monitorTickCore;
     exports.monitorTailRepeatCount = monitorTailRepeatCount;
-    exports.monitorCancelPlan = monitorCancelPlan;
+    exports.monitorCyclePeriod = monitorCyclePeriod;
+    exports.monitorLooksLooped = monitorLooksLooped;
     exports.notifyDiffCore = notifyDiffCore;
     exports.notifyCompactionCore = notifyCompactionCore;
+    exports.notifyTurnKind = notifyTurnKind;
     exports.notifyCompleteSettled = notifyCompleteSettled;
-    exports.monitorStore = monitorStore; // 测试注入活动快照用
-    exports.monitorSessions = monitorSessions;
     exports.usageIsPeak = usageIsPeak;
     // 配置面（内置默认表 / 组件行配置页 / 快照解析）供测试断言与宿主默认同源比对
     exports.M_CFG_DEFAULTS = M_CFG_DEFAULTS;
@@ -11041,7 +10761,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const jsxRuntime = require("react/jsx-runtime");
     const dock = kit;
     const {
-      getKitUi, setKitUi, KitTip, flashToast, kitJson, resolveZh,
+      getKitUi, setKitUi, KitTip, flashToast, kitJson, kitWsUrl, resolveZh,
       closeFeatureTab, openFeatureTab, openFeatureDock, closeRightbarTab,
       useCurrentRow, currentSessionId, shellShare,
     } = dock;
@@ -11288,7 +11008,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         let disposed = false;
         let retry = null;
         const connect = () => {
-          const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/dsh-kit/browser`);
+          const ws = new WebSocket(kitWsUrl("/dsh-kit/browser"));
           wsRef.current = ws;
           ws.onopen = () => {
             if (disposed) return;
@@ -11717,7 +11437,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         let ws = null;
         let hadPages = false;
         const connect = () => {
-          ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/dsh-kit/browser`);
+          ws = new WebSocket(kitWsUrl("/dsh-kit/browser"));
           ws.onopen = () => {
             if (disposed) return;
             try {

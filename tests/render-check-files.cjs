@@ -454,8 +454,13 @@ async function checkApply() {
   const scmCmd = sc("dsh-kit-files.scm.toggle");
   check("files apply 向官方 shortcuts 注册文件树/源代码管理两条命令", !!treeCmd && !!scmCmd && typeof treeCmd.label === "function" && typeof scmCmd.label() === "string");
   check(
-    "默认键：文件树 Ctrl+Alt+,、源代码管理 Ctrl+Alt+.（primary+alt 口径）",
-    treeCmd.defaults["web:windows"].code === "Comma" && String(treeCmd.defaults["web:windows"].modifiers) === "primary,alt" && scmCmd.defaults["web:windows"].code === "Period" && !!scmCmd.defaults["desktop:linux"] && ["page", "editable", "terminal"].every((r) => treeCmd.regions.includes(r)),
+    // 文件树 web 档是 Mod+Shift+,：宿主「打开设置」在 web 占 Mod+Alt+,，register 跨档查重会直接抛
+    "默认键：文件树 desktop Mod+Alt+, / web Mod+Shift+,，源代码管理两档都 Mod+Alt+.",
+    treeCmd.defaults["desktop:windows"].code === "Comma" && String(treeCmd.defaults["desktop:windows"].modifiers) === "primary,alt" &&
+    treeCmd.defaults["web:windows"].code === "Comma" && String(treeCmd.defaults["web:windows"].modifiers) === "primary,shift" &&
+    treeCmd.defaults["web:macos"].modifiers[0] === "primary" && treeCmd.defaults["web:macos"].modifiers[1] === "shift" &&
+    scmCmd.defaults["web:windows"].code === "Period" && String(scmCmd.defaults["web:windows"].modifiers) === "primary,alt" &&
+    !!scmCmd.defaults["desktop:linux"] && ["page", "editable", "terminal"].every((r) => treeCmd.regions.includes(r)),
   );
   // resolve 门控：组件配置在测试里未就绪 → 走内置默认（两个功能都开）→ handled
   const before = JSON.stringify({ tree: dockExports.getKitUi().treeOpen, git: dockExports.getKitUi().gitOpen });

@@ -276,9 +276,6 @@ export async function apply(ctx, config = {}) {
                     const openWatch = (scope) => {
                         // 分区内单回调（同分区多连接扇出同一份帧）
                         void browserService.watcherOpen(scope, (data) => broadcastJson(JSON.stringify({ t: 'frame', data }), scope));
-                        // 点开浏览器面板就该是「浏览器在、有页签」：本分区没有页就开一页
-                        // （懒启动 + 空白页签；运行中 ensure 是幂等 no-op）
-                        void browserService.ensurePage(scope);
                     };
                     const closeWatch = () => {
                         if (watchedScope === null)
@@ -311,15 +308,13 @@ export async function apply(ctx, config = {}) {
                         }
                         const scope = scopeOfConn();
                         if (msg.t === 'watch') {
+                            // 看帧不等于开浏览器：面板打开/重新激活都只订流，浏览器由「有理由的
+                            // 动作」拉起（地址栏导航、「＋」新页签、agent 工具、对话链接改投）。
+                            // 页比观察者晚到也没关系——认领页时的 _resyncStream 会补挂流。
                             if (msg.on === true && watchedScope !== scope) {
                                 closeWatch();
                                 watchedScope = scope;
                                 openWatch(scope);
-                            }
-                            else if (msg.on === true) {
-                                // 已订阅的连接重发 watch = 面板重新激活：浏览器若已收摊（关最后一页/
-                                // 空闲关闭），懒启动拉回并自带空白页签（同 openWatch 语义）
-                                void browserService.ensurePage(scope);
                             }
                             else if (msg.on === false && watchedScope !== null) {
                                 closeWatch();

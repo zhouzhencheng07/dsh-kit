@@ -128,7 +128,7 @@ dsh plugin --profile web update dsh-kit
 承载（文件 / 知识库 / 日程 / 浏览器四类 dock 签），AI 的 `web_search` 同时切到免费多源搜索。
 
 **宿主版本要求**：dsh ≥ 0.2.0-rc.2（组件行与插件页行配置、官方 `shortcuts` 服务、
-官方 `webTerminals` 都在这一版）。
+官方 `webTerminals` 都在这一版；桌面版同版本可用，面板实时画面走宿主注入的 WS 基址）。
 
 ## 工作原理
 
