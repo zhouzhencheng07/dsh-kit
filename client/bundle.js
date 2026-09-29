@@ -9410,7 +9410,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       notifyPlanTitle: "{title} · 等你批准计划",
       notifyPlanBody: "agent 提交了计划等你批准",
       notifyToolFallback: "工具调用",
-      notifyInboxHead: "离开期间 {count} 条新消息",
+      notifyInboxHead: "离开期间 {count} 条提醒",
       notifyInboxClear: "清空",
       // 本组件配置页字段（骨架通用文案在 dock）
       kcfgGroupUsage: "用量与余额",
@@ -9471,7 +9471,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       notifyPlanTitle: "{title} · plan awaiting approval",
       notifyPlanBody: "The agent submitted a plan for your approval",
       notifyToolFallback: "A tool call",
-      notifyInboxHead: "{count} new while you were away",
+      notifyInboxHead: "{count} updates while you were away",
       notifyInboxClear: "Clear",
       kcfgGroupUsage: "Usage & balance",
       kcfgUsageEnabled: "Balance & usage chip",
