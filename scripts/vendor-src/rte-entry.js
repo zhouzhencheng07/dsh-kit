@@ -5,8 +5,8 @@
 //
 // 往返选型：@tiptap/markdown（官方，内建 marked lexer + 各扩展 parseMarkdown/
 // renderMarkdown 规格）。标准 md（标题/列表/表格/代码块/引用/行内样式）全部用
-// 官方规格；本文件只补 vault 约定的自定义语法（wikilink / 数学 / 折叠块）
-// 的 tokenizer + 双向规格，以及旧约定行内 HTML（<u>/<sup>/<sub>/<mark>/
+// 官方规格；本文件只补 vault 约定的自定义语法（wikilink / 数学 / mermaid 图块 /
+// 折叠块）的 tokenizer + 双向规格，以及旧约定行内 HTML（<u>/<sup>/<sub>/<mark>/
 // <span style>) 的序列化覆写。未知块级 HTML 整块原样保留（rawBlock），绝不丢弃。
 //
 // DOM 约束：本文件不得在模块顶层触碰 document/window（node 测试直接 eval 产物
@@ -47,8 +47,11 @@ import Color from "@tiptap/extension-color";
 import Gapcursor from "@tiptap/extension-gapcursor";
 import Dropcursor from "@tiptap/extension-dropcursor";
 import { common, createLowlight } from "lowlight";
+import powershell from "highlight.js/lib/languages/powershell";
 
 const lowlight = createLowlight(common);
+// common 不含 powershell：补注册（语言条里能选、围栏能高亮），与桌面端同口径
+lowlight.register("powershell", powershell);
 
 // ─── vault md 约定的共享小工具 ─────────────────────────────────────────────
 /** 拆 [[目标#锚|别名]]：返回 {target, anchor, alias}；无别名 alias=null */
@@ -354,6 +357,237 @@ const MathBlock = Node.create({
   },
   addNodeView() {
     return (props) => mathNodeView(props, true);
+  },
+});
+
+// ─── mermaid 图块（```mermaid 围栏 ↔ 独立图块，点击进源码编辑、跳出即渲染） ────
+// 落盘是 GitHub / Obsidian 同款 ```mermaid 围栏：桌面端/其它宿主读同一份文件时把它当
+// 普通代码块，互不影响。mermaid 库**不进 bundle**（katex 同款懒检查 window.mermaid），
+// 宿主要不要带这 5MB、何时注入脚本由 index.html/bridge 决定：node view 缺库时先请
+// window.__dshkMermaidLoad() 钩子、停在占位态，宿主脚本 onload 调 DshRTE.mermaidReady()
+// 重画全部图块；没有钩子的宿主（node 测试/未配 vendor 的阅读面）回落纯文本源码展示。
+let mermaidRerenders = null; // 惰性建：node 测试直接 eval 产物，顶层不碰 Set 无妨，但主题监听必须运行期
+let mermaidLoadAsked = false;
+let mermaidThemeInited = false;
+let mermaidSeq = 0; // 全局渲染 id：mermaid.render 要求文档内唯一的 id
+
+const mermaidTheme = () =>
+  typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "default";
+
+/** 库缺位时请宿主注入 vendor 脚本；返回当前可用的 mermaid（null = 还没就位） */
+function askMermaidLib() {
+  if (typeof window === "undefined") return null;
+  if (!window.mermaid && !mermaidLoadAsked) {
+    mermaidLoadAsked = true;
+    try {
+      window.__dshkMermaidLoad?.();
+    } catch {
+      /* 宿主钩子抛错按没有钩子处理，图块停在占位态 */
+    }
+  }
+  return window.mermaid ?? null;
+}
+
+/** 首次真正用库时初始化主题，并挂系统深浅色跟随（initialize 后改不了主题，只能重初始化再重画） */
+function ensureMermaidTheme(m) {
+  if (mermaidThemeInited) return;
+  mermaidThemeInited = true;
+  try {
+    m.initialize({ startOnLoad: false, securityLevel: "strict", theme: mermaidTheme() });
+  } catch {
+    return;
+  }
+  window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", () => {
+    try {
+      m.initialize({ startOnLoad: false, securityLevel: "strict", theme: mermaidTheme() });
+    } catch {
+      /* 重初始化失败沿用旧主题，只重画 */
+    }
+    for (const rerender of [...(mermaidRerenders ?? [])]) {
+      try {
+        rerender();
+      } catch {
+        /* 单块失败不影响其他 */
+      }
+    }
+  });
+}
+
+/** 宿主脚本就位后的重画入口（window.DshRTE.mermaidReady 导出） */
+function mermaidReady() {
+  for (const rerender of [...(mermaidRerenders ?? [])]) {
+    try {
+      rerender();
+    } catch {
+      /* 单块失败不影响其他 */
+    }
+  }
+}
+
+function mermaidNodeView(props) {
+  mermaidRerenders ??= new Set();
+  const wrap = document.createElement("div");
+  wrap.className = "dshk-mermaid";
+  wrap.contentEditable = "false";
+  const body = document.createElement("div");
+  body.className = "dshk-mermaid-body";
+  const err = document.createElement("div");
+  err.className = "dshk-mermaid-err";
+  err.hidden = true;
+  wrap.append(body, err);
+
+  let rendered = null; // 上次画图的源码（null = 还没画过；同值不重画）
+  let seq = 0; // 本块的渲染序号：丢弃过期结果（连打几次提交时的异步竞态）
+
+  const srcOf = () => String(props.node.attrs.src ?? "");
+  const render = (src) => {
+    wrap.classList.remove("is-editing");
+    if (src === rendered && rendered !== null) return;
+    rendered = src;
+    err.hidden = true;
+    if (!src.trim()) {
+      body.textContent = "输入 mermaid 源码生成图表";
+      return;
+    }
+    const m = askMermaidLib();
+    if (!m) {
+      // 库没就位（钩子已请、脚本在路上）或宿主没配：回落纯文本源码，不空等
+      wrap.classList.add("as-code");
+      body.textContent = src;
+      return;
+    }
+    wrap.classList.remove("as-code");
+    ensureMermaidTheme(m);
+    const my = ++seq;
+    m.render(`dshk-mermaid-${++mermaidSeq}`, src).then(
+      (out) => {
+        if (my !== seq) return;
+        body.textContent = "";
+        body.innerHTML = out.svg;
+      },
+      (e) => {
+        if (my !== seq) return;
+        body.textContent = "";
+        err.hidden = false;
+        err.textContent = `mermaid 渲染失败：${String(e?.message ?? e)}`;
+      },
+    );
+  };
+  const openEditor = () => {
+    if (wrap.classList.contains("is-editing")) return;
+    wrap.classList.add("is-editing"); // CSS：编辑态藏图、显源码框
+    err.hidden = true;
+    const input = document.createElement("textarea");
+    input.className = "dshk-mermaid-input";
+    input.value = srcOf();
+    input.placeholder = "graph TD\n  A[开始] --> B{判断}";
+    // 自动长高：随源码行数撑开、整段始终全见——块内不滚（页面本身会滚），不设上限
+    const fit = () => {
+      input.style.height = "auto";
+      input.style.height = `${input.scrollHeight}px`;
+    };
+    input.addEventListener("input", fit);
+    const commit = () => {
+      if (!wrap.contains(input)) return;
+      const src = input.value;
+      input.remove();
+      render(src); // 先本地回渲染态（同值时已有的图留着），再提交
+      props.editor.view.dispatch(
+        props.editor.view.state.tr.setNodeMarkup(props.getPos(), undefined, { src }),
+      );
+      props.editor.view.focus();
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        commit();
+      } else if (e.key === "Escape") {
+        e.stopPropagation();
+        render(srcOf());
+        props.editor.view.focus();
+      }
+    });
+    input.addEventListener("blur", commit);
+    wrap.appendChild(input);
+    input.focus();
+    fit();
+  };
+  render(srcOf());
+  if (srcOf() === "") {
+    // 斜杠菜单插入的空图块：直接进编辑态（空源码无从渲染）
+    queueMicrotask(() => openEditor());
+  }
+  wrap.addEventListener("click", openEditor);
+  const rerender = () => {
+    if (wrap.classList.contains("is-editing")) return;
+    rendered = null;
+    render(srcOf());
+  };
+  mermaidRerenders.add(rerender);
+  return {
+    dom: wrap,
+    ignoreMutation: () => true,
+    update(node) {
+      if (node.type.name !== "mermaidBlock") return false;
+      props.node = node;
+      if (!wrap.classList.contains("is-editing")) render(String(node.attrs.src ?? ""));
+      return true;
+    },
+    destroy() {
+      mermaidRerenders.delete(rerender);
+    },
+    stopEvent() {
+      return true;
+    },
+  };
+}
+
+const MermaidBlock = Node.create({
+  name: "mermaidBlock",
+  group: "block",
+  atom: true,
+  selectable: true,
+  addAttributes() {
+    return { src: { default: "" } };
+  },
+  parseHTML() {
+    return [{ tag: "div.dshk-mermaid[data-src]" }];
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      "div",
+      mergeAttributes({ class: "dshk-mermaid", "data-src": String(node.attrs.src ?? "") }, HTMLAttributes),
+    ];
+  },
+  markdownTokenizer: {
+    name: "mermaidBlock",
+    level: "block",
+    start(src) {
+      const m = /^[ \t]*```mermaid[ \t]*\r?\n/m.exec(src);
+      return m ? m.index : -1;
+    },
+    tokenize(src) {
+      const m = /^[ \t]*```mermaid[ \t]*\r?\n([\s\S]+?)\r?\n[ \t]*```/.exec(src);
+      if (!m) return undefined;
+      return { type: "mermaidBlock", raw: m[0], src: (m[1] ?? "").replace(/[ \t\r\n]+$/, "") };
+    },
+  },
+  parseMarkdown(token) {
+    return { type: "mermaidBlock", attrs: { src: String(token.src ?? "") } };
+  },
+  renderMarkdown(node) {
+    return `\`\`\`mermaid\n${node.attrs?.src ?? ""}\n\`\`\``;
+  },
+  addCommands() {
+    return {
+      insertMermaidBlock:
+        () =>
+        ({ chain }) =>
+          chain().insertContent({ type: this.name, attrs: { src: "" } }).run(),
+    };
+  },
+  addNodeView() {
+    return (props) => mermaidNodeView(props);
   },
 });
 
@@ -695,11 +929,95 @@ const VaultTextStyle = TextStyle.extend({
 });
 
 // ─── 代码盒（语言条 + 复制钮，官方 CodeBlockLowlight 的装饰高亮不变） ───────
-const CODE_LANGS = [
-  ["", "text"], "js", "ts", "jsx", "tsx", "json", "python", "rust", "go", "java",
-  "c", "cpp", "csharp", "php", "ruby", "sql", "bash", "shell", "yaml", "toml",
-  "css", "html", "xml", "markdown", "latex", "diff", "mermaid",
-];
+// 语言数据集 = lowlight 注册表（common + 补注册的 powershell），刻意**不含 mermaid**
+// ——它是文本绘图不是代码语言，入口是独立图块（见 MermaidBlock）；已有的 mermaid 块
+// 语言条会原样显示这个值，改掉就回到普通代码块。就算注册表外的值从粘贴的 md 溜进来，
+// code-block-lowlight 对未注册语言自带 highlightAuto 兜底，不会炸。
+/** 主流别名（只服务筛选命中，选中落的是规范名） */
+const LANG_ALIASES = {
+  javascript: ["js", "node", "nodejs"],
+  typescript: ["ts", "tsx"],
+  python: ["py"],
+  csharp: ["cs", "c#"],
+  cpp: ["c++"],
+  powershell: ["pwsh", "ps1", "ps"],
+  shell: ["sh", "console"],
+  bash: ["sh", "zsh"],
+  yaml: ["yml"],
+  markdown: ["md"],
+  rust: ["rs"],
+  kotlin: ["kt"],
+  ruby: ["rb"],
+  ini: ["conf"],
+};
+
+/** 数据源：规范名升序。每次新数组，调用方随便筛不改底表 */
+function langDataset() {
+  return lowlight
+    .listLanguages()
+    .map((value) => ({ value, aliases: LANG_ALIASES[value] ?? [] }))
+    .sort((a, b) => (a.value < b.value ? -1 : a.value > b.value ? 1 : 0));
+}
+
+/** 筛选：无 query 原样返回；有 query 按规范名或别名的包含命中，**前缀**命中的排前 */
+function filterLangs(entries, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return entries;
+  const prefix = (e) => e.value.toLowerCase().startsWith(q) || e.aliases.some((a) => a.startsWith(q));
+  const include = (e) => e.value.toLowerCase().includes(q) || e.aliases.some((a) => a.includes(q));
+  return entries
+    .filter(include)
+    .sort((a, b) => Number(prefix(b)) - Number(prefix(a)) || a.value.localeCompare(b.value));
+}
+
+/** 输入文本 → 精确命中的语言（规范名或别名，大小写不敏感）；没命中返回 null（落 auto） */
+function matchExact(entries, text) {
+  const t = text.trim().toLowerCase();
+  if (!t) return null;
+  return (
+    entries.find((e) => e.value.toLowerCase() === t) ??
+    entries.find((e) => e.aliases.some((a) => a === t)) ??
+    null
+  );
+}
+
+/** 最近使用置顶：recent 里的（按新→旧）排前面，其余保持字典序；recent 里不在数据源的忽略 */
+function withRecentFirst(entries, recent) {
+  const byValue = new Map(entries.map((e) => [e.value, e]));
+  const head = recent.map((v) => byValue.get(v)).filter((e) => e !== undefined);
+  const seen = new Set(head.map((e) => e.value));
+  return [...head, ...entries.filter((e) => !seen.has(e.value))];
+}
+
+const RECENT_MAX = 6;
+
+/** 记一次使用：提到最前、去重、截上限（纯函数，落盘由调用方做） */
+function rememberLang(recent, value) {
+  return [value, ...recent.filter((v) => v !== value)].slice(0, RECENT_MAX);
+}
+
+const RECENT_KEY = "wangshu.codeLangs";
+
+function loadRecentLangs() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    return Array.isArray(raw) ? raw.filter((v) => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentLangs(recent) {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+  } catch {
+    /* 落盘失败不影响本次会话 */
+  }
+}
+
+/** 语言条显示文本：空 = auto */
+const displayLang = (lang) => (lang ? lang : "auto");
+
 const VaultCodeBlock = CodeBlockLowlight.extend({
   addOptions() {
     return { ...this.parent?.(), ctx: null };
@@ -707,31 +1025,152 @@ const VaultCodeBlock = CodeBlockLowlight.extend({
   addNodeView() {
     const ctx = this.options.ctx ?? {};
     return (props) => {
+      const langOf = (n) => String(n.attrs.language ?? "");
+
       const box = document.createElement("div");
       box.className = "dshk-codebox";
       const bar = document.createElement("div");
       bar.className = "dshk-codebar";
-      const select = document.createElement("select");
-      select.className = "dshk-rte-langsel";
-      for (const item of CODE_LANGS) {
-        const [value, label] = Array.isArray(item) ? item : [item, item];
-        const opt = document.createElement("option");
-        opt.value = value;
-        opt.textContent = label;
-        select.appendChild(opt);
-      }
-      select.value = props.node.attrs.language ?? "";
-      select.addEventListener("change", () => {
+
+      const setLang = (value) => {
         const pos = props.getPos();
         if (typeof pos !== "number") return;
         props.editor.view.dispatch(
-          props.editor.view.state.tr.setNodeMarkup(pos, undefined, {
-            ...props.node.attrs,
-            language: select.value || null,
-          }),
+          props.editor.view.state.tr.setNodeMarkup(pos, undefined, { ...props.node.attrs, language: value }),
         );
         props.editor.view.focus();
+      };
+
+      // ── 语言条 ────────────────────────────────────────────────────
+      const langbox = document.createElement("span");
+      langbox.className = "dshk-langbox";
+      const langInput = document.createElement("input");
+      langInput.className = "dshk-rte-langsel";
+      langInput.spellcheck = false;
+      langInput.setAttribute("autocomplete", "off");
+      // 下拉挂 body 上用 fixed 定位：代码盒是 overflow:hidden，挂盒子里会被截断
+      const langDrop = document.createElement("div");
+      langDrop.className = "dshk-langdrop";
+      langDrop.hidden = true;
+      document.body.appendChild(langDrop);
+      langbox.append(langInput);
+      // 语言条是 ProseMirror 可编辑区里的控件：整条 contenteditable=false 并在
+      // stopEvent 里拦下它的所有事件，否则点输入框会被 PM 的选区处理抢走焦点、
+      // 按键也被当成编辑输入，输入框根本打不了字
+      bar.contentEditable = "false";
+
+      // 下拉行有真语言也有合成的 auto（value ""）；dropActive = -1 表示没预选
+      const AUTO = { value: "", aliases: [] };
+      let dropList = [];
+      let dropEls = [];
+      let dropActive = -1;
+      let dropOpen = false;
+
+      const onScrollClose = () => closeDrop();
+      const closeDrop = () => {
+        if (!dropOpen) return;
+        dropOpen = false;
+        langDrop.hidden = true;
+        window.removeEventListener("scroll", onScrollClose, true);
+      };
+      const openDrop = () => {
+        if (dropOpen) return;
+        dropOpen = true;
+        langDrop.hidden = false; // 摘掉创建时的 hidden：必须在量尺寸（offsetWidth）之前
+        window.addEventListener("scroll", onScrollClose, true);
+      };
+
+      const syncLangInput = () => { langInput.value = displayLang(langOf(props.node)); };
+      const setActive = (i) => {
+        dropActive = dropList.length ? Math.max(0, Math.min(dropList.length - 1, i)) : -1;
+        dropEls.forEach((el, j) => el.classList.toggle("active", j === dropActive));
+      };
+      const renderDrop = (query) => {
+        const q = query.trim();
+        const base = q
+          ? filterLangs(langDataset(), q)
+          : [AUTO, ...withRecentFirst(langDataset(), loadRecentLangs())];
+        dropList = base;
+        dropActive = -1; // 不预选：Enter 走精确匹配/唯一命中，不会误切到清单第一条
+        dropEls = base.map((e, i) => {
+          const opt = document.createElement("div");
+          opt.className = "dshk-langopt";
+          opt.textContent = e.value || "auto";
+          opt.addEventListener("mousedown", (ev) => ev.preventDefault()); // 保住 input 焦点
+          opt.addEventListener("click", () => commitLang(e));
+          opt.addEventListener("mousemove", () => setActive(i));
+          return opt;
+        });
+        langDrop.replaceChildren(
+          ...dropEls,
+          ...(base.length
+            ? []
+            : [Object.assign(document.createElement("div"), { className: "dshk-langempty", textContent: "无匹配语言" })]),
+        );
+        openDrop();
+        // 按输入框实际位置贴（fixed 坐标）：默认往下，下方贴不下翻到上面；滚动即收
+        const r = langInput.getBoundingClientRect();
+        langDrop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - langDrop.offsetWidth - 8))}px`;
+        const below = r.bottom + 4 + langDrop.offsetHeight <= window.innerHeight - 8;
+        langDrop.style.top = `${below ? r.bottom + 4 : Math.max(8, r.top - langDrop.offsetHeight - 4)}px`;
+      };
+      const commitLang = (e) => {
+        if (e && e.value) {
+          setLang(e.value);
+          saveRecentLangs(rememberLang(loadRecentLangs(), e.value));
+        } else {
+          setLang(null); // auto / 无匹配落空
+        }
+        closeDrop();
+        syncLangInput();
+      };
+      langInput.addEventListener("mousedown", () => {
+        // 已聚焦时再点不会重发 focus 事件：点一下也要能重新展开清单
+        if (!dropOpen) renderDrop("");
       });
+      langInput.addEventListener("focus", () => {
+        langInput.placeholder = displayLang(langOf(props.node));
+        langInput.value = "";
+        renderDrop("");
+      });
+      langInput.addEventListener("input", () => renderDrop(langInput.value));
+      langInput.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!langDrop.hidden) setActive(dropActive + (e.key === "ArrowDown" ? 1 : -1));
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          e.stopPropagation();
+          const t = langInput.value.trim();
+          if (!t) {
+            // 空输入不算改动：只是把清单收了
+            closeDrop();
+            syncLangInput();
+            return;
+          }
+          const hit =
+            dropActive >= 0
+              ? dropList[dropActive]
+              : (matchExact(langDataset(), t) ?? (dropList.length === 1 ? dropList[0] : null));
+          commitLang(hit);
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          closeDrop();
+          syncLangInput();
+          props.editor.view.focus();
+        }
+      });
+      langInput.addEventListener("blur", () => {
+        // 点选已被 mousedown preventDefault 保住焦点，blur 只会发生在点去别处：收起并还原
+        window.setTimeout(() => {
+          closeDrop();
+          syncLangInput();
+        }, 0);
+      });
+
+      // ── 复制钮 ────────────────────────────────────────────────────
       const copy = document.createElement("button");
       copy.type = "button";
       copy.className = "dshk-codecopy";
@@ -748,8 +1187,8 @@ const VaultCodeBlock = CodeBlockLowlight.extend({
         if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done, done);
         else done();
       });
-      bar.appendChild(select);
-      bar.appendChild(copy);
+
+      bar.append(langbox, copy);
       const pre = document.createElement("pre");
       const code = document.createElement("code");
       if (props.node.attrs.language) code.className = `language-${props.node.attrs.language}`;
@@ -759,12 +1198,20 @@ const VaultCodeBlock = CodeBlockLowlight.extend({
       return {
         dom: box,
         contentDOM: code,
+        stopEvent(event) {
+          return bar.contains(event.target);
+        },
+        ignoreMutation: () => true,
         update(node) {
           if (node.type.name !== "codeBlock") return false;
           props.node = node;
           code.className = node.attrs.language ? `language-${node.attrs.language}` : "";
-          select.value = node.attrs.language ?? "";
+          syncLangInput();
           return true;
+        },
+        destroy() {
+          closeDrop();
+          langDrop.remove();
         },
       };
     };
@@ -873,7 +1320,7 @@ function buildExtensions(ctx = {}) {
     HardBreakPonyfill,
     Gapcursor, Dropcursor,
     WikiLink.configure({ ctx }),
-    MathInline, MathBlock,
+    MathInline, MathBlock, MermaidBlock,
     Details, DetailsTitle, DetailsBody,
     RawBlock,
     AnchorFlash,
@@ -1059,6 +1506,7 @@ function create(host, opts = {}) {
     insertCodeBlock: () => editor.chain().focus().toggleCodeBlock().run(),
     insertMathInline: () => editor.chain().focus().insertMathInline().run(),
     insertMathBlock: () => editor.chain().focus().insertMathBlock().run(),
+    insertMermaidBlock: () => editor.chain().focus().insertMermaidBlock().run(),
     insertDetails: () => editor.chain().focus().insertDetails().run(),
     insertTable: (rows, cols) => editor.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run(),
     insertImage: (src, alt) => editor.chain().focus().setImage({ src, alt }).run(),
@@ -1126,4 +1574,4 @@ function makeTestRig(markedOptions = { breaks: true, gfm: true }) {
   };
 }
 
-window.DshRTE = { create, buildExtensions, makeTestRig, VaultMarkdownManager, version: "1" };
+window.DshRTE = { create, buildExtensions, makeTestRig, VaultMarkdownManager, mermaidReady, version: "1" };

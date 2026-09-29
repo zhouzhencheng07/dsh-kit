@@ -54,6 +54,8 @@ const PKGS = [
   `@tiptap/extension-code-block@${TIP}`,
   `@tiptap/markdown@${TIP}`,
   'lowlight@3.3.0',
+  // rte-entry 里补注册 powershell 用（lowlight common 不含它）
+  'highlight.js@11.11.2',
 ]
 
 try {

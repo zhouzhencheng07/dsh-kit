@@ -124,6 +124,27 @@ console.log("== vault 自定义语法 ==");
   check("行间公式", err === null && out === "前\n\n$$\na_1 + b^2\n$$\n\n后", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
+  const src = "```mermaid\ngraph TD\n  A[开始] --> B{判断}\n```";
+  const first = rig.parse(src).content?.[0];
+  check("mermaid 围栏 → 独立图块节点", first?.type === "mermaidBlock" && first?.attrs?.src === "graph TD\n  A[开始] --> B{判断}", JSON.stringify(first));
+  const [out, err] = rt(src);
+  check("mermaid 图块往返", err === null && out === src && stable(src), `err=${err} out=${JSON.stringify(out)}`);
+}
+{
+  const [out, err] = rt("```js\ngraph TD\n  A --> B\n```\n\n```mermaid\ngraph LR\n  A --> B\n```");
+  // mermaid 只认领 ```mermaid 围栏；相邻的 js 围栏照旧是代码块
+  check(
+    "非 mermaid 围栏不受影响",
+    err === null && out === "```js\ngraph TD\n  A --> B\n```\n\n```mermaid\ngraph LR\n  A --> B\n```",
+    `err=${err} out=${JSON.stringify(out)}`,
+  );
+}
+{
+  // 旧数据里 mermaid 曾以普通代码块（language=mermaid）落盘：同一份围栏，新解析直接升级成图块
+  const json = rig.parse("```mermaid\npie title 占比\n  "+'"甲"'+" : 40\n  "+'"乙"'+" : 60\n```");
+  check("旧代码块形态的 mermaid 升级为图块", json.content?.[0]?.type === "mermaidBlock", JSON.stringify(json.content?.[0]));
+}
+{
   const [out, err] = rt("$5 美元和 $6 元");
   // 文本里的字面 $ 转义成 \$（防二次 parse 误判成公式），是预期行为
   check("价签不算公式", err === null && out === "\\$5 美元和 \\$6 元" && stable(out), `err=${err} out=${JSON.stringify(out)}`);
