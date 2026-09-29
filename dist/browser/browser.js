@@ -222,8 +222,8 @@ export class BrowserService {
                 dialogs: new Map(),
                 activeId: null,
                 viewId: null,
-                watchers: 0,
-                stream: null,
+                watchers: new Map(),
+                streams: new Map(),
                 onFrame: undefined,
                 lastActivity: Date.now(),
                 inputQueue: Promise.resolve(),
@@ -235,7 +235,7 @@ export class BrowserService {
     /** 分区没页、没观察者、没帧流就删掉它的记录（分区表不长期堆空壳） */
     _dropIdleScope(scope) {
         const s = this._scopes.get(scope);
-        if (s && s.pages.size === 0 && s.watchers === 0 && s.stream === null)
+        if (s && s.pages.size === 0 && s.watchers.size === 0 && s.streams.size === 0)
             this._scopes.delete(scope);
     }
     _touch(scope) {
@@ -247,7 +247,8 @@ export class BrowserService {
     _watchersTotal() {
         let n = 0;
         for (const s of this._scopes.values())
-            n += s.watchers;
+            for (const c of s.watchers.values())
+                n += c;
         return n;
     }
     _pagesTotal() {
@@ -265,7 +266,7 @@ export class BrowserService {
             const now = Date.now();
             // 分区级回收：没人看且十分钟没动过的对话，只收它自己的页（别的对话不受影响）
             for (const [key, s] of [...this._scopes]) {
-                if (s.watchers > 0 || s.pages.size === 0 || now - s.lastActivity <= IDLE_CLOSE_MS)
+                if (s.watchers.size > 0 || s.pages.size === 0 || now - s.lastActivity <= IDLE_CLOSE_MS)
                     continue;
                 this._log(`browser: 分区空闲超时，收起该对话的 ${s.pages.size} 页`);
                 void this._closeScopePages(key, s);
@@ -551,16 +552,14 @@ export class BrowserService {
         this._emit({ kind: 'scope', scope: key });
         return tabId;
     }
-    /** 切本分区观察页（幂等）：帧流重挂到新页；每次都广播（面板页签条高亮要跟随） */
+    /** 记下本分区人最近动的那页（幂等，广播）：帧流按页各挂各的，观察指针只管
+     *  「没带页 id 的调用落哪一页」（agent 工具与 HTTP 改投走它） */
     _setView(scope, tabId) {
         const s = this._s(scope);
         if (s.viewId === tabId)
             return;
-        const prevStreamTab = s.stream?.tabId ?? null;
         s.viewId = tabId;
         this._emit({ kind: 'scope', scope });
-        if (prevStreamTab !== tabId)
-            void this._resyncStream(scope, tabId);
     }
     /** 页面消失（关闭/崩溃）后本分区两个指针的回退：活动页取剩余首页；观察页优先跟随活动页 */
     _pageGone(scope, id) {
@@ -570,13 +569,12 @@ export class BrowserService {
             s.activeId = s.pages.keys().next().value ?? null;
         if (s.viewId === id) {
             s.viewId = s.activeId ?? s.pages.keys().next().value ?? null;
-            if (s.viewId !== null)
-                void this._resyncStream(scope, s.viewId);
         }
         // 流的宿主页没了就拆掉：CDP 会话已死，留着会让面板把最后一帧当成活画面
         // （关最后一页后面板冻结在旧视图，看起来像还在直播，误导人以为页面还在）
-        if (s.stream && s.stream.tabId === id)
-            void this._detachStream(scope);
+        if (s.streams.has(id))
+            void this._detachStream(scope, id);
+        s.watchers.delete(id);
         if (s.pages.size === 0)
             this._dropIdleScope(scope);
     }
@@ -644,8 +642,9 @@ export class BrowserService {
     }
     /** 导航（工具与面板共用）：返回 { tabId, title, url, snapshot? }。
      *  agent 路径作用于本分区 agent 活动页；forHuman（面板 URL 栏）作用于本分区观察页、
-     *  不动 agent 活动页。两者都只落在本分区，别的对话的页不受影响。 */
-    async navigate(scope, url, { newTab = false, snapshot = true, forHuman = false } = {}) {
+     *  不动 agent 活动页；targetId 显式点名某页（面板一签一页时地址栏作用于自己那张签）。
+     *  两者都只落在本分区，别的对话的页不受影响。 */
+    async navigate(scope, url, { newTab = false, snapshot = true, forHuman = false, targetId = null } = {}) {
         if (typeof url !== 'string' || !/^https?:\/\//i.test(url.trim())) {
             return { ok: false, error: '仅支持 http/https URL' };
         }
@@ -653,7 +652,7 @@ export class BrowserService {
         if (!ensured.ok)
             return ensured;
         const s = this._s(scope);
-        const anchorId = forHuman ? s.viewId : s.activeId;
+        const anchorId = targetId !== null && s.pages.has(Number(targetId)) ? Number(targetId) : forHuman ? s.viewId : s.activeId;
         let page;
         if (newTab || anchorId === null || !s.pages.has(anchorId)) {
             // 新页或本分区还没有页：开一页（认领自带页或 newPage）并纳管
@@ -979,9 +978,9 @@ export class BrowserService {
     }
     /** 面板历史按钮（作用于本分区观察页）：back/forward/reload。无历史可退/超时不视为
      *  故障（页面维持原状），仍回报当前位置 */
-    async history(scope, op) {
+    async history(scope, op, targetId = null) {
         const s = this._s(scope);
-        const page = s.viewId !== null ? s.pages.get(s.viewId) ?? null : null;
+        const page = targetId !== null ? s.pages.get(Number(targetId)) ?? null : s.viewId !== null ? s.pages.get(s.viewId) ?? null : null;
         if (!page)
             return { ok: false, error: '无观察页（浏览器未运行或页签已关）' };
         this._touch(scope);
@@ -1003,46 +1002,57 @@ export class BrowserService {
         return { ok: true, tabId, url: page.url(), title };
     }
     // ── 面板帧流（按分区各一条；同一分区的多个观察者复路到同一条 CDP 会话）──
-    /** 面板订阅本分区帧流（引用计数；复路：同一观察页只挂一条 CDP 会话） */
-    async watcherOpen(scope, onFrame) {
+    /** 面板订阅某页的帧流（一页一条，多张签看同一页复路） */
+    async watcherOpen(scope, tabId, onFrame) {
         const ensured = await this.ensure();
         if (!ensured.ok)
             return ensured;
         const s = this._s(scope);
-        s.watchers++;
-        this._touch(scope);
+        const id = Number(tabId);
+        if (!Number.isFinite(id) || !s.pages.has(id))
+            return { ok: false, error: `页不存在：${tabId}` };
         s.onFrame = onFrame;
-        if (!s.stream)
-            await this._attachStream(scope);
-        return { ok: true };
+        s.watchers.set(id, (s.watchers.get(id) ?? 0) + 1);
+        this._touch(scope);
+        if (!s.streams.has(id))
+            await this._attachStream(scope, id);
+        return { ok: true, tabId: id };
     }
-    watcherClose(scope) {
+    /** 退订某页帧流（该页无观察者即拆 CDP 会话） */
+    watcherClose(scope, tabId) {
         const s = this._s(scope);
-        s.watchers = Math.max(0, s.watchers - 1);
-        if (s.watchers === 0 && s.stream) {
-            void this._detachStream(scope);
-        }
-        this._dropIdleScope(normalizeScope(scope));
-    }
-    /** 挂本分区观察页的 CDP 帧流（每分区一条；同分区多观察者复用它） */
-    async _attachStream(scope) {
-        const s = this._s(scope);
-        if (s.stream)
+        const id = Number(tabId);
+        if (!Number.isFinite(id))
             return;
-        const page = s.viewId !== null ? s.pages.get(s.viewId) ?? null : null;
+        const left = Math.max(0, (s.watchers.get(id) ?? 0) - 1);
+        if (left === 0)
+            s.watchers.delete(id);
+        else
+            s.watchers.set(id, left);
+        if (left === 0 && s.streams.has(id))
+            void this._detachStream(scope, id);
+        if (s.watchers.size === 0)
+            this._dropIdleScope(normalizeScope(scope));
+    }
+    /** 挂某页的 CDP 帧流（一页一条；多张签看同一页复用它） */
+    async _attachStream(scope, tabId) {
+        const s = this._s(scope);
+        if (s.streams.has(tabId))
+            return;
+        const page = s.pages.get(tabId) ?? null;
         if (!page || !this._context)
             return;
         try {
             const cdp = await this._context.newCDPSession(page);
             // 并发进来（watcherOpen 与页就绪重挂）时只留先到的这条
-            if (s.stream) {
+            if (s.streams.has(tabId)) {
                 await cdp.detach().catch(() => { });
                 return;
             }
             cdp.on('Page.screencastFrame', (f) => {
                 try {
                     if (s.onFrame)
-                        s.onFrame(f.data, f.metadata);
+                        s.onFrame(tabId, f.data, f.metadata);
                 }
                 catch { }
                 cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => { });
@@ -1057,14 +1067,14 @@ export class BrowserService {
                 maxHeight: 1200,
                 everyNthFrame: 2,
             });
-            s.stream = { cdp, tabId: page.__dshTabId };
+            s.streams.set(tabId, { cdp });
             // 首帧兜底：screencast 只在重绘时推帧，静态页面可能长时间没有首帧（面板
             // 空白）。attach 后立即抓一帧推给面板，之后帧流自然接管。
             try {
                 const shot = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 60 });
                 const data = shot?.data;
                 if (data && s.onFrame)
-                    s.onFrame(data, null);
+                    s.onFrame(tabId, data, null);
             }
             catch { }
         }
@@ -1072,10 +1082,10 @@ export class BrowserService {
             this._log(`browser: 帧流启动失败：${error instanceof Error ? error.message : error}`);
         }
     }
-    async _detachStream(scope) {
+    async _detachStream(scope, tabId) {
         const s = this._s(scope);
-        const stream = s.stream;
-        s.stream = null;
+        const stream = s.streams.get(tabId);
+        s.streams.delete(tabId);
         if (!stream)
             return;
         try {
@@ -1092,16 +1102,15 @@ export class BrowserService {
      *  这里必须补挂——否则流永远不建，面板一直空白 */
     async _resyncStream(scope, tabId) {
         const s = this._s(scope);
-        if (s.stream && s.stream.tabId === tabId)
+        if (s.streams.has(tabId))
             return;
-        if (s.stream)
-            await this._detachStream(scope);
-        if (s.watchers > 0)
-            await this._attachStream(scope);
+        if ((s.watchers.get(tabId) ?? 0) > 0)
+            await this._attachStream(scope, tabId);
     }
-    /** 面板 URL 栏手动导航（作用于本分区观察页，不动 agent 活动页；不取快照） */
-    async humanOpen(scope, url) {
-        return this.navigate(scope, url, { snapshot: false, forHuman: true });
+    /** 面板 URL 栏手动导航（作用于指定页——面板一签一页时就是那张签自己的页；
+     *  不给页则落本分区观察页；都不动 agent 活动页；不取快照） */
+    async humanOpen(scope, url, targetId = null) {
+        return this.navigate(scope, url, { snapshot: false, forHuman: true, targetId });
     }
     /** 优雅关闭（面板/协议可调）：context.close() 落盘 cookie 后再走，下次启动免登录 */
     async closeNow() {
@@ -1114,11 +1123,11 @@ export class BrowserService {
      * 设计约束：不自动拉起浏览器（未运行即拒绝，避免悬停误启动）；事件进顺序队列
      * 串行派发（鼠标移动高频，乱序会拖拽断裂）；坐标由面板按帧原始尺寸换算好。
      */
-    async humanInput(scope, msg) {
+    async humanInput(scope, msg, targetId = null) {
         if (!this._context)
             return { ok: false, error: '浏览器未运行' };
         const s = this._s(scope);
-        const page = s.viewId !== null ? s.pages.get(s.viewId) ?? null : null;
+        const page = targetId !== null ? s.pages.get(Number(targetId)) ?? null : s.viewId !== null ? s.pages.get(s.viewId) ?? null : null;
         if (!page)
             return { ok: false, error: '无观察页面' };
         const buttonName = (b) => (b === 1 ? 'middle' : b === 2 ? 'right' : 'left');
@@ -1172,8 +1181,10 @@ export class BrowserService {
         const streams = [...this._scopes.entries()];
         this._scopes.clear();
         this._unclaimed = [];
-        for (const [key] of streams)
-            await this._detachStream(key);
+        for (const [key, s] of streams) {
+            for (const tabId of [...s.streams.keys()])
+                await this._detachStream(key, tabId);
+        }
         try {
             await context.close();
         }

@@ -85,12 +85,13 @@ const svc = {
   state: () => service.state(S),
   closePage: (tabId) => service.closePage(S, tabId),
   activatePage: (tabId) => service.activatePage(S, tabId),
-  humanOpen: (url) => service.humanOpen(S, url),
+  humanOpen: (url, tabId = null) => service.humanOpen(S, url, tabId),
   humanNewTab: () => service.humanNewTab(S),
-  history: (op) => service.history(S, op),
-  humanInput: (msg) => service.humanInput(S, msg),
-  watcherOpen: (cb) => service.watcherOpen(S, cb),
-  watcherClose: () => service.watcherClose(S),
+  history: (op, tabId = null) => service.history(S, op, tabId),
+  humanInput: (msg, tabId = null) => service.humanInput(S, msg, tabId),
+  // 帧流按页：签名是 (scope, tabId, onFrame)，回调带页 id
+  watcherOpen: (tabId, cb) => service.watcherOpen(S, tabId, cb),
+  watcherClose: (tabId) => service.watcherClose(S, tabId),
   ensurePage: () => service.ensurePage(S),
   dispose: () => service.dispose(),
 }
@@ -373,19 +374,22 @@ try {
   assert.ok(events.includes('navigated'), '应收到 navigated 事件（面板联动源）')
   ok('事件流包含 navigated（面板联动）')
 
-  // ── 观察者先到、页后到：面板点开即 watch（浏览器还在冷启动），页认领后必须补挂流。
-  // 少了这一步，面板收到 state 却永远等不到帧（canvas 恒空白）──
+  // ── 帧流按页：面板一签一页，订的是「那张签那一页」。页还不存在直接拒（签只会
+  //  为已存在的页开），故「观察者先于页」这个老场景在新模型里不存在。
   const C = 'sess-c'
   const frames = []
-  const opened = await service.watcherOpen(C, (data) => frames.push(data))
-  assert.equal(opened.ok, true, `watcherOpen 失败：${opened.error}`)
   assert.equal((await service.listPages(C)).pages.length, 0, '此分区此刻还没有页')
+  const noPage = await service.watcherOpen(C, 999, (id, data) => frames.push(data))
+  assert.equal(noPage.ok, false, '订不存在的页应被拒')
   const ensuredC = await service.ensurePage(C)
   assert.equal(ensuredC.ok, true, `ensurePage 失败：${ensuredC.error}`)
+  const opened = await service.watcherOpen(C, ensuredC.tabId, (id, data) => frames.push({ id, data }))
+  assert.equal(opened.ok, true, `watcherOpen 失败：${opened.error}`)
   await new Promise((r) => setTimeout(r, 800))
-  assert.ok(frames.length > 0, '观察者先到、页后到时也要有帧（流按「有观察者就有流」补挂）')
-  service.watcherClose(C)
-  ok(`观察者先到页后到：页认领后帧流补挂（收到 ${frames.length} 帧）`)
+  assert.ok(frames.length > 0, '订了页就该有帧')
+  assert.ok(frames.every((f) => f.id === ensuredC.tabId), '帧只投它自己那页')
+  service.watcherClose(C, ensuredC.tabId)
+  ok(`按页帧流：只投自己那页（收到 ${frames.length} 帧）`)
 } finally {
   off()
   await svc.dispose()

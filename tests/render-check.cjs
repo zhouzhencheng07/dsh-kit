@@ -105,7 +105,7 @@ const RETURN = "return module.exports;";
 const rootReturn = body.lastIndexOf(RETURN);
 if (rootReturn < 0) { console.log("FATAL: no root return"); process.exit(2); }
 const wrapper = body.slice(0, rootReturn) +
-  "return Object.assign({ KitSurfaces, TreeRowMenu, openFileTab, activateFileTab, closeFileTab, openFeatureTab, closeFeatureTab, openVaultPageTab, closeVaultPageTab, activateVaultPage, sidebarViewPatch, kitGetJson, kitPostJson, kitJson, getKitUi, setKitUi, FilePaneBody, openFeatureDock, openFileAndDock, closeRightbarTab, docChips, openOfficialFile, openTreeFile }, kitBase, exports.vault, exports.phone);" +
+  "return Object.assign({ KitSurfaces, TreeRowMenu, openFeatureTab, closeFeatureTab, sidebarViewPatch, kitGetJson, kitPostJson, kitJson, getKitUi, setKitUi, FilePaneBody, openFeatureDock, openFileAndDock, closeRightbarTab, openOfficialFile, openTreeFile }, kitBase, exports.vault, exports.phone);" +
   body.slice(rootReturn + RETURN.length);
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -127,7 +127,7 @@ console.log((baseOk ? "PASS  " : "FAIL  ") + "底座共享面齐全（kit 三件
 if (!baseOk) process.exitCode = 1;
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["VaultEntry", "KitSurfaces", "TreeRowMenu", "RteEditor", "VaultPagePane", "openFeatureTab", "activateFileTab", "closeFileTab", "openVaultPageTab", "closeVaultPageTab", "activateVaultPage", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["VaultEntry", "KitSurfaces", "TreeRowMenu", "RteEditor", "VaultPagePane", "openFeatureTab", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -173,21 +173,13 @@ const tvOpen = comps.toggleVaultEntry({ treeOpen: true, vaultIdxOpen: false, vau
 check("知识库入口开：只切侧栏索引且让出文件树", tvOpen.vaultIdxOpen === true && tvOpen.treeOpen === false && tvOpen.vaultOpen === undefined && tvOpen.activeFeature === undefined);
 const tvClose = comps.toggleVaultEntry({ vaultIdxOpen: true, vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", activeFeature: "vault" });
 check("知识库入口再点：索引回会话、知识库签与页签不动（补丁不含这些键）", tvClose.vaultIdxOpen === false && tvClose.vaultOpen === undefined && tvClose.vaultPages === undefined && tvClose.activeVaultPage === undefined && tvClose.activeFeature === undefined);
-// 7.1c) 知识库页标签纯逻辑：多开、激活、单关、关光收摊（访问序随 ← → 一起退役）
-const vp1 = comps.openVaultPageTab({ vaultPages: [], activeVaultPage: null }, "D:/v/a.md");
-const vp2 = comps.openVaultPageTab(vp1, "D:/v/b.md");
-check("openVaultPageTab 多开：一页一签 + 激活", vp2.vaultPages.length === 2 && vp2.activeVaultPage === "D:/v/b.md" && vp2.vaultOpen === true && vp2.activeFeature === "vault" && vp2.vaultHist === undefined);
-const vp3 = comps.openVaultPageTab(vp2, "D:/v/a.md");
-check("openVaultPageTab 重开已开页：不重复开签、只激活", vp3.vaultPages.length === 2 && vp3.activeVaultPage === "D:/v/a.md");
-const vpAct = comps.activateVaultPage(vp3, "D:/v/b.md");
-check("activateVaultPage 只激活", vpAct.activeVaultPage === "D:/v/b.md" && vpAct.vaultPages.length === 2);
-check("activateVaultPage 未开的页不认", Object.keys(comps.activateVaultPage(vp3, "D:/v/zz.md")).length === 0);
-const vpClose = comps.closeVaultPageTab(vp3, "D:/v/b.md");
-check("closeVaultPageTab 单关非激活页：激活位不动", vpClose.vaultPages.length === 1 && vpClose.activeVaultPage === undefined && vpClose.vaultOpen === undefined);
-const vpCloseActive = comps.closeVaultPageTab(vp3, "D:/v/a.md");
-check("closeVaultPageTab 关激活页：激活位顺延邻居", vpCloseActive.vaultPages.length === 1 && vpCloseActive.activeVaultPage === "D:/v/b.md");
-const vpLast = comps.closeVaultPageTab({ vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", vaultOpen: true, activeFeature: "vault" }, "D:/v/a.md");
-check("closeVaultPageTab 关最后一个：整片知识库舞台收摊", vpLast.vaultPages.length === 0 && vpLast.vaultOpen === false && vpLast.activeVaultPage === null && vpLast.activeFeature === null);
+// 7.1c) 右栏资源地址（一内容一签的载体）：条目 ↔ 地址往返，query 归 diff 源用
+const vAddr = comps.rightbarAddress("vault", "D:/v/a b.md");
+check("知识库页地址：dsh-resource 前缀 + 编码条目", vAddr === "dsh-resource://dshk-vault/D%3A%2Fv%2Fa%20b.md" && comps.rightbarItem("vault", vAddr) === "D:/v/a b.md");
+const dAddr = comps.rightbarAddress("file", "C:/x/a.js", "d=1&c=abc");
+check("diff 地址：query 跟着地址走（同一文件不同 diff 源是两张签）", dAddr.startsWith("dsh-resource://dshk-diff/C%3A%2Fx%2Fa.js?") && comps.rightbarItem("file", dAddr) === "C:/x/a.js" && comps.rightbarQuery("file", dAddr) === "d=1&c=abc");
+check("非本 feature 的地址回 null（不串类）", comps.rightbarItem("vault", dAddr) === null && comps.rightbarItem("file", "dsh-resource://file/x") === null);
+check("空条目不给地址", comps.rightbarAddress("vault", "") === "");
 
 stateSeq = 0;
 stateStore.clear();
@@ -213,71 +205,31 @@ check("timerMinsOfDT：取 HH:mm 折当日分钟", comps.timerMinsOfDT("2026-09-
 }
 
 
-// 7.2.2a) 文件标签纯逻辑：点击只激活（刷新 usedAt）／✕ 单关顺延邻居／关光了整片收摊
-const tabBase = {
-  files: [
-    { path: "C:/x/a.js", from: "tree", usedAt: 1 },
-    { path: "C:/x/b.js", from: "tree", deleted: true, usedAt: 2 },
-    { path: "C:/x/c.js", from: "tree", usedAt: 3 },
-  ],
-  activeFile: "C:/x/c.js",
-  activeFeature: "file",
-};
-const actA = comps.activateFileTab(tabBase, "C:/x/a.js");
-check("activateFileTab 只激活：不动顺序、只刷新 usedAt 与激活位", actA.activeFile === "C:/x/a.js" && actA.activeFeature === "file" && actA.files.length === 3 && actA.files[0].usedAt > 1 && actA.files[1].deleted === true);
-check("activateFileTab 未开的文件不认", Object.keys(comps.activateFileTab(tabBase, "C:/x/zz.js")).length === 0);
-const closeB = comps.closeFileTab(tabBase, "C:/x/b.js");
-check("closeFileTab 单关非激活签：激活位不动", closeB.files.length === 2 && closeB.activeFile === undefined && !closeB.files.some((x) => x.path === "C:/x/b.js"));
-const closeActive = comps.closeFileTab(tabBase, "C:/x/c.js");
-check("closeFileTab 关激活签：激活位顺延邻居", closeActive.files.length === 2 && closeActive.activeFile === "C:/x/b.js");
-const closeLast = comps.closeFileTab({ files: [{ path: "C:/x/a.js", from: "tree", usedAt: 1 }], activeFile: "C:/x/a.js", browserOpen: true, activeFeature: "file" }, "C:/x/a.js");
-check("closeFileTab 关最后一个：整片文件舞台收摊且激活位顺延到余下标签", closeLast.files.length === 0 && closeLast.activeFile === null && closeLast.activeFeature === "browser");
+// 7.2.2a) 文件签的文档签条已退役：一个文件一张官方签（地址往返见 7.1c）
 
-
-
-// 7.2.4e) 右栏 pane 正文组件：各 pane 正文的唯一外壳，
-// 这里直接渲染各 pane 正文验证渲染体；存在性同步走 effect（桩不执行）
-comps.setKitUi({
-  files: [
-    { path: "C:/x/a.js", from: "scm", untracked: false, usedAt: 1 },
-    { path: "C:/x/b.md", from: "scm", untracked: true, usedAt: 2 },
-  ],
-  activeFile: "C:/x/b.md",
-});
+// 7.2.4e) 右栏 pane 正文组件：一个内容一张签，正文只渲染自己那张签
+// （地址由官方签条给出：tabAddress 读 tab.contentId）
+const tabProps = (address) => ({ useTabInfo: () => ({ tab: { id: "t1", contentId: address, visible: true } }) });
 callLog = [];
 // DiffPane 在 dsh-kit/files 组件：root 只从 kitBase 的 diffPane 座取（物化期挂上）。
 // 桩环境手动挂一枚假组件，钉住「正文类型确实来自座」——座没接线时类型是 undefined
 // （真机 React #130 白屏，桩渲染器不抛，只能这样钉）
 const fakeDiff = function FakeDiff() {};
 comps.diffPane.Component = fakeDiff;
-out = comps.FilePaneBody({});
-const fpChips = callLog.filter((c) => (c[0] === "jsxs") && c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-tab") && typeof c[2].title === "string" && c[2].title.startsWith("C:/x/"));
-const fpWraps = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-pane-view" && c[2].style && typeof c[2].style.display === "string");
+const diffAddr = comps.rightbarAddress("file", "C:/x/b.md", "u=1");
+out = comps.FilePaneBody(tabProps(diffAddr));
 const fpDiffs = callLog.filter((c) => (c[0] === "jsx") && c[1] === fakeDiff && c[2] && typeof c[2].path === "string");
-const fpLabels = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-tab-label" && ["a.js", "b.md"].includes(c[2].children));
-check("FilePaneBody 渲染无异常（文档签条 + 两个 diff 正文实例）", !!out && fpChips.length === 2 && fpWraps.length === 2 && fpLabels.length === 2);
-check("FilePaneBody diff 正文类型取自 diffPane 座（每文件一枚，未跟踪标志透传）", fpDiffs.length === 2 && fpDiffs.some((c) => c[2].path === "C:/x/b.md" && c[2].untracked === true) && fpDiffs.some((c) => c[2].path === "C:/x/a.js" && c[2].untracked === false));
+check("FilePaneBody 一文件一签：只渲染自己那张签的 diff（未跟踪标志从地址 query 取）", !!out && fpDiffs.length === 1 && fpDiffs[0][2].path === "C:/x/b.md" && fpDiffs[0][2].untracked === true);
+check("FilePaneBody 不再自绘第二层签条", callLog.every((c) => !(c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-tab"))));
 comps.diffPane.Component = null;
-check("FilePaneBody 每文件一签、只激活当前签、每签各带 ✕ 单关", fpChips.filter((c) => c[2].className.includes("dshk-tab-on")).length === 1 && fpChips.every((c) => Array.isArray(c[2].children) && c[2].children.some((ch) => ch && ch.props && ch.props.children && ch.props.children.props && ch.props.children.props.className === "dshk-tab-x")));
-check("FilePaneBody 非激活文件仍挂载（激活 flex / 非激活 none）", fpWraps.filter((c) => c[2].style.display === "flex").length === 1 && fpWraps.some((c) => c[2].style.display === "none"));
-comps.setKitUi({ files: [], activeFile: null });
-comps.setKitUi({ files: [], activeFile: null });
 callLog = [];
-out = comps.FilePaneBody({});
-const fpEmpty = callLog.find((c) => (c[0] === "jsx") && c[2] && (c[2].className === "dshk-rbpane-hint" || c[2].className === "dshk-rbguide"));
-check("FilePaneBody 0 文件无空态（最后一页关掉连官方签一起收）", !!out && !fpEmpty);
+out = comps.FilePaneBody(tabProps(comps.rightbarAddress("file", "C:/x/b.md")));
+const fpPlain = callLog.filter((c) => (c[0] === "jsx") && c[1] === null && c[2] && typeof c[2].path === "string");
+check("无 query 标志即普通工作区 diff（untracked/deleted 为假）", fpPlain.length === 1 && fpPlain[0][2].untracked === false && fpPlain[0][2].deleted === false);
+out = comps.FilePaneBody(tabProps(""));
+check("地址认不出（别的页类型/没落地址）→ 不渲染正文", out === null);
 callLog = [];
-comps.setKitUi({ vaultOpen: true, vaultPages: ["D:/v/a.md", "D:/v/b.md"], activeVaultPage: "D:/v/b.md" });
-callLog = [];
-out = comps.VaultPaneBody({});
-const vpHost = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-vault-panehost");
-const vpChips = callLog.filter((c) => (c[0] === "jsxs") && c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-tab") && typeof c[2].title === "string" && c[2].title.startsWith("D:/v/"));
-const vpOnChips = vpChips.filter((c) => c[2].className.includes("dshk-tab-on"));
-const vpLabels = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-tab-label" && ["a", "b"].includes(c[2].children));
-check("VaultPaneBody 渲染 portal 宿主（VaultRootView 投页编辑器）", !!out && !!vpHost);
-check("VaultPaneBody 知识库多开：一页一签、只激活当前页、页名去 .md", vpChips.length === 2 && vpOnChips.length === 1 && vpOnChips[0][2].title === "D:/v/b.md" && vpLabels.length === 2);
-check("VaultPaneBody 每页签各带独立 ✕", vpChips.every((c) => Array.isArray(c[2].children) && c[2].children.some((ch) => ch && ch.props && ch.props.children && ch.props.children.props && ch.props.children.props.className === "dshk-tab-x")));
-comps.setKitUi({ vaultOpen: false, vaultPages: [], activeVaultPage: null });
+out = comps.SchedulePaneBody({});
 callLog = [];
 out = comps.SchedulePaneBody({});
 check("SchedulePaneBody 挂 ScheduleView（pane 内左待办+右网格）", !!out && callLog.some((c) => c[1] === comps.ScheduleView));
@@ -291,14 +243,12 @@ const taskChecks = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].type =
 const timerBtns = callLog.filter((c) => c[2] && c[2].className === "dshk-sched-tasktimer");
 check("ScheduleTasksCard 待办行渲染卡壳", !!out && typeof out === "object");
 check("ScheduleTasksCard 只读行：无勾选框、无计时钮", taskChecks.length === 0 && timerBtns.length === 0);
-// openFileAndDock / openVaultPageAndDock：kitUi 侧补丁在这里断言；右栏
-// openTab 走 sidebarRight 服务（桩环境服务未注入，静默不触）
-comps.openFileAndDock("C:/x/new.js", "tree", false);
-check("openFileAndDock 落 kitUi 差异签", comps.getKitUi().activeFile === "C:/x/new.js" && comps.getKitUi().activeFeature === "file");
+// openFileAndDock / openVaultPageAndDock：签归官方签表，这里断言「开出来的地址对不对」
+// （桩环境无右栏服务 → 只看地址映射，见 7.1c 的往返断言）
+comps.openFileAndDock("C:/x/new.js", false, true, undefined);
+check("openFileAndDock 激活差异（签由官方签条持有）", comps.getKitUi().activeFeature === "file");
 comps.openVaultPageAndDock("D:/v/p.md");
-check("openVaultPageAndDock 落 kitUi 知识库页签", comps.getKitUi().activeVaultPage === "D:/v/p.md" && comps.getKitUi().vaultOpen === true);
-comps.setKitUi({ files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null, activeFeature: null });
-
+check("openVaultPageAndDock 激活知识库（页签在官方签条里）", comps.getKitUi().activeFeature === "vault");
 // 6.5b) 官方右栏可用时机（rightbarSeat）：树/源代码管理/知识库三个工作区面与全部
 // 开签动作跟官方右栏同生灭——全局面板（插件页/设置页）占住中栏或没选会话时收手。
 // 两路信号：layout.panelInfo 回落源先测（mounted 一旦挂上就首选，无退订 API），
@@ -326,10 +276,11 @@ comps.setKitUi({ files: [], activeFile: null, vaultOpen: false, vaultPages: [], 
   check("useRightbarSeat 读的就是这份在场状态（KitSurfaces 据此重绘）", comps.useRightbarSeat() === false);
   // 不在场：开签动作整件不做（只补存在性会留下「状态说开着、右栏没这张签」）
   check("不在场：openFeatureDock 不动任何状态", Object.keys(comps.openFeatureDock({ browserOpen: false, activeFeature: null }, "browser")).length === 0);
-  comps.openFileAndDock("C:/x/gated.js", "scm", true);
-  check("不在场：openFileAndDock 不落差异签", (comps.getKitUi().files ?? []).length === 0);
+  comps.setKitUi({ activeFeature: null });
+  comps.openFileAndDock("C:/x/gated.js", true, false, undefined);
+  check("不在场：openFileAndDock 不激活差异", comps.getKitUi().activeFeature !== "file");
   comps.openVaultPageAndDock("D:/v/gated.md");
-  check("不在场：openVaultPageAndDock 不落知识库签", (comps.getKitUi().vaultPages ?? []).length === 0 && comps.getKitUi().vaultOpen === false);
+  check("不在场：openVaultPageAndDock 不激活知识库", comps.getKitUi().activeFeature !== "vault");
   mountedVal = "session-1";
   for (const cb of seatListeners) cb();
   check("回到对话（mounted 有值）＝恢复在场", seat.available === true);
@@ -417,19 +368,18 @@ check("resolveMdLink：空 href / 无根时站内链接返回 null", comps.resol
 {
   let vaultOut = null;
   let vaultErr = null;
-  // 拆两半后 VaultRootView 单实例挂 KitSurfaces、内容经 portal 投两侧宿主；
-  // 宿主全空（知识库侧栏/右栏签都没开）时返回 null 是合法语义。这里登记右栏
-  // 宿主再渲（未配置 vault 的整页提示走 portal 投出），防渲染体异常逃逸
-  comps.vaultPaneSlot.set({ tagName: "DIV" });
-  comps.setKitUi({ vaultOpen: true, activeFeature: "vault" });
+  // 索引视图单实例挂 KitSurfaces、只投侧栏（页签正文自己渲染，不再投右栏）；
+  // 侧栏宿主全空时返回 null 是合法语义。渲一遍防渲染体异常逃逸
+  comps.vaultSideSlot.set({ tagName: "DIV" });
+  comps.setKitUi({ vaultOpen: true, vaultIdxOpen: true, activeFeature: "vault" });
   try {
     vaultOut = comps.VaultRootView({ root: "D:/v" });
   } catch (e) {
     vaultErr = e;
   }
-  check("VaultRootView 单态渲染无异常（portal 投出整页提示）", vaultErr === null && !!vaultOut && typeof vaultOut === "object");
+  check("VaultRootView 单态渲染无异常（索引就绪后投侧栏）", vaultErr === null && !!vaultOut && typeof vaultOut === "object");
   if (vaultErr) console.log("  VaultRootView error:", vaultErr.message);
-  comps.vaultPaneSlot.set(null);
+  comps.vaultSideSlot.set(null);
   comps.setKitUi({ vaultOpen: false, activeFeature: null });
 }
 // 6.9c) VaultRootView 索引就绪态：工具条一行（搜索框占满 + ↻ 收尾）、资料库那一行、
@@ -684,9 +634,9 @@ let vaultFetchPrev = null;
       !!renameInput && renameInput[2].defaultValue === "a" && renameInput[2].autoFocus === true,
     );
     check(
-      "改名走宿主端点（源码哨兵：rename 提交后搬树键与已开页签）",
+      "改名走宿主端点（源码哨兵：rename 提交后搬树键 + 把开着的那张页签换到新地址）",
       src.includes('vaultOp("/dsh-kit/vault/rename", { path: entry.path, name })') &&
-        src.includes("const patch = vaultTabsRetarget(getKitUi(), entry.path, res.path, entry.dir === true);") &&
+        src.includes("vaultTabsRetarget(entry.path, res.path, entry.dir === true);") &&
         src.includes("retargetTree(entry.path, res.path, entry.dir === true);"),
     );
     // 移动到…：候选目录列同侧全部分支（根 + wiki + wiki/Python）
@@ -780,8 +730,7 @@ let vaultFetchPrev = null;
   // 微任务里，桩要留到收尾结算后（提前还原会让它打真网络，落进 fetchDir 的静默失败）
   check("↻ 点击立即重拉索引（/dsh-kit/vault/index）", fetched.some((u) => u.includes("/dsh-kit/vault/index")));
   comps.vaultSideSlot.set(null);
-  comps.vaultPaneSlot.set(null);
-  comps.setKitUi({ vaultIdxOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, activeFeature: null });
+  comps.setKitUi({ vaultIdxOpen: false, vaultOpen: false, activeFeature: null });
   stateSeq = 0;
   stateStore.clear();
 }
@@ -904,12 +853,10 @@ let vaultFetchPrev = null;
   if (paneErr) console.log("  VaultPagePane error:", paneErr.message);
   stateSeq = 0;
   stateStore.clear();
-  stateStore.set(0, { loading: false, body: "x", binary: false, gone: false });
   callLog = [];
-  comps.VaultPagePane({ path: "D:/v/wiki/a.md", active: false, root: "D:/v", indexPages: [], onOpenPage: () => {}, onIndexRefresh: () => {}, toast: () => {} });
-  const paneRoot = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-vault-reader" && c[2].style);
-  check("VaultPagePane 非激活标签保挂载但 display:none", !!paneRoot && paneRoot[2].style.display === "none");
-  check("冲突条已随写入半边退役（CSS 不存在）", !/\.dshk-vault-conflict\{/.test(src));
+  comps.VaultPagePane({ path: "D:/v/wiki/a.md", active: true, root: "D:/v", indexPages: [], onOpenPage: () => {}, onIndexRefresh: () => {}, toast: () => {} });
+  const paneRoot = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-vault-reader");
+  check("VaultPagePane 一页一签：正文常显（显隐归官方签条，不再自管 display）", !!paneRoot && paneRoot[2].style === undefined);
   stateSeq = 0;
   stateStore.clear();
 }
@@ -941,23 +888,14 @@ let vaultFetchPrev = null;
 
 // 7.2.3) 文件标签 LRU 纯逻辑：默认上限 3，超限开新文件逐出 usedAt 最小者（=关掉
 // 最久没看的那张标签）；重开已存在文件置顶激活不逐出自身
-const lruBase = [];
-for (let i = 1; i <= 3; i++) lruBase.push({ path: `C:/x/f${i}.js`, from: "scm", untracked: false, usedAt: i });
-const opened = comps.openFileTab({ files: lruBase, activeFile: "C:/x/f3.js" }, "C:/x/f4.js", "scm", false);
-check("openFileTab 超限 LRU 逐出最久未用", opened.files.length === 3 && !opened.files.some((p) => p.path === "C:/x/f1.js") && opened.files.some((p) => p.path === "C:/x/f4.js") && opened.activeFile === "C:/x/f4.js" && opened.activeFeature === "file");
-const reopened = comps.openFileTab({ files: opened.files, activeFile: "C:/x/f4.js" }, "C:/x/f2.js", "scm", false);
-const reopenedItem = reopened.files.find((p) => p.path === "C:/x/f2.js");
-check("openFileTab 重开已存在文件置顶激活不逐出自身", reopened.files.length === 3 && reopened.activeFile === "C:/x/f2.js" && !!reopenedItem && reopenedItem.untracked === false && reopenedItem.from === "scm");
-const delOpen = comps.openFileTab({ files: [], activeFile: null }, "C:/x/gone.js", "scm", false, true);
-check("openFileTab 携带 deleted 标记", delOpen.files.length === 1 && delOpen.files[0].deleted === true && delOpen.activeFile === "C:/x/gone.js");
-// 7.2.3b) commit 钉定（图谱提交详情进入）：条目携带 commit；从 SCM 重开同路径清除钉定
-const commitOpen = comps.openFileTab({ files: [], activeFile: null }, "C:/x/hist.js", "scm", false, false, "abc1234def");
-check("openFileTab 携带 commit 钉定", commitOpen.files.length === 1 && commitOpen.files[0].commit === "abc1234def" && commitOpen.activeFile === "C:/x/hist.js");
-const commitReopen = comps.openFileTab(commitOpen, "C:/x/hist.js", "scm", false);
-check("openFileTab 从 SCM 重开同路径清除钉定", commitReopen.files[0].commit === undefined);
-
-// 7.5) 终端坞（多标签）直测在 tests\render-check-terminal.cjs：
-// 预置会话后的标签 map 渲染分支（曾因变量遮蔽翻译函数 t 而崩溃）在那里专测
+// 7.2.3) diff 签的 LRU 与来源标记随「地址 query」走：上限 3 张、超限逐出最久没看、
+// 未跟踪/已删/commit 钉定各是不同地址（=不同签）。签表归官方，这里只钉地址映射
+const diffAddrOf = (p, q) => comps.rightbarAddress("file", p, q);
+check("未跟踪 diff：地址带 u=1", comps.rightbarQuery("file", diffAddrOf("C:/x/gone.js", "u=1")) === "u=1");
+check("已删 diff：地址带 d=1", comps.rightbarQuery("file", diffAddrOf("C:/x/gone.js", "d=1")) === "d=1");
+const pinned = diffAddrOf("C:/x/hist.js", "c=" + encodeURIComponent("abc1234def"));
+check("提交钉定 diff：地址带 c=<sha>（刷新后仍认得回这张签）", comps.rightbarQuery("file", pinned) === "c=abc1234def" && comps.rightbarItem("file", pinned) === "C:/x/hist.js");
+check("同文件不同 diff 源是两张签（地址不同）", pinned !== diffAddrOf("C:/x/hist.js") && diffAddrOf("C:/x/hist.js") !== diffAddrOf("C:/x/other.js"));
 comps.setKitUi({ terminals: [], activeTermId: null, termDockOpen: false });
 callLog = [];
 out = comps.KitSurfaces({});
@@ -1091,11 +1029,11 @@ check("入口钮的悬停不再自带原生 title（全走官方气泡）", !/ds
 // 正向钉住见 tests\render-check-terminal.cjs（comps = dockExports.terminal）
 
 // 至少渲染出来 JSX 元素（说明走到 render 而非静默 null）。根壳（KitSurfaces）只做座位
-// 门控、恒返回 null，这里用根包共用的文档签条确认 JSX 真走到 render。
+// 门控、恒返回 null，这里用右栏 diff 正文（座组件）确认 JSX 真走到 render。
 callLog = [];
-comps.docChips(["D:/w/a.md"], "D:/w/a.md", (p) => ({ activeVaultPage: p }), () => ({}), (p) => p);
+comps.diffPane.Component = fakeDiff;
+comps.FilePaneBody(tabProps(comps.rightbarAddress("file", "D:/w/a.md")));
 check("渲染体实际产出元素", callLog.length > 0);
-
 // 收尾结算放进 setTimeout：6.9c 里 ↻ 刷新的目录树重拉排在 await loadIndex()
 // 之后的微任务里，同步段看不到；微任务先于定时器清空，此刻断言才成立
 setTimeout(async () => {

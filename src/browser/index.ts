@@ -213,9 +213,12 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       })
 
       // ── 浏览器面板 WebSocket 端点（browser.ts 的面板面）──
-      // 协议：hello（连接即回 state）→ 浏览器端；watch {on}（帧流订阅引用计数，
-      // 0 时停流）/ open {url}（URL 栏导航）/ activate {tabId}（切观察页）/
-      // closeTab {tabId}（关页）/ nav {op}（back/forward/reload）/ newTab（＋）
+      // 协议：hello（连接即回 state）→ 浏览器端；watch {on, tabId}（**按页**订阅帧流，
+      // 每页一条 CDP 会话、引用计数 0 时停流）/ open {url, tabId}（URL 栏导航，作用于
+      // 该页）/ activate {tabId}（切观察页）/ closeTab {tabId}（关页）/
+      // nav {op, tabId}（back/forward/reload，作用于该页）/ newTab（＋，回包带新页 id）/
+      // input {…, tabId}（人机共驾，作用于该页）。面板一签一页，一连接只画自己那张签的页，
+      // 故帧按页投递（frame 消息带 tabId）。
       // → 宿主。每条消息可带 scope（会话 id，见 normalizeScope）：连接按它认领分区，
       // state/event/frame 都按分区投递——不同对话各看各的页签与画面，浏览器实例与
       // profile 仍是全局共享的。面板挂舞台「浏览器」功能签，关闭标签即断 WS。
@@ -276,17 +279,19 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
         const bwss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 })
         bwss.on('connection', (ws: any) => {
           browserSockets.set(ws, DEFAULT_SCOPE)
-          /** 本连接当前订着的分区（null = 没订流）；换分区时先退订旧分区 */
-          let watchedScope: string | null = null
+          /** 本连接订着的「分区 + 页」（面板一签一页，一连接只画自己那张签的页）；
+           *  换分区或换页时先退订旧的 */
+          let watched: { scope: string; tabId: number } | null = null
           const scopeOfConn = () => browserSockets.get(ws) ?? DEFAULT_SCOPE
-          const openWatch = (scope: string) => {
-            // 分区内单回调（同分区多连接扇出同一份帧）
-            void browserService.watcherOpen(scope, (data) => broadcastJson(JSON.stringify({ t: 'frame', data }), scope))
+          const openWatch = (scope: string, tabId: number) => {
+            // 帧按页投：同页多连接复路同一条 CDP 会话，不同页各挂各的流
+            void browserService.watcherOpen(scope, tabId, (frameTabId, data) =>
+              sendTo(ws, { t: 'frame', tabId: frameTabId, data }))
           }
           const closeWatch = () => {
-            if (watchedScope === null) return
-            browserService.watcherClose(watchedScope)
-            watchedScope = null
+            if (watched === null) return
+            browserService.watcherClose(watched.scope, watched.tabId)
+            watched = null
           }
           sendState(ws)
           ws.on('message', (raw: any) => {
@@ -302,9 +307,11 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
               const next = normalizeScope(msg.scope)
               if (next !== scopeOfConn()) {
                 browserSockets.set(ws, next)
-                if (watchedScope !== null) {
+                // 换分区：帧流跟着换（页不变）
+                if (watched !== null) {
+                  const tabId = watched.tabId
                   closeWatch()
-                  openWatch(next)
+                  openWatch(next, tabId)
                 }
                 sendState(ws)
               }
@@ -314,11 +321,12 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
               // 看帧不等于开浏览器：面板打开/重新激活都只订流，浏览器由「有理由的
               // 动作」拉起（地址栏导航、「＋」新页签、agent 工具、对话链接改投）。
               // 页比观察者晚到也没关系——认领页时的 _resyncStream 会补挂流。
-              if (msg.on === true && watchedScope !== scope) {
+              const want = msg.on === true && msg.tabId !== undefined ? Number(msg.tabId) : null
+              if (want !== null && (watched === null || watched.scope !== scope || watched.tabId !== want)) {
                 closeWatch()
-                watchedScope = scope
-                openWatch(scope)
-              } else if (msg.on === false && watchedScope !== null) {
+                watched = { scope, tabId: want }
+                openWatch(scope, want)
+              } else if (want === null && watched !== null) {
                 closeWatch()
               }
               return
@@ -327,7 +335,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
               // 失败不发 error 事件：面板已经切到浏览器签，网址打不开时浏览器自己的错误页
               // 就是反馈（普通浏览器也这样），起不来时面板按 state.error 显示原因。
               // 别的操作（切页/关页/新页）失败仍要报——那些没有"页面上看得见"的等价物
-              void browserService.humanOpen(scope, msg.url)
+              void browserService.humanOpen(scope, msg.url, msg.tabId === undefined ? null : Number(msg.tabId))
               return
             }
             if (msg.t === 'activate' && msg.tabId !== undefined) {
@@ -345,11 +353,12 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
             if (msg.t === 'newTab') {
               void browserService.humanNewTab(scope).then((r) => {
                 if (!r.ok) sendTo(ws, { t: 'event', kind: 'error', message: r.error })
+                else sendTo(ws, { t: 'newTab', tabId: r.tabId ?? null })
               })
               return
             }
             if (msg.t === 'nav' && (msg.op === 'back' || msg.op === 'forward' || msg.op === 'reload')) {
-              void browserService.history(scope, msg.op).then((r) => {
+              void browserService.history(scope, msg.op, msg.tabId === undefined ? null : Number(msg.tabId)).then((r) => {
                 if (!r.ok) sendTo(ws, { t: 'event', kind: 'error', message: r.error })
               })
               return
@@ -361,7 +370,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
             }
             if (msg.t === 'input') {
               // 人机共驾：面板输入回传本分区观察页（未运行时宿主拒绝，不误拉起）
-              void browserService.humanInput(scope, msg)
+              void browserService.humanInput(scope, msg, msg.tabId === undefined ? null : Number(msg.tabId))
               return
             }
           })

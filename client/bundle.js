@@ -474,7 +474,7 @@ window.__ModuleLoader__.load({
     // 都往 files 标签条里加标签，同路径复用一个（重开刷新 diff/未跟踪状态）。
     // 文件树与对话区点击走官方右栏文件签，不进这里。diff 签非激活仍挂载
     // （display:none）保住滚动位置，超内部上限（3）自动关最久没看的那张。
-    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, activeFeature: null };
+    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, activeFeature: null };
     // terminals/activeTermId/termDockOpen 是 dsh-kit-terminal 组件的水位（入口与坞
     // 分属两个槽位，状态必须共享一份）；本文件只读 termDockOpen 一处——Esc 收起坞。
     const kitUiListeners = new Set();
@@ -489,108 +489,20 @@ window.__ModuleLoader__.load({
     const useKitUi = () => react.useSyncExternalStore(subscribeKitUi, () => kitUi);
     const getKitUi = () => kitUi;
 
-    /** diff 签内部上限（不外露为设置项——签只来自 SCM/提交图谱，堆积面小）：
-     *  超限自动关最久没看的那张 */
-    const PREVIEW_MAX = 3;
-    /** 打开文件 = 差异签条上加一个标签（已开过则复用、只刷新状态并激活）。
-     *  usedAt 是 LRU 判据（超上限时关掉最久没看的那张，绝不含本次）；
-     *  deleted=已删除文件，只承载删除 diff。commit（可选）= 提交钉定模式
-     *  （图谱提交详情进入，diff 视图与该提交的第一父对比）；重开同路径时
-     *  commit 随入口刷新（从 SCM 更改列表重开即清除钉定） */
-    function openFileTab(ui, path, from, untracked, deleted, commit) {
-      const now = Date.now();
-      const commitRef = typeof commit === "string" && commit !== "" ? commit : undefined;
-      const items = ui.files ?? [];
-      let list = items.some((x) => x.path === path)
-        ? items.map((x) => (x.path === path ? { ...x, from: from ?? x.from, untracked: untracked === true, deleted: deleted === true, commit: commitRef, usedAt: now } : x))
-        : [...items, { path, from: from ?? "scm", untracked: untracked === true, deleted: deleted === true, commit: commitRef, usedAt: now }];
-      const max = PREVIEW_MAX;
-      while (list.length > max) {
-        let oldest = null;
-        for (const x of list) {
-          if (x.path !== path && (oldest === null || x.usedAt < oldest.usedAt)) oldest = x;
-        }
-        if (oldest === null) break;
-        list = list.filter((x) => x.path !== oldest.path);
-      }
-      return { files: list, activeFile: path, activeFeature: "file" };
-    }
-    /** 只激活一个文件标签（标签条点击走这里）：刷新 usedAt（LRU 判据是「最久没看
-     *  的那张」），不重设 diff/未跟踪状态——那是入口（openFileTab）的事 */
-    function activateFileTab(ui, path) {
-      const items = ui.files ?? [];
-      if (!items.some((x) => x.path === path)) return {};
-      const now = Date.now();
-      return { files: items.map((x) => (x.path === path ? { ...x, usedAt: now } : x)), activeFile: path, activeFeature: "file" };
-    }
-    /** 关一个文件标签：激活位顺延邻居；关光了整片文件区收摊（走 closeFeatureTab，
-     *  激活位顺延到余下的存在标签） */
-    function closeFileTab(ui, path) {
-      const items = ui.files ?? [];
-      const idx = items.findIndex((x) => x.path === path);
-      if (idx < 0) return {};
-      const rest = items.filter((x) => x.path !== path);
-      if (rest.length === 0) return { ...closeFeatureTab(ui, "file"), files: [], activeFile: null };
-      const patch = { files: rest };
-      if (ui.activeFile === path) patch.activeFile = rest[Math.min(idx, rest.length - 1)].path;
-      return patch;
-    }
-
-    // ── 知识库页标签（多开：与文件标签同款交互）──
-    // 一页一标签、点击切换、✕ 单关；vaultOpen 是「知识库这一片有没有」，
-    // 没有任何页标签时它承载一张「请选择页面」空签（入口点开即见右栏签，打开时
-    // 中间页面也要相应打开）。
-    /** 路径尾名（标签名用）：文件保留后缀，知识库页去掉 .md（与索引树的页名一致） */
+    // ── 知识库页签（一页一签：地址即条目，开页走 openRightbarItem）──
+    /** 路径尾名（签名用）：文件保留后缀，知识库页去掉 .md（与索引树的页名一致） */
     const baseName = (p) => String(p ?? "").split(/[\\/]/).pop() ?? "";
     const pageBasename = (p) => baseName(p).replace(/\.(md|markdown)$/i, "");
-    /** 开/激活一个知识库页标签（树/搜索/反链/闲聊路径/wikilink 点击都走这里） */
-    function openVaultPageTab(ui, path) {
-      const pages = ui.vaultPages ?? [];
-      const list = pages.includes(path) ? pages : [...pages, path];
-      return {
-        vaultPages: list,
-        activeVaultPage: path,
-        vaultOpen: true,
-        activeFeature: "vault",
-      };
-    }
-    /** 只激活（标签条点击走这里） */
-    function activateVaultPage(ui, path) {
-      if (!(ui.vaultPages ?? []).includes(path)) return {};
-      return { vaultPages: ui.vaultPages, activeVaultPage: path, vaultOpen: true, activeFeature: "vault" };
-    }
-    /** 关一个知识库页标签：激活位顺延邻居；关光了则整片知识库区收摊
-     *  （索引视图不跟着关——那是侧栏的事，输入行入口管它） */
-    function closeVaultPageTab(ui, path) {
-      const pages = ui.vaultPages ?? [];
-      const idx = pages.indexOf(path);
-      if (idx < 0) return {};
-      const rest = pages.filter((p) => p !== path);
-      // 关光了走 closeFeatureTab：清 vaultOpen 的同时把激活位顺延到别的标签
-      if (rest.length === 0) {
-        return { ...closeFeatureTab(ui, "vault"), vaultPages: [], activeVaultPage: null };
-      }
-      const patch = { vaultPages: rest };
-      if (ui.activeVaultPage === path) patch.activeVaultPage = rest[Math.min(idx, rest.length - 1)];
-      return patch;
-    }
+
     /** 关一个功能签：清存在性；关的是激活签时激活位顺延剩余签 */
     function closeFeatureTab(ui, tab) {
       const patch = {};
-      if (tab === "file") {
-        patch.files = [];
-        patch.activeFile = null;
-      } else if (tab === "schedule") patch.schedOpen = false;
-      else if (tab === "vault") {
-        patch.vaultOpen = false;
-        patch.vaultPages = [];
-        patch.activeVaultPage = null;
-      } else patch.browserOpen = false;
+      if (tab === "schedule") patch.schedOpen = false;
+      else if (tab === "vault") patch.vaultOpen = false;
+      else patch.browserOpen = false;
       if (ui.activeFeature === tab) {
         const remaining = [];
-        if (tab !== "file" && (ui.files?.length ?? 0) > 0) remaining.push("file");
         if (tab !== "schedule" && ui.schedOpen) remaining.push("schedule");
-        if (tab !== "vault" && ui.vaultOpen) remaining.push("vault");
         if (tab !== "browser" && ui.browserOpen) remaining.push("browser");
         patch.activeFeature = remaining[0] ?? null;
       }
@@ -691,21 +603,151 @@ window.__ModuleLoader__.load({
         /* 右栏异常不拖垮入口动作 */
       }
     }
-    /** 关掉右栏的某类 dock 签（官方 close API：按 kind 在 mounted surface 的
-     *  layout 签表里找到 id 再关）。服务未就绪或签不在时静默——调用点都在
-     *  「签该消失」的语义位（最后一页文档签关掉 / 浏览器没了） */
+    /** 关掉右栏的某类 dock 签（内容类页类型一张内容一张签，这里收的是该类的全部签；
+     *  无签可关时静默——调用点都在「该消失」的语义位（浏览器收摊等） */
     function closeRightbarTab(feature) {
-      const sr = rightbarSr;
-      const f = tabKinds[feature];
-      if (!sr || !f || typeof sr.close !== "function") return;
+      for (const item of rightbarItems(feature)) closeRightbarItem(feature, item);
+    }
+
+    // ── 一内容一签（右栏资源地址）──
+    // 内容类页类型按 dsh-resource://<段>/<编码后的条目> 认领地址：一个条目一张官方
+    // 签，签条即切换器（对齐官方行为），pane 内不再自绘第二层标签条。地址同时是
+    // 签的 contentId，随布局持久化——刷新后签与内容仍对得上，同址重复开复用同一张签。
+    const RB_ADDRESS_PREFIX = {
+      file: "dsh-resource://dshk-diff/",
+      vault: "dsh-resource://dshk-vault/",
+      browser: "dsh-resource://dshk-browser/",
+    };
+    /** 条目 → 资源地址（query 供「同一文件不同 diff 源」这类区分用） */
+    function rightbarAddress(feature, item, query) {
+      const prefix = RB_ADDRESS_PREFIX[feature];
+      if (typeof prefix !== "string" || typeof item !== "string" || item === "") return "";
+      const base = prefix + encodeURIComponent(item);
+      return typeof query === "string" && query !== "" ? `${base}?${query}` : base;
+    }
+    /** 资源地址 → 条目；不是本 feature 的地址回 null */
+    function rightbarItem(feature, address) {
+      const prefix = RB_ADDRESS_PREFIX[feature];
+      if (typeof prefix !== "string" || typeof address !== "string" || !address.startsWith(prefix)) return null;
+      const rest = address.slice(prefix.length).split("?")[0] ?? "";
       try {
-        // mounted() 返回 surface {layout, history, minted}——签表在 layout.tabs
-        const surface = typeof sr.mounted === "function" ? sr.mounted() : undefined;
-        const tabsMap = surface && surface.layout ? surface.layout.tabs : undefined;
-        const tab = tabsMap ? Object.values(tabsMap).find((x) => x && x.kind === f.kind) : null;
-        if (tab && tab.id !== undefined) sr.close(tab.id);
+        return decodeURIComponent(rest);
+      } catch {
+        return null;
+      }
+    }
+    /** 资源地址上的 query（没有回空串） */
+    function rightbarQuery(feature, address) {
+      const prefix = RB_ADDRESS_PREFIX[feature];
+      if (typeof prefix !== "string" || typeof address !== "string" || !address.startsWith(prefix)) return "";
+      const at = address.indexOf("?");
+      return at < 0 ? "" : address.slice(at + 1);
+    }
+    /** 开一个条目（官方 openResource：认领地址 → 落一张签并激活；同址已开则复用） */
+    function openRightbarItem(feature, item, query) {
+      const address = rightbarAddress(feature, item, query);
+      const sr = rightbarSr;
+      if (address === "" || !rightbarSeat.available || !sr || typeof sr.openResource !== "function") return;
+      try {
+        sr.openResource(address);
       } catch {
         /* 右栏异常不拖垮入口动作 */
+      }
+    }
+    /** 当前会话里本 feature 开着的签（官方 openTabs 名册，按 on-screen 会话过滤） */
+    function rightbarTabsOf(feature) {
+      const sr = rightbarSr;
+      const f = tabKinds[feature];
+      if (!sr || !f) return [];
+      const inv = sr.openTabs;
+      if (!inv || typeof inv.getSnapshot !== "function") return [];
+      const mounted = sr.mounted;
+      const sid = mounted && typeof mounted.getSnapshot === "function" ? mounted.getSnapshot() : undefined;
+      const list = inv.getSnapshot();
+      if (!Array.isArray(list)) return [];
+      return list.filter((t) => t && t.kind === f.kind && (sid === undefined || t.sessionId === sid));
+    }
+    function rightbarItems(feature) {
+      const out = [];
+      for (const t of rightbarTabsOf(feature)) {
+        const item = rightbarItem(feature, t.contentId);
+        if (item !== null) out.push(item);
+      }
+      return out;
+    }
+    /** 开着哪些条目（跟随官方签表：刷新/关签/换会话都自动跟上） */
+    function useRightbarItems(feature) {
+      const key = react.useSyncExternalStore(
+        (cb) => {
+          const sr = rightbarSr;
+          const inv = sr && sr.openTabs;
+          const mounted = sr && sr.mounted;
+          const offTabs = inv && typeof inv.subscribe === "function" ? inv.subscribe(cb) : null;
+          const offMounted = mounted && typeof mounted.subscribe === "function" ? mounted.subscribe(cb) : null;
+          return () => {
+            if (typeof offTabs === "function") offTabs();
+            if (typeof offMounted === "function") offMounted();
+          };
+        },
+        () => rightbarTabsOf(feature).map((t) => String(t.contentId)).join("|"),
+      );
+      return react.useMemo(
+        () => (key === "" ? [] : key.split("|").map((a) => rightbarItem(feature, a))).filter((x) => x !== null),
+        [key, feature],
+      );
+    }
+    /** 关掉某个条目那张签（条目没开则静默） */
+    function closeRightbarItem(feature, item) {
+      const sr = rightbarSr;
+      if (!sr || typeof sr.close !== "function") return;
+      const want = rightbarAddress(feature, item);
+      const tab = rightbarTabsOf(feature).find((t) => String(t.contentId).split("?")[0] === want);
+      if (!tab || tab.tabId === undefined) return;
+      try {
+        sr.close(tab.tabId);
+      } catch {
+        /* 右栏异常不拖垮入口动作 */
+      }
+    }
+    /** 当前激活签对应哪个条目（没有激活签或不是本类回 null） */
+    function activeRightbarItem(feature) {
+      const sr = rightbarSr;
+      const f = tabKinds[feature];
+      if (!sr || !f || typeof sr.active !== "function") return null;
+      try {
+        const tab = sr.active();
+        return tab && tab.kind === f.kind ? rightbarItem(feature, tab.contentId) : null;
+      } catch {
+        return null;
+      }
+    }
+    /** 激活条目（跟随官方签表：切签/关签/换会话自动跟上） */
+    function useActiveRightbarItem(feature) {
+      useRightbarItems(feature);
+      return activeRightbarItem(feature);
+    }
+    /** 当前激活签是不是本 feature 的（Esc 分层用） */
+    function activeRightbarFeature(feature) {
+      const sr = rightbarSr;
+      const f = tabKinds[feature];
+      if (!sr || !f || typeof sr.active !== "function") return false;
+      try {
+        return sr.active()?.kind === f.kind;
+      } catch {
+        return false;
+      }
+    }
+    /** 关掉 on-screen 会话里当前激活的那张签（Esc：关当前内容签，不收功能签） */
+    function closeActiveRightbarTab() {
+      const sr = rightbarSr;
+      if (!sr || typeof sr.active !== "function" || typeof sr.close !== "function") return false;
+      try {
+        const tab = sr.active();
+        if (!tab || tab.id === undefined) return false;
+        sr.close(tab.id);
+        return true;
+      } catch {
+        return false;
       }
     }
     /** 「开功能签」：dock 签交给官方 openTab；kitUi 只补存在性（入口按钮选中态 /
@@ -717,12 +759,38 @@ window.__ModuleLoader__.load({
       return openFeatureTab(ui, feature);
     }
 
-    /** 打开 diff 签并确保「差异」dock 签在眼前（源代码管理/提交图谱统一入口；
-     *  文件树与对话区点击走官方右栏文件签，不进这里）。seat 不在场时不动 */
-    function openFileAndDock(path, from, untracked, deleted, commit) {
+    /** 打开一个文件的 diff（源代码管理/提交图谱统一入口；文件树与对话区点击走官方
+     *  右栏文件签，不进这里）。一个文件一张签：diff 源（未跟踪/已删/钉定提交）编进
+     *  地址 query，故同文件换源是另一张签、同一源重复开复用原签。seat 不在场时不动 */
+    function openFileAndDock(path, untracked, deleted, commit) {
       if (!rightbarSeat.available) return;
-      setKitUi(openFileTab(kitUi, path, from, untracked === true, deleted === true, typeof commit === "string" && commit !== "" ? commit : undefined));
-      openRightbarTab("file");
+      const q = [];
+      if (untracked === true) q.push("u=1");
+      if (deleted === true) q.push("d=1");
+      if (typeof commit === "string" && commit !== "") q.push("c=" + encodeURIComponent(commit));
+      openRightbarItem("file", path, q.join("&"));
+      setKitUi({ activeFeature: "file" });
+      trimDiffTabs(path);
+    }
+    /** 本签当前是否可见（官方口径：前台会话 + 右栏展开 + 本签激活）——停轮询用 */
+    function tabVisible(props) {
+      try {
+        const info = typeof props?.useTabInfo === "function" ? props.useTabInfo() : null;
+        return info?.tab?.visible !== false;
+      } catch {
+        return true;
+      }
+    }
+    /** 本签认领的资源地址（签条即切换器，pane 正文只管自己这一张） */
+    function tabAddress(props) {
+      try {
+        const info = typeof props?.useTabInfo === "function" ? props.useTabInfo() : null;
+        const tab = info?.tab;
+        const address = tab?.contentId ?? tab?.navigation?.address;
+        return typeof address === "string" ? address : "";
+      } catch {
+        return "";
+      }
     }
 
     /** 单槽互斥补丁：view = 'tree' | 'scm' | 'vault' | null */
@@ -751,23 +819,29 @@ window.__ModuleLoader__.load({
     exports.subscribeKitUi = subscribeKitUi;
     exports.useKitUi = useKitUi;
     exports.getKitUi = getKitUi;
-    exports.PREVIEW_MAX = PREVIEW_MAX;
-    exports.openFileTab = openFileTab;
-    exports.activateFileTab = activateFileTab;
-    exports.closeFileTab = closeFileTab;
     exports.baseName = baseName;
     exports.pageBasename = pageBasename;
-    exports.openVaultPageTab = openVaultPageTab;
-    exports.activateVaultPage = activateVaultPage;
-    exports.closeVaultPageTab = closeVaultPageTab;
     exports.closeFeatureTab = closeFeatureTab;
     exports.openFeatureTab = openFeatureTab;
     exports.RB_FEATURES = RB_FEATURES;
     exports.getRightbarSr = getRightbarSr;
     exports.openRightbarTab = openRightbarTab;
     exports.closeRightbarTab = closeRightbarTab;
+    exports.rightbarAddress = rightbarAddress;
+    exports.rightbarItem = rightbarItem;
+    exports.rightbarQuery = rightbarQuery;
+    exports.openRightbarItem = openRightbarItem;
+    exports.rightbarItems = rightbarItems;
+    exports.useRightbarItems = useRightbarItems;
+    exports.closeRightbarItem = closeRightbarItem;
+    exports.activeRightbarFeature = activeRightbarFeature;
+    exports.activeRightbarItem = activeRightbarItem;
+    exports.useActiveRightbarItem = useActiveRightbarItem;
+    exports.closeActiveRightbarTab = closeActiveRightbarTab;
     exports.openFeatureDock = openFeatureDock;
     exports.openFileAndDock = openFileAndDock;
+    exports.tabAddress = tabAddress;
+    exports.tabVisible = tabVisible;
     exports.sidebarViewPatch = sidebarViewPatch;
     // 在场信号面：KitSurfaces 订阅它决定工作区面生灭，组件半边读它门控快捷键
     exports.rightbarSeat = rightbarSeat;
@@ -822,10 +896,11 @@ window.__ModuleLoader__.load({
     const {
       setKitUi, subscribeKitUi, useKitUi, getKitUi,
       KitTip, attachShortcutCatalog, kitWsUrl,
-      PREVIEW_MAX, openFileTab, activateFileTab, closeFileTab,
-      baseName, pageBasename, openVaultPageTab, activateVaultPage, closeVaultPageTab,
+        baseName, pageBasename,
       closeFeatureTab, openFeatureTab, RB_FEATURES,
       openRightbarTab, closeRightbarTab, openFeatureDock, openFileAndDock,
+    rightbarAddress, rightbarItem, rightbarQuery, openRightbarItem,
+      useRightbarItems, rightbarItems, closeRightbarItem, activeRightbarFeature, closeActiveRightbarTab, tabAddress,
       sidebarViewPatch, toggleTermDock, spawnTerm, killTerm, makeTerm, getRightbarSr,
       rightbarSeat, useRightbarSeat,
     } = dock;
@@ -1048,7 +1123,6 @@ window.__ModuleLoader__.load({
       officialOpenFail: "打开失败",
       scNoSeat: "当前不在对话中",
 
-      pvCloseTab: "关闭此标签",
       rbGuideSchedDesc: "周网格、待办与统计（只读）",
       fileTabLabel: "差异",
       // 官方「快捷键」页里的命令名与「为什么按不动」的说明（键位本身归官方页管）
@@ -1092,7 +1166,6 @@ window.__ModuleLoader__.load({
       officialOpenFail: "Open failed",
       scNoSeat: "Not in a conversation",
 
-      pvCloseTab: "Close this tab",
       rbGuideSchedDesc: "Weekly grid, todos, and stats (read-only)",
       fileTabLabel: "Diff",
       moved: "Moved",
@@ -1158,8 +1231,6 @@ window.__ModuleLoader__.load({
 /* 官方右栏 dock pane 正文（sidebar.right.pane.tab）：pane 内是普通文档流，
    外壳占满 100%×100%、内容区自己滚；这里只有普通文档流 */
 .dshk-rbpane{width:100%;height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base)}
-.dshk-rbpane .dshk-pane-view{flex:1 1 auto;min-height:0}
-.dshk-rbpane .dshk-vault-panehost{flex:1 1 auto;min-height:0}
 /* 侧栏索引宿主（知识库目录/日程待办入口占 sidebar.workspaces） */
 .dshk-sidehost{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;pointer-events:auto}
 /* 知识库（vault）：工具条+目录树投侧栏索引宿主，页编辑器投右栏 pane 宿主（拆两半 portal）。 */
@@ -1183,8 +1254,6 @@ window.__ModuleLoader__.load({
    视口，提示飘在窗口底部正中，看着像没反应 */
 .dshk-vault-sidewrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;width:100%;position:relative}
 .dshk-vault-sidewrap .dshk-vault-rail{flex:1 1 auto;width:auto;border-right:none}
-.dshk-vault-panehost{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
-.dshk-vault-panehost .dshk-vault-reader{padding:0 2px}
 /* 左轨细头部：当前空间名 */
 .dshk-vault-railhead{display:flex;align-items:center;gap:4px;padding:2px 4px 4px;flex:none}
 .dshk-vault-railtitle{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-tertiary)}
@@ -1387,12 +1456,7 @@ ellipsis，窄列只截字不破版 */
 /* order:1 —— 槽位容器 display:contents，本元素与官方 ContextMeter 环同为 dock 行的
    flex item；order 提到环后面才是真正最右（DOM 里槽位贡献永远在环左边）。
    不加 padding-top：dock 行自带 4px，加了会垂直错位 2px+ */
-/* 右侧标签页容器：内容视图占满（非激活标签 display:none 保挂载） */
-.dshk-pane-view{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
-/* 功能内容区（文件/知识库）：顶部文档签条 + 下面的内容页；签条超宽横向滚动
-   （滚动条隐藏），标签多了滑过去点，不被裁掉 */
-.dshk-subtabs{flex:none;display:flex;align-items:center;gap:2px;min-width:0;padding:6px 8px 4px;border-bottom:1px solid var(--dsw-alias-border-l1);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
-.dshk-subtabs::-webkit-scrollbar{display:none}
+
 /* 手机触控增强：斜杠菜单（input-trigger）在触屏上滚不动/悬停粘滞的兜底。
    类名是前端构建哈希（_3e4SsG_*），升级换哈希后本段静默失效——需跟随维护。 */
 @media (hover: none) {
@@ -1652,33 +1716,7 @@ ellipsis，窄列只截字不破版 */
 
 
 
-    /** 内容区文档签条（浏览器式页签）：一文档一签、点击切换、✕ 单关；
-     *  label(path) 决定签名（文件带后缀、知识库页去掉 .md）。文件区与知识库区
-     *  的 pane 正文共用 */
-    const docChips = (paths, activePath, activate, closeOne, label) =>
-      paths.map((p) =>
-        jsxRuntime.jsxs("span", {
-          className: `dshk-tab${p === activePath ? " dshk-tab-on" : ""}`,
-          title: p,
-          onClick: () => setKitUi(activate(p)),
-          children: [
-            jsxRuntime.jsx("span", { className: "dshk-tab-label", children: label(p) }),
-            jsxRuntime.jsx(KitTip, {
-              label: t("pvCloseTab"),
-              children: jsxRuntime.jsx("button", {
-                type: "button",
-                className: "dshk-tab-x",
-                "aria-label": t("pvCloseTab"),
-                onClick: (e) => {
-                  e.stopPropagation();
-                  setKitUi(closeOne(p));
-                },
-                children: "✕",
-              }),
-            }),
-          ],
-        }, p),
-      );
+
 
 
     // ─────────── 右栏 pane 正文（每个 dock 签一个，key = 页类型 id）───────────
@@ -1687,36 +1725,47 @@ ellipsis，窄列只截字不破版 */
     // 角标、自动跟随判定都读它）；pane 卸载（用户点官方签 ✕）同步回假——
     // 「签开着吗」以官方 pane 的挂载为准。文件/知识库的文档签状态（files/
     // vaultPages）在卸载后保留，重开签即恢复，与关签前一致。
-    /** diff pane：文档签条 + 多实例 DiffPane（非激活 display:none 保挂载——
-     *  滚动位置不丢）。只承载源代码管理/提交图谱点开的 diff；工作区文件的
-     *  预览/编辑走官方右栏文件签。不做存在性同步：files 状态本来就在
-     *  getKitUi()，官方签关了重开，文档签原样恢复。最后一页 diff 签关掉 → 官方
-     *  「差异」dock 签一起关（同浏览器「没了就没了」，没有空页状态） */
+    // ── diff：一个文件一张官方右栏签（签条即切换器，pane 内不再自绘标签条）──
+    /** 签数上限（不外露为设置项）：签只来自 SCM/提交图谱，堆积面小，超限关最久没看的 */
+    const PREVIEW_MAX = 3;
+    /** 每张签最近一次被看的时刻（LRU 判据；签被关后连同记录一起清） */
+    const diffSeenAt = new Map();
+    function trimDiffTabs(keepPath) {
+      const items = rightbarItems("file");
+      let over = items.length - PREVIEW_MAX;
+      if (over <= 0) return;
+      const victims = items
+        .filter((p) => p !== keepPath)
+        .sort((a, b) => (diffSeenAt.get(a) ?? 0) - (diffSeenAt.get(b) ?? 0));
+      for (const p of victims) {
+        if (over-- <= 0) break;
+        diffSeenAt.delete(p);
+        closeRightbarItem("file", p);
+      }
+    }
+    /** diff pane：一个文件一张签。正文只渲染自己这张签的内容——地址即文件路径，
+     *  query 带着 diff 源（未跟踪/已删/钉定提交），故刷新后重建签也认得回自己。
+     *  只承载源代码管理/提交图谱点开的 diff；工作区文件的预览/编辑走官方右栏文件签 */
     function FilePaneBody(props) {
-      const ui = useKitUi();
       const cwd = useCurrentCwd(props);
-      const files = ui.files ?? [];
-      const fileCount = files.length;
+      const address = tabAddress(props);
+      const path = rightbarItem("file", address) ?? "";
+      const query = rightbarQuery("file", address);
+      const active = props?.active !== false;
       react.useEffect(() => {
-        if (fileCount === 0) closeRightbarTab("file");
-      }, [fileCount]);
-      return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
-        fileCount > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(files.map((x) => x.path), ui.activeFile, (p) => activateFileTab(getKitUi(), p), (p) => closeFileTab(getKitUi(), p), (p) => baseName(p) || t("fileTabLabel")) }) : null,
-        files.map((pv) =>
-              jsxRuntime.jsx("div", {
-                className: "dshk-pane-view",
-                style: { display: pv.path === ui.activeFile ? "flex" : "none" },
-                children: jsxRuntime.jsx(dock.diffPane.Component, { // dsh-kit/files 物化期挂上（渲染期取，boot 后必已物化）
-                  key: pv.path,
-                  path: pv.path,
-                  untracked: pv.untracked === true,
-                  deleted: pv.deleted === true,
-                  commit: pv.commit,
-                  cwd,
-                }),
-              }, pv.path),
-            ),
-      ] });
+        if (path !== "") diffSeenAt.set(path, Date.now());
+      }, [path, active]);
+      if (path === "") return null;
+      const flag = (key) => new RegExp("(^|&)" + key + "=([^&]*)").exec(query);
+      const commitM = flag("c");
+      return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(dock.diffPane.Component, { // dsh-kit/files 物化期挂上（渲染期取，boot 后必已物化）
+        key: address,
+        path,
+        untracked: flag("u") !== null,
+        deleted: flag("d") !== null,
+        commit: commitM ? decodeURIComponent(commitM[2]) : undefined,
+        cwd,
+      }) });
     }
     // ─────────── 面板宿主（shell.overlay 全帧浮层）───────────
     // 终端停靠在这里渲染（fixed 定位不受 composer 祖先
@@ -1756,7 +1805,7 @@ ellipsis，窄列只截字不破版 */
           });
         } catch (error) {
           console.error("[dsh-kit] 注册 sidebar.workspaces 面板失败：", error);
-          setKitUi({ treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null });
+          setKitUi({ treeOpen: false, gitOpen: false, vaultIdxOpen: false });
           return undefined;
         }
         return () => {
@@ -1779,21 +1828,10 @@ ellipsis，窄列只截字不破版 */
             if (dock.inlineEdit.active) return; // 树行改名输入激活（dsh-kit/files 经底座座上报）
             // 知识库搜索浮层开着时让路：Esc 归它自己（只关自己，不收标签页）
             if (dock.vaultSearch.open) return;
-            // Esc 关当前激活那张文档签（知识库关当前页那张、diff 关当前
-            // 那张，各自与标签条的 ✕ 同语义）。功能签归官方 ✕，Esc 不收
-            // 功能签（getKitUi() 收了 pane 还在，状态会对不上）
-            const vaultPages = getKitUi().vaultPages ?? [];
-            const files = getKitUi().files ?? [];
-            const activeVault = getKitUi().activeVaultPage ?? vaultPages[vaultPages.length - 1] ?? null;
-            const activeFile = getKitUi().activeFile ?? files[files.length - 1]?.path ?? null;
-            if (getKitUi().activeFeature === "vault" && activeVault) {
-              setKitUi(closeVaultPageTab(getKitUi(), activeVault));
-            } else if (getKitUi().activeFeature === "file" && activeFile) {
-              setKitUi(closeFileTab(getKitUi(), activeFile));
-            } else if (vaultPages.length > 0) {
-              setKitUi(closeVaultPageTab(getKitUi(), activeVault));
-            } else if (files.length > 0) {
-              setKitUi(closeFileTab(getKitUi(), activeFile));
+            // Esc 关当前激活那张内容签（diff / 知识库页，与官方签条的 ✕ 同语义——
+            // 内容类页类型一内容一签，关闭走官方 close）
+            if (activeRightbarFeature("file") || activeRightbarFeature("vault")) {
+              closeActiveRightbarTab();
             } else if (getKitUi().gitOpen || getKitUi().treeOpen || getKitUi().vaultIdxOpen) {
               // 侧栏视图单槽：关一格即可（四者互斥）；功能签不连带关
               setKitUi(sidebarViewPatch(null));
@@ -2992,7 +3030,8 @@ ellipsis，窄列只截字不破版 */
         rbCtx.effect(() => tabs.register({
           id: f.id,
           kind: f.kind,
-          title: () => t(f.titleKey),
+          ...(f.feature === "file" ? { patterns: ["dsh-resource://dshk-diff/**"] } : {}),
+          title: (address) => (f.feature === "file" ? baseName(rightbarItem("file", address) ?? "") || t(f.titleKey) : t(f.titleKey)),
         }), `dsh-kit: rightbar tab type ${f.kind}`);
         rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.pane.tab", () => rbCtx.slots.register({
           name: "sidebar.right.pane.tab",
@@ -3110,9 +3149,10 @@ ellipsis，窄列只截字不破版 */
     const dock = kit;
     const {
       getKitUi, setKitUi, useKitUi, KitTip, flashToast, writeClipboard,
-      kitJson, kitPostJson, resolveZh, baseName, pageBasename, docChips,
-      openVaultPageTab, activateVaultPage, closeVaultPageTab, closeFeatureTab, openFeatureTab,
+      kitJson, kitPostJson, resolveZh, baseName, pageBasename,
+      closeFeatureTab, openFeatureTab,
       openRightbarTab, closeRightbarTab, sidebarViewPatch,
+    rightbarAddress, rightbarItem, openRightbarItem, useRightbarItems, rightbarItems, closeRightbarItem, useActiveRightbarItem, tabAddress, tabVisible,
       rightbarSeat, mainRowOf, getRightbarSr,
       useCurrentRow, useCurrentCwd, currentComposerShell, chatMentionText,
       openOfficialFile, TreeRowMenu, TreeFolderIcon, FileTypeIcon16, ChevronIcon, OfficialIcon, dswIcon,
@@ -3270,8 +3310,8 @@ ellipsis，窄列只截字不破版 */
      *  跨页跳转时随开页带给 VaultPagePane 消费（见 vaultPendingAnchor） */
     function openVaultPageAndDock(path, anchor) {
       if (!rightbarSeat.available) return;
-      setKitUi(openVaultPageTab(getKitUi(), path));
-      openRightbarTab("vault");
+      openRightbarItem("vault", path);
+      setKitUi({ activeFeature: "vault" });
       vaultPendingAnchor = typeof anchor === "string" && anchor !== "" ? { path, anchor } : null;
     }
     /** 点击路径落知识库标签（树行/对话拦截器共用）：先落地再派发——知识库未
@@ -3291,10 +3331,9 @@ ellipsis，窄列只截字不破版 */
       return openVaultEntry();
     }
 
-    // ── portal 宿主登记（侧栏索引 ↔ 右栏内容）──
-    // 知识库拆两半后 VaultRootView 单实例挂在 KitSurfaces，左树/工具条与页编辑器
-    // 经 createPortal 分投两侧：宿主 DOM 节点由侧栏占用组件与右栏 pane 登记。
-    // 宿主出现/消失走最小 store（useSyncExternalStore）驱动 VaultRootView 重渲染。
+    // ── portal 宿主登记（侧栏索引 → 右栏签）──
+    // 知识库拆两半后 VaultRootView 单实例挂在 KitSurfaces，左树/工具条经
+    // createPortal 投进侧栏；页编辑器由页签正文自己渲染（不再投右栏）。
     function makeHostSlot() {
       let el = null;
       const subs = new Set();
@@ -3311,9 +3350,30 @@ ellipsis，窄列只截字不破版 */
       };
     }
     const vaultSideSlot = makeHostSlot();
-    const vaultPaneSlot = makeHostSlot();
     const useHostSlot = (slot) => react.useSyncExternalStore(slot.subscribe, slot.get);
 
+    // ── 读页上下文（索引侧发布 → 页签侧消费）──
+    // 页签正文渲染 VaultPagePane 需要库根 / 索引页表 / 开页入口 / 刷新 / toast，
+    // 这些都住在常驻的索引视图里。发布走最小 store：索引侧每次渲染后 publish，
+    // 页签侧订阅（索引刷新、搜索命中变化都会带着新对象过来）。
+    const vaultReader = { root: null, earlyBody: null, indexPages: null, openPath: null, refreshIndex: null, setToast: null };
+    let vaultReaderVersion = 0;
+    const vaultReaderSubs = new Set();
+    function publishVaultReader(patch) {
+      Object.assign(vaultReader, patch);
+      vaultReaderVersion += 1;
+      for (const fn of vaultReaderSubs) fn();
+    }
+    function useVaultReader() {
+      react.useSyncExternalStore(
+        (cb) => {
+          vaultReaderSubs.add(cb);
+          return () => vaultReaderSubs.delete(cb);
+        },
+        () => vaultReaderVersion,
+      );
+      return vaultReader;
+    }
     // ─────────── 对话文件点击的知识库路由 ───────────
     // 官方对话中的文件点击（chips / markdown 内联代码 / 工具行 / 交付卡）原生
     // 走 sidebarRight.openResource 开右栏文件签，kit 不拦。唯一例外是 vault 内
@@ -3575,34 +3635,22 @@ ellipsis，窄列只截字不破版 */
       return p === prefix || p.startsWith(`${prefix}\\`) || p.startsWith(`${prefix}/`);
     }
 
-    /** 改名/移动后把已开的知识库页签一起搬（等路径或整棵前缀）；无变化回 null。
-     *  撞上已开页时并成一格（去重保序），激活页跟着搬。 */
-    function vaultTabsRetarget(ui, oldPath, newPath, isDir) {
-      const pages = ui.vaultPages ?? [];
-      const map = (p) => {
-        if (p === oldPath) return newPath;
-        return isDir && pathUnder(p, oldPath) ? newPath + p.slice(oldPath.length) : p;
-      };
-      const next = pages.map(map);
-      if (next.every((p, i) => p === pages[i])) return null;
-      const list = [];
-      for (const p of next) if (!list.includes(p)) list.push(p);
-      const patch = { vaultPages: list };
-      if (ui.activeVaultPage != null) patch.activeVaultPage = map(ui.activeVaultPage);
-      return patch;
+    /** 改名/移动后把开着的那几张知识库签一起搬（等路径或整棵前缀）：旧地址收掉、
+     *  新地址开一张——签的地址即页路径，搬页就是换地址 */
+    function vaultTabsRetarget(oldPath, newPath, isDir) {
+      for (const p of rightbarItems("vault")) {
+        const moved = p === oldPath || (isDir && pathUnder(p, oldPath) ? newPath + p.slice(oldPath.length) : null);
+        if (moved === null) continue;
+        closeRightbarItem("vault", p);
+        if (!rightbarItems("vault").includes(moved)) openRightbarItem("vault", moved);
+      }
     }
 
-    /** 删除后关掉落在删除集里的页签（含整棵子路径）；没有受影响页签回 null */
-    function vaultTabsClose(ui, prefixes) {
-      const pages = ui.vaultPages ?? [];
-      const stale = (p) => prefixes.some((pre) => pathUnder(p, pre));
-      const rest = pages.filter((p) => !stale(p));
-      if (rest.length === pages.length) return null;
-      const patch = { vaultPages: rest };
-      if (ui.activeVaultPage != null && stale(ui.activeVaultPage)) {
-        patch.activeVaultPage = rest.length > 0 ? rest[rest.length - 1] : null;
+    /** 删除后关掉落在删除集里的知识库签（含整棵子路径） */
+    function vaultTabsClose(prefixes) {
+      for (const p of rightbarItems("vault")) {
+        if (prefixes.some((pre) => pathUnder(p, pre))) closeRightbarItem("vault", p);
       }
-      return patch;
     }
 
     /** 移动/删除候选目标：库内目录（含根）。notes = 笔记侧（索引 folders + 库根），
@@ -4702,7 +4750,6 @@ ellipsis，窄列只截字不破版 */
     function VaultRootView() {
       const ui = useKitUi();
       const sideHost = useHostSlot(vaultSideSlot);
-      const paneHost = useHostSlot(vaultPaneSlot);
       const [index, setIndex] = react.useState(null);
       const [indexErr, setIndexErr] = react.useState("");
       // 面板的树根：null = 库根（vaultRoot）；非 null = 进入的绝对目录
@@ -4723,8 +4770,7 @@ ellipsis，窄列只截字不破版 */
       const [searching, setSearching] = react.useState(false);
       const [toast, setToast] = react.useState("");
 
-      // 激活页 = 当前标签；页编辑器的全部状态住在各自的 VaultPagePane 里
-      const current = ui.activeVaultPage ?? null;
+      const current = useActiveRightbarItem("vault");
       // root 从 index 响应取而非入参；null = 索引未就绪（加载中/未配置/失败），
       // 整页态由下方早退分支承担
       const root = index !== null && typeof index.root === "string" && index.root !== "" ? index.root : null;
@@ -5100,8 +5146,7 @@ ellipsis，窄列只截字不破版 */
         );
         if (res === null) return;
         retargetTree(entry.path, res.path, entry.dir === true);
-        const patch = vaultTabsRetarget(getKitUi(), entry.path, res.path, entry.dir === true);
-        if (patch) setKitUi(patch);
+        vaultTabsRetarget(entry.path, res.path, entry.dir === true);
         await reloadData();
       };
       /** 移动到…：候选目录 = 同侧全部分支（笔记侧走索引，资料库侧走库内清单） */
@@ -5120,8 +5165,7 @@ ellipsis，窄列只截字不破版 */
         setDialog(null);
         if (res.skipped === true) return;
         retargetTree(d.entry.path, res.path, d.entry.dir === true);
-        const patch = vaultTabsRetarget(getKitUi(), d.entry.path, res.path, d.entry.dir === true);
-        if (patch) setKitUi(patch);
+        vaultTabsRetarget(d.entry.path, res.path, d.entry.dir === true);
         setExpanded((e) => ({ ...e, [d.dest]: true }));
         void fetchDir(d.dest);
         await reloadData();
@@ -5192,8 +5236,7 @@ ellipsis，窄列只截字不破版 */
         );
         if (res === null) return;
         setDialog(null);
-        const patch = vaultTabsClose(getKitUi(), [d.entry.path]);
-        if (patch) setKitUi(patch);
+        vaultTabsClose([d.entry.path]);
         forgetTree([d.entry.path]);
         await reloadData();
       };
@@ -5420,7 +5463,8 @@ ellipsis，窄列只截字不破版 */
       };
 
       // root 未就绪的整页态：加载中 / 未配置 / 索引失败（root 就绪后的瞬时错误
-      // 走主界面内的错误条，不早退）。portal 进任一在场的宿主（右栏优先）
+      // 走主界面内的错误条，不早退）。发布给页签侧（页签正文自己渲染），
+      // 侧栏索引在场时也照旧投一份
       if (root === null) {
         let earlyBody;
         if (indexErr === "") earlyBody = jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("contentLoading") });
@@ -5430,9 +5474,9 @@ ellipsis，窄列只截字不破版 */
             jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultNotConfiguredHint") }),
           ] });
         } else earlyBody = jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: `${t("vaultIndexFail")} ${indexErr}` });
-        const target = ui.vaultOpen && paneHost ? paneHost : sideHost;
-        return target
-          ? reactDom.createPortal(jsxRuntime.jsx("div", { className: "dshk-vault", children: earlyBody }), target, "dshk-vault-early")
+        publishVaultReader({ root: null, earlyBody, indexPages: null, openPath, refreshIndex: () => void loadIndex(), setToast });
+        return ui.vaultIdxOpen && sideHost
+          ? reactDom.createPortal(jsxRuntime.jsx("div", { className: "dshk-vault", children: earlyBody }), sideHost, "dshk-vault-early")
           : null;
       }
 
@@ -5667,35 +5711,16 @@ ellipsis，窄列只截字不破版 */
         toast !== "" ? jsxRuntime.jsx("div", { className: "dshk-vault-toast", role: "status", children: toast }) : null,
       ] });
 
-      // 页签半边：每开一页一个 pane（非激活 display:none 保持挂载——切回不丢
-      // 滚动位置），一页都没开时是「去索引挑一页」的空态
-      const vaultPages = ui.vaultPages ?? [];
-      const stageContent =
-        vaultPages.length === 0
-          ? jsxRuntime.jsx("div", { className: "dshk-vault-reader", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPickPage") }) })
-          : vaultPages.map((p) =>
-              jsxRuntime.jsx(VaultPagePane, {
-                path: p,
-                active: p === current,
-                root,
-                indexPages,
-                onOpenPage: openPath,
-                onIndexRefresh: () => void loadIndex(),
-                toast: setToast,
-              }, p),
-            );
+      // 页签侧要用的读页上下文（库根 / 索引页表 / 开页入口 / 刷新 / toast）在这里
+      // 发布：页签正文自己渲染 VaultPagePane（一页一张签），不再靠 portal 投递
+      publishVaultReader({ root, earlyBody: null, indexPages, openPath, refreshIndex: () => void loadIndex(), setToast });
 
-      return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-        ui.vaultIdxOpen && sideHost
-          ? reactDom.createPortal(sideContent, sideHost, "dshk-vault-side")
-          : null,
-        ui.vaultOpen && paneHost
-          ? reactDom.createPortal(stageContent, paneHost, "dshk-vault-pane")
-          : null,
-      ] });
+      return ui.vaultIdxOpen && sideHost
+        ? reactDom.createPortal(sideContent, sideHost, "dshk-vault-side")
+        : null;
     }
 
-    /** 知识库单页阅读视图（一页一个实例，挂右栏 pane 宿主）：正文加载/外部修改
+    /** 知识库单页阅读视图（一页一张签的正文）：正文加载/外部修改
      *  静默跟随/阅读条（目录・反链・面包屑）都在这一层。没有写入——盘上变了
      *  整页静默重读（页面由 agent 文件工具或外部编辑器维护，文件即接口）。active=false
      *  的 pane 仍挂载（保住滚动位置与页签），只停掉 stat 轮询。 */
@@ -5840,7 +5865,7 @@ ellipsis，窄列只截字不破版 */
 
       const barRect = barMenu !== null && barMenuAnchorRef.current !== null ? barMenuAnchorRef.current.getBoundingClientRect() : null;
       const outline = barMenu === "toc" ? outlineAt() : null;
-      return jsxRuntime.jsxs("div", { className: "dshk-vault-reader", style: { display: active ? "flex" : "none" }, ref: paneRef, children: [
+      return jsxRuntime.jsxs("div", { className: "dshk-vault-reader", ref: paneRef, children: [
         !page || page.loading === true
           ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("contentLoading") })
           : page.gone === true
@@ -5979,27 +6004,27 @@ ellipsis，窄列只截字不破版 */
       }, [feature]);
     }
 
-    /** 知识库 pane：页签条 + portal 宿主（VaultRootView 单实例投页编辑器进来）。
-     *  vaultOpen 跟随挂载——KitSurfaces 靠它决定挂不挂 VaultView；挂载期间
-     *  vaultOpen 被别处收掉（Esc 关光页签的「收摊」分支）也强制回真，pane 在
-     *  官方签就得有内容（0 页时显示「去索引挑一页」空态） */
-    function VaultPaneBody() {
-      const ui = useKitUi();
-      react.useEffect(() => {
-        if (!ui.vaultOpen) setKitUi({ vaultOpen: true });
-      }, [ui.vaultOpen]);
-      react.useEffect(() => () => setKitUi({ vaultOpen: false }), []);
-      const vaultPages = ui.vaultPages ?? [];
-      // 最后一页关掉 → 官方「知识库」dock 签一起关（同文件
-      // 「没了就没了」，没有空页状态）；页签状态留在 getKitUi()，重开即恢复
-      const pageCount = vaultPages.length;
-      react.useEffect(() => {
-        if (pageCount === 0) closeRightbarTab("vault");
-      }, [pageCount]);
+    /** 知识库 pane：一个页一张官方签（地址即页路径），正文只渲染自己这一页。
+     *  读页所需的库根/索引页表/开页入口由常驻的索引视图经 publishVaultReader
+     *  发布过来——页签侧不持有索引状态，索引侧也不再有 pane portal */
+    function VaultPaneBody(props) {
+      useFeaturePresence("vault");
+      const reader = useVaultReader();
+      const path = rightbarItem("vault", tabAddress(props)) ?? "";
       return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
-        vaultPages.length > 0 ? jsxRuntime.jsx("div", { className: "dshk-subtabs", children: docChips(vaultPages, ui.activeVaultPage, (p) => activateVaultPage(getKitUi(), p), (p) => closeVaultPageTab(getKitUi(), p), (p) => pageBasename(p) || t("vaultTitle")) }) : null,
-        // 宿主常驻渲染（页签条之后），portal 目标缺失的时序问题不存在
-        jsxRuntime.jsx("div", { className: "dshk-vault-panehost", ref: (el) => vaultPaneSlot.set(el) }),
+        reader.earlyBody != null
+          ? jsxRuntime.jsx("div", { className: "dshk-vault", children: reader.earlyBody })
+          : path === ""
+            ? jsxRuntime.jsx("div", { className: "dshk-vault-reader", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPickPage") }) })
+            : jsxRuntime.jsx(VaultPagePane, {
+              path,
+              active: tabVisible(props),
+              root: reader.root,
+              indexPages: reader.indexPages,
+              onOpenPage: reader.openPath,
+              onIndexRefresh: reader.refreshIndex,
+              toast: reader.setToast,
+            }),
       ] });
     }
     /** 日程 pane：ScheduleView（pane 内上待办 + 下网格） */
@@ -6052,8 +6077,10 @@ ellipsis，窄列只截字不破版 */
     // 知识库是被动签（入口在左侧边栏，不给开始页条目）；日程给一条开始页条目
     // （order 100+ 垫在官方条目之后）。服务运行期探测取用，缺服务只剩 kitUi 侧的
     // 存在性补丁（签不出现），不写进 dsh.client.inject。
+    // 知识库是「一页一签」的内容类页类型：按 dsh-resource 地址认领，签名取页名；
+    // 日程仍是单张功能签（签里自带月网格，没有多实例形态）
     const VAULT_RB_TABS = [
-      { id: "dsh-kit-vault", kind: "dshk-vault", feature: "vault", titleKey: "vaultTitle" },
+      { id: "dsh-kit-vault", kind: "dshk-vault", feature: "vault", titleKey: "vaultTitle", perItem: true, keepMounted: true },
       { id: "dsh-kit-schedule", kind: "dshk-schedule", feature: "schedule", titleKey: "schedTab" },
     ];
     const VAULT_RB_BODY = { vault: VaultPaneBody, schedule: SchedulePaneBody };
@@ -6067,7 +6094,9 @@ ellipsis，窄列只截字不破版 */
         rbCtx.effect(() => tabs.register({
           id: f.id,
           kind: f.kind,
-          title: () => t(f.titleKey),
+          ...(f.perItem === true ? { patterns: ["dsh-resource://dshk-vault/**"], keepMounted: true } : {}),
+          title: (address) =>
+            f.perItem === true ? pageBasename(rightbarItem(f.feature, address) ?? "") || t(f.titleKey) : t(f.titleKey),
           ...(guide ? { guide: [{ order: guide.order, title: () => t(f.titleKey), description: () => t(guide.descKey), icon: guide.icon }] } : {}),
         }), "dsh-kit-vault: rightbar tab type " + f.kind);
         rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.pane.tab", () => rbCtx.slots.register({
@@ -6211,7 +6240,7 @@ ellipsis，窄列只截字不破版 */
     exports.schedAssignLanes = schedAssignLanes;
     exports.useHostSlot = useHostSlot;
     exports.vaultSideSlot = vaultSideSlot;
-    exports.vaultPaneSlot = vaultPaneSlot;
+    exports.useVaultReader = useVaultReader;
     exports.toggleVaultEntry = toggleVaultEntry;
     exports.openVaultEntry = openVaultEntry;
     exports.vaultSearchOpen = dock.vaultSearch;
@@ -6681,6 +6710,7 @@ ellipsis，窄列只截字不破版 */
       setKitUi, getKitUi, useKitUi,
       KitTip, attachShortcutCatalog,
       openFileAndDock, openTreeFile, sidebarViewPatch,
+    rightbarAddress, rightbarQuery, openRightbarItem, useRightbarItems, rightbarItems, closeRightbarItem,
       flashToast, writeClipboard, kitGetJson, kitPostJson, kitJson,
       resolveZh, currentComposerShell, chatMentionText,
       expandSidebarNow, TreeRowMenu, TreeFolderIcon, FileTypeIcon16, ChevronIcon,
@@ -6951,8 +6981,8 @@ ellipsis，窄列只截字不破版 */
     function sweepDisabledViews() {
       const cfg = cfgFromSnapshot(getCfgSnapshot());
       const ui = getKitUi();
-      if (!cfg.fileTreeEnabled && ui.treeOpen) setKitUi({ treeOpen: false, files: [], activeFile: null });
-      if (!cfg.sourceControlEnabled && ui.gitOpen) setKitUi({ gitOpen: false, files: [], activeFile: null });
+      if (!cfg.fileTreeEnabled && ui.treeOpen) setKitUi({ treeOpen: false });
+      if (!cfg.sourceControlEnabled && ui.gitOpen) setKitUi({ gitOpen: false });
     }
     /** 隐藏官方右栏「工作区文件」入口：body 标记 + FILES_CSS 的 display:none。
         锚点 data-sidebar-right-guide-entry 是官方胶囊的稳定属性（失效形态 = 静默不隐藏） */
@@ -7689,17 +7719,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         const draft = state && typeof state.draft === "string" ? state.draft : "";
         shell.actions.setDraft(draft === "" ? mention : `${draft} ${mention}`);
       };
-      /** 已打开的文件被改名/删除后关掉对应文件标签（含其子路径；激活位顺延） */
+      /** 已打开的文件被改名/删除后关掉对应那张 diff 签（含其子路径） */
       const closeStalePreview = (prefix) => {
-        const stale = (f) => f === prefix || f.startsWith(`${prefix}\\`) || f.startsWith(`${prefix}/`);
-        const items = getKitUi().files ?? [];
-        const rest = items.filter((pv) => !stale(pv.path));
-        if (rest.length === items.length) return;
-        const patch = { files: rest };
-        if (getKitUi().activeFile && stale(getKitUi().activeFile)) {
-          patch.activeFile = rest.length > 0 ? rest[rest.length - 1].path : null;
+        for (const item of rightbarItems("file")) {
+          if (item === prefix || item.startsWith(prefix + "\\") || item.startsWith(prefix + "/")) closeRightbarItem("file", item);
         }
-        setKitUi(patch);
       };
       const runFsOp = async (payload, confirmText) => {
         if (confirmText && !window.confirm(confirmText)) return false;
@@ -9097,7 +9121,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         const side = owner ?? {};
         if (side.wide === false) return null;
         if (ui.gitOpen) {
-          return jsxRuntime.jsx(GitChangesPanel, { cwd, onOpenFile: (p, untracked, deleted, commit) => openFileAndDock(p, "scm", untracked === true, deleted === true, commit), ...owner });
+          return jsxRuntime.jsx(GitChangesPanel, { cwd, onOpenFile: (p, untracked, deleted, commit) => openFileAndDock(p, untracked === true, deleted === true, commit), ...owner });
         }
         if (ui.treeOpen) {
           return jsxRuntime.jsx(FileTreePanel, { cwd, onOpenFile: (p) => openTreeFile(p), ...owner });
@@ -10759,6 +10783,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       getKitUi, setKitUi, KitTip, flashToast, kitJson, kitWsUrl, resolveZh,
       closeFeatureTab, openFeatureTab, openFeatureDock, closeRightbarTab,
       useCurrentRow, currentSessionId, shellShare,
+      rightbarItem, rightbarItems, openRightbarItem, tabAddress, tabVisible,
     } = dock;
     const dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives");
     const dswIcon = (...names) => {
@@ -10779,7 +10804,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       browserReload: "刷新",
       browserExternal: "在系统浏览器中打开",
       browserNewTab: "新建页签",
-      browserCloseTab: "关闭页签",
       browserReconnect: "连接断开，重连中…",
       browserNotRunning: "浏览器未启动——在上方输入网址回车，或等 agent 首次使用时自动拉起",
       browserNoPages: "没有打开的页面——在上方输入网址回车，或等 agent 下次导航自动出现在这里",
@@ -10800,7 +10824,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       browserReload: "Reload",
       browserExternal: "Open in system browser",
       browserNewTab: "New tab",
-      browserCloseTab: "Close tab",
       browserReconnect: "Reconnecting…",
       browserNotRunning: "Browser not started — type a URL above or wait for the agent's first use",
       browserNoPages: "No open pages — type a URL above, or the agent's next navigation will appear here",
@@ -10847,12 +10870,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       return bAvailable;
     }
 
-    /** agent 动浏览器 → 把右栏浏览器签拽到眼前（壳层常驻事件源与面板共用此入口）。
-     *  无抑制标志（agent 操作浏览器为安全起见必须可见——
-     *  人为关掉/隐藏的浏览器签，agent 下次导航照样弹回） */
-    function maybeAutoOpenBrowser() {
-      if (getKitUi().activeFeature === "browser" && getKitUi().browserOpen === true) return;
-      setKitUi(openFeatureDock(getKitUi(), "browser"));
+    /** agent 动了某一页 → 把那一页的签开/激活到眼前（一页一签：无抑制，
+     *  agent 操作浏览器为安全起见必须可见，人关掉的签下次导航照样弹回）。
+     *  页集对账（brwReconcile）与面板导航事件共用此入口 */
+    function maybeAutoOpenBrowser(pageId) {
+      if (pageId === undefined || pageId === null) return;
+      openRightbarItem("browser", String(pageId));
     }
     /** 浏览器没了（优雅关闭/空闲自动关/整只崩溃/页崩光）→ 收掉官方浏览器签
      *  （sidebarRight.close）：正常浏览器语义「没了就没了」，agent 下次开页面板
@@ -10941,7 +10964,135 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       });
     }
 
-    function BrowserPanel({ active, scope }) {
+    // ── 一页一签 ──
+    // 页集是真相、官方签条是它的投影：分区控制连接只收 state/event（不订帧），负责
+    // 「页没签就开一张、页没了就收掉那张签」；每张签自己一条连接按页订帧、收共驾输入。
+    // 人关签（官方 ✕）= 关掉那张签对应的页，故撤签时经控制连接发 closeTab。
+    const brwScopes = new Map();
+    const brwClosedByUser = new Set(); // 人关签时登记的页：宿主那侧关页失败也不回弹签
+    function brwConn(scope) {
+      let entry = brwScopes.get(scope);
+      if (entry) return entry;
+      entry = { ws: null, retry: null, version: 0, pages: [], running: false, error: "", closed: false, hadPages: false, subs: new Set() };
+      brwScopes.set(scope, entry);
+      const publish = () => {
+        entry.version += 1;
+        for (const fn of entry.subs) fn();
+      };
+      const send = (obj) => {
+        try {
+          entry.ws?.send(JSON.stringify({ ...obj, scope }));
+        } catch {
+          // 已断：重连后由 state 校正
+        }
+      };
+      const applyState = (msg) => {
+        entry.pages = Array.isArray(msg.pages) ? msg.pages : [];
+        entry.running = msg.running === true;
+        entry.error = typeof msg.error === "string" ? msg.error : "";
+        publish();
+        brwReconcile(scope);
+      };
+      const connect = () => {
+        const ws = new WebSocket(kitWsUrl("/dsh-kit/browser"));
+        entry.ws = ws;
+        ws.onopen = () => {
+          entry.retry = null;
+          send({ t: "scope" });
+        };
+        ws.onmessage = (e) => {
+          let msg;
+          try {
+            msg = JSON.parse(e.data);
+          } catch {
+            return;
+          }
+          if (!msg || typeof msg !== "object") return;
+          if (msg.t === "state") {
+            entry.closed = false;
+            applyState(msg);
+          } else if (msg.t === "event" && (msg.kind === "navigated" || msg.kind === "scope" || msg.kind === "closed" || msg.kind === "crashed")) {
+            entry.running = msg.kind === "closed" ? false : entry.running;
+            entry.closed = msg.kind === "closed";
+            publish();
+            brwReconcile(scope);
+          }
+        };
+        ws.onclose = () => {
+          entry.ws = null;
+          if (entry.subs.size === 0) return;
+          entry.retry = window.setTimeout(connect, 2500);
+        };
+        ws.onerror = () => {};
+      };
+      connect();
+      return entry;
+    }
+    /** 页集 ⇄ 官方签条对账：页没签开一张（跳过人关过的），签的页没了收掉那张签。
+     *  页集为空（浏览器还没起来/已收摊）时一律不动——那种时刻由壳层的
+     *  closeBrowserDockForGone 收整片，空列表不代表哪一页被关掉了 */
+    function brwReconcile(scope) {
+      const entry = brwScopes.get(scope);
+      if (!entry) return;
+      const ids = new Set(entry.pages.map((p) => Number(p.tabId)).filter((id) => Number.isFinite(id)));
+      for (const id of [...brwClosedByUser]) if (!ids.has(id)) brwClosedByUser.delete(id);
+      if (ids.size === 0) return;
+      for (const item of rightbarItems("browser")) {
+        const id = Number(item);
+        if (!ids.has(id)) {
+          brwClosedByUser.delete(id);
+          closeRightbarItem("browser", item);
+        }
+      }
+      const open = new Set(rightbarItems("browser").map((x) => Number(x)));
+      for (const id of ids) {
+        if (open.has(id) || brwClosedByUser.has(id)) continue;
+        maybeAutoOpenBrowser(id);
+      }
+    }
+    /** 关掉一张签对应的页（人点官方 ✕ 时 pane 卸载走这里） */
+    function brwClosePage(scope, pageId) {
+      const id = Number(pageId);
+      if (!Number.isFinite(id)) return;
+      brwClosedByUser.add(id);
+      const entry = brwScopes.get(scope);
+      if (entry?.ws) {
+        try {
+          entry.ws.send(JSON.stringify({ t: "closeTab", tabId: id, scope }));
+        } catch {
+          // 已断：页留到分区空闲回收
+        }
+      }
+    }
+    function brwPageOf(scope, pageId) {
+      const entry = brwScopes.get(scope);
+      if (!entry) return null;
+      return entry.pages.find((p) => Number(p.tabId) === Number(pageId)) ?? null;
+    }
+    /** 签条标题：页标题（宿主事件流带回来的活标题），没有就退回地址的 host */
+    function BrowserTabTitle(props) {
+      const scope = useCurrentRow(props)?.id ?? "";
+      const pageId = Number(rightbarItem("browser", tabAddress(props)) ?? NaN);
+      const entry = brwScopes.get(scope);
+      react.useSyncExternalStore(
+        (cb) => {
+          if (!entry) return () => {};
+          entry.subs.add(cb);
+          return () => entry.subs.delete(cb);
+        },
+        () => entry?.version ?? 0,
+      );
+      const page = brwPageOf(scope, pageId);
+      const title = typeof page?.title === "string" ? page.title.trim() : "";
+      if (title !== "") return title;
+      try {
+        return page?.url ? new URL(page.url).host || page.url : t("dockBrowser");
+      } catch {
+        return t("dockBrowser");
+      }
+    }
+
+    function BrowserPanel({ active, scope, pageId }) {
       const [state, setState] = react.useState({ running: false, launching: false, pages: [], activeId: null, viewId: null });
       const [draft, setDraft] = react.useState("");
       const [visible, setVisible] = react.useState(document.visibilityState === "visible");
@@ -10957,21 +11108,22 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       // 到新分区（effect 依赖 scope），宿主只回本分区的 state/frame/event
       const scopeRef = react.useRef(scope);
       scopeRef.current = scope;
+      const pageIdRef = react.useRef(pageId);
+      pageIdRef.current = pageId;
       // watch 门控与事件回调里要读「最新」的激活/可见态，走 ref（闭包会停在创建帧）
       const activeRef = react.useRef(active);
       activeRef.current = active;
       const visibleRef = react.useRef(visible);
       visibleRef.current = visible;
 
-      // 观察页（页签条/URL 栏数据源；URL 栏与导航按钮都作用于它）
-      const viewPage = (state.pages ?? []).find((p) => p.viewed) ?? null;
-      const viewUrl = viewPage?.url ?? "";
+      // 本签那一页（一页一签：URL 栏/导航/共驾输入都作用于它，地址即页 id）
+      const myPage = (state.pages ?? []).find((p) => p.tabId === pageId) ?? null;
+      const viewUrl = myPage?.url ?? "";
       const live = state.running === true;
 
       // 让位布局（body 类/宽度/拖拽）由右侧标签页容器统一负责，本组件只管内容。
 
-      // agent 导航 → 自动切到浏览器标签：统一走模块级 maybeAutoOpenBrowser（壳层
-      // 常驻事件源与面板共用同一入口，抑制与「已在浏览器标签」的判断都在那边）
+
 
       // 帧绘制：base64 jpeg → Image 解码 → canvas（尺寸随帧更新，宽 100% 等比）。
       // Image 实例复用：每帧 new Image 会把分配与 GC 压进帧路径（每秒几十帧），
@@ -11028,7 +11180,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
               }
               return;
             }
-            if (msg.t === "frame" && typeof msg.data === "string") {
+            if (msg.t === "frame" && typeof msg.data === "string" && msg.tabId === pageIdRef.current) {
               frameRef.current = msg.data;
               if (!rafRef.current) {
                 rafRef.current = window.requestAnimationFrame(() => {
@@ -11048,7 +11200,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
                   );
                   return { ...prev, pages, running: true };
                 });
-                maybeAutoOpenBrowser();
+                brwReconcile(scopeRef.current);
                 return;
               }
               if (msg.kind === "crashed" || msg.kind === "closed") {
@@ -11072,6 +11224,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         return () => {
           disposed = true;
           if (retry !== null) window.clearTimeout(retry);
+          // 官方 ✕ 关掉这张签 = 收掉它那一页（控制连接仍在，消息发得出去）
+          brwClosePage(scopeRef.current, pageIdRef.current);
           try {
             wsRef.current?.close();
           } catch {
@@ -11096,7 +11250,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         const ws = wsRef.current;
         if (!ws || ws.readyState !== 1) return;
         try {
-          ws.send(JSON.stringify({ t: "watch", on: visibleRef.current === true && activeRef.current === true, scope: scopeRef.current ?? "" }));
+          ws.send(JSON.stringify({ t: "watch", on: visibleRef.current === true && activeRef.current === true, scope: scopeRef.current ?? "", tabId: pageIdRef.current }));
         } catch {
           // 已断
         }
@@ -11120,7 +11274,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       // 所有面板消息都带上本 pane 的分区（scope）：宿主按连接分区派发到该对话的观察页
       const sendInput = (obj) => {
         try {
-          wsRef.current?.send(JSON.stringify({ ...obj, scope: scopeRef.current ?? "" }));
+          wsRef.current?.send(JSON.stringify({ ...obj, scope: scopeRef.current ?? "", tabId: pageIdRef.current }));
         } catch {
           // 已断：丢帧无害（下一帧画面自校正）
         }
@@ -11215,28 +11369,19 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           pages: (prev.pages ?? []).map((p) => (p.viewed ? { ...p, url: withScheme, title: "" } : p)),
         }));
         try {
-          wsRef.current?.send(JSON.stringify({ t: "open", url: withScheme, scope: scopeRef.current ?? "" }));
+          wsRef.current?.send(JSON.stringify({ t: "open", url: withScheme, scope: scopeRef.current ?? "", tabId: pageIdRef.current }));
         } catch {
           // 连接断开时忽略（重连后用户可再按）
         }
       };
 
-      // URL 栏跟随观察页：切页签/导航事件（宿主侧校正）都把地址栏对到观察页
+      // URL 栏跟随本签那一页：导航事件（宿主侧校正）把地址栏对到它
       react.useEffect(() => {
         setDraft(viewUrl);
-      }, [viewPage?.tabId, viewUrl]);
-
-      const tabLabel = (p) => {
-        if (typeof p.title === "string" && p.title.trim() !== "") return p.title;
-        try {
-          return new URL(p.url).host || p.url;
-        } catch {
-          return p.url || `#${p.tabId}`;
-        }
-      };
+      }, [pageId, viewUrl]);
 
       // 在系统浏览器打开（官方工具栏同款）：web 端 = 你自己浏览器的新标签页，
-      // 桌面壳里 = 系统浏览器。地址取观察页——没有观察页就没得开
+      // 桌面壳里 = 系统浏览器。地址取本签那一页——没有地址就没得开
       const openExternal = () => {
         const url = String(viewUrl ?? "").trim();
         if (url === "") return;
@@ -11255,56 +11400,14 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           ? t("browserStarting")
           : !live && viewUrl === ""
             ? t("browserNotRunning")
-            : (state.pages ?? []).length === 0
+            : myPage === null
               ? t("browserNoPages")
               : null;
 
       return jsxRuntime.jsxs(jsxRuntime.Fragment, {
         children: [
-          // 页签条：高亮=观察页；× 关页签（直关无确认）；＋ 新页签
-          jsxRuntime.jsx("div", {
-            className: "dshk-brw-tabrow",
-            children: jsxRuntime.jsxs("span", {
-              className: "dshk-tabs",
-              children: [
-                (state.pages ?? []).map((p) =>
-                  jsxRuntime.jsxs("span", {
-                    className: `dshk-tab${p.viewed ? " dshk-tab-on" : ""}`,
-                    title: p.url,
-                    onClick: () => sendInput({ t: "activate", tabId: p.tabId }),
-                    children: [
-                      jsxRuntime.jsx("span", { className: "dshk-tab-label", children: tabLabel(p) }),
-                      jsxRuntime.jsx(KitTip, {
-                        label: t("browserCloseTab"),
-                        children: jsxRuntime.jsx("button", {
-                          type: "button",
-                          className: "dshk-tab-x",
-                          "aria-label": t("browserCloseTab"),
-                          onClick: (e) => {
-                            e.stopPropagation();
-                            sendInput({ t: "closeTab", tabId: p.tabId });
-                          },
-                          children: "✕",
-                        }),
-                      }),
-                    ],
-                  }, p.tabId),
-                ),
-                jsxRuntime.jsx(KitTip, {
-                  label: t("browserNewTab"),
-                  children: jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-tab dshk-brw-newtab",
-                    "aria-label": t("browserNewTab"),
-                    onClick: () => sendInput({ t: "newTab" }),
-                    children: "＋",
-                  }),
-                }),
-              ],
-            }),
-          }),
           // 工具栏（规格同官方浏览器签）：后退/前进/刷新 + 地址框（「前往」聚焦才现形）
-          // + 在系统浏览器中打开；都作用于观察页
+          // + 新页（＋，落新页即新签）+ 在系统浏览器中打开；都作用于本签那一页
           jsxRuntime.jsxs("form", {
             className: "dshk-brw-bar",
             onSubmit: (e) => {
@@ -11329,6 +11432,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
                   jsxRuntime.jsx(KitTip, { label: t("browserGo"), children: jsxRuntime.jsx("button", { type: "submit", className: "dshk-brw-tool dshk-brw-go", "aria-label": t("browserGo"), children: jsxRuntime.jsx(BrwToolIcon, { name: "go" }) }) }),
                 ],
               }),
+              jsxRuntime.jsx(KitTip, { label: t("browserNewTab"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserNewTab"), onClick: () => sendInput({ t: "newTab" }), children: "＋" }) }),
               jsxRuntime.jsx(KitTip, { label: t("browserExternal"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserExternal"), disabled: viewUrl === "", onClick: openExternal, children: jsxRuntime.jsx(BrwToolIcon, { name: "external" }) }) }),
             ],
           }),
@@ -11394,11 +11498,39 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         return () => setKitUi(closeFeatureTab(getKitUi(), feature));
       }, [feature]);
     }
-    /** 浏览器 pane（agent 驱动 + 人机共驾 + 自动跟随）：分区 = 本 pane 所属会话 id */
+    /** 浏览器 pane（一页一签）：地址即页 id，正文只画自己那一页。页没了（agent 或
+     *  别的页签关的）即收掉这张签——人关签则是反过来撤签关页（见 pane 卸载） */
     function BrowserPaneBody(props) {
       useFeaturePresence("browser");
       const scope = useCurrentRow(props)?.id ?? "";
-      return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(BrowserPanel, { active: true, scope }) });
+      const pageId = Number(rightbarItem("browser", tabAddress(props)) ?? NaN);
+      const seenRef = react.useRef(false);
+      // 分区 = 所属会话；没有会话就没有分区（也不连控制连接）
+      const conn = scope ? brwConn(scope) : null;
+      react.useSyncExternalStore(
+        (cb) => {
+          if (!conn) return () => {};
+          conn.subs.add(cb);
+          return () => conn.subs.delete(cb);
+        },
+        () => conn?.version ?? 0,
+      );
+      // 页集非空却找不到自己那一页 = 那页真的没了（关掉/崩溃）→ 收掉这张签。
+      // 页集为空是「浏览器没起来/已收摊」，不是「这一页没了」，那时不动（见 brwReconcile）
+      const gone = conn !== null && conn.pages.length > 0 && seenRef.current && brwPageOf(scope, pageId) === null;
+      react.useEffect(() => {
+        if (Number.isFinite(pageId)) seenRef.current = true;
+      }, [pageId]);
+      react.useEffect(() => {
+        if (gone) {
+          try {
+            props.actions?.close?.();
+          } catch {
+            // 签已不在
+          }
+        }
+      }, [gone]);
+      return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(BrowserPanel, { active: tabVisible(props), scope, pageId }) });
     }
 
     /** 壳层常驻（shell.overlay）：浏览器事件源 + 官方「浏览器」入口掩码。
@@ -11419,82 +11551,40 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         };
       }, [cfg.hideOfficialBrowserEntry]);
 
-      // ShellBrowserEvents：壳层常驻浏览器事件源（与面板 WS 并存，不订阅帧流）。
-      // 面板标签会被收掉（0 页自动收/人为关闭），「agent 开页切到浏览器」不能依赖
-      // 面板自己活着——壳层恒听宿主广播：navigated → 拽出右栏浏览器签（无抑制，
-      // agent 操作浏览器必须可见）；浏览器收摊 → 顺手收掉标签。两者兼得：正常浏览器的
-      // 「没了就没了」+ agent 干活时画面自动回眼前。
-      // 分区 = 当前会话：连接先报 scope（宿主只回本会话的 navigated），换会话即重连；
-      // 0 页收签只在「曾经有页又变 0」时触发——本会话刚开面板（页还没建）不该被收掉。
+      // 浏览器「没了就没了」：页集由分区控制连接（brwConn）统一收，壳层只盯着
+      // 「曾有页又归零 / 实例关闭」这一刻把浏览器那张签收掉——正常浏览器语义，
+      // agent 下次开页照常弹回（新页 = 新签，由控制连接的页集→签条对账开出来）
+      const conn = sessionId ? brwConn(sessionId) : null;
+      const connVersion = react.useSyncExternalStore(
+        (cb) => {
+          if (!conn) return () => {};
+          conn.subs.add(cb);
+          return () => conn.subs.delete(cb);
+        },
+        () => conn?.version ?? 0,
+      );
+      void connVersion;
       react.useEffect(() => {
-        let disposed = false;
-        let retry = null;
-        let ws = null;
-        let hadPages = false;
-        const connect = () => {
-          ws = new WebSocket(kitWsUrl("/dsh-kit/browser"));
-          ws.onopen = () => {
-            if (disposed) return;
-            try {
-              ws.send(JSON.stringify({ t: "scope", scope: sessionId ?? "" }));
-            } catch {
-              // 已断
-            }
-          };
-          ws.onmessage = (e) => {
-            let msg;
-            try {
-              msg = JSON.parse(e.data);
-            } catch {
-              return;
-            }
-            if (!msg || typeof msg !== "object") return;
-            if (msg.t === "event") {
-              if (msg.kind === "navigated") maybeAutoOpenBrowser();
-              else if (msg.kind === "closed") {
-                hadPages = false;
-                closeBrowserDockForGone();
-              }
-              return;
-            }
-            if (msg.t === "state" && msg.launching !== true && msg.running === true) {
-              // 页崩光残留（running 但 0 页）= 浏览器实质没了，收掉标签。
-              // running:false 不作依据——快照无历史，启动失败也会落到这个形状，
-              // 收掉标签会让用户连错误线索都看不到；「曾活着→没了」由 closed 事件负责。
-              // 本会话刚开、页还没建（hadPages 为假）时不动它
-              if ((msg.pages ?? []).length > 0) hadPages = true;
-              else if (hadPages) {
-                hadPages = false;
-                closeBrowserDockForGone();
-              }
-            }
-          };
-          ws.onclose = () => {
-            if (disposed) return;
-            retry = window.setTimeout(connect, 2500);
-          };
-          ws.onerror = () => {};
-        };
-        connect();
-        return () => {
-          disposed = true;
-          if (retry !== null) window.clearTimeout(retry);
-          try {
-            ws?.close();
-          } catch {
-            // 已断
-          }
-        };
-      }, [sessionId]);
+        if (!conn) return;
+        if (conn.pages.length > 0) {
+          conn.hadPages = true;
+          return;
+        }
+        // 曾有页又归零（页崩光/分区回收）或实例已关：收掉浏览器那张签
+        if (conn.hadPages || conn.closed === true) {
+          conn.hadPages = false;
+          closeBrowserDockForGone();
+        }
+      }, [conn, connVersion]);
 
       return null;
     }
 
     // ─────────── 对话链接改投内置浏览器（设置项 chatOpenLinkInBrowser，默认开）───────────
     /** 官方 markdown 把链接渲染成 `<a target="_blank">`（新标签打开，系统浏览器接管）。
-     *  开启后把对话滚动区内的 http(s) 链接改投右栏浏览器签：宿主端点
-     *  /dsh-kit/browser/open 与面板 URL 栏同一条 humanOpen 语义（作用于观察页、浏览器
-     *  没在跑时拉起），点击即达，不依赖面板是否已挂载/已连上 WS。
+     *  开启后把对话滚动区内的 http(s) 链接改投内置浏览器：宿主端点
+     *  /dsh-kit/browser/open 落出一个页，回包带页 id → 开成一张签（地址即页 id）。
+     *  点击即达，不依赖面板是否已挂载/已连上 WS。
      *  判定链任何一环不命中都放行官方：自家面板元素、非 http(s)（相对链接/mailto/锚点）。 */
     function onChatLinkClick(ev) {
       if (!ev.isTrusted) return;
@@ -11511,16 +11601,21 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       if (!/^https?:\/\//i.test(href)) return;
       ev.preventDefault();
       ev.stopPropagation();
-      setKitUi(openFeatureDock(getKitUi(), "browser"));
-      // 失败不提示（吞掉 rejection 免成 unhandled）：面板上一步已切到浏览器签——
-      // 网址打不开时浏览器自己的错误页就是反馈（同普通浏览器），浏览器起不来时
-      // 面板的未启动提示会带上宿主报的原因。再弹 toast 只是重复的噪音。
-      // sessionId = 点击时所在会话：宿主按它把链接落进该对话自己的浏览器分区
+      // 失败不提示（吞掉 rejection 免成 unhandled）：网址打不开时浏览器自己的错误页
+      // 就是反馈（同普通浏览器），浏览器起不来时面板的未启动提示会带上宿主报的原因。
+      // sessionId = 点击时所在会话：宿主按它把链接落进该对话自己的浏览器分区；
+      // 回包的页 id 开成一张签（没有回包就由控制连接的页集对账补开）
       kitJson("/dsh-kit/browser/open", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ url: href, sessionId: currentSessionId() }),
-      }).catch(() => {});
+      })
+        .then((r) => {
+          const id = r && r.tabId;
+          if (id === undefined || id === null) return;
+          openRightbarItem("browser", String(id));
+        })
+        .catch(() => {});
     }
 
 
@@ -11531,9 +11626,15 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     function registerRightbar(rbCtx) {
       const tabs = rbCtx.sidebarRightTabs;
       if (!tabs || typeof tabs.register !== "function") return;
+      // 一页一签：按 dsh-resource 地址认领（地址即页 id，布局持久化，刷新后签与页
+      // 仍对得上）。签名走标题槽（页标题会变），这里只给开局默认值
       rbCtx.effect(() => tabs.register({
         id: "dsh-kit-browser",
         kind: "dshk-browser",
+        patterns: ["dsh-resource://dshk-browser/**"],
+        // 保活：pane 正文里是这一页的 WS 与画布，切签/收栏时不能拆（拆了会把
+        // 这一页当成关掉）。帧流按 tabVisible 自己停（见 BrowserPaneBody）
+        keepMounted: true,
         title: () => t("dockBrowser"),
         guide: [{ order: 110, title: () => t("dockBrowser"), description: () => t("rbGuideBrowserDesc"), icon: BrowserIcon }],
       }), "dsh-kit-browser: rightbar tab type dshk-browser");
@@ -11544,6 +11645,13 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         // 常驻的 KitSurfaces 桥供最新值）
         inject: () => ({ useSessions: shellShare.current?.useSessions }),
       }, BrowserPaneBody)), "dsh-kit-browser: rightbar pane body dshk-browser");
+      // 签条标题 = 那一页的活标题（官方同款做法：标题随内容变）。会话行同样经
+      // shellShare 桥取（标题要按分区找那一页）
+      rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.pane.tab.title", () => rbCtx.slots.register({
+        name: "sidebar.right.pane.tab.title",
+        key: "dsh-kit-browser",
+        inject: () => ({ useSessions: shellShare.current?.useSessions }),
+      }, BrowserTabTitle)), "dsh-kit-browser: rightbar tab title dshk-browser");
     }
 
     // ─────────── 配置页（plugins.row.config）───────────
@@ -11563,14 +11671,13 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       },
     });
 
-    // 组件私有样式：面板（页签条/工具栏/地址框/提示条/画布/透明 IME 输入）+ 官方入口掩码
+    // 组件私有样式：面板（工具栏/地址框/提示条/画布/透明 IME 输入）+ 官方入口掩码
     const BROWSER_CSS = `
 /* 工具栏/地址框/提示条/空状态规格照抄官方右栏浏览器签
    （@deepseek-ai/dsh-client-ui-sidebar-browser 的 Browser.module.css：38px 工具栏、
    28px 图标钮、0.5px 分隔线、dsw 令牌与字号；哈希类名不跨包复用，仅搬规格）。
-   页签条与画布（多页切换 + 人机共驾）是本插件特有，官方无对应物 */
-.dshk-brw-tabrow{flex:none;display:flex;align-items:center;gap:4px;height:32px;padding:0 6px;min-width:0;overflow:hidden}
-.dshk-brw-newtab{padding:0 7px;font-size:13px}
+   画布（帧流 + 人机共驾）是本插件特有，官方无对应物；页签条没有——一个页一张
+   官方右栏签，切换器是官方签条 */
 .dshk-brw-bar{box-sizing:border-box;flex:none;display:flex;align-items:center;gap:4px;height:38px;padding:5px 6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
 .dshk-brw-tool{width:28px;height:28px;flex:none;display:inline-flex;align-items:center;justify-content:center;padding:0;border:0;border-radius:6px;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer}
 .dshk-brw-tool:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
@@ -12495,7 +12602,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     // 主行文案与官方文件签打开（组件半边的共用词条回落 rootT、资料库文件开官方右栏）
     exports.t = t;
     exports.openOfficialFile = openOfficialFile;
-    exports.docChips = docChips;
     exports.dswIcon = dswIcon;
     exports.sidebarBtn = sidebarBtn;
     exports.expandSidebarNow = expandSidebarNow;

@@ -119,13 +119,14 @@ check(
   );
 }
 
-// 3) 面板：未运行态 canvas + 共驾输入处理器；运行态页签 ✕ 直关 + 工具栏 5 枚
+// 3) 面板：一页一签（正文只画自己那页）+ 共驾输入处理器 + 工具栏 6 枚（含新页）
 {
   callLog = [];
-  const out = comps.BrowserPanel({});
+  const out = comps.BrowserPanel({ pageId: 1 });
   const canvasHost = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-brw-canvas"));
   check("BrowserPanel 未运行态渲染无异常", !!out && typeof out === "object");
   check("BrowserPanel 渲染出带共驾输入处理器的 canvas", !!canvasHost && !!canvasHost[2].onPointerDown && !!canvasHost[2].onKeyDown && !!canvasHost[2].onWheel);
+  check("面板不再自绘页签条（一个页一张官方签，切换器是官方签条）", !callLog.some((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-brw-tabrow"));
   dockExports.setKitUi({ browserOpen: false });
   stateStore.clear();
   stateSeq = 0;
@@ -134,19 +135,11 @@ check(
     { tabId: 2, url: "http://b.example/", title: "B", active: true, viewed: true },
   ], activeId: 2, viewId: 2 });
   callLog = [];
-  comps.BrowserPanel({ active: true });
-  const tabXs = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-tab-x");
-  check("BrowserPanel 运行态渲染出页签 ✕（2 个）", tabXs.length === 2);
-  const fakeEvent = { stopPropagation() {} };
-  let threw = null;
-  try { tabXs[0][2].onClick(fakeEvent); tabXs[1][2].onClick(fakeEvent); } catch (e) { threw = e; }
-  check("页签 ✕ 直关不弹确认", threw === null);
+  comps.BrowserPanel({ active: true, pageId: 2 });
+  const urlBox = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-brw-url");
+  check("地址栏只此一个（草稿由本签那一页的导航校正）", !!urlBox && urlBox[2].spellCheck === false);
   const toolBtns = callLog.filter((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.split(" ").includes("dshk-brw-tool"));
-  check("工具栏为官方同款图标钮（5 枚，含提交钮「前往」）", toolBtns.length === 5 && toolBtns.some((c) => c[2].type === "submit"));
-  stateStore.clear();
-  stateSeq = 0;
-  stateStore.set(0, { running: true, launching: false, pages: [], activeId: null, viewId: null });
-  callLog = [];
+  check("工具栏为官方同款图标钮（6 枚：后退/前进/刷新/前往/新页/系统浏览器）", toolBtns.length === 6 && toolBtns.some((c) => c[2].type === "submit") && toolBtns.some((c) => c[2].children === "＋"));
   comps.BrowserPanel({ active: true });
   const noPagesNote = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-brw-start");
   const canvasHidden = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-brw-canvas-off"));
@@ -163,8 +156,8 @@ check(
   check("BrowserPaneBody 挂 BrowserPanel（active 恒真：pane 显示即在看）", !!out && !!panelElem);
   check("BrowserShell 渲染无异常（空壳：事件源 + 入口掩码）", comps.BrowserShell({}) === null || typeof comps.BrowserShell({}) === "object");
   dockExports.setKitUi({ browserOpen: false, activeFeature: null });
-  comps.maybeAutoOpenBrowser();
-  check("maybeAutoOpenBrowser 切到浏览器标签（无抑制，agent 干活必回眼前）", dockExports.getKitUi().browserOpen === true && dockExports.getKitUi().activeFeature === "browser");
+  comps.maybeAutoOpenBrowser(7);
+  check("maybeAutoOpenBrowser 无页 id 时不动作（签的开合归官方签条）", dockExports.getKitUi().browserOpen === false);
   comps.closeBrowserDockForGone();
   check("closeBrowserDockForGone 收掉面板标签（0 页无面板壳）", dockExports.getKitUi().browserOpen === false && dockExports.getKitUi().activeFeature === null);
   // 链接改投：判定链不命中一律放行官方；命中（对话滚动区内的 http(s) 链接）则吞掉
@@ -184,7 +177,7 @@ check(
   dockExports.setKitUi({ browserOpen: false, activeFeature: null });
   const hitEv = { isTrusted: true, target: linkTarget, preventDefault: () => { prevented++; }, stopPropagation: () => {} };
   comps.onChatLinkClick(hitEv);
-  check("命中链接：吞掉官方新标签 + 切到浏览器签", prevented === 1 && dockExports.getKitUi().browserOpen === true && dockExports.getKitUi().activeFeature === "browser");
+  check("命中链接：吞掉官方新标签（开签交给回包的页 id，不预切功能签）", prevented === 1 && dockExports.getKitUi().browserOpen === false);
   check("命中链接：POST /dsh-kit/browser/open 带 URL 与会话", hits.some((h) => h[0] === "/dsh-kit/browser/open" && h[1] === "POST"));
 }
 
@@ -276,8 +269,12 @@ async function checkApply() {
       bundleSrc.includes('body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{display:none}'),
   );
   check(
-    "根半边仍保留 kitUi 的 browserOpen 座（跨槽功能签机制，非浏览器 UI）",
-    bundleSrc.includes("else if (tab === \"schedule\") patch.schedOpen = false;") && bundleSrc.includes('return { browserOpen: true, activeFeature: "browser" };'),
+    "根半边仍保留 kitUi 的 browserOpen 座（pane 挂载即在场的跨槽存在位）",
+    bundleSrc.includes("else patch.browserOpen = false;") && bundleSrc.includes("useFeaturePresence(\"browser\")"),
+  );
+  check(
+    "浏览器页类型按 dsh-resource 地址认领（一页一签，标题走标题槽）",
+    bundleSrc.includes('patterns: ["dsh-resource://dshk-browser/**"]') && bundleSrc.includes('"sidebar.right.pane.tab.title"'),
   );
   check("根词典不再持浏览器词条（kcfgBrowser/浏览器面板文案随组件）", !/^ {6}(browser[A-Za-z]*|dockBrowser|rbGuideBrowserDesc|kcfgBrowser[A-Za-z]*):/m.test(rootZh));
   // 字段表与宿主 Config schema 同源（改必须两处同改，漂移即红）
