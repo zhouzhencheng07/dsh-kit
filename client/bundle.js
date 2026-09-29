@@ -6022,20 +6022,48 @@ ellipsis，窄列只截字不破版 */
       useFeaturePresence("vault");
       const reader = useVaultReader();
       const path = rightbarItem("vault", tabAddress(props)) ?? "";
+      // 索引侧没挂过（刷新后签被恢复、用户没开过侧栏）时正文自己拉一次索引：
+      // 页正文要库根与页表（反链、相对链接、库内判定），缺了就只能白屏
+      const [own, setOwn] = react.useState(null);
+      react.useEffect(() => {
+        if (path === "" || reader.root !== null || own !== null) return undefined;
+        let alive = true;
+        kitJson("/dsh-kit/vault/index", undefined, (b) => !!b)
+          .then((body) => {
+            if (!alive) return;
+            setOwn({ root: typeof body?.root === "string" ? body.root : "", indexPages: Array.isArray(body?.pages) ? body.pages : [] });
+          })
+          .catch(() => {
+            if (alive) setOwn({ root: "", indexPages: [] });
+          });
+        return () => {
+          alive = false;
+        };
+      }, [path, reader.root, own]);
+      const root = reader.root ?? own?.root ?? null;
+      const indexPages = reader.indexPages ?? own?.indexPages ?? null;
       return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
         reader.earlyBody != null
           ? jsxRuntime.jsx("div", { className: "dshk-vault", children: reader.earlyBody })
           : path === ""
             ? jsxRuntime.jsx("div", { className: "dshk-vault-reader", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPickPage") }) })
-            : jsxRuntime.jsx(VaultPagePane, {
-              path,
-              active: tabVisible(props),
-              root: reader.root,
-              indexPages: reader.indexPages,
-              onOpenPage: reader.openPath,
-              onIndexRefresh: reader.refreshIndex,
-              toast: reader.setToast,
-            }),
+            : root === null
+              ? jsxRuntime.jsx("div", { className: "dshk-vault-reader", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("contentLoading") }) })
+              : jsxRuntime.jsx(VaultPagePane, {
+                path,
+                active: tabVisible(props),
+                root,
+                indexPages,
+                // 索引侧不在时：开页退回本模块的入口、刷新无回调可调（页签本组件开）
+                onOpenPage: (p) => {
+                  if (typeof reader.openPath === "function") reader.openPath(p);
+                  else openVaultPageAndDock(p);
+                },
+                onIndexRefresh: () => {
+                  if (typeof reader.refreshIndex === "function") reader.refreshIndex();
+                },
+                toast: reader.setToast ?? (() => {}),
+              }),
       ] });
     }
     /** 日程 pane：ScheduleView（pane 内上待办 + 下网格） */
