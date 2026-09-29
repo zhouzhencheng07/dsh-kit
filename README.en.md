@@ -7,9 +7,10 @@ dsh browser UI, each independent and dependency-free; with none used, dsh stays 
 
 ## Features
 
-The workbench lives in the **official right sidebar** (the official `sidebar.right` service):
-one dock tab each for Diff / Knowledge base / Schedule / Browser,
-with document tabs inside the Knowledge base tab (one per page). Workspace files are
+The workbench lives in the **official right sidebar** (the official `sidebar.right` service),
+shaped like the official one — **one tab per item**: one diff, one knowledge-base page and
+one browser page each take a dock tab of their own (the tab strip is the switcher; Schedule
+stays a single tab). Workspace files are
 viewed through the **official file preview** (kit adds a "Download" button to its
 header); there is no in-plugin editing of workspace files — edit in VS Code or let
 the agent do it.
@@ -39,8 +40,8 @@ and take no component slot).
   - **Knowledge base** (composer-row toggle / default **Ctrl+Alt+/**): ready out
   of the box (data-directory `dsh-kit\vault`, configurable absolute path on this row's
   config page) — a one-row search
-  plus a tree on the left, pages read as document tabs inside the right-dock **Knowledge
-  base** tab (multiple tabs, ✕ per tab); `[[wikilinks]]` jumping to sections
+  plus a tree on the left, each page reads in its own right-dock **Knowledge base** tab
+  (title = page name, ✕ per tab); `[[wikilinks]]` jumping to sections
   (`[[page#heading]]`), a sticky reading bar with outline & backlinks menus; one search
   covers both sides (full-text notes + note folders + files/folders under the root
   `library/` matched by name), and library files open in the official right-dock file tab
@@ -54,7 +55,8 @@ and take no component slot).
   (pick files in the browser, or paste an absolute local path — md pages pull their locally
   referenced images into `attachments/` and rewrite the references), copy absolute path and
   delete (Recycle Bin on Windows); the library side uses the same menu but imports arbitrary
-  documents and always auto-numbers on clashes; open page tabs follow renames/moves and close
+  documents and always auto-numbers on clashes; open page tabs follow renames/moves (the tab
+  is reopened at the new address) and close
   on delete; chat integration (vault paths in chat open the page, "@" on a tree row cites
   page/selection); page bodies are still not editable inside the plugin (writing belongs to
   the agent's file tools or your local editor) and the plugin creates no skeleton directories
@@ -66,16 +68,22 @@ and take no component slot).
   `schedule_delete`; data is stored one-entry-per-file under
   `$DSH_HOME/dsh-kit/schedule/` (`events/` + `entries/` + `timer.json`, shared with the
   Wangshu desktop app — editing and timers belong there, the plugin is read-only)
-- **Built-in browser** (right-dock Browser tab; this component's row switch is the master
+- **Built-in browser** (right-dock tabs, **one page per tab** — the title is the page title and
+  the official tab strip is the switcher; this component's row switch is the master
   switch — turning it off removes the tools and the panel, leaving only the official
   browser entry): the agent drives the
   system Edge via **7** `browser_*` tools (vendored playwright-core, dedicated
   persistent profile) — snapshot → act → assert GUI-testing loops, screenshots
   (attached directly for multimodal models, saved to disk otherwise); the panel shows
-  the agent's browser live — your clicks/wheel/keys act on the very page the agent is
-  operating (shared control); every agent navigation brings the tab to the front
-- **Skill pool** (new Settings page): workspace / user-level / skill-pool groups
-  with copy, move, delete, disable/enable; shadowed same-name skills get a dashed badge
+  the agent's browser live — your clicks/wheel/keys act on the page behind that very tab
+  (shared control); the toolbar's ＋ opens a page as a new tab and closing a tab closes its
+  page; every agent navigation brings that page's tab to the front
+- **Skill management** (new Settings page): workspace / user-level / skill-pool groups with
+  move, delete, disable/enable (move only — no copy, otherwise copies drift; a flat `.md`
+  dropped into the pool is wrapped into a same-named directory, and the row shows how many
+  workspaces mount it); pool skills carry version history: write what changed to record a
+  version, open a commit to see the diff, roll back from there; same-name skills shadowed by
+  another root get a dashed badge
 - **Phone access** (new Settings page; the component row switch is the master switch —
   turn it off and both the gateway and the page are gone): scan a QR code to reach the
   local dsh web — token-gated gateway (editable port), off on every startup by default;

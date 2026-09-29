@@ -215,7 +215,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       // ── 浏览器面板 WebSocket 端点（browser.ts 的面板面）──
       // 协议：hello（连接即回 state）→ 浏览器端；watch {on, tabId}（**按页**订阅帧流，
       // 每页一条 CDP 会话、引用计数 0 时停流）/ open {url, tabId}（URL 栏导航，作用于
-      // 该页）/ activate {tabId}（切观察页）/ closeTab {tabId}（关页）/
+      // 该页）/ closeTab {tabId}（关页）/
       // nav {op, tabId}（back/forward/reload，作用于该页）/ newTab（＋，回包带新页 id）/
       // input {…, tabId}（人机共驾，作用于该页）。面板一签一页，一连接只画自己那张签的页，
       // 故帧按页投递（frame 消息带 tabId）。
@@ -334,16 +334,11 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
             if (msg.t === 'open' && typeof msg.url === 'string') {
               // 失败不发 error 事件：面板已经切到浏览器签，网址打不开时浏览器自己的错误页
               // 就是反馈（普通浏览器也这样），起不来时面板按 state.error 显示原因。
-              // 别的操作（切页/关页/新页）失败仍要报——那些没有"页面上看得见"的等价物
+              // 别的操作（关页/新页）失败仍要报——那些没有"页面上看得见"的等价物
               void browserService.humanOpen(scope, msg.url, msg.tabId === undefined ? null : Number(msg.tabId))
               return
             }
-            if (msg.t === 'activate' && msg.tabId !== undefined) {
-              void browserService.activatePage(scope, Number(msg.tabId)).then((r) => {
-                if (!r.ok) sendTo(ws, { t: 'event', kind: 'error', message: r.error })
-              })
-              return
-            }
+
             if (msg.t === 'closeTab' && msg.tabId !== undefined) {
               void browserService.closePage(scope, Number(msg.tabId)).then((r) => {
                 if (!r.ok) sendTo(ws, { t: 'event', kind: 'error', message: r.error })
@@ -369,7 +364,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
               return
             }
             if (msg.t === 'input') {
-              // 人机共驾：面板输入回传本分区观察页（未运行时宿主拒绝，不误拉起）
+              // 人机共驾：面板输入回传该签对应的页（未运行时宿主拒绝，不误拉起）
               void browserService.humanInput(scope, msg, msg.tabId === undefined ? null : Number(msg.tabId))
               return
             }
@@ -405,7 +400,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       }
 
       // 对话里的链接改投内置浏览器（client 半边 onChatLinkClick 调用）。语义与面板
-      // URL 栏一致（humanOpen：作用于观察页、不动 agent 活动页；浏览器没在跑时
+      // URL 栏一致（humanOpen：作用于该签那一页、不动 agent 活动页；浏览器没在跑时
       // ensure() 拉起），好处是点击不必等面板挂载与 WS 就绪。
       const disposeBrowserOpen = webCtx.webServer.register({
         kind: 'exact',
@@ -438,7 +433,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
               json(400, { error: '仅支持 http/https URL' })
               return
             }
-            // 分区 = 点链接时的会话（客户端带 sessionId）：链接落在该对话自己的观察页
+            // 分区 = 点链接时的会话（客户端带 sessionId）：链接落在该对话自己的分区，回包页 id 开签
             void browserService.humanOpen(normalizeScope(body?.sessionId), url).then((r) => {
               if (r.ok) json(200, { ok: true, tabId: r.tabId, url: r.url })
               else json(502, { error: r.error })

@@ -10,17 +10,17 @@
 //     开始页条目与待办卡）。
 //   右栏（唯一工作台形态）：sidebarRightTabs 注册四类 dock 签，
 //     pane 正文经 slots.inject（sidebar.right.pane.tab）按 id 提供，pane 内自管
-//     文档签条。dock 签本身没有按钮：diff/知识库是被动签（SCM/树/对话点开
+//     pane 正文。dock 签本身没有按钮：diff/知识库是被动签（SCM/树/对话点开
 //     即开），日程/浏览器走右栏开始页清单与自动跟随。开始页保留官方
 //     ShippedGuide（罗盘 + 胶囊条目），我们只贡献 guide 条目：日程/浏览器
 //     两枚（diff/知识库是被动签，不给条目），官方「工作区文件」条目
 //     垫底（配置可隐藏）。
 //     缺 sidebarRight 服务时只剩 getKitUi() 侧的存在性补丁——入口按钮
 //     不报错，签由官方侧自己决定要不要出现。
-//   功能存在性（getKitUi()）：files/activeFile（diff 签）与
-//     vaultPages/activeVaultPage 是文档签；schedOpen/browserOpen/vaultOpen 是功能签在场
-//     （入口按钮选中态与角标读它）；activeFeature 是当前激活的功能（Esc 关哪张
-//     文档签、浏览器自动跟随的判据）。索引类视图（知识库目录树）住侧栏
+//   功能存在性（getKitUi()）：schedOpen/browserOpen/vaultOpen 是功能签在场
+//     （入口按钮选中态与角标读它）；activeFeature 是当前激活的功能（Esc 关当前
+//     激活那张签的判据）。「开着哪些内容」不在这儿存——那是官方签表，
+//     经 rightbarItems/useRightbarItems 读。索引类视图（知识库目录树）住侧栏
 //     sidebar.workspaces 单槽，点条目开对应右栏签。
 //   文件树/源代码管理：面板群与宿主端点归 dsh-kit/files 组件半边（端点路径
 //     /dsh-kit/*），侧栏浏览区的 tree/git 分支经 kitBase.sidebarView 座回到本包
@@ -468,13 +468,9 @@ window.__ModuleLoader__.load({
     // 组件（分属不同组件半边），状态必须跨槽共享：模块级不可变快照 +
     // useSyncExternalStore 订阅（getSnapshot 返回模块绑定值，恒定引用直到 set 替换）。
     // 功能存在性（open 位）与激活位（activeFeature）分离：打开某功能 = 确保签
-    // 存在并激活，切走不丢状态（diff/知识库的文档签状态在 kitUi 里，官方 dock
-    // 签关掉再开即恢复）。files 与 vaultPages 同构（浏览器式：顶部一条标签条 +
-    // 下面若干内容页）——一页一标签、点击切换、✕ 单关；源代码管理/提交图谱点开
-    // 都往 files 标签条里加标签，同路径复用一个（重开刷新 diff/未跟踪状态）。
-    // 文件树与对话区点击走官方右栏文件签，不进这里。diff 签非激活仍挂载
-    // （display:none）保住滚动位置，超内部上限（3）自动关最久没看的那张。
-    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, vaultPages: [], activeVaultPage: null, activeFeature: null };
+    // 存在并激活，切走不丢状态。内容类（diff / 知识库页 / 浏览器页）是一内容一签，
+    // 签表归官方，kitUi 不留清单；文件树与对话区点击走官方右栏文件签，不进这里。
+    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, activeFeature: null };
     // terminals/activeTermId/termDockOpen 是 dsh-kit-terminal 组件的水位（入口与坞
     // 分属两个槽位，状态必须共享一份）；本文件只读 termDockOpen 一处——Esc 收起坞。
     const kitUiListeners = new Set();
@@ -1185,7 +1181,7 @@ window.__ModuleLoader__.load({
 
     // ─────────── 样式 ───────────
     const UI_CSS = `
-.dshk-head{flex:none;min-height:34px;display:flex;align-items:center;gap:8px;padding:0 6px 0 12px;color:var(--dsw-alias-label-secondary);font-size:12px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.dshk-head{flex:none;min-height:34px;display:flex;align-items:center;gap:8px;padding:0 6px 0 12px;color:var(--dsw-alias-label-secondary);font-size:12px;border-bottom:1px solid var(--dsw-alias-border-l1);overflow:hidden}
 .dshk-title{font-weight:600;color:var(--dsw-alias-label-primary);flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
 .dshk-status{color:var(--dsw-alias-label-tertiary)}
 .dshk-spring{flex:1}
@@ -1723,8 +1719,7 @@ ellipsis，窄列只截字不破版 */
     // 官方 pane 是普通文档流：外壳 .dshk-rbpane 占满 100%×100%，内容区自己滚。
     // pane 挂载 = 官方签开着：把 getKitUi() 的功能存在性同步为真（入口按钮选中态、
     // 角标、自动跟随判定都读它）；pane 卸载（用户点官方签 ✕）同步回假——
-    // 「签开着吗」以官方 pane 的挂载为准。文件/知识库的文档签状态（files/
-    // vaultPages）在卸载后保留，重开签即恢复，与关签前一致。
+    // 「签开着吗」以官方 pane 的挂载为准。
     // ── diff：一个文件一张官方右栏签（签条即切换器，pane 内不再自绘标签条）──
     /** 签数上限（不外露为设置项）：签只来自 SCM/提交图谱，堆积面小，超限关最久没看的 */
     const PREVIEW_MAX = 3;
@@ -6264,7 +6259,7 @@ ellipsis，窄列只截字不破版 */
     const dock = kit;
     const {
       KitTip, kitGetJson, kitPostJson, kitJson, resolveZh, subscribeLocale, getLocaleVersion,
-      writeClipboard, registerNavIcon, t: rootT,
+      writeClipboard, registerNavIcon, useCurrentRow, t: rootT,
     } = dock;
 
     // 组件私有文案（手机访问页与配置页）
@@ -6745,6 +6740,9 @@ ellipsis，窄列只截字不破版 */
       treeAtUnavailable: "输入框未就绪（无会话或不可用）",
       treeMenu: "更多操作",
       scTitle: "源代码管理",
+      scDiffTotal: "已跟踪改动的行数合计（未跟踪文件不计入）",
+      scUpdated: "更新于 {time}",
+      scRefreshFail: "刷新失败：{error}（下面是上次读到的内容）",
       scStaged: "暂存的更改",
       scChanges: "更改",
       scEmpty: "（没有更改）",
@@ -6844,6 +6842,9 @@ ellipsis，窄列只截字不破版 */
       treeAtUnavailable: "Composer is not ready (no active session)",
       treeMenu: "More actions",
       scTitle: "Source Control",
+      scDiffTotal: "Line totals of tracked changes (untracked files excluded)",
+      scUpdated: "Updated {time}",
+      scRefreshFail: "Refresh failed: {error} (the content below is the last read)",
       scStaged: "Staged Changes",
       scChanges: "Changes",
       scEmpty: "(no changes)",
@@ -7039,7 +7040,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 .dshk-headbtn-on{color:var(--dsw-alias-brand-primary)}
 /* width:auto 覆盖 .dshk-btn 的 26px 方钮定宽——否则按钮恒 26 宽，图标与分支名
    被 flex 压成 0 宽，只剩 ▾ 可见（「源代码管理图标没了」的根因） */
-.dshk-branchbtn{display:inline-flex;flex:none;width:auto;align-items:center;gap:4px;max-width:150px;padding:2px 7px;border-color:var(--dsw-alias-border-l2)}
+.dshk-branchbtn{display:inline-flex;flex:0 1 auto;min-width:0;width:auto;align-items:center;gap:4px;max-width:60%;padding:2px 7px;border-color:var(--dsw-alias-border-l2)}
+.dshk-branchbtn>svg,.dshk-branchbtn .dshk-caret{flex:none}
 .dshk-branchbtn .dshk-branch-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshk-caret{font-size:9px;color:var(--dsw-alias-label-tertiary)}
 .dshk-pushhint{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:var(--dsw-alias-label-secondary)}
@@ -7275,32 +7277,42 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
   // （stage/commit/branch 成功后各自 kick）与「可见性/焦点变化立即补一拍」不受影响，
   // 所以拉长到 8s 只影响"放着不动时的自动跟随"这一档。
   const GIT_POLL_MS = 8000;
+  /** SCM 清单常开时用快拍：人盯着面板等的就是「agent 刚改完有没有出现」
+   *  （一次 status+numstat 在本机 54–276ms，3s 一拍的代价可接受，且不可见时本就不轮） */
+  const GIT_POLL_FAST_MS = 3000;
   /** git 轮询共享时钟：状态/图谱/文件 diff 三处轮询共用一条 interval（各自挂载时
    *  订阅、卸载退订），避免同一拍上叠出多条定时器；谁在看才轮谁由各视图的挂载与
-   *  可见性门控负责，这里只管节拍。全部退订后时钟自己停掉。 */
-  const gitTickSubs = new Set();
+   *  可见性门控负责，这里只管节拍。订阅各自报想要的拍长，时钟按最短的走（全部
+   *  退订后时钟自己停掉）。 */
+  const gitTickSubs = new Map();
   let gitTickTimer = null;
 
-  function subscribeGitTick(fn) {
-    gitTickSubs.add(fn);
-    if (gitTickTimer === null) {
-      gitTickTimer = window.setInterval(() => {
-        if (document.visibilityState === "hidden") return;
-        for (const sub of [...gitTickSubs]) {
-          try {
-            sub();
-          } catch {
-            // 单个订阅异常不拖垮其它视图
-          }
-        }
-      }, GIT_POLL_MS);
+  function fireGitTick() {
+    if (document.visibilityState === "hidden") return;
+    for (const sub of [...gitTickSubs.keys()]) {
+      try {
+        sub();
+      } catch {
+        // 单个订阅异常不拖垮其它视图
+      }
     }
+  }
+
+  function armGitTick() {
+    if (gitTickTimer !== null) {
+      window.clearInterval(gitTickTimer);
+      gitTickTimer = null;
+    }
+    if (gitTickSubs.size === 0) return;
+    gitTickTimer = window.setInterval(fireGitTick, Math.min(...gitTickSubs.values()));
+  }
+
+  function subscribeGitTick(fn, ms = GIT_POLL_MS) {
+    gitTickSubs.set(fn, ms);
+    armGitTick();
     return () => {
       gitTickSubs.delete(fn);
-      if (gitTickSubs.size === 0 && gitTickTimer !== null) {
-        window.clearInterval(gitTickTimer);
-        gitTickTimer = null;
-      }
+      armGitTick();
     };
   }
 
@@ -8031,21 +8043,34 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // 图谱视图（⧉ 切换）见 GitGraphPanel；同步钮 = 拉取+推送（有上游）/
     // 发布分支（无上游，push -u），失败且无上游时给「设置上游并推送」提示；
     // 推送入口先 confirm 防误触，被远程 reject 后可 confirm 以本地为准 --force 覆盖。
-    function GitChangesPanel({ cwd, onOpenFile }) {
+    function GitChangesPanel({ cwd, onOpenFile, ...owner }) {
       const [data, setData] = react.useState(null); // null=加载中；{available, root?, entries?}
       const [initializing, setInitializing] = react.useState(false);
       const [msg, setMsg] = react.useState("");
       const [busy, setBusy] = react.useState(false);
       const [collapsed, setCollapsed] = react.useState({});
+      // 刷新可观测：最后读到的时刻 + 上次失败原因。失败保留旧数据（不清空），
+      // 只把原因显示出来——「静默停在旧数据」是「不知道新改动」的主因
+      const [fetchedAt, setFetchedAt] = react.useState(0);
+      const [err, setErr] = react.useState("");
       const fetchRef = react.useRef(null);
+      const seqRef = react.useRef(0);
       fetchRef.current = () => {
         if (!cwd) return;
         const c = new AbortController();
+        const seq = ++seqRef.current;
         fetchGitStatus(cwd, c.signal)
           .then((b) => {
-            if (!c.signal.aborted) setData(b);
+            // seq 守卫：慢响应不覆盖更新的那次
+            if (c.signal.aborted || seq !== seqRef.current) return;
+            setData(b);
+            setFetchedAt(Date.now());
+            setErr("");
           })
-          .catch(() => {});
+          .catch((e) => {
+            if (c.signal.aborted || seq !== seqRef.current) return;
+            setErr(String(e?.message ?? e));
+          });
       };
       // 视图：changes（更改清单，默认）⇄ graph（提交图谱）；分支浮层内联展开
       const [view, setView] = react.useState("changes");
@@ -8057,7 +8082,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           if (view === "graph") return;
           if (document.visibilityState !== "hidden" && fetchRef.current) fetchRef.current();
         };
-        const unsubscribe = subscribeGitTick(tick);
+        const unsubscribe = subscribeGitTick(tick, GIT_POLL_FAST_MS);
         document.addEventListener("visibilitychange", tick);
         window.addEventListener("focus", tick);
         return () => {
@@ -8066,6 +8091,14 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           window.removeEventListener("focus", tick);
         };
       }, [cwd, view]);
+      // agent 一回合跑完（会话行 running 由真变假）立刻补一拍：人盯着面板等的就是
+      // 「改完了没」，那一下正好是清单该变的时候（轮询只是兜底）
+      const running = useCurrentRow(owner)?.running === true;
+      const wasRunning = react.useRef(running);
+      react.useEffect(() => {
+        if (wasRunning.current === true && running === false) fetchRef.current?.();
+        wasRunning.current = running;
+      }, [running, cwd]);
       const [branchOpen, setBranchOpen] = react.useState(false);
       const [branches, setBranches] = react.useState(null); // null=未加载；{current, branches[]}
       const [newBranch, setNewBranch] = react.useState("");
@@ -8304,6 +8337,19 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       };
 
       const ahead = available && typeof data?.ahead === "number" ? data.ahead : 0;
+      // ±行数合计（相对 HEAD 的已跟踪改动；未跟踪文件没有 numstat，不计入）
+      const totals = react.useMemo(() => {
+        let added = 0;
+        let deleted = 0;
+        let counted = 0;
+        for (const e of entries) {
+          if (!e?.stats) continue;
+          added += Number(e.stats.a) || 0;
+          deleted += Number(e.stats.d) || 0;
+          counted++;
+        }
+        return { added, deleted, counted };
+      }, [entries]);
 
       return jsxRuntime.jsxs("div", {
         className: "dshk-tree",
@@ -8322,6 +8368,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
                       className: "dshk-btn dshk-branchbtn" + (branchOpen ? " dshk-headbtn-on" : ""),
                       "data-popkey": "branch",
                       "aria-pressed": branchOpen || undefined,
+                      // 名字长时省略号截断，悬停出全名（头部一整行要放得下四颗钮）
+                      title: data.detached === true ? t("scDetached") : data.branch || "",
                       onClick: toggleBranch,
                       children: [
                         jsxRuntime.jsx(dswIcon("IconBranchOutline16") ?? BranchIcon, {}),
@@ -8334,8 +8382,26 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
                     }),
                   })
                 : jsxRuntime.jsx("span", { className: "dshk-dir", title: root ?? "", children: t("scTitle") }),
-              available && entries.length > 0
-                ? jsxRuntime.jsx("span", { className: "dshk-status", children: String(entries.length) })
+              // 条目数不在头部重复：下方分组标题已经各带一个 N
+              // ±行数合计：numstat 相对 HEAD（未跟踪文件不在其中，故 tooltip 说明）
+              totals.counted > 0
+                ? jsxRuntime.jsx(KitTip, {
+                    label: t("scDiffTotal"),
+                    children: jsxRuntime.jsx("span", {
+                      className: "dshk-status",
+                      children: `+${totals.added} −${totals.deleted}`,
+                    }),
+                  })
+                : null,
+              // 最后一次读到的时刻（「没刷新」不该靠猜）；只到分，头部一行宽度金贵
+              fetchedAt > 0
+                ? jsxRuntime.jsx(KitTip, {
+                    label: t("scUpdated").replace("{time}", new Date(fetchedAt).toLocaleTimeString()),
+                    children: jsxRuntime.jsx("span", {
+                      className: "dshk-status",
+                      children: new Date(fetchedAt).toLocaleTimeString().slice(0, 5),
+                    }),
+                  })
                 : null,
               jsxRuntime.jsx("span", { className: "dshk-spring" }),
               // 同步钮（↑↓）：有上游=
@@ -8388,6 +8454,13 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
               }),
             ],
           }),
+          // 刷新失败：旧数据留在下面，原因写在上面（静默停在旧数据最要命）
+          err !== ""
+            ? jsxRuntime.jsx("div", {
+                className: "dshk-note",
+                children: t("scRefreshFail").replace("{error}", err),
+              })
+            : null,
           // 分支浮层 / ⋯ 操作菜单：fixed 悬浮（.dshk-menu 模式），不参与面板布局，
           // 更改条目再多也不会挤压分支列表；关浮层由组件内 Esc/外部点击触发
           branchOpen && branchAnchor

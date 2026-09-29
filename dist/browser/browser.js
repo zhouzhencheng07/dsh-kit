@@ -954,7 +954,7 @@ export class BrowserService {
             await this.closeNow();
         return { ok: true };
     }
-    /** 人切本分区观察页（面板页签条）：只动观察指针，agent 的默认目标页不受影响 */
+    /** agent 的 browser_act(action:'activate') 换观察页：只动观察指针，默认目标页不受影响 */
     async activatePage(scope, tabId) {
         const id = Number(tabId);
         if (!this._s(scope).pages.has(id))
@@ -963,7 +963,7 @@ export class BrowserService {
         this._setView(scope, id);
         return { ok: true };
     }
-    /** 面板「＋」新建页签：新页即观察页（adopt 会把它提为本分区 agent 活动页，保持既有
+    /** 面板工具栏「＋」新建页：新页即观察页（adopt 会把它提为本分区 agent 活动页，保持既有
      *  语义）；本分区无页时的首建走 ensurePage 兜底 */
     async humanNewTab(scope) {
         const ensureResult = await this.ensure();

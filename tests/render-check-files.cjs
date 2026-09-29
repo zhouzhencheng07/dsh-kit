@@ -335,10 +335,16 @@ out = comps.GitBranchMenu({ rect: { left: 20, top: 40 }, branches: { branches: [
 check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
 
 // —— 源码哨兵：SCM 面板分支按钮会被 .dshk-btn 的 26px 方钮定宽压扁（svg/分支名
-// 0 宽只剩 ▾）——分支按钮必须显式 width:auto 反制（样式随组件在本包 FILES_CSS）
+// 0 宽只剩 ▾）——必须显式 width:auto 反制，且可收缩 + 名字省略号 + 图标不参与
+// 收缩（否则窄侧栏下「main」这类短名也会被挤没）
 {
   const filesSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
-  check("分支按钮不被 .dshk-btn 定宽压扁（width:auto 修正恒在）", filesSrc.includes(".dshk-branchbtn{display:inline-flex;flex:none;width:auto"));
+  check(
+    "分支按钮 width:auto + 可收缩 + 图标不参与收缩（窄侧栏不截断短分支名）",
+    filesSrc.includes(".dshk-branchbtn{display:inline-flex;flex:0 1 auto;min-width:0;width:auto") &&
+      filesSrc.includes(".dshk-branchbtn>svg,.dshk-branchbtn .dshk-caret{flex:none}"),
+  );
+  check("分支按钮挂全名 title（省略号时悬停可见）", filesSrc.includes("title: data.detached === true ? t(\"scDetached\") : data.branch || \"\","));
   // 键位整体改由宿主 shortcuts 服务持有（官方「快捷键」页）：本组件
   // 不再有键位配置项（宿主 schema 同删），注册面见下方 apply 钉子
   const hostSrc = fs.readFileSync(__dirname + "/../src/files/index.ts", "utf8");
