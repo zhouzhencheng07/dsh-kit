@@ -722,7 +722,15 @@ window.__ModuleLoader__.load({
       useRightbarItems(feature);
       return activeRightbarItem(feature);
     }
-    /** 当前激活签是不是本 feature 的（Esc 分层用） */
+    /** 地址里的转义段还原：坏转义（手改过的布局/旧版本遗留）不该在渲染期抛错 */
+  function safeDecode(s) {
+    try {
+      return decodeURIComponent(s);
+    } catch {
+      return "";
+    }
+  }
+  /** 当前激活签是不是本 feature 的（Esc 分层用） */
     function activeRightbarFeature(feature) {
       const sr = rightbarSr;
       const f = tabKinds[feature];
@@ -914,32 +922,35 @@ window.__ModuleLoader__.load({
     // fileAddressFor：反斜杠归 /、剥前导 ./；cwd 内剥成相对，cwd 外保留绝对；
     // 逐段 encodeURIComponent、`:` 保留字面量（Windows 盘符）。会话未选中时
     // 无从定位工作区，放弃。
+    /** 官方文件签的地址（`dsh-resource://file/session/<会话id>/<路径>`）：开签与
+     *  问宿主「这个文件什么版本」共用同一个地址。会话未选中时无从定位工作区，返回 null */
+    function fileAddressFor(path) {
+      const list = sessionsSvc && typeof sessionsSvc.list?.getSnapshot === "function" ? sessionsSvc.list.getSnapshot() : null;
+      const sessionId = mainRowOf(list)?.id;
+      if (!sessionId) return null;
+      const cwd = list.byId?.[sessionId]?.cwd ?? null;
+      try {
+        const util = require("@deepseek-ai/dsh-util-workspace-path");
+        if (util && typeof util.fileAddressFor === "function") return util.fileAddressFor(sessionId, cwd, path);
+      } catch (e) {
+        /* 平台模块缺位：走下面的本地复刻 */
+      }
+      // 复刻官方编码；cwd 前缀比较有意不分大小写——盘符大小写不一致时剥成
+      // 相对路径（session 域按会话 cwd 解析），官方的大小写敏感版会落成绝对路径
+      const seg = (s) => encodeURIComponent(s).replace(/%3A/gi, ":");
+      let norm = String(path).replace(/\\/g, "/").replace(/^(?:\.\/)+/, "");
+      const cwdNorm = cwd ? String(cwd).replace(/\\/g, "/").replace(/[\\/]+$/, "") : null;
+      if (cwdNorm && norm.toLowerCase().startsWith(`${cwdNorm.toLowerCase()}/`)) norm = norm.slice(cwdNorm.length + 1);
+      return `dsh-resource://file/session/${seg(sessionId)}/${norm.split("/").map(seg).join("/")}`;
+    }
     function openOfficialFile(path, line) {
       // seat 不在场 = 右栏不画（全局面板在前台 / 没选会话）：开签必抛
       // 「no session surface is mounted」，这里先收手，别把内部错误当用户错误报
       if (!rightbarSeat.available) return false;
       const sr = getRightbarSr();
       if (!sr || typeof sr.openResource !== "function") return false;
-      const list = sessionsSvc && typeof sessionsSvc.list?.getSnapshot === "function" ? sessionsSvc.list.getSnapshot() : null;
-      const sessionId = mainRowOf(list)?.id;
-      if (!sessionId) return false;
-      const cwd = list.byId?.[sessionId]?.cwd ?? null;
-      let address = null;
-      try {
-        const util = require("@deepseek-ai/dsh-util-workspace-path");
-        if (util && typeof util.fileAddressFor === "function") address = util.fileAddressFor(sessionId, cwd, path);
-      } catch (e) {
-        /* 平台模块缺位：走下面的本地复刻 */
-      }
-      if (address === null) {
-        // 复刻官方编码；cwd 前缀比较有意不分大小写——盘符大小写不一致时剥成
-        // 相对路径（session 域按会话 cwd 解析），官方的大小写敏感版会落成绝对路径
-        const seg = (s) => encodeURIComponent(s).replace(/%3A/gi, ":");
-        let norm = String(path).replace(/\\/g, "/").replace(/^(?:\.\/)+/, "");
-        const cwdNorm = cwd ? String(cwd).replace(/\\/g, "/").replace(/[\\/]+$/, "") : null;
-        if (cwdNorm && norm.toLowerCase().startsWith(`${cwdNorm.toLowerCase()}/`)) norm = norm.slice(cwdNorm.length + 1);
-        address = `dsh-resource://file/session/${seg(sessionId)}/${norm.split("/").map(seg).join("/")}`;
-      }
+      const address = fileAddressFor(path);
+      if (address === null) return false;
       try {
         sr.openResource(address, line === undefined ? undefined : { params: { line } });
         return true;
@@ -1745,6 +1756,9 @@ ellipsis，窄列只截字不破版 */
       const cwd = useCurrentCwd(props);
       const address = tabAddress(props);
       const path = rightbarItem("file", address) ?? "";
+      // 官方 file 资源（宿主 watcher 推版本）：diff 正文拿它判「盘上这份是不是我读的那份」
+      const fileAddress = path === "" ? null : fileAddressFor(path);
+      const useResource = typeof props?.useResource === "function" ? props.useResource : null;
       const query = rightbarQuery("file", address);
       const active = props?.active !== false;
       react.useEffect(() => {
@@ -1758,8 +1772,10 @@ ellipsis，窄列只截字不破版 */
         path,
         untracked: flag("u") !== null,
         deleted: flag("d") !== null,
-        commit: commitM ? decodeURIComponent(commitM[2]) : undefined,
+        commit: commitM ? safeDecode(commitM[2]) : undefined,
         cwd,
+        fileAddress,
+        useResource,
       }) });
     }
     // ─────────── 面板宿主（shell.overlay 全帧浮层）───────────
@@ -6740,6 +6756,9 @@ ellipsis，窄列只截字不破版 */
       treeAtUnavailable: "输入框未就绪（无会话或不可用）",
       treeMenu: "更多操作",
       scTitle: "源代码管理",
+      diffStale: "文件已被修改",
+      diffReloadNow: "重新载入",
+      diffAutoFollow: "自动跟随",
       scDiffTotal: "已跟踪改动的行数合计（未跟踪文件不计入）",
       scUpdated: "更新于 {time}",
       scRefreshFail: "刷新失败：{error}（下面是上次读到的内容）",
@@ -6842,6 +6861,9 @@ ellipsis，窄列只截字不破版 */
       treeAtUnavailable: "Composer is not ready (no active session)",
       treeMenu: "More actions",
       scTitle: "Source Control",
+      diffStale: "File changed on disk",
+      diffReloadNow: "Reload",
+      diffAutoFollow: "Auto-follow",
       scDiffTotal: "Line totals of tracked changes (untracked files excluded)",
       scUpdated: "Updated {time}",
       scRefreshFail: "Refresh failed: {error} (the content below is the last read)",
@@ -7031,6 +7053,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 .dshk-chg-head{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:11px}
 .dshk-chg-count{color:var(--dsw-alias-label-tertiary);font-size:12px}
 .dshk-diff{font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;padding:4px 0;white-space:pre;overflow-x:auto;user-select:text;color:var(--dsw-alias-label-secondary)}
+.dshk-stalebar{display:flex;align-items:center;gap:8px;padding:4px 10px;margin:0 0 4px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:11px}
+.dshk-stalebar .dshk-spring{flex:1}
+.dshk-stalebar .dshk-btn{flex:none;white-space:nowrap}
 .dshk-diff-add{color:#0dbc79;background:rgba(13,188,121,.08)}
 .dshk-diff-del{color:#cd3131;background:rgba(205,49,49,.08)}
 .dshk-diff-hunk{color:#4daafc}
@@ -8927,10 +8952,24 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
      *  文件签。commit（可选）= 提交钉定模式（图谱提交详情进入，diff 与该提交的
      *  第一父对比）；deleted=工作区已删除（纯红展示全文）；untracked=未跟踪
      *  （整文件按新增着色，内容来自 read）。 */
-    function DiffPane({ path, untracked, deleted, cwd, commit }) {
+    function DiffPane({ path, untracked, deleted, cwd, commit, fileAddress, useResource }) {
       const [state, setState] = react.useState({ phase: "loading" });
       const [diff, setDiff] = react.useState({ phase: "loading" });
       const [reloadNonce, setReloadNonce] = react.useState(0);
+      // 「盘上这份是不是我读的那份」：宿主 file 资源带版本号（watcher 推帧），
+      // 读到的 diff 记下当时的版本，对不上就是文件被改过——内容留着，上面给一条
+      // 提示条（官方预览同款：旧内容不白屏，重载与否由人/开关定）
+      const meta = useResource && fileAddress ? useResource(fileAddress) : null;
+      const version = meta?.value?.version;
+      const readVersionRef = react.useRef(null);
+      const [stale, setStale] = react.useState(false);
+      const [autoFollow, setAutoFollow] = react.useState(true);
+      const reload = () => {
+        readVersionRef.current = version ?? null;
+        setStale(false);
+        setReloadNonce((n) => n + 1);
+        if (diffFetchRef.current) diffFetchRef.current();
+      };
       // deleted 翻转（同一文件先打开后被删 / ↩ 恢复后重开）：实例不重挂（key=path），
       // 手动跟上——解除删除态时重读内容（未跟踪/着色用），进删除态无需动作
       //（渲染分支直接读 deleted prop）
@@ -8948,41 +8987,47 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         const commitQ = commit ? `&commit=${encodeURIComponent(commit)}` : "";
         kitGetJson(`/dsh-kit/git/diff?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? path)}${commitQ}`, c.signal, (b) => b.available === true)
           .then((b) => {
-            if (!c.signal.aborted)
-              setDiff({
-                phase: "ready",
-                untracked: b.untracked === true,
-                clean: b.clean === true,
-                base: typeof b.base === "string" ? b.base : "",
-                content: typeof b.content === "string" ? b.content : undefined,
-                blobMissing: b.blobMissing === true,
-                text: typeof b.diff === "string" ? b.diff : null,
-              });
+            if (c.signal.aborted) return;
+            // 这份 diff 算在宿主的哪个文件版本上（版本为 undefined = 宿主没这个
+            // 资源的 provider，退回旧的轮询/手动重载）
+            readVersionRef.current = version ?? null;
+            setDiff({
+              phase: "ready",
+              untracked: b.untracked === true,
+              clean: b.clean === true,
+              base: typeof b.base === "string" ? b.base : "",
+              content: typeof b.content === "string" ? b.content : undefined,
+              blobMissing: b.blobMissing === true,
+              text: typeof b.diff === "string" ? b.diff : null,
+            });
           })
           .catch((error) => {
             if (!c.signal.aborted && error?.name !== "AbortError") setDiff({ phase: "error", error: String(error?.message ?? error) });
           });
       };
-      // diff 数据：进入时拉一次，可见期间低频静默跟随（AI 边改边看也能跟上），
-      // 转回可见/聚焦立即补。commit 钉定模式的 diff 不可变（固定对某提交的
-      // 第一父），拉一次即可不轮询
+      // diff 数据：进入时拉一次；之后由宿主 file 资源的版本号驱动（见下方版本对照）
+      // ——不再自己轮询：版本是事件驱动推来的，比每 8s 猜一次准，也省掉每张签一个
+      // git 进程。拿不到版本（无 provider / commit 钉定）时靠手动重载与重开签
       react.useEffect(() => {
         if (!cwd) return undefined;
         setDiff({ phase: "loading" });
         if (diffFetchRef.current) diffFetchRef.current();
-        if (commit) return undefined;
-        const tick = () => {
-          if (document.visibilityState !== "hidden" && diffFetchRef.current) diffFetchRef.current();
-        };
-        const unsubscribe = subscribeGitTick(tick);
-        document.addEventListener("visibilitychange", tick);
-        window.addEventListener("focus", tick);
-        return () => {
-          unsubscribe();
-          document.removeEventListener("visibilitychange", tick);
-          window.removeEventListener("focus", tick);
-        };
+        return undefined;
       }, [path, cwd, commit]);
+
+      // 版本对照：宿主推了新版本 = 盘上被改过。自动跟随（默认开）直接重读；
+      // 关掉则保留旧 diff、顶一条提示条，重不重载由人定（官方预览同款取舍）
+      react.useEffect(() => {
+        // 只认「有版本可比」：首次拿到 live 版本（read 还是 null）也要重读一次，
+        // 否则资源晚到时这份 diff 永远停在旧内容
+        if (version === undefined) return;
+        if (version === readVersionRef.current) return;
+        if (autoFollow) {
+          reload();
+          return;
+        }
+        setStale(true);
+      }, [version, autoFollow]);
 
       // 内容读取：只服务于 diff 着色（常规视图的新像 = 盘上内容；未跟踪 = 整文件
       // 按新增着色）。截断（>512KB）或读失败时着色回落原始 patch，不作为错误展示。
@@ -9113,8 +9158,32 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         children: [
           jsxRuntime.jsx("div", {
             className: "dshk-head",
-            children: jsxRuntime.jsx("span", { className: "dshk-title", children: path }),
+            children: [
+              jsxRuntime.jsx("span", { className: "dshk-title", children: path }),
+              // 自动跟随开关常驻头部（关掉才有「要不要重载」这个问题）
+              commit === undefined && version !== undefined
+                ? jsxRuntime.jsx("label", { className: "dshk-status", children: [
+                    jsxRuntime.jsx("input", {
+                      type: "checkbox",
+                      checked: autoFollow,
+                      onChange: (e) => setAutoFollow(e?.target?.checked === true),
+                    }),
+                    t("diffAutoFollow"),
+                  ] })
+                : null,
+            ],
           }),
+          // 文件被改过：旧 diff 留在下面（不白屏），上面一条提示条 + 重载 + 自动跟随
+          stale && !commit && version !== undefined
+            ? jsxRuntime.jsxs("div", {
+                className: "dshk-stalebar",
+                children: [
+                  jsxRuntime.jsx("span", { children: t("diffStale") }),
+                  jsxRuntime.jsx("span", { className: "dshk-spring" }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-btn", onClick: reload, children: t("diffReloadNow") }),
+                ],
+              })
+            : null,
           deleted === true
             ? jsxRuntime.jsxs(jsxRuntime.Fragment, {
                 children: [
