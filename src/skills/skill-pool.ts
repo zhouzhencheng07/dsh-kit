@@ -1,6 +1,6 @@
 // dsh-kit 技能池宿主半边
 //
-// 技能池 $DSH_HOME/skill-pool 不挂任何扫描根（DSH 不会把它当技能源）：它是跨工作区
+// 技能池 <DSH_HOME>/dsh-kit/skill-pool 不挂任何扫描根（DSH 不会把它当技能源）：它是跨工作区
 // 共用技能的**本体**所在地。要让某个工作区看见池里的技能，就在该工作区的一个项目级根
 // 里建一条指向池的目录链接（载体根选择、git 体检与建链/断链见 ./mount.ts）。技能永远
 // 不进项目仓库——载体根整目录被 git 忽略。
@@ -56,11 +56,13 @@ import {
   prepareCarrier,
   setCarrier,
   syncMounts,
+  relinkMounts,
   unmountLink,
   type MountState,
   type ProjectDirs,
   type ProjectRootId,
 } from './mount.ts'
+import { adoptLegacy, dshHome, kitPath } from '../core/data-path.ts'
 import { ensurePoolBaseline, poolGitCommit, poolGitRollback, poolGitState } from './pool-git.ts'
 import { parseFrontmatter } from './frontmatter.ts'
 
@@ -132,15 +134,15 @@ interface ResolvedRoot {
   skills: SkillEntry[]
 }
 
-function dshHome(): string {
-  const env = process.env.DSH_HOME
-  return env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh')
+/** 技能池目录（<DSH_HOME>/dsh-kit/skill-pool）：不是 DSH 扫描根，只作跨工作区共用的本体
+ *  所在地。池路径真相只此一处（vault 的「知识库目录」等用户配置与它无关）。 */
+export function defaultPoolDir(): string {
+  return kitPath(POOL_DIRNAME)
 }
 
-/** 技能池目录（$DSH_HOME/skill-pool）：不是 DSH 扫描根，只作跨工作区共用的本体所在地。
- *  池路径真相只此一处（vault 的「知识库目录」等用户配置与它无关）。 */
-export function defaultPoolDir(): string {
-  return path.join(dshHome(), POOL_DIRNAME)
+/** 旧版把池放在 <DSH_HOME>/skill-pool：搬进 dsh-kit/ 后重指工作区里那些绝对路径链接 */
+function adoptLegacyPool(): void {
+  if (adoptLegacy(path.join(dshHome(), POOL_DIRNAME), defaultPoolDir())) relinkMounts(defaultPoolDir())
 }
 
 /** 项目级两根的物理位置；没有会话 cwd（或 cwd 非法）时返回 null */
@@ -488,6 +490,7 @@ interface SkillPoolHooks {
  * 注册技能池端点。registryApi 由外部注入回调捕获（ctx.skills 服务可能晚于本模块就绪）。
  */
 export function applySkillPool(ctx: KitCtx, hooks?: SkillPoolHooks): void {
+  adoptLegacyPool()
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => {
       const origins = (req: http.IncomingMessage): boolean => sameOrigin(req)

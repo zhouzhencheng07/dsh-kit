@@ -36,6 +36,8 @@ import os from 'node:os'
 import path from 'node:path'
 import zlib from 'node:zlib'
 
+import { adoptLegacy, dshHome, kitPath } from '../core/data-path.ts'
+
 /** 网关下发的授权 Cookie 名 */
 export const PHONE_COOKIE = 'dshk_phone'
 
@@ -357,15 +359,15 @@ export function parseCookies(header: unknown): Record<string, string> {
 }
 
 /**
- * 默认令牌持久化文件：<DSH_HOME>/data/dsh-kit-phone-gateway.json。
+ * 默认令牌持久化文件：<DSH_HOME>/dsh-kit/phone-gateway.json（旧版的
+ * <DSH_HOME>/data/dsh-kit-phone-gateway.json 在首次读到时搬过来）。
  * 重启 dsh 后令牌不变，手机端 Cookie 继续有效；文件损坏则重新生成
  * （等价于一次轮换，旧链接失效属预期）。
  */
 export function defaultStateFile(): string {
-  const home = process.env.DSH_HOME && process.env.DSH_HOME.trim() !== ''
-    ? process.env.DSH_HOME
-    : os.tmpdir()
-  return path.join(home, 'data', 'dsh-kit-phone-gateway.json')
+  const next = kitPath('phone-gateway.json')
+  adoptLegacy(path.join(dshHome(), 'data', 'dsh-kit-phone-gateway.json'), next)
+  return next
 }
 
 export interface GatewayState {

@@ -11,15 +11,16 @@
 // 决定；这里只负责"判定载体根 / 写忽略 / 建链 / 断链"，外加一份挂载登记表——池技能被
 // 哪些工作区挂了只存在于各项目的磁盘上，出池或删除本体时得靠这份账断链。
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { adoptLegacy, dshHome, kitPath } from "../core/data-path.js";
 import { runGit } from "./git.js";
 function toPosix(p) {
     return p.split(path.sep).join('/');
 }
 function policyFile() {
-    const home = process.env.DSH_HOME && process.env.DSH_HOME.trim() !== '' ? process.env.DSH_HOME.trim() : path.join(os.homedir(), '.dsh');
-    return path.join(home, 'data', 'dsh-kit-skills.json');
+    const next = kitPath('skills.json');
+    adoptLegacy(path.join(dshHome(), 'data', 'dsh-kit-skills.json'), next);
+    return next;
 }
 function normalizeMounts(raw) {
     const out = {};
@@ -160,6 +161,40 @@ export function liveMounts(poolDir, poolSkillDir) {
     if (dirty)
         saveMounts(policy, mounts);
     return mounts[path.basename(poolSkillDir)] ?? [];
+}
+/**
+ * 池目录搬家后重指挂载链接：链接是指向池的绝对路径，池从 $DSH_HOME/skill-pool 搬到
+ * dsh-kit/skill-pool 后旧链接全悬空——按登记表把悬空的重建到新池（本体不动）。
+ * 返回重指了几条。
+ */
+export function relinkMounts(poolDir) {
+    const { policy, mounts } = readMounts(poolDir);
+    let fixed = 0;
+    let changed = false;
+    for (const [name, list] of Object.entries(mounts)) {
+        const kept = [];
+        for (const rec of list) {
+            if (!isLinkAt(rec.link) || fs.existsSync(rec.link)) {
+                kept.push(rec);
+                continue;
+            }
+            unmountLink(rec.link);
+            const rebuilt = mountLink(path.join(poolDir, name), path.dirname(rec.link));
+            if (rebuilt.ok)
+                fixed++;
+            else
+                kept.push(rec);
+        }
+        if (kept.length !== list.length || list.some((rec, i) => kept[i] !== rec))
+            changed = true;
+        if (kept.length === 0)
+            delete mounts[name];
+        else
+            mounts[name] = kept;
+    }
+    if (changed)
+        saveMounts(policy, mounts);
+    return fixed;
 }
 // ── 载体根（挂载点）──
 //

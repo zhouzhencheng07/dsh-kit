@@ -18,7 +18,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const base = process.argv[2] ?? "http://127.0.0.1:3081";
-const POOL = path.join(process.env.DSH_HOME ?? path.join(os.homedir(), ".dsh"), "skill-pool");
+const POOL = path.join(process.env.DSH_HOME ?? path.join(os.homedir(), ".dsh"), "dsh-kit", "skill-pool");
 let failed = 0;
 const check = (label, ok, detail) => {
   console.log(`${ok ? "PASS  " : "FAIL  "}${label}${!ok && detail ? ` :: ${detail}` : ""}`);

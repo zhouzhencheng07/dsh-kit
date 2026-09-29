@@ -12,9 +12,9 @@
 // 哪些工作区挂了只存在于各项目的磁盘上，出池或删除本体时得靠这份账断链。
 
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 
+import { adoptLegacy, dshHome, kitPath } from '../core/data-path.ts'
 import { runGit } from './git.ts'
 
 /** 项目级两根（与 skill-pool 的物理根 id 同名） */
@@ -72,8 +72,9 @@ interface Policy {
 }
 
 function policyFile(): string {
-  const home = process.env.DSH_HOME && process.env.DSH_HOME.trim() !== '' ? process.env.DSH_HOME.trim() : path.join(os.homedir(), '.dsh')
-  return path.join(home, 'data', 'dsh-kit-skills.json')
+  const next = kitPath('skills.json')
+  adoptLegacy(path.join(dshHome(), 'data', 'dsh-kit-skills.json'), next)
+  return next
 }
 
 function normalizeMounts(raw: unknown): Record<string, MountRecord[]> {
@@ -208,6 +209,35 @@ export function liveMounts(poolDir: string, poolSkillDir: string): MountRecord[]
   const { policy, mounts, dirty } = readMounts(poolDir)
   if (dirty) saveMounts(policy, mounts)
   return mounts[path.basename(poolSkillDir)] ?? []
+}
+
+/**
+ * 池目录搬家后重指挂载链接：链接是指向池的绝对路径，池从 $DSH_HOME/skill-pool 搬到
+ * dsh-kit/skill-pool 后旧链接全悬空——按登记表把悬空的重建到新池（本体不动）。
+ * 返回重指了几条。
+ */
+export function relinkMounts(poolDir: string): number {
+  const { policy, mounts } = readMounts(poolDir)
+  let fixed = 0
+  let changed = false
+  for (const [name, list] of Object.entries(mounts)) {
+    const kept: MountRecord[] = []
+    for (const rec of list) {
+      if (!isLinkAt(rec.link) || fs.existsSync(rec.link)) {
+        kept.push(rec)
+        continue
+      }
+      unmountLink(rec.link)
+      const rebuilt = mountLink(path.join(poolDir, name), path.dirname(rec.link))
+      if (rebuilt.ok) fixed++
+      else kept.push(rec)
+    }
+    if (kept.length !== list.length || list.some((rec, i) => kept[i] !== rec)) changed = true
+    if (kept.length === 0) delete mounts[name]
+    else mounts[name] = kept
+  }
+  if (changed) saveMounts(policy, mounts)
+  return fixed
 }
 
 // ── 载体根（挂载点）──

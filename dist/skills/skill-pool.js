@@ -1,6 +1,6 @@
 // dsh-kit 技能池宿主半边
 //
-// 技能池 $DSH_HOME/skill-pool 不挂任何扫描根（DSH 不会把它当技能源）：它是跨工作区
+// 技能池 <DSH_HOME>/dsh-kit/skill-pool 不挂任何扫描根（DSH 不会把它当技能源）：它是跨工作区
 // 共用技能的**本体**所在地。要让某个工作区看见池里的技能，就在该工作区的一个项目级根
 // 里建一条指向池的目录链接（载体根选择、git 体检与建链/断链见 ./mount.ts）。技能永远
 // 不进项目仓库——载体根整目录被 git 忽略。
@@ -45,7 +45,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { recycleDelete, findProjectRoot } from "../core/index.js";
 import { sameOrigin } from "../core/index.js";
-import { computeMountState, forgetMount, liveMounts, mountLink, mountPrecondition, prepareCarrier, setCarrier, syncMounts, unmountLink, } from "./mount.js";
+import { computeMountState, forgetMount, liveMounts, mountLink, mountPrecondition, prepareCarrier, setCarrier, syncMounts, relinkMounts, unmountLink, } from "./mount.js";
+import { adoptLegacy, dshHome, kitPath } from "../core/data-path.js";
 import { ensurePoolBaseline, poolGitCommit, poolGitRollback, poolGitState } from "./pool-git.js";
 import { parseFrontmatter } from "./frontmatter.js";
 const POOL_DIRNAME = 'skill-pool';
@@ -58,14 +59,15 @@ const PHYSICAL_ROOTS = [
 ];
 /** 逻辑分组展示顺序：工作区 → 用户级 → 技能池 */
 const GROUP_ORDER = ['workspace', 'user', 'pool'];
-function dshHome() {
-    const env = process.env.DSH_HOME;
-    return env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh');
-}
-/** 技能池目录（$DSH_HOME/skill-pool）：不是 DSH 扫描根，只作跨工作区共用的本体所在地。
- *  池路径真相只此一处（vault 的「知识库目录」等用户配置与它无关）。 */
+/** 技能池目录（<DSH_HOME>/dsh-kit/skill-pool）：不是 DSH 扫描根，只作跨工作区共用的本体
+ *  所在地。池路径真相只此一处（vault 的「知识库目录」等用户配置与它无关）。 */
 export function defaultPoolDir() {
-    return path.join(dshHome(), POOL_DIRNAME);
+    return kitPath(POOL_DIRNAME);
+}
+/** 旧版把池放在 <DSH_HOME>/skill-pool：搬进 dsh-kit/ 后重指工作区里那些绝对路径链接 */
+function adoptLegacyPool() {
+    if (adoptLegacy(path.join(dshHome(), POOL_DIRNAME), defaultPoolDir()))
+        relinkMounts(defaultPoolDir());
 }
 /** 项目级两根的物理位置；没有会话 cwd（或 cwd 非法）时返回 null */
 export function resolveProjectDirs(cwd) {
@@ -396,6 +398,7 @@ function readBody(req) {
  * 注册技能池端点。registryApi 由外部注入回调捕获（ctx.skills 服务可能晚于本模块就绪）。
  */
 export function applySkillPool(ctx, hooks) {
+    adoptLegacyPool();
     ctx.inject(['webServer'], (webCtx) => {
         webCtx.effect(() => {
             const origins = (req) => sameOrigin(req);
