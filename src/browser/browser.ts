@@ -187,6 +187,9 @@ export function normalizeScope(raw: unknown): string {
   return s === '' ? DEFAULT_SCOPE : s
 }
 
+/** 帧流的投递口：一个订阅者（= 一条面板连接）收自己订的那一页的帧 */
+type FrameSink = (tabId: number, data: string, metadata: unknown) => void
+
 /** 一个分区的全部可变状态（浏览器实例与 profile 不在这里——那是全局共享的） */
 interface ScopeState {
   pages: Map<number, PwPage>
@@ -196,10 +199,10 @@ interface ScopeState {
   activeId: number | null
   /** 面板观察页：帧流、人机共驾输入、面板 URL 栏都作用于它 */
   viewId: number | null
-  /** 每页一观察流（面板签 ↔ 真实页）：订阅数与 CDP 会话都按页记，多张签看同一页复路 */
-  watchers: Map<number, number>
+  /** 帧流订阅者，按页记（页 id → 订阅者 → 投递函数）。同页多张签各挂各的连接，
+   *  不同页各投各的——投递槽必须按页分开，否则后开的签会顶掉先开那张的 */
+  frames: Map<number, Map<object, FrameSink>>
   streams: Map<number, { cdp: PwCdpSession }>
-  onFrame: ((tabId: number, data: string, metadata: unknown) => void) | undefined
   lastActivity: number
   /** 人手高频输入与 agent 工具动作共用一页，必须顺序派发 */
   inputQueue: Promise<void>
@@ -386,9 +389,8 @@ export class BrowserService {
         dialogs: new Map(),
         activeId: null,
         viewId: null,
-        watchers: new Map(),
+        frames: new Map(),
         streams: new Map(),
-        onFrame: undefined,
         lastActivity: Date.now(),
         inputQueue: Promise.resolve(),
       }
@@ -400,7 +402,7 @@ export class BrowserService {
   /** 分区没页、没观察者、没帧流就删掉它的记录（分区表不长期堆空壳） */
   private _dropIdleScope(scope: string): void {
     const s = this._scopes.get(scope)
-    if (s && s.pages.size === 0 && s.watchers.size === 0 && s.streams.size === 0) this._scopes.delete(scope)
+    if (s && s.pages.size === 0 && s.frames.size === 0 && s.streams.size === 0) this._scopes.delete(scope)
   }
 
   private _touch(scope?: string): void {
@@ -411,7 +413,7 @@ export class BrowserService {
 
   private _watchersTotal(): number {
     let n = 0
-    for (const s of this._scopes.values()) for (const c of s.watchers.values()) n += c
+    for (const s of this._scopes.values()) for (const sinks of s.frames.values()) n += sinks.size
     return n
   }
 
@@ -428,7 +430,7 @@ export class BrowserService {
       const now = Date.now()
       // 分区级回收：没人看且十分钟没动过的对话，只收它自己的页（别的对话不受影响）
       for (const [key, s] of [...this._scopes]) {
-        if (s.watchers.size > 0 || s.pages.size === 0 || now - s.lastActivity <= IDLE_CLOSE_MS) continue
+        if (s.frames.size > 0 || s.pages.size === 0 || now - s.lastActivity <= IDLE_CLOSE_MS) continue
         this._log(`browser: 分区空闲超时，收起该对话的 ${s.pages.size} 页`)
         void this._closeScopePages(key, s)
       }
@@ -717,7 +719,7 @@ export class BrowserService {
     // 流的宿主页没了就拆掉：CDP 会话已死，留着会让面板把最后一帧当成活画面
     // （关最后一页后面板冻结在旧视图，看起来像还在直播，误导人以为页面还在）
     if (s.streams.has(id)) void this._detachStream(scope, id)
-    s.watchers.delete(id)
+    s.frames.delete(id)
     if (s.pages.size === 0) this._dropIdleScope(scope)
   }
 
@@ -1103,32 +1105,52 @@ export class BrowserService {
     return { ok: true, tabId, url: page.url(), title }
   }
 
-  // ── 面板帧流（按分区各一条；同一分区的多个观察者复路到同一条 CDP 会话）──
+  // ── 面板帧流（每页一条 CDP 会话，页内多张签复路；页与页之间互不相干）──
 
-  /** 面板订阅某页的帧流（一页一条，多张签看同一页复路） */
-  async watcherOpen(scope: string, tabId: number | null, onFrame: (tabId: number, data: string, metadata: unknown) => void): Promise<{ ok: true; tabId?: number } | { ok: false; error: string }> {
+  /** 面板订阅某页的帧流。subscriber 标识这一个订阅者（连接），退订时按它摘，
+   *  免得同页多张签张冠李戴 */
+  async watcherOpen(scope: string, tabId: number | null, subscriber: object, onFrame: FrameSink): Promise<{ ok: true; tabId?: number } | { ok: false; error: string }> {
     const ensured = await this.ensure()
     if (!ensured.ok) return ensured
     const s = this._s(scope)
     const id = Number(tabId)
     if (!Number.isFinite(id) || !s.pages.has(id)) return { ok: false, error: `页不存在：${tabId}` }
-    s.onFrame = onFrame
-    s.watchers.set(id, (s.watchers.get(id) ?? 0) + 1)
+    let sinks = s.frames.get(id)
+    if (!sinks) {
+      sinks = new Map()
+      s.frames.set(id, sinks)
+    }
+    sinks.set(subscriber, onFrame)
     this._touch(scope)
     if (!s.streams.has(id)) await this._attachStream(scope, id)
     return { ok: true, tabId: id }
   }
 
-  /** 退订某页帧流（该页无观察者即拆 CDP 会话） */
-  watcherClose(scope: string, tabId: number | null): void {
+  /** 退订某页帧流（该页无订阅者即拆 CDP 会话） */
+  watcherClose(scope: string, tabId: number | null, subscriber: object): void {
     const s = this._s(scope)
     const id = Number(tabId)
     if (!Number.isFinite(id)) return
-    const left = Math.max(0, (s.watchers.get(id) ?? 0) - 1)
-    if (left === 0) s.watchers.delete(id)
-    else s.watchers.set(id, left)
-    if (left === 0 && s.streams.has(id)) void this._detachStream(scope, id)
-    if (s.watchers.size === 0) this._dropIdleScope(normalizeScope(scope))
+    const sinks = s.frames.get(id)
+    if (!sinks) return
+    sinks.delete(subscriber)
+    const left = sinks.size
+    if (left === 0) {
+      s.frames.delete(id)
+      if (s.streams.has(id)) void this._detachStream(scope, id)
+    }
+    if (s.frames.size === 0) this._dropIdleScope(normalizeScope(scope))
+  }
+
+  /** 某页的一帧投给该页所有订阅者（一个订阅者抛错不拖累别的） */
+  private _emitFrame(s: ScopeState, tabId: number, data: string, metadata: unknown): void {
+    const sinks = s.frames.get(tabId)
+    if (!sinks) return
+    for (const sink of sinks.values()) {
+      try {
+        sink(tabId, data, metadata)
+      } catch {}
+    }
   }
 
   /** 挂某页的 CDP 帧流（一页一条；多张签看同一页复用它） */
@@ -1146,7 +1168,7 @@ export class BrowserService {
       }
       cdp.on('Page.screencastFrame', (f) => {
         try {
-          if (s.onFrame) s.onFrame(tabId, f.data, f.metadata)
+          this._emitFrame(s, tabId, f.data, f.metadata)
         } catch {}
         cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {})
       })
@@ -1166,7 +1188,7 @@ export class BrowserService {
       try {
         const shot = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 60 })
         const data = (shot as { data?: string })?.data
-        if (data && s.onFrame) s.onFrame(tabId, data, null)
+        if (data) this._emitFrame(s, tabId, data, null)
       } catch {}
     } catch (error) {
       this._log(`browser: 帧流启动失败：${error instanceof Error ? error.message : error}`)
@@ -1192,7 +1214,7 @@ export class BrowserService {
   private async _resyncStream(scope: string, tabId: number): Promise<void> {
     const s = this._s(scope)
     if (s.streams.has(tabId)) return
-    if ((s.watchers.get(tabId) ?? 0) > 0) await this._attachStream(scope, tabId)
+    if ((s.frames.get(tabId)?.size ?? 0) > 0) await this._attachStream(scope, tabId)
   }
 
   /** 面板 URL 栏手动导航（作用于指定页——面板一签一页时就是那张签自己的页；

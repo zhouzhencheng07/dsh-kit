@@ -284,13 +284,14 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
           let watched: { scope: string; tabId: number } | null = null
           const scopeOfConn = () => browserSockets.get(ws) ?? DEFAULT_SCOPE
           const openWatch = (scope: string, tabId: number) => {
-            // 帧按页投：同页多连接复路同一条 CDP 会话，不同页各挂各的流
-            void browserService.watcherOpen(scope, tabId, (frameTabId, data) =>
+            // 帧按页投：同页多连接复路同一条 CDP 会话，不同页各挂各的流。连接本身
+            // 当订阅者标识，退订只摘自己那一份
+            void browserService.watcherOpen(scope, tabId, ws, (frameTabId, data) =>
               sendTo(ws, { t: 'frame', tabId: frameTabId, data }))
           }
           const closeWatch = () => {
             if (watched === null) return
-            browserService.watcherClose(watched.scope, watched.tabId)
+            browserService.watcherClose(watched.scope, watched.tabId, ws)
             watched = null
           }
           sendState(ws)

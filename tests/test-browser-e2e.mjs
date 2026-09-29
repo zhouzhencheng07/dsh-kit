@@ -89,9 +89,9 @@ const svc = {
   humanNewTab: () => service.humanNewTab(S),
   history: (op, tabId = null) => service.history(S, op, tabId),
   humanInput: (msg, tabId = null) => service.humanInput(S, msg, tabId),
-  // 帧流按页：签名是 (scope, tabId, onFrame)，回调带页 id
-  watcherOpen: (tabId, cb) => service.watcherOpen(S, tabId, cb),
-  watcherClose: (tabId) => service.watcherClose(S, tabId),
+  // 帧流按页：签名是 (scope, tabId, subscriber, onFrame)，回调带页 id
+  watcherOpen: (tabId, sub, cb) => service.watcherOpen(S, tabId, sub, cb),
+  watcherClose: (tabId, sub) => service.watcherClose(S, tabId, sub),
   ensurePage: () => service.ensurePage(S),
   dispose: () => service.dispose(),
 }
@@ -378,18 +378,38 @@ try {
   //  为已存在的页开），故「观察者先于页」这个老场景在新模型里不存在。
   const C = 'sess-c'
   const frames = []
+  const subC = { conn: 'a' }
   assert.equal((await service.listPages(C)).pages.length, 0, '此分区此刻还没有页')
-  const noPage = await service.watcherOpen(C, 999, (id, data) => frames.push(data))
+  const noPage = await service.watcherOpen(C, 999, subC, (id, data) => frames.push(data))
   assert.equal(noPage.ok, false, '订不存在的页应被拒')
   const ensuredC = await service.ensurePage(C)
   assert.equal(ensuredC.ok, true, `ensurePage 失败：${ensuredC.error}`)
-  const opened = await service.watcherOpen(C, ensuredC.tabId, (id, data) => frames.push({ id, data }))
+  const opened = await service.watcherOpen(C, ensuredC.tabId, subC, (id, data) => frames.push({ id, data }))
   assert.equal(opened.ok, true, `watcherOpen 失败：${opened.error}`)
   await new Promise((r) => setTimeout(r, 800))
   assert.ok(frames.length > 0, '订了页就该有帧')
   assert.ok(frames.every((f) => f.id === ensuredC.tabId), '帧只投它自己那页')
-  service.watcherClose(C, ensuredC.tabId)
+  service.watcherClose(C, ensuredC.tabId, subC)
   ok(`按页帧流：只投自己那页（收到 ${frames.length} 帧）`)
+
+  // 同一分区两张签同时看：后开的不能顶掉先开那张的投递口，投递口是按页分的
+  const secondC = await service.humanNewTab(C)
+  assert.equal(secondC.ok, true, `humanNewTab 失败：${secondC.error}`)
+  assert.notEqual(secondC.tabId, ensuredC.tabId, '第二张签应是另一个页')
+  const framesA = []
+  const framesB = []
+  const subA = { conn: 'a' }
+  const subB = { conn: 'b' }
+  await service.watcherOpen(C, ensuredC.tabId, subA, (id, data) => framesA.push({ id, data }))
+  await service.watcherOpen(C, secondC.tabId, subB, (id, data) => framesB.push({ id, data }))
+  await new Promise((r) => setTimeout(r, 800))
+  assert.ok(framesA.length > 0, '先开那张签该收到自己那页的帧')
+  assert.ok(framesB.length > 0, '后开那张签该收到自己那页的帧')
+  assert.ok(framesA.every((f) => f.id === ensuredC.tabId), '先开的只收自己那页')
+  assert.ok(framesB.every((f) => f.id === secondC.tabId), '后开的只收自己那页')
+  service.watcherClose(C, ensuredC.tabId, subA)
+  service.watcherClose(C, secondC.tabId, subB)
+  ok(`同分区两签并行看：各收各那页（${framesA.length}/${framesB.length} 帧）`)
 } finally {
   off()
   await svc.dispose()
