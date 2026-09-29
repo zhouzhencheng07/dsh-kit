@@ -11,15 +11,41 @@ if (!global.localStorage) {
   const store = new Map();
   global.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(String(k), String(v)), removeItem: (k) => store.delete(k) };
 }
+global.__bodyNodes = [];
 if (!global.document) {
   global.document = {
     visibilityState: "visible",
     documentElement: { lang: "" },
     addEventListener: () => {},
     removeEventListener: () => {},
-    createElement: () => ({ className: "", textContent: "", setAttribute: () => {}, removeAttribute: () => {}, remove: () => {}, style: {} }),
+    createElement: () => ({
+      className: "",
+      textContent: "",
+      style: {},
+      children: [],
+      listeners: {},
+      appendChild(child) {
+        this.children.push(child);
+        return child;
+      },
+      addEventListener(kind, fn) {
+        (this.listeners[kind] = this.listeners[kind] || []).push(fn);
+      },
+      remove() {
+        const at = global.__bodyNodes.indexOf(this);
+        if (at >= 0) global.__bodyNodes.splice(at, 1);
+      },
+      setAttribute() {},
+      removeAttribute() {},
+    }),
     head: { appendChild: () => {} },
-    body: { classList: { add() {}, remove() {} }, appendChild: () => {} },
+    body: {
+      classList: { add() {}, remove() {} },
+      appendChild: (node) => {
+        global.__bodyNodes.push(node);
+        return node;
+      },
+    },
   };
 }
 if (!global.window) global.window = { innerWidth: 1600, requestAnimationFrame: () => 0, setTimeout: () => 0, clearTimeout: () => {} };
@@ -311,6 +337,68 @@ async function checkApply() {
     check("N 会话已不在列表：不发", posted.length === 0);
   } finally {
     global.Notification = prevNotification;
+  }
+}
+// 10e-2) 通知箱（OS 通知之外的留痕层）：Electron 这类壳里系统通知可能不响、
+//        标题闪烁又看不见，页面自己画的这一层是唯一保证被看到的
+{
+  const sessionsOf = (running, id = "n15") => ({
+    list: {
+      getSnapshot: () => ({
+        ids: [id],
+        byId: { [id]: { running, displayTitle: id === "n15" ? "会话 Q" : "会话 R" } },
+        current: null,
+      }),
+    },
+    open: () => {},
+  });
+  const prevNotification = global.Notification;
+  const prevFocus = global.document.hasFocus;
+  class SilentNote {
+    constructor() {}
+    close() {}
+  }
+  SilentNote.permission = "default";
+  global.Notification = SilentNote;
+  const box = () => global.__bodyNodes.find((n) => n.className === "dshk-notifybox");
+  try {
+    // 权限未定（Electron 常见）也照发：不卡在等 granted，否则永远走不到系统通知
+    const asked = [];
+    SilentNote.requestPermission = (cb) => {
+      asked.push(1);
+      cb("granted");
+    };
+    // 先把上一段留下的痕迹清掉（顺带走一遍「回窗口即清」）
+    global.document.hasFocus = () => true;
+    comps.notifyMaybeUnflash();
+    global.document.hasFocus = () => false;
+    comps.notifyCompleteSettled(sessionsOf(false), { kind: "complete", sessionId: "n15", title: "会话 Q" });
+    check("N 权限未定也投递（并顺带申请一次）", asked.length === 1);
+    check("N 通知箱落在页面上（OS 通知不响时唯一的留痕）", box() !== undefined);
+    const head = box().children[0];
+    const row = box().children[1];
+    check(
+      "N 通知箱头部给条数、行给会话标题",
+      /1/.test(head.textContent) && /会话 Q/.test(row.children[0].textContent),
+    );
+    // 点一行 = 摘掉那一条
+    row.listeners.click[0]({ stopPropagation() {} });
+    check("N 点通知箱某行即摘掉那一条", box() === undefined);
+    // 再来一条，回窗口（聚焦）即清空
+    comps.notifyCompleteSettled(sessionsOf(false), { kind: "complete", sessionId: "n15", title: "会话 Q" });
+    global.document.hasFocus = () => true;
+    comps.notifyMaybeUnflash();
+    check("N 回窗口即清空通知箱", box() === undefined);
+    // 清空钮：留痕还在时点它即清（换一条会话，避开同会话的收尾限流）
+    global.document.hasFocus = () => false;
+    comps.notifyCompleteSettled(sessionsOf(false, "n16"), { kind: "complete", sessionId: "n16", title: "会话 R" });
+    const clearBtn = box().children[0].children[0]; // 头部只挂一个「清空」钮
+    clearBtn.listeners.click[0]({ stopPropagation() {} });
+    check("N 通知箱「清空」钮即清", box() === undefined);
+  } finally {
+    global.Notification = prevNotification;
+    global.document.hasFocus = prevFocus;
+    global.__bodyNodes.length = 0;
   }
 }
 

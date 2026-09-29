@@ -111,6 +111,15 @@ window.__ModuleLoader__.load({
       style.textContent =
         ".dshk-toast{position:fixed;left:50%;bottom:56px;transform:translateX(-50%) translateY(8px);z-index:950;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);font-size:12px;line-height:1;padding:8px 14px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);box-shadow:0 4px 16px rgba(0,0,0,.12);opacity:0;pointer-events:none;transition:opacity .15s var(--ds-ease-in-out),transform .15s var(--ds-ease-in-out)}" +
         ".dshk-toast[data-show]{opacity:1;transform:translateX(-50%) translateY(0)}" +
+    // 通知箱：右下角贴边，宿主令牌取色；行即按钮（回会话），标题一行 + 正文一行截断
+    ".dshk-notifybox{position:fixed;right:16px;bottom:16px;z-index:960;width:280px;max-width:calc(100vw - 32px);display:flex;flex-direction:column;gap:4px;padding:8px;border-radius:10px;background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);box-shadow:0 6px 20px rgba(0,0,0,.16)}" +
+    ".dshk-notifybox-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--dsw-alias-label-tertiary)}" +
+    ".dshk-notifybox-clear{flex:none;border:0;background:none;padding:0;font:inherit;color:var(--dsw-alias-label-tertiary);cursor:pointer}" +
+    ".dshk-notifybox-clear:hover{color:var(--dsw-alias-label-primary)}" +
+    ".dshk-notifybox-row{display:flex;flex-direction:column;gap:1px;width:100%;text-align:left;border:0;border-radius:6px;padding:6px 8px;background:none;cursor:pointer}" +
+    ".dshk-notifybox-row:hover{background:var(--dsw-alias-bg-layer-3)}" +
+    ".dshk-notifybox-title{font-size:12px;line-height:1.3;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+    ".dshk-notifybox-body{font-size:11px;line-height:1.3;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
         // 插件行配置页骨架：字段控件用官方 SettingsForm/Switch 等（自带样式），
         // 这里只补 bool 字段行（对齐官方 .field 节奏）与页签间距。
         ".dshk-cfgp{display:flex;flex-direction:column;gap:12px;padding:4px 2px 8px;color:var(--dsw-alias-label-primary);font-size:13px}" +
@@ -9401,6 +9410,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       notifyPlanTitle: "{title} · 等你批准计划",
       notifyPlanBody: "agent 提交了计划等你批准",
       notifyToolFallback: "工具调用",
+      notifyInboxHead: "离开期间 {count} 条新消息",
+      notifyInboxClear: "清空",
       // 本组件配置页字段（骨架通用文案在 dock）
       kcfgGroupUsage: "用量与余额",
       kcfgUsageEnabled: "余额与用量芯片",
@@ -9460,6 +9471,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       notifyPlanTitle: "{title} · plan awaiting approval",
       notifyPlanBody: "The agent submitted a plan for your approval",
       notifyToolFallback: "A tool call",
+      notifyInboxHead: "{count} new while you were away",
+      notifyInboxClear: "Clear",
       kcfgGroupUsage: "Usage & balance",
       kcfgUsageEnabled: "Balance & usage chip",
       kcfgUsageEnabledHint: "Shows a balance/quota chip for the session's provider under the composer.",
@@ -9836,6 +9849,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       turnEnd: new Map(),
       /** 首帧标志：页面刚打开时列表里已在跑的会话不补发通知 */
       primed: false,
+      /** 权限只申请一次（浏览器侧事实，不进 settings） */
+      asked: false,
       /** 标题闪烁：未读计数（0 = 未闪烁）与 <title> 观察器 */
       flashCount: 0,
       flashWatch: null,
@@ -9848,6 +9863,82 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const notifySeenRequests = new WeakSet();
     const NOTIFY_BODY_MAX = 140; // 提问正文截断长度：桌面通知两行即满，长了被裁
     const NOTIFY_FLASH_RE = /^\(\d+\) /; // 闪烁前缀：复原时按它剥掉，不存旧标题
+
+    /** 通知箱：窗口不在前台时，OS 通知不响、标题闪烁在无标题栏的壳里也看不见，
+     *  只有自己画在页面上的这层是能保证被看到的——回窗口即读，读完即清。
+     *  固定右下、最多 5 条（新的在上），点一条回该会话。 */
+    const NOTIFY_INBOX_MAX = 5;
+    let notifyInboxEl = null;
+    let notifyInboxItems = [];
+    function notifyInboxRender() {
+      if (typeof document === "undefined") return;
+      try {
+        notifyInboxPaint();
+      } catch {
+        /* 装饰层：画不出来也不能影响投递本身 */
+      }
+    }
+    function notifyInboxPaint() {
+      if (notifyInboxItems.length === 0) {
+        if (notifyInboxEl) {
+          notifyInboxEl.remove();
+          notifyInboxEl = null;
+        }
+        return;
+      }
+      if (!notifyInboxEl) {
+        notifyInboxEl = document.createElement("div");
+        notifyInboxEl.className = "dshk-notifybox";
+        notifyInboxEl.setAttribute("role", "status");
+        document.body.appendChild(notifyInboxEl);
+      }
+      notifyInboxEl.textContent = "";
+      const head = document.createElement("div");
+      head.className = "dshk-notifybox-head";
+      head.textContent = tf("notifyInboxHead", { count: String(notifyInboxItems.length) });
+      const clear = document.createElement("button");
+      clear.type = "button";
+      clear.className = "dshk-notifybox-clear";
+      clear.textContent = t("notifyInboxClear");
+      clear.addEventListener("click", (e) => {
+        e.stopPropagation();
+        notifyInboxClear();
+      });
+      head.appendChild(clear);
+      notifyInboxEl.appendChild(head);
+      for (const item of notifyInboxItems) {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "dshk-notifybox-row";
+        const title = document.createElement("span");
+        title.className = "dshk-notifybox-title";
+        title.textContent = item.title;
+        row.appendChild(title);
+        if (item.body !== "") {
+          const body = document.createElement("span");
+          body.className = "dshk-notifybox-body";
+          body.textContent = item.body;
+          row.appendChild(body);
+        }
+        row.addEventListener("click", () => {
+          notifyOpenSession(item.sessionId);
+          notifyInboxDrop(item);
+        });
+        notifyInboxEl.appendChild(row);
+      }
+    }
+    function notifyInboxPush(item) {
+      notifyInboxItems = [item, ...notifyInboxItems.filter((x) => x.sessionId !== item.sessionId)].slice(0, NOTIFY_INBOX_MAX);
+      notifyInboxRender();
+    }
+    function notifyInboxDrop(item) {
+      notifyInboxItems = notifyInboxItems.filter((x) => x !== item);
+      notifyInboxRender();
+    }
+    function notifyInboxClear() {
+      notifyInboxItems = [];
+      notifyInboxRender();
+    }
 
     /** 折叠空白并按上限截断（通知正文只取一行；超长补省略号） */
     function notifyClip(text, max) {
@@ -10069,10 +10160,22 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       return perm === "granted" || perm === "denied" ? perm : "default";
     }
 
-    /** 桌面通知可用：浏览器有 API 且已授权（未授权不能在此处请求——requestPermission
-     *  必须在用户手势里发；配置页无请求手势入口，首次需在浏览器站点设置里允许） */
+    /** 桌面通知可用：API 在、且没被明确拒绝。「default」（未定）也算可用——有些壳
+     *  （Electron 桌面端）根本不弹授权框，卡死在等 granted 等于永远走兜底 */
     function notifyCanPost() {
-      return notifyPermState() === "granted";
+      const perm = notifyPermState();
+      return perm === "granted" || perm === "default";
+    }
+
+    /** 顺带申请一次权限：浏览器要手势才弹框，这里发多半被忽略，但下一次起状态就准了 */
+    function notifyAskPermission() {
+      if (notifyState.asked || notifyPermState() !== "default") return;
+      notifyState.asked = true;
+      try {
+        Notification.requestPermission(() => {});
+      } catch {
+        /* 不支持就算了：构造失败有兜底 */
+      }
     }
 
     /** 标题闪烁兜底：未授权/非安全上下文时至少留痕（标签条上看得见未读计数）。
@@ -10102,9 +10205,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const base = document.title.replace(NOTIFY_FLASH_RE, "");
       if (document.title !== base) document.title = base;
     }
-    /** 回窗口才复原标题：可见但仍未聚焦（切程序回来一半）时留着闪烁 */
+    /** 回窗口才算读过：复原标题并清空通知箱。可见但仍未聚焦（切程序回来一半）时留着 */
     function notifyMaybeUnflash() {
-      if (notifyForeground()) notifyUnflash();
+      if (!notifyForeground()) return;
+      notifyUnflash();
+      notifyInboxClear();
     }
 
     /** 点通知 → 聚焦窗口并切到该会话。
@@ -10155,7 +10260,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const title = tf(TITLE_BY_KIND[ev.kind] ?? "notifyQuestionTitle", { title: ev.title });
       const bodyKey = BODY_BY_KIND[ev.kind];
       const body = bodyKey ? t(bodyKey) : ev.body ?? "";
+      // 通知箱无条件收一条：OS 通知在不响的壳里（Electron 桌面端）没有替代品，
+      // 标题闪烁又只在有标签栏的浏览器里看得见，这层是唯一保证被看到的
+      notifyInboxPush({ sessionId: ev.sessionId, title, body: ev.body ?? "" });
       if (notifyCanPost()) {
+        notifyAskPermission();
         try {
           const note = new Notification(title, { body, tag: `dsh-kit:${ev.sessionId}`, silent: true });
           note.onclick = () => {
@@ -10168,7 +10277,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           };
           return;
         } catch {
-          /* 构造被拒（部分环境只认 ServiceWorker 通知）：退标题闪烁 */
+          /* 构造被拒（部分环境只认 ServiceWorker 通知）：通知箱已留痕 */
         }
       }
       notifyFlash();
@@ -10866,6 +10975,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     exports.notifyCompactionCore = notifyCompactionCore;
     exports.notifyTurnKind = notifyTurnKind;
     exports.notifyCompleteSettled = notifyCompleteSettled;
+    exports.notifyMaybeUnflash = notifyMaybeUnflash;
     exports.usageIsPeak = usageIsPeak;
     // 配置面（内置默认表 / 组件行配置页 / 快照解析）供测试断言与宿主默认同源比对
     exports.M_CFG_DEFAULTS = M_CFG_DEFAULTS;
