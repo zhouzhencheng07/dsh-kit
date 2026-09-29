@@ -173,7 +173,7 @@ window.__ModuleLoader__.load({
 
     /** 宿主 WebSocket 地址：桌面版页面跑在 dsh-app://app/ 自定义 scheme 上，
         location.host 是假主机名（ws://app/… 解析不到宿主），真实宿主 origin 由
-        宿主注入 __DSH_TRANSPORT__.streamBaseUrl——取法与官方客户端同款，缺失回落
+        宿主注入 __DSH_TRANSPORT__.streamBaseUrl——取法缺失回落
         document.baseURI。失效条件：宿主改注入键名或不再注入（桌面启动即无流）。 */
     function kitWsUrl(pathname) {
       const base = globalThis.__DSH_TRANSPORT__?.streamBaseUrl ?? document.baseURI;
@@ -869,7 +869,7 @@ window.__ModuleLoader__.load({
     exports.vaultRoute = { open: null }; // 文件树行点击的 vault 改道（命中返回 true）
     exports.vaultSearch = { open: false }; // 知识库搜索浮层开着（root 全局 Esc 让路）
     // 底座是活动 entry：client runner 按 client 插件形状物化本模块，必须带 apply
-    //（宿主半边同款：载体 entry，本体无行为）
+    //（载体 entry，本体无行为）
     exports.apply = async (ctx) => {
       if (typeof ctx?.inject === "function") {
         ctx.inject(["sidebarRight"], (c) => {
@@ -885,7 +885,7 @@ window.__ModuleLoader__.load({
     const dock = kitBase;
 
     // ─────────── 官方 primitives 图标复用（能复用就不自绘）───
-    // primitives 随宿主前端注册进 ModuleLoader（官方各 client lib 同款 require）；
+    // primitives 随宿主前端注册进 ModuleLoader；
     // 宿主没这个图标成员时回退自绘版本，不挡启动。
     const dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives");
     const dswIcon = (...names) => {
@@ -1053,7 +1053,7 @@ window.__ModuleLoader__.load({
     // ─────────── 对话 @ 引用（文件树 → 输入框）───────────
     // 官方 ui-conversation 注册 `conversation` 服务（ConversationController），
     // 其 .input = InputHub，`hub.shell(当前会话 id)` 返回 SessionInputShell
-    // （公开 actions.setDraft 草稿写入 + 官方 @ 面板同款插入体
+    // （公开 actions.setDraft 草稿写入 + 插入体
     // insertReference(ref, span) 引用芯片直插）——文件树「@到对话」优先直插
     // 真实引用 chip（不弹官方 @ 面板），失败兜底追加 @ 语法文本，均与手打
     // @ 等价（提交后按官方 file-reference 语法解析）。使用点现取（懒解析）。
@@ -1215,7 +1215,7 @@ window.__ModuleLoader__.load({
 .dshk-tab-x{appearance:none;border:0;background:none;color:inherit;width:15px;height:15px;border-radius:4px;font-size:10px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:none;visibility:hidden}
 .dshk-tab:hover .dshk-tab-x,.dshk-tab-x:hover{visibility:visible}
 .dshk-tab-x:hover{background:var(--dsw-alias-interactive-bg-hover)}
-/* 新建内联输入（vault createrow 同款）：头部下单行，\ 前缀建目录 */
+/* 新建内联输入：头部下单行，\ 前缀建目录 */
 .dshk-createrow{display:flex;gap:6px;padding:6px 8px}
 .dshk-createrow input{flex:1;min-width:0;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 8px;border-radius:6px}
 .dshk-createrow .dshk-btn{flex:none}
@@ -1318,8 +1318,7 @@ window.__ModuleLoader__.load({
 .dshk-rte-img.is-broken img{display:none}
 .dshk-rte-img .dshk-rte-imgmiss{display:none;font-size:12px;color:var(--dsw-alias-label-tertiary);border:1px dashed var(--dsw-alias-border-l2);border-radius:6px;padding:6px 10px}
 .dshk-rte-img.is-broken .dshk-rte-imgmiss{display:inline-block}
-/* 表格选中格高亮 + 表头底色（编辑态） */
-.dshk-vault-rtehost .ProseMirror-selectedcell{outline:2px solid var(--dsw-alias-brand-primary,#1971c2)}
+/* 表头底色（编辑态） */
 .dshk-vault-rtehost th{background:var(--dsw-alias-bg-layer-3)}
 /* 阅读条下拉（目录/反链共用一个壳）：fixed 锚在触发钮下、右缘对齐按钮；
    目录条目按标题层级缩进，光标所在那条 is-cur 高亮 */
@@ -1451,7 +1450,7 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-taskduebadge.is-overdue{color:var(--dsw-alias-danger,#cd3131);border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent)}
 .dshk-sched-emptytasks{font-size:12px;color:var(--dsw-alias-label-tertiary);text-align:center;padding:8px 0}
 /* 清单范围档（近三日/近一周/全部）：一排小 chip，复用 wdchip 的形态 */
-/* 统计两行（桌面同款）：总时长一行大字 + 事件/已过/未到一行小字；
+/* 统计两行：总时长一行大字 + 事件/已过/未到一行小字；
    小字行 11px 在最窄 118px 卡里也放得下（「事件 12 · 已过 8 · 未到 20」约 150px，
    超宽时 nowrap 截断由卡内滚兜底） */
 .dshk-sched-statsgrid{display:flex;flex-direction:column;gap:2px;margin:auto 0}
@@ -1595,7 +1594,7 @@ ellipsis，窄列只截字不破版 */
       );
     }
     /** 官方文件类型图标（primitives FileTypeIcon + classifyFileType，官方 files
-     *  树同款）：按扩展名出图形；
+     *  分类器按扩展名出图形；
      *  primitives 不可用时回退空位（行内不留自绘图形） */
     function FileTypeIcon16({ name }) {
       const C = dswPrimIcons ? dswPrimIcons.FileTypeIcon : null;
@@ -1862,9 +1861,6 @@ ellipsis，窄列只截字不破版 */
     // 未知 id 一律回退齿轮。没有注册缝，这里按标签文字找到对应行，把行内第一个
     // svg 换成自绘分层图标——纯外观增强：任何一步失败都静默保持齿轮。
     // 候选由各归属方注册（组件经 dock.registerNavIcon 注册自己的）。
-    const SVG_OPEN =
-      '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" ' +
-      'stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
     const NAV_ICONS = [];
     function registerNavIcon(entry) {
       if (entry) NAV_ICONS.push(entry);
@@ -3687,7 +3683,7 @@ ellipsis，窄列只截字不破版 */
 
     /** M4 笔记→会话：「引用到对话」的选区文本转引用块续在草稿后（首尾空行剥
      *  掉）。页面路径本体由 @ 引用芯片承载（与文件树
-     *  「@到对话」同款方法，此函数只管引用块文本）。render-check 直调。 */
+     *  「@到对话」同一条路径，此函数只管引用块文本）。render-check 直调。 */
     function vaultCiteText(draft, selText) {
       const base = typeof draft === "string" ? draft : "";
       const lines = typeof selText === "string" ? selText.replace(/\r\n?/g, "\n").split("\n") : [];
@@ -3699,7 +3695,7 @@ ellipsis，窄列只截字不破版 */
     }
 
     /** 一页 @ 进对话输入框（左侧树行按钮的唯一实现）：以官方 @ 引用芯片直插
-     *  （与文件树「@到对话」同款方法），selText 非空时先落引用块。**成功不提示**——
+     *  （与文件树同一条路径），selText 非空时先落引用块。**成功不提示**——
      *  插进去的引用就摆在输入框里，再弹一条是噪音；只有失败原因经 notify 回报
      *  （组件各自有自己的 toast 通道）。 */
     function citeVaultPageToChat(pagePath, selText, notify) {
@@ -3976,8 +3972,6 @@ ellipsis，窄列只截字不破版 */
     // 面板只读：写路径归 agent 工具（schedule_query/create/update/delete）与望舒端；
     // 计时数据只展示不编辑。
 
-    // 标题字数上限：与宿主 store 截断/工具描述同一口径（重要信息做标题，其余写备注）
-    const SCHED_TITLE_MAX = 16;
     const SCHED_DAY_START = 0; // 网格 0:00–24:00（与鸿蒙端一致，起止时刻零裁剪）
     const SCHED_DAY_END = 24 * 60;
     const SCHED_HOUR_PX = 42;
@@ -4473,7 +4467,7 @@ ellipsis，窄列只截字不破版 */
         stats
           ? jsxRuntime.jsxs("div", { className: "dshk-sched-card is-stats", children: [
               jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedStatsTitle") }),
-              // 两行（桌面同款）：总时长一行大字 + 事件/已过/未到一行小字
+              // 两行：总时长一行大字 + 事件/已过/未到一行小字
               jsxRuntime.jsxs("div", { className: "dshk-sched-statsgrid", children: [
                 jsxRuntime.jsx("b", { children: schedFmtDur(stats.totalMs) }),
                 jsxRuntime.jsx("span", { className: "dshk-sched-statrow", children: `${t("schedStatsEvents")} ${stats.eventCount} · ${t("schedStatsDone")} ${stats.completedCount} · ${t("schedStatsOpen")} ${stats.openCount}` }),
@@ -4601,8 +4595,7 @@ ellipsis，窄列只截字不破版 */
     // 回调承担（vault/write 带 _fm），mode ∈ auto|manual|overwrite，返回
     // 'ok'|'conflict'|'fail'。conflict 会暂停自动保存，直到父层重载
     // （docTick bump 重挂）或 overwrite 成功。
-    // rteRef 直通 RTE 句柄（父层页条按钮 undo/redo/表格等照旧调用）；
-    // ctlRef 暴露 { dirty, flush, flushManual, overwrite } 供切页 flush。
+    // rteRef 直通 RTE 句柄（父层页条按钮 undo/redo/表格等照旧调用）。
     /** 知识库页面渲染器（一页一个实例，挂右栏 pane 宿主）：vendor RTE 只读态
      *  （editable:false），只负责加载 / 阅读位置记忆 / wikilink 与页内链接点击 /
      *  面包屑上报 / 就绪回调（跨页锚点落位消费点）。 */
@@ -4757,7 +4750,7 @@ ellipsis，窄列只截字不破版 */
      *  页标签编排（打开、关闭）。页编辑器不在本组件——每开一页一个
      *  VaultPagePane 经 portal 投进右栏 pane 宿主，一页一标签（多开）。
      *  树根默认 = 库根（vaultRoot），可在任意目录行上「在此打开」（或 Ctrl+点击）
-     *  换到该目录，树头 ← 回库根——这就是原来的空间/文件夹筛选框的替身。 */
+     *  换到该目录，树头 ← 回库根。 */
     function VaultRootView() {
       const ui = useKitUi();
       const sideHost = useHostSlot(vaultSideSlot);
@@ -4778,7 +4771,6 @@ ellipsis，窄列只截字不破版 */
       const searchRef = react.useRef(null);
       const searchTimer = react.useRef(null);
       const searchSeq = react.useRef(0);
-      const [searching, setSearching] = react.useState(false);
       const [toast, setToast] = react.useState("");
 
       const current = useActiveRightbarItem("vault");
@@ -4938,7 +4930,6 @@ ellipsis，窄列只截字不破版 */
         const seq = ++searchSeq.current;
         setSearchIdx(0);
         setSearchRect(searchRef.current ? searchRef.current.getBoundingClientRect() : null);
-        setSearching(true);
         try {
           const body = await kitJson(`/dsh-kit/vault/search?q=${encodeURIComponent(q)}`);
           // 笔记命中来自宿主全文搜索；目录与资料库按名字匹配在本地合成（同一张表）
@@ -4946,7 +4937,6 @@ ellipsis，窄列只截字不破版 */
         } catch (error) {
           if (seq === searchSeq.current) setToast(`${t("vaultSearchFail")} ${String(error?.message ?? error)}`);
         }
-        if (seq === searchSeq.current) setSearching(false);
       };
       const scheduleSearch = (raw) => {
         const q = String(raw ?? "").trim();
@@ -5334,7 +5324,7 @@ ellipsis，窄列只截字不破版 */
             }),
           ],
         });
-      /** 行内改名输入（与文件树同款交互）：Enter 提交、Esc / 失焦取消；打开时只选中
+      /** 行内改名输入：Enter 提交、Esc / 失焦取消；打开时只选中
        *  主名（页与资料保留扩展名，目录选全名） */
       const renameInput = (entry, label, isDir) =>
         jsxRuntime.jsx("input", {
@@ -6165,7 +6155,7 @@ ellipsis，窄列只截字不破版 */
         label: () => t("scVault"),
         aliases: ["vault", "knowledge base", "dsh-kit"],
         defaults: VAULT_SHORTCUT_DEFAULTS("Slash"),
-        // editable/terminal 都要：聊天输入行里、终端里按都该生效（官方左右栏键同款）
+        // editable/terminal 都要：聊天输入行里、终端里按都该生效
         regions: ["page", "editable", "terminal"],
         modals: [],
         resolve: () => {
@@ -7735,7 +7725,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       };
       // ── 对话 @ 引用：把选中条目作为官方引用直接插入当前会话输入框 ──
       // 优先走官方引用芯片直插（shell.insertReference，官方 @ 面板 pick 的
-      // 同款槽位事件监听体，公开实例方法）：phase 须为 plain/claimed、
+      // 那套槽位事件监听体，公开实例方法）：phase 须为 plain/claimed、
       // span.draftRev 须等于当前 rev（CAS），成功即产生真实引用 chip（提交
       // 时按官方 codec 序列化为 @语法文本），不经过官方 @ 面板；失败兜底为
       // @ 语法文本追加草稿末尾（与手打一致，此时面板可见属官方行为）。
@@ -7800,7 +7790,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           return false;
         }
       };
-      // 新建文件/目录单入口（vault 同款）：内联输入，
+      // 新建文件/目录单入口：内联输入，
       // `\` 开头 = 新建文件夹（剥前缀），否则建文件；可带 / 多级。头部按钮与
       // 目录行 ⋯ 菜单都汇到这里（createAt = 目标目录）
       const [createAt, setCreateAt] = react.useState(null);
@@ -7916,7 +7906,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
               }),
             ],
           }),
-          // 新建内联输入（vault 同款）：挂在头部下、目标目录由触发入口决定；
+          // 新建内联输入：挂在头部下、目标目录由触发入口决定；
           // Enter 创建、Esc/空内容退格/区域外点击取消（✓ 按钮取消：回车即建，不需要
           // 第二确认点）
           createAt !== null
@@ -8986,7 +8976,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const [reloadNonce, setReloadNonce] = react.useState(0);
       // 「盘上这份是不是我读的那份」：宿主 file 资源带版本号（watcher 推帧），
       // 读到的 diff 记下当时的版本，对不上就是文件被改过——内容留着，上面给一条
-      // 提示条（官方预览同款：旧内容不白屏，重载与否由人/开关定）
+      // 提示条（旧内容不白屏，重载与否由人/开关定）
       const meta = useResource && fileAddress ? useResource(fileAddress) : null;
       const version = meta?.value?.version;
       const readVersionRef = react.useRef(null);
@@ -9044,7 +9034,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       }, [path, cwd, commit]);
 
       // 版本对照：宿主推了新版本 = 盘上被改过。自动跟随（默认开）直接重读；
-      // 关掉则保留旧 diff、顶一条提示条，重不重载由人定（官方预览同款取舍）
+      // 关掉则保留旧 diff、顶一条提示条，重不重载由人定
       react.useEffect(() => {
         // 只认「有版本可比」：首次拿到 live 版本（read 还是 null）也要重读一次，
         // 否则资源晚到时这份 diff 永远停在旧内容
@@ -9078,7 +9068,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
        *  截断大文件或 hunk 对不上时回退原始 patch 渲染。新像来源两分支——
        *  常规视图 = 当前盘上内容；commit 钉定模式 = 该提交时刻的内容（端点
        *  随 diff 带回，盘上已是别的版本不能叠）。commit 模式下该提交已删除的
-       *  文件（新像不存在）与工作区删除文件同款纯红展示；内容缺失（过大/二进制）
+       *  文件（新像不存在）与工作区删除文件一样纯红展示；内容缺失（过大/二进制）
        *  回落原始 patch。顶部基线说明见 renderDiffView 包装层。 */
       const renderDiffBody = () => {
         if (diff.phase === "loading") return jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentLoading") });
@@ -9087,7 +9077,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         if (deleted === true || (commit && diff.blobMissing === true)) {
           // 已删除文件：不看 raw diff（diff --git/index/--- 等元数据是噪音）——
           // 只抽删除行、剥掉前缀 `-`，整块按"已删除"红色展示（= 被删文件全文）。
-          // commit 钉定模式下该提交已删除的文件（新像不存在）同款处理
+          // commit 钉定模式下该提交已删除的文件（新像不存在）同样处理
           if (diff.clean || diff.text === null) return jsxRuntime.jsx("div", { className: "dshk-note", children: t("diffEmpty") });
           const removed = diff.text
             .split("\n")
@@ -9489,7 +9479,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const t = (key) => lang()[key] ?? key;
 
     // 组件配置快照：拉本组件自己的 /dsh-kit-monitor/config（用量开关 + 监视/通知
-    // 全部字段——组件的 Config schema 是唯一真源）。快照形状与主包同款
+    // 全部字段——组件的 Config schema 是唯一真源）。快照形状统一为
     // { status:'ready', value }；端点不可达按全默认处理（与门控同源语义）。
     const M_CFG_DEFAULTS = {
       usageEnabled: true,
@@ -9595,7 +9585,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
      * 出现的每一种周期 p，检查 p 位移上连续相同的位置是否达 2p，即至少连走两个
      * 完整周期；与分块方式无关，也不依赖重复起点对齐。返回命中的最大周期（0=无）。
      * 阈值 2p 而非 p：只复述一遍刚说过的内容是正常输出，判成循环会误伤。
-     * 与 src/monitor/loop-guard.ts 同款（那里是真源，此处手抄，零构建）。
+     * 真源是 src/monitor/loop-guard.ts，零构建的 bundle 没法 import，此处手抄一份。
      */
     function monitorCyclePeriod(text) {
       const tail = text.length > MONITOR_CYCLE_WINDOW ? text.slice(-MONITOR_CYCLE_WINDOW) : text;
@@ -9616,7 +9606,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     /**
      * 死循环判定的总入口：把各判据合成一个布尔。与 src/monitor/loop-guard.ts
-     * 同款（那里是真源，此处手抄——零构建的 bundle 没法 import）。
+     * 同一份判据（真源在 src/monitor/loop-guard.ts，零构建没法 import，此处手抄）。
      * 宿主侧 loop-breaker 已做同样判据且覆盖全部会话；本函数只作**当前会话的
      * 补充**：它看的是整段已落定/流式文本，能兜住跨 attempt 的复读（宿主侧按
      * attempt 重置），代价是只管当前打开的会话。
@@ -10329,12 +10319,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         ".dshk-usage-win.is-hot{color:var(--dsw-alias-danger)}",
         ".dshk-usage-sep{color:var(--dsw-alias-label-tertiary);opacity:.7}",
         ".dshk-usage-peak{color:var(--dsw-alias-danger);font-weight:600;margin-right:4px}",
-        // 芯片 = 官方 ContextMeter trigger 同款（pill、hover/展开态同色）
+        // 芯片（pill、hover/展开态同色）
         ".dshk-usage-trigger{color:var(--dsw-alias-label-tertiary);font-family:inherit;font-size:var(--dsh-content-font-size-secondary,13px);font-variant-numeric:tabular-nums;line-height:calc(20px + var(--dsh-content-font-delta-secondary,0px));white-space:nowrap;cursor:pointer;background:0 0;border:none;border-radius:24px;flex:none;align-items:center;gap:6px;padding:1px 8px;display:inline-flex}",
         ".dshk-usage-trigger:hover,.dshk-usage-trigger[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}",
         ".dshk-usage-trigger.dshk-usage-hot{color:var(--dsw-alias-danger)}",
         ".dshk-usage-trigger.dshk-usage-hot:hover,.dshk-usage-trigger.dshk-usage-hot[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover)}",
-        // 面板 = 官方 ContextMeter panel 同款（定位经 primitives useAnchoredPosition，portal 到 body）；背景是半透明色，磨砂 backdrop-filter 缺了背后的界面会整个透出来
+        // 面板（定位经 primitives useAnchoredPosition，portal 到 body）；背景是半透明色，磨砂 backdrop-filter 缺了背后的界面会整个透出来
         ".dshk-usage-pop{z-index:1100;box-sizing:border-box;background:var(--dsw-specific-menu);backdrop-filter:var(--dsw-menu-backdrop-filter);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);width:min(264px,100vw - 24px);box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-secondary);cursor:default;border:0;border-radius:12px;padding:12px;font-size:12px;line-height:20px;position:fixed}",
         ".dshk-usage-header{align-items:center;gap:6px;display:flex}",
         ".dshk-usage-headline{color:var(--dsw-alias-label-tertiary);min-width:0}",
@@ -10467,7 +10457,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     }
 
     /**
-     * 芯片内容（官方 trigger 同款字体高度，纯数值）：
+     * 芯片内容（纯数值）：
      *   deepseek → 单文本 ¥余额；opencode → 全部窗口百分比数组（5h、周、月顺序）。
      * 返回 { text, hot? } 或 { wins:[percent] , }；null = 该家没数、不出芯片。
      */
@@ -10576,7 +10566,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       react.useEffect(() => {
         if (kind === null) setOpen(false);
       }, [kind]);
-      // Esc 关浮层（官方 ContextMeter 同款）
+      // Esc 关浮层
       react.useEffect(() => {
         if (!open) return undefined;
         const onKey = (e) => {
@@ -11550,7 +11540,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         setDraft(viewUrl);
       }, [pageId, viewUrl]);
 
-      // 在系统浏览器打开（官方工具栏同款）：web 端 = 你自己浏览器的新标签页，
+      // 在系统浏览器打开：web 端 = 你自己浏览器的新标签页，
       // 桌面壳里 = 系统浏览器。地址取本签那一页——没有地址就没得开
       const openExternal = () => {
         const url = String(viewUrl ?? "").trim();
@@ -11562,7 +11552,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         }
       };
 
-      // 画面占位（官方空状态同款居中提示）：没帧可看的三种情形；断线/启动失败
+      // 画面占位（居中提示）：没帧可看的三种情形；断线/启动失败
       // 另走顶部提示条，不占画面（定格帧保留，重连回来自动续上）
       const start = connLost
         ? null
@@ -11606,7 +11596,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
               jsxRuntime.jsx(KitTip, { label: t("browserExternal"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-brw-tool", "aria-label": t("browserExternal"), disabled: viewUrl === "", onClick: openExternal, children: jsxRuntime.jsx(BrwToolIcon, { name: "external" }) }) }),
             ],
           }),
-          // 顶部提示条（官方 failure / sandboxWarning 同款）：断线取警示色、启动失败取
+          // 顶部提示条：断线取警示色、启动失败取
           // 错误色；压在画面上方，定格帧不动（重连回来自动续流）
           connLost ? jsxRuntime.jsx("div", { className: "dshk-brw-warn", role: "status", children: t("browserReconnect") }) : null,
           !connLost && !live && state.error ? jsxRuntime.jsx("div", { className: "dshk-brw-fail", role: "alert", children: state.error }) : null,
@@ -11815,7 +11805,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         // 常驻的 KitSurfaces 桥供最新值）
         inject: () => ({ useSessions: shellShare.current?.useSessions }),
       }, BrowserPaneBody)), "dsh-kit-browser: rightbar pane body dshk-browser");
-      // 签条标题 = 那一页的活标题（官方同款做法：标题随内容变）。会话行同样经
+      // 签条标题 = 那一页的活标题（标题随内容变）。会话行同样经
       // shellShare 桥取（标题要按分区找那一页）
       rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.pane.tab.title", () => rbCtx.slots.register({
         name: "sidebar.right.pane.tab.title",
@@ -11843,9 +11833,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     // 组件私有样式：面板（工具栏/地址框/提示条/画布/透明 IME 输入）+ 官方入口掩码
     const BROWSER_CSS = `
-/* 工具栏/地址框/提示条/空状态规格照抄官方右栏浏览器签
-   （@deepseek-ai/dsh-client-ui-sidebar-browser 的 Browser.module.css：38px 工具栏、
-   28px 图标钮、0.5px 分隔线、dsw 令牌与字号；哈希类名不跨包复用，仅搬规格）。
+/* 工具栏/地址框/提示条/空状态规格：38px 工具栏、28px 图标钮、0.5px 分隔线、
+   dsw 令牌与字号（哈希类名不跨包复用，故只搬规格不搬类名）。
    画布（帧流 + 人机共驾）是本插件特有，官方无对应物；页签条没有——一个页一张
    官方右栏签，切换器是官方签条 */
 .dshk-brw-bar{box-sizing:border-box;flex:none;display:flex;align-items:center;gap:4px;height:38px;padding:5px 6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
@@ -11856,7 +11845,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 .dshk-brw-addrbox{position:relative;flex:auto;min-width:0}
 .dshk-brw-url{box-sizing:border-box;width:100%;height:28px;padding:0 34px 0 9px;border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12)}
 .dshk-brw-url:focus{outline:1px solid var(--dsw-alias-brand-primary-new-colorprimary-new-color,var(--dsw-alias-brand-primary));outline-offset:-1px}
-/* 「前往」贴地址框右缘，聚焦时才现形（官方 addressGo 同款） */
+/* 「前往」贴地址框右缘，聚焦时才现形 */
 .dshk-brw-go{position:absolute;top:0;right:0;visibility:hidden;opacity:0}
 .dshk-brw-addrbox:focus-within .dshk-brw-go{visibility:visible;opacity:1}
 .dshk-brw-warn{flex:none;padding:6px 12px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warning-primary,var(--dsw-alias-state-business-primary));background:color-mix(in srgb,var(--dsw-alias-state-warning-primary,var(--dsw-alias-state-business-primary)) 8%,transparent)}
@@ -12264,7 +12253,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
               theme: xtermTheme(),
             });
             // 有选区时 Ctrl+C = 复制并清选区（随后无选区的 Ctrl+C 恢复中断语义，
-            // VS Code 同款）——否则想复制选中文字，^C 直达 shell 把正在运行的
+            // 语义）——否则想复制选中文字，^C 直达 shell 把正在运行的
             // 前台进程停掉。Ctrl+Shift+C 恒为复制
             termInst.attachCustomKeyEventHandler((ev) => {
               if (ev.type !== "keydown" || !ev.ctrlKey || ev.altKey) return true;
@@ -12705,7 +12694,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
           "desktop:windows": { code: "Backquote", modifiers: ["primary", "alt"] },
           "desktop:linux": { code: "Backquote", modifiers: ["primary", "alt"] },
         },
-        // editable/terminal 都要：聊天输入行里、终端里按都该生效（官方左右栏键同款）
+        // editable/terminal 都要：聊天输入行里、终端里按都该生效
         regions: ["page", "editable", "terminal"],
         modals: [],
         resolve: () => {

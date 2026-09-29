@@ -19,12 +19,8 @@
 // 优雅退化，落盘文件与面板永远可见）。
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { pngSize, normalizeLocatorArgs, normalizeActArgs, normalizeScope } from "./browser.js";
-function dshHomeDir() {
-    const env = process.env.DSH_HOME;
-    return env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh');
-}
+import { kitPath } from "../core/data-path.js";
 /**
  * 截图图片入附件库（带模型能力证明），照 mcp-client 的准入门：
  * 任一步失败抛错——调用方把原因写进文本投影，不让截图失败炸掉工具。
@@ -206,7 +202,7 @@ export function buildBrowserTools({ defineTool, service, ctx, isDisabled, scopeO
             if (!r.ok)
                 throw new Error(r.error);
             // 落盘（人随时可看；非多模态模型下的唯一留存）
-            const dir = path.join(dshHomeDir(), 'dsh-kit', 'screenshots');
+            const dir = kitPath('screenshots');
             fs.mkdirSync(dir, { recursive: true });
             const file = path.join(dir, `${new Date().toISOString().replace(/[:.]/g, '-')}.png`);
             fs.writeFileSync(file, r.buffer);

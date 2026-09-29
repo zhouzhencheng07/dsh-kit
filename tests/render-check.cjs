@@ -590,7 +590,8 @@ let vaultFetchPrev = null;
       src.includes("row.scrollIntoView({ block: \"nearest\" });"),
   );
   // ── 文件管理（建 / 改名 / 移动 / 导入 / 删除）：行内输入 + 三个对话框 ──
-  // 预置 state：14 renamingPath / 15 createAt / 16 createName / 17 dialog
+  // 预置 state（按 VaultRootView 的 useState 顺序，槽位随钩子增删整体位移）：
+  // 13 renamingPath / 14 createAt / 15 createName / 16 dialog
   {
     const base = {
       0: VAULT_INDEX,
@@ -608,7 +609,7 @@ let vaultFetchPrev = null;
       return out;
     };
     const byClass = (node, cls) => walk(node, (n) => typeof (n.props && n.props.className) === "string" && n.props.className.split(" ").includes(cls));
-    const createErr = renderVault({ ...base, 14: null, 15: "D:/v/wiki", 16: "新页" });
+    const createErr = renderVault({ ...base, 13: null, 14: "D:/v/wiki", 15: "新页" });
     const createRow = callLog.find((c) => c[2] && c[2].className === "dshk-createrow");
     const createInput = createRow && createRow[2].children ? createRow[2].children[0] : null;
     check(
@@ -626,8 +627,8 @@ let vaultFetchPrev = null;
     const createPlus = callLog.find((c) => c[2] && c[2].className === "dshk-vault-treerow" && c[2].title === "D:/v/wiki");
     const plusBtn = createPlus ? createPlus[2].children.find((ch) => ch && ch.props && ch.props.className === "dshk-vault-treeplus") : null;
     if (plusBtn) plusBtn.props.onClick({ stopPropagation: () => {} });
-    check("目录行尾 + 的落点 = 那一行目录（树头 + 落到当前树根）", stateStore.get(15) === "D:/v/wiki");
-    renderVault({ ...base, 14: "D:/v/wiki/a.md" });
+    check("目录行尾 + 的落点 = 那一行目录（树头 + 落到当前树根）", stateStore.get(14) === "D:/v/wiki");
+    renderVault({ ...base, 13: "D:/v/wiki/a.md" });
     const renameInput = callLog.find((c) => c[2] && c[2].className === "dshk-rename");
     check(
       "行内改名：页行换成输入框，初值取显示名（去 .md）",
@@ -642,7 +643,7 @@ let vaultFetchPrev = null;
     // 移动到…：候选目录列同侧全部分支（根 + wiki + wiki/Python）
     const moveErr = renderVault({
       ...base,
-      17: { kind: "move", entry: { dir: false, name: "a", path: "D:/v/wiki/a.md" }, lib: false, dest: "D:/v/wiki", conflict: "skip" },
+      16: { kind: "move", entry: { dir: false, name: "a", path: "D:/v/wiki/a.md" }, lib: false, dest: "D:/v/wiki", conflict: "skip" },
     });
     const moveDialog = callLog.find((c) => c[1] === comps.VaultDialog);
     const dirItems = moveDialog ? byClass({ props: moveDialog[2] }, "dshk-vault-diritem") : [];
@@ -665,7 +666,7 @@ let vaultFetchPrev = null;
     // 导入：资料库那一支给「导入文件…」（多选、不限格式），笔记侧给「导入 md 文件…」
     const importErr = renderVault({
       ...base,
-      17: { kind: "import", dest: "D:/v/library", lib: true, files: [], src: "", name: "", conflict: "skip" },
+      16: { kind: "import", dest: "D:/v/library", lib: true, files: [], src: "", name: "", conflict: "skip" },
     });
     const importDialog = callLog.find((c) => c[1] === comps.VaultDialog);
     const fileInput = importDialog ? walk({ props: importDialog[2] }, (n) => n.props && n.props.type === "file")[0] : null;
@@ -687,7 +688,7 @@ let vaultFetchPrev = null;
     );
     const notesImportErr = renderVault({
       ...base,
-      17: { kind: "import", dest: "D:/v/wiki", lib: false, files: [], src: "", name: "", conflict: "skip" },
+      16: { kind: "import", dest: "D:/v/wiki", lib: false, files: [], src: "", name: "", conflict: "skip" },
     });
     const notesDialog = callLog.find((c) => c[1] === comps.VaultDialog);
     const notesFile = notesDialog ? walk({ props: notesDialog[2] }, (n) => n.props && n.props.type === "file")[0] : null;
@@ -706,7 +707,7 @@ let vaultFetchPrev = null;
     );
     const delErr = renderVault({
       ...base,
-      17: { kind: "delete", entry: { dir: true, name: "wiki", path: "D:/v/wiki" } },
+      16: { kind: "delete", entry: { dir: true, name: "wiki", path: "D:/v/wiki" } },
     });
     const delDialog = callLog.find((c) => c[1] === comps.VaultDialog);
     check(

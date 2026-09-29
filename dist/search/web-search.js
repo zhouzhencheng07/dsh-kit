@@ -10,7 +10,7 @@
 // free-search 这个 id，seam 每次搜索抛 WEB_PROVIDER_CONFIGURED_MISSING；加载时接管
 // 才有「关行 = base 钉的官方 provider 原样服务」。
 //
-// 宿主断言（0.1.7-alpha.2 / rc.2 代码级，见知识库「DSH 插件开发坑」）：WebRuntime 的
+// 宿主断言（0.2.0-rc.2 代码级，见知识库「DSH 插件开发坑」）：WebRuntime 的
 // searchProviderId 是实例公开字段（构造期取 config.searchProvider ??
 // $DSH_WEB_SEARCH_PROVIDER，每次 search() 现读）。字段缺失或不可写 = 不钉不注册，
 // 仅「免费链不生效」，官方搜索照常。

@@ -182,7 +182,7 @@ export async function apply(ctx: any, config: KitSettings = {}): Promise<void> {
 
   // 输出侧死循环熔断（宿主侧）：覆盖【全部】会话，与页面开没开、当前看哪个会话
   // 无关——这是客户端那一层做不到的（它挂在当前会话的组件上，切走即失效，而
-  // 人不在正是循环白烧额度的时候）。判据与客户端同款，见 loop-guard.ts。
+  // 人不在正是循环白烧额度的时候）。判据见 loop-guard.ts。
   // 等 agent 服务就位再挂（它不总在本组件之前加载）
   ctx.inject(['agent'], () => {
     disposers.push(registerLoopGuard(ctx, { readSettings: () => readSettings() }))

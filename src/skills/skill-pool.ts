@@ -70,7 +70,7 @@ const POOL_DIRNAME = 'skill-pool'
 
 /**
  * 物理根定义：group = 所属逻辑分组；rank = DSH 扫描优先级（数值越小越优先，
- * 对齐 dsh-skill-filesystem 的 roots() 常量；pool 不是扫描根，不参与排序）。
+ * roots() 常量照官方那套；pool 不是扫描根，不参与排序）。
  */
 interface PhysicalRoot {
   id: string

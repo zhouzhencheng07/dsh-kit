@@ -164,7 +164,7 @@ export interface PhoneAssistOptions {
 /**
  * 网关注入的辅助脚本。锚点是宿主前端的 DOM 实现细节（hashed class 不用、只用语义
  * 属性/文本），宿主升级改版会静默失效——失效表现是"弹窗又出现/入口又能点"，无副作用；
- * 复核基线 dsh 0.1.7-rc.2（open-in-app 的置灰判据在这一版换成了 data-open-target）。
+ * 复核基线 dsh 0.2.0-rc.2（置灰判据是 data-open-target 语义属性）。
  * ① 内测声明弹窗（welcome notice）：远程浏览器的 settings scope 是内存模式，已读状态
  *    存不住，每次加载都会弹——脚本轮询自动点「继续」。
  * ② 宿主专属入口置灰（见 HOST_ONLY_LOCKED / PICKER_LOCKED / 两个

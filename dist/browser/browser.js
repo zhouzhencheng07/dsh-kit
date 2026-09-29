@@ -5,7 +5,7 @@
 // 会话保留）、**按分区（scope）隔离的页面集**（每分区一套 agent 活动页 / 面板观察页
 // 双指针，见 _s() 注释）、帧流中继；对工具层（browser-tools.ts）与面板 ws（index.ts）
 // 提供同一套操作面。TS 源码（tsc 构建出 dist 运行）、零运行时依赖声明；ws 服务器与
-// node-pty 同款多锚点解析在 index.ts 完成，这里不重复。
+// 多锚点解析在 index.ts 完成，这里不重复。
 //
 // 分区语义（scope = 调用方会话 id，见 normalizeScope）：
 //   浏览器实例与 profile **全局共享**（cookie/localStorage/登录态就一份），页集与指针
@@ -21,11 +21,11 @@
 //   URL 白名单 http/https（file:// 拒绝）；snapshot 8KB / eval 64KB / 帧 1600px 限长。
 // 观察面：ariaSnapshot({ mode: 'ai' })——紧凑树 + [ref=eN]（playwright 1.62 原生）。
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
+import { kitPath } from "../core/data-path.js";
 const IDLE_CLOSE_MS = 10 * 60 * 1000;
 const IDLE_TICK_MS = 30 * 1000;
 const GOTO_TIMEOUT = 15000;
@@ -142,11 +142,6 @@ export function normalizeActArgs(args) {
         return { error: 'action=press 需要 key（如 Enter、Control+A）' };
     }
     return { action };
-}
-/** dshHome（对齐 skill-pool.js 的解析） */
-function dshHomeDir() {
-    const env = process.env.DSH_HOME;
-    return env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh');
 }
 /** JS 对话框记录的文本投影：act/navigate 结果 warning 用。playwright 无监听器时
  *  会静默 auto-dismiss，agent 端看到的只是"点了没反应"——把弹出事实带回即可消除
@@ -292,7 +287,7 @@ export class BrowserService {
     }
     /** 启动前清理上次异常留下的孤儿实例（pidfile 信任 + 进程名核验） */
     _cleanupOrphan() {
-        const pidFile = path.join(dshHomeDir(), 'dsh-kit', 'browser-profile', '.pid');
+        const pidFile = kitPath('browser-profile', '.pid');
         let pid = 0;
         try {
             pid = Number(fs.readFileSync(pidFile, 'utf8').trim());
@@ -369,7 +364,7 @@ export class BrowserService {
         this._cleanupOrphan();
         // 启动即广播：面板拿到 launching 状态可提示「启动中」而不是空白等待
         this._emit({ kind: 'state' });
-        const userDataDir = path.join(dshHomeDir(), 'dsh-kit', 'browser-profile');
+        const userDataDir = kitPath('browser-profile');
         fs.mkdirSync(userDataDir, { recursive: true });
         const common = {
             headless: true,
@@ -1219,7 +1214,7 @@ export class BrowserService {
         }
         await this._closeContext();
         try {
-            fs.unlinkSync(path.join(dshHomeDir(), 'dsh-kit', 'browser-profile', '.pid'));
+            fs.unlinkSync(kitPath('browser-profile', '.pid'));
         }
         catch { }
         this._listeners.clear();

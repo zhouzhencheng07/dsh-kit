@@ -20,11 +20,11 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
 
 import { pngSize, normalizeLocatorArgs, normalizeActArgs, normalizeScope } from './browser.ts'
 import type { BrowserService } from './browser.ts'
 import type { DefineTool, ToolDefinition } from '../core/tools.ts'
+import { kitPath } from '../core/data-path.ts'
 
 /** 工具执行上下文里本层用到的最小面（宿主对象运行时才挂载） */
 interface ToolExec {
@@ -43,11 +43,6 @@ interface ToolExec {
 
 interface HostCtx {
   get(name: string): unknown
-}
-
-function dshHomeDir(): string {
-  const env = process.env.DSH_HOME
-  return env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh')
 }
 
 /**
@@ -234,7 +229,7 @@ export function buildBrowserTools({ defineTool, service, ctx, isDisabled, scopeO
       const r = await service.screenshot(scopeFor(exec), { fullPage: args.fullPage === true, tabId: args.tabId })
       if (!r.ok) throw new Error(r.error)
       // 落盘（人随时可看；非多模态模型下的唯一留存）
-      const dir = path.join(dshHomeDir(), 'dsh-kit', 'screenshots')
+      const dir = kitPath('screenshots')
       fs.mkdirSync(dir, { recursive: true })
       const file = path.join(dir, `${new Date().toISOString().replace(/[:.]/g, '-')}.png`)
       fs.writeFileSync(file, r.buffer)

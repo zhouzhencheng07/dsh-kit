@@ -7,7 +7,7 @@
 //   数据源 `agent/assistant-stream`（emit；宿主侧收**全部** agent 的流式帧，
 //          与页面开没开、当前看哪个会话无关）：帧里的 `text-delta` /
 //          `reasoning-delta` 带 {index, text}，正是判据所需原料。
-//   判据   loop-guard.ts 的 looksLooped（与客户端同款，共用一份逻辑）。
+//   判据   loop-guard.ts 的 looksLooped。
 //   动作   `agent.cancel({kind:'hook', reason})` —— 唯一能把熔断原因带进
 //          `turn/end` 的通道（`AgentCancelCause` 的 hook 分支带 reason 字符串），
 //          前端据此选「检测到死循环已停止」这类可读文案。

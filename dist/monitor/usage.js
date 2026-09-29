@@ -49,7 +49,7 @@ async function discoverProviders(deps) {
         }
     }
     if (!found.has('deepseek')) {
-        // 模型配置没写 deepseek provider 时探测标准引用名（官方内置适配器同款），有才出卡
+        // 模型配置没写 deepseek provider 时探测标准引用名，有才出卡
         const hit = await deps.credentials.resolve?.('DEEPSEEK_API_KEY').catch(() => undefined);
         if (hit?.value)
             add({ kind: 'deepseek', envRef: 'DEEPSEEK_API_KEY', base: 'https://api.deepseek.com' });
