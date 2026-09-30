@@ -362,10 +362,12 @@ check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
   const filesSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
   check(
     "分支按钮 width:auto + 可收缩 + 图标不参与收缩（窄侧栏不截断短分支名）",
-    filesSrc.includes(".dshk-branchbtn{display:inline-flex;flex:0 1 auto;min-width:0;width:auto") &&
+    filesSrc.includes(".dshk-branchbtn{display:inline-flex;flex:0 0 auto;min-width:0;width:auto") &&
       filesSrc.includes(".dshk-branchbtn>svg,.dshk-branchbtn .dshk-caret{flex:none}") &&
-      // 名段自带最小宽度：头部东西一多，main 这类短名也不该被压成一个字
-      filesSrc.includes(".dshk-branch-name{flex:0 1 auto;min-width:4ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"),
+      // 按钮不许收缩（flex:0 0 auto）+ 名段只留省略号：头部再怎么挤，分支名都按内容
+      // 取宽显示完整，只有超过 60% 上限的长名才截断
+      filesSrc.includes(".dshk-branchbtn{display:inline-flex;flex:0 0 auto;min-width:0;width:auto;align-items:center;gap:4px;max-width:60%;overflow:hidden") &&
+      filesSrc.includes(".dshk-branch-name{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"),
   );
   check(
     "头部不摆「更新于」与 diff 自动跟随开关（三处都收回）",

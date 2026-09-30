@@ -7073,7 +7073,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 .dshk-headbtn-on{color:var(--dsw-alias-brand-primary)}
 /* width:auto 覆盖 .dshk-btn 的 26px 方钮定宽——否则按钮恒 26 宽，图标与分支名
    被 flex 压成 0 宽，只剩 ▾ 可见（「源代码管理图标没了」的根因） */
-.dshk-branchbtn{display:inline-flex;flex:0 1 auto;min-width:0;width:auto;align-items:center;gap:4px;max-width:60%;padding:2px 7px;border-color:var(--dsw-alias-border-l2)}
+.dshk-branchbtn{display:inline-flex;flex:0 0 auto;min-width:0;width:auto;align-items:center;gap:4px;max-width:60%;overflow:hidden;padding:2px 7px;border-color:var(--dsw-alias-border-l2)}
 .dshk-branchbtn>svg,.dshk-branchbtn .dshk-caret{flex:none}
 .dshk-caret{font-size:9px;color:var(--dsw-alias-label-tertiary)}
 .dshk-pushhint{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:var(--dsw-alias-label-secondary)}
@@ -7084,7 +7084,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 .dshk-branch-cur{color:var(--dsw-alias-brand-primary)}
 .dshk-branch-ico{flex:none;font-size:8px;color:var(--dsw-alias-label-tertiary)}
 .dshk-branch-cur .dshk-branch-ico{color:var(--dsw-alias-brand-primary)}
-.dshk-branch-name{flex:0 1 auto;min-width:4ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-branch-name{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshk-branch-track{flex:none;font-family:ui-monospace,Consolas,monospace;font-size:10px;color:var(--dsw-alias-label-tertiary)}
 .dshk-branch-gone{color:#e7757f}
 .dshk-branch-curtag{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)}
