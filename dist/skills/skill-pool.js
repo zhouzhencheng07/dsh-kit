@@ -47,6 +47,8 @@ import { recycleDelete, findProjectRoot } from "../core/index.js";
 import { sameOrigin } from "../core/index.js";
 import { computeMountState, forgetMount, liveMounts, mountLink, mountPrecondition, prepareCarrier, setCarrier, syncMounts, unmountLink, } from "./mount.js";
 import { dshHome, kitPath } from "../core/data-path.js";
+import { kitLogger } from "../core/log.js";
+const log = kitLogger('skills');
 import { ensurePoolBaseline, poolGitCommit, poolGitRollback, poolGitState } from "./pool-git.js";
 import { parseFrontmatter } from "./frontmatter.js";
 const POOL_DIRNAME = 'skill-pool';
@@ -505,7 +507,7 @@ export function applySkillPool(ctx, hooks) {
                         }
                         catch (error) {
                             // 注册表不可用就不给这一段，枚举本身不受影响
-                            console.warn('[dsh-kit] skills registry list failed:', error instanceof Error ? error.message : error);
+                            log.warn('skills registry 列表不可用', { err: error });
                         }
                     }
                     jsonOf(res, 200, { cwd, groups, providers, brokenLinks, mount });

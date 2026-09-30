@@ -15,6 +15,8 @@
 import http from 'node:http';
 import { loadDep, sameOrigin } from "../core/index.js";
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from "./gateway.js";
+import { kitLogger } from "../core/log.js";
+const log = kitLogger('phone');
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在组件配置页改（phonePort，1-65535） */
 const PHONE_PORT = 3090;
 export const name = 'dsh-kit/phone';
@@ -70,7 +72,7 @@ export async function apply(ctx, config = {}) {
             };
             /** 重启后保留开启：勾选时启动才恢复上次启用位；不勾=每次启动网关都是关的 */
             const phoneKeepGatewayOn = () => readSettings().phoneKeepGatewayOn === true;
-            const warnLog = (msg) => console.warn(`dsh-kit: ${msg}`);
+            const warnLog = (msg) => log.warn(msg);
             // 远程视图（走网关）下要不要连挑选入口一起锁：宿主 picker 是 browse（应用内列目录/
             // 建文件夹，远程客户端自己就能选）时不该锁；native 或未挂载（判据未知，按宿主的
             // hide the affordance 语义）则锁——native 的 pick 在宿主屏幕弹 OS 对话框，远程端点了
@@ -159,19 +161,21 @@ export async function apply(ctx, config = {}) {
                         phoneGw = null;
                         phoneGwError = null;
                     }
+                    const wantPort = phonePort();
                     try {
-                        gwPort = phonePort();
-                        phoneGw = startPhoneGateway({ port: gwPort, upstreamPort: webCtx.webServer.port, log: warnLog, sessionSecret: () => dshSessionSecret, lockPickerEntries });
+                        gwPort = wantPort;
+                        phoneGw = log.op('gateway.start', () => startPhoneGateway({ port: wantPort, upstreamPort: webCtx.webServer.port, log: warnLog, sessionSecret: () => dshSessionSecret, lockPickerEntries }), { port: wantPort, upstream: webCtx.webServer.port });
                         phoneGwError = null;
                     }
                     catch (error) {
                         gwPort = null;
                         phoneGwError = String(error instanceof Error ? error.message : error);
-                        warnLog('手机访问网关启动失败：' + phoneGwError);
+                        log.error('手机访问网关启动失败', { err: error, port: wantPort });
                     }
                 }
                 else if (!phoneGwWanted && phoneGw !== null) {
                     phoneGw.close();
+                    log.info('网关已关闭');
                     phoneGw = null;
                 }
             };

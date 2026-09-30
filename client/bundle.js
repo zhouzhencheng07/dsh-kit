@@ -181,6 +181,77 @@ window.__ModuleLoader__.load({
       return url.href;
     }
 
+    // ── 浏览器半边日志 ──
+    // 与宿主半边合流到同一个文件（<DSH_HOME>/dsh-kit/logs/kit.log）：页面白屏、按钮
+    // 没反应这类只在浏览器侧的现象，宿主日志一个字都留不下。500ms 攒一批上报，
+    // 免得异常风暴把网络打满；上报失败静默——日志不该反过来影响页面。
+    // 组件半边用 kitLogger('<组件>')，与宿主半边同名同义，级别与格式都交给宿主统一排版。
+    const kitLogBatch = [];
+    let kitLogTimer = null;
+    function kitClientLog(entry) {
+      if (entry.level === "warn" || entry.level === "error") {
+        const line = "[dsh-kit] " + entry.msg;
+        if (entry.level === "error") console.error(line, entry.fields ?? "");
+        else console.warn(line, entry.fields ?? "");
+      }
+      kitLogBatch.push({
+        level: entry.level,
+        component: entry.component || "client",
+        msg: String(entry.msg ?? "").slice(0, 1000),
+        fields: entry.fields ?? undefined,
+        scope: entry.scope || undefined,
+      });
+      if (kitLogBatch.length >= 50) {
+        kitFlushLog();
+        return;
+      }
+      if (kitLogTimer === null) {
+        kitLogTimer = setTimeout(kitFlushLog, 500);
+      }
+    }
+    function kitFlushLog() {
+      if (kitLogTimer !== null) {
+        clearTimeout(kitLogTimer);
+        kitLogTimer = null;
+      }
+      if (kitLogBatch.length === 0) return;
+      const entries = kitLogBatch.splice(0, kitLogBatch.length);
+      void fetch("/dsh-kit/log", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ entries }),
+      }).catch(() => {});
+    }
+    /** 组件 logger：kitLogger('files').warn(msg, fields) */
+    function kitLogger(component) {
+      const call = (level) => (msg, fields, scope) => kitClientLog({ level, component, msg, fields, scope });
+      return { debug: call("debug"), info: call("info"), warn: call("warn"), error: call("error") };
+    }
+    // 未捕获异常与被处理的 Promise 拒绝：client 半边最常见的故障形态，逐条留痕。
+    // 级别由宿主侧的 DSH_KIT_LOG 统一裁剪，页面这边不另设开关。
+    if (typeof window !== "undefined") {
+      const boot = kitLogger("client");
+      window.addEventListener("error", (event) => {
+        boot.error(event.message || "未捕获异常", {
+          source: event.filename + ":" + event.lineno + ":" + event.colno,
+          stack: String(event.error?.stack ?? "").slice(0, 600),
+        });
+      });
+      window.addEventListener("unhandledrejection", (event) => {
+        const reason = event.reason;
+        boot.error("未处理的 Promise 拒绝", {
+          reason: String(reason?.message ?? reason ?? "").slice(0, 300),
+          stack: String(reason?.stack ?? "").slice(0, 600),
+        });
+      });
+      // 攒批靠 setTimeout，而后台标签页的定时器会被节流到分钟级、直接关页则永远发不出去，
+      // 所以页面隐藏/关闭时立刻冲刷
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") kitFlushLog();
+      });
+      window.addEventListener("pagehide", kitFlushLog);
+    }
+
     /** GET /dsh-kit/*，按 validate 校验回包形状（形状不符 = 失败，不当半个成功）；
         （如写文件的 409 冲突） */
     async function kitGetJson(url, signal, validate) {
@@ -190,6 +261,7 @@ window.__ModuleLoader__.load({
         const error = new Error((body && body.error) || "HTTP " + res.status);
         error.status = res.status;
         error.body = body;
+        kitClientLog({ level: "warn", msg: "GET 失败：" + url, fields: { status: res.status, err: error.message } });
         throw error;
       }
       return body;
@@ -206,6 +278,7 @@ window.__ModuleLoader__.load({
         const error = new Error(body.error || "HTTP " + res.status);
         error.status = res.status;
         error.body = body;
+        kitClientLog({ level: "warn", msg: "POST 失败：" + url, fields: { status: res.status, err: error.message } });
         throw error;
       }
       return body;
@@ -219,6 +292,7 @@ window.__ModuleLoader__.load({
         const error = new Error((body && body.error) || "HTTP " + res.status);
         error.status = res.status;
         error.body = body;
+        kitClientLog({ level: "warn", msg: "请求失败：" + url, fields: { status: res.status, err: error.message } });
         throw error;
       }
       return body;
@@ -787,6 +861,8 @@ window.__ModuleLoader__.load({
     exports.kitWsUrl = kitWsUrl;
     exports.kitPostJson = kitPostJson;
     exports.kitJson = kitJson;
+    exports.kitClientLog = kitClientLog;
+    exports.kitLogger = kitLogger;
     exports.resolveZh = resolveZh;
     exports.subscribeLocale = subscribeLocale;
     exports.getLocaleVersion = getLocaleVersion;
@@ -1763,7 +1839,7 @@ ellipsis，窄列只截字不破版 */
             return dock.vaultView.renderer ? dock.vaultView.renderer({ ui, cwd, owner }) : null;
           });
         } catch (error) {
-          console.error("[dsh-kit] 注册 sidebar.workspaces 面板失败：", error);
+          kitClientLog({ level: "error", component: "root", msg: "注册 sidebar.workspaces 面板失败", fields: { err: String(error?.message ?? error) } });
           setKitUi({ treeOpen: false, gitOpen: false, vaultIdxOpen: false });
           return undefined;
         }

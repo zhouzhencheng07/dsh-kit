@@ -27,6 +27,8 @@ import { loadDep, loadToolsModule, sameOrigin } from "../core/index.js";
 import { VaultScanner, defaultVaultRoot } from "./scanner.js";
 import { createEntry, renameEntry, moveEntry, importEntry, deleteEntries, parseConflict } from "./fs.js";
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from "./schedule.js";
+import { kitLogger } from "../core/log.js";
+const log = kitLogger('vault');
 export const name = 'dsh-kit/vault';
 // ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile
@@ -59,12 +61,12 @@ export async function apply(ctx, config = {}) {
     //   schedule_delete 按 id 删整个系列）；只读日程签在 client/bundle.js 的
     //   vaultModule。行关闭 = 本模块不物化 = 工具不存在。
     const scheduleStore = syncScheduleStore();
-    const scheduleToolsMod = await loadToolsModule((m) => console.warn('dsh-kit: ' + m));
+    const scheduleToolsMod = await loadToolsModule((m) => log.warn(m));
     const scheduleDefs = scheduleToolsMod && typeof scheduleToolsMod.defineTool === 'function'
         ? buildScheduleTools({ defineTool: scheduleToolsMod.defineTool, store: scheduleStore })
         : null;
     if (!scheduleDefs) {
-        console.warn('dsh-kit: dsh-tools 不可达，日程 agent 工具未注册（日程面板不受影响）');
+        log.warn('dsh-tools 不可达，日程 agent 工具未注册（日程面板不受影响）');
     }
     ctx.inject(['settings', 'tools'], (caps) => {
         if (!scheduleDefs)
@@ -74,7 +76,7 @@ export async function apply(ctx, config = {}) {
                 caps.tools.register(def);
             }
             catch (error) {
-                console.warn('dsh-kit: 日程工具注册失败：' + (error instanceof Error ? error.message : error));
+                log.error('日程工具注册失败', { err: error });
             }
         }
     });

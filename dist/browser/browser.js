@@ -270,11 +270,11 @@ export class BrowserService {
             for (const [key, s] of [...this._scopes]) {
                 if (s.frames.size > 0 || s.pages.size === 0 || now - s.lastActivity <= IDLE_CLOSE_MS)
                     continue;
-                this._log(`browser: 分区空闲超时，收起该对话的 ${s.pages.size} 页`);
+                this._log(`分区空闲超时，收起该对话的 ${s.pages.size} 页`);
                 void this._closeScopePages(key, s);
             }
             if (this._context && this._watchersTotal() === 0 && this._pagesTotal() === 0 && now - this._lastActivity > IDLE_CLOSE_MS) {
-                this._log('browser: 空闲超时，自动关闭（登录态保留在专用 profile）');
+                this._log('空闲超时，自动关闭（登录态保留在专用 profile）');
                 void this._closeContext();
             }
         }, IDLE_TICK_MS);
@@ -346,7 +346,7 @@ export class BrowserService {
                 fs.unlinkSync(pidFile);
             }
             catch { }
-            this._log(`browser: 清理上次残留的浏览器实例（pid ${pid}）`);
+            this._log(`清理上次残留的浏览器实例（pid ${pid}）`);
         })();
     }
     /** 懒启动持久化上下文（幂等；并发调用共享同一次启动） */
@@ -403,7 +403,7 @@ export class BrowserService {
             }
             catch (error) {
                 lastError = error;
-                this._log(`browser: 启动失败（${attempt.channel ?? attempt.executablePath}）：${error instanceof Error ? error.message : error}`);
+                this._log(`启动失败（${attempt.channel ?? attempt.executablePath}）：${error instanceof Error ? error.message : error}`);
             }
         }
         if (!context) {
@@ -469,7 +469,7 @@ export class BrowserService {
                 this._adopt(page, scope);
             })();
         });
-        this._log('browser: 已启动（headless，专用 profile）');
+        this._log('已启动（headless，专用 profile）');
         return { ok: true };
     }
     /** 认领上下文自带的一页（首个要页的分区拿到它，省掉一个空白页签） */
@@ -1057,7 +1057,7 @@ export class BrowserService {
                 await page.reload({ timeout: GOTO_TIMEOUT });
         }
         catch (error) {
-            this._log(`browser: history ${op}：${error instanceof Error ? error.message : error}`);
+            this._log(`history ${op}：${error instanceof Error ? error.message : error}`);
         }
         const tabId = page.__dshTabId;
         const title = await page.title().catch(() => '');
@@ -1162,7 +1162,7 @@ export class BrowserService {
             catch { }
         }
         catch (error) {
-            this._log(`browser: 帧流启动失败：${error instanceof Error ? error.message : error}`);
+            this._log(`帧流启动失败：${error instanceof Error ? error.message : error}`);
         }
     }
     async _detachStream(scope, tabId) {

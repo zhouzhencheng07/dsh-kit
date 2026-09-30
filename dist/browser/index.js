@@ -17,11 +17,13 @@ import http from 'node:http';
 import { BrowserService, normalizeScope, DEFAULT_SCOPE } from "./browser.js";
 import { buildBrowserTools } from "./browser-tools.js";
 import { loadDep, loadToolsModule, sameOrigin } from "../core/index.js";
+import { kitLogger } from "../core/log.js";
+const log = kitLogger('browser');
 // 面板 WebSocket 服务器（ws 是 DSH 自身依赖，不在本包 dependencies 里）；
 // 取不到只影响面板帧流，agent 工具照常可用
 const WebSocketServer = loadDep('ws')?.WebSocketServer ?? null;
 if (!WebSocketServer) {
-    console.warn('dsh-kit: ws 不可用，浏览器面板不可用');
+    log.warn('ws 不可用，浏览器面板不可用');
 }
 export const name = 'dsh-kit/browser';
 // ── 组件设置 schema（声明式模型）──
@@ -52,7 +54,7 @@ export async function apply(ctx, config = {}) {
     };
     // ── 浏览器服务（懒启动：首次工具调用/面板 watch 才拉起 Edge）──
     // 这里只建对象与注册；dispose 挂 ctx.effect（插件卸载/行收起时关浏览器，profile 保留）。
-    const browserService = new BrowserService({ log: (m) => console.log(`dsh-kit: ${m}`) });
+    const browserService = new BrowserService({ log: (m) => log.info(m) });
     if (typeof ctx.effect === 'function') {
         ctx.effect(() => () => {
             void browserService.dispose();
@@ -83,7 +85,7 @@ export async function apply(ctx, config = {}) {
         }
         return root;
     };
-    const toolsMod = browserService.available ? await loadToolsModule((m) => console.warn(`dsh-kit: ${m}`)) : null;
+    const toolsMod = browserService.available ? await loadToolsModule((m) => log.warn(m)) : null;
     let toolDefs = null;
     try {
         toolDefs =
@@ -93,11 +95,11 @@ export async function apply(ctx, config = {}) {
     }
     catch (error) {
         // 构建失败降级为无浏览器工具，不炸插件树（可用性优先）
-        console.warn(`dsh-kit: 浏览器工具构建失败，本组件浏览器工具未注册：${error instanceof Error ? error.message : error}`);
+        log.error('浏览器工具构建失败，本组件浏览器工具未注册', { err: error });
         toolDefs = null;
     }
     if (browserService.available && !toolDefs) {
-        console.warn('dsh-kit: dsh-tools 不可达或形态不符，浏览器工具未注册（其余功能不受影响）');
+        log.warn('dsh-tools 不可达或形态不符，浏览器工具未注册（其余功能不受影响）');
     }
     ctx.inject(['settings', 'tools'], (caps) => {
         if (!toolDefs)
@@ -107,7 +109,7 @@ export async function apply(ctx, config = {}) {
                 caps.tools.register(def);
             }
             catch (error) {
-                console.warn(`dsh-kit: 浏览器工具注册失败：${error instanceof Error ? error.message : error}`);
+                log.error('浏览器工具注册失败', { err: error });
             }
         }
     });
@@ -190,6 +192,7 @@ export async function apply(ctx, config = {}) {
                 mounted.bwss = bwss;
                 bwss.on('connection', (ws) => {
                     browserSockets.set(ws, DEFAULT_SCOPE);
+                    log.debug('面板 WS 连接', { scope: DEFAULT_SCOPE });
                     /** 本连接订着的「分区 + 页」（面板一签一页，一连接只画自己那张签的页）；
                      *  换分区或换页时先退订旧的 */
                     let watched = null;
@@ -257,8 +260,8 @@ export async function apply(ctx, config = {}) {
                             // 别的操作（关页/新页）失败仍要报——那些没有"页面上看得见"的等价物
                             const target = msg.tabId == null ? null : Number(msg.tabId);
                             // fresh = 这张签还没有页（从入口开出来的那张）：另开一页，不动别的签正在看的页
-                            void browserService
-                                .humanOpen(scope, msg.url, target, msg.fresh === true && target === null)
+                            void log.op('ws.open', () => browserService
+                                .humanOpen(scope, msg.url, target, msg.fresh === true && target === null), { scope, tabId: target ?? 'new' })
                                 .then((r) => {
                                 // 回包把页号交给发起的那张签：页集对账是全局补开路径，面板自己那张空签
                                 // 等不到它就只剩「回车没反应」（画面要等别的动作把签挤掉重来）
@@ -268,14 +271,16 @@ export async function apply(ctx, config = {}) {
                             return;
                         }
                         if (msg.t === 'closeTab' && msg.tabId != null) {
-                            void browserService.closePage(scope, Number(msg.tabId)).then((r) => {
+                            void log.op('ws.closeTab', () => browserService.closePage(scope, Number(msg.tabId)), { scope, tabId: msg.tabId })
+                                .then((r) => {
                                 if (!r.ok)
                                     sendTo(ws, { t: 'event', kind: 'error', message: r.error });
                             });
                             return;
                         }
                         if (msg.t === 'newTab') {
-                            void browserService.humanNewTab(scope).then((r) => {
+                            void log.op('ws.newTab', () => browserService.humanNewTab(scope), { scope })
+                                .then((r) => {
                                 if (!r.ok)
                                     sendTo(ws, { t: 'event', kind: 'error', message: r.error });
                                 else
@@ -284,7 +289,8 @@ export async function apply(ctx, config = {}) {
                             return;
                         }
                         if (msg.t === 'nav' && (msg.op === 'back' || msg.op === 'forward' || msg.op === 'reload')) {
-                            void browserService.history(scope, msg.op, msg.tabId == null ? null : Number(msg.tabId)).then((r) => {
+                            void log.op('ws.nav', () => browserService.history(scope, msg.op, msg.tabId == null ? null : Number(msg.tabId)), { scope, op: msg.op })
+                                .then((r) => {
                                 if (!r.ok)
                                     sendTo(ws, { t: 'event', kind: 'error', message: r.error });
                             });
@@ -302,11 +308,13 @@ export async function apply(ctx, config = {}) {
                         }
                     });
                     ws.on('close', () => {
+                        log.debug('面板 WS 断开', { scope: scopeOfConn() });
                         browserSockets.delete(ws);
                         closeWatch();
                     });
-                    ws.on('error', () => {
+                    ws.on('error', (error) => {
                         // close 会跟着来
+                        log.warn('面板 WS 出错', { err: error });
                     });
                 });
                 const disposeBrowserUpgrade = webCtx.webServer.registerUpgrade({

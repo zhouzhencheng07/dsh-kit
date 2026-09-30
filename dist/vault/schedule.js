@@ -20,6 +20,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { kitPath } from "../core/data-path.js";
+import { kitLogger } from "../core/log.js";
+const log = kitLogger('vault');
 // ── 时间工具（本地朴素时间，字符串即真源）────────────────────────────────────
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/;
@@ -318,7 +320,7 @@ export class ScheduleStore {
             return true;
         }
         catch (error) {
-            console.warn(`dsh-kit: 日程写入失败（${file}）：${error instanceof Error ? error.message : error}`);
+            log.error('日程写入失败', { file, err: error });
             return false;
         }
     }

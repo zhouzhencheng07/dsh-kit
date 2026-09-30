@@ -22,7 +22,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { kitPath } from '../core/data-path.ts'
+import { kitLogger } from '../core/log.ts'
 import type { DefineTool, ToolDefinition } from '../core/tools.ts'
+
+const log = kitLogger('vault')
 
 // ── 类型 ────────────────────────────────────────────────────────────────────
 
@@ -406,7 +409,7 @@ export class ScheduleStore {
       fs.renameSync(tmp, file)
       return true
     } catch (error) {
-      console.warn(`dsh-kit: 日程写入失败（${file}）：${error instanceof Error ? error.message : error}`)
+      log.error('日程写入失败', { file, err: error })
       return false
     }
   }

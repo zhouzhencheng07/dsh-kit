@@ -25,6 +25,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { gitAvailable, runGit } from "./git.js";
+import { kitLogger } from "../core/log.js";
+const log = kitLogger('skills');
 const LOG_LIMIT = 30;
 const SUBJECT_BASELINE = 'auto: 初始记录';
 const BODY_BASELINE = '进入技能池时的状态；之后的提交由人或 agent 有意为之';
@@ -251,19 +253,20 @@ export function splitCommitMessage(raw) {
 export async function ensurePoolBaseline(skillDir) {
     if (!isSkillDir(skillDir))
         return;
-    const ready = await ensureRepo(skillDir);
+    const name = path.basename(skillDir);
+    const ready = await log.op('pool.baseline.repo', () => ensureRepo(skillDir), { skill: name });
     if (!ready.ok) {
-        console.warn(`[dsh-kit] 技能池版本记录不可用（${path.basename(skillDir)}）：${ready.error ?? ready.reason}`);
+        log.warn('技能池版本记录不可用', { skill: name, reason: ready.error ?? ready.reason });
         return;
     }
-    const result = await withSkillLock(skillDir, async () => {
+    const result = await log.op('pool.baseline.commit', () => withSkillLock(skillDir, async () => {
         const head = await runGit(['rev-parse', '--verify', '--quiet', 'HEAD'], skillDir);
         if (head.ok)
             return { ok: true, committed: false };
         return commitLocked(skillDir, SUBJECT_BASELINE, BODY_BASELINE);
-    });
+    }), { skill: name });
     if (!result.ok)
-        console.warn(`[dsh-kit] 技能池基线记录失败（${path.basename(skillDir)}）：${result.error ?? '未知原因'}`);
+        log.warn('技能池基线记录失败', { skill: name, reason: result.error ?? '未知原因' });
 }
 /** 池根下所有目录型技能（平铺 .md 不参与版本记录） */
 function poolSkillDirs(poolDir) {

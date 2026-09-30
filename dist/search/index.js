@@ -7,6 +7,8 @@
 // 「配置」（client 半边同 bundle 内的 search 组件模块注册）。
 import { applyWebSearch } from "./web-search.js";
 import { loadDep } from "../core/index.js";
+import { kitLogger } from "../core/log.js";
+const log = kitLogger('search');
 export const name = 'dsh-kit/search';
 // ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile
@@ -34,6 +36,6 @@ export async function apply(ctx, config = {}) {
     };
     applyWebSearch(ctx, {
         getMaxResults: () => readSettings().searchMaxResults,
-        log: (message) => console.warn(`dsh-kit: ${message}`),
+        log: (message) => log.warn(message),
     });
 }

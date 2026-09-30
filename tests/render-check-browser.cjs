@@ -25,7 +25,7 @@ if (!global.document) {
     body: { classList: { add() {}, remove() {}, toggle() {} }, appendChild: () => {}, hasAttribute: () => false },
   };
 }
-if (!global.window) global.window = { innerWidth: 1600, requestAnimationFrame: () => 0, setTimeout: () => 0, clearTimeout: () => {}, isSecureContext: false };
+if (!global.window) global.window = { innerWidth: 1600, requestAnimationFrame: () => 0, setTimeout: () => 0, clearTimeout: () => {}, isSecureContext: false, addEventListener: () => {}, removeEventListener: () => {} };
 if (!global.location) global.location = { protocol: "http:", host: "127.0.0.1:3081" };
 if (!global.MutationObserver) global.MutationObserver = class { observe() {} };
 if (!global.Element) global.Element = class Element {};

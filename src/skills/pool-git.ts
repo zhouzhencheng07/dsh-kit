@@ -27,6 +27,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { gitAvailable, runGit } from './git.ts'
+import { kitLogger } from '../core/log.ts'
+
+const log = kitLogger('skills')
 
 const LOG_LIMIT = 30
 const SUBJECT_BASELINE = 'auto: 初始记录'
@@ -287,17 +290,18 @@ export function splitCommitMessage(raw: string): { ok: boolean; subject?: string
 /** 还没有历史就记一条基线（进池时的状态）；已有历史立刻返回，不做任何提交 */
 export async function ensurePoolBaseline(skillDir: string): Promise<void> {
   if (!isSkillDir(skillDir)) return
-  const ready = await ensureRepo(skillDir)
+  const name = path.basename(skillDir)
+  const ready = await log.op('pool.baseline.repo', () => ensureRepo(skillDir), { skill: name })
   if (!ready.ok) {
-    console.warn(`[dsh-kit] 技能池版本记录不可用（${path.basename(skillDir)}）：${ready.error ?? ready.reason}`)
+    log.warn('技能池版本记录不可用', { skill: name, reason: ready.error ?? ready.reason })
     return
   }
-  const result = await withSkillLock(skillDir, async () => {
+  const result = await log.op('pool.baseline.commit', () => withSkillLock(skillDir, async () => {
     const head = await runGit(['rev-parse', '--verify', '--quiet', 'HEAD'], skillDir)
     if (head.ok) return { ok: true, committed: false }
     return commitLocked(skillDir, SUBJECT_BASELINE, BODY_BASELINE)
-  })
-  if (!result.ok) console.warn(`[dsh-kit] 技能池基线记录失败（${path.basename(skillDir)}）：${result.error ?? '未知原因'}`)
+  }), { skill: name })
+  if (!result.ok) log.warn('技能池基线记录失败', { skill: name, reason: result.error ?? '未知原因' })
 }
 
 /** 池根下所有目录型技能（平铺 .md 不参与版本记录） */

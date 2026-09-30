@@ -16,6 +16,7 @@
 //
 // 本行端点（webserver 默认只绑 loopback）：
 //   GET  /dsh-kit/vendor/*          —— xterm / qrcode / richeditor / katex 静态资源
+//   POST /dsh-kit/log               —— 浏览器半边日志回传（client 侧的异常只有这里能留痕）
 
 import fs from 'node:fs'
 import http from 'node:http'
@@ -23,6 +24,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { applyOpenCodeSessionHeader } from './core/index.ts'
+import { sameOrigin } from './core/web-guard.ts'
+import { kitLogEmit, kitLogStartup, type KitLogLevel } from './core/log.ts'
 
 export const name = 'dsh-kit'
 
@@ -79,9 +82,63 @@ const VENDOR_TYPES = new Map([
   ['.ttf', 'font/ttf'],
 ])
 
+// ── 浏览器半边日志回传（POST）与最近日志（GET）──
+// 客户端文本是外部可写内容：级别按白名单取，组件名/作用域/消息限长净化，字段只收标量。
+const LOG_LEVELS: readonly string[] = ['debug', 'info', 'warn', 'error']
+const MAX_CLIENT_ENTRIES = 50
+const MAX_MSG = 1000
+
+const clean = (value: unknown, max: number, fallback: string): string =>
+  (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '') || fallback
+
+interface ClientLogEntry {
+  level?: string
+  component?: string
+  scope?: string
+  msg?: string
+  fields?: unknown
+}
+
+function readJson(req: http.IncomingMessage, limit = 64 * 1024): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    let size = 0
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length
+      if (size > limit) {
+        reject(new Error('body too large'))
+        req.destroy()
+        return
+      }
+      chunks.push(chunk)
+    })
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'))
+      } catch {
+        reject(new Error('invalid json'))
+      }
+    })
+    req.on('error', reject)
+  })
+}
+
+function clientFields(raw: unknown): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>).slice(0, 8)) {
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      out[clean(key, 24, 'f')] = typeof value === 'string' ? clean(value, 200, '') : value
+    }
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 export async function apply(ctx: KitCtx): Promise<void> {
+  kitLogStartup()
+
   // OpenCode Go 会话头按会话注入（实现见 src/core/opencode-session.ts）
-  applyOpenCodeSessionHeader(ctx, (m) => console.warn('dsh-kit: ' + m))
+  applyOpenCodeSessionHeader(ctx, (m) => kitLogEmit('warn', 'session-header', '', m))
 
   // webServer 可能在本插件 apply 之后才挂载，用动态注入等它就绪
   ctx.inject(['webServer'], (webCtx: KitWebCtx) => {
@@ -123,9 +180,47 @@ export async function apply(ctx: KitCtx): Promise<void> {
         },
       })
 
+      // ── 浏览器半边日志回传 ──
+      // 收客户端上报：页面白屏、按钮没反应这类只在浏览器侧的现象，宿主日志一个字都留不下。
+      // 查询日志用 pnpm logs / 直接看 kit.log，不另开读端点。
+      const disposeLog = webCtx.webServer.register({
+        kind: 'exact',
+        path: '/dsh-kit/log',
+        handler: (req, res) => {
+          const json = (code: number, obj: unknown): void => {
+            res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' })
+            res.end(JSON.stringify(obj))
+          }
+          if (!sameOrigin(req)) {
+            json(403, { error: 'forbidden' })
+            return
+          }
+          if (req.method !== 'POST') {
+            json(405, { error: 'method not allowed' })
+            return
+          }
+          void readJson(req).then((body) => {
+            const list = Array.isArray(body?.entries) ? (body.entries as ClientLogEntry[]).slice(0, MAX_CLIENT_ENTRIES) : []
+            for (const item of list) {
+              kitLogEmit(
+                LOG_LEVELS.includes(item?.level ?? '') ? (item.level as KitLogLevel) : 'info',
+                clean(item?.component, 24, 'client'),
+                clean(item?.scope, 120, ''),
+                clean(item?.msg, MAX_MSG, ''),
+                clientFields(item?.fields),
+              )
+            }
+            json(200, { ok: true })
+          }).catch(() => {
+            json(400, { error: 'bad body' })
+          })
+        },
+      })
+
       return () => {
         disposeVendor()
+        disposeLog()
       }
-    }, 'dsh-kit: vendor endpoints')
+    }, 'dsh-kit: vendor endpoints + log endpoints')
   })
 }

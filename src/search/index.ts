@@ -9,6 +9,9 @@
 
 import { applyWebSearch } from './web-search.ts'
 import { loadDep } from '../core/index.ts'
+import { kitLogger } from '../core/log.ts'
+
+const log = kitLogger('search')
 
 /** 插件设置的运行时形状（loader 按 Config schema 解析后传入 apply 第二参） */
 type KitSettings = Record<string, unknown>
@@ -49,6 +52,6 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
   }
   applyWebSearch(ctx, {
     getMaxResults: () => readSettings().searchMaxResults,
-    log: (message) => console.warn(`dsh-kit: ${message}`),
+    log: (message) => log.warn(message),
   })
 }

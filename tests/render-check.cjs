@@ -88,7 +88,9 @@ if (!global.document) {
   };
 }
 if (!global.window) {
-  global.window = { innerWidth: 1600, requestAnimationFrame: () => 0, setTimeout: () => 0, clearTimeout: () => {} };
+  // addEventListener：client 半边在 factory 里注册全局 error / unhandledrejection
+  // 兜底（把浏览器侧的异常回传宿主日志），桩缺它会直接抛。
+  global.window = { innerWidth: 1600, requestAnimationFrame: () => 0, setTimeout: () => 0, clearTimeout: () => {}, addEventListener: () => {}, removeEventListener: () => {} };
 }
 if (!global.location) {
   global.location = { protocol: "http:", host: "127.0.0.1:3081" };

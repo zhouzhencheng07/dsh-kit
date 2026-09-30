@@ -62,6 +62,9 @@ import {
   type ProjectRootId,
 } from './mount.ts'
 import { dshHome, kitPath } from '../core/data-path.ts'
+import { kitLogger } from '../core/log.ts'
+
+const log = kitLogger('skills')
 import { ensurePoolBaseline, poolGitCommit, poolGitRollback, poolGitState } from './pool-git.ts'
 import { parseFrontmatter } from './frontmatter.ts'
 
@@ -592,7 +595,7 @@ export function applySkillPool(ctx: KitCtx, hooks?: SkillPoolHooks): void {
               }
             } catch (error) {
               // 注册表不可用就不给这一段，枚举本身不受影响
-              console.warn('[dsh-kit] skills registry list failed:', error instanceof Error ? error.message : error)
+              log.warn('skills registry 列表不可用', { err: error })
             }
           }
           jsonOf(res, 200, { cwd, groups, providers, brokenLinks, mount })
