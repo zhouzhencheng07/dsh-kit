@@ -142,10 +142,28 @@ for (const p of dynamicKeyPrefixes) {
   notes.push('动态类前缀豁免：' + (prefixes.join(' ') || '(无)'))
 }
 
+// ── 4) 座字段活性 ──
+// 组件行与 root 只经座对象单向接线（座没接上 = diffPane 白屏，座只读不写 = 让路
+// 之类的跨块判据静默失效）。按「root 读得到却没人写」判死。
+{
+  const seats = [...new Set([...src.matchAll(/exports\.([A-Za-z_$][\w$]*)\s*=\s*\{/g)].map((m) => m[1]))]
+  if (seats.length < 4) die('只解析出 ' + seats.length + ' 个座，锚点可能失效')
+  for (const seat of seats) {
+    const fields = [...new Set([...src.matchAll(new RegExp('(?:dock\\.|exports\\.)' + seat + '\\.([A-Za-z_$][\\w$]*)', 'g'))].map((m) => m[1]))]
+    for (const field of fields) {
+      const base = '(?:dock\\.|exports\\.)' + seat + '\\.' + field
+      const writes = (src.match(new RegExp(base + '\\s*=(?!=)', 'g')) ?? []).length
+      const reads = (src.match(new RegExp(base + '(?!\\s*=(?!=))', 'g')) ?? []).length
+      if (writes === 0 && reads > 0) fail('座字段只读不写：' + seat + '.' + field + '（root 读得到，组件没人写）')
+    }
+  }
+  notes.push('座字段活性：' + seats.length + ' 个座')
+}
+
 // ── 输出 ──
 for (const n of notes) console.log('NOTE  ' + n)
 if (problems.length === 0) {
-  console.log('PASS  死代码哨兵：词条 / 函数 / CSS 三类均无发现')
+  console.log('PASS  死代码哨兵：词条 / 函数 / CSS / 座字段 四类均无发现')
   process.exit(0)
 }
 console.log('FAIL  死代码哨兵发现 ' + problems.length + ' 项：')

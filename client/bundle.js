@@ -607,7 +607,7 @@ window.__ModuleLoader__.load({
 
     // ── 一内容一签（右栏资源地址）──
     // 内容类页类型按 dsh-resource://<段>/<编码后的条目> 认领地址：一个条目一张官方
-    // 签，签条即切换器（对齐官方行为），pane 内不再自绘第二层标签条。地址同时是
+    // 签，签条即切换器，pane 内不再自绘第二层标签条。地址同时是
     // 签的 contentId，随布局持久化——刷新后签与内容仍对得上，同址重复开复用同一张签。
     const RB_ADDRESS_PREFIX = {
       file: "dsh-resource://dshk-diff/",
@@ -4956,16 +4956,16 @@ ellipsis，窄列只截字不破版 */
       }, []);
 
       // 关闭手势长在浮层自己身上（同 TreeRowMenu 契约）：点浮层与搜索框之外才关；
-      // 开着期间挂 vaultSearchOpen，KitSurfaces 的全局 Esc 让路——Esc 只关浮层，不收页签/侧栏
+      // 开着期间挂 dock.vaultSearch 座，KitSurfaces 的全局 Esc 让路——Esc 只关浮层，不收页签/侧栏
       react.useEffect(() => {
         if (searchRes === null) return undefined;
-        vaultSearchOpen = true;
+        dock.vaultSearch.open = true;
         const onDown = (e) => {
           if (e.target instanceof Element && !e.target.closest(".dshk-vault-vsearch") && !e.target.closest(".dshk-vault-search")) setSearchRes(null);
         };
         document.addEventListener("pointerdown", onDown, true);
         return () => {
-          vaultSearchOpen = false;
+          dock.vaultSearch.open = false;
           document.removeEventListener("pointerdown", onDown, true);
         };
       }, [searchRes]);
@@ -5516,7 +5516,7 @@ ellipsis，窄列只截字不破版 */
                   e.preventDefault();
                   setSearchIdx((i) => Math.max(i - 1, 0));
                 } else if (e.key === "Escape" && searchRes !== null) {
-                  // 全局 Esc 已挂 vaultSearchOpen 让路：这里只关浮层
+                  // 全局 Esc 已挂 dock.vaultSearch 让路：这里只关浮层
                   e.preventDefault();
                   setSearchRes(null);
                 }
@@ -6273,7 +6273,6 @@ ellipsis，窄列只截字不破版 */
     exports.useVaultReader = useVaultReader;
     exports.toggleVaultEntry = toggleVaultEntry;
     exports.openVaultEntry = openVaultEntry;
-    exports.vaultSearchOpen = dock.vaultSearch;
     exports.shortcutRun = shortcutRun;
 
     return module.exports;
@@ -9070,8 +9069,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         return () => controller.abort();
       }, [path, reloadNonce, deleted]);
 
-      /** diff 视图：只渲染 hunk（单栏带行号 / 双栏并排，对齐官方「本轮改动」观感）——
-       *  长文件只改几行时不必翻整篇，上下文行数由 git 的 -U 决定（默认 3）。
+      /** diff 视图：只渲染 hunk（单栏带行号 / 双栏并排）——长文件只改几行时不必
+       *  每次翻整篇，上下文行数由 git 的 -U 决定（默认 3）。
        *  没有 hunk（空/非 unified patch）才原样贴出。commit 模式下该提交已删除的
        *  文件与工作区删除文件一样纯红展示。顶部基线说明见 renderDiffView 包装层。 */
       /** hunk 头与 git 输出同形，便于和命令行结果对照 */
