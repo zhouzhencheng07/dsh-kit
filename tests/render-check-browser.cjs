@@ -154,6 +154,17 @@ check(
   const out = comps.BrowserPaneBody({});
   const panelElem = callLog.find((c) => c[1] === comps.BrowserPanel && c[2] && c[2].active === true);
   check("BrowserPaneBody 挂 BrowserPanel（active 恒真：pane 显示即在看）", !!out && !!panelElem);
+  // 从入口开出来的那张签没有浏览器地址 = 没有页。Number(null) 是 0，让它冒充
+  // 0 号页的话回车会把 tabId:0 发给宿主，宿主新开一页另开一张签，本签永远空着
+  const panelWithAddr = (contentId) => {
+    callLog = [];
+    comps.BrowserPaneBody({ useTabInfo: () => ({ tab: { id: "tab7", contentId, visible: true } }) });
+    return callLog.find((c) => c[1] === comps.BrowserPanel)?.[2] ?? null;
+  };
+  const noAddr = panelWithAddr("dsh-app://app/guide");
+  check("无浏览器地址的签：页 id 为 null（不是 0），并带上本签 id 供 replaceTab 接管", noAddr !== null && noAddr.pageId === null && noAddr.tabId === "tab7");
+  const withAddr = panelWithAddr("dsh-resource://dshk-browser/" + encodeURIComponent("7"));
+  check("有地址的签：页 id 取自地址", withAddr !== null && withAddr.pageId === 7);
   check("BrowserShell 渲染无异常（空壳：事件源 + 入口掩码）", comps.BrowserShell({}) === null || typeof comps.BrowserShell({}) === "object");
   dockExports.setKitUi({ browserOpen: false, activeFeature: null });
   comps.maybeAutoOpenBrowser(7);

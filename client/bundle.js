@@ -631,13 +631,14 @@ window.__ModuleLoader__.load({
       const at = address.indexOf("?");
       return at < 0 ? "" : address.slice(at + 1);
     }
-    /** 开一个条目（官方 openResource：认领地址 → 落一张签并激活；同址已开则复用） */
-    function openRightbarItem(feature, item, query) {
+    /** 开一个条目（官方 openResource：认领地址 → 落一张签并激活；同址已开则复用）。
+     *  options 直通宿主（replaceTab：让新页接管指定那张签，见 maybeAutoOpenBrowser） */
+    function openRightbarItem(feature, item, query, options) {
       const address = rightbarAddress(feature, item, query);
       const sr = rightbarSr;
       if (address === "" || !rightbarSeat.available || !sr || typeof sr.openResource !== "function") return;
       try {
-        sr.openResource(address);
+        sr.openResource(address, options);
       } catch {
         /* 右栏异常不拖垮入口动作 */
       }
@@ -768,6 +769,16 @@ window.__ModuleLoader__.load({
         return true;
       }
     }
+    /** 本签在官方签表里的 id（replaceTab 要它：无页的签接管自己新建的那一页） */
+    function tabIdOf(props) {
+      try {
+        const info = typeof props?.useTabInfo === "function" ? props.useTabInfo() : null;
+        const id = info?.tab?.id;
+        return typeof id === "string" || typeof id === "number" ? id : null;
+      } catch {
+        return null;
+      }
+    }
     /** 本签认领的资源地址（签条即切换器，pane 正文只管自己这一张） */
     function tabAddress(props) {
       try {
@@ -828,6 +839,7 @@ window.__ModuleLoader__.load({
     exports.openFeatureDock = openFeatureDock;
     exports.openFileAndDock = openFileAndDock;
     exports.tabAddress = tabAddress;
+    exports.tabIdOf = tabIdOf;
     exports.tabVisible = tabVisible;
     exports.FilePaneBody = FilePaneBody;
     exports.sidebarViewPatch = sidebarViewPatch;
@@ -10933,7 +10945,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       getKitUi, setKitUi, KitTip, flashToast, kitJson, kitWsUrl, resolveZh,
       closeFeatureTab, openFeatureTab, openFeatureDock, closeRightbarTab,
       useCurrentRow, currentSessionId, shellShare,
-      rightbarItem, rightbarItems, openRightbarItem, tabAddress, tabVisible,
+      rightbarItem, rightbarItems, openRightbarItem, tabAddress, tabIdOf, tabVisible,
     } = dock;
     const dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives");
     const dswIcon = (...names) => {
@@ -11025,6 +11037,16 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
      *  页集对账（brwReconcile）与面板导航事件共用此入口 */
     function maybeAutoOpenBrowser(pageId) {
       if (pageId === undefined || pageId === null) return;
+      // 本签自己没有页（从入口开出来的那张）却在地址栏导航过 → 宿主新建的这一页
+      // replaceTab 接管本签；不接管的话新页会另开一张签，本签永远空着
+      const adopt = brwAdoptTab;
+      if (adopt !== null) {
+        brwAdoptTab = null; // 一次性的接管意图
+        if (rightbarTabsOf("browser").some((t) => t.id === adopt)) {
+          openRightbarItem("browser", String(pageId), "", { replaceTab: adopt });
+          return;
+        }
+      }
       openRightbarItem("browser", String(pageId));
     }
     /** 浏览器没了（优雅关闭/空闲自动关/整只崩溃/页崩光）→ 收掉官方浏览器签
@@ -11120,6 +11142,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // 人关签（官方 ✕）= 关掉那张签对应的页，故撤签时经控制连接发 closeTab。
     const brwScopes = new Map();
     const brwClosedByUser = new Set(); // 人关签时登记的页：宿主那侧关页失败也不回弹签
+/** 无页的签在地址栏回车后要接管的签 id（宿主新建的那一页 replaceTab 进去，别另开一张） */
+let brwAdoptTab = null;
     function brwConn(scope) {
       let entry = brwScopes.get(scope);
       if (entry) return entry;
@@ -11214,6 +11238,13 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         }
       }
     }
+    /** 本签那一页的页 id：从入口开出来的那张签没有地址，就没有页——必须回 null。
+     *  Number(null) 是 0，让它冒充 0 号页的话回车会把 tabId:0 发给宿主，宿主当成
+     *  「这页没了」而新开一页，于是新页另开一张签，本签永远空着 */
+    function brwPageIdOf(props) {
+      const raw = rightbarItem("browser", tabAddress(props));
+      return raw === null ? null : Number(raw);
+    }
     function brwPageOf(scope, pageId) {
       const entry = brwScopes.get(scope);
       if (!entry) return null;
@@ -11222,7 +11253,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     /** 签条标题：页标题（宿主事件流带回来的活标题），没有就退回地址的 host */
     function BrowserTabTitle(props) {
       const scope = useCurrentRow(props)?.id ?? "";
-      const pageId = Number(rightbarItem("browser", tabAddress(props)) ?? NaN);
+      const pageId = brwPageIdOf(props);
       const entry = brwScopes.get(scope);
       react.useSyncExternalStore(
         (cb) => {
@@ -11242,7 +11273,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       }
     }
 
-    function BrowserPanel({ active, scope, pageId }) {
+    function BrowserPanel({ active, scope, pageId, tabId }) {
       const [state, setState] = react.useState({ running: false, launching: false, pages: [], activeId: null, viewId: null });
       const [draft, setDraft] = react.useState("");
       const [visible, setVisible] = react.useState(document.visibilityState === "visible");
@@ -11518,6 +11549,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           running: true,
           pages: (prev.pages ?? []).map((p) => (p.tabId === pageIdRef.current ? { ...p, url: withScheme, title: "" } : p)),
         }));
+        // 本签没有页（从入口开出来的那张）→ 宿主会新建一页并回一个页 id，
+        // 记下要接管的签，让那一页 replaceTab 进来而不是另开一张空签
+        if (pageIdRef.current === null && tabId !== null && tabId !== undefined) brwAdoptTab = tabId;
         try {
           wsRef.current?.send(JSON.stringify({ t: "open", url: withScheme, scope: scopeRef.current ?? "", tabId: pageIdRef.current }));
         } catch {
@@ -11653,7 +11687,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     function BrowserPaneBody(props) {
       useFeaturePresence("browser");
       const scope = useCurrentRow(props)?.id ?? "";
-      const pageId = Number(rightbarItem("browser", tabAddress(props)) ?? NaN);
+      const pageId = brwPageIdOf(props);
       const seenRef = react.useRef(false);
       // 分区 = 所属会话；没有会话就没有分区（也不连控制连接）
       const conn = scope ? brwConn(scope) : null;
@@ -11680,7 +11714,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           }
         }
       }, [gone]);
-      return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(BrowserPanel, { active: tabVisible(props), scope, pageId }) });
+      return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(BrowserPanel, { active: tabVisible(props), scope, pageId, tabId: tabIdOf(props) }) });
     }
 
     /** 壳层常驻（shell.overlay）：浏览器事件源 + 官方「浏览器」入口掩码。
