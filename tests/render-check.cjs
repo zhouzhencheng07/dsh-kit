@@ -160,12 +160,14 @@ check("VaultEntry 渲染无异常且悬停走官方气泡（KitTip + 命令 id �
 // 7.0) 侧栏索引单槽互斥（sidebarViewPatch 纯补丁语义；入口按钮交互在 files 组件直测）
 const svp = comps.sidebarViewPatch("vault");
 check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultIdxOpen === true && svp.treeOpen === false && svp.gitOpen === false);
-// 7.1) 功能签入口补丁（openFeatureTab）：置存在 + 置激活位，纯补丁不触碰别的签。
-// 后台任务无插件分支：官方会话头部自带任务清单 + 实时输出 + 停止
-const ots = comps.openFeatureTab({ files: [], browserOpen: false, schedOpen: false, activeFeature: null }, "schedule");
-check("openFeatureTab 日程：置存在+激活", ots.schedOpen === true && ots.activeFeature === "schedule" && ots.browserOpen === undefined);
-const otb = comps.openFeatureTab({ files: [], browserOpen: false, schedOpen: true, activeFeature: "schedule" }, "browser");
-check("openFeatureTab 浏览器：纯补丁不触碰日程签（合并保留）", otb.browserOpen === true && otb.activeFeature === "browser" && otb.schedOpen === undefined);
+// 7.1) 功能签入口补丁（openFeatureTab）：只置存在位，纯补丁不触碰别的签。
+// 「哪张签激活」归官方签表，kitUi 不再存激活位。后台任务无插件分支：官方会话
+// 头部自带任务清单 + 实时输出 + 停止
+const ots = comps.openFeatureTab({ files: [], browserOpen: false, schedOpen: false }, "schedule");
+check("openFeatureTab 日程：只置存在位", ots.schedOpen === true && ots.activeFeature === undefined && ots.browserOpen === undefined);
+const otb = comps.openFeatureTab({ files: [], browserOpen: false, schedOpen: true }, "browser");
+check("openFeatureTab 浏览器：纯补丁不触碰日程签（合并保留）", otb.browserOpen === true && otb.schedOpen === undefined);
+check("kitUi 不再存激活位（官方签表才是唯一事实）", comps.getKitUi().activeFeature === undefined);
 // 7.1b) 知识库入口（输入行钮 + 快捷键同语义）：只切左侧目录，点具体页才开右栏知识库
 // 签；再点 = 收回会话列表。补丁只含侧栏三键，功能签与页签状态一律不动（setKitUi
 // 合并语义）
@@ -246,9 +248,9 @@ check("ScheduleTasksCard 只读行：无勾选框、无计时钮", taskChecks.le
 // openFileAndDock / openVaultPageAndDock：签归官方签表，这里断言「开出来的地址对不对」
 // （桩环境无右栏服务 → 只看地址映射，见 7.1c 的往返断言）
 comps.openFileAndDock("C:/x/new.js", false, true, undefined);
-check("openFileAndDock 激活差异（签由官方签条持有）", comps.getKitUi().activeFeature === "file");
+check("openFileAndDock 不再往 kitUi 写激活位", comps.getKitUi().activeFeature === undefined);
 comps.openVaultPageAndDock("D:/v/p.md");
-check("openVaultPageAndDock 激活知识库（页签在官方签条里）", comps.getKitUi().activeFeature === "vault");
+check("openVaultPageAndDock 同样不写激活位", comps.getKitUi().activeFeature === undefined);
 // 6.5b) 官方右栏可用时机（rightbarSeat）：树/源代码管理/知识库三个工作区面与全部
 // 开签动作跟官方右栏同生灭——全局面板（插件页/设置页）占住中栏或没选会话时收手。
 // 两路信号：layout.panelInfo 回落源先测（mounted 一旦挂上就首选，无退订 API），

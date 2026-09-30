@@ -1,5 +1,6 @@
 // 插件数据根：宿主只保证 DSH_HOME，自家的东西一律落 <DSH_HOME>/dsh-kit/ 下——
-// vault、schedule、browser-profile、技能池、状态文件都在那儿，备份与清理只看一个目录。
+// 技能池与技能挂载策略、浏览器 profile、手机网关状态都在那儿，备份与清理只看一个目录。
+// （知识库与日程仍各自解 DSH_HOME，见 src/vault 的两个调用点。）
 
 import fs from 'node:fs'
 import os from 'node:os'
@@ -11,7 +12,8 @@ export function dshHome(): string {
   return env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh')
 }
 
-export function kitDir(): string {
+/** <DSH_HOME>/dsh-kit —— 自家数据的根（具体路径一律经 kitPath 拼） */
+function kitDir(): string {
   return path.join(dshHome(), 'dsh-kit')
 }
 

@@ -168,7 +168,6 @@ async function checkApply() {
     current,
   });
   const cfgAll = { notifyEnabled: true };
-  const pendingOf = (id, item) => new Map([[id, item]]);
 
   // —— 沿检测：首帧播种，收尾才发；同一快照重复读不重发 ——
   const st1 = freshState();
@@ -209,91 +208,35 @@ async function checkApply() {
   rows5[0].running = false;
   check("N 子会话收尾不发（导航细节属噪音）", comps.notifyDiffCore(st5, listOf(rows5, null), cfgAll).length === 0);
 
-  // —— 待回应：key 变化即新请求，正文取首问；同一请求只提醒一次 ——
-  const st7 = freshState();
-  const rows7 = [{ id: "n8", running: true, title: "项目 A" }];
+  // —— 提问/批准/计划评审：走事件瀑布那条口直接投递，判定核心只管回合收尾。
+  //    这里直测它俩共用的分类与正文取法（宿主没有 uiSession.pendingInteractions
+  //    这个 store，官方待回应投影那条口在生产上永远拿不到东西，已删）——
+  const askQ = (question, detail) => ({ questions: [{ question, detail }] });
+  check("N 提问原样成类", comps.notifyKindOf("question", askQ("去不去？")) === "question");
   check(
-    "N 首帧播种不发待回应通知（打开页面时已存在的提问不算新的）",
-    comps.notifyDiffCore(st7, { ...listOf(rows7, null), pending: pendingOf("n8", { key: "question:1", kind: "question", questions: [{ question: "旧问题" }] }) }, cfgAll).length === 0,
+    "N 计划评审（intent=plan-review）单独成类",
+    comps.notifyKindOf("question", { questions: [{ question: "批准？", intent: { kind: "plan-review" } }] }) === "plan",
   );
-  const ev7 = comps.notifyDiffCore(
-    st7,
-    { ...listOf(rows7, null), pending: pendingOf("n8", { key: "question:2", kind: "question", questions: [{ question: "选哪个方案？" }] }) },
-    cfgAll,
-  );
-  check("N 新提问发通知（标题=会话名，正文=问题原文）", ev7.length === 1 && ev7[0].kind === "question" && ev7[0].title === "项目 A" && ev7[0].body === "选哪个方案？");
+  check("N 批准原样成类", comps.notifyKindOf("approval", {}) === "approval");
+  check("N 提问正文取首问原文", comps.notifyBodyOf(askQ("选哪个方案？"), "question") === "选哪个方案？");
+  check("N 批准有理由时取理由", comps.notifyBodyOf({ reason: "要写盘上了", toolName: "write" }, "approval") === "要写盘上了");
+  check("N 批准无理由时用工具名兜底", /pwsh/.test(comps.notifyBodyOf({ reason: "", toolName: "pwsh" }, "approval")));
   check(
-    "N 同一请求不重复提醒",
-    comps.notifyDiffCore(st7, { ...listOf(rows7, null), pending: pendingOf("n8", { key: "question:2", kind: "question", questions: [{ question: "选哪个方案？" }] }) }, cfgAll).length === 0,
+    "N 计划评审正文取计划首个标题",
+    comps.notifyBodyOf({ questions: [{ question: "批准？", detail: "# 重构终端坞\n\n1. 拆模块" }] }, "plan") === "重构终端坞",
   );
-  check("N 提问提醒同受总开关门控", comps.notifyDiffCore(st7, { ...listOf(rows7, null), pending: pendingOf("n8", { key: "question:3", kind: "question", questions: [{ question: "又问？" }] }) }, { notifyEnabled: false }).length === 0);
-  const ev8 = comps.notifyDiffCore(
-    st7,
-    { ...listOf(rows7, null), pending: pendingOf("n8", { key: "approval:1", kind: "approval", toolName: "pwsh", reason: "" }) },
-    cfgAll,
-  );
-  check("N 批准请求发通知（无理由时用工具名兜底）", ev8.length === 1 && ev8[0].kind === "approval" && /pwsh/.test(ev8[0].body));
-  const ev9 = comps.notifyDiffCore(
-    st7,
-    { ...listOf(rows7, null), foreground: true, pending: pendingOf("n8", { key: "question:9", kind: "question", questions: [{ question: "已在跑的另一问" }] }) },
-    cfgAll,
-  );
-  check("N 前台但提问的是当前没打开的会话：照发", ev9.length === 1 && ev9[0].kind === "question");
-  // 前台 + 当前会话的待回应 → 不打扰（composer 里已经摆着）
   check(
-    "N 前台且待回应就在当前会话：不打扰",
-    comps.notifyDiffCore(freshState(), { ...listOf([{ id: "n10", running: true }], "n10"), foreground: true, pending: pendingOf("n10", { key: "question:8", kind: "question", questions: [{ question: "x" }] }) }, cfgAll).length === 0,
+    "N 计划无标题时退回提问原文",
+    comps.notifyBodyOf({ questions: [{ question: "批准吗？", detail: "没有标题的计划" }] }, "plan") === "批准吗？",
   );
-  // 会话消失 → 状态回收（同 id 再来按新会话处理）
+  check("N 正文折叠空白并按上限截断", comps.notifyBodyOf({ questions: [{ question: "  换行\n与   连续空白  " }] }, "question") === "换行 与 连续空白");
+
+  // 会话消失 → 沿回收（列表里没有的会话不再参与判定）
   const st8 = freshState();
   const rows8 = [{ id: "n11", running: true }];
   comps.notifyDiffCore(st8, listOf(rows8, null), cfgAll);
   comps.notifyDiffCore(st8, { ids: [], byId: {}, current: undefined }, cfgAll);
-  check("N 会话消失后状态回收", !st8.running.has("n11") && !st8.pendingKey.has("n11"));
-
-  // —— 两个观察口去重：remote 瀑布事件路径（seen 里记的是 questions 数组，官方
-  //    待回应投影存的是同一个引用）先处置过的请求，投影那一路不能再提醒一遍 ——
-  const st9 = freshState();
-  const rows9 = [{ id: "n12", running: true }];
-  const seenSet = new WeakSet();
-  const qArr = [{ question: "去不去？" }];
-  seenSet.add(qArr);
-  comps.notifyDiffCore(st9, listOf(rows9, null), cfgAll); // 首帧播种
-  check(
-    "N 事件路径已处置的提问，投影路径不重复提醒",
-    comps.notifyDiffCore(st9, { ...listOf(rows9, null), pending: pendingOf("n12", { key: "question:20", kind: "question", questions: qArr }), seen: seenSet }, cfgAll).length === 0,
-  );
-  check(
-    "N seen 只挡同一次请求（另一次提问照发）",
-    comps.notifyDiffCore(st9, { ...listOf(rows9, null), pending: pendingOf("n12", { key: "question:21", kind: "question", questions: [{ question: "另一问" }] }), seen: seenSet }, cfgAll).length === 1,
-  );
-
-  // —— 计划评审（exit_plan_mode 的 intent=plan-review，走同一条 user-questions 请求）
-  //    单独成类：标题走「等你批准计划」，正文取计划 markdown 的首个标题 ——
-  const st10 = freshState();
-  const rows10 = [{ id: "n13", running: true, title: "项目 B" }];
-  comps.notifyDiffCore(st10, listOf(rows10, null), cfgAll); // 首帧播种
-  const evPlan = comps.notifyDiffCore(
-    st10,
-    {
-      ...listOf(rows10, null),
-      pending: pendingOf("n13", {
-        key: "question:30",
-        kind: "plan-review",
-        questions: [{ question: "Approve this plan and leave plan mode?", detail: "# 重构终端坞\n\n1. 拆模块" }],
-      }),
-    },
-    cfgAll,
-  );
-  check("N 计划评审单独成类，正文取计划首标题", evPlan.length === 1 && evPlan[0].kind === "plan" && evPlan[0].body === "重构终端坞" && evPlan[0].title === "项目 B");
-  check(
-    "N 计划评审无标题时退回提问原文",
-    comps.notifyDiffCore(st10, { ...listOf(rows10, null), pending: pendingOf("n13", { key: "question:31", kind: "plan-review", questions: [{ question: "批准吗？", detail: "没有标题的计划" }] }) }, cfgAll)[0]?.body === "批准吗？",
-  );
-  check(
-    "N 计划提醒同受总开关门控",
-    comps.notifyDiffCore(st10, { ...listOf(rows10, null), pending: pendingOf("n13", { key: "question:32", kind: "plan-review", questions: [{ question: "x", detail: "# Y" }] }) }, { notifyEnabled: false }).length === 0,
-  );
+  check("N 会话消失后状态回收", !st8.running.has("n11"));
 }
 // 10e) 收尾判定（notifyCompleteSettled 依赖注入直测）：限流失败也会让 running 落地，
 //      续跑器 2s 后才排「继续」——延迟判定必须把待续跑的失败挡掉不发通知

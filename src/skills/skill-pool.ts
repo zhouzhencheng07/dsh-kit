@@ -140,7 +140,7 @@ export function defaultPoolDir(): string {
   return kitPath(POOL_DIRNAME)
 }
 
-/** 旧版把池放在 <DSH_HOME>/skill-pool：搬进 dsh-kit/ 后重指工作区里那些绝对路径链接 */
+/** 老位置的池搬进 dsh-kit/，并重指工作区里那些绝对路径链接 */
 function adoptLegacyPool(): void {
   if (adoptLegacy(path.join(dshHome(), POOL_DIRNAME), defaultPoolDir())) relinkMounts(defaultPoolDir())
 }

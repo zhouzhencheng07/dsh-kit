@@ -18,10 +18,9 @@
 //     缺 sidebarRight 服务时只剩 getKitUi() 侧的存在性补丁——入口按钮
 //     不报错，签由官方侧自己决定要不要出现。
 //   功能存在性（getKitUi()）：schedOpen/browserOpen/vaultOpen 是功能签在场
-//     （入口按钮选中态与角标读它）；activeFeature 是当前激活的功能（Esc 关当前
-//     激活那张签的判据）。「开着哪些内容」不在这儿存——那是官方签表，
-//     经 rightbarItems/useRightbarItems 读。索引类视图（知识库目录树）住侧栏
-//     sidebar.workspaces 单槽，点条目开对应右栏签。
+//     （入口按钮选中态与角标读它）。「开着哪些内容」与「哪张签激活」都不在这儿存
+//     ——那是官方签表，经 rightbarItems/useRightbarItems/activeRightbarFeature 读。
+//     索引类视图（知识库目录树）住侧栏 sidebar.workspaces 单槽，点条目开对应右栏签。
 //   文件树/源代码管理：面板群与宿主端点归 dsh-kit/files 组件半边（端点路径
 //     /dsh-kit/*），侧栏浏览区的 tree/git 分支经 kitBase.sidebarView 座回到本包
 //     的 sidebar.workspaces 渲染器单槽分发；本包保留右栏「差异」pane 正文
@@ -467,10 +466,11 @@ window.__ModuleLoader__.load({
     // 底座单例持有：入口按钮（composer 工具行）与右栏 pane 宿主是多个独立槽位
     // 组件（分属不同组件半边），状态必须跨槽共享：模块级不可变快照 +
     // useSyncExternalStore 订阅（getSnapshot 返回模块绑定值，恒定引用直到 set 替换）。
-    // 功能存在性（open 位）与激活位（activeFeature）分离：打开某功能 = 确保签
-    // 存在并激活，切走不丢状态。内容类（diff / 知识库页 / 浏览器页）是一内容一签，
-    // 签表归官方，kitUi 不留清单；文件树与对话区点击走官方右栏文件签，不进这里。
-    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false, activeFeature: null };
+    // 功能存在性只记 open 位：打开某功能 = 确保签在，切走不丢状态。「哪张签是激活的」
+    // 归官方签表（activeRightbarFeature 读它），kitUi 不另存。内容类（diff /
+    // 知识库页 / 浏览器页）是一内容一签，签表也归官方；文件树与对话区点击走官方
+    // 右栏文件签，不进这里。
+    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false };
     // terminals/activeTermId/termDockOpen 是 dsh-kit-terminal 组件的水位（入口与坞
     // 分属两个槽位，状态必须共享一份）；本文件只读 termDockOpen 一处——Esc 收起坞。
     const kitUiListeners = new Set();
@@ -490,26 +490,18 @@ window.__ModuleLoader__.load({
     const baseName = (p) => String(p ?? "").split(/[\\/]/).pop() ?? "";
     const pageBasename = (p) => baseName(p).replace(/\.(md|markdown)$/i, "");
 
-    /** 关一个功能签：清存在性；关的是激活签时激活位顺延剩余签 */
+    /** 关一个功能签：只清存在性（激活与否归官方签表，这里不操心） */
     function closeFeatureTab(ui, tab) {
-      const patch = {};
-      if (tab === "schedule") patch.schedOpen = false;
-      else if (tab === "vault") patch.vaultOpen = false;
-      else patch.browserOpen = false;
-      if (ui.activeFeature === tab) {
-        const remaining = [];
-        if (tab !== "schedule" && ui.schedOpen) remaining.push("schedule");
-        if (tab !== "browser" && ui.browserOpen) remaining.push("browser");
-        patch.activeFeature = remaining[0] ?? null;
-      }
-      return patch;
+      if (tab === "schedule") return { schedOpen: false };
+      if (tab === "vault") return { vaultOpen: false };
+      return { browserOpen: false };
     }
-    /** 打开/激活一个功能签（输入行入口与自动跟随共用）：确保存在并
-     *  激活、不清别的标签。浏览器不做抑制（agent 干活必回眼前） */
+    /** 打开一个功能签（输入行入口与自动跟随共用）：确保存在，不清别的签。
+     *  浏览器不做抑制（agent 干活必回眼前） */
     function openFeatureTab(ui, tab) {
-      if (tab === "schedule") return { schedOpen: true, activeFeature: "schedule" };
-      if (tab === "vault") return { vaultOpen: true, activeFeature: "vault" };
-      return { browserOpen: true, activeFeature: "browser" };
+      if (tab === "schedule") return { schedOpen: true };
+      if (tab === "vault") return { vaultOpen: true };
+      return { browserOpen: true };
     }
 
     /** 功能 → dock 签映射（页类型注册表；kind 即 openTab 用的类型名）。
@@ -765,7 +757,6 @@ window.__ModuleLoader__.load({
       if (deleted === true) q.push("d=1");
       if (typeof commit === "string" && commit !== "") q.push("c=" + encodeURIComponent(commit));
       openRightbarItem("file", path, q.join("&"));
-      setKitUi({ activeFeature: "file" });
       trimDiffTabs(path);
     }
     /** 本签当前是否可见（官方口径：前台会话 + 右栏展开 + 本签激活）——停轮询用 */
@@ -3319,7 +3310,6 @@ ellipsis，窄列只截字不破版 */
     function openVaultPageAndDock(path, anchor) {
       if (!rightbarSeat.available) return;
       openRightbarItem("vault", path);
-      setKitUi({ activeFeature: "vault" });
       vaultPendingAnchor = typeof anchor === "string" && anchor !== "" ? { path, anchor } : null;
     }
     /** 点击路径落知识库标签（树行/对话拦截器共用）：先落地再派发——知识库未
@@ -6293,7 +6283,7 @@ ellipsis，窄列只截字不破版 */
     const dock = kit;
     const {
       KitTip, kitGetJson, kitPostJson, kitJson, resolveZh, subscribeLocale, getLocaleVersion,
-      writeClipboard, registerNavIcon, useCurrentRow, t: rootT,
+      writeClipboard, registerNavIcon, t: rootT,
     } = dock;
 
     // 组件私有文案（手机访问页与配置页）
@@ -9377,7 +9367,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // ── dsh-kit/monitor 组件（用量与监视）──
 // dsh-kit/monitor 浏览器半边 —— 用量与监视组件的 client 面。
 // 现收纳：余额与用量芯片（UsageLine）+ 会话监视（死循环打断的 MonitorLine）
-// + 会话通知（桌面通知/标题闪烁）。
+// + 会话通知（系统通知）。
 //
 // 数据走宿主 /dsh-kit/usage（key 在宿主侧复用模型配置，浏览器拿不到）。状态带
 // 右缘只出**一张**芯片：当前会话选中的模型 provider（modelDirectories 服务按
@@ -9861,8 +9851,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     }
 
     // ─────────── 会话通知（回合收尾 / 上下文压缩 / agent 提问）───────────
-    // 页面不在前台、或事件不属于当前打开的会话时弹一条桌面通知（浏览器
-    // Notification API）；未授权 / 非安全上下文（手机走局域网 http）退标题闪烁。
+    // 页面不在前台、或事件不属于当前打开的会话时弹一条系统通知（浏览器
+    // Notification API）；不支持或被拒就是没有提醒，没有第二层替代标记。
     // 纯浏览器端，宿主只提供 settings 字段。三类事件的观察口不同：
     //   回合收尾 ← sessions.list 快照的 running（订阅式而非轮询：后台标签的定时器
     //     被浏览器节流到分钟级，而宿主的推送不受影响）；
@@ -9873,16 +9863,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     //     官方 UI 只在会话「上台」时才注册待回应，后台会话的请求在它那里是空档，
     //     本插件挂在根 ctx 上能收到全部会话的请求（会话身份从事件 ctx 的 scope 取）；
     //     计划评审（exit_plan_mode 的 intent=plan-review）走的是同一条 user-questions
-    //     请求，只是另成一类文案与正文取法（见 notifyKindOf）。官方待回应投影
-    //     （uiSession.pendingInteractions）只作补充口存在——两者是同一次请求的两个
-    //     观察口，谁先看到都能提醒，去重见 notifySeenRequests。
+    //     请求，只是另成一类文案与正文取法（见 notifyKindOf）。
     // 抑制规则见 notifyWanted（一个总开关管全部提醒，不分类配置）；页面完全关掉时
     // 浏览器端无从运行，无通知可言。
     const notifyState = {
       /** sessionId -> 上次已知 running（沿检测基线；首帧只播种不发通知） */
       running: new Map(),
-      /** sessionId -> 已提醒过的待回应 key（同一请求只提醒一次） */
-      pendingKey: new Map(),
       /** sessionId -> {seq}：事件窗口已读到的持久 seq（压缩沿的基线，首帧只播种） */
       compactions: new Map(),
       /** sessionId -> 最近一次 turn/end 的 reason.kind：收尾通知的分类依据。
@@ -9896,10 +9882,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       /** 点通知的导航口：官方 uiWorkspace（缺位时只聚焦窗口） */
       nav: null,
     };
-    /** 事件路径已处置过的提问请求（key 用 questions 数组——待回应投影里存的是
-     *  同一个引用，据此让两条观察口只提醒一次）。批准请求没有共用引用可用，靠
-     *  通知 tag 由浏览器归并 */
-    const notifySeenRequests = new WeakSet();
     const NOTIFY_BODY_MAX = 140; // 提问正文截断长度：桌面通知两行即满，长了被裁
 
     /** 折叠空白并按上限截断（通知正文只取一行；超长补省略号） */
@@ -9946,11 +9928,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     }
 
     /**
-     * 通知判定核心（依赖注入，render-check 直测）：把列表快照与待回应表投影成
-     * 应发通知，顺带把沿写回 state。抑制：见 notifyWanted；子会话（导航细节，
-     * 属噪音）与首帧播种也不发。
-     * @param input {ids,byId,current,foreground,pending:Map<sessionId,interaction>,seen:WeakSet}
-     * @returns [{kind:"complete"|"question"|"approval", sessionId, title, body?}]
+     * 通知判定核心（依赖注入，render-check 直测）：把列表快照投影成应发的收尾通知，
+     * 顺带把沿写回 state。抑制：见 notifyWanted；子会话（导航细节，属噪音）与首帧
+     * 播种也不发。提问/批准不走这里——它们是既成事实，由事件瀑布那条口直接投递。
+     * @param input {ids,byId,current,foreground}
+     * @returns [{kind: TURN_END_KINDS 之一, sessionId, title}]
      */
     function notifyDiffCore(state, input, cfg) {
       const events = [];
@@ -9972,23 +9954,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         if (wanted(id)) events.push({ kind: notifyTurnKind(state.turnEnd?.get(id)), sessionId: id, title: titleOf(id) });
       }
       for (const id of [...state.running.keys()]) if (!seen.has(id)) state.running.delete(id);
-      // 待回应：key 变化即新请求（一个会话同时只投影一个待回应）。事件路径已经
-      // 处置过的那次请求直接跳过——同一次提问被两条观察口各报一次只算一次
-      const pending = input.pending instanceof Map ? input.pending : new Map();
-      const seenRequests = input.seen instanceof WeakSet ? input.seen : null;
-      const pendingSeen = new Set();
-      for (const [id, interaction] of pending) {
-        if (!interaction || typeof interaction.key !== "string") continue;
-        pendingSeen.add(id);
-        if (seenRequests && seenRequests.has(interaction.questions ?? interaction)) continue;
-        if (state.pendingKey.get(id) === interaction.key) continue;
-        state.pendingKey.set(id, interaction.key);
-        if (!state.primed) continue;
-        const kind = interaction.kind === "approval" ? "approval" : interaction.kind === "plan-review" ? "plan" : "question";
-        if (!wanted(id)) continue;
-        events.push({ kind, sessionId: id, title: titleOf(id), body: notifyBodyOf(interaction, kind) });
-      }
-      for (const id of [...state.pendingKey.keys()]) if (!pendingSeen.has(id)) state.pendingKey.delete(id);
       state.primed = true;
       return events;
     }
@@ -10160,10 +10125,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       }
     }
 
-    /** 投递一条系统通知。**不带 tag**：Windows 把同 tag 的新通知当「替换」，旧的那条
-     *  不在时就只替换不展示（桌面端实测：带 tag 的通知一条都不弹） */
+    /** 投递一条系统通知。**不带 tag**：Windows 把同 tag 的新通知当「替换」，旧的
+     *  那条不在时就只替换、不展示 */
     function notifyDeliver(ev) {
-      // 五类收尾共用「点击回到该会话」这个正文，只有提问/批准/计划评审各带自己的
+      // 除提问/批准/计划评审外都共用「点击回到该会话」这个正文
       const TITLE_BY_KIND = {
         complete: "notifyCompleteTitle",
         error: "notifyErrorTitle",
@@ -10209,26 +10174,16 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const TURN_END_KINDS = new Set(["complete", "error", "aborted", "blocked", "maxTokens", "loopBreak"]);
 
     /** 事件入口（订阅回调与首帧共用）：读快照 → 核心判定 → 逐条投递 */
-    function notifyEvaluate(sessions, pendingStore) {
+    function notifyEvaluate(sessions) {
       let cfg;
       let list;
-      let pending = null;
       try {
         cfg = cfgFromSnapshot(getCfgSnapshot());
         list = sessions.list.getSnapshot();
       } catch {
         return; // 服务异常：本轮跳过，下条推送再来
       }
-      try {
-        if (pendingStore && typeof pendingStore.getSnapshot === "function") pending = pendingStore.getSnapshot();
-      } catch {
-        /* 待回应源异常：只报完成 */
-      }
-      const events = notifyDiffCore(
-        notifyState,
-        { ids: list.ids, byId: list.byId, current: mainRowOf(list)?.id, foreground: notifyForeground(), pending, seen: notifySeenRequests },
-        cfg,
-      );
+      const events = notifyDiffCore(notifyState, { ids: list.ids, byId: list.byId, current: mainRowOf(list)?.id, foreground: notifyForeground() }, cfg);
       for (const ev of events) {
         // 只有回合收尾要落定判定（到点仍在列表且空闲）；提问/批准是既成事实，直接发。
         if (TURN_END_KINDS.has(ev.kind)) notifyCompleteSettled(sessions, ev);
@@ -10322,8 +10277,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         try {
           const sessionId = notifySessionId(sessions, sessions.scopeOf(this));
           if (sessionId !== undefined) {
-            // 先记账再投递：官方待回应投影稍后也会看到这次请求，别提醒两遍
-            notifySeenRequests.add(kind === "question" ? request.questions : request);
             notifyEventDeliver(sessions, notifyKindOf(kind, request), sessionId, request);
           }
         } catch {
@@ -10806,12 +10759,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           MonitorLine,
         ),
       );
-      // 会话通知：订阅官方两个数据源（就绪时机不保证，用 inject 等）。uiSession
-      // 缺位（精简组合）时只订阅列表——完成通知照发，提问通知降级为不发
+      // 会话通知：订阅官方数据源（就绪时机不保证，用 inject 等）
       ctx.inject(["sessions"], (sctx) => {
         const offs = [];
-        let pendingStore = null;
-        const evaluate = () => notifyEvaluate(sctx.sessions, pendingStore);
+        const evaluate = () => notifyEvaluate(sctx.sessions);
         // 点通知的导航口：uiWorkspace.openSession 是官方的一次 UI 导航动作
         // （选中会话 + 显示对话，内部管 mainView 引用计数与面板 reveal）。
         // 精简组合缺这个服务时，notifyOpenSession 只聚焦窗口。
@@ -10859,13 +10810,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           evaluate();
           syncCompactionSubs();
         };
-        if (typeof sctx.inject === "function") {
-          sctx.inject(["uiSession"], (uctx) => {
-            pendingStore = uctx.uiSession ? uctx.uiSession.pendingInteractions : null;
-            if (pendingStore && typeof pendingStore.subscribe === "function") offs.push(pendingStore.subscribe(evaluate));
-            evaluate();
-          });
-        }
         const listStore = sctx.sessions ? sctx.sessions.list : null;
         if (listStore && typeof listStore.subscribe === "function") offs.push(listStore.subscribe(sync));
         sync(); // 首帧播种：列表里已在跑的会话不补发通知，窗口里已有的压缩同理
@@ -10889,7 +10833,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       });
       // 提问 / 批准事件：旁听官方 remote 瀑布（根 ctx 上收全部会话的请求，含后台
       // 会话——官方 UI 只在会话上台时接管，那半边它接不到）。remote 服务缺位
-      // 时静默降级：只剩完成通知与官方待回应投影那一半
+      // 时静默降级：只剩回合收尾与压缩两类通知
       ctx.inject(["remote", "sessions"], (rctx) => {
         try {
           rctx.remote.$on("user-questions/request", notifyRequestListener(rctx.sessions, "question"));
@@ -10906,6 +10850,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     exports.monitorCyclePeriod = monitorCyclePeriod;
     exports.monitorLooksLooped = monitorLooksLooped;
     exports.notifyDiffCore = notifyDiffCore;
+    exports.notifyKindOf = notifyKindOf;
+    exports.notifyBodyOf = notifyBodyOf;
     exports.notifyCompactionCore = notifyCompactionCore;
     exports.notifyTurnKind = notifyTurnKind;
     exports.notifyCompleteSettled = notifyCompleteSettled;
@@ -11566,11 +11512,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         if (text === "") return;
         const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `http://${text}`;
         setDraft(withScheme);
-        // 先本地反馈（宿主 navigated 事件随后校正）；humanOpen 作用于观察页
+        // 先本地反馈（宿主 navigated 事件随后校正）；一签一页，作用于本签那张页
         setState((prev) => ({
           ...prev,
           running: true,
-          pages: (prev.pages ?? []).map((p) => (p.viewed ? { ...p, url: withScheme, title: "" } : p)),
+          pages: (prev.pages ?? []).map((p) => (p.tabId === pageIdRef.current ? { ...p, url: withScheme, title: "" } : p)),
         }));
         try {
           wsRef.current?.send(JSON.stringify({ t: "open", url: withScheme, scope: scopeRef.current ?? "", tabId: pageIdRef.current }));

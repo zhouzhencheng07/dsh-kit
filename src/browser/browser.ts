@@ -197,7 +197,8 @@ interface ScopeState {
   dialogs: Map<number, Array<{ type: string; message: string; at: number }>>
   /** agent 默认目标页 */
   activeId: number | null
-  /** 面板观察页：帧流、人机共驾输入、面板 URL 栏都作用于它 */
+  /** 面板默认落在哪一页：没带页 id 的调用（工具面调用、URL 栏裸调用）落它。
+   *  帧流/输入/nav 这些带 tabId 的都不看它 */
   viewId: number | null
   /** 帧流订阅者，按页记（页 id → 订阅者 → 投递函数）。同页多张签各挂各的连接，
    *  不同页各投各的——投递槽必须按页分开，否则后开的签会顶掉先开那张的 */
@@ -1202,9 +1203,8 @@ export class BrowserService {
     } catch {}
   }
 
-  /** 本分区观察页换了/页没了，按「有观察者就有流」重挂。
-   *  关键：观察者先于页到来时（面板点开即 watch，浏览器冷启动几秒后才认领到页）
-   *  这里必须补挂——否则流永远不建，面板一直空白 */
+  /** 本分区有观察者却缺流时补挂（如 CDP 会话被别处拆了）。页还不存在时
+   *  watcherOpen 会直接拒掉，那半边由客户端重开签补，不走这里 */
   private async _resyncStream(scope: string, tabId: number): Promise<void> {
     const s = this._s(scope)
     if (s.streams.has(tabId)) return
@@ -1282,12 +1282,15 @@ export class BrowserService {
     const context = this._context
     if (!context) return
     this._context = null
+    // 先摘映射再拆流：_detachStream 开头会 _s(scope) 重建分区，清表在前会让它拿到
+    // 一个空壳、s.streams 里根本没有那条流，于是 stopScreencast/detach 一次都不发，
+    // 每关一次还留一条空分区。这里反过来——拿着捕获的 s 拆完，最后才清表
     const streams = [...this._scopes.entries()]
-    this._scopes.clear()
     this._unclaimed = []
     for (const [key, s] of streams) {
       for (const tabId of [...s.streams.keys()]) await this._detachStream(key, tabId)
     }
+    this._scopes.clear()
     try {
       await context.close()
     } catch {}

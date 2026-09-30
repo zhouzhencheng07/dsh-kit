@@ -1110,9 +1110,8 @@ export class BrowserService {
         }
         catch { }
     }
-    /** 本分区观察页换了/页没了，按「有观察者就有流」重挂。
-     *  关键：观察者先于页到来时（面板点开即 watch，浏览器冷启动几秒后才认领到页）
-     *  这里必须补挂——否则流永远不建，面板一直空白 */
+    /** 本分区有观察者却缺流时补挂（如 CDP 会话被别处拆了）。页还不存在时
+     *  watcherOpen 会直接拒掉，那半边由客户端重开签补，不走这里 */
     async _resyncStream(scope, tabId) {
         const s = this._s(scope);
         if (s.streams.has(tabId))
@@ -1191,13 +1190,16 @@ export class BrowserService {
         if (!context)
             return;
         this._context = null;
+        // 先摘映射再拆流：_detachStream 开头会 _s(scope) 重建分区，清表在前会让它拿到
+        // 一个空壳、s.streams 里根本没有那条流，于是 stopScreencast/detach 一次都不发，
+        // 每关一次还留一条空分区。这里反过来——拿着捕获的 s 拆完，最后才清表
         const streams = [...this._scopes.entries()];
-        this._scopes.clear();
         this._unclaimed = [];
         for (const [key, s] of streams) {
             for (const tabId of [...s.streams.keys()])
                 await this._detachStream(key, tabId);
         }
+        this._scopes.clear();
         try {
             await context.close();
         }

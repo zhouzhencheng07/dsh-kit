@@ -196,8 +196,8 @@ export async function apply(ctx, config = {}) {
                 },
             });
             // ── 浏览器面板 WebSocket 端点（browser.ts 的面板面）──
-            // 协议：hello（连接即回 state）→ 浏览器端；watch {on, tabId}（**按页**订阅帧流，
-            // 每页一条 CDP 会话、引用计数 0 时停流）/ open {url, tabId}（URL 栏导航，作用于
+            // 协议：连接即回 state → 浏览器端；watch {on, tabId}（**按页**订阅帧流，每页
+            // 一条 CDP 会话、该页无订阅者即停流）/ open {url, tabId}（URL 栏导航，作用于
             // 该页）/ closeTab {tabId}（关页）/
             // nav {op, tabId}（back/forward/reload，作用于该页）/ newTab（＋，回包带新页 id）/
             // input {…, tabId}（人机共驾，作用于该页）。面板一签一页，一连接只画自己那张签的页，
@@ -224,21 +224,6 @@ export async function apply(ctx, config = {}) {
                         if (scope !== undefined && key !== scope)
                             continue;
                         sendTo(ws, obj);
-                    }
-                };
-                /** 预序列化广播：帧体是几百 KB 的 base64 字符串，逐连接 JSON.stringify 会把
-                 *  同一份大字符串重复编码 N 次——一次编好，同分区的连接复用同一个串 */
-                const broadcastJson = (json, scope) => {
-                    for (const [ws, key] of browserSockets) {
-                        if (key !== scope)
-                            continue;
-                        try {
-                            if (ws.readyState === 1)
-                                ws.send(json);
-                        }
-                        catch {
-                            // 连接正在断开
-                        }
                     }
                 };
                 /** 回发某条连接自己分区的 state（连接认领分区、分区事件、全局事件都走它） */
@@ -279,8 +264,15 @@ export async function apply(ctx, config = {}) {
                     const scopeOfConn = () => browserSockets.get(ws) ?? DEFAULT_SCOPE;
                     const openWatch = (scope, tabId) => {
                         // 帧按页投：同页多连接复路同一条 CDP 会话，不同页各挂各的流。连接本身
-                        // 当订阅者标识，退订只摘自己那一份
-                        void browserService.watcherOpen(scope, tabId, ws, (frameTabId, data) => sendTo(ws, { t: 'frame', tabId: frameTabId, data }));
+                        // 当订阅者标识，退订只摘自己那一份。
+                        // 失败必须回话：页不存在（宿主重启后页号从头数，而签地址里还留着旧页号）
+                        // 时静默丢弃的话，这张签会永久空白且没有任何症状
+                        void browserService
+                            .watcherOpen(scope, tabId, ws, (frameTabId, data) => sendTo(ws, { t: 'frame', tabId: frameTabId, data }))
+                            .then((r) => {
+                            if (!r.ok)
+                                sendTo(ws, { t: 'event', kind: 'error', message: r.error });
+                        });
                     };
                     const closeWatch = () => {
                         if (watched === null)
@@ -317,7 +309,7 @@ export async function apply(ctx, config = {}) {
                         if (msg.t === 'watch') {
                             // 看帧不等于开浏览器：面板打开/重新激活都只订流，浏览器由「有理由的
                             // 动作」拉起（地址栏导航、「＋」新页签、agent 工具、对话链接改投）。
-                            // 页比观察者晚到也没关系——认领页时的 _resyncStream 会补挂流。
+                            // 页还不存在时订阅会被拒并回一条 error（见 openWatch），客户端重开签即可。
                             const want = msg.on === true && msg.tabId !== undefined ? Number(msg.tabId) : null;
                             if (want !== null && (watched === null || watched.scope !== scope || watched.tabId !== want)) {
                                 closeWatch();

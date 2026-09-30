@@ -330,7 +330,11 @@ export function parseCookies(header) {
  */
 export function defaultStateFile() {
     const next = kitPath('phone-gateway.json');
-    adoptLegacy(path.join(dshHome(), 'data', 'dsh-kit-phone-gateway.json'), next);
+    const legacy = path.join(dshHome(), 'data', 'dsh-kit-phone-gateway.json');
+    // 搬不动（跨设备、被占用）就继续读旧位置：直接返回新路径会被当成「文件不存在」
+    // 而重新生成令牌，手机端旧链接全部失效且无任何提示
+    if (!adoptLegacy(legacy, next) && fs.existsSync(legacy))
+        return legacy;
     return next;
 }
 /**

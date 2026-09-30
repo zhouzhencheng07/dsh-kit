@@ -1,6 +1,6 @@
 // 技能池挂载：载体根选择 + git 体检/忽略 + 目录链接的建立与移除。
 //
-// 池（$DSH_HOME/skill-pool）不挂扫描根，要让某个工作区看见池里的技能，就得在该工作区
+// 池（<DSH_HOME>/dsh-kit/skill-pool）不挂扫描根，要让某个工作区看见池里的技能，就得在该工作区
 // 的一个项目级根里建一条指向池的目录链接（Windows 用 junction、POSIX 用目录 symlink）。
 // 两个项目级根放什么由用户自己决定：插件不判断哪个根"在用"、也不默认哪一根。这个工作区
 // 第一次挂池技能时面板给出两个根让用户选，选定后记进策略文件，之后所有池链接（含入池
@@ -73,7 +73,9 @@ interface Policy {
 
 function policyFile(): string {
   const next = kitPath('skills.json')
-  adoptLegacy(path.join(dshHome(), 'data', 'dsh-kit-skills.json'), next)
+  const legacy = path.join(dshHome(), 'data', 'dsh-kit-skills.json')
+  // 搬不动就继续读旧位置：读不到会被当成空策略，挂载记录与载体选择全丢
+  if (!adoptLegacy(legacy, next) && fs.existsSync(legacy)) return legacy
   return next
 }
 
@@ -232,11 +234,14 @@ export function relinkMounts(poolDir: string): number {
         continue
       }
       unmountLink(rec.link)
-      const rebuilt = mountLink(path.join(poolDir, name), path.dirname(rec.link))
+      // 目标取记录自己的 rec.pool：它才是登记事实（mountAlive 也按它判），拿 map 键
+      // 拼会在键与记录不一致时把链接指到另一个技能目录
+      const rebuilt = mountLink(path.join(poolDir, rec.pool), path.dirname(rec.link))
       if (rebuilt.ok) fixed++
       else kept.push(rec)
     }
-    if (kept.length !== list.length || list.some((rec, i) => kept[i] !== rec)) changed = true
+    // kept 只从 list 按序取，长度不变即内容不变；重指成功的条目不进 kept，长度必变
+    if (kept.length !== list.length) changed = true
     if (kept.length === 0) delete mounts[name]
     else mounts[name] = kept
   }

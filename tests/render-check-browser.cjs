@@ -270,7 +270,7 @@ async function checkApply() {
   );
   check(
     "根半边仍保留 kitUi 的 browserOpen 座（pane 挂载即在场的跨槽存在位）",
-    bundleSrc.includes("else patch.browserOpen = false;") && bundleSrc.includes("useFeaturePresence(\"browser\")"),
+    bundleSrc.includes("return { browserOpen: false };") && bundleSrc.includes("useFeaturePresence(\"browser\")"),
   );
   check(
     "浏览器页类型按 dsh-resource 地址认领（一页一签，标题走标题槽）",
