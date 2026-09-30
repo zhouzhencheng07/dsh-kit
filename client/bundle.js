@@ -6832,6 +6832,10 @@ ellipsis，窄列只截字不破版 */
       diffBaseRoot: "根提交：与空树对比（全部为新增）",
       diffEmpty: "（无未暂存差异）",
       diffUntracked: "未跟踪文件，暂无 diff",
+      diffOpenFile: "在侧边栏打开整个文件",
+      diffOpenFileShort: "全文",
+      diffSplit: "双栏对比",
+      diffUnified: "单栏对比",
       contentLoading: "加载中…",
       contentEmpty: "（空文件）",
       pvDeletedNote: "文件已删除——此标签仅展示删除 diff；可在源代码管理里 ↩ 恢复文件",
@@ -6933,6 +6937,10 @@ ellipsis，窄列只截字不破版 */
       diffBaseRoot: "Root commit: diffed against empty tree (all additions)",
       diffEmpty: "(no unstaged changes)",
       diffUntracked: "Untracked file, no diff yet",
+      diffOpenFile: "Open the whole file in the sidebar",
+      diffOpenFileShort: "Full",
+      diffSplit: "Side-by-side",
+      diffUnified: "Single column",
       contentLoading: "Loading…",
       contentEmpty: "(empty file)",
       pvDeletedNote: "File deleted — this tab shows the deletion diff only; restore it via ↩ in source control",
@@ -7055,10 +7063,30 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 .dshk-chg-head{cursor:pointer;user-select:none}
 .dshk-chg-chev{flex:none;font-size:9px;line-height:1;color:var(--dsw-alias-label-tertiary);transition:transform .15s var(--ds-ease-in-out);display:inline-block}
 .dshk-chg-chev[data-open]{transform:rotate(90deg)}
-/* 全文件着色 diff：完整内容内联渲染，删除红/新增绿/上下文正常 */
+/* 无基线的整文件着色（未跟踪 / 已删除）：新增绿、删除红 */
 .dshk-inline{font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-all;padding:4px 0;user-select:text;color:var(--dsw-alias-label-secondary)}
 .dshk-il-add{color:#0dbc79;background:rgba(13,188,121,.08)}
 .dshk-il-del{color:#cd3131;background:rgba(205,49,49,.08)}
+/* hunk 视图：只渲染改动附近。行号列定宽不折行，长行交给文本列 */
+.dshk-hunks{font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;padding:4px 0 12px;user-select:text;color:var(--dsw-alias-label-secondary)}
+.dshk-hunk+.dshk-hunk{margin-top:8px}
+.dshk-hunkhead{position:sticky;top:0;z-index:1;padding:2px 8px;font-size:11px;color:#4daafc;background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-drow{display:flex;align-items:flex-start;white-space:pre-wrap;word-break:break-all}
+.dshk-dno{flex:none;width:36px;padding:0 6px;text-align:right;color:var(--dsw-alias-label-tertiary);opacity:.65;user-select:none;font-variant-numeric:tabular-nums}
+.dshk-dtext{flex:1;min-width:0;padding-right:8px}
+.dshk-drow-add{background:rgba(13,188,121,.08)}
+.dshk-drow-add .dshk-dtext{color:#0dbc79}
+.dshk-drow-del{background:rgba(205,49,49,.08)}
+.dshk-drow-del .dshk-dtext{color:#cd3131}
+/* 双栏：左右各半，缺的一侧留空占位，中缝一条线 */
+.dshk-dcell{flex:1 1 50%;min-width:0;display:flex;align-items:flex-start;white-space:pre-wrap;word-break:break-all}
+.dshk-dcell+.dshk-dcell{border-left:1px solid var(--dsw-alias-border-l1)}
+.dshk-dcell-add{background:rgba(13,188,121,.08)}
+.dshk-dcell-add .dshk-dtext{color:#0dbc79}
+.dshk-dcell-del{background:rgba(205,49,49,.08)}
+.dshk-dcell-del .dshk-dtext{color:#cd3131}
+.dshk-dcell-void{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-textbtn{width:auto;padding:0 8px;font-size:11px}
 /* 「更改」清单（源代码管理视图） */
 .dshk-changes{margin:2px 4px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;overflow:hidden}
 .dshk-chg-head{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:11px}
@@ -7349,45 +7377,53 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
   }
 
     /**
-     * 把 unified patch 的 hunk 套回完整新文件内容，产出全文件着色行：
-     * [type, text]，type ∈ ctx | add | del。上下文行来自新文件本体，
-     * 删除行插在原位、不推进新文件游标。hunk 与内容对不上时返回 null（调用方回退原始 patch）。
+     * 解析 unified patch 的 hunk 段：每行带新旧行号，只认 hunk（diff/index/---/+++
+     * 头与 "\ No newline" 之类杂项行跳过）。上下文行数由 git 决定——端点没给 -U。
+     * @param patch unified patch 文本
+     * @returns [{oldStart,oldLines,newStart,newLines,rows:[{kind,text,oldNo,newNo}]}]，无 hunk 时 null
      */
-    function buildInlineRows(patch, newLines) {
-      const lines = String(patch ?? "").split("\n");
-      const rows = [];
-      let idx = 0;
-      let i = 0;
-      let seenHunk = false;
-      while (i < lines.length && !/^@@ /.test(lines[i])) i++;
-      for (; i < lines.length; i++) {
-        const line = lines[i];
-        if (line.startsWith("diff ") || line.startsWith("index ")) break;
-        const m = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    function parsePatchHunks(patch) {
+      const hunks = [];
+      let cur = null;
+      let oldNo = 0;
+      let newNo = 0;
+      for (const line of String(patch ?? "").split("\n")) {
+        // hunk 之前有 diff/index 头部是常态，进了 hunk 再见到才是下一段文件
+        if (cur !== null && (line.startsWith("diff ") || line.startsWith("index "))) break;
+        const m = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
         if (m) {
-          seenHunk = true;
-          const newStart = parseInt(m[1], 10);
-          if (newStart < idx + 1) return null; // hunk 乱序，放弃内联
-          while (idx < newStart - 1) {
-            if (idx >= newLines.length) return null;
-            rows.push(["ctx", newLines[idx++]]);
-          }
+          oldNo = Number(m[1]);
+          newNo = Number(m[3]);
+          cur = { oldStart: oldNo, oldLines: m[2] === undefined ? 1 : Number(m[2]), newStart: newNo, newLines: m[4] === undefined ? 1 : Number(m[4]), rows: [] };
+          hunks.push(cur);
           continue;
         }
-        if (line.startsWith("+")) {
-          rows.push(["add", line.slice(1)]);
-          idx++;
-        } else if (line.startsWith("-")) {
-          rows.push(["del", line.slice(1)]);
-        } else if (line.startsWith(" ")) {
-          if (idx >= newLines.length) return null;
-          rows.push(["ctx", newLines[idx] === undefined ? line.slice(1) : newLines[idx]]);
-          idx++;
-        }
-        // "\ No newline at end of file" 等杂项行忽略
+        if (cur === null) continue;
+        if (line.startsWith("+")) cur.rows.push({ kind: "add", text: line.slice(1), oldNo: null, newNo: newNo++ });
+        else if (line.startsWith("-")) cur.rows.push({ kind: "del", text: line.slice(1), oldNo: oldNo++, newNo: null });
+        else if (line.startsWith(" ")) cur.rows.push({ kind: "ctx", text: line.slice(1), oldNo: oldNo++, newNo: newNo++ });
       }
-      while (idx < newLines.length) rows.push(["ctx", newLines[idx++]]);
-      return seenHunk ? rows : null;
+      return hunks.length > 0 ? hunks : null;
+    }
+
+    /** 双栏配对：连续的删除行与新增行按序两两成对，多出的一侧留空格；上下文行两侧同格 */
+    function splitRowsOf(rows) {
+      const out = [];
+      let i = 0;
+      while (i < rows.length) {
+        const row = rows[i];
+        if (row.kind === "ctx") {
+          out.push({ left: row, right: row });
+          i += 1;
+          continue;
+        }
+        const dels = [];
+        const adds = [];
+        while (i < rows.length && rows[i].kind === "del") dels.push(rows[i++]);
+        while (i < rows.length && rows[i].kind === "add") adds.push(rows[i++]);
+        for (let k = 0; k < Math.max(dels.length, adds.length); k += 1) out.push({ left: dels[k] ?? null, right: adds[k] ?? null });
+      }
+      return out;
     }
 
     function FolderIcon(props) {
@@ -8951,6 +8987,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const [state, setState] = react.useState({ phase: "loading" });
       const [diff, setDiff] = react.useState({ phase: "loading" });
       const [reloadNonce, setReloadNonce] = react.useState(0);
+      const [split, setSplit] = react.useState(false); // 双栏对比（单栏为默认，右栏窄）
       // 「盘上这份是不是我读的那份」：宿主 file 资源带版本号（watcher 推帧），
       // 读到的 diff 记下当时的版本，对不上就是文件被改过——内容留着，上面给一条
       // 提示条（旧内容不白屏，重载与否由人/开关定）
@@ -9016,9 +9053,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         reload();
       }, [version]);
 
-      // 内容读取：只服务于 diff 着色（常规视图的新像 = 盘上内容；未跟踪 = 整文件
-      // 按新增着色）。截断（>512KB）或读失败时着色回落原始 patch，不作为错误展示。
-      // 已删除文件读不到，不发请求
+      // 内容读取：只服务未跟踪文件（没有基线，整文件按新增着色）。有基线的文件
+      // 走 hunk 视图，上下文行数由 git 给，不需要新像。截断（>512KB）或读失败
+      // 只降级展示，不作为错误。已删除文件读不到，不发请求
       react.useEffect(() => {
         if (deleted === true) return undefined;
         const controller = new AbortController();
@@ -9033,12 +9070,75 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         return () => controller.abort();
       }, [path, reloadNonce, deleted]);
 
-      /** diff 视图：优先全文件着色（hunk 套回完整新像，删除红/新增绿）；
-       *  截断大文件或 hunk 对不上时回退原始 patch 渲染。新像来源两分支——
-       *  常规视图 = 当前盘上内容；commit 钉定模式 = 该提交时刻的内容（端点
-       *  随 diff 带回，盘上已是别的版本不能叠）。commit 模式下该提交已删除的
-       *  文件（新像不存在）与工作区删除文件一样纯红展示；内容缺失（过大/二进制）
-       *  回落原始 patch。顶部基线说明见 renderDiffView 包装层。 */
+      /** diff 视图：只渲染 hunk（单栏带行号 / 双栏并排，对齐官方「本轮改动」观感）——
+       *  长文件只改几行时不必翻整篇，上下文行数由 git 的 -U 决定（默认 3）。
+       *  没有 hunk（空/非 unified patch）才原样贴出。commit 模式下该提交已删除的
+       *  文件与工作区删除文件一样纯红展示。顶部基线说明见 renderDiffView 包装层。 */
+      /** hunk 头与 git 输出同形，便于和命令行结果对照 */
+      const hunkHeadOf = (h) => `@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`;
+      /** 单栏：每行「旧行号 新行号 文本」 */
+      const renderUnifiedHunks = (hunks) =>
+        jsxRuntime.jsx("div", {
+          className: "dshk-hunks",
+          children: hunks.map((h, hi) =>
+            jsxRuntime.jsxs(
+              "section",
+              {
+                className: "dshk-hunk",
+                children: [
+                  jsxRuntime.jsx("div", { className: "dshk-hunkhead", children: hunkHeadOf(h) }),
+                  ...h.rows.map((r, ri) =>
+                    jsxRuntime.jsxs(
+                      "div",
+                      {
+                        className: `dshk-drow dshk-drow-${r.kind}`,
+                        children: [
+                          jsxRuntime.jsx("span", { className: "dshk-dno", children: r.oldNo === null ? "" : String(r.oldNo) }),
+                          jsxRuntime.jsx("span", { className: "dshk-dno", children: r.newNo === null ? "" : String(r.newNo) }),
+                          jsxRuntime.jsx("span", { className: "dshk-dtext", children: r.text === "" ? " " : r.text }),
+                        ],
+                      },
+                      `${hi}-${ri}`,
+                    ),
+                  ),
+                ],
+              },
+              `h${hi}`,
+            ),
+          ),
+        });
+      /** 双栏的一格：缺的一侧留空占位，行号各取自己那侧 */
+      const splitCell = (cell, noKey) =>
+        jsxRuntime.jsxs("span", {
+          className: cell === null ? "dshk-dcell dshk-dcell-void" : `dshk-dcell dshk-dcell-${cell.kind}`,
+          children: [
+            jsxRuntime.jsx("span", { className: "dshk-dno", children: cell === null || cell[noKey] === null ? "" : String(cell[noKey]) }),
+            jsxRuntime.jsx("span", { className: "dshk-dtext", children: cell === null || cell.text === "" ? " " : cell.text }),
+          ],
+        });
+      const renderSplitHunks = (hunks) =>
+        jsxRuntime.jsx("div", {
+          className: "dshk-hunks",
+          children: hunks.map((h, hi) =>
+            jsxRuntime.jsxs(
+              "section",
+              {
+                className: "dshk-hunk",
+                children: [
+                  jsxRuntime.jsx("div", { className: "dshk-hunkhead", children: hunkHeadOf(h) }),
+                  ...splitRowsOf(h.rows).map((pair, ri) =>
+                    jsxRuntime.jsx(
+                      "div",
+                      { className: "dshk-drow", children: [splitCell(pair.left, "oldNo"), splitCell(pair.right, "newNo")] },
+                      `${hi}-${ri}`,
+                    ),
+                  ),
+                ],
+              },
+              `h${hi}`,
+            ),
+          ),
+        });
       const renderDiffBody = () => {
         if (diff.phase === "loading") return jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentLoading") });
         if (diff.phase === "error")
@@ -9083,29 +9183,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         }
         if (diff.clean || diff.text === null) return jsxRuntime.jsx("div", { className: "dshk-note", children: t("diffEmpty") });
 
-        // 新像：常规视图 = 当前盘上内容（read 带回）；commit 钉定 = 该提交时刻的
-        // 内容（diff 响应带回，不读盘——盘上已是别的版本，套上去会错位着色）。
-        // 钉定模式无新像（过大/二进制）时 null → 回落原始 patch
-        const newLines =
-          commit
-            ? typeof diff.content === "string"
-              ? diff.content.split("\n")
-              : null
-            : state.body && !state.body.truncated && typeof state.body.content === "string"
-              ? state.body.content.split("\n")
-              : null;
-        const rows = newLines ? buildInlineRows(diff.text, newLines) : null;
-        if (rows) {
-          return jsxRuntime.jsx(
-            "div",
-            {
-              className: "dshk-inline",
-              children: rows.map(([type, text], i) =>
-                jsxRuntime.jsx("div", { className: `dshk-il-${type}`, children: text === "" ? " " : text }, i),
-              ),
-            },
-          );
-        }
+        const hunks = parsePatchHunks(diff.text);
+        if (hunks !== null) return split ? renderSplitHunks(hunks) : renderUnifiedHunks(hunks);
         const lines = diff.text.split("\n");
         return jsxRuntime.jsx("div", {
           className: "dshk-diff",
@@ -9140,13 +9219,42 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         return body;
       };
 
-      // 头部只剩路径（签名由页签 chip 承担）；正文恒为 diff 视图
+      // 头部：路径（签名由页签 chip 承担）+ 打开全文 + 单栏/双栏切换；正文恒为 diff 视图。
+      // 删除态没有可开的文件、也没有可分栏的两侧，两个钮都不出现
+      const headActions = [
+        deleted !== true &&
+          jsxRuntime.jsx(KitTip, {
+            label: t("diffOpenFile"),
+            side: "bottom",
+            children: jsxRuntime.jsx("button", {
+              type: "button",
+              className: "dshk-btn dshk-enbtn dshk-textbtn",
+              onClick: () => openOfficialFile(path),
+              children: t("diffOpenFileShort"),
+            }),
+          }),
+        deleted !== true &&
+          untracked !== true &&
+          jsxRuntime.jsx(KitTip, {
+            label: t(split === true ? "diffUnified" : "diffSplit"),
+            side: "bottom",
+            children: jsxRuntime.jsx("button", {
+              type: "button",
+              className: `dshk-btn dshk-enbtn${split === true ? " dshk-headbtn-on" : ""}`,
+              "aria-pressed": split,
+              onClick: () => setSplit((v) => !v),
+              children: "⇄",
+            }),
+          }),
+      ];
       return jsxRuntime.jsxs(jsxRuntime.Fragment, {
         children: [
           jsxRuntime.jsx("div", {
             className: "dshk-head",
             children: [
               jsxRuntime.jsx("span", { className: "dshk-title", children: path }),
+              jsxRuntime.jsx("span", { className: "dshk-spring" }),
+              ...headActions,
             ],
           }),
           deleted === true
@@ -9249,6 +9357,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // 渲染级检查与面板引用供测试断言；DiffPane 另挂 root 的 diff 正文座（座对象
     // 与 root 的 kitBase 共享同一引用，root 读得到）
     exports.DiffPane = DiffPane;
+    exports.parsePatchHunks = parsePatchHunks;
+    exports.splitRowsOf = splitRowsOf;
     dock.diffPane.Component = DiffPane;
     exports.TreeNode = TreeNode;
     exports.FileTreePanel = FileTreePanel;

@@ -202,10 +202,16 @@ check("DiffPane 渲染无异常", !!out && typeof out === "object");
   callLog = [];
   comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", commit: "full40hash" });
   const baseNote = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diffnote" && typeof c[2].children === "string" && c[2].children.includes("abcd123"));
-  const overlayRows = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-inline");
+  const hunkWrap = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-hunks");
   const rawOnly = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diff");
+  const hunkHead = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-hunkhead");
+  const hunkNos = callLog.filter((c) => c[2] && c[2].className === "dshk-dno").map((c) => c[2].children);
+  const hunkRowCls = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-drow-")).map((c) => c[2].className);
   check("提交钉定 diff 渲染基线说明（父提交 abcd123）", !!baseNote);
-  check("提交钉定 diff 复用全文件着色（新像=提交时刻内容）", !!overlayRows && !rawOnly);
+  check("提交钉定 diff 只渲染 hunk（长文件不再整篇铺开）", !!hunkWrap && !rawOnly);
+  check("hunk 头与 git 输出同形", !!hunkHead && hunkHead[2].children === "@@ -1,1 +1,1 @@");
+  check("hunk 行带旧/新行号", hunkNos.join("|") === "1|||1");
+  check("增删行分色不串", hunkRowCls.join("|") === "dshk-drow dshk-drow-del|dshk-drow dshk-drow-add");
   stateStore.clear();
   stateSeq = 0;
   stateStore.set(0, readyBody);
@@ -221,8 +227,8 @@ check("DiffPane 渲染无异常", !!out && typeof out === "object");
   stateStore.set(1, { phase: "ready", clean: false, base: "abcd123", text: commitDiffText });
   callLog = [];
   comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", commit: "full40hash" });
-  const rawFallback = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diff");
-  check("钉定无新像回落原始 patch", !!rawFallback);
+  const pinnedHunks = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-hunks");
+  check("钉定无新像也照常渲染 hunk（不再回落原始 patch）", !!pinnedHunks);
   stateStore.clear();
   stateSeq = 0;
   stateStore.set(0, readyBody);
@@ -231,15 +237,16 @@ check("DiffPane 渲染无异常", !!out && typeof out === "object");
   comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", commit: "root40hash" });
   const rootNote = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diffnote" && typeof c[2].children === "string" && (c[2].children.includes("empty tree") || c[2].children.includes("空树")));
   check("根提交钉定显示空树基线说明", !!rootNote);
-  // 常规 diff：hunk 套回盘上内容（全文件着色）
+  // 常规 diff：同样只渲染 hunk
   stateStore.clear();
   stateSeq = 0;
   stateStore.set(0, readyBody);
   stateStore.set(1, { phase: "ready", clean: false, text: commitDiffText });
   callLog = [];
   comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x" });
-  const normalOverlay = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-inline");
-  check("常规 diff 视图仍套盘上内容（无 commit 钉定）", !!normalOverlay);
+  const normalHunks = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-hunks");
+  const normalRaw = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diff");
+  check("常规 diff 也只渲染 hunk", !!normalHunks && !normalRaw);
   // 未跟踪：整文件按新增着色（内容来自 read）
   stateStore.clear();
   stateSeq = 0;
@@ -257,6 +264,54 @@ check("DiffPane 渲染无异常", !!out && typeof out === "object");
   const titleAbs = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-title" && c[2].children === "C:/x/dir/f.js");
   check("diff 头部标题显示绝对路径", !!titleAbs);
   check("diff 头部不挂 title 悬停（全路径已直显，悬停只留页签 chip）", !!(titleAbs && titleAbs[2] && titleAbs[2].title === undefined));
+  // 头部两个钮：打开全文（官方右栏文件签）+ 单栏/双栏切换
+  const headBtn = (glyph) => callLog.find((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[2] && c[2].children === glyph);
+  const fullBtn = headBtn("全文") || headBtn("Full");
+  const splitBtn = headBtn("⇄");
+  check("diff 头部有「打开全文」钮（走官方 sidebarRight.openResource）", !!fullBtn && typeof fullBtn[2].onClick === "function");
+  check("diff 头部有单栏/双栏切换钮（默认单栏）", !!splitBtn && splitBtn[2]["aria-pressed"] === false);
+  // 删除态：没有可开的文件、也没有可分栏的两侧 → 两个钮都不出现
+  stateStore.clear();
+  stateSeq = 0;
+  stateStore.set(0, { phase: "deleted" });
+  stateStore.set(1, { phase: "ready", clean: false, text: commitDiffText });
+  callLog = [];
+  comps.DiffPane({ path: "C:/x/gone.md", cwd: "C:/x", deleted: true });
+  check("删除态头部无全文/分栏钮", !headBtn("⇄") && !(headBtn("全文") || headBtn("Full")));
+  stateStore.clear();
+  stateSeq = 0;
+}
+{
+  // —— 直测：hunk 解析与双栏配对（纯函数）——
+  const patch = [
+    "diff --git a/f.js b/f.js",
+    "index 111..222 100644",
+    "--- a/f.js",
+    "+++ b/f.js",
+    "@@ -10,4 +10,5 @@ head",
+    " ctx-a",
+    "-del-1",
+    "-del-2",
+    "+add-1",
+    "+add-2",
+    "+add-3",
+    " ctx-b",
+    "@@ -40 +41 @@",
+    "-only-del",
+  ].join("\n");
+  const hunks = comps.parsePatchHunks(patch);
+  check("parsePatchHunks 跳过 git 头部只取 hunk", Array.isArray(hunks) && hunks.length === 2);
+  check("hunk 坐标解析（缺省计数按 1）", hunks[0].oldStart === 10 && hunks[0].oldLines === 4 && hunks[0].newStart === 10 && hunks[0].newLines === 5 && hunks[1].oldStart === 40 && hunks[1].newLines === 1);
+  const r0 = hunks[0].rows;
+  check("hunk 行按前缀分 ctx/del/add", r0.map((x) => x.kind).join("|") === "ctx|del|del|add|add|add|ctx");
+  check("hunk 行号双侧各自推进（新增行不占旧号）", r0[0].oldNo === 10 && r0[0].newNo === 10 && r0[1].oldNo === 11 && r0[1].newNo === null && r0[3].oldNo === null && r0[3].newNo === 11 && r0[6].oldNo === 13 && r0[6].newNo === 14);
+  check("hunk 头行（@@ 后缀）不混进行内容", r0[0].text === "ctx-a" && hunks[1].rows[0].text === "only-del");
+  const pairs = comps.splitRowsOf(r0);
+  check("双栏配对：上下文两侧同格", pairs[0].left === pairs[0].right && pairs[0].left.kind === "ctx");
+  check("双栏配对：多删少补时右侧留空", pairs[3].left === null && pairs[3].right.text === "add-3" && pairs[1].left.text === "del-1" && pairs[1].right.text === "add-1");
+  const delPairs = comps.splitRowsOf(hunks[1].rows);
+  check("双栏配对：纯删除右侧整列留空", delPairs.length === 1 && delPairs[0].left.text === "only-del" && delPairs[0].right === null);
+  check("parsePatchHunks 无 hunk 返回 null", comps.parsePatchHunks("diff --git a/f b/f\nindex 1..2\n") === null && comps.parsePatchHunks("") === null);
 }
 
 // —— 直测：入口按钮（门控默认开 = 配置快照未就绪按内置默认）——
