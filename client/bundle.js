@@ -11507,6 +11507,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       react.useEffect(() => {
         sendWatch();
       }, [visible, active, connLost]);
+      // 入口开出来的那张空签被认领到页（maybeAutoOpenBrowser 换掉签内容）时要重订帧流：
+      // watch 只在可见性/激活态与连接建立时发，页号 null → 1 这一步没人发，宿主那侧
+      // 还订着「没有页」，画面就永远空白——直到别的动作把它挤掉重来
+      react.useEffect(() => {
+        sendWatch();
+      }, [pageId]);
       react.useEffect(() => {
         const onVis = () => {
           // 事件回调先于重渲染：先同步 ref 再发，避免 watch 带着过期的可见态
