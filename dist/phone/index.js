@@ -275,10 +275,10 @@ export async function apply(ctx, config = {}) {
                 res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
                 res.end(JSON.stringify(obj));
             };
-            /** GET 类守卫：同源 fetch 的 GET 可能不带 Origin，带了就必须匹配 Host */
+            /** GET 类守卫：无条件过 sameOrigin（Host 回环闸 + Origin 比对）。GET 不带
+             *  Origin，只查 Origin 等于把 Host 闸也放过 */
             const phoneGuardGet = (req, res) => {
-                const origin = req.headers.origin;
-                if (typeof origin === 'string' && origin !== '' && !sameOrigin(req)) {
+                if (!sameOrigin(req)) {
                     phoneJson(res, 403, { error: 'cross-origin denied' });
                     return false;
                 }
@@ -330,7 +330,7 @@ export async function apply(ctx, config = {}) {
                         phoneJson(res, 405, { error: 'method not allowed' });
                         return;
                     }
-                    if (req.headers.origin !== undefined && !sameOrigin(req)) {
+                    if (!sameOrigin(req)) {
                         phoneJson(res, 403, { error: 'cross-origin denied' });
                         return;
                     }
@@ -350,7 +350,7 @@ export async function apply(ctx, config = {}) {
                         phoneJson(res, 405, { error: 'method not allowed' });
                         return;
                     }
-                    if (req.headers.origin !== undefined && !sameOrigin(req)) {
+                    if (!sameOrigin(req)) {
                         phoneJson(res, 403, { error: 'cross-origin denied' });
                         return;
                     }

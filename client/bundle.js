@@ -3628,7 +3628,9 @@ ellipsis，窄列只截字不破版 */
      *  新地址开一张——签的地址即页路径，搬页就是换地址 */
     function vaultTabsRetarget(oldPath, newPath, isDir) {
       for (const p of rightbarItems("vault")) {
-        const moved = p === oldPath || (isDir && pathUnder(p, oldPath) ? newPath + p.slice(oldPath.length) : null);
+        // 精确命中要给新路径本身（写成 p === oldPath || … 会把布尔 true 当新地址，
+        // openRightbarItem 拿到非字符串直接空转——签被关掉却不再开）
+        const moved = p === oldPath ? newPath : isDir && pathUnder(p, oldPath) ? newPath + p.slice(oldPath.length) : null;
         if (moved === null) continue;
         closeRightbarItem("vault", p);
         if (!rightbarItems("vault").includes(moved)) openRightbarItem("vault", moved);
@@ -6196,7 +6198,7 @@ ellipsis，窄列只截字不破版 */
     //（侧栏索引、右栏知识库/日程签、输入行入口、对话路径改投、快捷键全不出现）。
     exports.apply = async (ctx) => {
       if (!(await loadCfg())) return;
-      // 本组件的两张 dock 签 kind 补登（openFeatureDock/closeRightbarTab 按 feature 查）
+      // 本组件的两张 dock 签 kind 补登（openRightbarTab/closeRightbarTab 按 feature 查 kind）
       dock.tabKinds.vault = { id: "dsh-kit-vault", kind: "dshk-vault" };
       dock.tabKinds.schedule = { id: "dsh-kit-schedule", kind: "dshk-schedule" };
       // 座对象（root 只读，本组件填字段）：侧栏索引视图 + 文件树行点击的 vault 改道
@@ -6543,6 +6545,8 @@ ellipsis，窄列只截字不破版 */
         const ctrl = new AbortController();
         fetchPhoneInfo(ctrl.signal)
           .then((body) => {
+            // 成功即清错误位：否则一次瞬时失败会永久盖住状态行（只能重挂组件才消）
+            setLoadErr("");
             setInfo(body);
             if (body.gatewayOn && body.running) {
               return fetchPhoneLinks(ctrl.signal).then(setLinkData).catch((e) => setLoadErr(String(e?.message ?? e)));
@@ -6781,6 +6785,13 @@ ellipsis，窄列只截字不破版 */
       treeEmpty: "（空目录）",
       treeFail: "加载失败",
       treeTruncated: "条目过多，列表已截断",
+      // git 行尾徽标（M/A/D/R/U）的悬停文案：本包 t() 只读本包词典，root 那份读不到
+      gitM: "已修改",
+      gitA: "新文件",
+      gitD: "已删除",
+      gitR: "重命名",
+      gitU: "未跟踪",
+      gitTip: "git 变更",
       treeNewAny: "新建文件/目录",
       treeNewPh: "名称，\\ 开头新建文件夹，可含 / 多级，回车创建",
       treeRename: "重命名",
@@ -6886,6 +6897,13 @@ ellipsis，窄列只截字不破版 */
       treeEmpty: "(empty)",
       treeFail: "Failed to load",
       treeTruncated: "Too many entries, list truncated",
+      // git status badge (M/A/D/R/U) tooltips: this module's t() only reads its own dict
+      gitM: "Modified",
+      gitA: "Added",
+      gitD: "Deleted",
+      gitR: "Renamed",
+      gitU: "Untracked",
+      gitTip: "git change",
       treeNewAny: "New file/folder",
       treeNewPh: "Name, \\ prefix creates a folder, / for nesting, Enter to create",
       treeRename: "Rename",
@@ -8622,6 +8640,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
                               children: t(stagedList.length > 0 ? "scCommit" : "scCommitAll"),
                             }),
                           ] }),
+                          data?.untrackedTruncated === true
+                            ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("treeTruncated") })
+                            : null,
                           groups.length === 0
                             ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("scEmpty") })
                             : groups.map((group) => {
@@ -10973,7 +10994,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const dock = kit;
     const {
       getKitUi, setKitUi, KitTip, flashToast, kitJson, kitWsUrl, resolveZh,
-      closeFeatureTab, openFeatureTab, markFeaturePresence, openFeatureDock, closeRightbarTab,
+      closeFeatureTab, markFeaturePresence, closeRightbarTab,
       useCurrentRow, currentSessionId, shellShare,
       rightbarItem, rightbarItems, openRightbarItem, closeRightbarItem, rightbarTabsOf, tabAddress, tabVisible,
     } = dock;
@@ -11132,8 +11153,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // 全局共享（登录态一份）——连接先报 scope，宿主只回本分区的 state/帧/事件，
     // 换会话即重连换分区。
     // 设计定位：面板是 agent 浏览器的「现场直播 + 遥控」——canvas 绘观察页实时
-    // 画面；人的点击/滚轮/键入经画布坐标换算回传宿主，派发到观察页（人与 agent 可
-    // 各看各页，画面是否跟随 agent 由宿主侧 follow 开关决定）。面板常驻挂在右侧
+    // 画面；人的点击/滚轮/键入经画布坐标换算回传宿主，派发到观察页。观察指针由
+    // 宿主维护：agent 的 navigate/act、人的地址栏导航与新建页都把它切到那一页，
+    // 面板即那块画面（没有第二套 follow 开关）。面板常驻挂在右侧
     // 标签页容器：WS 管帧流与共驾输入；「agent 导航自动切到浏览器标签」的事件源
     // 已升级为壳层常驻（ShellBrowserEvents），标签被收掉（0 页自动收/人为关）也能弹回。
     // 生命周期：关标签仅停流不关浏览器（分区空闲 10 分钟自动收该对话的页、全局无页
@@ -11185,7 +11207,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     function brwConn(scope) {
       let entry = brwScopes.get(scope);
       if (entry) return entry;
-      entry = { ws: null, retry: null, version: 0, pages: [], running: false, error: "", closed: false, hadPages: false, subs: new Set() };
+      entry = { ws: null, retry: null, version: 0, pages: [], running: false, closed: false, hadPages: false, subs: new Set() };
       brwScopes.set(scope, entry);
       const publish = () => {
         entry.version += 1;
@@ -11201,7 +11223,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const applyState = (msg) => {
         entry.pages = Array.isArray(msg.pages) ? msg.pages : [];
         entry.running = msg.running === true;
-        entry.error = typeof msg.error === "string" ? msg.error : "";
         publish();
         brwReconcile(scope);
       };
@@ -11988,7 +12009,7 @@ body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{displ
     //（面板、右栏签、链接改投、官方入口掩码全不出现）。
     exports.apply = async (ctx) => {
       if (!(await loadCfg())) return;
-      // 本组件的 dock 签 kind 补登（openFeatureDock/closeRightbarTab 按 feature 查）
+      // 本组件的 dock 签 kind 补登（openRightbarTab/closeRightbarTab 按 feature 查 kind）
       dock.tabKinds.browser = { id: "dsh-kit-browser", kind: "dshk-browser" };
       injectStyles();
       // 右栏功能签：官方 sidebarRightTabs 是挂载期声明的服务，inject 等它就绪

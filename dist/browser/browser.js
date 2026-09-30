@@ -3,7 +3,7 @@
 // 职责：vendored playwright-core（host-vendor/，钉 1.62.1）驱动系统 Edge（channel
 // 方式，失败退 executablePath 探测链），管理持久化上下文（专用 profile，登录态跨
 // 会话保留）、**按分区（scope）隔离的页面集**（每分区一套 agent 活动页 / 面板观察页
-// 双指针，见 _s() 注释）、帧流中继；对工具层（browser-tools.ts）与面板 ws（index.ts）
+// 双指针，见 ScopeState 注释）、帧流中继；对工具层（browser-tools.ts）与面板 ws（index.ts）
 // 提供同一套操作面。TS 源码（tsc 构建出 dist 运行）、零运行时依赖声明；ws 服务器与
 // 多锚点解析在 index.ts 完成，这里不重复。
 //
@@ -37,6 +37,9 @@ const SNAPSHOT_MIN = 200;
 const SNAPSHOT_MAX = 32 * 1024;
 const EVAL_CAP = 64 * 1024;
 const LAUNCH_TIMEOUT = 30000;
+/** 启动失败后的快速失败窗口：窗口内直接回上次那句错误（连续重试不打爆启动链），
+ *  窗口过后允许再试——一次瞬时失败（Edge 自更新、profile 被占）不该砖死到重启 */
+const LAUNCH_RETRY_MS = 10000;
 /** 认不出调用方会话时的分区（无 agent 的工具调用、面板还没拿到会话 id） */
 export const DEFAULT_SCOPE = 'default';
 /** 分区键归一：非空字符串原样，其它（undefined/null/空串）落 DEFAULT_SCOPE */
@@ -91,7 +94,7 @@ export function capText(text, cap = SNAPSHOT_CAP) {
         return '';
     if (text.length <= cap)
         return text;
-    return text.slice(0, cap) + `\n…（快照超过 ${cap} 字符已截断：改用 browser_snapshot 的 selector 只看一个区域，或用 maxChars 调小上限）`;
+    return text.slice(0, cap) + `\n…（快照超过 ${cap} 字符已截断：改用 browser_snapshot 的 selector 只看一个区域）`;
 }
 /** 从 PNG 字节取宽高（IHDR 定长偏移，纯函数供单测） */
 export function pngSize(buffer) {
@@ -125,7 +128,7 @@ export function normalizeLocatorArgs(args) {
     if (text !== undefined && text !== null && String(text).trim() !== '') {
         return { kind: 'text', text: String(text) };
     }
-    return { error: '缺少定位参数：role（+name）/ text / selector 三选一' };
+    return { error: '缺少定位参数：ref（照抄快照 [ref=…]）/ role（+name）/ text / selector 四选一' };
 }
 const ACT_KINDS = new Set(['click', 'type', 'press', 'check', 'uncheck', 'select', 'hover', 'scroll', 'upload']);
 /** 校验 act 的动作与参数配套（type/select/upload 需要 value，press 需要 key；
@@ -156,13 +159,17 @@ export class BrowserService {
     _pw;
     _context;
     _launchError;
+    /** 上次启动失败的时刻（0 = 没失败过）：与 _launchError 一起构成快速失败窗口 */
+    _launchFailedAt;
     _launching;
     /** 分区表：会话 id → 页集与指针。空的（无页无观察者）分区随手删，不长期占位 */
     _scopes;
     /** 启动时上下文里已有的页：不预设分区，谁第一个要页谁认领（见 _claimIdlePage） */
     _unclaimed;
-    /** newPage 与 'page' 事件之间的分区交接（事件先于 resolve 到达时靠它认领归属） */
-    _pendingScope;
+    /** newPage 与 'page' 事件之间的分区交接（事件先于 resolve 到达时靠它认领归属）。
+     *  按请求排队而非单值：两个分区同时开页时事件要按 FIFO 与请求对号，共用一枚
+     *  单值会让页被后一个分区认领走（表现是「页跑进别的对话」） */
+    _pendingScopes;
     _nextId;
     _listeners;
     _lastActivity;
@@ -173,10 +180,11 @@ export class BrowserService {
         this._pw = loadPlaywright();
         this._context = null;
         this._launchError = null;
+        this._launchFailedAt = 0;
         this._launching = null;
         this._scopes = new Map();
         this._unclaimed = [];
-        this._pendingScope = null;
+        this._pendingScopes = [];
         this._nextId = 1;
         this._listeners = new Set();
         this._lastActivity = Date.now();
@@ -346,8 +354,9 @@ export class BrowserService {
         this._touch();
         if (this._context)
             return { ok: true };
-        if (this._launchError)
+        if (this._launchError && Date.now() - this._launchFailedAt < LAUNCH_RETRY_MS) {
             return { ok: false, error: this._launchError };
+        }
         if (!this._launching) {
             // 落定即清：context 事后关闭（关最后一页/空闲关闭/崩溃）后 _launching 若残留
             // 已落定的旧 promise，这里会误报 ok，调用方拿 null context 去 newPage 直接崩，
@@ -399,15 +408,26 @@ export class BrowserService {
         }
         if (!context) {
             this._launchError = `无法启动系统浏览器（Edge/Chrome）：${lastError instanceof Error ? lastError.message : lastError}`;
+            this._launchFailedAt = Date.now();
             this._emit({ kind: 'state' });
             return { ok: false, error: this._launchError };
         }
+        // 启动途中插件被卸载：这只 context 已无人接管（dispose 那一刻它还不存在），当场收掉
+        if (this._disposed) {
+            try {
+                await context.close();
+            }
+            catch { }
+            return { ok: false, error: '浏览器组件已卸载' };
+        }
         this._context = context;
         this._launchError = null;
+        this._launchFailedAt = 0;
         context.on('close', () => {
             this._context = null;
             this._scopes.clear();
             this._unclaimed = [];
+            this._pendingScopes = [];
             this._emit({ kind: 'closed' });
         });
         // pidfile（孤儿防护，尽力而为）
@@ -422,7 +442,7 @@ export class BrowserService {
         // 不预设分区，谁第一个要页谁认领；不认领就一直挂着，实例收摊时一起没
         this._unclaimed = context.pages().slice();
         context.on('page', (page) => {
-            // 弹窗（target=_blank）按打开者归分区；newPage 建的页靠 _pendingScope 交接。
+            // 弹窗（target=_blank）按打开者归分区；newPage 建的页靠 _pendingScopes 队列交接。
             // opener() 是 async（coreBundle 客户端实现），只能异步读——已被显式路径纳管的页
             // 直接跳过（_adopt 认 page 上的分区标记，晚到的异步分支不会把它搬到别处）
             const registered = page.__dshScope;
@@ -430,7 +450,7 @@ export class BrowserService {
                 this._adopt(page, registered);
                 return;
             }
-            const pending = this._pendingScope;
+            const token = this._pendingScopes[0];
             void (async () => {
                 let openerScope = null;
                 try {
@@ -442,9 +462,10 @@ export class BrowserService {
                 }
                 if (page.__dshTabId !== undefined)
                     return;
-                const scope = openerScope ?? pending ?? DEFAULT_SCOPE;
-                if (openerScope === null && pending !== null && this._pendingScope === pending)
-                    this._pendingScope = null;
+                const scope = openerScope ?? token?.scope ?? DEFAULT_SCOPE;
+                // 认领掉最早那次 newPage 的交接（弹窗有打开者，不动这枚 token）
+                if (openerScope === null && token !== undefined && this._pendingScopes[0] === token)
+                    this._pendingScopes.shift();
                 this._adopt(page, scope);
             })();
         });
@@ -467,13 +488,26 @@ export class BrowserService {
         const claimed = this._claimIdlePage(scope);
         if (claimed)
             return claimed;
-        // 'page' 事件通常先于 newPage 的 resolve 到达并据此认领；没到就这里兜底
-        this._pendingScope = scope;
-        const page = await this._context.newPage();
-        if (this._pendingScope === scope)
-            this._pendingScope = null;
+        // 'page' 事件通常先于 newPage 的 resolve 到达并据此认领；没到就这里兜底。
+        // token 按 FIFO 与事件对号——并发开页时不能共用一枚单值
+        const token = { scope };
+        this._pendingScopes.push(token);
+        let page = null;
+        try {
+            page = await this._context.newPage();
+        }
+        finally {
+            const at = this._pendingScopes.indexOf(token);
+            if (at >= 0)
+                this._pendingScopes.splice(at, 1);
+        }
+        if (page === null)
+            throw new Error('新建页失败');
         if (page.__dshTabId === undefined)
             this._adopt(page, scope);
+        // 事件路径理论上不会认错 token；真错了也在这里搬回来，保住
+        // 「_openPage 返回的页属于本分区」这条不变量
+        this._rehome(page, scope);
         return page;
     }
     /** 纳管一页（幂等）：归属分区、缓存标题、监听导航与崩溃；返回 tabId。
@@ -546,6 +580,37 @@ export class BrowserService {
         this._emit({ kind: 'scope', scope: key });
         return tabId;
     }
+    /** 把已纳管的页搬到另一个分区（并发开页时事件路径认错 token 的兜底）。
+     *  订阅与帧流属于旧分区，搬走前先摘掉——留着会把帧推给别的对话的画布 */
+    _rehome(page, scope) {
+        const key = normalizeScope(scope);
+        const id = page.__dshTabId;
+        if (id === undefined || page.__dshScope === key)
+            return;
+        const from = page.__dshScope;
+        if (from !== undefined) {
+            const old = this._scopes.get(from);
+            if (old && old.pages.get(id) === page) {
+                old.pages.delete(id);
+                old.titles.delete(id);
+                old.dialogs.delete(id);
+                old.frames.delete(id);
+                if (old.streams.has(id))
+                    void this._detachStream(from, id);
+                if (old.activeId === id)
+                    old.activeId = old.pages.keys().next().value ?? null;
+                if (old.viewId === id)
+                    old.viewId = old.activeId ?? null;
+                this._emit({ kind: 'scope', scope: from });
+            }
+        }
+        const s = this._s(key);
+        page.__dshScope = key;
+        s.pages.set(id, page);
+        s.activeId = id;
+        this._setView(key, id);
+        this._emit({ kind: 'scope', scope: key });
+    }
     /** 记下本分区人最近动的那页（幂等，广播）：帧流按页各挂各的，观察指针只管
      *  「没带页 id 的调用落哪一页」（agent 工具与 HTTP 改投走它） */
     _setView(scope, tabId) {
@@ -561,9 +626,8 @@ export class BrowserService {
         s.dialogs.delete(id);
         if (s.activeId === id)
             s.activeId = s.pages.keys().next().value ?? null;
-        if (s.viewId === id) {
+        if (s.viewId === id)
             s.viewId = s.activeId ?? s.pages.keys().next().value ?? null;
-        }
         // 流的宿主页没了就拆掉：CDP 会话已死，留着会让面板把最后一帧当成活画面
         // （关最后一页后面板冻结在旧视图，看起来像还在直播，误导人以为页面还在）
         if (s.streams.has(id))
@@ -606,10 +670,17 @@ export class BrowserService {
         s.dialogs.set(tabId, []);
         return fresh;
     }
-    async listPages(scope = DEFAULT_SCOPE) {
-        const ensureResult = await this.ensure();
-        if (!ensureResult.ok)
-            return { ok: false, error: ensureResult.error };
+    /** 列本分区页集。ensure:false = 只看现状，浏览器没跑就回空表——只读的工具面
+     *  （browser_tabs list、关页后的回读）不该把浏览器拉起来，那是「被动动作不属于
+     *  使用理由」这条面板口径的延伸。 */
+    async listPages(scope = DEFAULT_SCOPE, { ensure = true } = {}) {
+        if (ensure) {
+            const ensureResult = await this.ensure();
+            if (!ensureResult.ok)
+                return { ok: false, error: ensureResult.error };
+        }
+        if (!this._context)
+            return { ok: true, pages: [], activeId: null, viewId: null };
         const s = this._s(scope);
         const pages = [];
         for (const [tabId, page] of s.pages) {
@@ -650,8 +721,7 @@ export class BrowserService {
         let page;
         if (newTab || anchorId === null || !s.pages.has(anchorId)) {
             // 新页或本分区还没有页：开一页（认领自带页或 newPage）并纳管
-            await this._openPage(scope);
-            page = s.pages.get(s.activeId);
+            page = await this._openPage(scope);
         }
         else {
             page = s.pages.get(anchorId);
@@ -1196,6 +1266,7 @@ export class BrowserService {
         // 每关一次还留一条空分区。这里反过来——拿着捕获的 s 拆完，最后才清表
         const streams = [...this._scopes.entries()];
         this._unclaimed = [];
+        this._pendingScopes = [];
         for (const [key, s] of streams) {
             for (const tabId of [...s.streams.keys()])
                 await this._detachStream(key, tabId);

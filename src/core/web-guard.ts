@@ -5,10 +5,12 @@
 //   自己连回来：DNS rebinding 让恶意页面把自身域名解析到 127.0.0.1 后，请求的
 //   Origin 与 Host 同为攻击者域名，仅比对两者恒真。手机网关会把 Host 重写为
 //   127.0.0.1:<upstream>，同样落在回环，不受影响。
-//   Origin 比对——缺省放行（同源 GET fetch 不带 Origin；经网关剥离 Origin 的
-//   手机链路也要放行——浏览器对 POST/WS 恒带 Origin，缺 Origin 只剩非浏览器
-//   客户端，属本机信任范围，与 dsh 本体 fence 的回环放行语义一致）；存在时其
-//   host 必须与请求 Host 完全一致，跨站表单/CSRF 在这里被拒。
+//   Origin 比对——Host 过了之后再看 Origin：缺省放行（同源 GET fetch 不带
+//   Origin；经网关剥离 Origin 的手机链路也要放行——浏览器对 POST/WS 恒带
+//   Origin，缺 Origin 只剩非浏览器客户端，属本机信任范围）；存在时其 host 必须
+//   与请求 Host 完全一致，跨站表单/CSRF 在这里被拒。
+// 调用口径：端点一律**无条件**调本函数。别写成「Origin 非空才校验」——那等于把
+// Host 闸也一起跳过，而 DNS rebinding 的 GET 恰好不带 Origin。
 
 /** Host 头是否指向本机回环（127.0.0.1 / localhost / [::1]，含端口） */
 export function isLoopbackHost(host: string): boolean {

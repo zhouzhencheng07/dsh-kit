@@ -110,8 +110,8 @@ const ok = (name) => {
       calls.push(['setViewport', scope, p])
       return { ok: true, tabId: 1, url: 'u', viewport: { width: p.width, height: p.height } }
     },
-    listPages: async (scope) => {
-      calls.push(['listPages', scope])
+    listPages: async (scope, opts) => {
+      calls.push(['listPages', scope, opts])
       return {
         ok: true,
         pages: [{ tabId: 1, url: 'u', title: 'T', active: true, viewed: true }],
@@ -128,7 +128,7 @@ const ok = (name) => {
       return { ok: true }
     },
   }
-  const defs = buildBrowserTools({ defineTool, service, ctx: { get: () => undefined }, isDisabled: () => false })
+  const defs = buildBrowserTools({ defineTool, service, ctx: { get: () => undefined } })
   assert.equal(defs.length, 7)
   assert.deepEqual(
     defs.map((d) => d.name),
@@ -150,7 +150,7 @@ const ok = (name) => {
   // 分区：exec.agent.id 即 scope；scopeOf 注入（宿主解析子代理归属）优先
   await defs[2].execute({ action: 'click', ref: 'e1' }, { agent: { id: 'sess-a' } })
   assert.equal(calls.at(-1)[1], 'sess-a')
-  const defsScoped = buildBrowserTools({ defineTool, service, ctx: { get: () => undefined }, isDisabled: () => false, scopeOf: () => 'root-sess' })
+  const defsScoped = buildBrowserTools({ defineTool, service, ctx: { get: () => undefined }, scopeOf: () => 'root-sess' })
   await defsScoped[2].execute({ action: 'click', ref: 'e1' }, { agent: { id: 'sub-sess' } })
   assert.equal(calls.at(-1)[1], 'root-sess')
   assert.equal(defsScoped.length, 7)
@@ -212,7 +212,6 @@ const ok = (name) => {
     defineTool,
     service,
     ctx: ctx2,
-    isDisabled: () => false,
   })
   const exec2 = { agent: { session: { requestHeader: () => ({ config: { provider: 'p', model: 'm' } }) } }, signal: { aborted: false } }
   const shot2 = await defs2[4].execute({}, exec2)
@@ -223,10 +222,13 @@ const ok = (name) => {
   assert.deepEqual(blocks2[1].attachment, { ref: 1 })
   ok('screenshot 多模态 image 块附加')
 
-  // isDisabled 守卫
-  const defs3 = buildBrowserTools({ defineTool, service, ctx: {}, isDisabled: () => true })
-  await assert.rejects(() => defs3[0].execute({ url: 'http://x/' }), /停用/)
-  ok('browserEnabled 关闭时 execute 守卫生效')
+  // 只读面不拉起浏览器：list 与关页后的回读都带 ensure:false（被动动作不是使用理由）
+  assert.deepEqual(calls.filter((c) => c[0] === 'listPages').map((c) => c[2]), [
+    { ensure: false },
+    { ensure: false },
+    { ensure: false },
+  ])
+  ok('browser_tabs list/activate/close 全走 ensure:false 的读取口')
 }
 
 // ── BrowserService vendor 缺失形态 ──

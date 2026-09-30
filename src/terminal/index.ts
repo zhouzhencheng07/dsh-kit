@@ -33,7 +33,7 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             json(405, { error: 'method not allowed' })
             return
           }
-          if (typeof req.headers.origin === 'string' && req.headers.origin !== '' && !sameOrigin(req)) {
+          if (!sameOrigin(req)) {
             json(403, { error: 'cross-origin denied' })
             return
           }

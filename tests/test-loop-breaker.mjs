@@ -68,6 +68,18 @@ function stream(ctx, agent, text, { chunkSize = 7, start = true } = {}) {
   }
 }
 
+/** 不含任何重复单元的长文本（Lehmer 序列取汉字）：单独考核 ③「单步输出过长」。
+ *  用「同一句话重复 N 遍」当输入是错的——那命中的是 ①，③ 就永远没被独立验证过 */
+function variedText(n) {
+  let seed = 20260930
+  let out = ''
+  for (let i = 0; i < n; i++) {
+    seed = (seed * 48271) % 2147483647
+    out += String.fromCharCode(0x4e00 + (seed % 1500))
+  }
+  return out
+}
+
 const CFG = { monitorEnabled: true, monitorRepeatThreshold: 3, monitorStepMaxChars: 60000 }
 const withCfg = (over = {}) => () => ({ ...CFG, ...over })
 
@@ -88,11 +100,28 @@ const withCfg = (over = {}) => () => ({ ...CFG, ...over })
   check('尾部整块重复触发熔断', a.cancels.length === 1)
 }
 {
+  // 反证：同一段变体文本在没有 ③ 阈值压力时不熔断 → 它确实不含 ①②，下面的用例才有意义
+  const ctx = makeCtx()
+  registerLoopGuard(ctx, { readSettings: withCfg({ monitorStepMaxChars: 400000 }) })
+  const a = makeAgent()
+  stream(ctx, a, variedText(30000), { chunkSize: 64 })
+  check('变体文本本身不触发复读判据（③ 独立成立的前提）', a.cancels.length === 0)
+}
+{
   const ctx = makeCtx()
   registerLoopGuard(ctx, { readSettings: withCfg({ monitorStepMaxChars: 20000 }) })
   const a = makeAgent()
-  stream(ctx, a, '内容互不重复但一直吐字。'.repeat(2000), { chunkSize: 40 })
-  check('单步输出过长触发熔断', a.cancels.length === 1)
+  stream(ctx, a, variedText(26000), { chunkSize: 40 })
+  check('单步输出过长触发熔断（输入不含重复单元）', a.cancels.length === 1)
+}
+{
+  // 阈值高于累积内存闸（ACCUM_MAX = 20000）：累积文本被截断后，拿 text.length 判
+  // 永远不成立——只有「本 attempt 累计字符数」这条能抓到（此前正是漏在这里）
+  const ctx = makeCtx()
+  registerLoopGuard(ctx, { readSettings: withCfg({ monitorStepMaxChars: 25000 }) })
+  const a = makeAgent()
+  stream(ctx, a, variedText(30000), { chunkSize: 64 })
+  check('阈值高于累积上限时靠字符计数熔断', a.cancels.length === 1)
 }
 
 // —— ② 正常长输出不熔断 ——
@@ -230,7 +259,9 @@ const withCfg = (over = {}) => () => ({ ...CFG, ...over })
   check('cyclePeriod：正常长文不误报', guard.cyclePeriod('模型的正常回答句式变化丰富，用词与结构都不重复，句子长短也不一致。') === 0)
   check('looksLooped：正常文本不误报', guard.looksLooped('这是一次完全正常的回答，内容丰富且不重复。', 3, 60000) === false)
   check('looksLooped：空串安全', guard.looksLooped('', 3, 60000) === false)
-  check('looksLooped：超长兜底生效', guard.looksLooped('不重复但很长'.repeat(3000), 3, 20000) === true)
+  check('looksLooped：超长兜底生效', guard.looksLooped(variedText(20001), 3, 20000) === true)
+  check('repeatsLooped：变体文本不误报', guard.repeatsLooped(variedText(30000), 3) === false)
+  check('repeatsLooped：复读仍被抓到', guard.repeatsLooped('换一种方式继续推进任务。'.repeat(30), 3) === true)
 }
 
 console.log(failed === 0 ? '\nALL LOOP-BREAKER TESTS PASS' : `\nFAILED: ${failed}`)

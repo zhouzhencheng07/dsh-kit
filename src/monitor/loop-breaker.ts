@@ -7,7 +7,8 @@
 //   数据源 `agent/assistant-stream`（emit；宿主侧收**全部** agent 的流式帧，
 //          与页面开没开、当前看哪个会话无关）：帧里的 `text-delta` /
 //          `reasoning-delta` 带 {index, text}，正是判据所需原料。
-//   判据   loop-guard.ts 的 looksLooped。
+//   判据   loop-guard.ts：①②（复读/绕圈）看尾部文本，③（单步过长）看本 attempt 的
+//          累计字符数——累积文本有内存闸，长度不能当依据。
 //   动作   `agent.cancel({kind:'hook', reason})` —— 唯一能把熔断原因带进
 //          `turn/end` 的通道（`AgentCancelCause` 的 hook 分支带 reason 字符串），
 //          前端据此选「检测到死循环已停止」这类可读文案。
@@ -22,19 +23,20 @@
 // 粒度是「单 attempt」而非「整回合」：帧的 start 边界重置累积。跨 attempt 复读
 // 由客户端侧那一层兜（它看的是整段流文本），两层互补。
 
-import { looksLooped } from './loop-guard.ts'
+import { repeatsLooped } from './loop-guard.ts'
 
 /** 熔断原因写进 turn/end 的这个串，前端据此选文案 */
 export const LOOP_CANCEL_REASON = 'dsh-kit:dead-loop'
 
-/** 累积文本的内存上限：判据只看尾部 CYCLE_WINDOW，留数倍余量即可 */
+/** 累积文本的内存上限：①② 只看尾部 CYCLE_WINDOW，留数倍余量即可；③ 走 chars
+ *  计数，不受这里影响（上限压到阈值以下会让 ③ 永不成立） */
 const ACCUM_MAX = 20000
 
 /** 每个 agent 的流式累积与记账 */
 interface AgentState {
   text: string
-  /** 累积是否已触到内存闸（触到后只留尾部，不再增长） */
-  trimmed: boolean
+  /** 本 attempt 已产出的字符总数（不受 text 的内存闸影响）：③ 的判据看它 */
+  chars: number
   /** 本 attempt 是否已熔断（防同一次 attempt 反复 cancel） */
   tripped: boolean
 }
@@ -60,7 +62,7 @@ export function registerLoopGuard(ctx: GuardCtx, options: LoopGuardOptions): () 
   const stateOf = (agent: object): AgentState => {
     let st = states.get(agent)
     if (st === undefined) {
-      st = { text: '', trimmed: false, tripped: false }
+      st = { text: '', chars: 0, tripped: false }
       states.set(agent, st)
     }
     return st
@@ -70,7 +72,7 @@ export function registerLoopGuard(ctx: GuardCtx, options: LoopGuardOptions): () 
     if (st.tripped) return
     const threshold = Number.isInteger(cfg.monitorRepeatThreshold) ? cfg.monitorRepeatThreshold : 3
     const maxChars = Number.isInteger(cfg.monitorStepMaxChars) ? cfg.monitorStepMaxChars : 60000
-    if (!looksLooped(st.text, threshold, maxChars)) return
+    if (st.chars <= maxChars && !repeatsLooped(st.text, threshold)) return
     st.tripped = true
     st.text = ''
     try {
@@ -93,7 +95,7 @@ export function registerLoopGuard(ctx: GuardCtx, options: LoopGuardOptions): () 
     const frame = payload.frame
     if (frame?.type === 'start') {
       // 新 attempt：重置累积与熔断标记
-      states.set(agent, { text: '', trimmed: false, tripped: false })
+      states.set(agent, { text: '', chars: 0, tripped: false })
       return
     }
     if (frame?.type !== 'chunk') return
@@ -103,10 +105,10 @@ export function registerLoopGuard(ctx: GuardCtx, options: LoopGuardOptions): () 
     if (piece === '') return
     const st = stateOf(agent)
     if (st.tripped) return
-    if (st.text.length + piece > ACCUM_MAX) {
-      // 超上限只保留尾部：判据看的是尾部
+    st.chars += piece.length
+    if (st.text.length + piece.length > ACCUM_MAX) {
+      // 超上限只保留尾部：①② 看的是尾部
       st.text = (st.text + piece).slice(-ACCUM_MAX)
-      st.trimmed = true
     } else {
       st.text += piece
     }

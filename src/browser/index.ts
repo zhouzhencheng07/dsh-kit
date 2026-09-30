@@ -224,7 +224,6 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       // profile 仍是全局共享的。面板挂舞台「浏览器」功能签，关闭标签即断 WS。
       // 同源校验同终端。另有 HTTP 侧的 /dsh-kit/browser/open（见下）：对话链接点击改投
       // 内置浏览器，走它而不是 WS——点击发生时面板未必已挂载/已连上，HTTP 不依赖任一状态。
-      // 卸载时要摘干净的东西（行关闭 = 端点不挂；不摘的话重开一轮会叠两套）
       // 卸载时要摘的东西（行关闭 = 端点不挂；不摘的话重开一轮会叠两套）
       const mounted: { off?: () => void; bwss?: { close: () => void }; upgrade?: () => void; probe?: () => void } = {}
       if (browserService.available && WebSocketServer) {
@@ -300,17 +299,14 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
               return
             }
             if (!msg || typeof msg !== 'object') return
-            // 面板每条消息都带 scope（会话 id）：认领/切换分区，换分区时帧流跟着换
+            // 面板每条消息都带 scope（会话 id）：认领/切换分区。分区换 = 页集也换，
+            // 旧订阅随旧分区一起摘掉；新分区看哪一页由客户端随后的 watch 消息说
+            //（拿旧页号去新分区订必然订不到——页集是按分区隔离的）
             if (typeof msg.scope === 'string') {
               const next = normalizeScope(msg.scope)
               if (next !== scopeOfConn()) {
                 browserSockets.set(ws, next)
-                // 换分区：帧流跟着换（页不变）
-                if (watched !== null) {
-                  const tabId = watched.tabId
-                  closeWatch()
-                  openWatch(next, tabId)
-                }
+                closeWatch()
                 sendState(ws)
               }
             }
@@ -415,7 +411,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
             json(405, { error: 'method not allowed' })
             return
           }
-          if (req.headers.origin !== undefined && !sameOrigin(req)) {
+          if (!sameOrigin(req)) {
             json(403, { error: 'cross-origin denied' })
             return
           }

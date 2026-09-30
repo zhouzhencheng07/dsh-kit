@@ -61,13 +61,22 @@ export function cyclePeriod(text) {
     }
     return best;
 }
-/** 死循环判定的总入口：三条判据合成一个布尔 */
+/** 复读两条判据（① 尾部整块重复 ② 周期复读）的合成。与 looksLooped 拆开是因为宿主
+ *  侧的累积文本有内存闸（loop-breaker 的 ACCUM_MAX），那边「单步过长」得自己记账
+ *  字符数——拿被截断后的 text.length 判会让这条判据永远不成立。 */
+export function repeatsLooped(text, threshold) {
+    if (typeof text !== 'string' || text === '')
+        return false;
+    if (tailRepeatCount(text) >= threshold)
+        return true;
+    return cyclePeriod(text) > 0;
+}
+/** 死循环判定的总入口：三条判据合成一个布尔。maxChars 按 text.length 判——只有
+ *  传进来的 text 未被截断时这条才成立（客户端那份手抄副本正是如此）。 */
 export function looksLooped(text, threshold, maxChars) {
     if (typeof text !== 'string' || text === '')
         return false;
     if (text.length > maxChars)
         return true;
-    if (tailRepeatCount(text) >= threshold)
-        return true;
-    return cyclePeriod(text) > 0;
+    return repeatsLooped(text, threshold);
 }

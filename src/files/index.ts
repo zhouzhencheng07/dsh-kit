@@ -16,6 +16,9 @@ import { createRequire } from 'node:module'
 
 import { decodePreviewText, sameOrigin, recycleDelete, findProjectRoot } from '../core/index.ts'
 import { parseStatusBranch, parseLogRecords, parseBranchList, parseTrack } from './git.ts'
+
+/** git status 的条目上限（口径同文件树 TREE_LIMIT）：未跟踪目录展开没有天然边界 */
+const STATUS_ENTRY_LIMIT = 2000
 import { rawContentType, rawDownloadContentType, rawDisposition, parseRangeHeader } from './raw-file.ts'
 import { validateCwd, validateFile, validateAny, validatePathShape, withinTree, invalidFsName } from './validate.ts'
 
@@ -160,7 +163,7 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             json(405, { error: 'method not allowed' })
             return
           }
-          if (typeof req.headers.origin === 'string' && req.headers.origin !== '' && !sameOrigin(req)) {
+          if (!sameOrigin(req)) {
             json(403, { error: 'cross-origin denied' })
             return
           }
@@ -186,10 +189,10 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             json(405, { error: 'method not allowed' })
             return
           }
-          // 同源校验：同源 fetch 的 GET 可能不带 Origin（浏览器行为），带了就必须匹配 Host；
-          // webserver 本身只绑 loopback，这里防的是其它本地页面跨源探测。
-          const origin = req.headers.origin
-          if (typeof origin === 'string' && origin !== '' && !sameOrigin(req)) {
+          // 同源校验（无条件）：Host 必须是回环名。GET 不带 Origin，把整条校验包进
+          // 「Origin 非空」里会连 Host 回环闸一起跳过——DNS rebinding 的 GET 正是无
+          // Origin（手机链路经网关重写 Host 为回环，不受影响）
+          if (!sameOrigin(req)) {
             json(403, { error: 'cross-origin denied' })
             return
           }
@@ -219,9 +222,13 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
                   fs.promises
                     .opendir(e.path)
                     .then(async (it) => {
-                      const first = await it.read()
-                      await it.close()
-                      return { path: e.path, empty: first === null }
+                      // read 抛错也要关句柄（catch 在外层，漏了这句句柄只能等 GC）
+                      try {
+                        const first = await it.read()
+                        return { path: e.path, empty: first === null }
+                      } finally {
+                        await it.close().catch(() => {})
+                      }
                     })
                     .catch(() => null),
                 ),
@@ -264,8 +271,7 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             json(405, { error: 'method not allowed' })
             return
           }
-          const origin = req.headers.origin
-          if (typeof origin === 'string' && origin !== '' && !sameOrigin(req)) {
+          if (!sameOrigin(req)) {
             json(403, { error: 'cross-origin denied' })
             return
           }
@@ -334,8 +340,7 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             fail(405, 'method not allowed')
             return
           }
-          const origin = req.headers.origin
-          if (typeof origin === 'string' && origin !== '' && !sameOrigin(req)) {
+          if (!sameOrigin(req)) {
             fail(403, 'cross-origin denied')
             return
           }
@@ -508,11 +513,16 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
               }
               const name = String(body.name).trim()
               const renamed = path.join(path.dirname(target.path), name)
+              // 只改大小写不算冲突：不敏感文件系统上 statSync(renamed) 命中的是源文件
+              // 自己（大小写敏感的系统本来也走不到这支，rename 照样成立）
+              const caseOnly = renamed.toLowerCase() === target.path.toLowerCase()
               let clash = false
-              try {
-                fs.statSync(renamed)
-                clash = true
-              } catch {}
+              if (!caseOnly) {
+                try {
+                  fs.statSync(renamed)
+                  clash = true
+                } catch {}
+              }
               if (clash) {
                 json(400, { error: `目标已存在：${name}` })
                 return
@@ -617,8 +627,7 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             json(405, { error: 'method not allowed' })
             return
           }
-          const origin = req.headers.origin
-          if (typeof origin === 'string' && origin !== '' && !sameOrigin(req)) {
+          if (!sameOrigin(req)) {
             json(403, { error: 'cross-origin denied' })
             return
           }
@@ -665,12 +674,19 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
               }
               entries.push({ xy, path: p, abs: path.join(root, p) })
             }
+            let untrackedTruncated = false
             if (untrackedDirs.length > 0) {
               const u = await runGit(['-c', 'core.quotePath=false', 'ls-files', '--others', '--exclude-standard', '--', ...untrackedDirs], root)
               if (u.ok) {
                 for (const f of u.out.split('\n')) {
                   const relFile = f.trim()
                   if (relFile === '') continue
+                  // 没 .gitignore 的目录（刚 npm install 那种）能一次列出上万条，
+                  // 撑爆响应与前端渲染；到顶就停并把截断事实带给前端
+                  if (entries.length >= STATUS_ENTRY_LIMIT) {
+                    untrackedTruncated = true
+                    break
+                  }
                   entries.push({ xy: '??', path: relFile, abs: path.join(root, relFile) })
                 }
               }
@@ -687,7 +703,7 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
               }
               for (const e of entries) e.stats = statMap.get(e.path) ?? null
             }
-            json(200, { available: true, root, entries, ...branchInfo })
+            json(200, { available: true, root, entries, ...(untrackedTruncated ? { untrackedTruncated: true } : {}), ...branchInfo })
           })()
         },
       })
@@ -714,8 +730,7 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             json(405, { error: 'method not allowed' })
             return
           }
-          const origin = req.headers.origin
-          if (typeof origin === 'string' && origin !== '' && !sameOrigin(req)) {
+          if (!sameOrigin(req)) {
             json(403, { error: 'cross-origin denied' })
             return
           }
@@ -909,13 +924,15 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             const pathOp = op === 'stage' || op === 'unstage' || op === 'discard'
             let rel = ''
             if (pathOp) {
-              const file = validateFile(String(body?.path ?? ''))
-              if (!file.ok) {
-                json(400, { error: file.message })
+              // 已删除的文件（xy 含 D）本就不在工作区：只校验路径形态 + 落在项目根内，
+              // 存在性交给 git 判（用 validateFile 会把「暂存这次删除」直接挡成 400）
+              const shape = validatePathShape(String(body?.path ?? ''))
+              if (!shape.ok) {
+                json(400, { error: shape.message })
                 return
               }
-              rel = path.relative(root, file.path)
-              if (rel.startsWith('..') || path.isAbsolute(rel)) {
+              rel = path.relative(root, shape.path)
+              if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
                 json(400, { error: '文件不在项目根内' })
                 return
               }
@@ -1023,8 +1040,7 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             json(405, { error: 'method not allowed' })
             return
           }
-          const origin = req.headers.origin
-          if (typeof origin === 'string' && origin !== '' && !sameOrigin(req)) {
+          if (!sameOrigin(req)) {
             json(403, { error: 'cross-origin denied' })
             return
           }
@@ -1083,8 +1099,7 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             json(405, { error: 'method not allowed' })
             return
           }
-          const origin = req.headers.origin
-          if (typeof origin === 'string' && origin !== '' && !sameOrigin(req)) {
+          if (!sameOrigin(req)) {
             json(403, { error: 'cross-origin denied' })
             return
           }
@@ -1171,8 +1186,7 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             json(405, { error: 'method not allowed' })
             return
           }
-          const origin = req.headers.origin
-          if (typeof origin === 'string' && origin !== '' && !sameOrigin(req)) {
+          if (!sameOrigin(req)) {
             json(403, { error: 'cross-origin denied' })
             return
           }
