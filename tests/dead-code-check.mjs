@@ -71,13 +71,19 @@ const renderSrc = fs.existsSync(renderPath) ? fs.readFileSync(renderPath, 'utf8'
 const EXPORT_ANCHOR = 'return Object.assign({ KitSurfaces'
 const exportAt = renderSrc.indexOf(EXPORT_ANCHOR)
 if (renderSrc !== '' && exportAt < 0) die('找不到 render-check 导出表锚点（测试结构变了，哨兵要同步）')
-const exportedNames = new Set(
-  (exportAt < 0 ? '' : renderSrc.slice(exportAt + 'return Object.assign({'.length, renderSrc.indexOf('}, kitBase,', exportAt)))
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s) => s !== ''),
-)
-if (exportAt >= 0 && exportedNames.size < 10) die('render-check 导出表只解析出 ' + exportedNames.size + ' 个名字，锚点可能失效')
+const exportEndAt = exportAt < 0 ? -1 : renderSrc.indexOf('}, kitBase,', exportAt)
+if (exportAt >= 0 && exportEndAt < 0) die('找不到 render-check 导出表结束锚点（测试结构变了，哨兵要同步）')
+// 条目形态校验代替名字个数阈值：锚点漂移会切出表达式片段（如 "a === b"），据此报锚点失效；
+// 个数随测试增删本来就该变，钉死数字只会逼着哨兵跟着改阈值
+const exportedList = exportAt < 0 ? [] : renderSrc
+  .slice(exportAt + 'return Object.assign({'.length, exportEndAt)
+  .split(',')
+  .map((s) => s.trim())
+  .filter((s) => s !== '')
+if (exportAt >= 0 && exportedList.length === 0) die('render-check 导出表解析为空，锚点可能失效')
+const badExport = exportedList.filter((n) => !/^[A-Za-z_$][\w$]*$/.test(n))
+if (badExport.length > 0) die('render-check 导出表解析出非标识符条目：' + badExport.join(' / ') + '（锚点可能失效）')
+const exportedNames = new Set(exportedList)
 
 // ── 1) i18n 词条 ──
 // 动态拼的键按前缀豁免（cfg 加字段名之类）；有新的拼接前缀时加进这张表
