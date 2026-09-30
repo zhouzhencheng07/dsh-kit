@@ -258,10 +258,14 @@ export async function apply(ctx, config = {}) {
             };
             /** 带令牌的可扫码链接：局域网每个 IPv4 一条 + 远程域名（配置了才有） */
             const phoneLinks = () => {
+                // 取链接前先对一次账：端口配置是 volatile 热提交，不会重跑 entry，
+                // 不同步就会把二维码指到一个没人监听的端口上（info 却报着旧端口在跑）
+                syncPhoneGateway();
                 if (!phoneGw)
                     return [];
+                const port = phoneGw.port() ?? phonePort();
                 const k = encodeURIComponent(phoneGw.token());
-                const links = lanAddresses().map((ip) => ({ label: 'lan', url: `http://${ip}:${phonePort()}/?k=${k}` }));
+                const links = lanAddresses().map((ip) => ({ label: 'lan', url: `http://${ip}:${port}/?k=${k}` }));
                 if (phoneRemoteDomain() !== '') {
                     links.push({ label: 'remote', url: `https://${phoneRemoteDomain()}/?k=${k}` });
                 }

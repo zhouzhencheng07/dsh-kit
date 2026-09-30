@@ -298,6 +298,21 @@ async function checkAdopt() {
       compSrc.includes("hideOfficialBrowserEntry") && compSrc.includes("同源校验"),
   );
   check(
+    "地址栏按官方口径校验（源码哨兵：只收 http(s)、拒带凭据、封顶长度，非法地址不发出）",
+    bundleSrc.includes('u.protocol !== "http:" && u.protocol !== "https:"') &&
+      bundleSrc.includes('u.username !== "" || u.password !== ""') &&
+      bundleSrc.includes("u.href.length > 2048"),
+  );
+  check(
+    "空签回车要另开一页而不是动别的签的页（源码哨兵：fresh 只在本签无页时发）",
+    bundleSrc.includes("fresh: mine === null") && bundleSrc.includes('t: "open", url: withScheme') &&
+      compSrc.includes("msg.fresh === true && target === null"),
+  );
+  check(
+    "空签不建真页（源码哨兵：没有页时给开始提示，挂载不再自动要空白页）",
+    bundleSrc.includes('t("browserStartHint")') && !bundleSrc.includes('sendNewPage'),
+  );
+  check(
     "组件行声明 + exports 子路径 + locale 齐备",
     patchSrc.includes("name: dsh-kit/browser") && !!pkg.exports["./browser"] && !!pkg.exports["./browser/locale/*.json"] &&
       fs.existsSync(__dirname + "/../locale/browser/zh.json") && fs.existsSync(__dirname + "/../locale/browser/en.json"),

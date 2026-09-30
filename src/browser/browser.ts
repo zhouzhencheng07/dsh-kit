@@ -1212,9 +1212,10 @@ export class BrowserService {
   }
 
   /** 面板 URL 栏手动导航（作用于指定页——面板一签一页时就是那张签自己的页；
-   *  不给页则落本分区观察页；都不动 agent 活动页；不取快照） */
-  async humanOpen(scope: string, url: string, targetId: number | null = null): Promise<{ ok: true; tabId: number; url: string; title: string } | { ok: false; error: string }> {
-    return this.navigate(scope, url, { snapshot: false, forHuman: true, targetId })
+   *  不给页则落本分区观察页；都不动 agent 活动页；不取快照）。
+   *  newPage = 那张签还没有页（从入口开出来的那张）：另开一页，别动别的签正在看的页 */
+  async humanOpen(scope: string, url: string, targetId: number | null = null, newPage = false): Promise<{ ok: true; tabId: number; url: string; title: string } | { ok: false; error: string }> {
+    return this.navigate(scope, url, { snapshot: false, forHuman: true, targetId, newTab: newPage })
   }
 
   /** 优雅关闭（面板/协议可调）：context.close() 落盘 cookie 后再走，下次启动免登录 */

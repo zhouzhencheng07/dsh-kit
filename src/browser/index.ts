@@ -203,7 +203,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       // ── 生效配置只读端点（client 门控与可达性探针）──
       // client 启动拉一次喂 cfgFromSnapshot；行关闭时本端点随模块不物化而 404，
       // client 探到 404 就整体不注册（面板、右栏签、链接改投全不出现）。
-      webCtx.webServer.register({
+      const disposeBrowserConfig = webCtx.webServer.register({
         kind: 'exact',
         path: '/dsh-kit-browser/config',
         handler: (_req, res) => {
@@ -224,6 +224,9 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       // profile 仍是全局共享的。面板挂舞台「浏览器」功能签，关闭标签即断 WS。
       // 同源校验同终端。另有 HTTP 侧的 /dsh-kit/browser/open（见下）：对话链接点击改投
       // 内置浏览器，走它而不是 WS——点击发生时面板未必已挂载/已连上，HTTP 不依赖任一状态。
+      // 卸载时要摘干净的东西（行关闭 = 端点不挂；不摘的话重开一轮会叠两套）
+      // 卸载时要摘的东西（行关闭 = 端点不挂；不摘的话重开一轮会叠两套）
+      const mounted: { off?: () => void; bwss?: { close: () => void }; upgrade?: () => void; probe?: () => void } = {}
       if (browserService.available && WebSocketServer) {
         const browserSockets = new Map<any, string>()
         const sendTo = (ws: any, obj: unknown) => {
@@ -254,17 +257,17 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
             if (key === scope) sendState(ws)
           }
         }
-        const offBrowserEvent = browserService.on((evt) => {
+        mounted.off = browserService.on((evt) => {
           // ws 投影统一字段形状：state/closed 无 tabId/url/title（投影为 undefined，JSON 序列化时丢弃）
           const flat = evt as { kind: string; scope?: string; tabId?: number; url?: string; title?: string }
           const scoped = evt.kind === 'scope' || evt.kind === 'navigated' || evt.kind === 'crashed'
           broadcast({ t: 'event', kind: flat.kind, scope: flat.scope, tabId: flat.tabId, url: flat.url, title: flat.title }, scoped ? flat.scope : undefined)
           // 页集/指针变了要重发 state（closed/state 是实例级的，各连接按自己分区取）
-          if (scoped) sendStateScope(flat.scope!)
+          if (scoped && flat.scope !== undefined) sendStateScope(flat.scope)
           else sendStateAll()
         })
-        void offBrowserEvent
         const bwss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 })
+        mounted.bwss = bwss
         bwss.on('connection', (ws: any) => {
           browserSockets.set(ws, DEFAULT_SCOPE)
           /** 本连接订着的「分区 + 页」（面板一签一页，一连接只画自己那张签的页）；
@@ -331,7 +334,9 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
               // 失败不发 error 事件：面板已经切到浏览器签，网址打不开时浏览器自己的错误页
               // 就是反馈（普通浏览器也这样），起不来时面板按 state.error 显示原因。
               // 别的操作（关页/新页）失败仍要报——那些没有"页面上看得见"的等价物
-              void browserService.humanOpen(scope, msg.url, msg.tabId == null ? null : Number(msg.tabId))
+              const target = msg.tabId == null ? null : Number(msg.tabId)
+              // fresh = 这张签还没有页（从入口开出来的那张）：另开一页，不动别的签正在看的页
+              void browserService.humanOpen(scope, msg.url, target, msg.fresh === true && target === null)
               return
             }
 
@@ -391,8 +396,8 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
             res.end('dsh-kit browser: WebSocket Upgrade Required')
           },
         })
-        void disposeBrowserUpgrade
-        void disposeBrowserProbe
+        mounted.upgrade = disposeBrowserUpgrade
+        mounted.probe = disposeBrowserProbe
       }
 
       // 对话里的链接改投内置浏览器（client 半边 onChatLinkClick 调用）。语义与面板
@@ -437,7 +442,20 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
           })
         },
       })
-      void disposeBrowserOpen
+      // 行关闭/重载插件时端点必须跟着没：少了这个，关掉行之后
+      // /dsh-kit-browser/config 与 /dsh-kit/browser 仍对外应答，再开一轮还会叠两套
+      return () => {
+        mounted.off?.()
+        mounted.upgrade?.()
+        mounted.probe?.()
+        disposeBrowserOpen()
+        disposeBrowserConfig()
+        try {
+          mounted.bwss?.close()
+        } catch {
+          // 已关
+        }
+      }
     })
   })
 }

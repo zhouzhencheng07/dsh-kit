@@ -3299,8 +3299,9 @@ ellipsis，窄列只截字不破版 */
      *  跨页跳转时随开页带给 VaultPagePane 消费（见 vaultPendingAnchor） */
     function openVaultPageAndDock(path, anchor) {
       if (!rightbarSeat.available) return;
-      openRightbarItem("vault", path);
+      // 先记锚再开签：开签可能同步挂载 pane，晚了就被它先消费掉
       vaultPendingAnchor = typeof anchor === "string" && anchor !== "" ? { path, anchor } : null;
+      openRightbarItem("vault", path);
     }
     /** 点击路径落知识库标签（树行/对话拦截器共用）：先落地再派发——知识库未
      *  挂载时 VaultRootView 不在，挂载后经 vaultOpenRequest 消费请求 */
@@ -3803,6 +3804,9 @@ ellipsis，窄列只截字不破版 */
      *  内容与按钮归调用方，这里只管壳与关闭。 */
     function VaultDialog({ title, onClose, children }) {
       react.useEffect(() => {
+        // 让路座：Esc 归这个对话框（同 target 上 root 的捕获监听注册得更早，
+        // 光 stopPropagation 拦不住它，会连带把右栏页签收了）
+        dock.vaultSearch.open = true;
         const onKey = (e) => {
           if (e.key === "Escape") {
             e.stopPropagation();
@@ -3810,7 +3814,10 @@ ellipsis，窄列只截字不破版 */
           }
         };
         window.addEventListener("keydown", onKey, true);
-        return () => window.removeEventListener("keydown", onKey, true);
+        return () => {
+          dock.vaultSearch.open = false;
+          window.removeEventListener("keydown", onKey, true);
+        };
       }, [onClose]);
       return jsxRuntime.jsx("div", {
         className: "dshk-vault-modalwrap",
@@ -4842,8 +4849,19 @@ ellipsis，窄列只截字不破版 */
       const [renamingPath, setRenamingPath] = react.useState(null);
       const [createAt, setCreateAt] = react.useState(null);
       const [createName, setCreateName] = react.useState("");
+      // 行内改名/新建期间把 dock.inlineEdit 座置真：root 的 Esc 分层据此让路，
+      // 否则按 Esc 取消编辑会顺手把右栏知识库页签（或整个侧栏视图）关掉
+      react.useEffect(() => {
+        dock.inlineEdit.active = renamingPath !== null || createAt !== null;
+        return () => {
+          dock.inlineEdit.active = false;
+        };
+      }, [renamingPath, createAt]);
       // 对话框（移动到…/导入/删除确认共用一份 state）：{kind, ...}；null = 没开
       const [dialog, setDialog] = react.useState(null);
+      // 搜索框聚焦态（Esc 让路用）。放在已有 state 之后：渲染级检查按 useState
+      // 槽位预置状态（改名/新建/对话框），插在中间会把那些槽位整体挪位
+      const [searchFocused, setSearchFocused] = react.useState(false);
       // 有盘上操作在跑（对话框按钮置灰防连点）
       const [busy, setBusy] = react.useState(false);
       const railRef = react.useRef(null);
@@ -4936,10 +4954,14 @@ ellipsis，窄列只截字不破版 */
       }, []);
 
       // 关闭手势长在浮层自己身上（同 TreeRowMenu 契约）：点浮层与搜索框之外才关；
-      // 开着期间挂 dock.vaultSearch 座，KitSurfaces 的全局 Esc 让路——Esc 只关浮层，不收页签/侧栏
+      // 开着期间挂 dock.vaultSearch 座，KitSurfaces 的全局 Esc 让路——Esc 只关浮层，不收页签/侧栏。
+      // 搜索框聚焦时也让路：去抖 + 请求在飞的那几百毫秒里座要是空的，Esc 会把页签收了
       react.useEffect(() => {
-        if (searchRes === null) return undefined;
+        if (searchRes === null && searchFocused !== true) return undefined;
         dock.vaultSearch.open = true;
+        if (searchRes === null) return () => {
+          dock.vaultSearch.open = false;
+        };
         const onDown = (e) => {
           if (e.target instanceof Element && !e.target.closest(".dshk-vault-vsearch") && !e.target.closest(".dshk-vault-search")) setSearchRes(null);
         };
@@ -4948,7 +4970,7 @@ ellipsis，窄列只截字不破版 */
           dock.vaultSearch.open = false;
           document.removeEventListener("pointerdown", onDown, true);
         };
-      }, [searchRes]);
+      }, [searchRes, searchFocused]);
 
       // toast 自动消隐
       react.useEffect(() => {
@@ -5474,6 +5496,8 @@ ellipsis，窄列只截字不破版 */
               value: searchQ,
               placeholder: t("vaultSearchPh"),
               spellCheck: false,
+              onFocus: () => setSearchFocused(true),
+              onBlur: () => setSearchFocused(false),
               onChange: (e) => {
                 // 随输入实时搜（去抖）；清空即关浮层
                 setSearchQ(e.target.value);
@@ -5823,6 +5847,7 @@ ellipsis，窄列只截字不破版 */
       // 点浮层与触发钮之外 / Esc 即关，Esc 不下传（别顺带收页签）
       react.useEffect(() => {
         if (barMenu === null) return undefined;
+        dock.vaultSearch.open = true;
         const onDown = (e) => {
           if (!(e.target instanceof Element)) {
             setBarMenu(null);
@@ -5840,6 +5865,7 @@ ellipsis，窄列只截字不破版 */
         document.addEventListener("pointerdown", onDown, true);
         window.addEventListener("keydown", onKey, true);
         return () => {
+          dock.vaultSearch.open = false;
           document.removeEventListener("pointerdown", onDown, true);
           window.removeEventListener("keydown", onKey, true);
         };
@@ -6026,9 +6052,9 @@ ellipsis，窄列只截字不破版 */
                 root,
                 indexPages,
                 // 索引侧不在时：开页退回本模块的入口、刷新无回调可调（页签本组件开）
-                onOpenPage: (p) => {
-                  if (typeof reader.openPath === "function") reader.openPath(p);
-                  else openVaultPageAndDock(p);
+                onOpenPage: (p, anchor) => {
+                  if (typeof reader.openPath === "function") reader.openPath(p, anchor);
+                  else openVaultPageAndDock(p, anchor);
                 },
                 onIndexRefresh: () => {
                   if (typeof reader.refreshIndex === "function") reader.refreshIndex();
@@ -6295,6 +6321,7 @@ ellipsis，窄列只截字不破版 */
       phoneRotate: "刷新链接",
       phoneRotateHint: "作废当前链接并生成新链接，已授权设备将全部失效。",
       phoneRotated: "链接已刷新，旧链接已失效",
+      phoneGateFail: "网关启停失败：{error}",
       phoneRotateFail: "刷新失败：{error}",
       kcfgGroupPhone: "手机访问",
       kcfgPhonePort: "手机访问端口（1–65535）",
@@ -6322,6 +6349,7 @@ ellipsis，窄列只截字不破版 */
       phoneRotate: "New link",
       phoneRotateHint: "Invalidate the current link and issue a new one; all authorized devices are signed out.",
       phoneRotated: "Link rotated; the old one is dead",
+      phoneGateFail: "Could not {op} the gateway: {error}",
       phoneRotateFail: "Rotate failed: {error}",
       kcfgGroupPhone: "Phone access",
       kcfgPhonePort: "Phone access port (1–65535)",
@@ -6487,8 +6515,9 @@ ellipsis，窄列只截字不破版 */
           } else {
             setLinkData(null);
           }
-        } catch {
-          // 失败保持原状：下一次 info 刷新为准
+        } catch (e) {
+          setNotice(tf("phoneGateFail", { op: next ? t("phoneGateStart") : t("phoneGateStop"), error: String(e?.message ?? e) }));
+          setTimeout(() => setNotice(""), 3000);
         }
         setGateBusy(false);
       };
@@ -6508,8 +6537,9 @@ ellipsis，窄列只截字不破版 */
         setGateBusy(false);
       };
 
-      // 打开即取状态与链接；网关未跑时只显示原因
-      react.useEffect(() => {
+      // 打开即取状态与链接；网关未跑时只显示原因。端口与远程域名是热提交，
+      // 这一页不会自己重挂——切回窗口时重取一次，否则改完设置回来看到的还是旧二维码
+      const refresh = react.useCallback(() => {
         const ctrl = new AbortController();
         fetchPhoneInfo(ctrl.signal)
           .then((body) => {
@@ -6517,11 +6547,17 @@ ellipsis，窄列只截字不破版 */
             if (body.gatewayOn && body.running) {
               return fetchPhoneLinks(ctrl.signal).then(setLinkData).catch((e) => setLoadErr(String(e?.message ?? e)));
             }
+            setLinkData(null);
             return undefined;
           })
           .catch((e) => setLoadErr(String(e?.message ?? e)));
-        return () => ctrl.abort();
       }, []);
+      react.useEffect(() => {
+        refresh();
+        const onFocus = () => refresh();
+        window.addEventListener("focus", onFocus);
+        return () => window.removeEventListener("focus", onFocus);
+      }, [refresh]);
       // vendored 二维码库按需加载一次
       react.useEffect(() => {
         if (typeof window !== "undefined" && typeof window.qrcode === "function") {
@@ -6535,10 +6571,12 @@ ellipsis，窄列只截字不破版 */
       }, []);
 
       const links = linkData && Array.isArray(linkData.links) ? linkData.links : [];
-      const activeUrl = links[activeIdx] ? links[activeIdx].url : "";
+      // 链接会随网卡/网关开关变少变多，索引要收敛，否则越界后二维码空白
+      const active = links[activeIdx] ?? links[0] ?? null;
+      const activeUrl = active ? active.url : "";
       // 链接统一出二维码（LAN/远程同等待遇）；远程链接公网可达，页面提示谨防
       // 他人扫码（见 phoneRemoteCaution）。悬停复制按钮 title 可查看完整链接。
-      const activeIsRemote = !!(links[activeIdx] && links[activeIdx].label === "remote");
+      const activeIsRemote = !!(active && active.label === "remote");
       react.useEffect(() => {
         if (!qrReady || activeUrl === "" || !canvasRef.current) return;
         try {
@@ -7366,7 +7404,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       let cur = null;
       let oldNo = 0;
       let newNo = 0;
-      for (const line of String(patch ?? "").split("\n")) {
+      for (const line of String(patch ?? "").split(/\r?\n/)) {
         // hunk 之前有 diff/index 头部是常态，进了 hunk 再见到才是下一段文件
         if (cur !== null && (line.startsWith("diff ") || line.startsWith("index "))) break;
         const m = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
@@ -8738,12 +8776,16 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const [detail, setDetail] = react.useState(null); // null | {phase, meta?, files?}
       const [more, setMore] = react.useState(false); // load more 在途
       const fetchRef = react.useRef(null);
+      // 序号守卫：轮询与「加载更多」并发时，先发后到的整页响应会把已追加的记录
+      // 盖回第一页（GitChangesPanel 同款）
+      const seqRef = react.useRef(0);
       fetchRef.current = () => {
         if (!cwd) return;
         const c = new AbortController();
+        const seq = ++seqRef.current;
         fetchGitLog(cwd, 200, 0, c.signal)
           .then((b) => {
-            if (c.signal.aborted) return;
+            if (c.signal.aborted || seq !== seqRef.current) return;
             setError(null);
             setData(b);
           })
@@ -8756,10 +8798,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const loadMore = () => {
         if (!cwd || more || !data || data.available !== true || data.hasMore !== true) return;
         const c = new AbortController();
+        const seq = ++seqRef.current;
         setMore(true);
         fetchGitLog(cwd, 200, Array.isArray(data.records) ? data.records.length : 0, c.signal)
           .then((b) => {
-            if (c.signal.aborted) return;
+            if (c.signal.aborted || seq !== seqRef.current) return;
             if (b.available !== true) throw new Error("unavailable");
             setData((prev) => ({
               available: true,
@@ -8768,7 +8811,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
               hasMore: b.hasMore === true,
             }));
           })
-          .catch(() => {})
+          .catch((e) => {
+            if (!c.signal.aborted && seq === seqRef.current && e?.name !== "AbortError") setError(String(e?.message ?? e));
+          })
           .finally(() => setMore(false));
       };
       // 把本面板的刷新函数暴露给父级的 ⟳
@@ -9126,10 +9171,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           // 只抽删除行、剥掉前缀 `-`，整块按"已删除"红色展示（= 被删文件全文）。
           // commit 钉定模式下该提交已删除的文件（新像不存在）同样处理
           if (diff.clean || diff.text === null) return jsxRuntime.jsx("div", { className: "dshk-note", children: t("diffEmpty") });
-          const removed = diff.text
-            .split("\n")
-            .filter((l) => l.startsWith("-") && !l.startsWith("---"))
-            .map((l) => (l.length > 1 ? l.slice(1) : ""));
+          const raw = diff.text.split(/\r?\n/);
+          const hunkAt = raw.findIndex((l) => l.startsWith("@@"));
+          const metaAt = raw.findIndex((l) => l.startsWith("---"));
+          const body = hunkAt >= 0 ? raw.slice(hunkAt) : metaAt >= 0 ? raw.slice(metaAt + 1) : raw;
+          const removed = body.filter((l) => l.startsWith("-")).map((l) => (l.length > 1 ? l.slice(1) : ""));
           if (removed.length === 0) return jsxRuntime.jsx("div", { className: "dshk-note", children: t("contentEmpty") });
           return jsxRuntime.jsx(
             "div",
@@ -9151,7 +9197,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
               "div",
               {
                 className: "dshk-inline",
-                children: content.split("\n").map((text, i) =>
+                children: content.split(/\r?\n/).map((text, i) =>
                   jsxRuntime.jsx("div", { className: "dshk-il-add", children: text === "" ? " " : text }, i),
                 ),
               },
@@ -9163,7 +9209,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
         const hunks = parsePatchHunks(diff.text);
         if (hunks !== null) return split ? renderSplitHunks(hunks) : renderUnifiedHunks(hunks);
-        const lines = diff.text.split("\n");
+        const lines = diff.text.split(/\r?\n/);
         return jsxRuntime.jsx("div", {
           className: "dshk-diff",
           children: lines.map((line, i) => {
@@ -9779,7 +9825,13 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       react.useEffect(() => {
         if (plan?.phase !== "stopping") return undefined;
         if (!running) {
-          if (loopBreaksRef.current >= cfg.monitorMaxLoopBreaks) return undefined;
+          if (loopBreaksRef.current >= cfg.monitorMaxLoopBreaks) {
+            // 达上限只停不发：这轮已经停了，提示要跟着收（否则取消钮不在这个相位，
+            // 用户会一直看着一条点不掉的「正在停止当前回合…」）
+            stoppingRef.current = false;
+            setPlan(null);
+            return undefined;
+          }
           setPlan({ phase: "waiting", fireAt: Date.now() + 2500, reason: "repeat" });
           return undefined;
         }
@@ -10950,6 +11002,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       dockBrowser: "内置浏览器",
       rbGuideBrowserDesc: "agent 驱动的真实浏览器，可实时观看与接管",
       browserStarting: "正在拉起浏览器…",
+      browserStartHint: "输入网址开始浏览——回车后这一页就落在这张签里",
+      browserErrEmpty: "请输入地址。",
+      browserErrInvalid: "这个地址无效或过长。",
+      browserErrProtocol: "只支持 HTTP 和 HTTPS 地址。",
+      browserErrCredentials: "地址不能包含用户名或密码。",
       kcfgChatOpenLinkInBrowser: "对话链接改投内置浏览器",
       kcfgChatOpenLinkInBrowserHint: "对话里点 http(s) 链接改在内置浏览器打开。",
       kcfgHideOfficialBrowserEntry: "隐藏官方「浏览器」入口",
@@ -10970,6 +11027,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       dockBrowser: "Built-in browser",
       rbGuideBrowserDesc: "Agent-driven real browser you can watch live and take over",
       browserStarting: "Starting browser…",
+      browserStartHint: "Enter an address to start browsing — it opens in this tab",
+      browserErrEmpty: "Enter an address.",
+      browserErrInvalid: "That address is invalid or too long.",
+      browserErrProtocol: "Only HTTP and HTTPS addresses are supported.",
+      browserErrCredentials: "Addresses cannot contain a username or password.",
       kcfgChatOpenLinkInBrowser: "Open chat links in the built-in browser",
       kcfgChatOpenLinkInBrowserHint: "http(s) links in chat open in the built-in browser.",
       kcfgHideOfficialBrowserEntry: "Hide the official Browser entry",
@@ -11319,7 +11381,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
             setConnLost(false);
             sendScope(); // 认领分区（换会话重连时也靠它）
             sendWatch(); // 首连补发：effect 里那次检查时握手未完成，会被 readyState 挡掉
-            if (pageIdRef.current === null) sendNewPage();
           };
           ws.onmessage = (e) => {
             let msg;
@@ -11411,18 +11472,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           ws.send(JSON.stringify({ t: "watch", on: visibleRef.current === true && activeRef.current === true, scope: scopeRef.current ?? "", tabId: pageIdRef.current }));
         } catch {
           // 已断
-        }
-      };
-      /** 入口开出来的那张签还没有页：先要一张空白页。宿主回包后由
-       *  maybeAutoOpenBrowser 落进本签（见「没有页的签」那段），之后地址栏与
-       *  前进后退都有页可作用，不会发出 tabId 为空的一发 */
-      const sendNewPage = () => {
-        const ws = wsRef.current;
-        if (!ws || ws.readyState !== 1) return;
-        try {
-          ws.send(JSON.stringify({ t: "newTab", scope: scopeRef.current ?? "" }));
-        } catch {
-          // 已断：重连后 onopen 会补
         }
       };
       react.useEffect(() => {
@@ -11527,10 +11576,29 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         sendInput({ t: "input", kind: "key", combo: parts.join("+") });
       };
 
-      const go = (raw) => {
+      /** 地址栏校验（口径同官方浏览器）：只收 HTTP(S)、不收带凭据的地址、长度封顶。
+       *  以前是「一律补个 http:// 丢出去」，mailto: 之类会被改写成一个打不开的地址 */
+      const parseUrl = (raw) => {
         const text = String(raw ?? "").trim();
-        if (text === "") return;
-        const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `http://${text}`;
+        if (text === "") return { error: t("browserErrEmpty") };
+        let u = null;
+        try {
+          u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `http://${text}`);
+        } catch {
+          return { error: t("browserErrInvalid") };
+        }
+        if (u.protocol !== "http:" && u.protocol !== "https:") return { error: t("browserErrProtocol") };
+        if (u.username !== "" || u.password !== "") return { error: t("browserErrCredentials") };
+        if (u.hostname === "" || u.href.length > 2048) return { error: t("browserErrInvalid") };
+        return { url: u.href };
+      };
+      const go = (raw) => {
+        const parsed = parseUrl(raw);
+        if (parsed.error !== undefined) {
+          flashToast(parsed.error);
+          return;
+        }
+        const withScheme = parsed.url;
         setDraft(withScheme);
         // 先本地反馈（宿主 navigated 事件随后校正）；一签一页，作用于本签那张页
         setState((prev) => ({
@@ -11538,8 +11606,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           running: true,
           pages: (prev.pages ?? []).map((p) => (p.tabId === pageIdRef.current ? { ...p, url: withScheme, title: "" } : p)),
         }));
+        // 本签还没有页（从入口开出来的那张）：要宿主另开一页，别去动别的签正在看的页。
+        // 新页建出来后由 maybeAutoOpenBrowser 认领进本签
+        const mine = pageIdRef.current;
         try {
-          wsRef.current?.send(JSON.stringify({ t: "open", url: withScheme, scope: scopeRef.current ?? "", tabId: pageIdRef.current }));
+          wsRef.current?.send(JSON.stringify({ t: "open", url: withScheme, scope: scopeRef.current ?? "", tabId: mine, fresh: mine === null }));
         } catch {
           // 连接断开时忽略（重连后用户可再按）
         }
@@ -11570,9 +11641,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           ? t("browserStarting")
           : !live && viewUrl === ""
             ? t("browserNotRunning")
-            : myPage === null
-              ? t("browserNoPages")
-              : null;
+            : pageId === null
+              ? t("browserStartHint")
+              : myPage === null
+                ? t("browserNoPages")
+                : null;
 
       return jsxRuntime.jsxs(jsxRuntime.Fragment, {
         children: [

@@ -216,12 +216,20 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
         const raw = url.searchParams.get(key) ?? ''
         return isDateStr(raw) ? raw : todayStr()
       }
+      /** 区间跨度上限：重复日程是按天展开的，from=0000-01-01&to=9999-12-31 能把
+       *  宿主事件循环占死（手机网关是全路径反代，链接持有人能自己拼这个 URL） */
+      const SCHED_MAX_SPAN_DAYS = 400
+      const schedSpanOk = (from: string, to: string): boolean => {
+        const span = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000
+        return Number.isFinite(span) && span >= 0 && span <= SCHED_MAX_SPAN_DAYS
+      }
       const disposeSchedule: Array<() => void> = []
       disposeSchedule.push(
         route('/dsh-kit/schedule/data', (req, res, url) => {
           if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' })
           const from = schedDateParam(url, 'from')
           const to = schedDateParam(url, 'to')
+          if (!schedSpanOk(from, to)) return json(res, 400, { error: `date range too large (max ${SCHED_MAX_SPAN_DAYS} days)` })
           json(res, 200, {
             events: scheduleStore.list(),
             occurrences: scheduleStore.occurrences(from, to),

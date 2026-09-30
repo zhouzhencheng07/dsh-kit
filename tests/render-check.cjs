@@ -637,6 +637,14 @@ let vaultFetchPrev = null;
       !!renameInput && renameInput[2].defaultValue === "a" && renameInput[2].autoFocus === true,
     );
     check(
+      "树内改名/新建占用 inlineEdit 让路座（源码哨兵：Esc 取消编辑不连带关页签/侧栏）",
+      src.includes("dock.inlineEdit.active = renamingPath !== null || createAt !== null;"),
+    );
+    check(
+      "跨页 wikilink 的锚点透传（源码哨兵：onOpenPage 收第二个参数，一路传到 pendingAnchor）",
+      src.includes("onOpenPage: (p, anchor) => {") && src.includes("reader.openPath(p, anchor)") && src.includes("else openVaultPageAndDock(p, anchor);"),
+    );
+    check(
       "改名走宿主端点（源码哨兵：rename 提交后搬树键 + 把开着的那张页签换到新地址）",
       src.includes('vaultOp("/dsh-kit/vault/rename", { path: entry.path, name })') &&
         src.includes("vaultTabsRetarget(entry.path, res.path, entry.dir === true);") &&
