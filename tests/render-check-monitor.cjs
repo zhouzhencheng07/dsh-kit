@@ -339,65 +339,65 @@ async function checkApply() {
     global.Notification = prevNotification;
   }
 }
-// 10e-2) 通知箱（OS 通知之外的留痕层）：Electron 这类壳里系统通知可能不响、
-//        标题闪烁又看不见，页面自己画的这一层是唯一保证被看到的
+// 10e-1) 事件 scope 的 id 形式：scopeOf 给 `session-<uuid>`，会话列表与 openSession
+//        认裸 id——不归一会取不到会话名、点提醒也跳不过去
+{
+  const list = { byId: { "uuid-1": { displayTitle: "会话 S" } } };
+  const sessions = { list: { getSnapshot: () => ({ byId: list.byId }) } };
+  check("N 裸 id 原样返回", comps.notifySessionId(sessions, "uuid-1") === "uuid-1");
+  check("N session- 前缀归一到裸 id", comps.notifySessionId(sessions, "session-uuid-1") === "uuid-1");
+  check("N 列表里没有就原样留着", comps.notifySessionId(sessions, "session-uuid-2") === "session-uuid-2");
+  check("N 空值不炸", comps.notifySessionId(sessions, undefined) === "");
+}
+
+// 10e-2) 投递只有一条路：系统通知。发不出去（无 API / 被拒）就是不发，
+//        不再有页内提醒或标题闪烁这类第二层
 {
   const sessionsOf = (running, id = "n15") => ({
     list: {
       getSnapshot: () => ({
         ids: [id],
-        byId: { [id]: { running, displayTitle: id === "n15" ? "会话 Q" : "会话 R" } },
+        byId: { [id]: { running, displayTitle: "会话 Q" } },
         current: null,
       }),
     },
     open: () => {},
   });
   const prevNotification = global.Notification;
-  const prevFocus = global.document.hasFocus;
-  class SilentNote {
-    constructor() {}
+  const posted = [];
+  class TestNote2 {
+    constructor(title) {
+      posted.push(title);
+    }
     close() {}
   }
-  SilentNote.permission = "default";
-  global.Notification = SilentNote;
-  const box = () => global.__bodyNodes.find((n) => n.className === "dshk-notifybox");
+  TestNote2.requestPermission = () => {};
+  global.Notification = TestNote2;
+  const ev = (id) => ({ kind: "complete", sessionId: id, title: "会话 Q" });
+  const nodes = () => global.__bodyNodes.map((n) => n.className);
   try {
-    // 权限未定（Electron 常见）也照发：不卡在等 granted，否则永远走不到系统通知
-    const asked = [];
-    SilentNote.requestPermission = (cb) => {
-      asked.push(1);
-      cb("granted");
-    };
-    // 先把上一段留下的痕迹清掉（顺带走一遍「回窗口即清」）
-    global.document.hasFocus = () => true;
-    comps.notifyMaybeUnflash();
-    global.document.hasFocus = () => false;
-    comps.notifyCompleteSettled(sessionsOf(false), { kind: "complete", sessionId: "n15", title: "会话 Q" });
-    check("N 权限未定也投递（并顺带申请一次）", asked.length === 1);
-    check("N 通知箱落在页面上（OS 通知不响时唯一的留痕）", box() !== undefined);
-    const head = box().children[0];
-    const row = box().children[1];
-    check(
-      "N 通知箱头部给条数、行给会话标题",
-      /1/.test(head.textContent) && /会话 Q/.test(row.children[0].textContent),
-    );
-    // 点一行 = 摘掉那一条
-    row.listeners.click[0]({ stopPropagation() {} });
-    check("N 点通知箱某行即摘掉那一条", box() === undefined);
-    // 再来一条，回窗口（聚焦）即清空
-    comps.notifyCompleteSettled(sessionsOf(false), { kind: "complete", sessionId: "n15", title: "会话 Q" });
-    global.document.hasFocus = () => true;
-    comps.notifyMaybeUnflash();
-    check("N 回窗口即清空通知箱", box() === undefined);
-    // 清空钮：留痕还在时点它即清（换一条会话，避开同会话的收尾限流）
-    global.document.hasFocus = () => false;
-    comps.notifyCompleteSettled(sessionsOf(false, "n16"), { kind: "complete", sessionId: "n16", title: "会话 R" });
-    const clearBtn = box().children[0].children[0]; // 头部只挂一个「清空」钮
-    clearBtn.listeners.click[0]({ stopPropagation() {} });
-    check("N 通知箱「清空」钮即清", box() === undefined);
+    global.__bodyNodes.length = 0;
+    TestNote2.permission = "granted";
+    posted.length = 0;
+    comps.notifyCompleteSettled(sessionsOf(false), ev("n15"));
+    check("N 授权后发系统通知", posted.length === 1 && /会话 Q/.test(posted[0]));
+    // 权限未定也照发（不少壳不弹授权框，卡在等 granted 等于永远不发）
+    TestNote2.permission = "default";
+    posted.length = 0;
+    comps.notifyCompleteSettled(sessionsOf(false, "n16"), ev("n16"));
+    check("N 权限未定也发", posted.length === 1);
+    // 被拒 / 没有这个 API：一条都不发，页面上也不留第二层
+    TestNote2.permission = "denied";
+    posted.length = 0;
+    comps.notifyCompleteSettled(sessionsOf(false, "n16"), ev("n16"));
+    check("N 权限被拒不硬发", posted.length === 0);
+    global.Notification = undefined;
+    posted.length = 0;
+    comps.notifyCompleteSettled(sessionsOf(false, "n16"), ev("n16"));
+    check("N 没有 Notification API 也不炸", posted.length === 0);
+    check("N 页面上不留任何替代层", nodes().length === 0);
   } finally {
     global.Notification = prevNotification;
-    global.document.hasFocus = prevFocus;
     global.__bodyNodes.length = 0;
   }
 }

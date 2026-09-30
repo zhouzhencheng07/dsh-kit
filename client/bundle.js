@@ -111,15 +111,6 @@ window.__ModuleLoader__.load({
       style.textContent =
         ".dshk-toast{position:fixed;left:50%;bottom:56px;transform:translateX(-50%) translateY(8px);z-index:950;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);font-size:12px;line-height:1;padding:8px 14px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);box-shadow:0 4px 16px rgba(0,0,0,.12);opacity:0;pointer-events:none;transition:opacity .15s var(--ds-ease-in-out),transform .15s var(--ds-ease-in-out)}" +
         ".dshk-toast[data-show]{opacity:1;transform:translateX(-50%) translateY(0)}" +
-    // 通知箱：右下角贴边，宿主令牌取色；行即按钮（回会话），标题一行 + 正文一行截断
-    ".dshk-notifybox{position:fixed;right:16px;bottom:16px;z-index:960;width:280px;max-width:calc(100vw - 32px);display:flex;flex-direction:column;gap:4px;padding:8px;border-radius:10px;background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);box-shadow:0 6px 20px rgba(0,0,0,.16)}" +
-    ".dshk-notifybox-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--dsw-alias-label-tertiary)}" +
-    ".dshk-notifybox-clear{flex:none;border:0;background:none;padding:0;font:inherit;color:var(--dsw-alias-label-tertiary);cursor:pointer}" +
-    ".dshk-notifybox-clear:hover{color:var(--dsw-alias-label-primary)}" +
-    ".dshk-notifybox-row{display:flex;flex-direction:column;gap:1px;width:100%;text-align:left;border:0;border-radius:6px;padding:6px 8px;background:none;cursor:pointer}" +
-    ".dshk-notifybox-row:hover{background:var(--dsw-alias-bg-layer-3)}" +
-    ".dshk-notifybox-title{font-size:12px;line-height:1.3;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
-    ".dshk-notifybox-body{font-size:11px;line-height:1.3;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
         // 插件行配置页骨架：字段控件用官方 SettingsForm/Switch 等（自带样式），
         // 这里只补 bool 字段行（对齐官方 .field 节奏）与页签间距。
         ".dshk-cfgp{display:flex;flex-direction:column;gap:12px;padding:4px 2px 8px;color:var(--dsw-alias-label-primary);font-size:13px}" +
@@ -9410,15 +9401,13 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       notifyPlanTitle: "{title} · 等你批准计划",
       notifyPlanBody: "agent 提交了计划等你批准",
       notifyToolFallback: "工具调用",
-      notifyInboxHead: "离开期间 {count} 条提醒",
-      notifyInboxClear: "清空",
       // 本组件配置页字段（骨架通用文案在 dock）
       kcfgGroupUsage: "用量与余额",
       kcfgUsageEnabled: "余额与用量芯片",
       kcfgUsageEnabledHint: "composer 下方状态带显示当前会话 provider 的余额/配额芯片。",
       kcfgGroupMonitor: "会话监视与通知",
       kcfgNotifyEnabled: "会话桌面通知",
-      kcfgNotifyEnabledHint: "页面不在前台时，回合收尾/压缩完成/agent 提问弹桌面通知。",
+      kcfgNotifyEnabledHint: "页面不在前台时，回合收尾/压缩完成/agent 提问提醒你一次。",
       kcfgMonitorEnabled: "死循环熔断",
       kcfgMonitorEnabledHint: "当前会话的输出若陷入重复或失控（复读、绕圈、输出过长），自动停止该回合并提示。",
       kcfgMonitorMaxLoopBreaks: "循环打断上限（1–10）",
@@ -9471,14 +9460,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       notifyPlanTitle: "{title} · plan awaiting approval",
       notifyPlanBody: "The agent submitted a plan for your approval",
       notifyToolFallback: "A tool call",
-      notifyInboxHead: "{count} updates while you were away",
-      notifyInboxClear: "Clear",
       kcfgGroupUsage: "Usage & balance",
       kcfgUsageEnabled: "Balance & usage chip",
       kcfgUsageEnabledHint: "Shows a balance/quota chip for the session's provider under the composer.",
       kcfgGroupMonitor: "Session monitor & notifications",
       kcfgNotifyEnabled: "Session desktop notifications",
-      kcfgNotifyEnabledHint: "Desktop-notify on turn completion / compaction / agent questions while the page is in the background.",
+      kcfgNotifyEnabledHint: "One reminder on turn completion / compaction / agent questions while the page is in the background.",
       kcfgMonitorEnabled: "Dead-loop guard",
       kcfgMonitorEnabledHint: "Stop the turn and nudge the agent when the current session's output repeats itself or runs away.",
       kcfgMonitorMaxLoopBreaks: "Loop-break cap (1–10)",
@@ -9851,9 +9838,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       primed: false,
       /** 权限只申请一次（浏览器侧事实，不进 settings） */
       asked: false,
-      /** 标题闪烁：未读计数（0 = 未闪烁）与 <title> 观察器 */
-      flashCount: 0,
-      flashWatch: null,
       /** 点通知的导航口：官方 uiWorkspace（缺位时只聚焦窗口） */
       nav: null,
     };
@@ -9862,83 +9846,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
      *  通知 tag 由浏览器归并 */
     const notifySeenRequests = new WeakSet();
     const NOTIFY_BODY_MAX = 140; // 提问正文截断长度：桌面通知两行即满，长了被裁
-    const NOTIFY_FLASH_RE = /^\(\d+\) /; // 闪烁前缀：复原时按它剥掉，不存旧标题
-
-    /** 通知箱：窗口不在前台时，OS 通知不响、标题闪烁在无标题栏的壳里也看不见，
-     *  只有自己画在页面上的这层是能保证被看到的——回窗口即读，读完即清。
-     *  固定右下、最多 5 条（新的在上），点一条回该会话。 */
-    const NOTIFY_INBOX_MAX = 5;
-    let notifyInboxEl = null;
-    let notifyInboxItems = [];
-    function notifyInboxRender() {
-      if (typeof document === "undefined") return;
-      try {
-        notifyInboxPaint();
-      } catch {
-        /* 装饰层：画不出来也不能影响投递本身 */
-      }
-    }
-    function notifyInboxPaint() {
-      if (notifyInboxItems.length === 0) {
-        if (notifyInboxEl) {
-          notifyInboxEl.remove();
-          notifyInboxEl = null;
-        }
-        return;
-      }
-      if (!notifyInboxEl) {
-        notifyInboxEl = document.createElement("div");
-        notifyInboxEl.className = "dshk-notifybox";
-        notifyInboxEl.setAttribute("role", "status");
-        document.body.appendChild(notifyInboxEl);
-      }
-      notifyInboxEl.textContent = "";
-      const head = document.createElement("div");
-      head.className = "dshk-notifybox-head";
-      head.textContent = tf("notifyInboxHead", { count: String(notifyInboxItems.length) });
-      const clear = document.createElement("button");
-      clear.type = "button";
-      clear.className = "dshk-notifybox-clear";
-      clear.textContent = t("notifyInboxClear");
-      clear.addEventListener("click", (e) => {
-        e.stopPropagation();
-        notifyInboxClear();
-      });
-      head.appendChild(clear);
-      notifyInboxEl.appendChild(head);
-      for (const item of notifyInboxItems) {
-        const row = document.createElement("button");
-        row.type = "button";
-        row.className = "dshk-notifybox-row";
-        const title = document.createElement("span");
-        title.className = "dshk-notifybox-title";
-        title.textContent = item.title;
-        row.appendChild(title);
-        if (item.body !== "") {
-          const body = document.createElement("span");
-          body.className = "dshk-notifybox-body";
-          body.textContent = item.body;
-          row.appendChild(body);
-        }
-        row.addEventListener("click", () => {
-          notifyOpenSession(item.sessionId);
-          notifyInboxDrop(item);
-        });
-        notifyInboxEl.appendChild(row);
-      }
-    }
-    function notifyInboxPush(item) {
-      notifyInboxItems = [item, ...notifyInboxItems.filter((x) => x.sessionId !== item.sessionId)].slice(0, NOTIFY_INBOX_MAX);
-      notifyInboxRender();
-    }
-    function notifyInboxDrop(item) {
-      notifyInboxItems = notifyInboxItems.filter((x) => x !== item);
-      notifyInboxRender();
-    }
-    function notifyInboxClear() {
-      notifyInboxItems = [];
-      notifyInboxRender();
-    }
 
     /** 折叠空白并按上限截断（通知正文只取一行；超长补省略号） */
     function notifyClip(text, max) {
@@ -10178,40 +10085,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       }
     }
 
-    /** 标题闪烁兜底：未授权/非安全上下文时至少留痕（标签条上看得见未读计数）。
-     *  DSH 自己会改写标题（换会话、生成标题），所以挂着 <title> 观察器把前缀贴
-     *  回去；回窗口（可见且聚焦）即复原 */
-    function notifyApplyFlash() {
-      if (typeof document === "undefined" || notifyState.flashCount === 0) return;
-      const base = document.title.replace(NOTIFY_FLASH_RE, "");
-      const next = `(${notifyState.flashCount}) ${base}`;
-      if (document.title !== next) document.title = next;
-    }
-    function notifyFlash() {
-      if (typeof document === "undefined") return;
-      notifyState.flashCount += 1;
-      notifyApplyFlash();
-      if (!notifyState.flashWatch && typeof MutationObserver === "function") {
-        const titleEl = document.querySelector("title");
-        if (titleEl) {
-          notifyState.flashWatch = new MutationObserver(() => notifyApplyFlash());
-          notifyState.flashWatch.observe(titleEl, { childList: true, characterData: true, subtree: true });
-        }
-      }
-    }
-    function notifyUnflash() {
-      if (typeof document === "undefined" || notifyState.flashCount === 0) return;
-      notifyState.flashCount = 0;
-      const base = document.title.replace(NOTIFY_FLASH_RE, "");
-      if (document.title !== base) document.title = base;
-    }
-    /** 回窗口才算读过：复原标题并清空通知箱。可见但仍未聚焦（切程序回来一半）时留着 */
-    function notifyMaybeUnflash() {
-      if (!notifyForeground()) return;
-      notifyUnflash();
-      notifyInboxClear();
-    }
-
     /** 点通知 → 聚焦窗口并切到该会话。
      *  导航走官方 `uiWorkspace.openSession`：它是「一次 UI 导航动作」，选中会话并显示
      *  其对话，内部管 mainView 引用计数与面板 reveal。`ctx.sessions` 上没有导航方法
@@ -10260,27 +10133,21 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const title = tf(TITLE_BY_KIND[ev.kind] ?? "notifyQuestionTitle", { title: ev.title });
       const bodyKey = BODY_BY_KIND[ev.kind];
       const body = bodyKey ? t(bodyKey) : ev.body ?? "";
-      // 通知箱无条件收一条：OS 通知在不响的壳里（Electron 桌面端）没有替代品，
-      // 标题闪烁又只在有标签栏的浏览器里看得见，这层是唯一保证被看到的
-      notifyInboxPush({ sessionId: ev.sessionId, title, body: ev.body ?? "" });
-      if (notifyCanPost()) {
-        notifyAskPermission();
-        try {
-          const note = new Notification(title, { body, tag: `dsh-kit:${ev.sessionId}`, silent: true });
-          note.onclick = () => {
-            notifyOpenSession(ev.sessionId);
-            try {
-              note.close();
-            } catch {
-              /* 已自动关闭 */
-            }
-          };
-          return;
-        } catch {
-          /* 构造被拒（部分环境只认 ServiceWorker 通知）：通知箱已留痕 */
-        }
+      if (!notifyCanPost()) return;
+      notifyAskPermission();
+      try {
+        const note = new Notification(title, { body, tag: `dsh-kit:${ev.sessionId}`, silent: true });
+        note.onclick = () => {
+          notifyOpenSession(ev.sessionId);
+          try {
+            note.close();
+          } catch {
+            /* 已自动关闭 */
+          }
+        };
+      } catch {
+        /* 构造被拒（部分环境只认 ServiceWorker 通知）：发不出去就是发不出去 */
       }
-      notifyFlash();
     }
 
     /** 回合收尾的 kind：走「落定判定」再投递（notifyTurnKind 的全部取值） */
@@ -10380,10 +10247,25 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
      *  归官方 UI，插件只借这条事件补上官方接不到的那一半：官方 UI 只在会话「上台」
      *  时才注册待回应，后台会话的请求在它那里是空档，而根 ctx 上的监听器能收到
      *  全部会话的请求（会话身份沿用官方取法：事件 ctx 的 scope）。 */
+    /** 事件 scope 拿到的是 `session-<uuid>` 形式，会话列表与 openSession 认的是裸
+     *  id——不归一会取不到会话名、点提醒也跳不过去。取不到就原样留着 */
+    function notifySessionId(sessions, scopeId) {
+      const raw = String(scopeId ?? "");
+      if (raw === "") return raw;
+      try {
+        const byId = sessions.list.getSnapshot().byId ?? {};
+        if (byId[raw]) return raw;
+        const bare = raw.startsWith("session-") ? raw.slice(8) : "";
+        return bare !== "" && byId[bare] ? bare : raw;
+      } catch {
+        return raw;
+      }
+    }
+
     function notifyRequestListener(sessions, kind) {
       return function (request, next) {
         try {
-          const sessionId = sessions.scopeOf(this);
+          const sessionId = notifySessionId(sessions, sessions.scopeOf(this));
           if (sessionId !== undefined) {
             // 先记账再投递：官方待回应投影稍后也会看到这次请求，别提醒两遍
             notifySeenRequests.add(kind === "question" ? request.questions : request);
@@ -10950,9 +10832,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           compactionSubs.clear();
         });
       });
-      // 标题闪烁复原（未授权时的兜底标记）：回窗口即清
-      document.addEventListener("visibilitychange", notifyMaybeUnflash);
-      window.addEventListener("focus", notifyMaybeUnflash);
       // 提问 / 批准事件：旁听官方 remote 瀑布（根 ctx 上收全部会话的请求，含后台
       // 会话——官方 UI 只在会话上台时接管，那半边它接不到）。remote 服务缺位
       // 时静默降级：只剩完成通知与官方待回应投影那一半
@@ -10975,7 +10854,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     exports.notifyCompactionCore = notifyCompactionCore;
     exports.notifyTurnKind = notifyTurnKind;
     exports.notifyCompleteSettled = notifyCompleteSettled;
-    exports.notifyMaybeUnflash = notifyMaybeUnflash;
+    exports.notifySessionId = notifySessionId;
     exports.usageIsPeak = usageIsPeak;
     // 配置面（内置默认表 / 组件行配置页 / 快照解析）供测试断言与宿主默认同源比对
     exports.M_CFG_DEFAULTS = M_CFG_DEFAULTS;
