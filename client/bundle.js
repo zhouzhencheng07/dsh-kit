@@ -6774,11 +6774,7 @@ ellipsis，窄列只截字不破版 */
       treeAtUnavailable: "输入框未就绪（无会话或不可用）",
       treeMenu: "更多操作",
       scTitle: "源代码管理",
-      diffStale: "文件已被修改",
-      diffReloadNow: "重新载入",
-      diffAutoFollow: "自动跟随",
       scDiffTotal: "已跟踪改动的行数合计（未跟踪文件不计入）",
-      scUpdated: "更新于 {time}",
       scRefreshFail: "刷新失败：{error}（下面是上次读到的内容）",
       scStaged: "暂存的更改",
       scChanges: "更改",
@@ -6879,11 +6875,7 @@ ellipsis，窄列只截字不破版 */
       treeAtUnavailable: "Composer is not ready (no active session)",
       treeMenu: "More actions",
       scTitle: "Source Control",
-      diffStale: "File changed on disk",
-      diffReloadNow: "Reload",
-      diffAutoFollow: "Auto-follow",
       scDiffTotal: "Line totals of tracked changes (untracked files excluded)",
-      scUpdated: "Updated {time}",
       scRefreshFail: "Refresh failed: {error} (the content below is the last read)",
       scStaged: "Staged Changes",
       scChanges: "Changes",
@@ -7071,9 +7063,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 .dshk-chg-head{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:11px}
 .dshk-chg-count{color:var(--dsw-alias-label-tertiary);font-size:12px}
 .dshk-diff{font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;padding:4px 0;white-space:pre;overflow-x:auto;user-select:text;color:var(--dsw-alias-label-secondary)}
-.dshk-stalebar{display:flex;align-items:center;gap:8px;padding:4px 10px;margin:0 0 4px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:11px}
-.dshk-stalebar .dshk-spring{flex:1}
-.dshk-stalebar .dshk-btn{flex:none;white-space:nowrap}
 .dshk-diff-add{color:#0dbc79;background:rgba(13,188,121,.08)}
 .dshk-diff-del{color:#cd3131;background:rgba(205,49,49,.08)}
 .dshk-diff-hunk{color:#4daafc}
@@ -7085,7 +7074,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
    被 flex 压成 0 宽，只剩 ▾ 可见（「源代码管理图标没了」的根因） */
 .dshk-branchbtn{display:inline-flex;flex:0 1 auto;min-width:0;width:auto;align-items:center;gap:4px;max-width:60%;padding:2px 7px;border-color:var(--dsw-alias-border-l2)}
 .dshk-branchbtn>svg,.dshk-branchbtn .dshk-caret{flex:none}
-.dshk-branchbtn .dshk-branch-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshk-caret{font-size:9px;color:var(--dsw-alias-label-tertiary)}
 .dshk-pushhint{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:var(--dsw-alias-label-secondary)}
 .dshk-pushhint span{flex:1;min-width:0}
@@ -7095,7 +7083,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 .dshk-branch-cur{color:var(--dsw-alias-brand-primary)}
 .dshk-branch-ico{flex:none;font-size:8px;color:var(--dsw-alias-label-tertiary)}
 .dshk-branch-cur .dshk-branch-ico{color:var(--dsw-alias-brand-primary)}
-.dshk-branch-name{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-branch-name{flex:0 1 auto;min-width:4ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshk-branch-track{flex:none;font-family:ui-monospace,Consolas,monospace;font-size:10px;color:var(--dsw-alias-label-tertiary)}
 .dshk-branch-gone{color:#e7757f}
 .dshk-branch-curtag{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)}
@@ -8094,7 +8082,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const [collapsed, setCollapsed] = react.useState({});
       // 刷新可观测：最后读到的时刻 + 上次失败原因。失败保留旧数据（不清空），
       // 只把原因显示出来——「静默停在旧数据」是「不知道新改动」的主因
-      const [fetchedAt, setFetchedAt] = react.useState(0);
       const [err, setErr] = react.useState("");
       const fetchRef = react.useRef(null);
       const seqRef = react.useRef(0);
@@ -8107,7 +8094,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
             // seq 守卫：慢响应不覆盖更新的那次
             if (c.signal.aborted || seq !== seqRef.current) return;
             setData(b);
-            setFetchedAt(Date.now());
             setErr("");
           })
           .catch((e) => {
@@ -8433,16 +8419,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
                     children: jsxRuntime.jsx("span", {
                       className: "dshk-status",
                       children: `+${totals.added} −${totals.deleted}`,
-                    }),
-                  })
-                : null,
-              // 最后一次读到的时刻（「没刷新」不该靠猜）；只到分，头部一行宽度金贵
-              fetchedAt > 0
-                ? jsxRuntime.jsx(KitTip, {
-                    label: t("scUpdated").replace("{time}", new Date(fetchedAt).toLocaleTimeString()),
-                    children: jsxRuntime.jsx("span", {
-                      className: "dshk-status",
-                      children: new Date(fetchedAt).toLocaleTimeString().slice(0, 5),
                     }),
                   })
                 : null,
@@ -8980,11 +8956,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const meta = useResource && fileAddress ? useResource(fileAddress) : null;
       const version = meta?.value?.version;
       const readVersionRef = react.useRef(null);
-      const [stale, setStale] = react.useState(false);
-      const [autoFollow, setAutoFollow] = react.useState(true);
       const reload = () => {
         readVersionRef.current = version ?? null;
-        setStale(false);
         setReloadNonce((n) => n + 1);
         if (diffFetchRef.current) diffFetchRef.current();
       };
@@ -9033,19 +9006,14 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         return undefined;
       }, [path, cwd, commit]);
 
-      // 版本对照：宿主推了新版本 = 盘上被改过。自动跟随（默认开）直接重读；
-      // 关掉则保留旧 diff、顶一条提示条，重不重载由人定
+      // 版本对照：宿主推了新版本 = 盘上被改过，直接重读。只认「有版本可比」——
+      // 首次拿到 live 版本（read 还是 null）也要重读一次，否则资源晚到时这份 diff
+      // 永远停在旧内容
       react.useEffect(() => {
-        // 只认「有版本可比」：首次拿到 live 版本（read 还是 null）也要重读一次，
-        // 否则资源晚到时这份 diff 永远停在旧内容
         if (version === undefined) return;
         if (version === readVersionRef.current) return;
-        if (autoFollow) {
-          reload();
-          return;
-        }
-        setStale(true);
-      }, [version, autoFollow]);
+        reload();
+      }, [version]);
 
       // 内容读取：只服务于 diff 着色（常规视图的新像 = 盘上内容；未跟踪 = 整文件
       // 按新增着色）。截断（>512KB）或读失败时着色回落原始 patch，不作为错误展示。
@@ -9178,30 +9146,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
             className: "dshk-head",
             children: [
               jsxRuntime.jsx("span", { className: "dshk-title", children: path }),
-              // 自动跟随开关常驻头部（关掉才有「要不要重载」这个问题）
-              commit === undefined && version !== undefined
-                ? jsxRuntime.jsx("label", { className: "dshk-status", children: [
-                    jsxRuntime.jsx("input", {
-                      type: "checkbox",
-                      checked: autoFollow,
-                      onChange: (e) => setAutoFollow(e?.target?.checked === true),
-                    }),
-                    t("diffAutoFollow"),
-                  ] })
-                : null,
             ],
           }),
-          // 文件被改过：旧 diff 留在下面（不白屏），上面一条提示条 + 重载 + 自动跟随
-          stale && !commit && version !== undefined
-            ? jsxRuntime.jsxs("div", {
-                className: "dshk-stalebar",
-                children: [
-                  jsxRuntime.jsx("span", { children: t("diffStale") }),
-                  jsxRuntime.jsx("span", { className: "dshk-spring" }),
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-btn", onClick: reload, children: t("diffReloadNow") }),
-                ],
-              })
-            : null,
           deleted === true
             ? jsxRuntime.jsxs(jsxRuntime.Fragment, {
                 children: [
