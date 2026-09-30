@@ -411,18 +411,22 @@ out = comps.GitBranchMenu({ rect: { left: 20, top: 40 }, branches: { branches: [
 check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
 
 // —— 源码哨兵：SCM 面板分支按钮会被 .dshk-btn 的 26px 方钮定宽压扁（svg/分支名
-// 0 宽只剩 ▾）——必须显式 width:auto 反制，且可收缩 + 名字省略号 + 图标不参与
-// 收缩（否则窄侧栏下「main」这类短名也会被挤没）
+// 0 宽只剩 ▾）。反制必须带 .dshk-btn 复合选择器：基础类在根 UI_CSS、模块样式先注入，
+// 同特异度下基础类后生效，只写 width:auto 是不生效的（真机量到按钮恒 26px）
 {
   const filesSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
   check(
-    "分支按钮 width:auto + 可收缩 + 图标不参与收缩（窄侧栏不截断短分支名）",
-    filesSrc.includes(".dshk-branchbtn{display:inline-flex;flex:0 0 auto;min-width:0;width:auto") &&
+    "分支按钮复合选择器提权 + width:auto + 图标不参与收缩",
+    filesSrc.includes(".dshk-btn.dshk-branchbtn{display:inline-flex;flex:0 0 auto;min-width:0;width:auto") &&
       filesSrc.includes(".dshk-branchbtn>svg,.dshk-branchbtn .dshk-caret{flex:none}") &&
       // 按钮不许收缩（flex:0 0 auto）+ 名段只留省略号：头部再怎么挤，分支名都按内容
       // 取宽显示完整，只有超过 60% 上限的长名才截断
-      filesSrc.includes(".dshk-branchbtn{display:inline-flex;flex:0 0 auto;min-width:0;width:auto;align-items:center;gap:4px;max-width:60%;overflow:hidden") &&
+      filesSrc.includes("gap:4px;max-width:60%;overflow:hidden") &&
       filesSrc.includes(".dshk-branch-name{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"),
+  );
+  check(
+    "改宽度的钮一律带 .dshk-btn 复合选择器（根 UI_CSS 的 26px 定宽后注入）",
+    !/(?<![\w-])\.dshk-(branchbtn|textbtn)\{[^}]*width:auto/.test(filesSrc),
   );
   check(
     "头部不摆「更新于」与 diff 自动跟随开关（三处都收回）",

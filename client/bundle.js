@@ -7085,7 +7085,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 .dshk-dcell-del{background:rgba(205,49,49,.08)}
 .dshk-dcell-del .dshk-dtext{color:#cd3131}
 .dshk-dcell-void{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-textbtn{width:auto;padding:0 8px;font-size:11px}
+.dshk-btn.dshk-textbtn{width:auto;padding:0 8px;font-size:11px}
 /* 「更改」清单（源代码管理视图） */
 .dshk-changes{margin:2px 4px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;overflow:hidden}
 .dshk-chg-head{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:11px}
@@ -7098,9 +7098,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 /* 源代码管理：分支/推送/图谱（头部工具、分支浮层、提交图谱） */
 .dshk-headbtn{flex:none}
 .dshk-headbtn-on{color:var(--dsw-alias-brand-primary)}
-/* width:auto 覆盖 .dshk-btn 的 26px 方钮定宽——否则按钮恒 26 宽，图标与分支名
-   被 flex 压成 0 宽，只剩 ▾ 可见（「源代码管理图标没了」的根因） */
-.dshk-branchbtn{display:inline-flex;flex:0 0 auto;min-width:0;width:auto;align-items:center;gap:4px;max-width:60%;overflow:hidden;padding:2px 7px;border-color:var(--dsw-alias-border-l2)}
+/* 选择器要带 .dshk-btn：基础类的 width:26px 在根 UI_CSS 里、而本模块样式先注入，
+   同特异度下基础类反而后生效，方钮定宽会把分支名压成 0 宽（只剩图标与 ▾） */
+.dshk-btn.dshk-branchbtn{display:inline-flex;flex:0 0 auto;min-width:0;width:auto;align-items:center;gap:4px;max-width:60%;overflow:hidden;padding:2px 7px;border-color:var(--dsw-alias-border-l2)}
 .dshk-branchbtn>svg,.dshk-branchbtn .dshk-caret{flex:none}
 .dshk-caret{font-size:9px;color:var(--dsw-alias-label-tertiary)}
 .dshk-pushhint{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:var(--dsw-alias-label-secondary)}
