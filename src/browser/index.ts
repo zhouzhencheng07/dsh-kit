@@ -268,7 +268,13 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
               // 别的操作（关页/新页）失败仍要报——那些没有"页面上看得见"的等价物
               const target = msg.tabId == null ? null : Number(msg.tabId)
               // fresh = 这张签还没有页（从入口开出来的那张）：另开一页，不动别的签正在看的页
-              void browserService.humanOpen(scope, msg.url, target, msg.fresh === true && target === null)
+              void browserService
+                .humanOpen(scope, msg.url, target, msg.fresh === true && target === null)
+                .then((r) => {
+                  // 回包把页号交给发起的那张签：页集对账是全局补开路径，面板自己那张空签
+                  // 等不到它就只剩「回车没反应」（画面要等别的动作把签挤掉重来）
+                  if (r.ok) sendTo(ws, { t: 'opened', tabId: r.tabId, url: r.url })
+                })
               return
             }
 

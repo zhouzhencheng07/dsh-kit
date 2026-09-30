@@ -11441,6 +11441,17 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
               }
               return;
             }
+            if (msg.t === "newTab" || msg.t === "opened") {
+              // 「open / newTab」的回包：宿主把新建或导航到的那一页号报回来。本签还没页、
+              // 或本签那一页已不在分区页集里（宿重重启后页号从头数、旧签地址还留着旧号），
+              // 就据此直接认领这一页——页集对账按连接分区走，缺了这一拍就是「回车没反应」
+              const id = Number(msg.tabId);
+              const mineId = pageIdRef.current;
+              const known = brwScopes.get(scopeRef.current ?? "")?.pages ?? [];
+              const mineGone = mineId !== null && !known.some((p) => Number(p.tabId) === Number(mineId));
+              if (Number.isFinite(id) && (mineId === null || mineGone)) maybeAutoOpenBrowser(id);
+              return;
+            }
             if (msg.t === "event") {
               if (msg.kind === "navigated" && typeof msg.url === "string") {
                 setState((prev) => {
