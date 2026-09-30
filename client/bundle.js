@@ -11292,8 +11292,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     }
     /** 关掉一张签对应的页（人点官方 ✕ 时 pane 卸载走这里） */
     function brwClosePage(scope, pageId) {
+      // 空签没有页（pageId 是 null）：Number(null) 是 0，而宿主页号从 1 起——发过去
+      // 只会换回一条「页不存在：0」的报错提示
       const id = Number(pageId);
-      if (!Number.isFinite(id)) return;
+      if (!Number.isFinite(id) || id <= 0) return;
       brwClosedByUser.add(id);
       const entry = brwScopes.get(scope);
       if (entry?.ws) {
@@ -11321,14 +11323,14 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const scope = useCurrentRow(props)?.id ?? "";
       const pageId = brwPageIdOf(props);
       const entry = brwScopes.get(scope);
-      react.useSyncExternalStore(
-        (cb) => {
-          if (!entry) return () => {};
-          entry.subs.add(cb);
-          return () => entry.subs.delete(cb);
-        },
-        () => entry?.version ?? 0,
-      );
+      // 订阅回调必须定形（useCallback）：useSyncExternalStore 一见 subscribe 换了身份就
+      // 退订+重订，而退订清理会 drop 连接——不定形 = 每次重渲染都把共享控制连接拆了重建
+      const subscribeEntry = react.useCallback((cb) => {
+        if (!entry) return () => {};
+        entry.subs.add(cb);
+        return () => entry.subs.delete(cb);
+      }, [entry]);
+      react.useSyncExternalStore(subscribeEntry, () => entry?.version ?? 0);
       const page = brwPageOf(scope, pageId);
       const title = typeof page?.title === "string" ? page.title.trim() : "";
       if (title !== "") return title;
@@ -11795,17 +11797,15 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const seenRef = react.useRef(false);
       // 分区 = 所属会话；没有会话就没有分区（也不连控制连接）
       const conn = scope ? brwConn(scope) : null;
-      react.useSyncExternalStore(
-        (cb) => {
-          if (!conn) return () => {};
-          conn.subs.add(cb);
-          return () => {
-            conn.subs.delete(cb);
-            conn.drop?.();
-          };
-        },
-        () => conn?.version ?? 0,
-      );
+      const subscribeConn = react.useCallback((cb) => {
+        if (!conn) return () => {};
+        conn.subs.add(cb);
+        return () => {
+          conn.subs.delete(cb);
+          conn.drop?.();
+        };
+      }, [conn]);
+      react.useSyncExternalStore(subscribeConn, () => conn?.version ?? 0);
       // 页集非空却找不到自己那一页 = 那页真的没了（关掉/崩溃）→ 收掉这张签。
       // 页集为空是「浏览器没起来/已收摊」，不是「这一页没了」，那时不动（见 brwReconcile）
       const gone = conn !== null && conn.pages.length > 0 && seenRef.current && brwPageOf(scope, pageId) === null;
@@ -11846,17 +11846,15 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       // 「曾有页又归零 / 实例关闭」这一刻把浏览器那张签收掉——正常浏览器语义，
       // agent 下次开页照常弹回（新页 = 新签，由控制连接的页集→签条对账开出来）
       const conn = sessionId ? brwConn(sessionId) : null;
-      const connVersion = react.useSyncExternalStore(
-        (cb) => {
-          if (!conn) return () => {};
-          conn.subs.add(cb);
-          return () => {
-            conn.subs.delete(cb);
-            conn.drop?.();
-          };
-        },
-        () => conn?.version ?? 0,
-      );
+      const subscribeConn = react.useCallback((cb) => {
+        if (!conn) return () => {};
+        conn.subs.add(cb);
+        return () => {
+          conn.subs.delete(cb);
+          conn.drop?.();
+        };
+      }, [conn]);
+      const connVersion = react.useSyncExternalStore(subscribeConn, () => conn?.version ?? 0);
       void connVersion;
       react.useEffect(() => {
         if (!conn) return;
