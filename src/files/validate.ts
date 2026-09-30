@@ -1,6 +1,6 @@
 // 浏览器路径参数校验（tree/read/raw/fs-op/git 端点共用）：绝对路径、存在性、
-// 类型门槛（文件/目录），一律 realpathSync 规范化后再放行——路径穿越与相对路径
-// 在这里挡掉。
+// 类型门槛（文件/目录）——路径穿越与相对路径在这里挡掉。带存在性的校验一律
+// realpathSync 规范化后放行；目标是 git 对象（无工作区文件）的场景走 validatePathShape。
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -56,8 +56,8 @@ export function validatePathShape(raw: unknown): ValidateOk<{ path: string }> | 
   return { ok: true, path: path.resolve(raw.trim()) }
 }
 
-/** 校验浏览器传来的路径：绝对路径 + 存在（文件或目录均可），返回真实路径与 stat */
-export function validateAny(raw: unknown): ValidateOk<{ path: string; stat: fs.Stats }> | ValidateFail {
+/** 校验浏览器传来的路径：绝对路径 + 存在（文件或目录均可），返回真实路径 */
+export function validateAny(raw: unknown): ValidateOk<{ path: string }> | ValidateFail {
   if (typeof raw !== 'string' || raw.trim() === '') return { ok: false, message: '缺少路径' }
   const resolved = path.resolve(raw.trim())
   let real: string
@@ -66,13 +66,7 @@ export function validateAny(raw: unknown): ValidateOk<{ path: string; stat: fs.S
   } catch {
     return { ok: false, message: `路径不存在：${resolved}` }
   }
-  let stat: fs.Stats
-  try {
-    stat = fs.statSync(real)
-  } catch {
-    return { ok: false, message: `无法读取路径：${real}` }
-  }
-  return { ok: true, path: real, stat }
+  return { ok: true, path: real }
 }
 
 /** target 是否位于 dir 子树内（dir 本身不算在内——根目录不可改删） */

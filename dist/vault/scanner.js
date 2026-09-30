@@ -6,11 +6,12 @@
 // 不读正文、不进检索）。插件不持有第二真源；索引由扫描派生、mtime 增量缓存，
 // 进程内存态，重启重扫。
 // 不建骨架目录、不碰 git：目录不存在就是未配置态，前端渲染引导。
-// 生命周期：跟随 webServer 注入段创建，随插件卸载丢弃（无外部资源）。降级路径：
+// 生命周期：apply 级单实例（webServer 注入段重进时沿用同一实例与 mtime 缓存），
+// 随插件卸载丢弃（无外部资源）。降级路径：
 // 根不存在 → 索引端点回 { root: null }，前端渲染引导；扫描/搜索失败按空结果+错误字段回。
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { kitPath } from "../core/data-path.js";
 const MD_EXTS = new Set(['.md', '.markdown']);
 /** 不进索引与树的目录名（attachments 约定放二进制，由外部工具维护；点前缀一律隐藏） */
 const SKIP_DIRS = new Set(['attachments', '.git', '.trash', 'node_modules']);
@@ -18,16 +19,10 @@ const SCAN_FILE_LIMIT = 5000;
 /** 资料库目录名（根下这一层是约定：library/ 即资料库）；清单上限独立于页数上限 */
 const LIBRARY_DIR = 'library';
 const LIBRARY_LIMIT = 2000;
-/** 插件数据目录（$DSH_HOME/dsh-kit；与 schedule.ts 同式，各自轻量持有） */
-function dshKitDataDir() {
-    const env = process.env.DSH_HOME;
-    const home = env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh');
-    return path.join(home, 'dsh-kit');
-}
 /** vault 默认根（vaultRoot 留空时即开即用）：数据目录下的 vault 子树（与模块同名），与
  *  browser-profile/screenshots 等运行产物不混居 */
 export function defaultVaultRoot() {
-    return path.join(dshKitDataDir(), 'vault');
+    return kitPath('vault');
 }
 export function isMdPath(p) {
     return MD_EXTS.has(path.extname(p).toLowerCase());
@@ -184,7 +179,8 @@ export class VaultScanner {
                         mtimeMs: stat.mtimeMs,
                         size: stat.size,
                         page,
-                        content: content.length <= SEARCH_CACHE_CAP ? content.toLowerCase() : null,
+                        // 存原文（搜索时再转小写）：snippet 要给人看，缓存里那份不能是被洗过的正文
+                        content: content.length <= SEARCH_CACHE_CAP ? content : null,
                     });
                     pages.push({ ...page, path: full, mtimeMs: stat.mtimeMs, size: stat.size });
                 }
@@ -224,16 +220,18 @@ export class VaultScanner {
         const terms = q.split(/\s+/).filter((t) => t !== '');
         const results = [];
         for (const page of index.pages) {
-            // 正文优先取 mtime 缓存（scan 刚刷新过，命中即免读盘）；超大页等未缓存者现读
-            let content = this.cache.get(page.path)?.content ?? null;
-            if (content === null) {
+            // 正文优先取 mtime 缓存（scan 刚刷新过，命中即免读盘）；超大页等未缓存者现读。
+            // 缓存存的是原文，匹配用小写副本——snippet 回原文切片，不能给一段小写正文
+            let raw = this.cache.get(page.path)?.content ?? null;
+            if (raw === null) {
                 try {
-                    content = (await fs.promises.readFile(page.path, 'utf8')).toLowerCase();
+                    raw = await fs.promises.readFile(page.path, 'utf8');
                 }
                 catch {
                     continue;
                 }
             }
+            const content = raw.toLowerCase();
             let score = 0;
             const relLower = page.rel.toLowerCase();
             const baseLower = relLower.split('/').pop() ?? '';
@@ -258,7 +256,7 @@ export class VaultScanner {
             // snippet：第一个词的首个出现位置附近 ±60 字符
             const first = terms[0];
             const at = first === undefined ? -1 : content.indexOf(first);
-            const snippet = at < 0 ? '' : content.slice(Math.max(0, at - 60), at + 100).replace(/\s+/g, ' ').trim();
+            const snippet = at < 0 ? '' : raw.slice(Math.max(0, at - 60), at + 100).replace(/\s+/g, ' ').trim();
             results.push({ path: page.path, rel: page.rel, snippet, score });
         }
         results.sort((a, b) => b.score - a.score || a.rel.localeCompare(b.rel));

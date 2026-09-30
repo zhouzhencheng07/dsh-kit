@@ -359,8 +359,7 @@ export function parseCookies(header: unknown): Record<string, string> {
 }
 
 /**
- * 默认令牌持久化文件：<DSH_HOME>/dsh-kit/phone-gateway.json（旧版的
- * <DSH_HOME>/data/dsh-kit-phone-gateway.json 在首次读到时搬过来）。
+ * 默认令牌持久化文件：<DSH_HOME>/dsh-kit/phone-gateway.json。
  * 重启 dsh 后令牌不变，手机端 Cookie 继续有效；文件损坏则重新生成
  * （等价于一次轮换，旧链接失效属预期）。
  */
@@ -447,8 +446,6 @@ export interface PhoneGatewayHandle {
   token(): string
   /** 轮换令牌并持久化；旧链接与旧 Cookie 立即失效 */
   rotate(): string
-  /** 令牌尾迹（日志/状态展示用，不暴露全文） */
-  fingerprint(): string
   /** 运行状态快照 */
   state(): { listening: boolean; error: string | null }
   close(): void
@@ -583,7 +580,9 @@ export function startPhoneGateway({ port, upstreamPort, stateFile = defaultState
         const enc = pickEncoding(req.headers['accept-encoding'])
         const bodyless = status === 204 || status === 304 || req.method === 'HEAD' || out['content-length'] === '0'
         const alreadyEncoded = out['content-encoding'] !== undefined
-        if (/text\/html/i.test(String(out['content-type'] ?? '')) && req.method !== 'HEAD') {
+        // 上游已经压过就不注入（注进去的是压缩字节，页面直接坏掉）；那种情况走下面的
+        // 原样透传分支——alreadyEncoded 同时也挡住了二次压缩
+        if (/text\/html/i.test(String(out['content-type'] ?? '')) && req.method !== 'HEAD' && !alreadyEncoded) {
           // HTML 需注入兜底脚本：缓冲整个页面（dsh 首页仅十余 KB）再回写；
           // 压不压另说——Caddy 层还会再压一次，这里只按客户端能力做
           const chunks: Buffer[] = []
@@ -691,6 +690,14 @@ export function startPhoneGateway({ port, upstreamPort, stateFile = defaultState
     up.end()
   })
 
+  // 活连接集合：server.close() 只停"接受新连接"，已建立的（含手机端长连的会话
+  // 事件流 WS）不会断——关网关/换端口/插件卸载时必须显式收掉
+  const sockets = new Set<import('node:net').Socket>()
+  server.on('connection', (socket: import('node:net').Socket) => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+  })
+
   const state: { listening: boolean; error: string | null } = { listening: false, error: null }
   server.on('listening', () => {
     state.listening = true
@@ -717,12 +724,19 @@ export function startPhoneGateway({ port, upstreamPort, stateFile = defaultState
       saveGatewayState(stateFile, { token, enabled }, log)
       return token
     },
-    fingerprint: () => token.slice(-4),
     state: () => ({ listening: state.listening, error: state.error }),
     close() {
       try {
         server.close()
       } catch { /* 已关闭 */ }
+      for (const socket of sockets) {
+        try {
+          socket.destroy()
+        } catch {
+          /* 已断开 */
+        }
+      }
+      sockets.clear()
     },
   }
 }

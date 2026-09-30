@@ -42,8 +42,6 @@ export async function searchChain(query, { maxResults = 5, signal } = {}) {
         try {
             const result = await runWithTimeout(engine, q, maxResults, signal);
             return {
-                engine: engine.id,
-                attempts,
                 items: capItems(result.items, maxResults),
                 ...(result.summary ? { summary: result.summary } : {}),
             };

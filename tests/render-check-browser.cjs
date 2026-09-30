@@ -227,7 +227,7 @@ async function checkApply() {
   check("壳层常驻事件源挂 shell.overlay（id 稳定）", on.registered.some((s) => s && s.name === "shell.overlay" && s.id === "dsh-kit-browser"));
   check("右栏签注册：页类型 kind=dshk-browser + pane 正文槽位", on.registered.some((s) => s && s.kind === "dshk-browser" && s.id === "dsh-kit-browser") && on.slotInjects.includes("sidebar.right.pane.tab"));
   check("槽位经 slots.inject 等声明落地（不直接 register）", on.slotInjects.every((k) => typeof k === "string" && k.length > 0));
-  check("dock 签 kind 补登（openFeatureDock/closeRightbarTab 按 feature 查 tabKinds）", dockExports.tabKinds.browser.kind === "dshk-browser");
+  check("dock 签 kind 补登（openRightbarTab/closeRightbarTab 按 feature 查 tabKinds）", dockExports.tabKinds.browser.kind === "dshk-browser");
 }
 
 // 7) 空签接管：入口开出来的那张签还没认领到页时，新页落进那张签而不是另开一张

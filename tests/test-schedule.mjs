@@ -504,6 +504,28 @@ test('toolArgsToCreateInput：repeat 系参数组装 recurrence、待办带 repe
   )
 })
 
+test('toolArgsToCreateInput：不存在的日历日与非法 repeat 参数都显式抛错（不静默降级）', () => {
+  // 2026-02-30 格式对但不是真实日子：Date 会把它滚成 03-02，字面串与派生层两套表示必须挡住
+  assert.throws(() => toolArgsToCreateInput({ title: 'x', date: '2026-02-30', time: '10:00' }), /date/)
+  assert.throws(
+    () => toolArgsToCreateInput({ title: 'x', date: '2026-03-01', time: '10:00', endDate: '2026-02-30', endTime: '11:00' }),
+    /endDate 无法解析/,
+  )
+  // repeatEnd 写错原先被静静忽略 → 变成无限重复
+  assert.throws(
+    () => toolArgsToCreateInput({ title: 'x', date: '2026-03-01', time: '10:00', repeat: 'daily', repeatEnd: '2026-9-1' }),
+    /repeatEnd 无法解析/,
+  )
+  assert.throws(
+    () => toolArgsToCreateInput({ title: 'x', date: '2026-03-01', time: '10:00', repeat: 'daily', repeatInterval: 0 }),
+    /repeatInterval/,
+  )
+  assert.deepEqual(
+    toolArgsToCreateInput({ title: 'x', date: '2026-03-01', time: '10:00', repeat: 'daily', repeatEnd: '2026-09-01' }).recurrence,
+    { type: 'daily', end: '2026-09-01' },
+  )
+})
+
 test('schedule_create 工具：date+time 建日程、date 建待办、重复透传与摘要', async () => {
   const dir = tmp()
   const store = new ScheduleStore(path.join(dir, 'sched'))

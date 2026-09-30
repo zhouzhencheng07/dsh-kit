@@ -146,7 +146,10 @@ function boolFlag(value) {
  * disabled=true → 两键置为 true/false（已有则原位改值，缺失则补在块尾）；
  * disabled=false → 删除这两行。无 frontmatter 且要禁用时新建一个最小块。
  */
-function setDisableFlags(text, disabled) {
+export function setDisableFlags(text, disabled) {
+    // 保留原换行风格：CRLF 的 SKILL.md 按 LF 重写会把整份文件洗一遍（git 整文件 diff），
+    // 而且状态没变也会因为内容不等而写盘
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
     const lines = text.split(/\r?\n/);
     // 定位首块（第 0 行必须是 --- 围栏）
     if (lines[0] !== undefined && /^---[ \t]*$/.test(lines[0])) {
@@ -162,7 +165,7 @@ function setDisableFlags(text, disabled) {
             const dropRe = /^(disable-model-invocation|user-invocable)[ \t]*:/;
             if (!disabled) {
                 const filtered = lines.filter((line, i) => !(i > 0 && i < closeIdx && dropRe.test(line)));
-                return filtered.join('\n');
+                return filtered.join(eol);
             }
             const wanted = { 'disable-model-invocation': 'true', 'user-invocable': 'false' };
             const inner = lines.slice(1, closeIdx);
@@ -176,13 +179,13 @@ function setDisableFlags(text, disabled) {
                 else
                     inner.push(`${key}: ${wanted[key]}`);
             }
-            return [...lines.slice(0, 1), ...inner, ...lines.slice(closeIdx)].join('\n');
+            return [...lines.slice(0, 1), ...inner, ...lines.slice(closeIdx)].join(eol);
         }
     }
     // 没有 frontmatter：禁用则补最小块，启用则原样返回
     if (!disabled)
         return text;
-    return `---\ndisable-model-invocation: true\nuser-invocable: false\n---\n${text}`;
+    return `---${eol}disable-model-invocation: true${eol}user-invocable: false${eol}---${eol}${text}`;
 }
 /** 扫单个根：一层条目，目录须含 SKILL.md，平铺 .md 也算技能 */
 function scanRoot(root) {
@@ -767,6 +770,19 @@ export function applySkillPool(ctx, hooks) {
                                 }
                                 catch {
                                     // 已经不在就当删过了
+                                }
+                                // 链接只是挂载点，搬的是它指向的本体：本体在池里就得一起搬走，
+                                // 否则同一技能留成两份（挂载链接上面已经全断）。链接指向池外时不动目标。
+                                const poolReal = safeRealpath(defaultPoolDir());
+                                const relToPool = poolReal === null ? '..' : path.relative(poolReal, srcReal);
+                                if (relToPool !== '' && !relToPool.startsWith('..') && !path.isAbsolute(relToPool)) {
+                                    try {
+                                        await rmSkillDir(srcReal);
+                                    }
+                                    catch (error) {
+                                        const code = error.code ?? '占用';
+                                        throw new Error(`池里那份删不掉（${code}）：技能已搬到 ${dst}，请手动删除 ${srcReal}`);
+                                    }
                                 }
                             }
                             else {

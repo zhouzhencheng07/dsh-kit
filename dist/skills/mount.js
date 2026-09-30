@@ -212,13 +212,11 @@ export async function computeMountState(dirs) {
     const carrierRoles = entryRoles(carrierDir);
     const repoRoot = await repoRootOf(dirs.projectRoot);
     let ignored = null;
-    let ignoreRule = '';
     let tracked = [];
     if (repoRoot !== null) {
         const rel = toPosix(path.relative(repoRoot, effective === 'project-dsh' ? dirs.dshDir : dirs.agentsDir));
         const check = await runGit(['check-ignore', '-v', '--', `${rel}/`], repoRoot);
         ignored = check.ok && check.out.trim() !== '';
-        ignoreRule = check.out.trim().split('\n')[0]?.trim() ?? '';
         const ls = await runGit(['ls-files', '--', rel], repoRoot);
         tracked = ls.ok ? ls.out.split(/\r?\n/).map((s) => s.trim()).filter((s) => s !== '') : [];
     }
@@ -232,10 +230,8 @@ export async function computeMountState(dirs) {
         pinned: carrier !== null,
         needsChoice: carrier === null,
         ignored,
-        ignoreRule,
         tracked,
         carrierOwn: carrierRoles.own,
-        carrierLinks: carrierRoles.links,
     };
 }
 // ── git 体检与忽略 ──

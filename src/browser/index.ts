@@ -14,14 +14,11 @@
 //   GET  /dsh-kit/browser        —— 非 Upgrade 请求的 426 提示
 //   POST /dsh-kit/browser/open   —— 对话链接改投（不依赖面板已挂载/已连 WS）
 
-import fs from 'node:fs'
 import http from 'node:http'
-import path from 'node:path'
-import { createRequire } from 'node:module'
 
 import { BrowserService, normalizeScope, DEFAULT_SCOPE } from './browser.ts'
 import { buildBrowserTools } from './browser-tools.ts'
-import { loadToolsModule, sameOrigin } from '../core/index.ts'
+import { loadDep, loadToolsModule, sameOrigin } from '../core/index.ts'
 
 /** 插件设置的运行时形状（loader 按 Config schema 解析后传入 apply 第二参） */
 type KitSettings = Record<string, unknown>
@@ -36,67 +33,6 @@ interface KitWebServer {
   register(route: { kind: 'exact' | 'prefix'; path: string; handler: (req: http.IncomingMessage, res: http.ServerResponse) => void | Promise<void> }): () => void
   registerUpgrade(route: { path: string; handler: (req: http.IncomingMessage, socket: import('node:net').Socket, head: Buffer) => void }): () => void
 }
-
-/**
- * 定位运行中 DSH 的 monorepo 根（含 pnpm-workspace.yaml 的目录），loadDep 的
- * 第三锚点用。非 DSH 环境返回 null。
- */
-function findMonorepoRoot(): string | null {
-  const anchor = process.argv[1]
-  if (!anchor) return null
-  const abs = path.isAbsolute(anchor) ? anchor : path.resolve(process.cwd(), anchor)
-  let dir = path.dirname(abs)
-  for (let i = 0; i < 10; i++) {
-    if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) return dir
-    const parent = path.dirname(dir)
-    if (parent === dir) break
-    dir = parent
-  }
-  return null
-}
-
-/** 多锚点加载宿主运行时依赖（schemastery / ws，不在本包 dependencies 里），同主包口径 */
-function loadDep(spec: string): any {
-  try {
-    return require(spec)
-  } catch {
-    // 落到后续锚点
-  }
-  const anchor = process.argv[1]
-  if (anchor) {
-    const abs = path.isAbsolute(anchor) ? anchor : path.resolve(process.cwd(), anchor)
-    try {
-      return createRequire(abs)(spec)
-    } catch {
-      // 落到 monorepo store
-    }
-  }
-  const root = findMonorepoRoot()
-  if (root) {
-    const pnpm = path.join(root, 'node_modules', '.pnpm')
-    if (fs.existsSync(pnpm)) {
-      let entries: string[] = []
-      try {
-        entries = fs.readdirSync(pnpm)
-      } catch {
-        /* ignore */
-      }
-      for (const e of entries) {
-        if (!(e === spec + '@' || e.startsWith(spec + '@'))) continue
-        const pkgJson = path.join(pnpm, e, 'node_modules', spec, 'package.json')
-        if (!fs.existsSync(pkgJson)) continue
-        try {
-          return createRequire(pkgJson)(spec)
-        } catch {
-          // 试下一个候选版本
-        }
-      }
-    }
-  }
-  return null
-}
-
-const require = createRequire(import.meta.url)
 
 // 面板 WebSocket 服务器（ws 是 DSH 自身依赖，不在本包 dependencies 里）；
 // 取不到只影响面板帧流，agent 工具照常可用

@@ -496,16 +496,8 @@ window.__ModuleLoader__.load({
       if (tab === "vault") return { vaultOpen: false };
       return { browserOpen: false };
     }
-    /** 打开一个功能签（输入行入口与自动跟随共用）：确保存在，不清别的签。
-     *  浏览器不做抑制（agent 干活必回眼前） */
-    function openFeatureTab(ui, tab) {
-      if (tab === "schedule") return { schedOpen: true };
-      if (tab === "vault") return { vaultOpen: true };
-      return { browserOpen: true };
-    }
     /** 功能存在性按挂载计数：一页一签，同一功能可同时挂着好几张签，关掉一张不等于
-     *  功能不在场（最后一张卸掉才收）。计数为 0 时退出仍按 openFeatureTab 的结果走，
-     *  入口开签不经这条路径 */
+     *  功能不在场（最后一张卸掉才收）。计数为 0 时按 0 上报；入口开签不经这条路径 */
     const featurePresence = { vault: 0, schedule: 0, browser: 0 };
     function markFeaturePresence(tab, delta) {
       const key = tab === "schedule" ? "sched" : tab === "vault" ? "vault" : "browser";
@@ -748,15 +740,6 @@ window.__ModuleLoader__.load({
         return false;
       }
     }
-    /** 「开功能签」：dock 签交给官方 openTab；kitUi 只补存在性（入口按钮选中态 /
-     *  角标 / 浏览器自动跟随判定还要读它）。seat 不在场（右栏压根不存在）时整件事
-     *  不做——只补存在性会留下「状态说开着、右栏没这张签」的假状态 */
-    function openFeatureDock(ui, feature) {
-      if (!rightbarSeat.available) return {};
-      openRightbarTab(feature);
-      return openFeatureTab(ui, feature);
-    }
-
     /** 打开一个文件的 diff（源代码管理/提交图谱统一入口；文件树与对话区点击走官方
      *  右栏文件签，不进这里）。一个文件一张签：diff 源（未跟踪/已删/钉定提交）编进
      *  地址 query，故同文件换源是另一张签、同一源重复开复用原签。seat 不在场时不动 */
@@ -818,7 +801,6 @@ window.__ModuleLoader__.load({
     exports.baseName = baseName;
     exports.pageBasename = pageBasename;
     exports.closeFeatureTab = closeFeatureTab;
-    exports.openFeatureTab = openFeatureTab;
     exports.RB_FEATURES = RB_FEATURES;
     exports.getRightbarSr = getRightbarSr;
     exports.openRightbarTab = openRightbarTab;
@@ -836,7 +818,6 @@ window.__ModuleLoader__.load({
     exports.activeRightbarItem = activeRightbarItem;
     exports.useActiveRightbarItem = useActiveRightbarItem;
     exports.closeActiveRightbarTab = closeActiveRightbarTab;
-    exports.openFeatureDock = openFeatureDock;
     exports.openFileAndDock = openFileAndDock;
     exports.tabAddress = tabAddress;
     exports.tabVisible = tabVisible;
@@ -896,8 +877,8 @@ window.__ModuleLoader__.load({
       setKitUi, subscribeKitUi, useKitUi, getKitUi,
       KitTip, attachShortcutCatalog, kitWsUrl,
         baseName, pageBasename,
-      closeFeatureTab, openFeatureTab, RB_FEATURES,
-      openRightbarTab, closeRightbarTab, openFeatureDock, openFileAndDock,
+      closeFeatureTab, RB_FEATURES,
+      openRightbarTab, closeRightbarTab, openFileAndDock,
     rightbarAddress, rightbarItem, rightbarQuery, openRightbarItem,
       useRightbarItems, rightbarItems, closeRightbarItem, activeRightbarFeature, closeActiveRightbarTab, tabAddress,
       sidebarViewPatch, toggleTermDock, spawnTerm, killTerm, makeTerm, getRightbarSr,
@@ -1895,7 +1876,7 @@ ellipsis，窄列只截字不破版 */
     const react = require("react");
     const jsxRuntime = require("react/jsx-runtime");
     const dock = kit;
-    const { KitTip, kitGetJson, kitPostJson, kitJson, resolveZh, subscribeLocale, getLocaleVersion, useCurrentCwd, registerNavIcon } = dock;
+    const { KitTip, kitGetJson, kitPostJson, kitJson, resolveZh, useCurrentCwd, registerNavIcon } = dock;
 
     // 组件私有文案（本组件自持词典，与根包字典互不依赖）
     const zh = {
@@ -2243,7 +2224,7 @@ ellipsis，窄列只截字不破版 */
           ? t("skGitNoGit")
           : git.reason === "not-a-dir"
             ? t("skGitFlat")
-            : `${t("skGitInitFail")}：${git.error ?? git.reason ?? ""}`
+            : `${t("skGitInitFail")}：${git.reason ?? ""}`
         : [
             `${t("skGitVersions")} ${git.commits.length}`,
             git.last ? `${t("skGitLast")} ${skAgo(git.last.time)}` : "",
@@ -3088,7 +3069,7 @@ ellipsis，窄列只截字不破版 */
           KitSurfaces,
         ),
       );
-      // 官方右侧边栏：五个功能 dock 签 + 引导页清单。只在宿主
+      // 官方右侧边栏：功能 dock 签 + 引导页清单。只在宿主
       // 提供该服务时生效（缺服务 = 只剩 getKitUi() 存在性补丁，签不出现）。用 inject
       // 等它就绪而非直接读——官方右栏与本插件的客户端加载顺序不保证
       //（sidebarRight 与在场信号的捕获在 kitBase.apply，本处只管右栏签与其它服务）
@@ -3139,11 +3120,11 @@ ellipsis，窄列只截字不破版 */
     const {
       getKitUi, setKitUi, useKitUi, KitTip, flashToast, writeClipboard,
       kitJson, kitPostJson, resolveZh, baseName, pageBasename,
-      closeFeatureTab, openFeatureTab, markFeaturePresence,
+      markFeaturePresence,
       openRightbarTab, closeRightbarTab, sidebarViewPatch,
-    rightbarAddress, rightbarItem, openRightbarItem, useRightbarItems, rightbarItems, closeRightbarItem, useActiveRightbarItem, tabAddress, tabVisible,
-      rightbarSeat, mainRowOf, getRightbarSr,
-      useCurrentRow, useCurrentCwd, currentComposerShell, chatMentionText,
+      rightbarItem, openRightbarItem, rightbarItems, closeRightbarItem, useActiveRightbarItem, tabAddress, tabVisible,
+      rightbarSeat,
+      useCurrentRow, currentComposerShell, chatMentionText,
       openOfficialFile, TreeRowMenu, TreeFolderIcon, FileTypeIcon16, ChevronIcon, OfficialIcon, dswIcon,
       expandSidebarNow, attachShortcutCatalog, t: rootT,
     } = dock;
@@ -3219,6 +3200,8 @@ ellipsis，窄列只截字不破版 */
       vaultPickPage: "从左侧选择一页开始",
       vaultPageGone: "页面不存在（可能已被移动或删除）",
       vaultCiteUnavailable: "对话输入框未就绪（无会话或不可用）",
+      vaultIdxTruncated: "笔记太多：索引已达单次扫描上限（5000 页），搜索与反链只覆盖已索引的部分",
+      vaultLibTruncated: "资料库清单已达上限（2000 项），资料库搜索只覆盖已列出的部分",
     };
     const en = {
       kcfgGroupVault: "Vault",
@@ -3290,6 +3273,8 @@ ellipsis，窄列只截字不破版 */
       vaultPickPage: "Pick a page on the left to start",
       vaultPageGone: "Page not found (it may have been moved or deleted)",
       vaultCiteUnavailable: "Composer is not ready (no active session)",
+      vaultIdxTruncated: "Too many notes: the index hit the per-scan cap (5000 pages); search and backlinks cover indexed pages only",
+      vaultLibTruncated: "The library list hit its cap (2000 entries); library search covers listed files only",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? rootT(key);
@@ -3958,7 +3943,7 @@ ellipsis，窄列只截字不破版 */
     // 数据走宿主 /dsh-kit/schedule/* 端点：raw 全量 events + 区间展开 occurrences
     // （重复展开与 state 派生都在宿主做，这里只渲染）+ orphans。
     // 块颜色只表达状态（浅底深字）：还没到橙 / 进行中绿 / 已过去蓝 / 逾期红——
-    // 不按标题散列取色，存量 color 字段保留但不读；已闭合计时段按已过去蓝展示。
+    // 不按标题散列取色（color 字段不读）；已闭合计时段按已过去蓝展示。
     // 面板只读：写路径归 agent 工具（schedule_query/create/update/delete）与望舒端；
     // 计时数据只展示不编辑。
 
@@ -5597,6 +5582,13 @@ ellipsis，窄列只截字不破版 */
           createAt === treeRoot ? createRow() : null,
           libRow(),
           renderDir(treeRoot, 0),
+          // 上限截断时说一声：搜索与反链只覆盖已索引的部分
+          index !== null && index.truncated === true
+            ? jsxRuntime.jsx("div", { className: "dshk-vault-treeload", children: t("vaultIdxTruncated") })
+            : null,
+          index !== null && index.library && index.library.truncated === true
+            ? jsxRuntime.jsx("div", { className: "dshk-vault-treeload", children: t("vaultLibTruncated") })
+            : null,
         ] }),
         rowMenu
           ? jsxRuntime.jsx(TreeRowMenu, {
@@ -6749,7 +6741,7 @@ ellipsis，窄列只截字不破版 */
 // /dsh-kit/*）。入口按钮经 slots.inject 自注册，开关 = 本组件自己的 Config
 // （fileTreeEnabled/sourceControlEnabled，经 /dsh-kit-files/config 拉取）；
 // 侧栏浏览区的 tree/git 分支经 kitBase.sidebarView 座交给 root 单槽分发，
-// 全局快捷键（Ctrl+Alt+, / Ctrl+Alt+.）在这里自挂，组合键读组件自己的配置。
+// 全局快捷键经宿主 shortcuts 服务注册（键位与冲突归官方快捷键页），组合键读组件自己的配置。
     const filesModule = (kit, require) => {
     var module = { exports: {} };
     var exports = module.exports;
@@ -6761,7 +6753,7 @@ ellipsis，窄列只截字不破版 */
       setKitUi, getKitUi, useKitUi,
       KitTip, attachShortcutCatalog,
       openFileAndDock, openTreeFile, sidebarViewPatch,
-    rightbarAddress, rightbarQuery, openRightbarItem, useRightbarItems, rightbarItems, closeRightbarItem,
+      rightbarItems, closeRightbarItem,
       flashToast, writeClipboard, kitGetJson, kitPostJson, kitJson,
       resolveZh, currentComposerShell, chatMentionText,
       expandSidebarNow, TreeRowMenu, TreeFolderIcon, FileTypeIcon16, ChevronIcon,
@@ -7328,7 +7320,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     function fetchGitBranch(cwd, signal) {
       return kitGetJson(`/dsh-kit/git/branch?cwd=${encodeURIComponent(cwd)}`, signal, (b) => typeof b.available === "boolean");
     }
-    /** 图谱引用装饰解析（与宿主侧 src/git.js parseDecoration 保持同步，入参为 %D 原文） */
+    /** 图谱引用装饰解析（与宿主侧 src/files/git.ts parseDecoration 保持同步，入参为 %D 原文） */
     function parseDecoration(text) {
       const out = [];
       if (typeof text !== "string" || text === "") return out;
@@ -7368,14 +7360,14 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     /** git 状态轮询周期：可见时低频拉取，回窗口/聚焦立即补一次 */
     // git 轮询间隔：每次轮询都要 spawn 一个 git 进程（实测本机 status 54–276ms、
-  // log 81–110ms），4s 一拍在 SCM 视图常开时是稳定可见的后台开销。动作后的刷新
-  // （stage/commit/branch 成功后各自 kick）与「可见性/焦点变化立即补一拍」不受影响，
-  // 所以拉长到 8s 只影响"放着不动时的自动跟随"这一档。
+    // log 81–110ms），4s 一拍在 SCM 视图常开时是稳定可见的后台开销。动作后的刷新
+    // （stage/commit/branch 成功后各自 kick）与「可见性/焦点变化立即补一拍」不受影响，
+    // 所以拉长到 8s 只影响"放着不动时的自动跟随"这一档。
   const GIT_POLL_MS = 8000;
   /** SCM 清单常开时用快拍：人盯着面板等的就是「agent 刚改完有没有出现」
    *  （一次 status+numstat 在本机 54–276ms，3s 一拍的代价可接受，且不可见时本就不轮） */
   const GIT_POLL_FAST_MS = 3000;
-  /** git 轮询共享时钟：状态/图谱/文件 diff 三处轮询共用一条 interval（各自挂载时
+    /** git 轮询共享时钟：状态/提交图谱两处轮询共用一条 interval（各自挂载时
    *  订阅、卸载退订），避免同一拍上叠出多条定时器；谁在看才轮谁由各视图的挂载与
    *  可见性门控负责，这里只管节拍。订阅各自报想要的拍长，时钟按最短的走（全部
    *  退订后时钟自己停掉）。 */
@@ -7670,7 +7662,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     }
 
     function FileTreePanel({ cwd, onOpenFile }) {
-      // expanded: 路径 → 目录单层状态；根目录就是 cwd
       // expanded: 路径 → 目录单层状态；根目录就是 cwd
       const [expanded, setExpanded] = react.useState({});
       // 供 nonce 刷新 effect 读取最新展开集合（保留展开状态用）
@@ -8136,7 +8127,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     // ─────────── 源代码管理视图（sidebar.workspaces 的 git 模式）───────────
     // 文件树头部分支按钮进入；与文件树互斥占用同一单槽，**无 ✕**——原文件树入口
-    // 按钮（及 Ctrl+E）就是切换开关：树 ⇄ 源代码管理 来回切。
+    // 按钮（及 Ctrl+Alt+.）就是切换开关：树 ⇄ 源代码管理 来回切。
     // 布局：标题行（分支按钮（官方分支图形+名称）+条目数+图谱/同步/刷新）
     // →「暂存的更改」组 →「更改」组（未跟踪 U 归入更改组）；分支浮层是
     // fixed 悬浮层（不参与面板布局，更改条目再多分支也完整显示；Esc/外部点击关闭，
@@ -9023,9 +9014,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     }
 
 
-    /** SCM 专用 diff 签（原 FileEditorPane 瘦身）：源代码管理/提交图谱点文件在
-     *  这里看差异。工作区文件的预览/编辑已退役——树与对话区点击改投官方右栏
-     *  文件签。commit（可选）= 提交钉定模式（图谱提交详情进入，diff 与该提交的
+    /** SCM 专用 diff 签：源代码管理/提交图谱点文件在这里看差异，工作区文件不在本
+     *  面板预览/编辑（树与对话区点击改投官方右栏文件签）。commit（可选）= 提交钉定模式（图谱提交详情进入，diff 与该提交的
      *  第一父对比）；deleted=工作区已删除（纯红展示全文）；untracked=未跟踪
      *  （整文件按新增着色，内容来自 read）。 */
     function DiffPane({ path, untracked, deleted, cwd, commit, fileAddress, useResource }) {
@@ -9081,7 +9071,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           });
       };
       // diff 数据：进入时拉一次；之后由宿主 file 资源的版本号驱动（见下方版本对照）
-      // ——不再自己轮询：版本是事件驱动推来的，比每 8s 猜一次准，也省掉每张签一个 git 进程
+      // 版本是事件驱动推来的（不自己轮询）：比每 8s 猜一次准，也省掉每张签一个 git 进程
       react.useEffect(() => {
         if (!cwd) return;
         setDiff({ phase: "loading" });
@@ -11617,7 +11607,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       };
 
       /** 地址栏校验（口径同官方浏览器）：只收 HTTP(S)、不收带凭据的地址、长度封顶。
-       *  以前是「一律补个 http:// 丢出去」，mailto: 之类会被改写成一个打不开的地址 */
+       *  mailto:/tel: 之类补成 http:// 会变成打不开的地址，故只收 HTTP(S) */
       const parseUrl = (raw) => {
         const text = String(raw ?? "").trim();
         if (text === "") return { error: t("browserErrEmpty") };

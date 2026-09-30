@@ -105,7 +105,7 @@ const RETURN = "return module.exports;";
 const rootReturn = body.lastIndexOf(RETURN);
 if (rootReturn < 0) { console.log("FATAL: no root return"); process.exit(2); }
 const wrapper = body.slice(0, rootReturn) +
-  "return Object.assign({ KitSurfaces, TreeRowMenu, openFeatureTab, closeFeatureTab, sidebarViewPatch, kitGetJson, kitPostJson, kitJson, getKitUi, setKitUi, FilePaneBody, openFeatureDock, openFileAndDock, closeRightbarTab, openOfficialFile, openTreeFile }, kitBase, exports.vault, exports.phone);" +
+  "return Object.assign({ KitSurfaces, TreeRowMenu, closeFeatureTab, sidebarViewPatch, kitGetJson, kitPostJson, kitJson, getKitUi, setKitUi, FilePaneBody, openFileAndDock, closeRightbarTab, openOfficialFile, openTreeFile }, kitBase, exports.vault, exports.phone);" +
   body.slice(rootReturn + RETURN.length);
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -127,7 +127,7 @@ console.log((baseOk ? "PASS  " : "FAIL  ") + "底座共享面齐全（kit 三件
 if (!baseOk) process.exitCode = 1;
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["VaultEntry", "KitSurfaces", "TreeRowMenu", "RteEditor", "VaultPagePane", "openFeatureTab", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksCard", "openFeatureDock", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["VaultEntry", "KitSurfaces", "TreeRowMenu", "RteEditor", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksCard", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -160,13 +160,8 @@ check("VaultEntry 渲染无异常且悬停走官方气泡（KitTip + 命令 id �
 // 7.0) 侧栏索引单槽互斥（sidebarViewPatch 纯补丁语义；入口按钮交互在 files 组件直测）
 const svp = comps.sidebarViewPatch("vault");
 check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultIdxOpen === true && svp.treeOpen === false && svp.gitOpen === false);
-// 7.1) 功能签入口补丁（openFeatureTab）：只置存在位，纯补丁不触碰别的签。
 // 「哪张签激活」归官方签表，kitUi 不再存激活位。后台任务无插件分支：官方会话
 // 头部自带任务清单 + 实时输出 + 停止
-const ots = comps.openFeatureTab({ files: [], browserOpen: false, schedOpen: false }, "schedule");
-check("openFeatureTab 日程：只置存在位", ots.schedOpen === true && ots.activeFeature === undefined && ots.browserOpen === undefined);
-const otb = comps.openFeatureTab({ files: [], browserOpen: false, schedOpen: true }, "browser");
-check("openFeatureTab 浏览器：纯补丁不触碰日程签（合并保留）", otb.browserOpen === true && otb.schedOpen === undefined);
 check("kitUi 不再存激活位（官方签表才是唯一事实）", comps.getKitUi().activeFeature === undefined);
 // 7.1b) 知识库入口（输入行钮 + 快捷键同语义）：只切左侧目录，点具体页才开右栏知识库
 // 签；再点 = 收回会话列表。补丁只含侧栏三键，功能签与页签状态一律不动（setKitUi
@@ -276,8 +271,6 @@ check("openVaultPageAndDock 同样不写激活位", comps.getKitUi().activeFeatu
   for (const cb of seatListeners) cb();
   check("mounted 变 undefined（没选会话 / 全局面板在前台）＝不在场", seat.available === false);
   check("useRightbarSeat 读的就是这份在场状态（KitSurfaces 据此重绘）", comps.useRightbarSeat() === false);
-  // 不在场：开签动作整件不做（只补存在性会留下「状态说开着、右栏没这张签」）
-  check("不在场：openFeatureDock 不动任何状态", Object.keys(comps.openFeatureDock({ browserOpen: false, activeFeature: null }, "browser")).length === 0);
   comps.setKitUi({ activeFeature: null });
   comps.openFileAndDock("C:/x/gated.js", true, false, undefined);
   check("不在场：openFileAndDock 不激活差异", comps.getKitUi().activeFeature !== "file");

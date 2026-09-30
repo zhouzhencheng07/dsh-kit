@@ -7,3 +7,4 @@ export * from "./project-root.js";
 export * from "./recycle.js";
 export * from "./text-decode.js";
 export * from "./opencode-session.js";
+export * from "./deps.js";

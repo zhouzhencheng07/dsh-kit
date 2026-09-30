@@ -73,5 +73,17 @@ eq('真实样本：描述完整且不含 ">-"', real.description.includes('>-'),
 eq('真实样本：name 不被块吞掉', real.name, 'wangshu-vault')
 check('真实样本：描述长度合理', real.description.length > 40)
 
+// setDisableFlags：改写 frontmatter 不能顺手把整份文件的换行风格洗掉
+{
+  const poolDist = join(here, '..', 'dist', 'skills', 'skill-pool.js')
+  const { setDisableFlags } = await import(`file://${poolDist.replace(/\\/g, '/')}`)
+  const crlf = '---\r\nname: demo\r\ndescription: x\r\n---\r\n正文\r\n'
+  const off = setDisableFlags(crlf, true)
+  check('CRLF：禁用后仍是 CRLF（没有裸 LF）', off.includes('\r\n') && !/[^\r]\n/.test(off))
+  eq('CRLF：本来就启用且没有弃用键 → 原样返回（不写盘）', setDisableFlags(crlf, false), crlf)
+  const lf = '---\nname: demo\n---\n正文\n'
+  eq('LF：保持 LF（不引入 CR）', setDisableFlags(lf, true).includes('\r'), false)
+}
+
 console.log(failed === 0 ? '\nALL PASS (test-skill-frontmatter)' : 'FAILED: ' + failed)
 process.exit(failed === 0 ? 0 : 1)

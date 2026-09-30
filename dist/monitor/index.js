@@ -6,78 +6,9 @@
 // 配置读取不依赖主包：经宿主 configEditor 服务现读 llm-pi-ai entry 的合成配置
 // （inherited+override 两层 providers 浅合并），凭证经宿主 credentials 按引用
 // 解析，key 不出宿主进程。
-import fs from 'node:fs';
-import path from 'node:path';
-import { createRequire } from 'node:module';
 import { registerUsageRoutes } from "./usage.js";
 import { registerLoopGuard } from "./loop-breaker.js";
-import { sameOrigin } from "../core/index.js";
-/**
- * 定位运行中 DSH 的 monorepo 根（含 pnpm-workspace.yaml 的目录），loadDep 的
- * 第三锚点用。非 DSH 环境返回 null。
- */
-function findMonorepoRoot() {
-    const anchor = process.argv[1];
-    if (!anchor)
-        return null;
-    const abs = path.isAbsolute(anchor) ? anchor : path.resolve(process.cwd(), anchor);
-    let dir = path.dirname(abs);
-    for (let i = 0; i < 10; i++) {
-        if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml')))
-            return dir;
-        const parent = path.dirname(dir);
-        if (parent === dir)
-            break;
-        dir = parent;
-    }
-    return null;
-}
-/** 多锚点加载宿主运行时依赖（schemastery，不在本包 dependencies 里），同主包口径 */
-function loadDep(spec) {
-    try {
-        return require(spec);
-    }
-    catch {
-        // 落到后续锚点
-    }
-    const anchor = process.argv[1];
-    if (anchor) {
-        const abs = path.isAbsolute(anchor) ? anchor : path.resolve(process.cwd(), anchor);
-        try {
-            return createRequire(abs)(spec);
-        }
-        catch {
-            // 落到 monorepo store
-        }
-    }
-    const root = findMonorepoRoot();
-    if (root) {
-        const pnpm = path.join(root, 'node_modules', '.pnpm');
-        if (fs.existsSync(pnpm)) {
-            let entries = [];
-            try {
-                entries = fs.readdirSync(pnpm);
-            }
-            catch {
-                /* ignore */
-            }
-            for (const e of entries) {
-                if (!(e === spec + '@' || e.startsWith(spec + '@')))
-                    continue;
-                const pkgJson = path.join(pnpm, e, 'node_modules', spec, 'package.json');
-                if (!fs.existsSync(pkgJson))
-                    continue;
-                try {
-                    return createRequire(pkgJson)(spec);
-                }
-                catch {
-                    // 试下一个候选版本
-                }
-            }
-        }
-    }
-    return null;
-}
+import { loadDep, sameOrigin } from "../core/index.js";
 // ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile
 // 写入 = 热提交（fiber config 里的稳定 ref），readSettings 统一解引用。

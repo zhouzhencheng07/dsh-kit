@@ -56,7 +56,7 @@ const ENGINE_TIMEOUT_MS = 12_000
 export async function searchChain(
   query: string,
   { maxResults = 5, signal }: { maxResults?: number; signal?: AbortSignal } = {},
-): Promise<{ engine: string; attempts: string[]; items: SearchResultItem[]; summary?: string }> {
+): Promise<{ items: SearchResultItem[]; summary?: string }> {
   const q = typeof query === 'string' ? query.trim() : ''
   if (!q) {
     throw new Error('free-search: query is empty')
@@ -68,8 +68,6 @@ export async function searchChain(
     try {
       const result = await runWithTimeout(engine, q, maxResults, signal)
       return {
-        engine: engine.id,
-        attempts,
         items: capItems(result.items, maxResults),
         ...(result.summary ? { summary: result.summary } : {}),
       }

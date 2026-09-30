@@ -77,7 +77,7 @@ const exportedNames = new Set(
     .map((s) => s.trim())
     .filter((s) => s !== ''),
 )
-if (exportAt >= 0 && exportedNames.size < 15) die('render-check 导出表只解析出 ' + exportedNames.size + ' 个名字，锚点可能失效')
+if (exportAt >= 0 && exportedNames.size < 10) die('render-check 导出表只解析出 ' + exportedNames.size + ' 个名字，锚点可能失效')
 
 // ── 1) i18n 词条 ──
 // 动态拼的键按前缀豁免（cfg 加字段名之类）；有新的拼接前缀时加进这张表

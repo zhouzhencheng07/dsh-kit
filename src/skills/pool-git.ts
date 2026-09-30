@@ -54,10 +54,8 @@ export interface PoolGitState {
   init: boolean
   /** init=false 的原因：no-git | not-a-dir | init-failed */
   reason?: string
-  error?: string
-  /** 未提交的文件（插件不会自己提交，等一次有意提交） */
+  /** 未提交的文件数（插件不会自己提交，等一次有意提交） */
   dirty: number
-  dirtyNames: string[]
   last: { sha: string; short: string; time: number; subject: string } | null
   commits: PoolGitCommit[]
 }
@@ -122,21 +120,45 @@ interface EnsureResult {
   reason?: string
 }
 
-async function ensureRepo(skillDir: string): Promise<EnsureResult> {
-  if (!isDir(skillDir)) return { ok: false, reason: 'not-a-dir' }
-  if (!(await gitAvailable())) return { ok: false, reason: 'no-git' }
-  if (await isOwnRepo(skillDir)) return { ok: true }
-  const init = await runGit(['-c', 'init.defaultBranch=main', 'init', '-q'], skillDir)
-  if (!init.ok) return { ok: false, reason: 'init-failed', error: init.err.trim() || 'git init 失败' }
-  // 身份与签名开关只落本仓库（user.useConfigOnly 之类的全局策略也不影响）
-  for (const [key, value] of [
+/**
+ * 本地配置补齐：缺什么补什么，已有值一律不动。身份缺失会让面板提交直接报
+ * Author identity unknown（clone 进来、或从别处搬进池的仓库就没有本地身份），
+ * 与文件头「不要求用户配过 user.name」冲突。一次 get-regexp 看清全部，够用就不再多起进程。
+ */
+async function ensureLocalConfig(skillDir: string): Promise<void> {
+  const wanted: Array<[string, string]> = [
     ['user.name', 'dsh-kit'],
     ['user.email', 'dsh-kit@localhost'],
     ['commit.gpgsign', 'false'],
     ['gc.auto', '0'],
-  ] as const) {
+  ]
+  const local = await runGit(['config', '--local', '--get-regexp', '^(user\.name|user\.email|commit\.gpgsign|gc\.auto)$'], skillDir)
+  const have = new Set<string>()
+  if (local.ok) {
+    for (const line of local.out.split(/\r?\n/)) {
+      const key = line.split(' ')[0]
+      if (key !== undefined && key !== '') have.add(key)
+    }
+  }
+  if (have.size === wanted.length) return
+  for (const [key, value] of wanted) {
+    if (have.has(key)) continue
     await runGit(['config', '--local', key, value], skillDir)
   }
+}
+
+async function ensureRepo(skillDir: string): Promise<EnsureResult> {
+  if (!isDir(skillDir)) return { ok: false, reason: 'not-a-dir' }
+  if (!(await gitAvailable())) return { ok: false, reason: 'no-git' }
+  if (await isOwnRepo(skillDir)) {
+    // 已有仓库（clone 进来 / 从别处搬来）同样要补齐缺失的本地配置
+    await ensureLocalConfig(skillDir)
+    return { ok: true }
+  }
+  const init = await runGit(['-c', 'init.defaultBranch=main', 'init', '-q'], skillDir)
+  if (!init.ok) return { ok: false, reason: 'init-failed', error: init.err.trim() || 'git init 失败' }
+  // 身份与签名开关只落本仓库（user.useConfigOnly 之类的全局策略也不影响）
+  await ensureLocalConfig(skillDir)
   return { ok: true }
 }
 
@@ -316,7 +338,7 @@ export function ensurePoolBaselines(poolDir: string): Promise<void> {
 
 /** 读版本状态：顺带把基线补上（打开面板这个动作本身就是"要看历史"的表示） */
 export async function poolGitState(skillDir: string): Promise<PoolGitState> {
-  const empty: PoolGitState = { available: true, init: false, dirty: 0, dirtyNames: [], last: null, commits: [] }
+  const empty: PoolGitState = { available: true, init: false, dirty: 0, last: null, commits: [] }
   if (!isDir(skillDir)) return { ...empty, reason: 'not-a-dir' }
   if (!(await gitAvailable())) return { ...empty, available: false, reason: 'no-git' }
   await ensurePoolBaseline(skillDir)
@@ -328,7 +350,6 @@ export async function poolGitState(skillDir: string): Promise<PoolGitState> {
     available: true,
     init: true,
     dirty: dirtyNames.length,
-    dirtyNames,
     last: head ? { sha: head.sha, short: head.short, time: head.time, subject: head.subject } : null,
     commits,
   }

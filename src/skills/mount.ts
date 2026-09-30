@@ -37,17 +37,15 @@ export interface MountState {
   /** 另一个根：载体根里有用户自己的技能时，可把实体挪到那边去（插件不指定谁该放什么） */
   otherRoot: ProjectRootId
   otherDir: string
-  /** 载体根来自用户选择（已持久化） */
+  /** 载体根来自用户选择（已持久化）；false = 还没选过，等用户选 */
   pinned: boolean
   needsChoice: boolean
   /** 载体根已被 git 忽略；非仓库为 null */
   ignored: boolean | null
-  ignoreRule: string
   /** 载体根下已被仓库跟踪的路径（相对仓库根） */
   tracked: string[]
-  /** 载体根里的实体条目数 / 链接条目数（实体 >0 说明用户在这个根里也放了自己的技能） */
+  /** 载体根里的实体条目数（>0 说明用户在这个根里也放了自己的技能） */
   carrierOwn: number
-  carrierLinks: number
 }
 
 function toPosix(p: string): string {
@@ -259,13 +257,11 @@ export async function computeMountState(dirs: ProjectDirs): Promise<MountState> 
   const carrierRoles = entryRoles(carrierDir)
   const repoRoot = await repoRootOf(dirs.projectRoot)
   let ignored: boolean | null = null
-  let ignoreRule = ''
   let tracked: string[] = []
   if (repoRoot !== null) {
     const rel = toPosix(path.relative(repoRoot, effective === 'project-dsh' ? dirs.dshDir : dirs.agentsDir))
     const check = await runGit(['check-ignore', '-v', '--', `${rel}/`], repoRoot)
     ignored = check.ok && check.out.trim() !== ''
-    ignoreRule = check.out.trim().split('\n')[0]?.trim() ?? ''
     const ls = await runGit(['ls-files', '--', rel], repoRoot)
     tracked = ls.ok ? ls.out.split(/\r?\n/).map((s) => s.trim()).filter((s) => s !== '') : []
   }
@@ -279,10 +275,8 @@ export async function computeMountState(dirs: ProjectDirs): Promise<MountState> 
     pinned: carrier !== null,
     needsChoice: carrier === null,
     ignored,
-    ignoreRule,
     tracked,
     carrierOwn: carrierRoles.own,
-    carrierLinks: carrierRoles.links,
   }
 }
 

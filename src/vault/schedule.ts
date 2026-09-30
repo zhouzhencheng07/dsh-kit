@@ -20,8 +20,8 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
 
+import { kitPath } from '../core/data-path.ts'
 import type { DefineTool, ToolDefinition } from '../core/tools.ts'
 
 // ── 类型 ────────────────────────────────────────────────────────────────────
@@ -129,12 +129,21 @@ export function isDateStr(s: string): boolean {
   return DATE_RE.test(s)
 }
 
+/** 严格日期：格式对 + 真实存在的日历日（2026-02-30 不算）——参数校验用 */
+export function isRealDateStr(s: string): boolean {
+  return isDateStr(s) && parseDate(s) !== null
+}
+
 /** "YYYY-MM-DD" → 本地零点 Date；非法返回 null */
 export function parseDate(s: string): Date | null {
   if (!DATE_RE.test(s)) return null
   const [y, m, d] = s.split('-').map(Number) as [number, number, number]
   const date = new Date(y, m - 1, d)
-  return Number.isNaN(date.getTime()) ? null : date
+  if (Number.isNaN(date.getTime())) return null
+  // Date 会把不存在的日子往后滚（02-30 → 03-02）：那样存的是字面串、派生层算的是
+  // 另一天，必须按原样回读三个字段确认它真实存在
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null
+  return date
 }
 
 /** "YYYY-MM-DDTHH:mm(:ss)" → 本地 Date；非法返回 null */
@@ -357,16 +366,10 @@ function validateScheduleEvent(ev: ScheduleEvent): void {
 
 // ── Store ───────────────────────────────────────────────────────────────────
 
-export function dshKitDataDir(): string {
-  const env = process.env.DSH_HOME
-  const home = env && env.trim() !== '' ? env.trim() : path.join(os.homedir(), '.dsh')
-  return path.join(home, 'dsh-kit')
-}
-
 /** 日程数据目录：固定 $DSH_HOME/dsh-kit/schedule/（一条一文件），与知识库（vaultRoot）
  *  无关——日程是独立能力，知识库未配置也照常可用 */
 export function resolveScheduleDir(): string {
-  return path.join(dshKitDataDir(), 'schedule')
+  return kitPath('schedule')
 }
 
 // 一条一文件（与桌面端、鸿蒙端同一份契约）：
@@ -393,15 +396,18 @@ export class ScheduleStore {
     return path.join(this.dir, 'entries')
   }
 
-  /** 原子写单个 JSON（tmp + rename）；失败只告警（内存态仍可用，下次变更会再试） */
-  private writeJson(file: string, value: unknown): void {
+  /** 原子写单个 JSON（tmp + rename）；失败只告警并回 false（内存态仍可用，下次变更
+   *  会再试）。调用方删旧文件前必须看这个返回值——没写成还删，条目就从盘上消失了 */
+  private writeJson(file: string, value: unknown): boolean {
     try {
       fs.mkdirSync(path.dirname(file), { recursive: true })
       const tmp = `${file}.tmp`
       fs.writeFileSync(tmp, JSON.stringify(value), 'utf8')
       fs.renameSync(tmp, file)
+      return true
     } catch (error) {
       console.warn(`dsh-kit: 日程写入失败（${file}）：${error instanceof Error ? error.message : error}`)
+      return false
     }
   }
 
@@ -437,11 +443,13 @@ export class ScheduleStore {
       // 文件名即身份：不符就迁到 <id>.json 并删旧文件，否则同一份内容会被读成两条
       const want = path.join(this.eventsDir(), `${value.id}.json`)
       if (path.resolve(file) !== path.resolve(want)) {
-        this.writeJson(want, value)
-        try {
-          fs.unlinkSync(file)
-        } catch {
-          /* 忽略 */
+        // 写成功才删旧文件（writeJson 失败只告警不抛，照删等于把这条从盘上抹掉）
+        if (this.writeJson(want, value)) {
+          try {
+            fs.unlinkSync(file)
+          } catch {
+            /* 忽略 */
+          }
         }
       }
       events.push(value)
@@ -458,11 +466,13 @@ export class ScheduleStore {
       value.id = id
       const want = path.join(this.entriesDir(), `${id}.json`)
       if (path.resolve(file) !== path.resolve(want)) {
-        this.writeJson(want, value)
-        try {
-          fs.unlinkSync(file)
-        } catch {
-          /* 忽略 */
+        // 写成功才删旧文件（writeJson 失败只告警不抛，照删等于把这条从盘上抹掉）
+        if (this.writeJson(want, value)) {
+          try {
+            fs.unlinkSync(file)
+          } catch {
+            /* 忽略 */
+          }
         }
       }
       orphans.push(value)
@@ -859,7 +869,7 @@ export function toolArgsToCreateInput(args: Record<string, unknown>): Record<str
   if (typeof args.description === 'string') input.description = args.description
   if (typeof args.location === 'string') input.location = args.location
   const rawDate = typeof args.date === 'string' ? args.date.trim() : ''
-  let date = isDateStr(rawDate) ? rawDate : ''
+  let date = isRealDateStr(rawDate) ? rawDate : ''
   let dtTime: string | null = null
   if (date === '' && DT_RE.test(rawDate)) {
     dtTime = normHHmm(rawDate.slice(11, 16))
@@ -876,7 +886,7 @@ export function toolArgsToCreateInput(args: Record<string, unknown>): Record<str
   const endDateArg = typeof args.endDate === 'string' && args.endDate.trim() !== '' ? args.endDate.trim() : null
   // endDate 是"跨天日程"的日期部分：没有时刻就无从谈起（只给日期是待办，没有 end）
   if (endDateArg !== null && time === null) throw new Error('endDate 仅对日程生效：请同时提供 time')
-  if (endDateArg !== null && !isDateStr(endDateArg)) throw new Error(`endDate 无法解析：${endDateArg}`)
+  if (endDateArg !== null && !isRealDateStr(endDateArg)) throw new Error(`endDate 无法解析：${endDateArg}`)
   if (time !== null) {
     const startMins = Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5))
     let end = endTime
@@ -908,14 +918,21 @@ export function toolArgsToCreateInput(args: Record<string, unknown>): Record<str
   if (repeat === 'daily' || repeat === 'weekly' || repeat === 'monthly') {
     if (!('start' in input)) throw new Error('repeat 仅对日程生效：请提供 time')
     const rec: ScheduleRecurrence = { type: repeat }
-    if (typeof args.repeatInterval === 'number' && Number.isFinite(args.repeatInterval) && args.repeatInterval >= 1) {
-      rec.interval = Math.floor(args.repeatInterval)
+    if (args.repeatInterval !== undefined) {
+      // 写错就抛（与 date/time 同口径）：静默忽略会变成"每天重复"这种别的语义
+      const n = Number(args.repeatInterval)
+      if (!Number.isFinite(n) || n < 1) throw new Error(`repeatInterval 需 ≥1：${String(args.repeatInterval)}`)
+      rec.interval = Math.floor(n)
     }
     if (repeat === 'weekly' && typeof args.repeatDays === 'string') {
       const days = [...new Set(args.repeatDays.split(/[^0-9]+/).map(Number).filter((n) => n >= 1 && n <= 7))].sort((a, b) => a - b)
       if (days.length > 0) rec.days = days
     }
-    if (typeof args.repeatEnd === 'string' && isDateStr(args.repeatEnd)) rec.end = args.repeatEnd
+    if (typeof args.repeatEnd === 'string' && args.repeatEnd.trim() !== '') {
+      const end = args.repeatEnd.trim()
+      if (!isRealDateStr(end)) throw new Error(`repeatEnd 无法解析：${end}`)
+      rec.end = end
+    }
     input.recurrence = rec
   }
   return input

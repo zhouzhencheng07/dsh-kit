@@ -13,12 +13,9 @@
 //   GET  /dsh-kit/phone/info|link   —— 网关状态与带令牌链接
 //   POST /dsh-kit/phone/rotate|gateway —— 轮换令牌 / 热启停网关
 
-import { createRequire } from 'node:module'
-import fs from 'node:fs'
 import http from 'node:http'
-import path from 'node:path'
 
-import { sameOrigin } from '../core/index.ts'
+import { loadDep, sameOrigin } from '../core/index.ts'
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from './gateway.ts'
 import type { PhoneGatewayHandle } from './gateway.ts'
 
@@ -26,8 +23,6 @@ import type { PhoneGatewayHandle } from './gateway.ts'
 const PHONE_PORT = 3090
 
 export const name = 'dsh-kit/phone'
-
-const require = createRequire(import.meta.url)
 
 interface KitCtx {
   inject(deps: string[], cb: (svc: any) => void): void
@@ -62,65 +57,6 @@ interface KitDirectoryPicker {
 
 /** 插件设置的运行时形状（loader 按 Config schema 解析 profile 补丁里的 config 后传入 apply） */
 type KitSettings = Record<string, unknown>
-
-/**
- * 定位运行中 DSH 的 monorepo 根（含 pnpm-workspace.yaml 的目录），loadDep 的第三锚点用。
- * 非 DSH 环境返回 null。
- */
-function findMonorepoRoot(): string | null {
-  const anchor = process.argv[1]
-  if (!anchor) return null
-  const abs = path.isAbsolute(anchor) ? anchor : path.resolve(process.cwd(), anchor)
-  let dir = path.dirname(abs)
-  for (let i = 0; i < 10; i++) {
-    if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) return dir
-    const parent = path.dirname(dir)
-    if (parent === dir) break
-    dir = parent
-  }
-  return null
-}
-
-/** 多锚点加载宿主运行时依赖（schemastery，不在本包 dependencies 里），同主包口径 */
-function loadDep(spec: string): any {
-  try {
-    return require(spec)
-  } catch {
-    // 落到后续锚点
-  }
-  const anchor = process.argv[1]
-  if (anchor) {
-    const abs = path.isAbsolute(anchor) ? anchor : path.resolve(process.cwd(), anchor)
-    try {
-      return createRequire(abs)(spec)
-    } catch {
-      // 落到 monorepo store
-    }
-  }
-  const root = findMonorepoRoot()
-  if (root) {
-    const pnpm = path.join(root, 'node_modules', '.pnpm')
-    if (fs.existsSync(pnpm)) {
-      let entries: string[] = []
-      try {
-        entries = fs.readdirSync(pnpm)
-      } catch {
-        /* ignore */
-      }
-      for (const e of entries) {
-        if (!(e === spec + '@' || e.startsWith(spec + '@'))) continue
-        const pkgJson = path.join(pnpm, e, 'node_modules', spec, 'package.json')
-        if (!fs.existsSync(pkgJson)) continue
-        try {
-          return createRequire(pkgJson)(spec)
-        } catch {
-          // 试下一个候选版本
-        }
-      }
-    }
-  }
-  return null
-}
 
 // ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile 写入 =
@@ -330,7 +266,6 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
             error: phoneGwError ?? phoneGw?.state().error ?? null,
             port: phoneGw ? (phoneGw.port() ?? phonePort()) : phonePort(),
             remoteDomain: phoneRemoteDomain(),
-            fingerprint: phoneGw ? phoneGw.fingerprint() : null,
           })
         },
       })
@@ -344,7 +279,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
             phoneJson(res, 409, { error: phoneGwError ?? phoneGw?.state().error ?? 'gateway disabled' })
             return
           }
-          phoneJson(res, 200, { links: phoneLinks(), fingerprint: phoneGw.fingerprint() })
+          phoneJson(res, 200, { links: phoneLinks() })
         },
       })
       // 手动轮换端点：页内「刷新链接」按钮（+ 脚本/异常场景）作废旧链接用
@@ -368,7 +303,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
             return
           }
           phoneGw.rotate()
-          phoneJson(res, 200, { links: phoneLinks(), fingerprint: phoneGw.fingerprint() })
+          phoneJson(res, 200, { links: phoneLinks() })
         },
       })
       const disposePhoneGateway = webCtx.webServer.register({

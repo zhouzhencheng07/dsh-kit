@@ -1,4 +1,4 @@
-// dsh-kit git 联动 · 纯解析函数（零依赖，供 src/index.ts 的 git 端点使用，单测见
+// dsh-kit git 联动 · 纯解析函数（零依赖，供 ./index.ts 的 git 端点使用，单测见
 // tests/test-git.mjs）。所有输入是 git CLI 的直接输出字符串，解析失败一律返回
 // 安全默认值而非抛错——端点侧据此回落，不让解析异常打穿 HTTP 层。
 
@@ -70,7 +70,7 @@ export function parseStatusBranch(line: unknown): GitBranchStatus {
   return out
 }
 
-/** 记录/字段分隔符（0x1E / 0x1F）：与 src/index.ts 的 git log --pretty=format 约定一致 */
+/** 记录/字段分隔符（0x1E / 0x1F）：与 ./index.ts 的 git log --pretty=format 约定一致 */
 export const LOG_RS = String.fromCharCode(30)
 export const LOG_FS = String.fromCharCode(31)
 

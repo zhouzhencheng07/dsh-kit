@@ -3,7 +3,7 @@
 // 端点家族（本组件自持，路径沿用 /dsh-kit/*——client 半边与官方右栏文件预览
 // 已按此路径接线，搬迁不改路径）：GET /dsh-kit/tree 目录树、GET /dsh-kit/read
 // 单文件文本（限长 + 二进制探测）、GET /dsh-kit/raw 原始字节（下载/附件预览）、
-// POST /dsh-kit/fs/op 文件管理（create/rename/move/delete，子树校验见
+// POST /dsh-kit/fs/op 文件管理（create/rename/delete，子树校验见
 // validate.ts）、git 联动端点（status/log/graph/branch/commit/diff）。
 // 另有 GET /dsh-kit-files/config 只读配置快照（client 半边的入口门控与快捷键
 // 真源），字段 = 本组件 Config schema。
@@ -11,79 +11,12 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { decodePreviewText, sameOrigin, recycleDelete, findProjectRoot } from "../core/index.js";
+import { loadDep, decodePreviewText, sameOrigin, recycleDelete, findProjectRoot } from "../core/index.js";
 import { parseStatusBranch, parseLogRecords, parseBranchList, parseTrack } from "./git.js";
 /** git status 的条目上限（口径同文件树 TREE_LIMIT）：未跟踪目录展开没有天然边界 */
 const STATUS_ENTRY_LIMIT = 2000;
 import { rawContentType, rawDownloadContentType, rawDisposition, parseRangeHeader } from "./raw-file.js";
 import { validateCwd, validateFile, validateAny, validatePathShape, withinTree, invalidFsName } from "./validate.js";
-/**
- * 定位运行中 DSH 的 monorepo 根（含 pnpm-workspace.yaml 的目录），loadDep 的
- * 第三锚点用。非 DSH 环境返回 null。
- */
-function findMonorepoRoot() {
-    const anchor = process.argv[1];
-    if (!anchor)
-        return null;
-    const abs = path.isAbsolute(anchor) ? anchor : path.resolve(process.cwd(), anchor);
-    let dir = path.dirname(abs);
-    for (let i = 0; i < 10; i++) {
-        if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml')))
-            return dir;
-        const parent = path.dirname(dir);
-        if (parent === dir)
-            break;
-        dir = parent;
-    }
-    return null;
-}
-/** 多锚点加载宿主运行时依赖（schemastery，不在本包 dependencies 里），同主包口径 */
-function loadDep(spec) {
-    try {
-        return require(spec);
-    }
-    catch {
-        // 落到后续锚点
-    }
-    const anchor = process.argv[1];
-    if (anchor) {
-        const abs = path.isAbsolute(anchor) ? anchor : path.resolve(process.cwd(), anchor);
-        try {
-            return createRequire(abs)(spec);
-        }
-        catch {
-            // 落到 monorepo store
-        }
-    }
-    const root = findMonorepoRoot();
-    if (root) {
-        const pnpm = path.join(root, 'node_modules', '.pnpm');
-        if (fs.existsSync(pnpm)) {
-            let entries = [];
-            try {
-                entries = fs.readdirSync(pnpm);
-            }
-            catch {
-                /* ignore */
-            }
-            for (const e of entries) {
-                if (!(e === spec + '@' || e.startsWith(spec + '@')))
-                    continue;
-                const pkgJson = path.join(pnpm, e, 'node_modules', spec, 'package.json');
-                if (!fs.existsSync(pkgJson))
-                    continue;
-                try {
-                    return createRequire(pkgJson)(spec);
-                }
-                catch {
-                    // 试下一个候选版本
-                }
-            }
-        }
-    }
-    return null;
-}
 // ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile
 // 写入 = 热提交（fiber config 里的稳定 ref），readSettings 统一解引用。默认值与
@@ -280,7 +213,7 @@ export function apply(ctx, config = {}) {
                         }
                         // 文本/二进制判定与解码：BOM 优先（UTF-8/UTF-16 系），无 BOM 含 NUL
                         // 时文本类扩展名按 UTF-16LE 尝试恢复（Windows 常见存法），详见
-                        // src/text-decode.ts（有单测）
+                        // src/core/text-decode.ts（有单测）
                         const decoded = decodePreviewText(body, file.path);
                         json(200, { path: file.path, size: file.size, mtimeMs: file.mtimeMs, truncated: false, binary: decoded.binary, content: decoded.content });
                     });
@@ -688,8 +621,8 @@ export function apply(ctx, config = {}) {
             //   展示"仅 diff"视图。
             //   带 commit 参数 = 提交钉定模式（图谱提交详情点文件）：基线是该提交的
             //   第一父（根提交由 --root 对空树，merge 默认无 patch），显示该提交对本
-            //   文件的改动；返回 {available:true, commitMode:true, base:<父短哈希|"">,
-            //   diff}。该提交里被列出的文件必然有 patch（清单与 diff 同源 diff-tree）。
+            //   文件的改动；返回 {available:true, base:<父短哈希|"">, diff}。该提交里被
+            //   列出的文件必然有 patch（清单与 diff 同源 diff-tree）。
             const disposeGitDiff = webCtx.webServer.register({
                 kind: 'exact',
                 path: '/dsh-kit/git/diff',
@@ -748,7 +681,7 @@ export function apply(ctx, config = {}) {
                                     const base = parent !== '' ? parent.slice(0, 7) : '';
                                     // 二进制 patch 没有可叠着色的文本新像，直接不取 blob
                                     if (patch === null || /GIT binary patch|^Binary files /m.test(patch)) {
-                                        json(200, { available: true, commitMode: true, base, diff: patch });
+                                        json(200, { available: true, base, diff: patch });
                                         return;
                                     }
                                     // 只判「该提交时刻这个文件在不在」：不在（该提交删除了它 / 路径变形）
@@ -757,7 +690,6 @@ export function apply(ctx, config = {}) {
                                     runGit(['-c', 'core.quotePath=false', 'show', `${full}:${rel.replace(/\\/g, '/')}`], root).then((blob) => {
                                         json(200, {
                                             available: true,
-                                            commitMode: true,
                                             base,
                                             diff: patch,
                                             ...(blob.ok ? {} : { blobMissing: true }),
@@ -783,7 +715,7 @@ export function apply(ctx, config = {}) {
                             return;
                         }
                         runGit(['-c', 'core.quotePath=false', 'diff', 'HEAD', '--', rel], root).then((d) => {
-                            json(200, { available: true, xy: line.slice(0, 2), diff: d.ok ? d.out : null });
+                            json(200, { available: true, diff: d.ok ? d.out : null });
                         });
                     });
                 },
@@ -843,7 +775,6 @@ export function apply(ctx, config = {}) {
             //   stage(path)      = git add -- <rel>
             //   unstage(path)    = git restore --staged -- <rel>
             //   discard(path)    = git restore -- <rel>（放弃未暂存改动，破坏性；前端已二次确认）
-            //   stageAll         = git add -A
             //   commit(message, all?) = 可选先 add -A（暂存区为空时的"提交全部"），再 commit -m
             //   push(upstream?, remote?, force?) = git push（upstream:true → push -u <remote> <当前分支>；
             //     force:true → --force，前端在 push 被 reject 询问「以本地为准」后重推用）
@@ -918,8 +849,6 @@ export function apply(ctx, config = {}) {
                             r = await runGit(['restore', '--staged', '--', rel], root);
                         else if (op === 'discard')
                             r = await runGit(['restore', '--', rel], root);
-                        else if (op === 'stageAll')
-                            r = await runGit(['add', '-A'], root);
                         else if (op === 'commit') {
                             const msg = String(body?.message ?? '').trim();
                             if (msg === '') {
@@ -1123,9 +1052,7 @@ export function apply(ctx, config = {}) {
                             const f = show.out.split('\n')[0].split('\x1f');
                             const meta = {
                                 H: f[0] || '',
-                                h: f[1] || '',
                                 an: f[2] || '',
-                                ae: f[3] || '',
                                 ad: f[4] || '',
                                 parents: f[5] || '',
                                 s: f[6] || '',

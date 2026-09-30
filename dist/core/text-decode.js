@@ -3,7 +3,7 @@
 // 评分取优）尝试恢复——Windows 工具/记事本"Unicode"保存的无 BOM UTF-16
 // 常见，逐字节 NUL 判定会误报二进制，ini 类配置文件的实测问题即源于此。
 //
-// 单独成模块：宿主侧 index.ts 消费，tests/test-text-decode.mjs 单测。
+// 单独成模块：files 组件的 read 端点消费，tests/test-text-decode.mjs 单测。
 /** 文本类扩展名集合（含无扩展名的点文件，按完整基名匹配） */
 const TEXT_EXTS = new Set([
     'txt', 'text', 'md', 'markdown', 'rst', 'ini', 'cfg', 'conf', 'cnf', 'log', 'json', 'jsonc',

@@ -81,6 +81,16 @@ try {
   );
   check("结构：user 组含两个物理根", groupOf(body, "user").roots.length === 2);
   check("结构：pool 组含一个物理根", groupOf(body, "pool").roots.length === 1);
+  // 数据目录对齐：POOL 由本进程的 DSH_HOME 推，dsh web 那侧可能是另一个 home——不一致时
+  // 后面写进 POOL 的 fixture 服务器根本看不见，还会把真实池当测试池用（先于任何写操作拦下）
+  const serverPool = groupOf(body, "pool")?.roots?.[0]?.dir;
+  if (typeof serverPool !== "string" || path.resolve(serverPool) !== path.resolve(POOL)) {
+    console.error(
+      `\n数据目录不一致：测试 POOL=${POOL}\n            服务器池=${serverPool ?? "(未上报)"}\n` +
+        "请带着与 dsh web 相同的 DSH_HOME 跑本测试（dev 环境：$env:DSH_HOME='D:\\agent\\.dsh-dev'）",
+    );
+    process.exit(2);
+  }
 
   // 2) 枚举与归属字段
   const hello = find(body, "workspace", "hello-kit");
