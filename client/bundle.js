@@ -17,7 +17,7 @@
 //     垫底（配置可隐藏）。
 //     缺 sidebarRight 服务时只剩 getKitUi() 侧的存在性补丁——入口按钮
 //     不报错，签由官方侧自己决定要不要出现。
-//   功能存在性（getKitUi()）：schedOpen/browserOpen/vaultOpen 是功能签在场
+//   功能存在性（getKitUi()）：vaultOpen/browserOpen 是功能签在场
 //     （入口按钮选中态与角标读它）。「开着哪些内容」与「哪张签激活」都不在这儿存
 //     ——那是官方签表，经 rightbarItems/useRightbarItems/activeRightbarFeature 读。
 //     索引类视图（知识库目录树）住侧栏 sidebar.workspaces 单槽，点条目开对应右栏签。
@@ -470,7 +470,7 @@ window.__ModuleLoader__.load({
     // 归官方签表（activeRightbarFeature 读它），kitUi 不另存。内容类（diff /
     // 知识库页 / 浏览器页）是一内容一签，签表也归官方；文件树与对话区点击走官方
     // 右栏文件签，不进这里。
-    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, schedOpen: false, vaultOpen: false };
+    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, vaultOpen: false };
     // terminals/activeTermId/termDockOpen 是 dsh-kit-terminal 组件的水位（入口与坞
     // 分属两个槽位，状态必须共享一份）；本文件只读 termDockOpen 一处——Esc 收起坞。
     const kitUiListeners = new Set();
@@ -490,19 +490,18 @@ window.__ModuleLoader__.load({
     const baseName = (p) => String(p ?? "").split(/[\\/]/).pop() ?? "";
     const pageBasename = (p) => baseName(p).replace(/\.(md|markdown)$/i, "");
 
-    /** 关一个功能签：只清存在性（激活与否归官方签表，这里不操心） */
+    /** 关一个功能签：只清存在性（激活与否归官方签表，这里不操心）；日程签无在场位读处，不列 */
     function closeFeatureTab(ui, tab) {
-      if (tab === "schedule") return { schedOpen: false };
       if (tab === "vault") return { vaultOpen: false };
       return { browserOpen: false };
     }
     /** 功能存在性按挂载计数：一页一签，同一功能可同时挂着好几张签，关掉一张不等于
-     *  功能不在场（最后一张卸掉才收）。计数为 0 时按 0 上报；入口开签不经这条路径 */
-    const featurePresence = { vault: 0, schedule: 0, browser: 0 };
-    function markFeaturePresence(tab, delta) {
-      const key = tab === "schedule" ? "sched" : tab === "vault" ? "vault" : "browser";
-      featurePresence[key] = Math.max(0, featurePresence[key] + delta);
-      return { [key + "Open"]: featurePresence[key] > 0 };
+     *  功能不在场（最后一张卸掉才收）。计数为 0 时按 0 上报；入口开签不经这条路径。
+     *  只登记有读处的功能：键前缀即功能名（日程签没有） */
+    const featurePresence = { vault: 0, browser: 0 };
+    function markFeaturePresence(feature, delta) {
+      featurePresence[feature] = Math.max(0, featurePresence[feature] + delta);
+      return { [feature + "Open"]: featurePresence[feature] > 0 };
     }
 
     /** 功能 → dock 签映射（页类型注册表；kind 即 openTab 用的类型名）。
@@ -5998,7 +5997,7 @@ ellipsis，窄列只截字不破版 */
       return jsxRuntime.jsx("div", { className: "dshk-sidehost", ref: (el) => vaultSideSlot.set(el) });
     }
 
-    /** 功能存在性跟随 pane 挂载（schedule/browser/vault 用） */
+    /** 功能存在性跟随 pane 挂载（vault/browser 用） */
     function useFeaturePresence(feature) {
       react.useEffect(() => {
         setKitUi(markFeaturePresence(feature, 1));
@@ -6059,7 +6058,6 @@ ellipsis，窄列只截字不破版 */
     }
     /** 日程 pane：ScheduleView（pane 内上待办 + 下网格） */
     function SchedulePaneBody() {
-      useFeaturePresence("schedule");
       return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(ScheduleView, { active: true }) });
     }
 
