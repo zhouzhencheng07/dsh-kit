@@ -1066,7 +1066,12 @@ const VaultCodeBlock = CodeBlockLowlight.extend({
       let dropActive = -1;
       let dropOpen = false;
 
-      const onScrollClose = () => closeDrop();
+      // 页面滚了才收（位置会错）；**下拉自己的内滚不算**——滚的就是这份清单，
+      // 把自己关掉就是"根本滚不动"
+      const onScrollClose = (ev) => {
+        if (ev.target instanceof Node && (ev.target === langDrop || langDrop.contains(ev.target))) return;
+        closeDrop();
+      };
       const closeDrop = () => {
         if (!dropOpen) return;
         dropOpen = false;
