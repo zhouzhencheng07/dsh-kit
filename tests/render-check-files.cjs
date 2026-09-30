@@ -105,6 +105,27 @@ check("files inject 声明 slots", Array.isArray(comps.inject) && comps.inject[0
 // 组件后加的键 root 读不到（正是 diffPane 白屏的成因）
 check("files 物化期把 DiffPane 挂上 root 的 diffPane 座", dockExports.diffPane.Component === comps.DiffPane);
 
+// —— 直测：FilePaneBody 提交钉定地址（图谱提交详情点文件）——
+// 地址里带 ?c=<sha> 时要走 safeDecode 取回提交号；该函数一度声明在 kitBase 闭包
+// 内却在闭包外被调用，渲染期 ReferenceError → 宿主槽位报错 → 正文整片空白
+{
+  const addr = (q) => "dsh-resource://dshk-diff/" + encodeURIComponent("C:/x/b.js") + (q ? "?" + q : "");
+  callLog = [];
+  let plain = null;
+  let pinned = null;
+  let threw = null;
+  try {
+    plain = dockExports.FilePaneBody({ useTabInfo: () => ({ tab: { contentId: addr("") } }) });
+    pinned = dockExports.FilePaneBody({ useTabInfo: () => ({ tab: { contentId: addr("c=" + encodeURIComponent("abc123")) } }) });
+  } catch (e) {
+    threw = String((e && e.message) || e);
+  }
+  check("提交钉定地址渲染不抛（槽位不落 data-slot-error）", threw === null && !!plain && !!pinned);
+  const childProps = pinned && pinned.props ? pinned.props.children.props : null;
+  check("提交钉定把 ?c= 还原成提交号传给 diff 正文", !!childProps && childProps.commit === "abc123");
+  check("常规地址不带提交号", !!plain && !!plain.props && plain.props.children.props.commit === undefined);
+}
+
 // —— 直测：TreeNode（文件 + 目录 + 常驻操作钮）——
 let out;
 callLog = [];

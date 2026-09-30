@@ -722,14 +722,6 @@ window.__ModuleLoader__.load({
       useRightbarItems(feature);
       return activeRightbarItem(feature);
     }
-    /** 地址里的转义段还原：坏转义（手改过的布局/旧版本遗留）不该在渲染期抛错 */
-  function safeDecode(s) {
-    try {
-      return decodeURIComponent(s);
-    } catch {
-      return "";
-    }
-  }
   /** 当前激活签是不是本 feature 的（Esc 分层用） */
     function activeRightbarFeature(feature) {
       const sr = rightbarSr;
@@ -846,6 +838,7 @@ window.__ModuleLoader__.load({
     exports.openFileAndDock = openFileAndDock;
     exports.tabAddress = tabAddress;
     exports.tabVisible = tabVisible;
+    exports.FilePaneBody = FilePaneBody;
     exports.sidebarViewPatch = sidebarViewPatch;
     // 在场信号面：KitSurfaces 订阅它决定工作区面生灭，组件半边读它门控快捷键
     exports.rightbarSeat = rightbarSeat;
@@ -924,6 +917,14 @@ window.__ModuleLoader__.load({
     // 无从定位工作区，放弃。
     /** 官方文件签的地址（`dsh-resource://file/session/<会话id>/<路径>`）：开签与
      *  问宿主「这个文件什么版本」共用同一个地址。会话未选中时无从定位工作区，返回 null */
+    /** 地址里的转义段还原：坏转义（手改过的布局/旧版本遗留）不该在渲染期抛错 */
+    function safeDecode(s) {
+      try {
+        return decodeURIComponent(s);
+      } catch {
+        return "";
+      }
+    }
     function fileAddressFor(path) {
       const list = sessionsSvc && typeof sessionsSvc.list?.getSnapshot === "function" ? sessionsSvc.list.getSnapshot() : null;
       const sessionId = mainRowOf(list)?.id;
