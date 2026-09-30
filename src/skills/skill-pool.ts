@@ -56,13 +56,12 @@ import {
   prepareCarrier,
   setCarrier,
   syncMounts,
-  relinkMounts,
   unmountLink,
   type MountState,
   type ProjectDirs,
   type ProjectRootId,
 } from './mount.ts'
-import { adoptLegacy, dshHome, kitPath } from '../core/data-path.ts'
+import { dshHome, kitPath } from '../core/data-path.ts'
 import { ensurePoolBaseline, poolGitCommit, poolGitRollback, poolGitState } from './pool-git.ts'
 import { parseFrontmatter } from './frontmatter.ts'
 
@@ -138,11 +137,6 @@ interface ResolvedRoot {
  *  所在地。池路径真相只此一处（vault 的「知识库目录」等用户配置与它无关）。 */
 export function defaultPoolDir(): string {
   return kitPath(POOL_DIRNAME)
-}
-
-/** 老位置的池搬进 dsh-kit/，并重指工作区里那些绝对路径链接 */
-function adoptLegacyPool(): void {
-  if (adoptLegacy(path.join(dshHome(), POOL_DIRNAME), defaultPoolDir())) relinkMounts(defaultPoolDir())
 }
 
 /** 项目级两根的物理位置；没有会话 cwd（或 cwd 非法）时返回 null */
@@ -490,7 +484,6 @@ interface SkillPoolHooks {
  * 注册技能池端点。registryApi 由外部注入回调捕获（ctx.skills 服务可能晚于本模块就绪）。
  */
 export function applySkillPool(ctx: KitCtx, hooks?: SkillPoolHooks): void {
-  adoptLegacyPool()
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => {
       const origins = (req: http.IncomingMessage): boolean => sameOrigin(req)

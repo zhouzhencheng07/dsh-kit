@@ -45,8 +45,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { recycleDelete, findProjectRoot } from "../core/index.js";
 import { sameOrigin } from "../core/index.js";
-import { computeMountState, forgetMount, liveMounts, mountLink, mountPrecondition, prepareCarrier, setCarrier, syncMounts, relinkMounts, unmountLink, } from "./mount.js";
-import { adoptLegacy, dshHome, kitPath } from "../core/data-path.js";
+import { computeMountState, forgetMount, liveMounts, mountLink, mountPrecondition, prepareCarrier, setCarrier, syncMounts, unmountLink, } from "./mount.js";
+import { dshHome, kitPath } from "../core/data-path.js";
 import { ensurePoolBaseline, poolGitCommit, poolGitRollback, poolGitState } from "./pool-git.js";
 import { parseFrontmatter } from "./frontmatter.js";
 const POOL_DIRNAME = 'skill-pool';
@@ -63,11 +63,6 @@ const GROUP_ORDER = ['workspace', 'user', 'pool'];
  *  所在地。池路径真相只此一处（vault 的「知识库目录」等用户配置与它无关）。 */
 export function defaultPoolDir() {
     return kitPath(POOL_DIRNAME);
-}
-/** 老位置的池搬进 dsh-kit/，并重指工作区里那些绝对路径链接 */
-function adoptLegacyPool() {
-    if (adoptLegacy(path.join(dshHome(), POOL_DIRNAME), defaultPoolDir()))
-        relinkMounts(defaultPoolDir());
 }
 /** 项目级两根的物理位置；没有会话 cwd（或 cwd 非法）时返回 null */
 export function resolveProjectDirs(cwd) {
@@ -398,7 +393,6 @@ function readBody(req) {
  * 注册技能池端点。registryApi 由外部注入回调捕获（ctx.skills 服务可能晚于本模块就绪）。
  */
 export function applySkillPool(ctx, hooks) {
-    adoptLegacyPool();
     ctx.inject(['webServer'], (webCtx) => {
         webCtx.effect(() => {
             const origins = (req) => sameOrigin(req);

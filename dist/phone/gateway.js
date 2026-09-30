@@ -34,7 +34,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { adoptLegacy, dshHome, kitPath } from "../core/data-path.js";
+import { kitPath } from "../core/data-path.js";
 /** 网关下发的授权 Cookie 名 */
 export const PHONE_COOKIE = 'dshk_phone';
 /**
@@ -329,13 +329,7 @@ export function parseCookies(header) {
  * （等价于一次轮换，旧链接失效属预期）。
  */
 export function defaultStateFile() {
-    const next = kitPath('phone-gateway.json');
-    const legacy = path.join(dshHome(), 'data', 'dsh-kit-phone-gateway.json');
-    // 搬不动（跨设备、被占用）就继续读旧位置：直接返回新路径会被当成「文件不存在」
-    // 而重新生成令牌，手机端旧链接全部失效且无任何提示
-    if (!adoptLegacy(legacy, next) && fs.existsSync(legacy))
-        return legacy;
-    return next;
+    return kitPath('phone-gateway.json');
 }
 /**
  * 状态文件读写（令牌 + 网关启用位）。启用位独立于 settings 通道：

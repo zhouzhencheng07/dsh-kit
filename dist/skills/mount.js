@@ -12,18 +12,13 @@
 // 哪些工作区挂了只存在于各项目的磁盘上，出池或删除本体时得靠这份账断链。
 import fs from 'node:fs';
 import path from 'node:path';
-import { adoptLegacy, dshHome, kitPath } from "../core/data-path.js";
+import { kitPath } from "../core/data-path.js";
 import { runGit } from "./git.js";
 function toPosix(p) {
     return p.split(path.sep).join('/');
 }
 function policyFile() {
-    const next = kitPath('skills.json');
-    const legacy = path.join(dshHome(), 'data', 'dsh-kit-skills.json');
-    // 搬不动就继续读旧位置：读不到会被当成空策略，挂载记录与载体选择全丢
-    if (!adoptLegacy(legacy, next) && fs.existsSync(legacy))
-        return legacy;
-    return next;
+    return kitPath('skills.json');
 }
 function normalizeMounts(raw) {
     const out = {};
@@ -164,47 +159,6 @@ export function liveMounts(poolDir, poolSkillDir) {
     if (dirty)
         saveMounts(policy, mounts);
     return mounts[path.basename(poolSkillDir)] ?? [];
-}
-/**
- * 池目录搬家后重指挂载链接：链接是指向池的绝对路径，池从 $DSH_HOME/skill-pool 搬到
- * dsh-kit/skill-pool 后旧链接全悬空——按登记表把悬空的重建到新池（本体不动）。
- * 返回重指了几条。
- */
-export function relinkMounts(poolDir) {
-    // 读原始登记表而不是 readMounts：后者按「链接还指向池」剔除失效条目，而搬家这件事
-    // 本身就让链接全悬空，剔完就没有可修的了
-    const policy = readPolicy();
-    const mounts = policy.mounts;
-    let fixed = 0;
-    let changed = false;
-    for (const [name, list] of Object.entries(mounts)) {
-        const kept = [];
-        for (const rec of list) {
-            // 载体根里那条路径已不是链接 = 别人的条目，不碰；指向新池的保持原样
-            if (!isLinkAt(rec.link) || mountAlive(poolDir, rec)) {
-                kept.push(rec);
-                continue;
-            }
-            unmountLink(rec.link);
-            // 目标取记录自己的 rec.pool：它才是登记事实（mountAlive 也按它判），拿 map 键
-            // 拼会在键与记录不一致时把链接指到另一个技能目录
-            const rebuilt = mountLink(path.join(poolDir, rec.pool), path.dirname(rec.link));
-            if (rebuilt.ok)
-                fixed++;
-            else
-                kept.push(rec);
-        }
-        // kept 只从 list 按序取，长度不变即内容不变；重指成功的条目不进 kept，长度必变
-        if (kept.length !== list.length)
-            changed = true;
-        if (kept.length === 0)
-            delete mounts[name];
-        else
-            mounts[name] = kept;
-    }
-    if (changed)
-        saveMounts(policy, mounts);
-    return fixed;
 }
 // ── 载体根（挂载点）──
 //
