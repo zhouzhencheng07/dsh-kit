@@ -32,8 +32,8 @@ and take no component slot).
 - **Source control** (composer-row toggle / default **Ctrl+Alt+.**): an in-page git
   workbench — stage/unstage/discard/commit, click a file to see its diff in a
   right-dock diff tab (changed regions only, with line numbers and a side-by-side
-  toggle; open the whole file in the sidebar from its header; pin any commit from
-  the graph to diff against it), branch switch/create/delete, ↑↓ sync (pull then push), commit graph;
+  toggle; open the whole file in the sidebar from its header), branch switch/create/delete,
+  ↑↓ sync (pull then push), commit graph (browse-only; hover a row for author/time/subject);
   one-click repo init for non-git directories
 - **Knowledge base · Schedule** (one component row; the row switch is the master switch —
   turning it off removes the directory index, both dock tabs, the composer toggle and the

@@ -999,94 +999,6 @@ export function apply(ctx, config = {}) {
                     });
                 },
             });
-            // GET /dsh-kit/git/show?cwd=<绝对目录>&commit=<哈希/引用> → 单个提交详情
-            //   {available:true, meta:{H,h,an,ae,ad,parents,s,b}, files:[{st,path,abs}]}
-            //   files 来自 diff-tree --name-status（合并提交无文件清单）；commit 先经
-            //   rev-parse 校验，伪造/不存在回 400。
-            const disposeGitShow = webCtx.webServer.register({
-                kind: 'exact',
-                path: '/dsh-kit/git/show',
-                handler: (req, res) => {
-                    const json = (code, obj) => {
-                        res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
-                        res.end(JSON.stringify(obj));
-                    };
-                    if (req.method !== 'GET') {
-                        json(405, { error: 'method not allowed' });
-                        return;
-                    }
-                    if (!sameOrigin(req)) {
-                        json(403, { error: 'cross-origin denied' });
-                        return;
-                    }
-                    const url = new URL(req.url ?? '/', 'http://dsh-kit.local');
-                    const dir = validateCwd(url.searchParams.get('cwd') ?? '');
-                    if (!dir.ok) {
-                        json(400, { error: dir.message });
-                        return;
-                    }
-                    const root = gitRootFor(dir.path);
-                    if (!root) {
-                        json(200, { available: false });
-                        return;
-                    }
-                    const commit = String(url.searchParams.get('commit') ?? '').trim();
-                    if (commit === '' || commit.length > 200 || /[\u0000-\u001f]/.test(commit)) {
-                        json(400, { error: '缺少合法的提交引用' });
-                        return;
-                    }
-                    runGit(['rev-parse', '--verify', '--quiet', `${commit}^{commit}`], root).then((rv) => {
-                        const full = rv.ok ? rv.out.trim() : '';
-                        if (!/^[0-9a-f]{40}$/.test(full)) {
-                            json(400, { error: '提交不存在：' + commit });
-                            return;
-                        }
-                        Promise.all([
-                            runGit(['show', '-s', '--format=%H%x1f%h%x1f%an%x1f%ae%x1f%ad%x1f%P%x1f%s%x1f%b', full], root),
-                            runGit(['-c', 'core.quotePath=false', 'diff-tree', '--no-commit-id', '--name-status', '-r', '--root', full], root),
-                        ]).then(([show, dt]) => {
-                            if (!show.ok) {
-                                json(200, { available: false });
-                                return;
-                            }
-                            const f = show.out.split('\n')[0].split('\x1f');
-                            const meta = {
-                                H: f[0] || '',
-                                an: f[2] || '',
-                                ad: f[4] || '',
-                                parents: f[5] || '',
-                                s: f[6] || '',
-                                b: f.slice(7).join('\x1f').trim(),
-                            };
-                            const files = [];
-                            if (dt.ok) {
-                                for (const line of dt.out.split('\n')) {
-                                    const tab = line.indexOf('\t');
-                                    if (tab < 0)
-                                        continue;
-                                    const st = line.slice(0, tab)[0] || '';
-                                    const rest = line.slice(tab + 1);
-                                    let p = rest;
-                                    if (st === 'R' || st === 'C') {
-                                        const arrow = rest.indexOf('\t');
-                                        if (arrow < 0)
-                                            continue;
-                                        p = rest.slice(arrow + 1); // 重命名/复制取新路径
-                                    }
-                                    if (p === '')
-                                        continue;
-                                    const abs = path.join(root, p);
-                                    const rel = path.relative(root, abs);
-                                    if (rel.startsWith('..') || path.isAbsolute(rel))
-                                        continue;
-                                    files.push({ st, path: p, abs });
-                                }
-                            }
-                            json(200, { available: true, meta, files });
-                        });
-                    });
-                },
-            });
             // GET /dsh-kit/git/branch?cwd=<绝对目录> → 本地分支列表
             //   {available:true, current, branches:[{name,isHead,upstream,track,trackParsed}]}
             //   trackParsed 由 parseTrack 归一（{ahead,behind,gone}|null），前端直接展示；
@@ -1153,7 +1065,6 @@ export function apply(ctx, config = {}) {
                 disposeGitInit();
                 disposeGitOp();
                 disposeGitLog();
-                disposeGitShow();
                 disposeGitBranch();
             };
         });

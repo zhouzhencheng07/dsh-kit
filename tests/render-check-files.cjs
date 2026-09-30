@@ -105,25 +105,19 @@ check("files inject 声明 slots", Array.isArray(comps.inject) && comps.inject[0
 // 组件后加的键 root 读不到（正是 diffPane 白屏的成因）
 check("files 物化期把 DiffPane 挂上 root 的 diffPane 座", dockExports.diffPane.Component === comps.DiffPane);
 
-// —— 直测：FilePaneBody 提交钉定地址（图谱提交详情点文件）——
-// 地址里带 ?c=<sha> 时要走 safeDecode 取回提交号；该函数一度声明在 kitBase 闭包
-// 内却在闭包外被调用，渲染期 ReferenceError → 宿主槽位报错 → 正文整片空白
+// —— 直测：FilePaneBody 地址解出（diff 正文经 diffPane 座取）——
 {
-  const addr = (q) => "dsh-resource://dshk-diff/" + encodeURIComponent("C:/x/b.js") + (q ? "?" + q : "");
+  const addr = "dsh-resource://dshk-diff/" + encodeURIComponent("C:/x/b.js") + "?u=1";
   callLog = [];
   let plain = null;
-  let pinned = null;
   let threw = null;
   try {
-    plain = dockExports.FilePaneBody({ useTabInfo: () => ({ tab: { contentId: addr("") } }) });
-    pinned = dockExports.FilePaneBody({ useTabInfo: () => ({ tab: { contentId: addr("c=" + encodeURIComponent("abc123")) } }) });
+    plain = dockExports.FilePaneBody({ useTabInfo: () => ({ tab: { contentId: addr } }) });
   } catch (e) {
     threw = String((e && e.message) || e);
   }
-  check("提交钉定地址渲染不抛（槽位不落 data-slot-error）", threw === null && !!plain && !!pinned);
-  const childProps = pinned && pinned.props ? pinned.props.children.props : null;
-  check("提交钉定把 ?c= 还原成提交号传给 diff 正文", !!childProps && childProps.commit === "abc123");
-  check("常规地址不带提交号", !!plain && !!plain.props && plain.props.children.props.commit === undefined);
+  check("FilePaneBody 常规地址渲染不抛（槽位不落 data-slot-error）", threw === null && !!plain);
+  check("未跟踪源还原成 untracked 传给 diff 正文", !!plain && !!plain.props && plain.props.children.props.untracked === true);
 }
 
 // —— 直测：TreeNode（文件 + 目录 + 常驻操作钮）——
@@ -359,7 +353,7 @@ out = comps.GitChangesPanel({ cwd: null, onOpenFile: () => {}, onClose: () => {}
 check("GitChangesPanel noCwd 渲染无异常", !!out && typeof out === "object");
 // 图谱视图：无 cwd（不触发拉取/轮询）
 callLog = [];
-out = comps.GitGraphPanel({ cwd: null, onOpenFile: () => {} });
+out = comps.GitGraphPanel({ cwd: null });
 check("GitGraphPanel noCwd 渲染无异常", !!out && typeof out === "object");
 // 图谱 lane 几何纯函数：线性链 / 分叉（兄弟提交并拢进父）/ 合并（多线收进主槽位）/ 窗口悬挂
 const geoLinear = comps.computeCommitGraph([
@@ -401,14 +395,16 @@ stateStore.set(0, {
   ],
 });
 callLog = [];
-out = comps.GitGraphPanel({ cwd: "C:/x", root: "C:/x", onOpenFile: () => {} });
-const graphRows = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-grow dshk-grow-click");
+out = comps.GitGraphPanel({ cwd: "C:/x" });
+const graphRows = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-grow");
 const graphAuthors = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-gauthor");
 const graphDates = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-gdate");
 const moreBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-gmore");
 // 注意：CommitGraphSvg 是嵌套组件，桩只记录元素不执行组件体（已知盲区）——
 // SVG 的 path/circle 产出用下面直调用例覆盖，面板级断言只数行与列
 check("GitGraphPanel 结构化行渲染（3 行+作者+时间列）", graphRows.length === 3 && graphAuthors.length === 3 && graphDates.length === 3);
+// 行不可点：提交详情（作者/说明/文件清单 + 钉定 diff）已撤，完整信息走 title 悬停
+check("GitGraphPanel 行不挂点击（详情视图已撤，信息走 title）", graphRows.every((r) => typeof r[2].onClick !== "function" && typeof r[2].title === "string"));
 check("GitGraphPanel hasMore 渲染 load more 按钮", !!moreBtn && typeof moreBtn[2].onClick === "function");
 callLog = [];
 const svgRow = comps.CommitGraphSvg({ row: geoFork.rows[0], laneCount: 2 });

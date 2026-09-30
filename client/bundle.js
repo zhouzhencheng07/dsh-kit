@@ -739,15 +739,14 @@ window.__ModuleLoader__.load({
         return false;
       }
     }
-    /** 打开一个文件的 diff（源代码管理/提交图谱统一入口；文件树与对话区点击走官方
-     *  右栏文件签，不进这里）。一个文件一张签：diff 源（未跟踪/已删/钉定提交）编进
+    /** 打开一个文件的 diff（源代码管理更改清单的入口；文件树与对话区点击走官方
+     *  右栏文件签，不进这里）。一个文件一张签：diff 源（未跟踪/已删）编进
      *  地址 query，故同文件换源是另一张签、同一源重复开复用原签。seat 不在场时不动 */
-    function openFileAndDock(path, untracked, deleted, commit) {
+    function openFileAndDock(path, untracked, deleted) {
       if (!rightbarSeat.available) return;
       const q = [];
       if (untracked === true) q.push("u=1");
       if (deleted === true) q.push("d=1");
-      if (typeof commit === "string" && commit !== "") q.push("c=" + encodeURIComponent(commit));
       openRightbarItem("file", path, q.join("&"));
     }
     /** 本签当前是否可见（官方口径：前台会话 + 右栏展开 + 本签激活）——停轮询用 */
@@ -899,14 +898,6 @@ window.__ModuleLoader__.load({
     // 无从定位工作区，放弃。
     /** 官方文件签的地址（`dsh-resource://file/session/<会话id>/<路径>`）：开签与
      *  问宿主「这个文件什么版本」共用同一个地址。会话未选中时无从定位工作区，返回 null */
-    /** 地址里的转义段还原：坏转义（手改过的布局/旧版本遗留）不该在渲染期抛错 */
-    function safeDecode(s) {
-      try {
-        return decodeURIComponent(s);
-      } catch {
-        return "";
-      }
-    }
     function fileAddressFor(path) {
       const list = sessionsSvc && typeof sessionsSvc.list?.getSnapshot === "function" ? sessionsSvc.list.getSnapshot() : null;
       const sessionId = mainRowOf(list)?.id;
@@ -1099,7 +1090,6 @@ window.__ModuleLoader__.load({
       scGraphEmpty: "（尚无提交）",
       scGraphFail: "图谱加载失败",
       scGraphMore: "加载更多",
-      scFiles: "更改的文件",
       edit: "编辑",
       gitM: "已修改",
       gitA: "新文件",
@@ -1142,7 +1132,6 @@ window.__ModuleLoader__.load({
       scGraphEmpty: "(no commits yet)",
       scGraphFail: "Failed to load graph",
       scGraphMore: "Load more",
-      scFiles: "Changed files",
       gitM: "Modified",
       gitA: "Added",
       gitD: "Deleted",
@@ -1715,8 +1704,8 @@ ellipsis，窄列只截字不破版 */
     // 「签开着吗」以官方 pane 的挂载为准。
     // ── diff：一个文件一张官方右栏签（签条即切换器，pane 内不再自绘标签条）──
     /** diff pane：一个文件一张签。正文只渲染自己这张签的内容——地址即文件路径，
-     *  query 带着 diff 源（未跟踪/已删/钉定提交），故刷新后重建签也认得回自己。
-     *  只承载源代码管理/提交图谱点开的 diff；工作区文件的预览/编辑走官方右栏文件签 */
+     *  query 带着 diff 源（未跟踪/已删），故刷新后重建签也认得回自己。
+     *  只承载源代码管理更改清单点开的 diff；工作区文件的预览/编辑走官方右栏文件签 */
     function FilePaneBody(props) {
       const cwd = useCurrentCwd(props);
       const address = tabAddress(props);
@@ -1727,13 +1716,11 @@ ellipsis，窄列只截字不破版 */
       const query = rightbarQuery("file", address);
       if (path === "") return null;
       const flag = (key) => new RegExp("(^|&)" + key + "=([^&]*)").exec(query);
-      const commitM = flag("c");
       return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(dock.diffPane.Component, { // dsh-kit/files 物化期挂上（渲染期取，boot 后必已物化）
         key: address,
         path,
         untracked: flag("u") !== null,
         deleted: flag("d") !== null,
-        commit: commitM ? safeDecode(commitM[2]) : undefined,
         cwd,
         fileAddress,
         useResource,
@@ -6839,12 +6826,7 @@ ellipsis，窄列只截字不破版 */
       scGraphFail: "图谱加载失败",
       scGraphEmpty: "（暂无提交）",
       scGraphMore: "加载更多",
-      scFiles: "文件",
       scDetached: "游离 HEAD",
-      scCommitDetail: "提交详情",
-      scBack: "返回",
-      scMergedCommit: "合并提交",
-      scAuthored: "作者",
       diffFail: "diff 加载失败",
       diffBaseParent: "与上一版（父提交 {base}）对比",
       diffBaseRoot: "根提交：与空树对比（全部为新增）",
@@ -6951,12 +6933,7 @@ ellipsis，窄列只截字不破版 */
       scGraphFail: "Failed to load the graph",
       scGraphEmpty: "(no commits)",
       scGraphMore: "Load more",
-      scFiles: "Files",
       scDetached: "Detached HEAD",
-      scCommitDetail: "Commit detail",
-      scBack: "Back",
-      scMergedCommit: "Merge commit",
-      scAuthored: "Author",
       diffFail: "Failed to load diff",
       diffBaseParent: "Compared with parent commit {base}",
       diffBaseRoot: "Root commit: diffed against empty tree (all additions)",
@@ -7156,8 +7133,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 /* 提交图谱（结构化 lane + SVG 绘制，横向滚动；窄容器隐藏作者/时间列） */
 .dshk-graph{font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.6;overflow-x:auto;user-select:text;padding:2px 0;container-type:inline-size}
 .dshk-grow{display:flex;align-items:center;white-space:pre;padding:0 8px;min-height:24px}
-.dshk-grow-click{cursor:pointer}
-.dshk-grow-click:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-gsvg{flex:none;display:block}
 .dshk-gref{flex:none;font-size:10px;line-height:1.4;margin-right:4px;padding:0 5px;border-radius:5px;border:1px solid currentColor;white-space:nowrap}
 .dshk-gref[data-k="head"]{color:#e2c08d}
@@ -7172,21 +7147,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 .dshk-gmore:hover{color:var(--dsw-alias-label-primary)}
 .dshk-gmore[disabled]{opacity:.55;cursor:default}
 @container (max-width: 520px){.dshk-gauthor,.dshk-gdate{display:none}}
-.dshk-gdetail-head{display:flex;align-items:center;gap:8px;padding:6px 10px}
-.dshk-gdetail-title{font-size:12px;color:var(--dsw-alias-label-secondary)}
-.dshk-gmeta{padding:6px 10px;border-bottom:1px solid var(--dsw-alias-border-l1)}
-.dshk-gmeta-row{display:flex;gap:8px;align-items:baseline;font-size:12px}
-.dshk-gmeta-k{flex:none;color:var(--dsw-alias-label-tertiary);width:44px}
-.dshk-gmeta-date{flex:1;min-width:0;text-align:right;color:var(--dsw-alias-label-tertiary)}
-.dshk-gmeta-hash{font-size:11px;color:var(--dsw-alias-label-tertiary);word-break:break-all;margin-top:2px}
-.dshk-gmeta-subj{font-size:12px;color:var(--dsw-alias-label-primary);margin-top:2px}
-.dshk-gmeta-body{font-size:12px;line-height:1.55;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;word-break:break-word;margin-top:2px}
-.dshk-gmeta-merge{margin-top:2px;font-size:11px;color:#e2c08d}
-.dshk-gfiles-head{padding:5px 10px;font-size:11px;color:var(--dsw-alias-label-secondary)}
-.dshk-gfile{display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:12px;cursor:pointer}
-.dshk-gfile:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-gfile .dshk-name{flex:none}
-.dshk-gfile .dshk-dir{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     `;
     function injectStyles() {
       if (typeof document === "undefined") return;
@@ -7305,14 +7265,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     function fetchGitLog(cwd, n, skip, signal) {
       const url = `/dsh-kit/git/log?cwd=${encodeURIComponent(cwd)}&n=${Number(n) || 120}&skip=${Number(skip) || 0}`;
       return kitGetJson(url, signal, (b) => typeof b.available === "boolean");
-    }
-    /** git 单个提交详情（图谱点开行用） */
-    function fetchGitShow(cwd, commit, signal) {
-      return kitGetJson(
-        `/dsh-kit/git/show?cwd=${encodeURIComponent(cwd)}&commit=${encodeURIComponent(commit)}`,
-        signal,
-        (b) => typeof b.available === "boolean",
-      );
     }
     /** git 本地分支列表（{current, branches:[{name,isHead,upstream,track,trackParsed}]}） */
     function fetchGitBranch(cwd, signal) {
@@ -8609,7 +8561,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
                         }),
                       ] })
                     : view === "graph"
-                    ? jsxRuntime.jsx(GitGraphPanel, { cwd, root, refreshRef: graphRef, onOpenFile })
+                    ? jsxRuntime.jsx(GitGraphPanel, { cwd, refreshRef: graphRef })
                     : jsxRuntime.jsxs(jsxRuntime.Fragment, {
                         children: [
                           // 提交框：暂存空=提交全部（需确认），否则只提交已暂存
@@ -8666,8 +8618,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // ─────────── 提交图谱（源代码管理面板的 graph 视图）───────────
     // 数据走 GET /dsh-kit/git/log（结构化提交记录：完整/短哈希、父哈希、作者、
     // 时间戳、说明、引用装饰），lane 几何由前端从父哈希计算后 SVG 绘制。
-    // 行布局：图谱列 → 引用装饰 chip → 短哈希 → 说明 → 作者 → 相对时间。点提交行进详情（/dsh-kit/git/show）：作者/时间/说明/文件
-    // 清单，清单行可点开进右侧预览面板（A 类按未跟踪语义进原文视图）。
+    // 行布局：图谱列 → 引用装饰 chip → 短哈希 → 说明 → 作者 → 相对时间。行不可点，完整
+    // 信息（作者 · 时间 + 说明）走 title 悬停。
     // refreshRef：头部 ⟳ 一并刷新的句柄（由 GitChangesPanel 传入并回填）。
     /** 图谱 lane 配色（按 lane 生命周期循环取用，同一条线颜色恒定） */
     const LANE_COLORS = ["#4daafc", "#73c991", "#e2c08d", "#b088e0"];
@@ -8779,11 +8731,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       return jsxRuntime.jsx("svg", { className: "dshk-gsvg", width: w, height: GRAPH_ROW_H, viewBox: `0 0 ${w} ${GRAPH_ROW_H}`, children: parts });
     }
 
-    function GitGraphPanel({ cwd, root, refreshRef, onOpenFile }) {
+    function GitGraphPanel({ cwd, refreshRef }) {
       const [data, setData] = react.useState(null); // null=加载中；{available, records?, hasMore?}
       const [error, setError] = react.useState(null);
-      const [sel, setSel] = react.useState(null); // null=列表；否则为选中的提交哈希
-      const [detail, setDetail] = react.useState(null); // null | {phase, meta?, files?}
       const [more, setMore] = react.useState(false); // load more 在途
       const fetchRef = react.useRef(null);
       // 序号守卫：轮询与「加载更多」并发时，先发后到的整页响应会把已追加的记录
@@ -8843,36 +8793,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         };
       }, [cwd]);
 
-      /** 详情拉取控制器（供返回键中止在途请求） */
-      const detailFetchRef = react.useRef(null);
-      const openDetail = (hash) => {
-        setSel(hash);
-        setDetail({ phase: "loading" });
-        const c = new AbortController();
-        detailFetchRef.current = c;
-        fetchGitShow(cwd, hash, c.signal)
-          .then((b) => {
-            if (c.signal.aborted) return;
-            if (b.available !== true) throw new Error("unavailable");
-            setDetail({ phase: "ready", meta: b.meta, files: b.files || [] });
-          })
-          .catch((e) => {
-            if (!c.signal.aborted) setDetail({ phase: "error", error: String(e?.message ?? e) });
-          });
-      };
-      const closeDetail = () => {
-        const c = detailFetchRef.current;
-        if (c) {
-          try {
-            c.abort();
-          } catch {
-            // 已结束
-          }
-        }
-        setSel(null);
-        setDetail(null);
-      };
-
       const renderRefChips = (d) => {
         const decs = parseDecoration(d);
         return decs.map((r, i) =>
@@ -8891,64 +8811,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
       if (!cwd) {
         return jsxRuntime.jsx("div", { className: "dshk-note", children: t("noCwd") });
-      }
-
-      // ── 提交详情子视图 ──
-      if (sel !== null) {
-        const isMerge = typeof detail?.meta?.parents === "string" && detail.meta.parents.trim().includes(" ");
-        return jsxRuntime.jsxs("div", { className: "dshk-graph", children: [
-          jsxRuntime.jsxs("div", { className: "dshk-gdetail-head", children: [
-            jsxRuntime.jsx("button", {
-              type: "button",
-              className: "dshk-btn-cancel",
-              onClick: closeDetail,
-              children: t("scBack"),
-            }),
-            jsxRuntime.jsx("span", { className: "dshk-gdetail-title", children: t("scCommitDetail") }),
-          ] }),
-          detail === null || detail.phase === "loading"
-            ? jsxRuntime.jsx("div", { className: "dshk-note", children: t("treeLoading") })
-            : detail.phase === "error"
-              ? jsxRuntime.jsx("div", { className: "dshk-note", children: `${t("scGraphFail")}：${detail.error}` })
-              : jsxRuntime.jsxs("div", { children: [
-                  jsxRuntime.jsxs("div", { className: "dshk-gmeta", children: [
-                    jsxRuntime.jsxs("div", { className: "dshk-gmeta-row", children: [
-                      jsxRuntime.jsx("span", { className: "dshk-gmeta-k", children: t("scAuthored") }),
-                      jsxRuntime.jsx("span", { children: detail.meta.an }),
-                      jsxRuntime.jsx("span", { className: "dshk-gmeta-date", children: detail.meta.ad }),
-                    ] }),
-                    jsxRuntime.jsx("div", { className: "dshk-gmeta-hash", children: detail.meta.H }),
-                    jsxRuntime.jsx("div", { className: "dshk-gmeta-subj", children: detail.meta.s }),
-                    detail.meta.b
-                      ? jsxRuntime.jsx("div", { className: "dshk-gmeta-body", children: detail.meta.b })
-                      : null,
-                    isMerge
-                      ? jsxRuntime.jsx("div", { className: "dshk-gmeta-merge", children: `${t("scMergedCommit")}：${detail.meta.parents}` })
-                      : null,
-                  ] }),
-                  jsxRuntime.jsx("div", { className: "dshk-gfiles-head", children: t("scFiles") }),
-                  detail.files.length === 0
-                    ? jsxRuntime.jsx("div", { className: "dshk-note", children: isMerge ? t("scMergedCommit") : t("scEmpty") })
-                    : detail.files.map((f) => {
-                        const st = f.st === "C" ? "R" : f.st;
-                        const base = f.path.split(/[\\/]/).pop() || f.path;
-                        return jsxRuntime.jsxs(
-                          "div",
-                          {
-                            className: "dshk-gfile",
-                            title: f.abs,
-                            onClick: () => onOpenFile(f.abs, false, false, sel),
-                            children: [
-                              jsxRuntime.jsx("span", { className: "dshk-gitbadge", "data-k": st, children: st }),
-                              jsxRuntime.jsx("span", { className: "dshk-name", children: base }),
-                              jsxRuntime.jsx("span", { className: "dshk-dir", children: f.path }),
-                            ],
-                          },
-                          f.path,
-                        );
-                      }),
-                ] }),
-        ] });
       }
 
       // ── 图谱列表 ──
@@ -8985,9 +8847,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
             jsxRuntime.jsxs(
               "div",
               {
-                className: "dshk-grow dshk-grow-click",
+                className: "dshk-grow",
                 title: `${row.rec.an} · ${fmtDate(row.rec.at)}\n${row.rec.s}`,
-                onClick: () => openDetail(row.rec.H),
                 children: [
                   jsxRuntime.jsx(CommitGraphSvg, { row, laneCount: geo.laneCount }),
                   renderRefChips(row.rec.d),
@@ -9012,10 +8873,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     }
 
 
-    /** SCM 专用 diff 签：源代码管理/提交图谱点文件在这里看差异，工作区文件不在本
-     *  面板预览/编辑（树与对话区点击改投官方右栏文件签）。commit（可选）= 提交钉定模式（图谱提交详情进入，diff 与该提交的
-     *  第一父对比）；deleted=工作区已删除（纯红展示全文）；untracked=未跟踪
-     *  （整文件按新增着色，内容来自 read）。 */
+    /** SCM 专用 diff 签：源代码管理更改清单点文件在这里看差异，工作区文件不在本
+     *  面板预览/编辑（树与对话区点击改投官方右栏文件签）。commit（可选）= 钉定到某个提交
+     *  （技能版本面板进入，diff 与该提交的第一父对比）；deleted=工作区已删除（纯红展示全文）；
+     *  untracked=未跟踪（整文件按新增着色，内容来自 read）。 */
     function DiffPane({ path, untracked, deleted, cwd, commit, fileAddress, useResource }) {
       const [state, setState] = react.useState({ phase: "loading" });
       const [diff, setDiff] = react.useState({ phase: "loading" });
@@ -9369,7 +9230,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         const side = owner ?? {};
         if (side.wide === false) return null;
         if (ui.gitOpen) {
-          return jsxRuntime.jsx(GitChangesPanel, { cwd, onOpenFile: (p, untracked, deleted, commit) => openFileAndDock(p, untracked === true, deleted === true, commit), ...owner });
+          return jsxRuntime.jsx(GitChangesPanel, { cwd, onOpenFile: (p, untracked, deleted) => openFileAndDock(p, untracked === true, deleted === true), ...owner });
         }
         if (ui.treeOpen) {
           return jsxRuntime.jsx(FileTreePanel, { cwd, onOpenFile: (p) => openTreeFile(p), ...owner });

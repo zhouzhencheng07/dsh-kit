@@ -173,8 +173,8 @@ check("知识库入口再点：索引回会话、知识库签与页签不动（�
 // 7.1c) 右栏资源地址（一内容一签的载体）：条目 ↔ 地址往返，query 归 diff 源用
 const vAddr = comps.rightbarAddress("vault", "D:/v/a b.md");
 check("知识库页地址：dsh-resource 前缀 + 编码条目", vAddr === "dsh-resource://dshk-vault/D%3A%2Fv%2Fa%20b.md" && comps.rightbarItem("vault", vAddr) === "D:/v/a b.md");
-const dAddr = comps.rightbarAddress("file", "C:/x/a.js", "d=1&c=abc");
-check("diff 地址：query 跟着地址走（同一文件不同 diff 源是两张签）", dAddr.startsWith("dsh-resource://dshk-diff/C%3A%2Fx%2Fa.js?") && comps.rightbarItem("file", dAddr) === "C:/x/a.js" && comps.rightbarQuery("file", dAddr) === "d=1&c=abc");
+const dAddr = comps.rightbarAddress("file", "C:/x/a.js", "d=1");
+check("diff 地址：query 跟着地址走（同一文件不同 diff 源是两张签）", dAddr.startsWith("dsh-resource://dshk-diff/C%3A%2Fx%2Fa.js?") && comps.rightbarItem("file", dAddr) === "C:/x/a.js" && comps.rightbarQuery("file", dAddr) === "d=1");
 check("非本 feature 的地址回 null（不串类）", comps.rightbarItem("vault", dAddr) === null && comps.rightbarItem("file", "dsh-resource://file/x") === null);
 check("空条目不给地址", comps.rightbarAddress("vault", "") === "");
 
@@ -242,7 +242,7 @@ check("ScheduleTasksCard 待办行渲染卡壳", !!out && typeof out === "object
 check("ScheduleTasksCard 只读行：无勾选框、无计时钮", taskChecks.length === 0 && timerBtns.length === 0);
 // openFileAndDock / openVaultPageAndDock：签归官方签表，这里断言「开出来的地址对不对」
 // （桩环境无右栏服务 → 只看地址映射，见 7.1c 的往返断言）
-comps.openFileAndDock("C:/x/new.js", false, true, undefined);
+comps.openFileAndDock("C:/x/new.js", false, true);
 check("openFileAndDock 不再往 kitUi 写激活位", comps.getKitUi().activeFeature === undefined);
 comps.openVaultPageAndDock("D:/v/p.md");
 check("openVaultPageAndDock 同样不写激活位", comps.getKitUi().activeFeature === undefined);
@@ -272,7 +272,7 @@ check("openVaultPageAndDock 同样不写激活位", comps.getKitUi().activeFeatu
   check("mounted 变 undefined（没选会话 / 全局面板在前台）＝不在场", seat.available === false);
   check("useRightbarSeat 读的就是这份在场状态（KitSurfaces 据此重绘）", comps.useRightbarSeat() === false);
   comps.setKitUi({ activeFeature: null });
-  comps.openFileAndDock("C:/x/gated.js", true, false, undefined);
+  comps.openFileAndDock("C:/x/gated.js", true, false);
   check("不在场：openFileAndDock 不激活差异", comps.getKitUi().activeFeature !== "file");
   comps.openVaultPageAndDock("D:/v/gated.md");
   check("不在场：openVaultPageAndDock 不激活知识库", comps.getKitUi().activeFeature !== "vault");
@@ -893,13 +893,11 @@ let vaultFetchPrev = null;
 // 7.2.3) 文件标签 LRU 纯逻辑：默认上限 3，超限开新文件逐出 usedAt 最小者（=关掉
 // 最久没看的那张标签）；重开已存在文件置顶激活不逐出自身
 // 7.2.3) diff 签的 LRU 与来源标记随「地址 query」走：上限 3 张、超限逐出最久没看、
-// 未跟踪/已删/commit 钉定各是不同地址（=不同签）。签表归官方，这里只钉地址映射
+// 未跟踪/已删各是不同地址（=不同签）。签表归官方，这里只钉地址映射
 const diffAddrOf = (p, q) => comps.rightbarAddress("file", p, q);
 check("未跟踪 diff：地址带 u=1", comps.rightbarQuery("file", diffAddrOf("C:/x/gone.js", "u=1")) === "u=1");
 check("已删 diff：地址带 d=1", comps.rightbarQuery("file", diffAddrOf("C:/x/gone.js", "d=1")) === "d=1");
-const pinned = diffAddrOf("C:/x/hist.js", "c=" + encodeURIComponent("abc1234def"));
-check("提交钉定 diff：地址带 c=<sha>（刷新后仍认得回这张签）", comps.rightbarQuery("file", pinned) === "c=abc1234def" && comps.rightbarItem("file", pinned) === "C:/x/hist.js");
-check("同文件不同 diff 源是两张签（地址不同）", pinned !== diffAddrOf("C:/x/hist.js") && diffAddrOf("C:/x/hist.js") !== diffAddrOf("C:/x/other.js"));
+check("同文件不同 diff 源是两张签（地址不同）", diffAddrOf("C:/x/gone.js", "u=1") !== diffAddrOf("C:/x/gone.js") && diffAddrOf("C:/x/hist.js") !== diffAddrOf("C:/x/other.js"));
 comps.setKitUi({ terminals: [], activeTermId: null, termDockOpen: false });
 callLog = [];
 out = comps.KitSurfaces({});
