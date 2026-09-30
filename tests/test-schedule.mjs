@@ -301,7 +301,11 @@ test('items：纯日期截止到当天结束前都不算逾期，带时刻比到
   const items = store.items('day', today)
   const byTitle = (t) => items.find((i) => i.title === t)
   assert.equal(byTitle('今天整日').overdue, undefined)
-  assert.equal(byTitle('今晚交').overdue, undefined)
+  // 23:59 那条的预期随「现在几点」变：跑在 23:59 这一分钟里它已经逾期（跨零点跑测试
+  // 不该翻车），那一分钟跳过这条断言，其余时刻照旧钉住「比到分钟」的语义
+  const endOfDay = new Date()
+  endOfDay.setHours(23, 59, 0, 0)
+  if (Date.now() < endOfDay.getTime()) assert.equal(byTitle('今晚交').overdue, undefined)
   assert.equal(byTitle('零点已过').overdue, true)
   fs.rmSync(dir, { recursive: true, force: true })
 })
