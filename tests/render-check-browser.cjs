@@ -162,7 +162,7 @@ check(
     return callLog.find((c) => c[1] === comps.BrowserPanel)?.[2] ?? null;
   };
   const noAddr = panelWithAddr("dsh-app://app/guide");
-  check("无浏览器地址的签：页 id 为 null（不是 0），并带上本签 id 供 replaceTab 接管", noAddr !== null && noAddr.pageId === null && noAddr.tabId === "tab7");
+  check("无浏览器地址的签：页 id 为 null（不是 0）", noAddr !== null && noAddr.pageId === null);
   const withAddr = panelWithAddr("dsh-resource://dshk-browser/" + encodeURIComponent("7"));
   check("有地址的签：页 id 取自地址", withAddr !== null && withAddr.pageId === 7);
   check("BrowserShell 渲染无异常（空壳：事件源 + 入口掩码）", comps.BrowserShell({}) === null || typeof comps.BrowserShell({}) === "object");
@@ -228,6 +228,35 @@ async function checkApply() {
   check("右栏签注册：页类型 kind=dshk-browser + pane 正文槽位", on.registered.some((s) => s && s.kind === "dshk-browser" && s.id === "dsh-kit-browser") && on.slotInjects.includes("sidebar.right.pane.tab"));
   check("槽位经 slots.inject 等声明落地（不直接 register）", on.slotInjects.every((k) => typeof k === "string" && k.length > 0));
   check("dock 签 kind 补登（openFeatureDock/closeRightbarTab 按 feature 查 tabKinds）", dockExports.tabKinds.browser.kind === "dshk-browser");
+}
+
+// 7) 空签接管：入口开出来的那张签还没认领到页时，新页落进那张签而不是另开一张
+//    （判据读官方签表：地址不是 dsh-resource://dshk-browser/… 的那张就是空签）
+async function checkAdopt() {
+  const calls = [];
+  const tabs = [{ sessionId: "sess-1", tabId: "tab6", kind: "dshk-browser", contentId: "sidebar://dshk-browser" }];
+  const fake = {
+    openTabs: { getSnapshot: () => tabs },
+    mounted: { getSnapshot: () => "sess-1" },
+    openResource: (address, options) => calls.push({ address, options }),
+    close: () => {},
+    active: () => null,
+  };
+  // 右栏服务实例挂在根半边（kitBase 共用），根 apply 注进去即可
+  await dockExports.apply({
+    slots: { register: () => {}, inject: (k, cb) => cb() },
+    inject: (deps, cb) => {
+      if (deps.includes("sidebarRight")) cb({ sidebarRight: fake });
+    },
+  });
+  comps.maybeAutoOpenBrowser(7);
+  check("空签在场：新页 replaceTab 落进那张签（用官方签表的 tabId 字段，不是 id）",
+    calls.length === 1 && calls[0].options?.replaceTab === "tab6" && calls[0].address.endsWith("dshk-browser/7"));
+  calls.length = 0;
+  tabs.length = 0;
+  tabs.push({ sessionId: "sess-1", tabId: "tab9", kind: "dshk-browser", contentId: "dsh-resource://dshk-browser/3" });
+  comps.maybeAutoOpenBrowser(8);
+  check("没有空签时正常开新签（不带 replaceTab）", calls.length === 1 && calls[0].options?.replaceTab === undefined);
 }
 
 // 6) 源哨兵：宿主半边搬进组件目录、主包与 client 摘干净、端点与配置齐备
@@ -307,6 +336,7 @@ async function checkApply() {
 
 (async () => {
   await checkApply();
+  await checkAdopt();
   console.log(failed === 0 ? "ALL RENDER OK (browser)" : `FAILED: ${failed}`);
   process.exit(failed === 0 ? 0 : 1);
 })();

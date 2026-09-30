@@ -316,7 +316,8 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
               // 看帧不等于开浏览器：面板打开/重新激活都只订流，浏览器由「有理由的
               // 动作」拉起（地址栏导航、「＋」新页签、agent 工具、对话链接改投）。
               // 页还不存在时订阅会被拒并回一条 error（见 openWatch），客户端重开签即可。
-              const want = msg.on === true && msg.tabId !== undefined ? Number(msg.tabId) : null
+              // null 与 undefined 同义：没有页。Number(null) 是 0，会去订/关「0 号页」
+              const want = msg.on === true && msg.tabId != null ? Number(msg.tabId) : null
               if (want !== null && (watched === null || watched.scope !== scope || watched.tabId !== want)) {
                 closeWatch()
                 watched = { scope, tabId: want }
@@ -330,11 +331,11 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
               // 失败不发 error 事件：面板已经切到浏览器签，网址打不开时浏览器自己的错误页
               // 就是反馈（普通浏览器也这样），起不来时面板按 state.error 显示原因。
               // 别的操作（关页/新页）失败仍要报——那些没有"页面上看得见"的等价物
-              void browserService.humanOpen(scope, msg.url, msg.tabId === undefined ? null : Number(msg.tabId))
+              void browserService.humanOpen(scope, msg.url, msg.tabId == null ? null : Number(msg.tabId))
               return
             }
 
-            if (msg.t === 'closeTab' && msg.tabId !== undefined) {
+            if (msg.t === 'closeTab' && msg.tabId != null) {
               void browserService.closePage(scope, Number(msg.tabId)).then((r) => {
                 if (!r.ok) sendTo(ws, { t: 'event', kind: 'error', message: r.error })
               })
@@ -348,7 +349,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
               return
             }
             if (msg.t === 'nav' && (msg.op === 'back' || msg.op === 'forward' || msg.op === 'reload')) {
-              void browserService.history(scope, msg.op, msg.tabId === undefined ? null : Number(msg.tabId)).then((r) => {
+              void browserService.history(scope, msg.op, msg.tabId == null ? null : Number(msg.tabId)).then((r) => {
                 if (!r.ok) sendTo(ws, { t: 'event', kind: 'error', message: r.error })
               })
               return
@@ -360,7 +361,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
             }
             if (msg.t === 'input') {
               // 人机共驾：面板输入回传该签对应的页（未运行时宿主拒绝，不误拉起）
-              void browserService.humanInput(scope, msg, msg.tabId === undefined ? null : Number(msg.tabId))
+              void browserService.humanInput(scope, msg, msg.tabId == null ? null : Number(msg.tabId))
               return
             }
           })
