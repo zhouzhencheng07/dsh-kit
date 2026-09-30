@@ -307,7 +307,7 @@ async function checkApply() {
   const prevNotification = global.Notification;
   class TestNote {
     constructor(title, opts) {
-      posted.push({ title, body: opts && opts.body });
+      posted.push({ title, body: opts && opts.body, tag: opts && opts.tag });
     }
     close() {}
   }
@@ -320,6 +320,7 @@ async function checkApply() {
     posted.length = 0;
     comps.notifyCompleteSettled(sessionsOf(false), { ...ev, kind: "complete" });
     check("N 真收尾发完成通知", posted.length === 1 && /回合完成|turn finished/.test(posted[0].title));
+    check("N 通知不带 tag（带 tag 时 Windows 只替换不展示）", posted[0]?.tag === undefined);
     posted.length = 0;
     comps.notifyCompleteSettled(sessionsOf(false), { ...ev, kind: "error" });
     check(

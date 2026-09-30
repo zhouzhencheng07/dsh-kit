@@ -10052,8 +10052,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       }
     }
 
-    /** 投递一条：系统通知优先，退标题闪烁。tag 按会话归并——同一会话的新通知
-     *  替换旧的，人不在时也不会堆一屏 */
+    /** 投递一条系统通知。**不带 tag**：Windows 把同 tag 的新通知当「替换」，旧的那条
+     *  不在时就只替换不展示（桌面端实测：带 tag 的通知一条都不弹） */
     function notifyDeliver(ev) {
       // 五类收尾共用「点击回到该会话」这个正文，只有提问/批准/计划评审各带自己的
       const TITLE_BY_KIND = {
@@ -10083,7 +10083,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       if (!notifyCanPost()) return;
       notifyAskPermission();
       try {
-        const note = new Notification(title, { body, tag: `dsh-kit:${ev.sessionId}`, silent: true });
+        const note = new Notification(title, { body, silent: true });
         note.onclick = () => {
           notifyOpenSession(ev.sessionId);
           try {
