@@ -435,7 +435,9 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
               return
             }
             // 分区 = 点链接时的会话（客户端带 sessionId）：链接落在该对话自己的分区，回包页 id 开签
-            void browserService.humanOpen(normalizeScope(body?.sessionId), url).then((r) => {
+            // newPage：点链接要另开一页。不给的话 humanOpen 落本分区「观察页」——
+            // 正在看的那张签内容会被顶掉、前进后退历史丢失，还为同一页多开一张签
+            void browserService.humanOpen(normalizeScope(body?.sessionId), url, null, true).then((r) => {
               if (r.ok) json(200, { ok: true, tabId: r.tabId, url: r.url })
               else json(502, { error: r.error })
             })

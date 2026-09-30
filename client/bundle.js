@@ -11232,11 +11232,30 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         };
         ws.onclose = () => {
           entry.ws = null;
-          if (entry.subs.size === 0) return;
+          if (entry.subs.size === 0) {
+            drop();
+            return;
+          }
           entry.retry = window.setTimeout(connect, 2500);
         };
         ws.onerror = () => {};
       };
+      // 这个分区没人看了：关连接、删条目。少了它，brwScopes 只增不减（用过 N 个
+      // 会话就 N 条常驻连接，宿主侧也各留一条），而条目一旦断死又永不重连——
+      // 回到那个会话时页集/事件永远不来，签空白且不报错
+      const drop = () => {
+        if (entry.subs.size > 0 || brwScopes.get(scope) !== entry) return;
+        brwScopes.delete(scope);
+        if (entry.retry !== null) window.clearTimeout(entry.retry);
+        entry.retry = null;
+        try {
+          entry.ws?.close();
+        } catch {
+          // 已断
+        }
+        entry.ws = null;
+      };
+      entry.drop = drop;
       connect();
       return entry;
     }
@@ -11754,7 +11773,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         (cb) => {
           if (!conn) return () => {};
           conn.subs.add(cb);
-          return () => conn.subs.delete(cb);
+          return () => {
+            conn.subs.delete(cb);
+            conn.drop?.();
+          };
         },
         () => conn?.version ?? 0,
       );
@@ -11802,7 +11824,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         (cb) => {
           if (!conn) return () => {};
           conn.subs.add(cb);
-          return () => conn.subs.delete(cb);
+          return () => {
+            conn.subs.delete(cb);
+            conn.drop?.();
+          };
         },
         () => conn?.version ?? 0,
       );
@@ -11844,8 +11869,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       if (!/^https?:\/\//i.test(href)) return;
       ev.preventDefault();
       ev.stopPropagation();
-      // 失败不提示（吞掉 rejection 免成 unhandled）：网址打不开时浏览器自己的错误页
-      // 就是反馈（同普通浏览器），浏览器起不来时面板的未启动提示会带上宿主报的原因。
+      // 端点失败（行关闭/浏览器拉不起来/502）时按官方口径自己开新标签：
+      // 官方行为已经被 preventDefault 掉了，不兜就是「点了毫无反应」。
       // sessionId = 点击时所在会话：宿主按它把链接落进该对话自己的浏览器分区；
       // 回包的页 id 开成一张签（没有回包就由控制连接的页集对账补开）
       kitJson("/dsh-kit/browser/open", {
@@ -11855,10 +11880,15 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       })
         .then((r) => {
           const id = r && r.tabId;
-          if (id === undefined || id === null) return;
+          if (id === undefined || id === null) {
+            window.open(href, "_blank", "noopener,noreferrer");
+            return;
+          }
           openRightbarItem("browser", String(id));
         })
-        .catch(() => {});
+        .catch(() => {
+          window.open(href, "_blank", "noopener,noreferrer");
+        });
     }
 
 
