@@ -736,23 +736,17 @@ export function apply(ctx, config = {}) {
                                         json(200, { available: true, commitMode: true, base, diff: patch });
                                         return;
                                     }
-                                    // 新像 = 该提交时刻的文件内容，供前端复用全文件着色视图；
-                                    // 取不到（该提交删除了此文件）标 blobMissing 走纯红删除视图；
-                                    // 超 1MB 不取（前端回落原始 patch，避免大内容白拉）
+                                    // 只判「该提交时刻这个文件在不在」：不在（该提交删除了它 / 路径变形）
+                                    // 标 blobMissing，前端走纯红删除视图。内容本身不取——前端只渲染
+                                    // hunk，上下文行数由 patch 自带，整份 blob 回传纯属浪费带宽
                                     runGit(['-c', 'core.quotePath=false', 'show', `${full}:${rel.replace(/\\/g, '/')}`], root).then((blob) => {
-                                        const text = blob.ok && typeof blob.out === 'string' && blob.out.length > 0 && blob.out.length <= 1024 * 1024
-                                            ? blob.out
-                                            : null;
-                                        if (text !== null) {
-                                            json(200, { available: true, commitMode: true, base, diff: patch, content: text });
-                                            return;
-                                        }
-                                        if (!blob.ok) {
-                                            // blob 读不出来 = 该提交时刻不存在此文件（删除/路径变形）
-                                            json(200, { available: true, commitMode: true, base, diff: patch, blobMissing: true });
-                                            return;
-                                        }
-                                        json(200, { available: true, commitMode: true, base, diff: patch });
+                                        json(200, {
+                                            available: true,
+                                            commitMode: true,
+                                            base,
+                                            diff: patch,
+                                            ...(blob.ok ? {} : { blobMissing: true }),
+                                        });
                                     });
                                 });
                             });

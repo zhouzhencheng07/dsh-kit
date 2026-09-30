@@ -198,7 +198,7 @@ check("DiffPane 渲染无异常", !!out && typeof out === "object");
 }
 {
   stateStore.set(0, readyBody);
-  stateStore.set(1, { phase: "ready", clean: false, base: "abcd123", text: commitDiffText, content: "new\n" });
+  stateStore.set(1, { phase: "ready", clean: false, base: "abcd123", text: commitDiffText });
   callLog = [];
   comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", commit: "full40hash" });
   const baseNote = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diffnote" && typeof c[2].children === "string" && c[2].children.includes("abcd123"));
@@ -278,6 +278,22 @@ check("DiffPane 渲染无异常", !!out && typeof out === "object");
   callLog = [];
   comps.DiffPane({ path: "C:/x/gone.md", cwd: "C:/x", deleted: true });
   check("删除态头部无全文/分栏钮", !headBtn("⇄") && !(headBtn("全文") || headBtn("Full")));
+  // useResource 是宿主标准 hook：按地址是否为空条件调用会让 hook 数随会话选中态
+  // 变化，React 抛「Rendered fewer hooks than expected」→ 整张差异签空白
+  const hookCalls = [];
+  const spyResource = (addr) => { hookCalls.push(addr); return { status: "none", value: undefined }; };
+  stateStore.clear();
+  stateSeq = 0;
+  stateStore.set(0, readyBody);
+  stateStore.set(1, { phase: "ready", clean: false, text: commitDiffText });
+  comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", fileAddress: null, useResource: spyResource });
+  check("无地址时 useResource 仍被调用（不得条件调用）", hookCalls.length === 1 && hookCalls[0] === "");
+  hookCalls.length = 0;
+  comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", fileAddress: "dsh-resource://file/session/s1/C%3A%2Fx%2Ff.js", useResource: spyResource });
+  check("有地址时 useResource 拿到该地址", hookCalls.length === 1 && hookCalls[0].startsWith("dsh-resource://file/"));
+  hookCalls.length = 0;
+  comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x" });
+  check("宿主没给 useResource 时不调（桩里没有该钩子）", hookCalls.length === 0);
   stateStore.clear();
   stateSeq = 0;
 }

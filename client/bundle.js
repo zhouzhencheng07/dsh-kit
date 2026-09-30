@@ -8988,9 +8988,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const [reloadNonce, setReloadNonce] = react.useState(0);
       const [split, setSplit] = react.useState(false); // 双栏对比（单栏为默认，右栏窄）
       // 「盘上这份是不是我读的那份」：宿主 file 资源带版本号（watcher 推帧），
-      // 读到的 diff 记下当时的版本，对不上就是文件被改过——内容留着，上面给一条
-      // 提示条（旧内容不白屏，重载与否由人/开关定）
-      const meta = useResource && fileAddress ? useResource(fileAddress) : null;
+      // 读到的 diff 记下当时的版本，对不上就是盘上被改过——直接重读换新内容。
+      // useResource 是宿主注入的标准 hook，必须无条件调用：按 fileAddress 是否为空
+      // 条件调用会让 hook 数随会话选中态变化，React 直接抛「Rendered fewer hooks
+      // than expected」，整张签空白。地址不是资源 URL 时它返回 status:"none"。
+      const meta = typeof useResource === "function" ? useResource(fileAddress ?? "") : null;
       const version = meta?.value?.version;
       const readVersionRef = react.useRef(null);
       const reload = () => {
@@ -9016,15 +9018,14 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         kitGetJson(`/dsh-kit/git/diff?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? path)}${commitQ}`, c.signal, (b) => b.available === true)
           .then((b) => {
             if (c.signal.aborted) return;
-            // 这份 diff 算在宿主的哪个文件版本上（版本为 undefined = 宿主没这个
-            // 资源的 provider，退回旧的轮询/手动重载）
+            // 这份 diff 算在宿主的哪个文件版本上（version 为 undefined = 宿主没装
+            // workspace-files 行，这个资源没有 provider，不跟随）
             readVersionRef.current = version ?? null;
             setDiff({
               phase: "ready",
               untracked: b.untracked === true,
               clean: b.clean === true,
               base: typeof b.base === "string" ? b.base : "",
-              content: typeof b.content === "string" ? b.content : undefined,
               blobMissing: b.blobMissing === true,
               text: typeof b.diff === "string" ? b.diff : null,
             });
@@ -9034,29 +9035,27 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           });
       };
       // diff 数据：进入时拉一次；之后由宿主 file 资源的版本号驱动（见下方版本对照）
-      // ——不再自己轮询：版本是事件驱动推来的，比每 8s 猜一次准，也省掉每张签一个
-      // git 进程。拿不到版本（无 provider / commit 钉定）时靠手动重载与重开签
+      // ——不再自己轮询：版本是事件驱动推来的，比每 8s 猜一次准，也省掉每张签一个 git 进程
       react.useEffect(() => {
-        if (!cwd) return undefined;
+        if (!cwd) return;
         setDiff({ phase: "loading" });
         if (diffFetchRef.current) diffFetchRef.current();
-        return undefined;
       }, [path, cwd, commit]);
 
       // 版本对照：宿主推了新版本 = 盘上被改过，直接重读。只认「有版本可比」——
       // 首次拿到 live 版本（read 还是 null）也要重读一次，否则资源晚到时这份 diff
-      // 永远停在旧内容
+      // 永远停在旧内容。commit 钉定的内容不可变，不参与跟随
       react.useEffect(() => {
-        if (version === undefined) return;
+        if (commit !== undefined || version === undefined) return;
         if (version === readVersionRef.current) return;
         reload();
-      }, [version]);
+      }, [version, commit]);
 
-      // 内容读取：只服务未跟踪文件（没有基线，整文件按新增着色）。有基线的文件
-      // 走 hunk 视图，上下文行数由 git 给，不需要新像。截断（>512KB）或读失败
-      // 只降级展示，不作为错误。已删除文件读不到，不发请求
+      // 内容读取只服务未跟踪文件：它没有基线，整文件按新增着色。有基线的走 hunk
+      // 视图，行号由 git 给，根本不需要新像——给它们读整份文件是白拉一次（>512KB
+      // 还会被截断）。已删除文件读不到，不发请求
       react.useEffect(() => {
-        if (deleted === true) return undefined;
+        if (untracked !== true || deleted === true) return;
         const controller = new AbortController();
         kitGetJson(`/dsh-kit/read?path=${encodeURIComponent(path)}`, controller.signal, (b) => typeof b.content !== "undefined")
           .then((body) => {
@@ -9064,16 +9063,16 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
             setState({ phase: "ready", body });
           })
           .catch(() => {
-            /* 读失败只降着色，不作为错误展示 */
+            /* 读失败只降级着色，不作为错误展示 */
           });
         return () => controller.abort();
-      }, [path, reloadNonce, deleted]);
+      }, [path, reloadNonce, untracked, deleted]);
 
       /** diff 视图：只渲染 hunk（单栏带行号 / 双栏并排）——长文件只改几行时不必
        *  每次翻整篇，上下文行数由 git 的 -U 决定（默认 3）。
        *  没有 hunk（空/非 unified patch）才原样贴出。commit 模式下该提交已删除的
        *  文件与工作区删除文件一样纯红展示。顶部基线说明见 renderDiffView 包装层。 */
-      /** hunk 头与 git 输出同形，便于和命令行结果对照 */
+      /** hunk 头：与 git 同形，但计数为 1 时也照写（git 会省略成 `@@ -1 +1 @@`） */
       const hunkHeadOf = (h) => `@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`;
       /** 单栏：每行「旧行号 新行号 文本」 */
       const renderUnifiedHunks = (hunks) =>
@@ -9085,7 +9084,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
               {
                 className: "dshk-hunk",
                 children: [
-                  jsxRuntime.jsx("div", { className: "dshk-hunkhead", children: hunkHeadOf(h) }),
+                  jsxRuntime.jsx("div", { key: "h", className: "dshk-hunkhead", children: hunkHeadOf(h) }),
                   ...h.rows.map((r, ri) =>
                     jsxRuntime.jsxs(
                       "div",
@@ -9124,7 +9123,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
               {
                 className: "dshk-hunk",
                 children: [
-                  jsxRuntime.jsx("div", { className: "dshk-hunkhead", children: hunkHeadOf(h) }),
+                  jsxRuntime.jsx("div", { key: "h", className: "dshk-hunkhead", children: hunkHeadOf(h) }),
                   ...splitRowsOf(h.rows).map((pair, ri) =>
                     jsxRuntime.jsx(
                       "div",
