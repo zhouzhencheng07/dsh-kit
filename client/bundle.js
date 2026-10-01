@@ -6908,6 +6908,9 @@ ellipsis，窄列只截字不破版 */
       diffBaseRoot: "根提交：与空树对比（全部为新增）",
       diffEmpty: "（无未暂存差异）",
       diffUntracked: "未跟踪文件，暂无 diff",
+      diffUntrackedBinary: "未跟踪文件是二进制，没有可逐行展示的内容",
+      diffUntrackedTruncated: "文件超过 512KB，仅显示前 512KB",
+      diffUntrackedFailed: "未跟踪文件读取失败",
       diffOpenFile: "在侧边栏打开整个文件",
       diffOpenFileShort: "全文",
       diffSplit: "双栏对比",
@@ -7015,6 +7018,9 @@ ellipsis，窄列只截字不破版 */
       diffBaseRoot: "Root commit: diffed against empty tree (all additions)",
       diffEmpty: "(no unstaged changes)",
       diffUntracked: "Untracked file, no diff yet",
+      diffUntrackedBinary: "Untracked file is binary, nothing to show line by line",
+      diffUntrackedTruncated: "File exceeds 512KB, showing the first 512KB",
+      diffUntrackedFailed: "Failed to read the untracked file",
       diffOpenFile: "Open the whole file in the sidebar",
       diffOpenFileShort: "Full",
       diffSplit: "Side-by-side",
@@ -8982,11 +8988,15 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       }, [deleted]);
 
       // diff 拉取（静默版）：已有内容时后台更新不闪「加载中」，数据到位再整体替换
+      // 仓库定位：会话 cwd 拿不到时用文件所在目录——端点要求 cwd 是目录，传文件路径
+      // 会被拒（400「不是目录」）；而 cwd 一旦缺失就早退的话，请求根本不发不出去，
+      // 面板会永远停在「加载中…」
+      const repoDir = cwd && cwd !== path ? cwd : path.replace(/[\\/]+$/, "").replace(/[\\/][^\\/]*$/, "");
       const diffFetchRef = react.useRef(null);
       diffFetchRef.current = () => {
         const c = new AbortController();
         const commitQ = commit ? `&commit=${encodeURIComponent(commit)}` : "";
-        kitGetJson(`/dsh-kit/git/diff?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? path)}${commitQ}`, c.signal, (b) => b.available === true)
+        kitGetJson(`/dsh-kit/git/diff?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(repoDir)}${commitQ}`, c.signal, (b) => b.available === true)
           .then((b) => {
             if (c.signal.aborted) return;
             // 这份 diff 算在宿主的哪个文件版本上（version 为 undefined = 宿主没装
@@ -9008,10 +9018,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       // diff 数据：进入时拉一次；之后由宿主 file 资源的版本号驱动（见下方版本对照）
       // 版本是事件驱动推来的（不自己轮询）：比每 8s 猜一次准，也省掉每张签一个 git 进程
       react.useEffect(() => {
-        if (!cwd) return;
         setDiff({ phase: "loading" });
         if (diffFetchRef.current) diffFetchRef.current();
-      }, [path, cwd, commit]);
+      }, [path, repoDir, commit]);
 
       // 版本对照：宿主推了新版本 = 盘上被改过，直接重读。只认「有版本可比」——
       // 首次拿到 live 版本（read 还是 null）也要重读一次，否则资源晚到时这份 diff
@@ -9025,19 +9034,24 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       // 内容读取只服务未跟踪文件：它没有基线，整文件按新增着色。有基线的走 hunk
       // 视图，行号由 git 给，根本不需要新像——给它们读整份文件是白拉一次（>512KB
       // 还会被截断）。已删除文件读不到，不发请求
+      // 判据取宿主回的 diff.untracked，不取地址带下来的 untracked 标志：后者只是
+      // 面板点开时写进地址的提示，地址丢了（刷新/重开签）就变成假，而正文分支按
+      // 宿主的事实走——两者不同步时读永远不发，面板卡在「加载中…」
       react.useEffect(() => {
-        if (untracked !== true || deleted === true) return;
+        if (diff.untracked !== true || deleted === true) return;
         const controller = new AbortController();
         kitGetJson(`/dsh-kit/read?path=${encodeURIComponent(path)}`, controller.signal, (b) => typeof b.content !== "undefined")
           .then((body) => {
             if (controller.signal.aborted) return;
             setState({ phase: "ready", body });
           })
-          .catch(() => {
-            /* 读失败只降级着色，不作为错误展示 */
+          .catch((error) => {
+            if (controller.signal.aborted || error?.name === "AbortError") return;
+            // 读失败要说出来：笼统回落成"暂无 diff"会让人以为是没差异，实际是拿不到内容
+            setState({ phase: "error", error: String(error?.message ?? error) });
           });
         return () => controller.abort();
-      }, [path, reloadNonce, untracked, deleted]);
+      }, [path, reloadNonce, diff.untracked, deleted]);
 
       /** diff 视图：只渲染 hunk（单栏带行号 / 双栏并排）——长文件只改几行时不必
        *  每次翻整篇，上下文行数由 git 的 -U 决定（默认 3）。
@@ -9135,21 +9149,40 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         }
         if (diff.untracked) {
           // 未跟踪文件没有基线版本：整文件按"新增"着色展示（对齐 git 对未跟踪
-          // 文件的 diff 语义，避免只给一行空提示）；内容截断/未就绪时才回落提示
-          const content =
-            state.body && !state.body.truncated && typeof state.body.content === "string" ? state.body.content : null;
-          if (content !== null) {
-            return jsxRuntime.jsx(
-              "div",
-              {
-                className: "dshk-inline",
-                children: content.split(/\r?\n/).map((text, i) =>
-                  jsxRuntime.jsx("div", { className: "dshk-il-add", children: text === "" ? " " : text }, i),
-                ),
-              },
-            );
+          // 文件的 diff 语义）。内容来自 /dsh-kit/read；拿不到时把原因说出来——
+          // 二进制 / 过大被截断 / 读取失败是三回事，笼统一句"暂无 diff"没法判断。
+          const body = state.body ?? null;
+          const content = body && typeof body.content === "string" ? body.content : null;
+          const reason =
+            body && body.binary === true
+              ? t("diffUntrackedBinary")
+              : body && body.truncated === true
+                ? t("diffUntrackedTruncated")
+                : state.phase === "error"
+                  ? `${t("diffUntrackedFailed")}：${state.error}`
+                  : null;
+          if (content === null) {
+            return jsxRuntime.jsx("div", {
+              className: "dshk-note",
+              children: state.phase === "loading" ? t("contentLoading") : reason ?? t("diffUntracked"),
+            });
           }
-          return jsxRuntime.jsx("div", { className: "dshk-note", children: t("diffUntracked") });
+          const view = jsxRuntime.jsx(
+            "div",
+            {
+              className: "dshk-inline",
+              children: content.split(/\r?\n/).map((text, i) =>
+                jsxRuntime.jsx("div", { className: "dshk-il-add", children: text === "" ? " " : text }, i),
+              ),
+            },
+          );
+          if (reason === null) return view;
+          return jsxRuntime.jsxs(jsxRuntime.Fragment, {
+            children: [
+              jsxRuntime.jsx("div", { key: "n", className: "dshk-note", children: reason }),
+              view,
+            ],
+          });
         }
         if (diff.clean || diff.text === null) return jsxRuntime.jsx("div", { className: "dshk-note", children: t("diffEmpty") });
 

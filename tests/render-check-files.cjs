@@ -250,6 +250,32 @@ check("DiffPane 渲染无异常", !!out && typeof out === "object");
   comps.DiffPane({ path: "C:/x/n.js", cwd: "C:/x", untracked: true });
   const addRows = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-il-add").map((c) => c[2].children);
   check("未跟踪整文件按新增着色", addRows.join("|") === "a|b");
+  // 三种拿不到内容的原因各说各的，不能都笼统成「暂无 diff」
+  const noteOf = () => {
+    const n = callLog.filter((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[2] && c[2].className === "dshk-note").map((c) => c[2].children);
+    return n.join("|");
+  };
+  stateStore.clear();
+  stateSeq = 0;
+  stateStore.set(0, { phase: "ready", body: { path: "C:/x/big.js", size: 900000, mtimeMs: 1, truncated: true, binary: false, content: "a\nb" } });
+  stateStore.set(1, { phase: "ready", untracked: true, clean: false, text: null });
+  callLog = [];
+  comps.DiffPane({ path: "C:/x/big.js", cwd: "C:/x", untracked: true });
+  check("超 512KB：仍然着色，并标出被截断", callLog.some((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-il-add") && /512KB/.test(noteOf()));
+  stateStore.clear();
+  stateSeq = 0;
+  stateStore.set(0, { phase: "ready", body: { path: "C:/x/x.png", size: 10, mtimeMs: 1, truncated: false, binary: true, content: null } });
+  stateStore.set(1, { phase: "ready", untracked: true, clean: false, text: null });
+  callLog = [];
+  comps.DiffPane({ path: "C:/x/x.png", cwd: "C:/x", untracked: true });
+  check("二进制：只说二进制，不着色", !callLog.some((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-il-add") && /二进制|binary/i.test(noteOf()));
+  stateStore.clear();
+  stateSeq = 0;
+  stateStore.set(0, { phase: "error", error: "读取文件失败：ENOENT" });
+  stateStore.set(1, { phase: "ready", untracked: true, clean: false, text: null });
+  callLog = [];
+  comps.DiffPane({ path: "C:/x/gone.js", cwd: "C:/x", untracked: true });
+  check("读取失败：把端点回的原因显示出来", /ENOENT/.test(noteOf()));
   stateStore.clear();
   stateSeq = 0;
   // 头部标题：绝对路径直显、不挂 title 悬停（文件名由页签 chip 承担）
