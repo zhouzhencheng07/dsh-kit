@@ -90,11 +90,13 @@ const comps = dockExports.vault;
 
 check("vault 导出 apply（client 插件形状）与 inject 声明 slots", typeof comps.apply === "function" && Array.isArray(comps.inject) && comps.inject[0] === "slots");
 check(
-  "vault 导出面齐全（索引/页/日程/壳/配置页/路由）",
+  "vault 导出面齐全（索引/页/日程/壳/配置页/路由/入口与侧栏渲染器）",
   typeof comps.VaultView === "function" && typeof comps.VaultRootView === "function" &&
     typeof comps.VaultPaneBody === "function" && typeof comps.SchedulePaneBody === "function" &&
-    typeof comps.ScheduleView === "function" && typeof comps.VaultShell === "function" &&
-    typeof comps.VaultEntry === "function" && typeof comps.VaultConfigPage === "function" &&
+    typeof comps.ScheduleView === "function" && typeof comps.ScheduleTasksPanel === "function" &&
+    typeof comps.VaultShell === "function" && typeof comps.VaultEntry === "function" &&
+    typeof comps.SidebarVaultIndex === "function" &&
+    typeof comps.VaultConfigPage === "function" &&
     typeof comps.onChatOpenFileClick === "function" && Array.isArray(comps.VAULT_CFG_FIELDS),
 );
 
@@ -173,11 +175,15 @@ async function checkApply() {
       on.slotInjects.includes("sidebar.right.pane.tab"),
   );
   check(
-    "开始页条目只给日程（知识库是被动签，入口在左侧边栏）",
-    on.registered.some((s) => s && s.kind === "dshk-schedule" && Array.isArray(s.guide) && s.guide.length === 1 && s.guide[0].order === 100) &&
-      !on.registered.some((s) => s && s.kind === "dshk-vault" && s.guide),
+    "两张签都是被动签：右栏开始页一律不给条目（入口在左栏 tab 条与输入行）",
+    !on.registered.some((s) => s && Array.isArray(s.guide)),
   );
-  check("输入行入口 + 常驻壳挂 shell.overlay（id 稳定）", on.registered.some((s) => s && s.name === "conversation.input.left" && s.id === "dsh-kit-vault" && s.order === 12) && on.registered.some((s) => s && s.name === "shell.overlay" && s.id === "dsh-kit-vault"));
+  check(
+    "输入行一枚入口（知识库 · 日程 共用，order 12）+ 常驻壳挂 shell.overlay（id 稳定）",
+    on.registered.filter((s) => s && s.name === "conversation.input.left").length === 1 &&
+      on.registered.some((s) => s && s.name === "conversation.input.left" && s.id === "dsh-kit-vault" && s.order === 12) &&
+      on.registered.some((s) => s && s.name === "shell.overlay" && s.id === "dsh-kit-vault"),
+  );
   check("对话文件点击路由挂 document capture 监听", on.clickListeners.some((c) => c[0] === "click" && c[1] === true));
   const vaultCmd = on.shortcutCmds.find((c) => c.id === "dsh-kit.vault.toggle");
   check(
@@ -191,7 +197,7 @@ async function checkApply() {
     dockExports.tabKinds.vault.kind === "dshk-vault" && dockExports.tabKinds.schedule.kind === "dshk-schedule",
   );
   check(
-    "座对象填好：侧栏索引视图渲染器 + 文件树行点击改道（命中返回 true）",
+    "座对象填好：侧栏那格渲染器（tab 条 + 知识库目录 / 日程待办）+ 文件树行点击改道（命中返回 true）",
     typeof dockExports.vaultView.renderer === "function" && typeof dockExports.vaultRoute.open === "function" &&
       dockExports.vaultRoute.open("D:/not-vault/x.md") === false,
   );

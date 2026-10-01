@@ -151,7 +151,7 @@ if (!baseOk) process.exitCode = 1;
 }
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["VaultEntry", "KitSurfaces", "TreeRowMenu", "RteEditor", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksCard", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["VaultEntry", "KitSurfaces", "TreeRowMenu", "RteEditor", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksPanel", "SidebarVaultIndex", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -180,20 +180,26 @@ check("TreeRowMenu 目录行菜单(新建文件/目录单入口+复制相对/重
 //    终端入口与坞直测在 tests\render-check-terminal.cjs
 callLog = [];
 out = comps.VaultEntry({});
-check("VaultEntry 渲染无异常且悬停走官方气泡（KitTip + 命令 id 对上快捷键注册）", !!out && out.type === comps.KitTip && out.props.command === "dsh-kit.vault.toggle" && typeof out.props.label === "string");
-// 7.0) 侧栏索引单槽互斥（sidebarViewPatch 纯补丁语义；入口按钮交互在 files 组件直测）
+const entryBtn = callLog.find((c) => c[2] && c[2].className === "dshk-btn dshk-enbtn");
+check("VaultEntry 渲染无异常且悬停走官方气泡（KitTip + 命令 id 对上快捷键注册）", !!out && out.type === comps.KitTip && out.props.command === "dsh-kit.vault.toggle" && typeof out.props.label === "string" && !!entryBtn);
+check("知识库 · 日程 只占输入行一枚钮（没有第二枚日程钮）", !src.includes("ScheduleEntry") && !src.includes("dsh-kit-schedule\", order: 13"));
+// 7.0) 侧栏那格单槽互斥（sidebarViewPatch 纯补丁语义；入口按钮交互在 files 组件直测）
 const svp = comps.sidebarViewPatch("vault");
-check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultIdxOpen === true && svp.treeOpen === false && svp.gitOpen === false);
+check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultSideOpen === true && svp.vaultSideTab === "vault" && svp.treeOpen === false && svp.gitOpen === false);
+const svpSched = comps.sidebarViewPatch("schedule");
+check("日程与知识库同占侧栏那一格（vaultSideOpen 亮、槽内切 tab）", svpSched.vaultSideOpen === true && svpSched.vaultSideTab === "schedule" && svpSched.treeOpen === false && svpSched.gitOpen === false);
 // 「哪张签激活」归官方签表，kitUi 不再存激活位。后台任务无插件分支：官方会话
 // 头部自带任务清单 + 实时输出 + 停止
 check("kitUi 不再存激活位（官方签表才是唯一事实）", comps.getKitUi().activeFeature === undefined);
-// 7.1b) 知识库入口（输入行钮 + 快捷键同语义）：只切左侧目录，点具体页才开右栏知识库
-// 签；再点 = 收回会话列表。补丁只含侧栏三键，功能签与页签状态一律不动（setKitUi
-// 合并语义）
-const tvOpen = comps.toggleVaultEntry({ treeOpen: true, vaultIdxOpen: false, vaultOpen: false, vaultPages: [], activeFeature: null });
-check("知识库入口开：只切侧栏索引且让出文件树", tvOpen.vaultIdxOpen === true && tvOpen.treeOpen === false && tvOpen.vaultOpen === undefined && tvOpen.activeFeature === undefined);
-const tvClose = comps.toggleVaultEntry({ vaultIdxOpen: true, vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", activeFeature: "vault" });
-check("知识库入口再点：索引回会话、知识库签与页签不动（补丁不含这些键）", tvClose.vaultIdxOpen === false && tvClose.vaultOpen === undefined && tvClose.vaultPages === undefined && tvClose.activeVaultPage === undefined && tvClose.activeFeature === undefined);
+// 7.1b) 入口钮（输入行钮 + 快捷键同语义）：开 = 侧栏占住那一格并落在知识库 tab；
+// 再点 = 收回会话列表（不论当前在哪个 tab——整格只有这一个开关）。补丁只含侧栏
+// 四键，功能签与页签状态一律不动（setKitUi 合并语义）
+const tvOpen = comps.toggleVaultEntry({ treeOpen: true, vaultSideOpen: false, vaultSideTab: "vault", vaultOpen: false, vaultPages: [], activeFeature: null });
+check("入口开：只切侧栏索引且让出文件树", tvOpen.vaultSideOpen === true && tvOpen.vaultSideTab === "vault" && tvOpen.treeOpen === false && tvOpen.vaultOpen === undefined && tvOpen.activeFeature === undefined);
+const tvClose = comps.toggleVaultEntry({ vaultSideOpen: true, vaultSideTab: "vault", vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", activeFeature: "vault" });
+check("入口再点：索引回会话、知识库签与页签不动（补丁不含这些键）", tvClose.vaultSideOpen === false && tvClose.vaultOpen === undefined && tvClose.vaultPages === undefined && tvClose.activeVaultPage === undefined && tvClose.activeFeature === undefined);
+const tvFromSched = comps.toggleVaultEntry({ vaultSideOpen: true, vaultSideTab: "schedule" });
+check("在日程 tab 上点入口钮：收整格（tab 切换只走 tab 条）", tvFromSched.vaultSideOpen === false);
 // 7.1c) 右栏资源地址（一内容一签的载体）：条目 ↔ 地址往返，query 归 diff 源用
 const vAddr = comps.rightbarAddress("vault", "D:/v/a b.md");
 check("知识库页地址：dsh-resource 前缀 + 编码条目", vAddr === "dsh-resource://dshk-vault/D%3A%2Fv%2Fa%20b.md" && comps.rightbarItem("vault", vAddr) === "D:/v/a b.md");
@@ -211,7 +217,7 @@ check("KitSurfaces 渲染无异常（根壳只做座位门控，面板本体归�
 // 6.4) 日程模块（只读面板）：ScheduleView 初始态 / 计时段定位纯函数 / 并行分列
 callLog = [];
 out = comps.ScheduleView({});
-check("ScheduleView 初始态渲染无异常（周网格+待办+统计）", !!out && typeof out === "object");
+check("ScheduleView 初始态渲染无异常（周网格 + 表头统计）", !!out && typeof out === "object");
 check("timerMinsOfDT：取 HH:mm 折当日分钟", comps.timerMinsOfDT("2026-09-07T09:30:15") === 570);
 {
   const lanes = comps.schedAssignLanes([
@@ -251,19 +257,29 @@ out = comps.FilePaneBody(tabProps(""));
 check("地址认不出（别的页类型/没落地址）→ 不渲染正文", out === null);
 callLog = [];
 out = comps.SchedulePaneBody({});
-callLog = [];
-out = comps.SchedulePaneBody({});
-check("SchedulePaneBody 挂 ScheduleView（pane 内左待办+右网格）", !!out && callLog.some((c) => c[1] === comps.ScheduleView));
+check("SchedulePaneBody 挂 ScheduleView（右栏只出网格，清单在侧栏）", !!out && callLog.some((c) => c[1] === comps.ScheduleView));
 callLog = [];
 let rbCloseOk = true;
 try { comps.closeRightbarTab("file"); } catch { rbCloseOk = false; }
 check("closeRightbarTab 服务未就绪时静默不抛", rbCloseOk);
 callLog = [];
-out = comps.ScheduleTasksCard({ data: { events: [{ id: "t1", title: "交报告", due: "2026-09-10" }] } });
+out = comps.ScheduleTasksPanel({});
 const taskChecks = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].type === "checkbox");
 const timerBtns = callLog.filter((c) => c[2] && c[2].className === "dshk-sched-tasktimer");
-check("ScheduleTasksCard 待办行渲染卡壳", !!out && typeof out === "object");
-check("ScheduleTasksCard 只读行：无勾选框、无计时钮", taskChecks.length === 0 && timerBtns.length === 0);
+const scopeChips = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-sched-wdchip"));
+check("ScheduleTasksPanel 渲染清单壳（标题带行数 + 近三日/近一周/全部三档）", !!out && scopeChips.length === 3);
+check("ScheduleTasksPanel 只读行：无勾选框、无计时钮", taskChecks.length === 0 && timerBtns.length === 0);
+// 预置 useScheduleData 的数据槽（0）让清单真出行：标题 + 截止徽章
+stateSeq = 0;
+stateStore.clear();
+stateStore.set(0, { events: [{ id: "t1", title: "交报告", due: "2026-09-10" }], occurrences: [], orphans: [] });
+callLog = [];
+out = comps.ScheduleTasksPanel({});
+const taskRows = callLog.filter((c) => c[2] && c[2].className === "dshk-sched-task");
+const rowBadges = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-sched-taskduebadge"));
+check("ScheduleTasksPanel 出行：待办一行 + 右端截止徽章", taskRows.length === 1 && rowBadges.length === 1);
+stateSeq = 0;
+stateStore.clear();
 // openFileAndDock / openVaultPageAndDock：签归官方签表，这里断言「开出来的地址对不对」
 // （桩环境无右栏服务 → 只看地址映射，见 7.1c 的往返断言）
 comps.openFileAndDock("C:/x/new.js", false, true);
@@ -310,7 +326,7 @@ check("openVaultPageAndDock 同样不写激活位", comps.getKitUi().activeFeatu
   const occupant = src.indexOf('slotsCtx.slots.register({ name: "sidebar.workspaces", priority: -1000 }');
   check(
     "侧栏工作区面板在位门控（不在场不占 sidebar.workspaces，让回官方会话列表）",
-    occupant > 0 && /if \(!slotsCtx \|\| !rightbarUp \|\| \(!ui\.treeOpen && !ui\.gitOpen && !ui\.vaultIdxOpen\)\) return undefined;/.test(src) && src.includes("[ui.treeOpen, ui.gitOpen, ui.vaultIdxOpen, cwd, rightbarUp]"),
+    occupant > 0 && /if \(!slotsCtx \|\| !rightbarUp \|\| \(!ui\.treeOpen && !ui\.gitOpen && !ui\.vaultSideOpen\)\) return undefined;/.test(src) && src.includes("[ui.treeOpen, ui.gitOpen, ui.vaultSideOpen, cwd, rightbarUp]"),
   );
   const fnAt = src.indexOf("function openOfficialFile(path, line) {");
   const gateAt = src.indexOf("if (!rightbarSeat.available) return false;", fnAt);
@@ -390,7 +406,7 @@ check("resolveMdLink：空 href / 无根时站内链接返回 null", comps.resol
   // 索引视图单实例挂 KitSurfaces、只投侧栏（页签正文自己渲染，不再投右栏）；
   // 侧栏宿主全空时返回 null 是合法语义。渲一遍防渲染体异常逃逸
   comps.vaultSideSlot.set({ tagName: "DIV" });
-  comps.setKitUi({ vaultOpen: true, vaultIdxOpen: true, activeFeature: "vault" });
+  comps.setKitUi({ vaultOpen: true, vaultSideOpen: true, vaultSideTab: "vault", activeFeature: "vault" });
   try {
     vaultOut = comps.VaultRootView({ root: "D:/v" });
   } catch (e) {
@@ -449,7 +465,7 @@ let vaultFetchPrev = null;
     return { ok: true, status: 200, json: async () => ({ root: "D:/v", folders: ["wiki"], pages: [], library: null, entries: [] }) };
   };
   comps.vaultSideSlot.set({ tagName: "DIV" });
-  comps.setKitUi({ vaultIdxOpen: true, vaultOpen: true, vaultPages: [], activeVaultPage: null, activeFeature: "vault" });
+  comps.setKitUi({ vaultSideOpen: true, vaultSideTab: "vault", vaultOpen: true, vaultPages: [], activeVaultPage: null, activeFeature: "vault" });
   const barErr = renderVault({
     0: VAULT_INDEX,
     1: "",
@@ -758,7 +774,7 @@ let vaultFetchPrev = null;
   // 微任务里，桩要留到收尾结算后（提前还原会让它打真网络，落进 fetchDir 的静默失败）
   check("↻ 点击立即重拉索引（/dsh-kit/vault/index）", fetched.some((u) => u.includes("/dsh-kit/vault/index")));
   comps.vaultSideSlot.set(null);
-  comps.setKitUi({ vaultIdxOpen: false, vaultOpen: false, activeFeature: null });
+  comps.setKitUi({ vaultSideOpen: false, vaultSideTab: "vault", vaultOpen: false, activeFeature: null });
   stateSeq = 0;
   stateStore.clear();
 }
@@ -1030,11 +1046,17 @@ check(
     !src.includes("mountPdfViewer") && !src.includes("dshk-sheetwrap") && !src.includes("dshk-docwrap"),
 );
 
-// 日程只有右栏 dock 签（入口归右栏开始页与待办卡）：侧栏待办索引与日程专属快捷键
-// 都不得出现
+// 日程的待办清单在侧栏「日程」tab（与知识库同一格，tab 条切换），网格在右栏签：
+// 但它仍**不做专属快捷键**——旧实现那套 schedIdxOpen / schedShortcut /
+// ScheduleIndexView 的独立侧栏索引与按键不得复活
 check(
-  "日程侧栏索引与专属快捷键不存在（schedIdxOpen/schedShortcut 全链移除）",
+  "日程不做专属快捷键（schedIdxOpen/schedShortcut/ScheduleIndexView 全链不存在）",
   !src.includes("schedIdxOpen") && !src.includes("schedShortcut") && !src.includes("cfgSchedShortcut") && !src.includes("ScheduleIndexView"),
+);
+// 右栏开始页不再给日程条目：入口 = 左栏 tab 条 + 输入行两枚钮，guide 与那条词条都退场
+check(
+  "右栏日程签不再给开始页条目（知识库·日程两张都不给 guide，词条一并退场）",
+  !src.includes("rbGuideSchedDesc") && !src.includes("const guideOf =") && src.includes("rbGuideBrowserDesc"),
 );
 // 键位整体改由宿主 shortcuts 服务持有（官方「快捷键」页）：自带快捷键
 // 配置项/全局 keydown 匹配/左栏键都不该再出现，注册面在 client 半边（见下方 apply 钉子）

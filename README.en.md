@@ -62,13 +62,14 @@ and take no component slot).
   page/selection); page bodies are still not editable inside the plugin (writing belongs to
   the agent's file tools or your local editor) and the plugin creates no skeleton directories
   and never touches git
-  - **Schedule** (entry from the right-dock start page; no composer toggle and no dedicated
-  shortcut): a task list (3-day / week / all scopes) on the left, weekly grid + stats on the
-  right; block colors encode state only (upcoming orange / running green / past blue /
-  overdue red); the agent gets `schedule_query`, `schedule_create`, `schedule_update` and
-  `schedule_delete`; data is stored one-entry-per-file under
-  `$DSH_HOME/dsh-kit/schedule/` (`events/` + `entries/` + `timer.json`, shared with the
-  Wangshu desktop app — editing and timers belong there, the plugin is read-only)
+  - **Schedule** (one shared entry — the composer-row Knowledge base / Schedule toggle opens the
+  left sidebar cell, whose top tab strip switches between the two; no dedicated shortcut): the task
+   list (3-day / week / all scopes) fills that cell and
+  the weekly grid fills the right dock tab with this week's stats in its header; block colors
+  encode state only (upcoming orange / running green / past blue / overdue red); the agent gets
+  `schedule_query`, `schedule_create`, `schedule_update` and `schedule_delete`; data is stored
+  one-entry-per-file under `$DSH_HOME/dsh-kit/schedule/` (`events/` + `entries/` + `timer.json`,
+  shared with the Wangshu desktop app — editing and timers belong there, the plugin is read-only)
 - **Built-in browser** (right-dock tabs, **one page per tab** — the title is the page title and
   the official tab strip is the switcher; this component's row switch is the master
   switch — turning it off removes the tools and the panel, leaving only the official
@@ -172,7 +173,7 @@ dsh plugin --profile web update dsh-kit
 
 The package declares `dsh.bundle.patch`, so it is activated as a profile bundle
 layer. After installing/updating, restart `dsh web`: four toggles — Files / Source
-Control / Knowledge base / Terminal — appear on the composer tool row, the workbench
+Control / Knowledge base · Schedule / Terminal — appear on the composer tool row, the workbench
 is carried by the official right sidebar (dock tabs for diffs / vault / schedule /
 browser), and the agent's `web_search` uses the free multi-source chain.
 

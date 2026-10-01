@@ -564,7 +564,9 @@ window.__ModuleLoader__.load({
     // 归官方签表（activeRightbarFeature 读它），kitUi 不另存。内容类（diff /
     // 知识库页 / 浏览器页）是一内容一签，签表也归官方；文件树与对话区点击走官方
     // 右栏文件签，不进这里。
-    let kitUi = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, vaultOpen: false };
+    // 侧栏那一格是单槽：tree / git / 知识库·日程 三者互斥。知识库与日程同属一个组件、
+    // 共占那一格，槽内切哪一面由 vaultSideTab 记（tab 条画在组件自己的侧栏渲染器里）。
+    let kitUi = { treeOpen: false, gitOpen: false, vaultSideOpen: false, vaultSideTab: "vault", terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, vaultOpen: false };
     // terminals/activeTermId/termDockOpen 是 dsh-kit-terminal 组件的水位（入口与坞
     // 分属两个槽位，状态必须共享一份）；本文件只读 termDockOpen 一处——Esc 收起坞。
     const kitUiListeners = new Set();
@@ -864,12 +866,14 @@ window.__ModuleLoader__.load({
       }
     }
 
-    /** 单槽互斥补丁：view = 'tree' | 'scm' | 'vault' | null */
+    /** 单槽互斥补丁：view = 'tree' | 'scm' | 'vault' | 'schedule' | null。
+     *  知识库与日程共用侧栏那一格（组件内自己切 tab），两者都把 vaultSideOpen 置真 */
     function sidebarViewPatch(view) {
       return {
         treeOpen: view === "tree",
         gitOpen: view === "scm",
-        vaultIdxOpen: view === "vault",
+        vaultSideOpen: view === "vault" || view === "schedule",
+        vaultSideTab: view === "schedule" ? "schedule" : "vault",
       };
     }
 
@@ -1200,7 +1204,6 @@ window.__ModuleLoader__.load({
       officialOpenFail: "打开失败",
       scNoSeat: "当前不在对话中",
 
-      rbGuideSchedDesc: "周网格、待办与统计（只读）",
       fileTabLabel: "差异",
       // 官方「快捷键」页里的命令名与「为什么按不动」的说明（键位本身归官方页管）
       moved: "已移动",
@@ -1242,7 +1245,6 @@ window.__ModuleLoader__.load({
       officialOpenFail: "Open failed",
       scNoSeat: "Not in a conversation",
 
-      rbGuideSchedDesc: "Weekly grid, todos, and stats (read-only)",
       fileTabLabel: "Diff",
       moved: "Moved",
       imported: "Imported",
@@ -1307,8 +1309,16 @@ window.__ModuleLoader__.load({
 /* 官方右栏 dock pane 正文（sidebar.right.pane.tab）：pane 内是普通文档流，
    外壳占满 100%×100%、内容区自己滚；这里只有普通文档流 */
 .dshk-rbpane{width:100%;height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base)}
-/* 侧栏索引宿主（知识库目录/日程待办入口占 sidebar.workspaces） */
-.dshk-sidehost{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;pointer-events:auto}
+/* 侧栏浏览区宿主（知识库目录 / 日程待办清单占 sidebar.workspaces） */
+.dshk-sidehost{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;pointer-events:auto;overflow:hidden}
+/* 侧栏那格（知识库 · 日程 共占）的顶部 tab 条：面板本体在下面 .dshk-sidebody。
+   选中态 = 品牌色 + 下划线（望舒侧栏同款，不给填充底） */
+.dshk-sidetabs{flex:none;display:flex;align-items:stretch;padding:0 6px;border-bottom:1px solid var(--dsw-alias-border-l2)}
+.dshk-sidetab{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:5px;appearance:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:12px;line-height:1;padding:9px 6px;cursor:pointer;white-space:nowrap;overflow:hidden}
+.dshk-sidetab>span{overflow:hidden;text-overflow:ellipsis}
+.dshk-sidetab:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-sidetab.is-active{color:var(--dsw-alias-brand-primary);border-bottom-color:var(--dsw-alias-brand-primary)}
+.dshk-sidebody{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
 /* 知识库（vault）：工具条+目录树投侧栏索引宿主，页编辑器投右栏 pane 宿主（拆两半 portal）。 */
    「选库进入阅读」——空间=顶层目录，树懒加载，[[wikilink]] 页内跳转带历史 */
 .dshk-vault{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
@@ -1433,20 +1443,20 @@ window.__ModuleLoader__.load({
 .dshk-vault-radio{display:flex;align-items:center;gap:6px;font-size:12px;line-height:1.4;color:var(--dsw-alias-label-primary);margin-top:4px}
 .dshk-vault-srcline{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
 .dshk-vault-modalinput{width:100%;box-sizing:border-box;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:6px 8px;border-radius:6px;margin-top:4px}
-/* 日程模块：中心区第三 tab——周时间网格 + 待办/统计侧栏；计时芯片挂输入区 dock。
-   --dshk-sched-toprow = 顶部一条的高度上限（矮坞里侧栏先被压、统计自己滚，
-   清单卡不拉伸到统计高度、只有约三行行区，见 .is-tasks/.dshk-sched-taskrows） */
-.dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px;--dshk-sched-toprow:218px}
+/* 日程：左栏待办清单 + 右栏周时间网格（望舒同款分工——清单在侧栏、网格占主区）。
+   --dshk-sched-band = 表头带高（角格与日期头共用，网格 sticky 滚动的基准） */
+.dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px}
 .dshk-sched-head{flex:none;display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--dsw-alias-border-l2)}
-.dshk-sched-title{font-weight:600;font-size:15px}
 .dshk-sched-weeknav{display:flex;align-items:center;gap:6px}
 .dshk-sched-weeklabel{min-width:104px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:12px}
 .dshk-sched-navbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
 .dshk-sched-navbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-/* 顶部一条（左待办 + 右统计）→ 下网格（所有坞宽一致）。
-   不做整体左右分栏（待办+统计整列在左、网格在右）——待办行的固定件（勾选/截止
-   徽章/计时钮）占 ~150px，坞宽一紧就只剩把网格挤成每天十几像素这一条路
-   （默认 300px 右栏、手机竖屏都实测过） */
+/* 表头右端的本周统计：总时长一行 + 事件/已过/未到一行小字。坞宽一紧就整段截断
+   （完整数值在悬停提示里），但绝不挤网格 */
+.dshk-sched-headstat{margin-left:auto;min-width:0;display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.dshk-sched-headstat b{font-size:13px;font-weight:600;color:var(--dsw-alias-label-secondary);white-space:nowrap}
+.dshk-sched-headstat .dshk-sched-statrow{max-width:100%}
+/* 主区只剩网格：待办在侧栏、统计在表头（所有坞宽一致） */
 .dshk-sched-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;min-width:0}
 /* y 轴 mandatory 吸附到整点行：静止位置恒为「某小时标签贴在表头带下方」，
 标签既不会被 sticky 角格盖掉半截，也不会漂进表头区；
@@ -1496,34 +1506,20 @@ ellipsis，窄列只截字不破版 */
 /* 够高的块（≥48px）标题放开两行，行数由 line-clamp 限死——
    短块维持单行省略，避免半截字被容器裁掉 */
 .dshk-sched-event.is-tall .dshk-sched-evtitle{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;word-break:break-word;line-clamp:2}
-/* 顶部一条最高 = 统计卡高度 + 上下内边距（36% 是矮坞的第二道闸：pane 一矮，
-   --dshk-sched-toprow 会占掉大半屏，得让网格先活）。整条高度由待办卡（限高
-   --dshk-sched-toprow）与统计卡里较高的那个决定，与待办条数无关 */
-.dshk-sched-sidecol{flex:none;width:auto;min-width:0;max-height:min(36%,calc(var(--dshk-sched-toprow) + 20px));box-sizing:border-box;display:flex;flex-direction:row;align-items:stretch;gap:10px;padding:10px;border-bottom:1px solid var(--dsw-alias-border-l2)}
-/* 待办卡不拉伸到统计卡高度：行区固定约三行高、其余卡内滚（表头与档位钉死，
-   不做分页加载——限高滚动本身就是「最多看几条，多了滚」本身） */
-.dshk-sched-card.is-tasks{flex:1 1 auto;min-width:0;min-height:0;align-self:flex-start;box-sizing:border-box;overflow:hidden}
-.dshk-sched-taskrows{flex:0 0 auto;max-height:66px;overflow:auto;display:flex;flex-direction:column;gap:8px}
-/* 统计卡窄而固定（数值列不需要宽度）；单列而非两列：四格两列时每格只剩约 80px，
-   「13小时46分」这种值（固有宽 82px）会被折断成两行（实测 576 坞宽下正是如此） */
-/* 统计卡跟随清单卡等高：标题钉顶，两行统计在剩余空间垂直居中——
-   清单高一分，统计的留白就摊到上下两半，不会全堆在底部 */
-.dshk-sched-card.is-stats{flex:0 0 clamp(118px,30%,220px);width:auto}
-.dshk-sched-card{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-3);min-height:0;overflow:auto}
-.dshk-sched-cardtitle{font-weight:600;font-size:12px;color:var(--dsw-alias-label-secondary)}
-.dshk-sched-cardhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}
-.dshk-sched-task{display:flex;align-items:center;gap:7px;padding:4px 4px;border-radius:6px}
+/* 待办清单（侧栏「日程」tab 整格）：表头与范围档钉死，行区吃满余高自己滚
+   （不做分页加载——滚动本身就是「最多看几条，多了滚」） */
+.dshk-sched-todo{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;color:var(--dsw-alias-label-primary);font-size:13px}
+.dshk-sched-todohead{flex:none;display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-bottom:1px solid var(--dsw-alias-border-l2)}
+.dshk-sched-todotitle{font-weight:600;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshk-sched-taskrows{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:2px;padding:4px 6px 10px}
+.dshk-sched-task{display:flex;align-items:center;gap:7px;padding:4px;border-radius:6px}
 .dshk-sched-task:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-sched-tasktitle{flex:1;min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:12px}
 .dshk-sched-taskduebadge{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary);border:1px solid var(--dsw-alias-border-l2);border-radius:5px;padding:1px 5px}
 .dshk-sched-taskduebadge.is-overdue{color:var(--dsw-alias-danger,#cd3131);border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent)}
 .dshk-sched-emptytasks{font-size:12px;color:var(--dsw-alias-label-tertiary);text-align:center;padding:8px 0}
 /* 清单范围档（近三日/近一周/全部）：一排小 chip，复用 wdchip 的形态 */
-/* 统计两行：总时长一行大字 + 事件/已过/未到一行小字；
-   小字行 11px 在最窄 118px 卡里也放得下（「事件 12 · 已过 8 · 未到 20」约 150px，
-   超宽时 nowrap 截断由卡内滚兜底） */
-.dshk-sched-statsgrid{display:flex;flex-direction:column;gap:2px;margin:auto 0}
-.dshk-sched-statsgrid b{font-size:15px;font-weight:600}
+/* 统计小字行（表头右端）：窄坞截断由 ellipsis 兜底，完整值在悬停提示里 */
 .dshk-sched-statrow{font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dshk-sched-wdchip{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
 .dshk-sched-wdchip.is-active{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
@@ -1839,12 +1835,12 @@ ellipsis，窄列只截字不破版 */
       // 从这里取最新值（槽位注册发生在 effect，渲染期的 props 用模块变量桥接）
       shellShare.current = props;
 
-      // 侧边栏浏览区占用：单槽轮换——源代码管理 ↔ 文件树 ↔ 知识库
-      // 目录，全关回官方会话列表。右栏不在场时不占（全局面板在前台时左栏该是
-      // 官方会话列表）：开合状态留着，回到对话原样恢复。
-      // 动态注册若在运行时抛错，捕获并回滚开合状态，避免入口被错误边界摘掉。
+      // 侧边栏浏览区占用：单槽轮换——源代码管理 ↔ 文件树 ↔ 知识库·日程
+      // （组件内自己切知识库/日程两个 tab），全关回官方会话列表。右栏不在场时
+      // 不占（全局面板在前台时左栏该是官方会话列表）：开合状态留着，回到对话原样
+      // 恢复。动态注册若在运行时抛错，捕获并回滚开合状态，避免入口被错误边界摘掉。
       react.useEffect(() => {
-        if (!slotsCtx || !rightbarUp || (!ui.treeOpen && !ui.gitOpen && !ui.vaultIdxOpen)) return undefined;
+        if (!slotsCtx || !rightbarUp || (!ui.treeOpen && !ui.gitOpen && !ui.vaultSideOpen)) return undefined;
         let dispose;
         try {
           // 单槽遮蔽原生需要更低 priority（数字越小越先渲染，原生在 priority 0）。
@@ -1853,7 +1849,7 @@ ellipsis，窄列只截字不破版 */
           dispose = slotsCtx.slots.register({ name: "sidebar.workspaces", priority: -1000 }, (owner) => {
             const side = owner ?? {};
             if (side.wide === false) return null;
-            // 文件树/源代码管理分支归 dsh-kit/files、知识库目录归 dsh-kit/vault，
+            // 文件树/源代码管理分支归 dsh-kit/files、知识库·日程归 dsh-kit/vault，
             // 各经 kitBase 的座对象接管；两者都不在场（未装 / 行关闭）时不占槽
             const branch = dock.sidebarView.renderer ? dock.sidebarView.renderer({ ui, cwd, owner }) : null;
             if (branch) return branch;
@@ -1861,7 +1857,7 @@ ellipsis，窄列只截字不破版 */
           });
         } catch (error) {
           kitClientLog({ level: "error", component: "root", msg: "注册 sidebar.workspaces 面板失败", fields: { err: String(error?.message ?? error) } });
-          setKitUi({ treeOpen: false, gitOpen: false, vaultIdxOpen: false });
+          setKitUi({ treeOpen: false, gitOpen: false, vaultSideOpen: false });
           return undefined;
         }
         return () => {
@@ -1871,7 +1867,7 @@ ellipsis，窄列只截字不破版 */
             // 忽略注销异常
           }
         };
-      }, [ui.treeOpen, ui.gitOpen, ui.vaultIdxOpen, cwd, rightbarUp]);
+      }, [ui.treeOpen, ui.gitOpen, ui.vaultSideOpen, cwd, rightbarUp]);
 
       // Esc 分层：先关当前激活那张文档签（知识库关当前页那张、文件关当前文件那张），
       // 再关侧栏视图，最后收起终端坞（不拦截，避免挡掉其它 Esc 行为）。功能签归官方 ✕。
@@ -1888,8 +1884,8 @@ ellipsis，窄列只截字不破版 */
             // 内容类页类型一内容一签，关闭走官方 close）
             if (activeRightbarFeature("file") || activeRightbarFeature("vault")) {
               closeActiveRightbarTab();
-            } else if (getKitUi().gitOpen || getKitUi().treeOpen || getKitUi().vaultIdxOpen) {
-              // 侧栏视图单槽：关一格即可（四者互斥）；功能签不连带关
+            } else if (getKitUi().gitOpen || getKitUi().treeOpen || getKitUi().vaultSideOpen) {
+              // 侧栏视图单槽：关一格即可（树/scm/知识库·日程 互斥）；功能签不连带关
               setKitUi(sidebarViewPatch(null));
             } else if (getKitUi().termDockOpen) setKitUi({ termDockOpen: false }); // 只隐藏，不杀会话
           }
@@ -3186,12 +3182,12 @@ ellipsis，窄列只截字不破版 */
 
     // ── dsh-kit/vault 组件（知识库 · 日程）──
 // dsh-kit/vault 浏览器半边 —— 知识库 · 日程组件的 client 面。
-// 收纳：侧栏知识库索引（工具条 / 搜索 / 懒加载目录树 / 文件管理）、右栏知识库页阅读面
-// （vendor RTE 只读态 + 双链 / 反链 / 目录导航）、右栏日程签（周时间网格 + 待办 + 统计）、
-// 对话文件路径改投知识库标签、组件配置页与快捷键。
+// 收纳：侧栏那一格（顶部 tab 条切 知识库 目录索引 / 日程 待办清单）、右栏知识库页阅读面
+// （vendor RTE 只读态 + 双链 / 反链 / 目录导航）、右栏日程签（周时间网格 + 统计）、
+// 输入行那一枚入口钮（开/关侧栏那一格）、对话文件路径改投知识库标签、组件配置页与快捷键。
 // 数据走本组件宿主半边 /dsh-kit/vault/* 与 /dsh-kit/schedule/*；行开关即总开关：
 // 宿主半边不物化时 /dsh-kit-vault/config 404，apply 直接不注册任何槽位与监听
-//（侧栏索引、右栏签、入口按钮、对话改投全不出现）。
+//（侧栏、右栏签、入口按钮、对话改投全不出现）。
     const vaultModule = (kit, require) => {
     var module = { exports: {} };
     var exports = module.exports;
@@ -3383,8 +3379,12 @@ ellipsis，窄列只截字不破版 */
       expandSidebarNow();
       return sidebarViewPatch("vault");
     }
+    /** 知识库 · 日程 的唯一入口（输入行钮 + 快捷键 + 左栏 tab 条都归它）：
+     *  开 = 侧栏占住那一格（默认落在知识库 tab）；再点 = 回官方会话列表。
+     *  那一格开着时点日程 tab 只是把面板换成待办清单并把右栏网格签带到眼前，
+     *  不重跑本函数——整格的开合只有这一处入口。 */
     function toggleVaultEntry(ui) {
-      if (ui.vaultIdxOpen === true) return sidebarViewPatch(null);
+      if (ui.vaultSideOpen === true) return sidebarViewPatch(null);
       return openVaultEntry();
     }
 
@@ -4002,10 +4002,10 @@ ellipsis，窄列只截字不破版 */
       setTimeout(step, 60);
     }
 
-    /** 知识库入口（输入行，源代码管理与终端之间）：
-     *  开 = 只切侧栏索引视图（点具体页才开右栏知识库签）；
-     *  再点 = 侧栏回会话列表（右栏知识库签与页签不跟着关）。
-     *  按钮与快捷键同语义（toggleVaultEntry） */
+    /** 知识库 · 日程 的唯一入口钮（输入行，源代码管理与终端之间）：
+     *  开 = 侧栏占住那一格并落在知识库 tab（点具体页才开右栏知识库签；日程待办
+     *  清单是那一格的另一个 tab）；再点 = 侧栏回会话列表（右栏各签不跟着关）。
+     *  与快捷键同语义（toggleVaultEntry） */
     function VaultEntry() {
       const ui = useKitUi();
       return jsxRuntime.jsx(KitTip, {
@@ -4015,14 +4015,14 @@ ellipsis，窄列只截字不破版 */
         children: jsxRuntime.jsx("button", {
           type: "button",
           className: "dshk-btn dshk-enbtn",
-          "aria-pressed": ui.vaultIdxOpen,
+          "aria-pressed": ui.vaultSideOpen === true,
           onClick: () => setKitUi(toggleVaultEntry(getKitUi())),
           children: jsxRuntime.jsx(VaultIcon, {}),
         }),
       });
     }
 
-    // ─────────── 日程模块（中心区第三 tab：周时间网格 + 待办 + 统计 + 计时）───────────
+    // ─────────── 日程模块（左栏待办清单 + 右栏周时间网格）───────────
     // 数据走宿主 /dsh-kit/schedule/* 端点：raw 全量 events + 区间展开 occurrences
     // （重复展开与 state 派生都在宿主做，这里只渲染）+ orphans。
     // 块颜色只表达状态（浅底深字）：还没到橙 / 进行中绿 / 已过去蓝 / 逾期红——
@@ -4155,10 +4155,10 @@ ellipsis，窄列只截字不破版 */
       return result;
     };
 
-    // ── 日程数据钩子（拆两半共用）：日程 pane 内待办卡与周网格各自
-    // 挂载、各自轮询；面板只读无写操作，30s 轮询兜底接住 agent 工具与
-    // 望舒端写进来的变化 ──
-    function useScheduleData() {
+    // ── 日程数据钩子（清单与网格各自挂载、各自轮询）：侧栏待办清单只要事件与
+    // 实例（needStats=false 省掉统计那次请求），右栏网格另取周统计；
+    // 面板只读无写操作，30s 轮询兜底接住 agent 工具与望舒端写进来的变化 ──
+    function useScheduleData(needStats = true) {
       const [data, setData] = react.useState(() => ({ events: [], occurrences: [], orphans: [] }));
       // 统计口径固定周
       const [stats, setStats] = react.useState(null);
@@ -4189,8 +4189,8 @@ ellipsis，窄列只截字不破版 */
         void fetchData();
       }, [fetchData]);
       react.useEffect(() => {
-        void fetchStats();
-      }, [fetchStats]);
+        if (needStats) void fetchStats();
+      }, [fetchStats, needStats]);
       // 可见时 30s 轮询（agent 经 schedule_create 建的条目靠它进面板）+ 每分钟走当前时刻线
       react.useEffect(() => {
         const timer = setInterval(() => {
@@ -4207,12 +4207,12 @@ ellipsis，窄列只截字不破版 */
       return { data, stats, nowTick, fetchData, fetchStats };
     }
 
-    /** 待办卡（日程 pane 顶部横条）——清单口径：
+    /** 待办清单（侧栏「日程」tab 整格，望舒侧栏同款）——清单口径：
      *  行 = 逾期待办 → 有截止日待办 → 无期限待办（仅「全部」）→ 还没过去的定时
      *  事件实例（**一次一次列**，重复系列不合并）。面板只读：行只展示标题与
      *  截止/时刻，无勾选、无计时、无编辑入口。范围档：近三日/近一周/全部
      *  （滑动窗口严格层层包含，逾期永远进前两档、无期限待办只在「全部」）；
-     *  行全部渲染，卡限高、多了卡内滚。 */
+     *  行全部渲染、这一层自己滚（不做分页加载）。 */
     const SCHED_TODO_SCOPES = ["3d", "week", "all"];
     const SCHED_SCOPE_KEY = { "3d": "schedScope3d", week: "schedScopeWeek", all: "schedScopeAll" };
     function schedTodoScopeSaved() {
@@ -4238,7 +4238,8 @@ ellipsis，窄列只截字不破版 */
         events,
       };
     }
-    function ScheduleTasksCard({ data }) {
+    function ScheduleTasksPanel() {
+      const { data } = useScheduleData(false);
       const [scope, setScope] = react.useState(schedTodoScopeSaved);
       const groups = react.useMemo(() => schedBuildTodoRows(data), [data]);
       const today = schedToday();
@@ -4269,15 +4270,14 @@ ellipsis，窄列只截字不破版 */
           /* 忽略 */
         }
       };
-      return jsxRuntime.jsxs("div", { className: "dshk-sched-card is-tasks", children: [
-        jsxRuntime.jsxs("div", { className: "dshk-sched-cardhead", children: [
-          jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: `${t("schedTasks")} · ${rows.length}` }),
-          // 范围档与标题同排（不占独立一行，卡更矮）
+      return jsxRuntime.jsxs("div", { className: "dshk-sched-todo", children: [
+        jsxRuntime.jsxs("div", { className: "dshk-sched-todohead", children: [
+          jsxRuntime.jsx("div", { className: "dshk-sched-todotitle", children: `${t("schedTasks")} · ${rows.length}` }),
           jsxRuntime.jsx("div", { className: "dshk-sched-scopes", children: SCHED_TODO_SCOPES.map((s) =>
             jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-wdchip${scope === s ? " is-active" : ""}`, onClick: () => pickScope(s), children: t(SCHED_SCOPE_KEY[s]) }, s),
           ) }),
         ] }),
-        // 行全部渲染，这一层自己滚（只露两行，表头不动）
+        // 行全部渲染，这一层自己滚（表头与范围档钉死）
         jsxRuntime.jsx("div", { className: "dshk-sched-taskrows", children:
           rows.length === 0
             ? jsxRuntime.jsx("div", { className: "dshk-sched-emptytasks", children: t("schedTasksEmpty") })
@@ -4410,16 +4410,22 @@ ellipsis，窄列只截字不破版 */
       const hours = [];
       for (let h = SCHED_DAY_START / 60; h < SCHED_DAY_END / 60; h++) hours.push(h);
 
+      // 表头：周导航靠左、本周统计靠右（待办清单在侧栏，网格页只剩网格与统计）
       const head = jsxRuntime.jsxs("div", {
         className: "dshk-sched-head",
         children: [
-          jsxRuntime.jsx("span", { className: "dshk-sched-title", children: t("schedTab") }),
           jsxRuntime.jsxs("span", { className: "dshk-sched-weeknav", children: [
             jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setWeekStart((s) => schedAddDays(s, -7)), children: "‹" }),
             jsxRuntime.jsx("span", { className: "dshk-sched-weeklabel", children: `${weekDates[0].slice(5).replace("-", "/")} - ${weekDates[6].slice(5).replace("-", "/")}` }),
             jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setWeekStart((s) => schedAddDays(s, 7)), children: "›" }),
             jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setWeekStart(schedMondayOf(schedToday())), children: t("schedToday") }),
           ] }),
+          stats
+            ? jsxRuntime.jsxs("span", { className: "dshk-sched-headstat", title: t("schedStatsTitle"), children: [
+              jsxRuntime.jsx("b", { children: schedFmtDur(stats.totalMs) }),
+              jsxRuntime.jsx("span", { className: "dshk-sched-statrow", children: `${t("schedStatsEvents")} ${stats.eventCount} · ${t("schedStatsDone")} ${stats.completedCount} · ${t("schedStatsOpen")} ${stats.openCount}` }),
+            ] })
+            : null,
         ],
       });
 
@@ -4518,28 +4524,12 @@ ellipsis，窄列只截字不破版 */
         ],
       });
 
-      // 顶部一条：待办卡（左，吃满余宽）+ 统计卡（右，固定窄列），周网格在下方吃满
-      // 余高（所有坞宽一致）
-      const sideCol = jsxRuntime.jsxs("div", { className: "dshk-sched-sidecol", children: [
-        jsxRuntime.jsx(ScheduleTasksCard, { data }),
-        stats
-          ? jsxRuntime.jsxs("div", { className: "dshk-sched-card is-stats", children: [
-              jsxRuntime.jsx("div", { className: "dshk-sched-cardtitle", children: t("schedStatsTitle") }),
-              // 两行：总时长一行大字 + 事件/已过/未到一行小字
-              jsxRuntime.jsxs("div", { className: "dshk-sched-statsgrid", children: [
-                jsxRuntime.jsx("b", { children: schedFmtDur(stats.totalMs) }),
-                jsxRuntime.jsx("span", { className: "dshk-sched-statrow", children: `${t("schedStatsEvents")} ${stats.eventCount} · ${t("schedStatsDone")} ${stats.completedCount} · ${t("schedStatsOpen")} ${stats.openCount}` }),
-              ] }),
-            ] })
-          : null,
-      ] });
-
+      // 网格吃满整格：待办清单在侧栏、统计进了表头，主区只剩一张全宽周网格
       return jsxRuntime.jsxs("div", { className: "dshk-sched-root", children: [
         head,
-        jsxRuntime.jsxs("div", { className: "dshk-sched-body", children: [
-          sideCol,
+        jsxRuntime.jsx("div", { className: "dshk-sched-body", children:
           jsxRuntime.jsx("div", { className: "dshk-sched-gridwrap", ref: gridRef, children: jsxRuntime.jsx("div", { className: "dshk-sched-gridinner", children: grid }) }),
-        ] }),
+        }),
       ] });
     }
     /** 计时段 "YYYY-MM-DDTHH:mm(:ss)" → 当日分钟数（网格块定位用） */
@@ -5549,7 +5539,7 @@ ellipsis，窄列只截字不破版 */
           ] });
         } else earlyBody = jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: `${t("vaultIndexFail")} ${indexErr}` });
         publishVaultReader({ root: null, earlyBody, indexPages: null, openPath, refreshIndex: () => void loadIndex(), setToast });
-        return ui.vaultIdxOpen && sideHost
+        return ui.vaultSideOpen && ui.vaultSideTab !== "schedule" && sideHost
           ? reactDom.createPortal(jsxRuntime.jsx("div", { className: "dshk-vault", children: earlyBody }), sideHost, "dshk-vault-early")
           : null;
       }
@@ -5798,7 +5788,7 @@ ellipsis，窄列只截字不破版 */
       // 发布：页签正文自己渲染 VaultPagePane（一页一张签），不再靠 portal 投递
       publishVaultReader({ root, earlyBody: null, indexPages, openPath, refreshIndex: () => void loadIndex(), setToast });
 
-      return ui.vaultIdxOpen && sideHost
+      return ui.vaultSideOpen && ui.vaultSideTab !== "schedule" && sideHost
         ? reactDom.createPortal(sideContent, sideHost, "dshk-vault-side")
         : null;
     }
@@ -6075,10 +6065,38 @@ ellipsis，窄列只截字不破版 */
     /** 侧栏索引宿主（知识库目录/日程待办占 sidebar.workspaces 单槽）：
      *  wide=false（侧栏收起）不渲染——视图挤进铁轨等于不可见；宿主 div 交给
      *  portal 投递方（VaultRootView）填内容 */
+    /** 侧栏浏览区（知识库 · 日程 共占的那一格）：顶部两个 tab 切换，面板本体
+     *  由 tab 决定——知识库 = 目录索引宿主（VaultRootView 单实例 portal 进来），
+     *  日程 = 待办清单。点日程 tab 顺带把右栏网格签带到眼前（网格才是日程主区）。
+     *  owner.wide=false（侧栏收成铁轨）时不渲染。 */
     function SidebarVaultIndex(owner) {
       const side = owner ?? {};
       if (side.wide === false) return null;
-      return jsxRuntime.jsx("div", { className: "dshk-sidehost", ref: (el) => vaultSideSlot.set(el) });
+      const ui = useKitUi();
+      const tab = ui.vaultSideTab === "schedule" ? "schedule" : "vault";
+      // tab 条只切不收：整格的开合归输入行那一枚钮（与官方会话列表的互斥面）
+      const pick = (next) => {
+        if (next === tab) return;
+        if (next === "schedule") openRightbarTab("schedule");
+        setKitUi(sidebarViewPatch(next));
+      };
+      const tabBtn = (key, label, icon) =>
+        jsxRuntime.jsx("button", {
+          type: "button",
+          className: `dshk-sidetab${tab === key ? " is-active" : ""}`,
+          "aria-pressed": tab === key,
+          onClick: () => pick(key),
+          children: [jsxRuntime.jsx(icon, {}), jsxRuntime.jsx("span", { children: label })],
+        }, key);
+      return jsxRuntime.jsxs("div", { className: "dshk-sidehost", children: [
+        jsxRuntime.jsx("div", { className: "dshk-sidetabs", children: [
+          tabBtn("vault", t("vaultTitle"), VaultIcon),
+          tabBtn("schedule", t("schedTab"), SchedIcon),
+        ] }),
+        tab === "schedule"
+          ? jsxRuntime.jsx(ScheduleTasksPanel, {})
+          : jsxRuntime.jsx("div", { className: "dshk-sidebody", ref: (el) => vaultSideSlot.set(el) }),
+      ] });
     }
 
     /** 功能存在性跟随 pane 挂载（vault/browser 用） */
@@ -6186,11 +6204,10 @@ ellipsis，窄列只截字不破版 */
     });
 
     // ─────────── 右栏两张功能签（官方 sidebarRightTabs）───────────
-    // 知识库是被动签（入口在左侧边栏，不给开始页条目）；日程给一条开始页条目
-    // （order 100+ 垫在官方条目之后）。服务运行期探测取用，缺服务只剩 kitUi 侧的
-    // 存在性补丁（签不出现），不写进 dsh.client.inject。
-    // 知识库是「一页一签」的内容类页类型：按 dsh-resource 地址认领，签名取页名；
-    // 日程仍是单张功能签（签里自带月网格，没有多实例形态）
+    // 两张都是被动签，**开始页不给条目**：入口是左栏 tab 条与输入行两枚钮。
+    // 服务运行期探测取用，缺服务只剩 kitUi 侧的存在性补丁（签不出现），不写进
+    // dsh.client.inject。知识库是「一页一签」的内容类页类型：按 dsh-resource
+    // 地址认领，签名取页名；日程仍是单张功能签（签里是周网格，没有多实例形态）
     const VAULT_RB_TABS = [
       { id: "dsh-kit-vault", kind: "dshk-vault", feature: "vault", titleKey: "vaultTitle", perItem: true, keepMounted: true },
       { id: "dsh-kit-schedule", kind: "dshk-schedule", feature: "schedule", titleKey: "schedTab" },
@@ -6199,17 +6216,14 @@ ellipsis，窄列只截字不破版 */
     function registerRightbar(rbCtx) {
       const tabs = rbCtx.sidebarRightTabs;
       if (!tabs || typeof tabs.register !== "function") return;
-      const guideOf = { schedule: { order: 100, icon: SchedIcon, descKey: "rbGuideSchedDesc" } };
       for (const f of VAULT_RB_TABS) {
         const Body = VAULT_RB_BODY[f.feature];
-        const guide = guideOf[f.feature];
         rbCtx.effect(() => tabs.register({
           id: f.id,
           kind: f.kind,
           ...(f.perItem === true ? { patterns: ["dsh-resource://dshk-vault/**"], keepMounted: true } : {}),
           title: (address) =>
             f.perItem === true ? pageBasename(rightbarItem(f.feature, address) ?? "") || t(f.titleKey) : t(f.titleKey),
-          ...(guide ? { guide: [{ order: guide.order, title: () => t(f.titleKey), description: () => t(guide.descKey), icon: guide.icon }] } : {}),
         }), "dsh-kit-vault: rightbar tab type " + f.kind);
         rbCtx.effect(() => rbCtx.slots.inject("sidebar.right.pane.tab", () => rbCtx.slots.register({
           name: "sidebar.right.pane.tab",
@@ -6263,7 +6277,7 @@ ellipsis，窄列只截字不破版 */
       chatPreviewHook = { cwd, vaultOn: true };
       shortcutRun.vault = () => setKitUi(toggleVaultEntry(getKitUi()));
       react.useEffect(() => () => { chatPreviewHook = null; }, []);
-      if (!(ui.vaultOpen || ui.vaultIdxOpen)) return null;
+      if (!(ui.vaultOpen || ui.vaultSideOpen)) return null;
       return jsxRuntime.jsx("div", { style: { display: "none" }, children: jsxRuntime.jsx(VaultView, {}) });
     }
 
@@ -6285,7 +6299,8 @@ ellipsis，窄列只截字不破版 */
       // vault root 预取：文件树/对话点击的判定同步读缓存，等点击时再取来不及
       //（索引端点宿主侧有 mtime 缓存，零成本）
       void ensureVaultRootHint();
-      // 输入行入口（conversation.input.left，order 12：文件树 10 → 知识库 → 终端 14）
+      // 输入行入口（conversation.input.left，order 12：文件树 10 → SCM 11 →
+      //   知识库·日程 → 终端 14）：知识库与日程共用这一枚，开的是侧栏那一格
       ctx.slots.inject("conversation.input.left", () =>
         ctx.slots.register({ name: "conversation.input.left", id: "dsh-kit-vault", order: 12 }, VaultEntry));
       // 常驻壳（order 910：根壳 900 之后）
@@ -6309,7 +6324,7 @@ ellipsis，窄列只截字不破版 */
     exports.VaultPaneBody = VaultPaneBody;
     exports.SchedulePaneBody = SchedulePaneBody;
     exports.ScheduleView = ScheduleView;
-    exports.ScheduleTasksCard = ScheduleTasksCard;
+    exports.ScheduleTasksPanel = ScheduleTasksPanel;
     exports.VaultEntry = VaultEntry;
     exports.VaultDialog = VaultDialog;
     exports.VaultPagePane = VaultPagePane;

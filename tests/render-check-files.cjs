@@ -360,16 +360,16 @@ out = comps.ScmEntry({});
 check("ScmEntry 渲染无异常", !!out && typeof out === "object");
 check("ScmEntry 悬停走官方气泡（同一条 KitTip 链路）", out.type === dockExports.KitTip && out.props.command === "dsh-kit-files.scm.toggle" && typeof out.props.label === "string");
 {
-  // 侧栏单槽互斥：源代码管理开着时点入口，知识库索引位让出（kitBase 补丁语义）
-  const sidebarResetPatch = { treeOpen: false, gitOpen: false, vaultIdxOpen: false, files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null };
+  // 侧栏单槽互斥：源代码管理开着时点入口，知识库·日程那一格让出（kitBase 补丁语义）
+  const sidebarResetPatch = { treeOpen: false, gitOpen: false, vaultSideOpen: false, vaultSideTab: "vault", files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null };
   const svp = dockExports.sidebarViewPatch("vault");
-  check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultIdxOpen === true && svp.treeOpen === false && svp.gitOpen === false);
-  dockExports.setKitUi({ vaultIdxOpen: true, vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", gitOpen: false, treeOpen: false });
+  check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultSideOpen === true && svp.vaultSideTab === "vault" && svp.treeOpen === false && svp.gitOpen === false);
+  dockExports.setKitUi({ vaultSideOpen: true, vaultSideTab: "vault", vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", gitOpen: false, treeOpen: false });
   callLog = [];
   comps.ScmEntry({ useSessions: () => ({ id: "s1", cwd: "C:/x" }) });
   const scmBtnEl = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-enbtn"));
   scmBtnEl[2].onClick();
-  check("ScmEntry 点击后侧栏单槽互斥（知识库索引位让出，两个钮不会同时亮）", dockExports.getKitUi().gitOpen === true && dockExports.getKitUi().vaultIdxOpen === false && dockExports.getKitUi().vaultOpen === true);
+  check("ScmEntry 点击后侧栏单槽互斥（知识库·日程那一格让出，两个钮不会同时亮）", dockExports.getKitUi().gitOpen === true && dockExports.getKitUi().vaultSideOpen === false && dockExports.getKitUi().vaultOpen === true);
   dockExports.setKitUi(sidebarResetPatch);
 }
 
