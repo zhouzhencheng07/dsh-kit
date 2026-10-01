@@ -28,7 +28,7 @@ and take no component slot).
 - **File tree** (composer-row toggle / default **Ctrl+Alt+,**): browse the session workspace;
   create/rename/delete (to Recycle Bin)/copy path / @-mention to chat; clicking a file
   opens it in the **official right-sidebar preview**, while md pages inside the vault
-  go to the read-only knowledge-base reader
+  go to the knowledge-base editor
 - **Source control** (composer-row toggle / default **Ctrl+Alt+.**): an in-page git
   workbench — stage/unstage/discard/commit, click a file to see its diff in a
   right-dock diff tab (changed regions only, with line numbers and a side-by-side
@@ -59,9 +59,17 @@ and take no component slot).
   documents and always auto-numbers on clashes; open page tabs follow renames/moves (the tab
   is reopened at the new address) and close
   on delete; chat integration (vault paths in chat open the page, "@" on a tree row cites
-  page/selection); page bodies are still not editable inside the plugin (writing belongs to
-  the agent's file tools or your local editor) and the plugin creates no skeleton directories
-  and never touches git
+  page/selection); **page bodies are what-you-see-is-what-you-get editors** (TipTap rich
+  text, no source/preview duality): `/` opens a two-level command menu (headings & text /
+  special blocks / lists / math & code / tables), a selection floats an inline format bar
+  (colour swatches and links included), pasted screenshots are compressed then stored
+  content-addressed under `attachments/` and inserted, and the page bar carries undo/redo,
+  table row/column buttons, an unsaved dot and the sticky reading bar (outline & backlinks);
+  saving is a 2s-debounced autosave (`Ctrl+S` saves now, leaving a tab or unmounting flushes)
+  over an mtime CAS — if the file changed underneath (agent or external editor), autosave
+  pauses and a conflict bar asks you to choose overwrite-disk or load-disk (the plugin never
+  overwrites silently and never touches git); external changes while the page is clean are
+  still re-read silently; the plugin creates no skeleton directories and never touches git
   - **Schedule** (one shared entry — the composer-row Knowledge base / Schedule toggle opens the
   left sidebar cell, whose top tab strip switches between the two; no dedicated shortcut): the task
    list (3-day / week / all scopes) fills that cell and
@@ -209,7 +217,8 @@ the WebSocket base the host injects).
   notifications; `browser` serves the 7 `browser_*` tools, the `/dsh-kit/browser` panel
   WebSocket, `/dsh-kit/browser/open` and the `/dsh-kit-browser/config` probe (right-bar
   browser tab, shared control, link redirection); `vault` serves `/dsh-kit/vault/*`
-  (index / search / per-page mtime / directory-level file management), `/dsh-kit/schedule/*`
+  (index / search / per-page mtime / directory-level file management / body write-back with
+  mtime CAS / pasted-image upload), `/dsh-kit/schedule/*`
   (read-only data and stats) and the `/dsh-kit-vault/config` probe, and registers the four
   `schedule_*` agent tools (knowledge base · schedule row); `phone` serves
   `/dsh-kit/phone/*` (status / links / rotation / start-stop) plus the

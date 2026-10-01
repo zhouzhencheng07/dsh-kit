@@ -866,9 +866,9 @@ let vaultFetchPrev = null;
     (src.match(/closest\("\.dshk-menu"\)/g) ?? []).length === 1,
   );
 }
-// 6.9b) VaultPagePane 直渲（只读阅读视图）：预置 state#0（page 已加载）走完整
-// 阅读面——sticky 阅读条（目录/反链按钮）+ RTE；写入类按钮（@/删除/撤销重做）
-// 与冲突条全部不得再出现
+// 6.9b) VaultPagePane 直渲（所见即所得编辑视图）：预置 state#0（page 已加载）走完整
+// 编辑面——页条（撤销/重做 + 阅读条目录/反链）+ RTE；@ 与删除仍只在左树侧，
+// 冲突条只在盘上被抢写后出现（预置态不出）
 {
   stateSeq = 0;
   stateStore.clear();
@@ -885,15 +885,17 @@ let vaultFetchPrev = null;
   const citeBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["引用到对话", "Cite to chat"].includes(c[2].title));
   // 删除同理在树上行的 ⋯ 菜单：页条里不得再有「删除」按钮/文案
   const delBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["删除", "Delete"].includes(c[2].children));
-  // 写入半边退役：撤销/重做按钮不得回到阅读条
-  const undoBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["撤销", "Undo", "重做", "Redo"].includes(c[2].title));
+  // 文档级命令：撤销 / 重做（行内格式在泡泡菜单、块插入在斜杠菜单，都不进页条）
+  const undoBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].children === "↶");
+  const redoBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].children === "↷");
   const rte = callLog.find((c) => c[1] === comps.RteEditor);
   // 阅读条两枚页面级入口：目录 / 反链（计数印在按钮上）
   const tocBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["目录", "Outline"].includes(c[2].children));
   const blBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("反链") || c[2].children.startsWith("Backlinks")));
-  check("VaultPagePane 渲染无异常（阅读条 + RTE 就位，页条不再带 @）", paneErr === null && !!editbar && !citeBtn && !!rte);
+  const conflictBar = callLog.find((c) => c[2] && c[2].className === "dshk-vault-conflict");
+  check("VaultPagePane 渲染无异常（页条 + RTE 就位，页条不带 @）", paneErr === null && !!editbar && !citeBtn && !!rte);
   check("页条不再带删除按钮（删除在左侧树的行 ⋯ 菜单）", !delBtn);
-  check("阅读条带 目录/反链 入口（只读导航），无撤销/重做（写入退役）", !!tocBtn && !!blBtn && !undoBtn);
+  check("页条带撤销/重做 + 阅读条目录/反链，无冲突条（预置态盘上没被抢写）", !!undoBtn && !!redoBtn && !!tocBtn && !!blBtn && !conflictBar);
   if (paneErr) console.log("  VaultPagePane error:", paneErr.message);
   stateSeq = 0;
   stateStore.clear();
@@ -903,6 +905,18 @@ let vaultFetchPrev = null;
   check("VaultPagePane 一页一签：正文常显（显隐归官方签条，不再自管 display）", !!paneRoot && paneRoot[2].style === undefined);
   stateSeq = 0;
   stateStore.clear();
+}
+// 6.9c) 编辑面保存链路：落盘走 vault/write（mtime CAS 带 baseMtime，mtime 不符回
+// conflict），粘贴图片走 vault/attach；RTE 可编辑 + 2s 防抖自动保存 + Ctrl+S +
+// 切走即存；冲突条只在出冲突后出现，两钮给「覆盖盘上 / 读盘上的」
+{
+  check("RTE 恒为可编辑态（editable:true，无只读二分）", /editable: true/.test(src) && !/editable: false/.test(src));
+  check("保存走 POST /dsh-kit/vault/write 且带 baseMtime CAS", src.includes('kitJson("/dsh-kit/vault/write"') && src.includes("baseMtime: base"));
+  check("CAS 三态都接住了：ok 清脏 / conflict 出条 / missing 丢弃（不写活旧页）", src.includes('body.missing === true') && src.includes('body.modified === true') && src.includes('setConflict({ diskMtime:'));
+  check("粘贴图片走 /dsh-kit/vault/attach（内容寻址入库后插图片节点）", src.includes('"/dsh-kit/vault/attach"') && src.includes("rteRef.current?.insertImage(body.rel"));
+  check("自动保存 2s 防抖 + Ctrl+S 立即存 + 卸载/切走保底", /saveTimer = setTimeout\(flushSave, 2000\)/.test(src) && /e\.key === "s" \|\| e\.key === "S"/.test(src) && /卸载前尽力落盘/.test(src) && /rteCtlRef\.current\.flush\(\)/.test(src));
+  check("冲突条两钮：覆盖盘上 / 读盘上的", src.includes('saveEditRef.current.overwrite()') && src.includes('saveEditRef.current.reload()'));
+  check("编辑面不静默覆盖也不碰 git（写端点只回 modified，由人裁决）", !/stash|commitVault/.test(src));
 }
 // 6.9b2) 阅读条「反链 N」：计数印在按钮上（来源页列表在浮层里，不再吊页尾）
 {

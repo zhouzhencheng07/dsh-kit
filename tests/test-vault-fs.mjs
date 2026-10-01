@@ -16,6 +16,8 @@ import {
   rewriteWikiLinks,
   safeLeaf,
   safeRel,
+  storeAttachment,
+  writePage,
 } from '../dist/vault/fs.js'
 
 const test = (name, fn) =>
@@ -245,6 +247,47 @@ await test('rewriteWikiLinks：解析判据而非字面比名（大小写 / .md 
   ]
   const out = rewriteWikiLinks('[[基础]] [[基础.md]] [[ 基础 ]] [[基础2]]', pages, 'wiki/基础', { kind: 'name', name: '基础X' })
   assert.equal(out, '[[基础X]] [[基础X]] [[ 基础X ]] [[基础2]]')
+})
+
+await test('writePage：mtime 对得上才落盘（原子写），对不上回 modified 且不写', () => {
+  const abs = write('写回.md', '原')
+  const mtime = fs.statSync(abs).mtimeMs
+  const ok = writePage(root, abs, '改', mtime)
+  assert.equal(read('写回.md'), '改')
+  assert.ok(ok.mtimeMs > 0 && ok.modified === undefined)
+  // 同一毫秒内的两次写 mtime 可能相等（时间戳精度），先把盘上时间顶到未来再试 CAS
+  const future = new Date(Date.now() + 5000)
+  fs.utimesSync(abs, future, future)
+  const stale = writePage(root, abs, '抢写', mtime)
+  assert.equal(stale.modified, true)
+  assert.equal(stale.mtimeMs, fs.statSync(abs).mtimeMs)
+  assert.equal(read('写回.md'), '改')
+  assert.equal(exists('写回.md.tmp'), false)
+})
+
+await test('writePage：文件已不在回 missing（丢弃这次写，不把旧页写活）；非 md / 库外 / 超限拒写', () => {
+  const gone = write('改名后.md', 'x')
+  fs.rmSync(gone)
+  assert.deepEqual(writePage(root, gone, 'y', 1), { mtimeMs: 0, missing: true })
+  assert.equal(exists('改名后.md'), false)
+  write('非页.txt', 't')
+  assert.throws(() => writePage(root, path.join(root, '非页.txt'), 'y', 1), /只允许写 md/)
+  assert.throws(() => writePage(root, path.join(root, '..', '外.md'), 'y', 1), /上跳段|不在知识库内/)
+  assert.throws(() => writePage(root, write('大.md', 'a'), 'x'.repeat(600 * 1024), 1), /超过 512KB/)
+})
+
+await test('storeAttachment：内容寻址落 attachments/，同内容复用不重写；非图片按 png 落', () => {
+  const png = Buffer.from('89504e470d0a1a0a', 'hex')
+  const first = storeAttachment(root, png, 'paste.png')
+  assert.equal(first.reused, false)
+  assert.match(first.rel, /^attachments\/[0-9a-f]{2}\/[0-9a-f]{16}\.png$/)
+  assert.equal(fs.readFileSync(path.join(root, first.rel)).length, png.length)
+  const again = storeAttachment(root, png, 'paste.png')
+  assert.equal(again.rel, first.rel)
+  assert.equal(again.reused, true)
+  const odd = storeAttachment(root, Buffer.from('gif89a'), 'clip.gif')
+  assert.equal(odd.rel.endsWith('.gif'), true)
+  assert.throws(() => storeAttachment(root, Buffer.alloc(0), 'x.png'), /空的/)
 })
 
 fs.rmSync(root, { recursive: true, force: true })

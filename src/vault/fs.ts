@@ -1,5 +1,5 @@
-// dsh-kit/vault 组件的文件管理半边——树上的新建 / 重命名 / 移动 / 导入 / 删除，正文写入与
-// 编辑不在此列（页面内容仍归 agent 文件工具与外部编辑器，文件即接口）。
+// dsh-kit/vault 组件的文件管理半边——树上的新建 / 重命名 / 移动 / 导入 / 删除，
+// 以及编辑面的正文写回（mtime CAS）与粘贴图片进 attachments/。
 // 契约：所有路径都是**绝对路径**，必须落在 vault 根内（根自身只允许作为容器）；
 // 名字只收单段叶子（拒分隔符、控制字符、Windows 保留名与首尾空白），多级交给
 // 各层的父目录参数表达。撞名策略：页与目录三选一（跳过 / 覆盖 / 自动加序号），
@@ -435,6 +435,72 @@ function rewriteRefs(pages: WikiRef[], oldRel: string, mode: RewriteMode, selfPa
     }
   }
   return changed
+}
+
+// ── 正文写回（编辑面）───────────────────────────────────────────────────────
+
+/** 正文上限：单页写回封顶，超了是误操作（粘贴误插二进制之类）不是正常长文 */
+const PAGE_WRITE_LIMIT = 512 * 1024
+
+/** 正文写回：mtime CAS + tmp/rename 原子落盘。
+ *  盘上不是前端读过的那一版（baseMtime 不符）就回 `modified` 让前端出冲突条，
+ *  **不静默覆盖**——库是共享的（agent / 外部编辑器随时在改），覆盖掉的那份没人
+ *  找得回来（插件不碰 git，没有存档兜底）。文件已不在（改名 / 删除后编辑器的
+ *  卸载兜底保存）回 `missing`，那次写直接丢弃，否则会把旧路径的页写活回来。 */
+export function writePage(
+  root: string,
+  targetAbs: string,
+  content: unknown,
+  baseMtime: unknown,
+): { mtimeMs: number; modified?: true; missing?: true } {
+  const target = resolveInside(root, targetAbs)
+  if (!/\.(md|markdown)$/i.test(target)) throw new Error('只允许写 md 文件')
+  if (typeof content !== 'string') throw new Error('缺少内容')
+  if (Buffer.byteLength(content, 'utf8') > PAGE_WRITE_LIMIT) throw new Error('内容超过 512KB 上限')
+  const base = Number(baseMtime)
+  if (!Number.isFinite(base)) throw new Error('缺少 baseMtime')
+  let stat: fs.Stats
+  try {
+    stat = fs.statSync(target)
+  } catch {
+    return { mtimeMs: 0, missing: true }
+  }
+  if (!stat.isFile()) throw new Error('目标不是文件')
+  if (stat.mtimeMs !== base) return { mtimeMs: stat.mtimeMs, modified: true }
+  const tmp = `${target}.tmp`
+  try {
+    fs.writeFileSync(tmp, content, 'utf8')
+    fs.renameSync(tmp, target)
+  } catch (error) {
+    try {
+      fs.rmSync(tmp, { force: true })
+    } catch {
+      /* 临时文件残留不影响读（扫描只认 .md），下轮写再覆盖 */
+    }
+    throw error
+  }
+  return { mtimeMs: fs.statSync(target).mtimeMs }
+}
+
+/** 图片扩展名白名单：只收静态图，svg 一类带脚本的按字节也不进库 */
+const ATTACH_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|avif)$/i
+const ATTACH_MAX_BYTES = 20 * 1024 * 1024
+
+/** 编辑面粘贴 / 拖入的图片：内容寻址落 attachments/<前两位>/<前 16 位>.<ext>
+ *  （与导入 md 时收本地图片同一条落盘规则，同内容复用不重写）。扩展名按来源名取，
+ *  不合白名单的一律按 png 落（剪贴板图绝大多数就是 png） */
+export function storeAttachment(root: string, bytes: Buffer, fileName: unknown): { rel: string; reused: boolean } {
+  if (bytes.length === 0) throw new Error('图片是空的')
+  if (bytes.length > ATTACH_MAX_BYTES) throw new Error('图片超过 20MB 上限')
+  const ext = (ATTACH_EXT_RE.exec(String(fileName ?? ''))?.[1] ?? 'png').toLowerCase()
+  const dest = attachmentPath(root, bytes, `.${ext}`)
+  let reused = true
+  if (!existsSync(dest)) {
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.writeFileSync(dest, bytes)
+    reused = false
+  }
+  return { rel: relUnderRoot(root, dest) ?? '', reused }
 }
 
 // ── 导入 ────────────────────────────────────────────────────────────────────

@@ -1443,6 +1443,34 @@ window.__ModuleLoader__.load({
 .dshk-vault-radio{display:flex;align-items:center;gap:6px;font-size:12px;line-height:1.4;color:var(--dsw-alias-label-primary);margin-top:4px}
 .dshk-vault-srcline{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
 .dshk-vault-modalinput{width:100%;box-sizing:border-box;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:6px 8px;border-radius:6px;margin-top:4px}
+/* 编辑面：撤销/重做 + 表格行列表（选区落在表内才亮）| 分隔点 | 未保存脏点 */
+.dshk-vault-tbsep{flex:none;width:1px;height:14px;background:var(--dsw-alias-border-l2)}
+.dshk-vault-dirtydot{flex:none;font-size:10px;line-height:1;color:var(--dsw-alias-warning,#e8a13c)}
+/* CAS 冲突条：盘上被改而自动保存已暂停（不静默覆盖、不存档——由人裁决） */
+.dshk-vault-conflict{flex:none;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dsw-alias-warning,#e8a13c);padding:0 0 8px}
+/* 斜杠菜单（/ 唤出，两级）：定位在光标旁，放不下翻到光标上方，横向钳在视口内 */
+.dshk-vault-slashmenu{position:fixed;z-index:1200;width:168px;max-height:300px;overflow:auto;padding:4px 0;display:flex;flex-direction:column;gap:1px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18))}
+.dshk-vault-slashitem{display:flex;align-items:center;gap:7px;padding:4px 10px;margin:0 3px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer}
+.dshk-vault-slashitem:hover,.dshk-vault-slashitem.is-active{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-vault-slashnum{flex:none;width:16px;text-align:center;font-size:10px;font-weight:600;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-slashicon{flex:none;width:22px;height:22px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-3);border-radius:5px;font-size:11px;font-weight:700}
+.dshk-vault-slashtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:0}
+.dshk-vault-slashtitle{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-vault-slashdesc{font-size:10px;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-slashmore{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-slashback{padding:4px 10px 6px;font-size:11px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-bottom:1px dashed var(--dsw-alias-border-l1);margin-bottom:2px}
+.dshk-vault-slashback:hover{color:var(--dsw-alias-label-primary)}
+/* 泡泡菜单（选区非空时浮在选区上方，放不下换下方）：行内格式条 + 色板 */
+.dshk-vault-bubble{position:fixed;z-index:1200;display:flex;flex-direction:column;gap:4px;padding:4px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18));transform:translateX(-50%)}
+.dshk-vault-bubblebar{display:flex;align-items:center;gap:2px}
+.dshk-vault-bbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;min-width:22px;height:22px;padding:0 4px;border-radius:5px;cursor:pointer}
+.dshk-vault-bbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-vault-bbtn.is-active{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-brand-primary)}
+.dshk-vault-bsep{flex:none;width:1px;height:14px;background:var(--dsw-alias-border-l2);margin:0 2px}
+.dshk-vault-bswatchrow{display:flex;flex-wrap:wrap;gap:4px;max-width:168px}
+.dshk-vault-bswatch{flex:none;width:16px;height:16px;border-radius:4px;border:1px solid var(--dsw-alias-border-l2);cursor:pointer;padding:0}
+.dshk-vault-bswatch-clear{width:100%;appearance:none;border:0;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:10px;line-height:1;padding:2px 0;cursor:pointer}
+.dshk-vault-bswatch-clear:hover{color:var(--dsw-alias-label-primary)}
 /* 日程：左栏待办清单 + 右栏周时间网格（望舒同款分工——清单在侧栏、网格占主区）。
    --dshk-sched-band = 表头带高（角格与日期头共用，网格 sticky 滚动的基准） */
 .dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px}
@@ -3281,6 +3309,82 @@ ellipsis，窄列只截字不破版 */
       vaultCiteUnavailable: "对话输入框未就绪（无会话或不可用）",
       vaultIdxTruncated: "笔记太多：索引已达单次扫描上限（5000 页），搜索与反链只覆盖已索引的部分",
       vaultLibTruncated: "资料库清单已达上限（2000 项），资料库搜索只覆盖已列出的部分",
+      vaultSaved: "已保存",
+      vaultUnsaved: "有未保存修改",
+      vaultSaveFail: "保存失败：{error}",
+      vaultSaveConflict: "页面在盘上已被改动，自动保存已暂停",
+      vaultSaveConflictOverwrite: "用我的覆盖盘上",
+      vaultSaveConflictReload: "读盘上的（丢弃我的改动）",
+      vaultAttachFail: "图片入库失败",
+      rtePlaceholder: "输入正文，/ 唤出命令菜单",
+      vaultTableAddRow: "加行",
+      vaultTableAddCol: "加列",
+      vaultTableDelRow: "删行",
+      vaultTableDelCol: "删列",
+      vaultTableDel: "删表",
+      vmenuGHead: "标题与正文",
+      vmenuH1: "标题 1",
+      vmenuH1Desc: "一级标题",
+      vmenuH2: "标题 2",
+      vmenuH2Desc: "二级标题",
+      vmenuH3: "标题 3",
+      vmenuH3Desc: "三级标题",
+      vmenuH4: "标题 4",
+      vmenuH4Desc: "四级标题",
+      vmenuH5: "标题 5",
+      vmenuH5Desc: "五级标题",
+      vmenuH6: "标题 6",
+      vmenuH6Desc: "六级标题",
+      vmenuBody: "正文",
+      vmenuBodyDesc: "普通文本段落",
+      vmenuGSpecial: "特殊块",
+      vmenuHr: "分割线",
+      vmenuHrDesc: "水平分割线",
+      vmenuFold: "折叠块",
+      vmenuFoldDesc: "可折叠内容区域",
+      vmenuGList: "列表",
+      vmenuUl: "无序列表",
+      vmenuUlDesc: "圆点列表",
+      vmenuOl: "有序列表",
+      vmenuOlDesc: "编号列表",
+      vmenuTodo: "任务列表",
+      vmenuTodoDesc: "勾选待办",
+      vmenuGMath: "数学公式与代码",
+      vmenuMathInline: "行内公式",
+      vmenuMathInlineDesc: "行内数学公式",
+      vmenuMathBlock: "行间公式",
+      vmenuMathBlockDesc: "独立公式区域",
+      vmenuCode: "代码块",
+      vmenuCodeDesc: "代码区域（语法高亮）",
+      vmenuQuote: "引用",
+      vmenuQuoteDesc: "引用块",
+      vmenuGTable: "表格",
+      vmenuTable1: "1×2",
+      vmenuTable1Desc: "1 行 2 列",
+      vmenuTable2: "2×2",
+      vmenuTable2Desc: "2 行 2 列",
+      vmenuTable3: "3×3",
+      vmenuTable3Desc: "3 行 3 列",
+      vmenuTable4: "4×4",
+      vmenuTable4Desc: "4 行 4 列",
+      vmenuTable5: "5×5",
+      vmenuTable5Desc: "5 行 5 列",
+      vtbUndo: "撤销",
+      vtbRedo: "重做",
+      vtbBold: "加粗",
+      vtbItalic: "斜体",
+      vtbUnderline: "下划线",
+      vtbStrike: "删除线",
+      vtbSup: "上标",
+      vtbSub: "下标",
+      vtbCode: "行内代码",
+      vtbColor: "文字颜色",
+      vtbHighlight: "高亮颜色",
+      vtbLink: "链接",
+      vtbLinkPrompt: "链接地址：",
+      vtbLinkEditPrompt: "输入新地址修改链接，留空并确定删除链接：",
+      vtbClear: "清除格式",
+      vtbClearColor: "清除",
     };
     const en = {
       kcfgGroupVault: "Vault",
@@ -3354,6 +3458,82 @@ ellipsis，窄列只截字不破版 */
       vaultCiteUnavailable: "Composer is not ready (no active session)",
       vaultIdxTruncated: "Too many notes: the index hit the per-scan cap (5000 pages); search and backlinks cover indexed pages only",
       vaultLibTruncated: "The library list hit its cap (2000 entries); library search covers listed files only",
+      vaultSaved: "Saved",
+      vaultUnsaved: "Unsaved changes",
+      vaultSaveFail: "Save failed: {error}",
+      vaultSaveConflict: "The page changed on disk; autosave is paused",
+      vaultSaveConflictOverwrite: "Overwrite disk with mine",
+      vaultSaveConflictReload: "Load the disk version (drop mine)",
+      vaultAttachFail: "Failed to store the image",
+      rtePlaceholder: "Type '/' for commands",
+      vaultTableAddRow: "Add row",
+      vaultTableAddCol: "Add col",
+      vaultTableDelRow: "Del row",
+      vaultTableDelCol: "Del col",
+      vaultTableDel: "Del table",
+      vmenuGHead: "Headings & text",
+      vmenuH1: "Heading 1",
+      vmenuH1Desc: "Level 1 heading",
+      vmenuH2: "Heading 2",
+      vmenuH2Desc: "Level 2 heading",
+      vmenuH3: "Heading 3",
+      vmenuH3Desc: "Level 3 heading",
+      vmenuH4: "Heading 4",
+      vmenuH4Desc: "Level 4 heading",
+      vmenuH5: "Heading 5",
+      vmenuH5Desc: "Level 5 heading",
+      vmenuH6: "Heading 6",
+      vmenuH6Desc: "Level 6 heading",
+      vmenuBody: "Body text",
+      vmenuBodyDesc: "Plain text paragraph",
+      vmenuGSpecial: "Special blocks",
+      vmenuHr: "Divider",
+      vmenuHrDesc: "Horizontal rule",
+      vmenuFold: "Fold block",
+      vmenuFoldDesc: "Collapsible content area",
+      vmenuGList: "Lists",
+      vmenuUl: "Bullet list",
+      vmenuUlDesc: "Dotted list",
+      vmenuOl: "Ordered list",
+      vmenuOlDesc: "Numbered list",
+      vmenuTodo: "Task list",
+      vmenuTodoDesc: "Checklist items",
+      vmenuGMath: "Math & code",
+      vmenuMathInline: "Inline math",
+      vmenuMathInlineDesc: "Inline math formula",
+      vmenuMathBlock: "Math block",
+      vmenuMathBlockDesc: "Standalone formula area",
+      vmenuCode: "Code block",
+      vmenuCodeDesc: "Code area with syntax highlighting",
+      vmenuQuote: "Quote",
+      vmenuQuoteDesc: "Blockquote",
+      vmenuGTable: "Tables",
+      vmenuTable1: "1×2",
+      vmenuTable1Desc: "1 row 2 cols",
+      vmenuTable2: "2×2",
+      vmenuTable2Desc: "2 rows 2 cols",
+      vmenuTable3: "3×3",
+      vmenuTable3Desc: "3 rows 3 cols",
+      vmenuTable4: "4×4",
+      vmenuTable4Desc: "4 rows 4 cols",
+      vmenuTable5: "5×5",
+      vmenuTable5Desc: "5 rows 5 cols",
+      vtbUndo: "Undo",
+      vtbRedo: "Redo",
+      vtbBold: "Bold",
+      vtbItalic: "Italic",
+      vtbUnderline: "Underline",
+      vtbStrike: "Strikethrough",
+      vtbSup: "Superscript",
+      vtbSub: "Subscript",
+      vtbCode: "Inline code",
+      vtbColor: "Text color",
+      vtbHighlight: "Highlight color",
+      vtbLink: "Link",
+      vtbLinkPrompt: "Link URL:",
+      vtbLinkEditPrompt: "Enter a new URL to edit the link; leave empty and confirm to remove it:",
+      vtbClear: "Clear formatting",
+      vtbClearColor: "Clear",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? rootT(key);
@@ -4549,12 +4729,82 @@ ellipsis，窄列只截字不破版 */
 
     /** 拆 frontmatter：返回 { fmText, rest }。fmText = "---…---" 块（含随后的
      *  首个换行）的字节级原文，无 frontmatter 时 fmText=""；rest = 其余全部。
-     *  只读态 fm 不进渲染器（当属性看），也无需保存回拼 */
+     *  编辑面 fm 不进渲染器（当属性看），保存时原样拼回正文前面 */
     function vaultSplitFrontmatter(content) {
       const src = String(content ?? "");
       const m = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(src);
       if (!m) return { fmText: "", rest: src };
       return { fmText: m[0], rest: src.slice(m[0].length) };
+    }
+
+    /** 粘贴图片的压缩阈值：最长边 >2048 或体积 >400KB 才重编码（望舒同款），
+     *  透明通道保 PNG、否则 JPEG 0.85；没过阈值按原字节走 */
+    const PASTE_MAX_EDGE = 2048;
+    const PASTE_MAX_BYTES = 400 * 1024;
+    /** 图片 → {blob, ext}：小图/PNG 直接放行，中大图走 canvas 重编码 */
+    async function shrinkPastedImage(file) {
+      if (file.type === "image/png" || file.size <= PASTE_MAX_BYTES) {
+        const img = await decodeImage(file);
+        if (img.width <= PASTE_MAX_EDGE && img.height <= PASTE_MAX_EDGE) {
+          return { blob: file, ext: file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "png" };
+        }
+        return encodeViaCanvas(img, img.hasAlpha);
+      }
+      const img = await decodeImage(file);
+      return encodeViaCanvas(img, img.hasAlpha);
+    }
+    function decodeImage(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const el = new Image();
+        el.onload = () => {
+          URL.revokeObjectURL(url);
+          const cv = document.createElement("canvas");
+          const ctx = cv.getContext("2d", { willReadFrequently: true });
+          ctx.clearRect(0, 0, el.naturalWidth, el.naturalHeight);
+          ctx.drawImage(el, 0, 0);
+          // 透明像素按「有无透明」分流：整幅不透明的一律出 JPEG（小一半）
+          const px = ctx.getImageData(0, 0, el.naturalWidth, el.naturalHeight).data;
+          let hasAlpha = false;
+          for (let i = 3; i < px.length; i += 4) {
+            if (px[i] < 255) { hasAlpha = true; break; }
+          }
+          resolve({ width: el.naturalWidth, height: el.naturalHeight, hasAlpha, canvas: el, ctx });
+        };
+        el.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error("decode failed"));
+        };
+        el.src = url;
+      });
+    }
+    function encodeViaCanvas(img, hasAlpha) {
+      const scale = Math.min(1, PASTE_MAX_EDGE / Math.max(img.width, img.height));
+      const cv = document.createElement("canvas");
+      cv.width = Math.max(1, Math.round(img.width * scale));
+      cv.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = cv.getContext("2d");
+      if (!hasAlpha) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, cv.width, cv.height);
+      }
+      ctx.drawImage(img.canvas, 0, 0, cv.width, cv.height);
+      const type = hasAlpha ? "image/png" : "image/jpeg";
+      const url = cv.toDataURL(type, 0.85);
+      const bin = atob(url.slice(url.indexOf(",") + 1));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return { blob: new Blob([bytes], { type }), ext: hasAlpha ? "png" : "jpg" };
+    }
+    function blobToBase64(blob) {
+      return blob.arrayBuffer().then((buf) => {
+        const bytes = new Uint8Array(buf);
+        let out = "";
+        for (let i = 0; i < bytes.length; i += 0x8000) {
+          out += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        }
+        return btoa(out);
+      });
     }
 
     /** 标题锚 slug：压空白为 -（中英混排原样保留，仅保证锚点匹配一致） */
@@ -4637,6 +4887,67 @@ ellipsis，窄列只截字不破版 */
       return jsxRuntime.jsx(VaultRootView, {});
     }
 
+    // 斜杠菜单的项表：两级（分组 → 条目），labelKey/descKey 走 i18n，match 是过滤
+    // 用的附加关键词（英文 + 中文别名；命令本身由 vendor 句柄执行）
+    const VAULT_MENU = [
+      {
+        key: "head",
+        labelKey: "vmenuGHead",
+        match: "heading h1 h2 h3 h4 h5 h6 body 标题 正文",
+        children: [
+          { key: "h1", icon: "H1", labelKey: "vmenuH1", descKey: "vmenuH1Desc", match: "h1 一级" },
+          { key: "h2", icon: "H2", labelKey: "vmenuH2", descKey: "vmenuH2Desc", match: "h2 二级" },
+          { key: "h3", icon: "H3", labelKey: "vmenuH3", descKey: "vmenuH3Desc", match: "h3 三级" },
+          { key: "h4", icon: "H4", labelKey: "vmenuH4", descKey: "vmenuH4Desc", match: "h4 四级" },
+          { key: "h5", icon: "H5", labelKey: "vmenuH5", descKey: "vmenuH5Desc", match: "h5 五级" },
+          { key: "h6", icon: "H6", labelKey: "vmenuH6", descKey: "vmenuH6Desc", match: "h6 六级" },
+          { key: "body", icon: "P", labelKey: "vmenuBody", descKey: "vmenuBodyDesc", match: "body paragraph 正文 段落" },
+        ],
+      },
+      {
+        key: "special",
+        labelKey: "vmenuGSpecial",
+        match: "special divider hr fold quote 分割 特殊 引用 折叠",
+        children: [
+          { key: "hr", icon: "—", labelKey: "vmenuHr", descKey: "vmenuHrDesc", match: "hr divider 分割线" },
+          { key: "fold", icon: "▸", labelKey: "vmenuFold", descKey: "vmenuFoldDesc", match: "fold collapsible 折叠 折叠块" },
+          { key: "quote", icon: "❝", labelKey: "vmenuQuote", descKey: "vmenuQuoteDesc", match: "quote blockquote 引用" },
+        ],
+      },
+      {
+        key: "list",
+        labelKey: "vmenuGList",
+        match: "list bullet ordered task 列表 无序 有序 待办",
+        children: [
+          { key: "ul", icon: "•", labelKey: "vmenuUl", descKey: "vmenuUlDesc", match: "ul bullet 无序" },
+          { key: "ol", icon: "1.", labelKey: "vmenuOl", descKey: "vmenuOlDesc", match: "ol ordered 有序" },
+          { key: "todo", icon: "☑", labelKey: "vmenuTodo", descKey: "vmenuTodoDesc", match: "todo task 待办 任务" },
+        ],
+      },
+      {
+        key: "math",
+        labelKey: "vmenuGMath",
+        match: "math formula code 数学 公式 代码",
+        children: [
+          { key: "mathinline", icon: "∑", labelKey: "vmenuMathInline", descKey: "vmenuMathInlineDesc", match: "inline math 行内 公式" },
+          { key: "mathblock", icon: "∫", labelKey: "vmenuMathBlock", descKey: "vmenuMathBlockDesc", match: "block math 行间 公式" },
+          { key: "code", icon: "</>", labelKey: "vmenuCode", descKey: "vmenuCodeDesc", match: "code block fence 代码块" },
+        ],
+      },
+      {
+        key: "table",
+        labelKey: "vmenuGTable",
+        match: "table 表格",
+        children: [
+          { key: "t1x2", icon: "⊟", labelKey: "vmenuTable1", descKey: "vmenuTable1Desc", match: "table 1x2 表格", rows: 1, cols: 2 },
+          { key: "t2x2", icon: "⊞", labelKey: "vmenuTable2", descKey: "vmenuTable2Desc", match: "table 2x2 表格", rows: 2, cols: 2 },
+          { key: "t3x3", icon: "⊟", labelKey: "vmenuTable3", descKey: "vmenuTable3Desc", match: "table 3x3 表格", rows: 3, cols: 3 },
+          { key: "t4x4", icon: "⊞", labelKey: "vmenuTable4", descKey: "vmenuTable4Desc", match: "table 4x4 表格", rows: 4, cols: 4 },
+          { key: "t5x5", icon: "⊟", labelKey: "vmenuTable5", descKey: "vmenuTable5Desc", match: "table 5x5 表格", rows: 5, cols: 5 },
+        ],
+      },
+    ];
+
     // ─────────── RTE 编辑面（知识库页专用，所见即所得）───────────
     // TipTap 富文本编辑器挂载 + 斜杠菜单 + 泡泡菜单 + 自动保存（2s 防抖 +
     // Ctrl+S + 卸载保底 + 冲突暂停）全部收拢在这里；落盘由 onSave(md, mode)
@@ -4644,22 +4955,48 @@ ellipsis，窄列只截字不破版 */
     // 'ok'|'conflict'|'fail'。conflict 会暂停自动保存，直到父层重载
     // （docTick bump 重挂）或 overwrite 成功。
     // rteRef 直通 RTE 句柄（父层页条按钮 undo/redo/表格等照旧调用）。
-    /** 知识库页面渲染器（一页一个实例，挂右栏 pane 宿主）：vendor RTE 只读态
-     *  （editable:false），只负责加载 / 阅读位置记忆 / wikilink 与页内链接点击 /
-     *  面包屑上报 / 就绪回调（跨页锚点落位消费点）。 */
-    function RteEditor({ rteRef, docKey, docTick, initialMd, labels, onReady, onWikiLink, resolveWiki, resolveSrc, onRelLink, onState }) {
+    /** 知识库页面编辑器（一页一个实例，挂右栏签）：vendor RTE 可编辑态
+     *  （editable:true），斜杠菜单 / 泡泡菜单 / 自动保存（2s 防抖 + Ctrl+S +
+     *  卸载保底 + 冲突暂停）收在这里；落盘由 onSave(md, mode) 承担
+     *  （POST /dsh-kit/vault/write，mtime CAS），mode ∈ auto|manual|overwrite，
+     *  返回 'ok'|'conflict'|'gone'|'fail'。conflict / gone 都暂停自动保存：
+     *  直到父层重载（docTick bump 重挂）或 overwrite 成功。
+     *  ctlRef 暴露 { dirty, flush, flushManual, overwrite } 供切签与冲突条用。 */
+    function RteEditor({ rteRef, ctlRef, docKey, docTick, initialMd, placeholder, labels, onReady, onWikiLink, resolveWiki, resolveSrc, onRelLink, onSave, onState, onPaste }) {
       const [libsReady, setLibsReady] = react.useState(false);
       const [libsFailed, setLibsFailed] = react.useState(false);
+      const [inTableState, setInTableState] = react.useState(false);
       const rteHostRef = react.useRef(null);
+      // 斜杠菜单：{query, sub, x, y, at} | null（/ 触发：行首或空白后，键入过滤，Esc/失焦关）
+      const [menu, setMenu] = react.useState(null);
+      const [menuIdx, setMenuIdx] = react.useState(0);
+      // 泡泡菜单：{x, y, above} | null（选区非空时浮在选区上/下方）；bubPanel =
+      // 展开的色板（"tc" 文字颜色 | "hc" 高亮）
+      const [bub, setBub] = react.useState(null);
+      const [bubPanel, setBubPanel] = react.useState(null);
+      // ref 镜像 state：capture 监听读 ref，直接读 state 会停在旧渲染的闭包里
+      const menuRef = react.useRef(menu);
+      menuRef.current = menu;
+      const menuIdxRef = react.useRef(menuIdx);
+      menuIdxRef.current = menuIdx;
+      const bubRef = react.useRef(bub);
+      bubRef.current = bub;
+      // 脏态用**位**记而不是拿 md 比：每次按键都比一次等于每次按键整篇序列化，
+      // 长文档直接卡；挂载即干净、改动即脏、存成功即干净
+      const dirtyRef = react.useRef(false);
+      const pausedRef = react.useRef(false); // 冲突 / 页面已不在 → 暂停自动保存
+      const inTableRef = react.useRef(false);
       const initialMdRef = react.useRef(initialMd);
       initialMdRef.current = initialMd;
       // 父层回调 ref 镜像：编辑器实例闭包里永远读到最新
       const onReadyRef = react.useRef(onReady);
       onReadyRef.current = onReady;
+      const onSaveRef = react.useRef(onSave);
+      onSaveRef.current = onSave;
       const onStateRef = react.useRef(onState);
       onStateRef.current = onState;
-      const confRef = react.useRef({ onWikiLink, resolveWiki, resolveSrc, onRelLink, labels });
-      confRef.current = { onWikiLink, resolveWiki, resolveSrc, onRelLink, labels };
+      const confRef = react.useRef({ onWikiLink, resolveWiki, resolveSrc, onRelLink, labels, placeholder });
+      confRef.current = { onWikiLink, resolveWiki, resolveSrc, onRelLink, labels, placeholder };
 
       // 光标所属标题链（面包屑）：heading 是顶层块互不嵌套，层级
       // 归属按「文档顺序」解释——从光标顶层块向前扫，遇到比链尾更高级（level
@@ -4690,7 +5027,7 @@ ellipsis，窄列只截字不破版 */
         return "";
       };
       const report = () => {
-        onStateRef.current?.({ crumb: crumbOf() });
+        onStateRef.current?.({ dirty: dirtyRef.current, inTable: inTableRef.current, crumb: crumbOf() });
       };
 
       react.useEffect(() => {
@@ -4700,8 +5037,110 @@ ellipsis，窄列只截字不破版 */
           .catch(() => setLibsFailed(true));
       }, []);
 
-      // 编辑器挂载（实例写 rteRef，只读态）。docKey=归属路径；docTick 变化强制
-      // 重挂（外部修改重读）。就绪即回调 onReady——跨页锚点落位在这里消费
+      // 泡泡菜单重定位：选区非空且不在代码块内 → 浮在选区上方（放不下换
+      // 下方）。selectionUpdate 高频回调只读 ref 不读 state；斜杠菜单开着时让位
+      const bubbleSync = () => {
+        const h = rteRef.current;
+        const ed = h?.editor;
+        if (!ed) return;
+        const sel = ed.state.selection;
+        if (sel.empty || menuRef.current !== null || ed.isActive("codeBlock")) {
+          setBub(null);
+          return;
+        }
+        const c1 = ed.view.coordsAtPos(sel.from);
+        const c2 = ed.view.coordsAtPos(sel.to);
+        if (!c1 || !c2) {
+          setBub(null);
+          return;
+        }
+        const above = Math.min(c1.top, c2.top) >= 44;
+        setBub({
+          x: Math.max(180, Math.min((c1.left + c2.right) / 2, window.innerWidth - 180)),
+          y: above ? Math.min(c1.top, c2.top) - 8 : Math.max(c1.bottom, c2.bottom) + 8,
+          above,
+        });
+      };
+      // 当前层可见行：sub 空且无 query = 根级分组；有 query = 跨组扁平搜叶项；
+      // sub 指向分组 = 该组子级。可传 mnArg 按暂态计算（syncSlashMenu 预判零匹配）
+      const menuRows = (mnArg) => {
+        const mn = mnArg ?? menuRef.current ?? { query: "", sub: null };
+        const q = (mn.query ?? "").toLowerCase();
+        if (mn.sub) {
+          const group = VAULT_MENU.find((g) => g.key === mn.sub);
+          const kids = group ? group.children : [];
+          return q === "" ? kids : kids.filter((k) => (k.labelKey + k.match).toLowerCase().includes(q));
+        }
+        if (q !== "") {
+          const out = [];
+          for (const g of VAULT_MENU) {
+            for (const k of g.children ?? [g]) {
+              if ((g.labelKey + k.labelKey + g.match + k.match).toLowerCase().includes(q)) out.push(k);
+            }
+          }
+          return out;
+        }
+        return VAULT_MENU;
+      };
+      /** 斜杠命令落地：先删掉 "/查询" 再套模板（菜单非破坏性，/ 是真实文本） */
+      const applyMenuTemplate = (item) => {
+        const h = rteRef.current;
+        if (!h) return;
+        const ed = h.editor;
+        const { $from } = ed.state.selection;
+        const textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - 80), $from.parentOffset, "\n", "\n");
+        const m = /(?:^|[\s\u3000-\u303F\uFF01-\uFF5E])\/(\S*)$/.exec(textBefore);
+        setMenu(null);
+        if (m) {
+          ed.view.dispatch(ed.view.state.tr.delete(Math.max(0, $from.pos - (m[1] ?? "").length - 1), $from.pos));
+        }
+        h.focus();
+        if (!m) return;
+        const key = item.key ?? "";
+        if (item.rows) h.insertTable(item.rows, item.cols ?? item.rows);
+        else if (key === "mathinline") h.insertMathInline();
+        else if (key === "mathblock") h.insertMathBlock();
+        else if (key === "code") h.insertCodeBlock();
+        else if (key === "hr") h.insertHr();
+        else if (key === "fold") h.insertDetails();
+        else if (key === "ul") h.toggleBullet();
+        else if (key === "ol") h.toggleOrdered();
+        else if (key === "todo") h.toggleTask();
+        else if (key === "quote") h.toggleQuote();
+        else if (key === "body") h.setParagraph();
+        else if (/^h[1-6]$/.test(key)) h.setHeading(Number(key.slice(1)));
+      };
+      const rteCmd = (fn) => {
+        const h = rteRef.current;
+        if (!h) return;
+        fn(h);
+        h.focus();
+        bubbleSync();
+      };
+      /** 泡泡按钮点亮态：TipTap isActive */
+      const bubActive = (name) => rteRef.current?.isActive(name) ?? false;
+      /** 链接（prompt 交互）：已有链接改地址（空=删除），否则包新链接 */
+      const bubLink = () =>
+        rteCmd((h) => {
+          const ed = h.editor;
+          if (ed.isActive("link")) {
+            const href = ed.getAttributes("link").href ?? "";
+            const action = window.prompt(t("vtbLinkEditPrompt"), href);
+            if (action === null) return;
+            if (action.trim() === "") h.unsetLink();
+            else h.setLink(action.trim());
+          } else {
+            const url = window.prompt(t("vtbLinkPrompt"), "https://");
+            if (url) h.setLink(url.trim());
+          }
+        });
+      const BUB_COLORS = ["#000000", "#333333", "#666666", "#999999", "#e03131", "#e8590c", "#f08c00", "#2f9e44", "#099268", "#1971c2", "#7048e8", "#d6336c"];
+      const BUB_HIGHLIGHTS = ["#fff3bf", "#ffec99", "#ffe066", "#b2f2bb", "#99e9f2", "#bac8ff", "#d0bfff", "#ffc9c9", "#ffd8a8", "#fcc2d7"];
+
+// 编辑器挂载（实例写 rteRef，文档变更防抖回写 + 自动保存，选区变化刷
+      // 泡泡/斜杠/表格态）。docKey=归属路径；docTick 变化强制重挂（外部修改重读 /
+      // 冲突回读）。自动保存钉住挂载页（docKey 局部闭包），切页后的卸载保底不会
+      // 写错路径。就绪即回调 onReady——跨页锚点落位在这里消费
       react.useEffect(() => {
         const host = rteHostRef.current;
         if (!libsReady || libsFailed || !host) return undefined;
@@ -4709,8 +5148,9 @@ ellipsis，窄列只截字不破版 */
         const cf = confRef.current;
         const opts = {
           md: initialMdRef.current ?? "",
-          // 只读：内容不可编辑，仍保留选区/命令能力（锚点落位、复制）
-          editable: false,
+          // 所见即所得：页面恒为可编辑富文本，没有只读/编辑两态
+          editable: true,
+          placeholder: cf.placeholder,
           labels: cf.labels,
         };
         if (cf.onWikiLink) opts.onWikiLink = cf.onWikiLink;
@@ -4718,9 +5158,11 @@ ellipsis，窄列只截字不破版 */
         if (cf.resolveSrc) opts.resolveSrc = cf.resolveSrc;
         const h = window.DshRTE.create(host, opts);
         rteRef.current = h;
+        pausedRef.current = false;
+        dirtyRef.current = false;
         report();
         // 阅读位置：滚动节流记录 + create 之后一拍恢复（挂载即恢复会白设——
-        // maxScroll 未建立）。docKey=归属路径，工作区 md 与知识库页同享
+        // maxScroll 未建立）。docKey=归属路径
         let posTimer = null;
         const posAnchor = () => {
           try { return h.editor.state.selection.from; } catch { return 0; }
@@ -4741,39 +5183,232 @@ ellipsis，窄列只截字不破版 */
             /* 选区失效按纯滚动恢复 */
           }
         });
-        // 只读态的选区跟随：非编辑内容上 PM 不自动吃点击选区，点哪就把选区落
-        // 到哪——面包屑与「目录」的当前项高亮才有据可依
-        const onClickSetSel = (e) => {
+        // 自动保存（2s 防抖）：改动置脏，2s 后落盘；冲突/页面已不在则暂停
+        let saveTimer = null;
+        const localAutosave = async () => {
+          if (pausedRef.current) return;
+          const hh = rteRef.current;
+          if (!hh) return;
+          const outcome = await onSaveRef.current(hh.getMd(), "auto");
+          if (outcome === "ok") dirtyRef.current = false;
+          else if (outcome !== "fail") pausedRef.current = true;
+          report();
+        };
+        const flushSave = () => {
+          if (saveTimer === null) return;
+          saveTimer = null;
+          void localAutosave();
+        };
+        const offUpdate = h.onUpdate(() => {
+          dirtyRef.current = true;
+          report();
+          clearTimeout(saveTimer);
+          saveTimer = setTimeout(flushSave, 2000);
+        });
+        // 斜杠菜单同步：光标前 /xxx（行首/空白/CJK 或全角标点后，行中也能触发）
+        // 即开/刷新菜单，前缀破坏即关。挂 update + selectionUpdate 覆盖全部输入
+        // 路径（真实键入/IME/命令改写）。边界集与 applyMenuTemplate 的删除正则
+        // 必须同源；ASCII 字母数字与 / 后不触发（URL 不捣乱）
+        const syncSlashMenu = () => {
           const ed = rteRef.current?.editor;
-          if (!ed || !(e.target instanceof Element) || !host.contains(e.target)) return;
-          try {
-            const at = ed.view.posAtCoords({ left: e.clientX, top: e.clientY });
-            if (at && typeof at.pos === "number") {
-              ed.commands.setTextSelection(at.pos);
-              report();
+          if (!ed) return;
+          const { $from } = ed.state.selection;
+          const textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - 80), $from.parentOffset, "\n", "\n");
+          const m = /(?:^|[\s\u3000-\u303F\uFF01-\uFF5E])\/(\S*)$/.exec(textBefore);
+          if (m) {
+            const q = m[1] ?? "";
+            // 查询无匹配即关：字面 "/" 打完随后出现的字符会让过滤落空，自动消失
+            // 才不纠缠（菜单非破坏性，/ 始终是真实文本）
+            if (q !== "" && menuRows({ query: q, sub: null }).length === 0) {
+              setMenu(null);
+              return;
             }
-          } catch {
-            /* 坐标落在内容外按无操作处理 */
+            const coords = ed.view.coordsAtPos($from.pos);
+            setMenu({ query: q, sub: null, x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4, at: coords?.top ?? 0 });
+          } else if (menuRef.current !== null) {
+            setMenu(null);
           }
         };
-        host.addEventListener("click", onClickSetSel);
-        // 选区跟随上报：锚点/目录跳转（vendor scrollToPos 派 selection 事务）、
-        // 点击落选区、恢复阅读位三者都会改选区——面包屑与「目录」当前项高亮靠它刷新
-        const offSelection = h.onSelectionUpdate(() => report());
-        // 就绪回调：跨页锚点落位（vaultPendingAnchor）在这里消费
-        onReadyRef.current?.();
+        const offSelection = h.onSelectionUpdate(() => {
+          bubbleSync();
+          syncSlashMenu();
+          const active = rteRef.current?.inTable() === true;
+          if (active !== inTableRef.current) {
+            inTableRef.current = active;
+            setInTableState(active);
+          }
+          report();
+        });
+        const onKeyDown = (e) => {
+          // Ctrl+S：立即落盘（toast 反馈在 onSave 的 manual 分支）
+          if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+            e.preventDefault();
+            e.stopPropagation();
+            void (async () => {
+              const hh = rteRef.current;
+              if (!hh) return;
+              const outcome = await onSaveRef.current(hh.getMd(), "manual");
+              if (outcome === "ok") {
+                dirtyRef.current = false;
+                report();
+              }
+            })();
+            return;
+          }
+          // 泡泡菜单开着时 Esc 关它（分层：先色板后泡泡），不拦编辑器的其它按键
+          if (menuRef.current === null && bubRef.current !== null && e.key === "Escape") {
+            e.stopPropagation();
+            setBubPanel(null);
+            setBub(null);
+            return;
+          }
+          if (menuRef.current !== null) {
+            const rows = menuRows();
+            const idx = rows.length === 0 ? 0 : Math.min(menuIdxRef.current, rows.length - 1);
+            const row = rows[idx];
+            if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenu(null);
+              return;
+            }
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              e.stopPropagation();
+              menuIdxRef.current = rows.length === 0
+                ? 0
+                : e.key === "ArrowDown"
+                  ? Math.min(idx + 1, rows.length - 1)
+                  : Math.max(0, idx - 1);
+              setMenuIdx(menuIdxRef.current);
+              return;
+            }
+            if (e.key === "ArrowRight" && row && row.children) {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenu({ ...menuRef.current, sub: row.key });
+              menuIdxRef.current = 0;
+              setMenuIdx(0);
+              return;
+            }
+            if (e.key === "ArrowLeft" && menuRef.current.sub) {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenu({ ...menuRef.current, sub: null });
+              menuIdxRef.current = 0;
+              setMenuIdx(0);
+              return;
+            }
+            // 数字键 1-9 直达：分类层跳进第 n 组，条目层直接应用
+            if (/^[1-9]$/.test(e.key)) {
+              const target = rows[Number(e.key) - 1];
+              if (!target) return;
+              e.preventDefault();
+              e.stopPropagation();
+              if (target.children) {
+                setMenu({ ...menuRef.current, sub: target.key });
+                menuIdxRef.current = 0;
+                setMenuIdx(0);
+              } else {
+                applyMenuTemplate(target);
+              }
+              return;
+            }
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!row) {
+                setMenu(null);
+                return;
+              }
+              if (row.children) {
+                setMenu({ ...menuRef.current, sub: row.key });
+                menuIdxRef.current = 0;
+                setMenuIdx(0);
+                return;
+              }
+              applyMenuTemplate(row);
+              return;
+            }
+          }
+        };
+        host.addEventListener("keydown", onKeyDown, true);
+        // 滚动/窗口变化跟随：泡泡/斜杠菜单都是 fixed 定位，坐标只在重定位时刷新
+        const onScrollOrResize = () => bubbleSync();
+        host.addEventListener("scroll", onScrollOrResize, true);
+        window.addEventListener("resize", onScrollOrResize);
+        // 泡泡点击外部收起：编辑器内的点击由 selectionUpdate 处理（收光标即关、
+        // 拖拽重选即跟位）；点在编辑器与泡泡之外（页条/空白/反链区）不产生选区
+        // 变化事件，泡泡会卡在原地——document 捕获阶段兜底关闭
+        const onDocMouseDown = (e) => {
+          if (bubRef.current === null) return;
+          const tEl = e.target;
+          if (!(tEl instanceof Element)) return;
+          if (tEl.closest(".dshk-vault-bubble") !== null || host.contains(tEl)) return;
+          setBubPanel(null);
+          setBub(null);
+        };
+        document.addEventListener("mousedown", onDocMouseDown, true);
         return () => {
+          clearTimeout(saveTimer);
           // 阅读位置兜底记一次（隐藏容器由 recordReadPos 自行跳过）
           if (posTimer !== null) clearTimeout(posTimer);
           host.removeEventListener("scroll", onPosScroll);
           recordReadPos(mountedKey, host, posAnchor());
-          host.removeEventListener("click", onClickSetSel);
+          // 有防抖未触发的改动 → 卸载前尽力落盘（保底；钉住挂载页路径）
+          if (!pausedRef.current && dirtyRef.current && rteRef.current) {
+            void onSaveRef.current(rteRef.current.getMd(), "auto");
+          }
+          offUpdate();
           offSelection();
+          host.removeEventListener("keydown", onKeyDown, true);
+          host.removeEventListener("scroll", onScrollOrResize, true);
+          window.removeEventListener("resize", onScrollOrResize);
+          document.removeEventListener("mousedown", onDocMouseDown, true);
+          setBub(null);
+          setBubPanel(null);
           h.destroy();
           rteRef.current = null;
         };
-        // initialMd 取挂载瞬间的盘上内容（ref），外部修改重读（docTick）才重挂
+        // initialMd 取挂载瞬间的盘上内容（ref），后续走 onUpdate 回写；
+        // 日常保存不重挂（docTick 不动），打开新页（docKey）/外部重读（docTick）才重挂
       }, [libsReady, libsFailed, docKey, docTick]);
+
+      // 控制面暴露给父层：切签 flush / Ctrl+S 语义 / 覆盖盘上 / 脏判定
+      ctlRef.current = {
+        dirty: () => dirtyRef.current,
+        flush: async () => {
+          const hh = rteRef.current;
+          if (!hh || pausedRef.current) return "fail";
+          const outcome = await onSaveRef.current(hh.getMd(), "auto");
+          if (outcome === "ok") {
+            dirtyRef.current = false;
+            report();
+          }
+          return outcome;
+        },
+        flushManual: async () => {
+          const hh = rteRef.current;
+          if (!hh) return "fail";
+          const outcome = await onSaveRef.current(hh.getMd(), "manual");
+          if (outcome === "ok") {
+            dirtyRef.current = false;
+            report();
+          }
+          return outcome;
+        },
+        overwrite: async () => {
+          const hh = rteRef.current;
+          if (!hh) return "fail";
+          const outcome = await onSaveRef.current(hh.getMd(), "overwrite");
+          if (outcome === "ok") {
+            pausedRef.current = false;
+            dirtyRef.current = false;
+            report();
+          }
+          return outcome;
+        },
+      };
 
       // 文档内链接点击：RTE 的 Link 扩展 openOnClick:false（点了不跳），相对链接
       // 不接管就等于「点了没反应」——捕获期拦下来交父层解析成文件/页再打开
@@ -4787,11 +5422,136 @@ ellipsis，窄列只截字不破版 */
         e.stopPropagation();
         cb(href, el.textContent || "");
       };
-      return jsxRuntime.jsx("div", { className: "dshk-vault-editwrap", onClickCapture: onLinkClick, children:
+      return jsxRuntime.jsxs("div", { className: "dshk-vault-editwrap", onPaste, onClickCapture: onLinkClick, children: [
         libsFailed
           ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultLibsFail") })
           : jsxRuntime.jsx("div", { className: "dshk-vault-rtehost dshk-md", ref: rteHostRef }),
-      });
+        menu !== null
+          ? jsxRuntime.jsx(
+              "div",
+              {
+                className: "dshk-vault-slashmenu",
+                // 位置自适应：默认光标下方；下方放不下翻到光标上方
+                // （再不够就贴顶滚动），横向钳在视口内。行高按当前
+                // 样式估算（叶子 30px，含容器纵向 padding）
+                style: (() => {
+                  const rowCount = menuRows({ query: menu.query ?? "", sub: menu.sub ?? null }).length;
+                  const h = Math.min(rowCount * 30 + 8, 300);
+                  const top = menu.y + h > window.innerHeight - 8
+                    ? Math.max(8, (menu.at ?? menu.y) - h - 6)
+                    : menu.y;
+                  const left = Math.max(8, Math.min(menu.x, window.innerWidth - 176));
+                  return { left, top };
+                })(),
+                children: (() => {
+                  const rows = menuRows();
+                  const group = menu.sub ? VAULT_MENU.find((g) => g.key === menu.sub) : null;
+                  const backRow = group
+                    ? jsxRuntime.jsxs("div", {
+                        className: "dshk-vault-slashback",
+                        onMouseDown: (e) => {
+                          e.preventDefault();
+                          setMenu({ ...menuRef.current, sub: null });
+                          menuIdxRef.current = 0;
+                          setMenuIdx(0);
+                        },
+                        children: ["‹ ", t(group.labelKey)],
+                      }, "back")
+                    : null;
+                  const rowsJsx = rows.length === 0
+                    ? [jsxRuntime.jsx("div", { className: "dshk-vault-slashitem", children: t("vaultSearchEmpty") }, "empty")]
+                    : rows.map((row, i) => {
+                        const isGroup = !!row.children;
+                        return jsxRuntime.jsxs(
+                          "div",
+                          {
+                            className: `dshk-vault-slashitem${i === menuIdx ? " is-active" : ""}`,
+                            onMouseDown: (e) => {
+                              e.preventDefault();
+                              if (isGroup) {
+                                setMenu({ ...menuRef.current, sub: row.key });
+                                menuIdxRef.current = 0;
+                                setMenuIdx(0);
+                              } else applyMenuTemplate(row);
+                            },
+                            children: isGroup
+                              ? [
+                                  // 分类行：序号徽章 + 组名 + ›
+                                  jsxRuntime.jsx("span", { className: "dshk-vault-slashnum", children: i + 1 }, "num"),
+                                  jsxRuntime.jsx("span", { className: "dshk-vault-slashtitle", children: t(row.labelKey) }, "title"),
+                                  jsxRuntime.jsx("span", { className: "dshk-vault-slashmore", children: "›" }, "more"),
+                                ]
+                              : [
+                                  // 条目行：图标徽章 + 标题/描述两行
+                                  jsxRuntime.jsx("span", { className: "dshk-vault-slashicon", children: row.icon }, "icon"),
+                                  jsxRuntime.jsxs("span", { className: "dshk-vault-slashtext", children: [
+                                    jsxRuntime.jsx("span", { className: "dshk-vault-slashtitle", children: t(row.labelKey) }, "title"),
+                                    jsxRuntime.jsx("span", { className: "dshk-vault-slashdesc", children: t(row.descKey) }, "desc"),
+                                  ] }, "text"),
+                                ],
+                          },
+                          (menu.sub ? menu.sub + "-" : "") + row.key,
+                        );
+                      });
+                  return [backRow, ...rowsJsx];
+                })(),
+              },
+              "slashmenu",
+            )
+          : null,
+        bub !== null
+          ? jsxRuntime.jsxs(
+              "div",
+              {
+                className: "dshk-vault-bubble",
+                style: { left: bub.x, top: bub.above ? undefined : bub.y, bottom: bub.above ? window.innerHeight - bub.y : undefined },
+                onMouseDown: (e) => e.preventDefault(),
+                children: [
+                  jsxRuntime.jsxs("div", { className: "dshk-vault-bubblebar", children: [
+                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("bold") ? " is-active" : ""}`, title: t("vtbBold"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleBold().run()), children: "B" }),
+                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("italic") ? " is-active" : ""}`, title: t("vtbItalic"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleItalic().run()), children: "I" }),
+                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("underline") ? " is-active" : ""}`, title: t("vtbUnderline"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleUnderline().run()), children: "U̲" }),
+                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("strike") ? " is-active" : ""}`, title: t("vtbStrike"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleStrike().run()), children: "S̶" }),
+                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("superscript") ? " is-active" : ""}`, title: t("vtbSup"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleSuperscript().run()), children: "x²" }),
+                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("subscript") ? " is-active" : ""}`, title: t("vtbSub"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleSubscript().run()), children: "x₂" }),
+                    jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
+                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubPanel === "tc" ? " is-active" : ""}`, title: t("vtbColor"), onClick: () => setBubPanel((p) => (p === "tc" ? null : "tc")), children: "A" }),
+                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubPanel === "hc" ? " is-active" : ""}`, title: t("vtbHighlight"), onClick: () => setBubPanel((p) => (p === "hc" ? null : "hc")), children: "▩" }),
+                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("code") ? " is-active" : ""}`, title: t("vtbCode"), onClick: () => rteCmd((h) => h.editor.chain().focus().toggleCode().run()), children: "‹›" }),
+                    jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
+                    jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("link") ? " is-active" : ""}`, title: t("vtbLink"), onClick: bubLink, children: "🔗" }),
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtbClear"), onClick: () => rteCmd((h) => h.clearFormat()), children: "⌫" }),
+                  ] }),
+                  bubPanel !== null
+                    ? jsxRuntime.jsx("div", { className: "dshk-vault-bswatchrow", children: (bubPanel === "tc" ? BUB_COLORS : BUB_HIGHLIGHTS).map((c) =>
+                        jsxRuntime.jsx("button", {
+                          type: "button",
+                          className: "dshk-vault-bswatch",
+                          style: { background: c },
+                          onClick: () => {
+                            if (bubPanel === "tc") rteCmd((h) => h.setColor(c));
+                            else rteCmd((h) => h.setHighlight(c));
+                            setBubPanel(null);
+                          },
+                        }, c),
+                      ).concat([
+                        jsxRuntime.jsx("button", {
+                          type: "button",
+                          className: "dshk-vault-bswatch-clear",
+                          onClick: () => {
+                            rteCmd((h) => (bubPanel === "tc" ? h.unsetColor() : h.unsetHighlight()));
+                            setBubPanel(null);
+                          },
+                          children: t("vtbClearColor"),
+                        }, "clear"),
+                      ]) })
+                    : null,
+                ],
+              },
+              "bubble",
+            )
+          : null,
+      ] });
     }
 
     /** 知识库索引半边（单实例，portal 进侧栏索引宿主）：工具条/目录树/搜索 +
@@ -5793,21 +6553,31 @@ ellipsis，窄列只截字不破版 */
         : null;
     }
 
-    /** 知识库单页阅读视图（一页一张签的正文）：正文加载/外部修改
-     *  静默跟随/阅读条（目录・反链・面包屑）都在这一层。没有写入——盘上变了
-     *  整页静默重读（页面由 agent 文件工具或外部编辑器维护，文件即接口）。active=false
-     *  的 pane 仍挂载（保住滚动位置与页签），只停掉 stat 轮询。 */
+    /** 知识库单页编辑视图（一页一张签的正文）：正文加载/所见即所得编辑/自动保存
+     *  /CAS 冲突/外部修改跟随/粘贴图片入库都在这一层，页条给文档级命令与阅读条
+     *  （目录・反链・面包屑）。active=false 的签仍挂载（保住滚动与草稿），只停掉
+     *  stat 轮询，并在失活那一刻把防抖未落盘的改动写掉（「切走即存」）。 */
     function VaultPagePane({ path, active, root, indexPages, onOpenPage, onIndexRefresh, toast }) {
-      // page: { loading, body(渲染入参), binary, gone }——frontmatter 拆掉不进渲染器
+      // page: { loading, body(编辑器入参), binary, gone }——frontmatter 字节级原文
+      // 存 ref（保存时原样拼回），不进 state（它不驱动渲染）
       const [page, setPage] = react.useState(null);
-      // RTE 重挂载 tick：首次加载/外部修改重读时 bump
+      // RTE 重挂载 tick：首次加载/外部修改重读/冲突回读时 bump（日常保存不重挂）
       const [docTick, setDocTick] = react.useState(0);
+      // CAS 冲突：{ diskMtime } | null —— 自动保存暂停，出冲突条（覆盖 / 读盘上）
+      const [conflict, setConflict] = react.useState(null);
+      // 表格上下文按钮随选区显隐（选区落在表格内即亮）+ 脏点（RteEditor 上报）
+      const [inTable, setInTable] = react.useState(false);
+      const [dirtyDot, setDirtyDot] = react.useState(false);
       // 阅读条：面包屑 + 页面级下拉（目录/反链，同时至多开一个）
       const [crumb, setCrumb] = react.useState("");
       const [barMenu, setBarMenu] = react.useState(null); // "toc" | "bl" | null
       const barMenuAnchorRef = react.useRef(null);
       const rteRef = react.useRef(null);
+      const rteCtlRef = react.useRef(null);
+      const fmRef = react.useRef("");
       const mtimeRef = react.useRef(0);
+      const conflictRef = react.useRef(conflict);
+      conflictRef.current = conflict;
       const pagesRef = react.useRef(indexPages);
       pagesRef.current = indexPages;
       // 引用到对话：@ 在左侧树的行上（见 VaultRootView），
@@ -5827,17 +6597,20 @@ ellipsis，窄列只截字不破版 */
         return () => document.removeEventListener("selectionchange", onSel);
       }, []);
 
-      // 拉本页内容（首次加载/外部修改共用）：拆掉 frontmatter（只读态当属性看，
-      // 不进渲染器），docTick bump 驱动重挂载对齐盘上内容
+      // 拉本页内容（首次加载/外部修改/冲突回读共用）：拆掉 frontmatter（不进渲染器，
+      // 原文存 fmRef 保存时拼回），docTick bump 驱动重挂载对齐盘上内容
       const loadCurrent = react.useCallback(async () => {
+        setConflict(null);
         try {
           const body = await kitJson(`/dsh-kit/read?path=${encodeURIComponent(path)}`);
           const raw = body.binary ? "" : (body.content ?? "");
-          const { rest } = body.binary ? { rest: "" } : vaultSplitFrontmatter(raw);
+          const { fmText, rest } = body.binary ? { fmText: "", rest: "" } : vaultSplitFrontmatter(raw);
+          fmRef.current = fmText;
           mtimeRef.current = body.mtimeMs ?? 0;
           setPage({ loading: false, body: rest.trimStart(), binary: body.binary === true, gone: false });
           setDocTick((t) => t + 1);
         } catch {
+          fmRef.current = "";
           mtimeRef.current = 0;
           setPage({ loading: false, body: "", binary: false, gone: true });
           setDocTick((t) => t + 1);
@@ -5850,13 +6623,74 @@ ellipsis，窄列只截字不破版 */
         return undefined;
       }, [loadCurrent]);
 
-      // 外部修改实时刷新：只轮询激活页（后台标签别白烧请求）。盘上变了 → 静默
-      // 重读整页 + 刷索引（agent/外部编辑器改文件零手动刷新）；文件被外部删除也重读 →
-      // 显示已消失。fetch 失败静默（尽力而为）。只读没有本地脏改，无需守卫
+      // 保存入口（RteEditor 自动保存 / Ctrl+S / 冲突覆盖都经 onSave 走到这里）。
+      // content = fmRef（frontmatter 字节级原文）+ 编辑器 md，baseMtime 用读到
+      // 那一版的 mtime；盘上不是它就回 modified → 出冲突条等用户裁决（插件不碰
+      // git，没有存档兜底，绝不静默覆盖）；文件已不在回 missing → 丢弃这次写，
+      // 否则改名/删除后的兜底保存会把旧路径的页写活回来。
+      // outcome: ok | conflict | gone | fail
+      const saveVaultPage = react.useCallback(
+        async (bodyMd, mode = "auto") => {
+          const content = fmRef.current + bodyMd;
+          const base = mode === "overwrite" ? (conflictRef.current?.diskMtime ?? mtimeRef.current) : mtimeRef.current;
+          try {
+            const body = await kitJson("/dsh-kit/vault/write", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ path, content, baseMtime: base }),
+            });
+            if (body.missing === true) {
+              setPage({ loading: false, body: "", binary: false, gone: true });
+              toast(t("vaultPageGone"));
+              return "gone";
+            }
+            if (body.modified === true) {
+              setConflict({ diskMtime: body.mtimeMs ?? 0 });
+              toast(t("vaultSaveConflict"));
+              return "conflict";
+            }
+            setConflict(null);
+            mtimeRef.current = body.mtimeMs ?? mtimeRef.current;
+            if (mode === "manual") {
+              toast(t("vaultSaved"));
+              onIndexRefresh();
+            }
+            return "ok";
+          } catch (error) {
+            toast(t("vaultSaveFail").replace("{error}", String(error?.message ?? error)));
+            return "fail";
+          }
+        },
+        [path, onIndexRefresh, toast],
+      );
+      // 冲突条按钮经它调，闭包永远新鲜
+      const saveEditRef = react.useRef(null);
+      saveEditRef.current = {
+        overwrite: async () => (rteCtlRef.current ? rteCtlRef.current.overwrite() : "fail"),
+        reload: () => loadCurrent(),
+      };
+      // 切走即存：激活位从 true 落到 false 的那一刻把防抖未触发的改动落盘（冲突中
+      // 不动——静默覆盖盘上内容比丢一次自动保存糟得多，等用户切回来处理冲突条）。
+      // 用“上一帧激活位”判边沿：写进 effect 清理函数会张冠李戴（清理属于上一次
+      // 渲染，激活→失活时清的是「激活那帧」的空清理，等于永不触发）
+      const wasActiveRef = react.useRef(active);
+      react.useEffect(() => {
+        const was = wasActiveRef.current;
+        wasActiveRef.current = active;
+        if (!was || active) return;
+        if (conflictRef.current !== null) return;
+        if (rteCtlRef.current && rteCtlRef.current.dirty()) void rteCtlRef.current.flush();
+      }, [active]);
+
+      // 外部修改实时刷新：只轮询激活页（后台签别白烧请求）。盘上变了且本地无脏改、
+      // 无冲突 → 静默重读整页 + 刷索引（agent/外部编辑器改文件零手动刷新）；有脏改
+      // 时不动，交给保存时的 CAS 冲突条。文件被外部删除也重读 → 显示已消失。
+      // fetch 失败静默（尽力而为）
       react.useEffect(() => {
         if (!active) return undefined;
         const timer = setInterval(() => {
           if (document.visibilityState === "hidden") return;
+          if (conflictRef.current !== null || (rteCtlRef.current && rteCtlRef.current.dirty())) return;
           void kitJson(`/dsh-kit/vault/stat?path=${encodeURIComponent(path)}`)
             .then((body) => {
               if (typeof body.mtimeMs === "number" && Math.abs(body.mtimeMs - mtimeRef.current) < 1) return;
@@ -5867,6 +6701,30 @@ ellipsis，窄列只截字不破版 */
         }, 4000);
         return () => clearInterval(timer);
       }, [active, path, loadCurrent, onIndexRefresh]);
+
+      /** 编辑态粘贴图片：浏览器侧先按阈值压缩 → POST /dsh-kit/vault/attach 进
+       *  attachments/（内容寻址，同内容不重写）→ 光标处插图片节点 */
+      const onEditPaste = (e) => {
+        const files = Array.from(e.clipboardData?.files ?? []).filter((f) => /^image\//i.test(f.type));
+        if (files.length === 0) return;
+        e.preventDefault();
+        void (async () => {
+          for (const f of files) {
+            try {
+              const img = await shrinkPastedImage(f);
+              const body = await kitJson("/dsh-kit/vault/attach", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ dataBase64: await blobToBase64(img.blob), fileName: `paste.${img.ext}` }),
+              });
+              if (typeof body.rel !== "string" || body.rel === "") throw new Error("no rel");
+              rteRef.current?.insertImage(body.rel, f.name || "");
+            } catch {
+              toast(t("vaultAttachFail"));
+            }
+          }
+        })();
+      };
 
       /** RTE 版标题锚滚动：vendor 按标题文本 slug 匹配，锚线摆位 + 装饰闪烁 */
       const scrollAnchorRte = (anchorRaw) => {
@@ -5949,9 +6807,39 @@ ellipsis，窄列只截字不破版 */
               ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultBinaryHint") })
               : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
                   jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
-                    // 阅读条 sticky：长文滚到哪儿都够得到——目录/反链是页面级入口
-                    // （「谁提到这一页」「本文有什么小节」），吊在页尾的老反链区
-                    // 就是够不到才撤掉的。空了按钮留原位置灰，别忽长忽短
+                    // 页条 = 文档级命令 + 阅读条（sticky）：撤销/重做、选区落在表内
+                    // 才亮的表格行列表、未保存脏点；右端仍是目录/反链两个页面级
+                    // 入口（长文滚到哪儿都够得到——吊在页尾的老反链区就是够不到
+                    // 才撤掉的）。空了按钮留原位置灰，别忽长忽短
+                    jsxRuntime.jsx(KitTip, {
+                      label: t("vtbUndo"),
+                      children: jsxRuntime.jsx("button", {
+                        type: "button",
+                        className: "dshk-vault-tbtn",
+                        onClick: () => rteRef.current?.undo(),
+                        children: "↶",
+                      }),
+                    }),
+                    jsxRuntime.jsx(KitTip, {
+                      label: t("vtbRedo"),
+                      children: jsxRuntime.jsx("button", {
+                        type: "button",
+                        className: "dshk-vault-tbtn",
+                        onClick: () => rteRef.current?.redo(),
+                        children: "↷",
+                      }),
+                    }),
+                    inTable
+                      ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                          jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableAddRow"), onClick: () => rteRef.current?.tableAddRow(true), children: "＋行" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableAddCol"), onClick: () => rteRef.current?.tableAddCol(true), children: "＋列" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDelRow"), onClick: () => rteRef.current?.tableDeleteRow(), children: "－行" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDelCol"), onClick: () => rteRef.current?.tableDeleteCol(), children: "－列" }),
+                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDel"), onClick: () => rteRef.current?.tableDelete(), children: "✕表" }),
+                        ] })
+                      : null,
+                    dirtyDot ? jsxRuntime.jsx("span", { className: "dshk-vault-dirtydot", title: t("vaultUnsaved"), children: "●" }) : null,
                     jsxRuntime.jsx(KitTip, {
                       label: outline !== null && outline.items.length === 0 ? t("vaultTocEmpty") : t("vaultToc"),
                       children: jsxRuntime.jsx("button", {
@@ -5974,11 +6862,21 @@ ellipsis，窄列只截字不破版 */
                       }),
                     }),
                   ] }),
+                  // CAS 冲突条：盘上被改而自动保存已暂停，由人裁决（覆盖 / 读盘上）
+                  conflict !== null
+                    ? jsxRuntime.jsxs("div", { className: "dshk-vault-conflict", children: [
+                        jsxRuntime.jsx("span", { children: `⚠ ${t("vaultSaveConflict")}` }),
+                        jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => void saveEditRef.current.overwrite(), children: t("vaultSaveConflictOverwrite") }),
+                        jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => saveEditRef.current.reload(), children: t("vaultSaveConflictReload") }),
+                      ] }, "conflict")
+                    : null,
                   jsxRuntime.jsx(RteEditor, {
                     rteRef,
+                    ctlRef: rteCtlRef,
                     docKey: path,
                     docTick,
                     initialMd: page.body ?? "",
+                    placeholder: t("rtePlaceholder"),
                     labels: { codeCopy: t("vaultCopy"), codeCopied: t("vaultCopied") },
                     onReady: onRteReady,
                     onWikiLink: (target, anchor) => {
@@ -6008,8 +6906,12 @@ ellipsis，窄列只截字不破版 */
                       if (target && /\.md$/i.test(target) && isPathInsideVaultRoot(root, target)) onOpenPage(target);
                     },
                     onState: (s) => {
+                      setDirtyDot(s.dirty === true);
+                      setInTable(s.inTable === true);
                       setCrumb(typeof s.crumb === "string" ? s.crumb : "");
                     },
+                    onSave: saveVaultPage,
+                    onPaste: onEditPaste,
                   }),
                   barMenu !== null && barRect !== null
                     ? jsxRuntime.jsx(

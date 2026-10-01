@@ -17,6 +17,8 @@
 //   GET  /dsh-kit/vault/stat        —— 单页 mtime（外部修改轮询）
 //   GET  /dsh-kit/vault/search      —— 全文搜索
 //   POST /dsh-kit/vault/create|rename|move|import|delete —— 目录级文件管理
+//   POST /dsh-kit/vault/write  —— 正文写回（mtime CAS，不符回 modified）
+//   POST /dsh-kit/vault/attach —— 编辑面粘贴的图片进 attachments/（内容寻址）
 //   GET  /dsh-kit/schedule/data     —— 事件 + 区间展开 + 独立计时段
 //   GET  /dsh-kit/schedule/stats    —— 统计
 // 知识库端点未配置 / 根不存在时回 400 vault-not-configured（前端渲染引导）。
@@ -25,7 +27,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { loadDep, loadToolsModule, sameOrigin } from "../core/index.js";
 import { VaultScanner, defaultVaultRoot } from "./scanner.js";
-import { createEntry, renameEntry, moveEntry, importEntry, deleteEntries, parseConflict } from "./fs.js";
+import { createEntry, renameEntry, moveEntry, importEntry, deleteEntries, parseConflict, writePage, storeAttachment, } from "./fs.js";
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from "./schedule.js";
 import { kitLogger } from "../core/log.js";
 const log = kitLogger('vault');
@@ -155,8 +157,8 @@ export async function apply(ctx, config = {}) {
             }));
             // ── 知识库（./scanner.ts + ./fs.ts）──
             // vaultRoot 是配置页配置的绝对目录，在工作区外；读端点出索引 / 单页 mtime /
-            // 全文搜索，写端点只管目录级文件管理。页面正文的写入仍归 agent 文件工具与
-            // 外部编辑器。根未配置 / 不存在时回 400 vault-not-configured。
+            // 全文搜索，写端点是目录级文件管理 + 编辑面的正文写回（见下）。根未配置 /
+            // 不存在时回 400 vault-not-configured。
             const disposeVault = [];
             const vaultRoute = (path, handler) => {
                 disposeVault.push(route(path, handler));
@@ -283,6 +285,18 @@ export async function apply(ctx, config = {}) {
                 const paths = Array.isArray(body.paths) ? body.paths : [];
                 return deleteEntries(root, paths);
             });
+            // ── 编辑面写端点（./fs.ts）──
+            //   write：mtime CAS——盘上不是前端读过的那一版就回 modified，前端出冲突条由人
+            //   裁决（覆盖 / 读盘上），插件不静默覆盖也不存档（不碰 git，见知识库页）；
+            //   文件已不在回 missing，那次写丢弃（改名 / 删除后卸载兜底不写活旧页）。
+            //   attach：粘贴图片内容寻址落 attachments/，同内容复用不重写。
+            vaultPost('/dsh-kit/vault/write', (body, root) => writePage(root, String(body.path ?? ''), body.content, body.baseMtime), 2 * 1024 * 1024);
+            vaultPost('/dsh-kit/vault/attach', (body, root) => {
+                const data = typeof body.dataBase64 === 'string' && body.dataBase64 !== '' ? Buffer.from(body.dataBase64, 'base64') : null;
+                if (data === null)
+                    throw new Error('缺少图片内容');
+                return storeAttachment(root, data, typeof body.fileName === 'string' ? body.fileName : '');
+            }, 32 * 1024 * 1024);
             return () => {
                 disposeConfig();
                 for (const dispose of disposeSchedule)
