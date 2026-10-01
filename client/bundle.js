@@ -144,6 +144,26 @@ window.__ModuleLoader__.load({
       }, 1600);
     }
 
+    /** 全局事件只挂一次。
+     *
+     *  apply 不是只跑一次：配置热提交、插件热更新都会让它重入。裸 addEventListener
+     *  在 apply 里挂 document/window 监听，重入一次就多一个监听器——点一次链接被
+     *  处理 N 次、开出 N 张标签页，而且页面越用越糟。注册表挂在目标对象上：重复
+     *  调用只换实现（避免旧版本的 handler 赖着不走），不再加监听器。
+     *  key 是调用点自己取的（同一事件类型上可能挂多个不同用途的监听器）。
+     */
+    function hookGlobal(target, key, type, handler, options) {
+      const table = (target.__dshkHooks ??= {});
+      const prev = table[key];
+      if (prev) {
+        prev.handler = handler;
+        return;
+      }
+      const entry = { handler };
+      table[key] = entry;
+      target.addEventListener(type, (ev) => entry.handler(ev), options);
+    }
+
     /** 写剪贴板：优先 Clipboard API；手机经局域网 http 访问时无安全上下文，退 execCommand */
     function writeClipboard(text) {
       const fallback = () => {
@@ -231,13 +251,13 @@ window.__ModuleLoader__.load({
     // 级别由宿主侧的 DSH_KIT_LOG 统一裁剪，页面这边不另设开关。
     if (typeof window !== "undefined") {
       const boot = kitLogger("client");
-      window.addEventListener("error", (event) => {
+      hookGlobal(window, "kitLogError", "error", (event) => {
         boot.error(event.message || "未捕获异常", {
           source: event.filename + ":" + event.lineno + ":" + event.colno,
           stack: String(event.error?.stack ?? "").slice(0, 600),
         });
       });
-      window.addEventListener("unhandledrejection", (event) => {
+      hookGlobal(window, "kitLogRejection", "unhandledrejection", (event) => {
         const reason = event.reason;
         boot.error("未处理的 Promise 拒绝", {
           reason: String(reason?.message ?? reason ?? "").slice(0, 300),
@@ -246,10 +266,10 @@ window.__ModuleLoader__.load({
       });
       // 攒批靠 setTimeout，而后台标签页的定时器会被节流到分钟级、直接关页则永远发不出去，
       // 所以页面隐藏/关闭时立刻冲刷
-      document.addEventListener("visibilitychange", () => {
+      hookGlobal(document, "kitLogVisibility", "visibilitychange", () => {
         if (document.visibilityState === "hidden") kitFlushLog();
       });
-      window.addEventListener("pagehide", kitFlushLog);
+      hookGlobal(window, "kitLogPagehide", "pagehide", kitFlushLog);
     }
 
     /** GET /dsh-kit/*，按 validate 校验回包形状（形状不符 = 失败，不当半个成功）；
@@ -857,6 +877,7 @@ window.__ModuleLoader__.load({
     exports.KitTip = KitTip;
     exports.attachShortcutCatalog = attachShortcutCatalog;
     exports.writeClipboard = writeClipboard;
+    exports.hookGlobal = hookGlobal;
     exports.kitGetJson = kitGetJson;
     exports.kitWsUrl = kitWsUrl;
     exports.kitPostJson = kitPostJson;
@@ -3143,7 +3164,7 @@ ellipsis，窄列只截字不破版 */
         registerRightbar(ctx);
       }
       // 导航图标替换是点击驱动的轻量方案：打开设置/面板内切换都源于一次 click
-      document.addEventListener("click", scheduleNavIconSwap, true);
+      dock.hookGlobal(document, "navIconSwap", "click", scheduleNavIconSwap, true);
       // 官方文件预览头部的下载按钮：预览根 mount（loading→text 整根重建）与路径
       // title 变化（meta 后到才补成绝对路径）都要接住，全走同一防抖扫描
       if (typeof MutationObserver !== "undefined" && document.documentElement) {
@@ -6273,7 +6294,7 @@ ellipsis，窄列只截字不破版 */
       // 右栏两张签 + pane 正文
       ctx.inject(["sidebarRightTabs"], registerRightbar);
       // 对话文件点击的知识库路由（vault 内路径改道知识库标签，其余放行官方）
-      document.addEventListener("click", onChatOpenFileClick, true);
+      dock.hookGlobal(document, "chatOpenFile", "click", onChatOpenFileClick, true);
       // 官方快捷键服务：知识库索引开合
       ctx.inject(["shortcuts"], registerShortcuts);
       // 配置页挂本组件行：槽位 key = <包名>#<行id>（宿主按精确 key 匹配本行）
@@ -11992,7 +12013,7 @@ body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{displ
         ctx.slots.register({ name: "shell.overlay", id: "dsh-kit-browser", order: 920 }, BrowserShell),
       );
       // 对话链接改投内置浏览器（默认开：配置页 chatOpenLinkInBrowser）
-      document.addEventListener("click", onChatLinkClick, true);
+      dock.hookGlobal(document, "chatLink", "click", onChatLinkClick, true);
       // 配置页挂本组件行：槽位 key = <包名>#<行id>（宿主按精确 key 匹配本行）
       ctx.slots.inject("plugins.row.config", () =>
         ctx.slots.register({ name: "plugins.row.config", key: "dsh-kit#browser" }, BrowserConfigPage),

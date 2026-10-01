@@ -80,7 +80,9 @@ if (!global.document) {
   // createElement/appendChild：flashToast 会建一个提示元素（关闭/结束失败时走这里）
   global.document = {
     visibilityState: "visible",
-    addEventListener: () => {},
+    // 记下挂过的监听器：hookGlobal 的幂等性要靠它数（apply 重入不得叠加监听器）
+    __listeners: [],
+    addEventListener: (type, fn, opts) => { global.document.__listeners.push({ type, fn, capture: !!(opts && opts.capture) }); },
     removeEventListener: () => {},
     createElement: () => ({ className: "", textContent: "", setAttribute: () => {}, removeAttribute: () => {}, remove: () => {}, style: {} }),
     head: { appendChild: () => {} },
@@ -127,6 +129,26 @@ const baseOk = [comps.kitGetJson, comps.kitPostJson, comps.kitJson, comps.flashT
 );
 console.log((baseOk ? "PASS  " : "FAIL  ") + "底座共享面齐全（kit 三件套/轻提示/剪贴板/mainRowOf/createConfigPage/kitUi/locale store/官方气泡与键位镜像）");
 if (!baseOk) process.exitCode = 1;
+
+// 全局监听幂等：apply 会因配置热提交 / 插件热更新重入，裸 addEventListener 会一次次
+// 叠加（点一次链接开 N 张标签页就是这么来的）。hookGlobal 重入只换实现、不再挂。
+{
+  const doc = global.document;
+  const before = doc.__listeners.length;
+  let first = 0;
+  let second = 0;
+  comps.hookGlobal(doc, "probe", "click", () => { first += 1; }, true);
+  const afterFirst = doc.__listeners.length - before;
+  comps.hookGlobal(doc, "probe", "click", () => { second += 1; }, true);
+  comps.hookGlobal(doc, "probe", "click", () => { second += 1; }, true);
+  const afterRepeat = doc.__listeners.length - before;
+  const installed = doc.__listeners[doc.__listeners.length - 1];
+  installed.fn({ type: "click" });
+  // 调一次只应命中**当前**实现：旧实现被换掉，不会各跑一遍
+  const ok = afterFirst === 1 && afterRepeat === 1 && first === 0 && second === 1;
+  console.log((ok ? "PASS  " : "FAIL  ") + `hookGlobal 重入不叠加监听器（挂 ${afterFirst} 个 / 重入 3 次后共 ${afterRepeat} 个，旧实现已被替换）`);
+  if (!ok) process.exitCode = 1;
+}
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
 const names = ["VaultEntry", "KitSurfaces", "TreeRowMenu", "RteEditor", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksCard", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
