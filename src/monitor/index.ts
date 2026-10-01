@@ -46,7 +46,7 @@ export const Config =
         monitorRepeatThreshold: z.number().step(1).min(2).max(10).default(3).volatile(),
         // 会话通知（纯浏览器端消费，宿主不读）：回合收尾、上下文压缩完成或 agent 提问时，
         // 若页面不在前台（或事件不属于当前打开的会话）弹桌面通知——浏览器 Notification
-        // API，未授权时退标题闪烁。收尾按 turn/end 的 reason 分类（完成/出错/中止/
+        // API，未授权就不发（不再退回标题闪烁）。收尾按 turn/end 的 reason 分类（完成/出错/中止/
         // 卡住/撞上限各有文案）。一个总开关管全部提醒，不分类配置。
         notifyEnabled: z.boolean().default(true).volatile(),
       })

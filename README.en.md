@@ -116,8 +116,8 @@ and take no component slot).
   stopped — instead of always reporting "finished"; compaction alerts cover sessions you
   have opened (the official
   client loads history only for the current session, so a never-opened session's
-  compaction is invisible). Permission is requested from the settings card (without it an
-  unread count is shown in the tab title instead)
+  compaction is invisible). Notifications go through the browser Notification API; without
+   permission no notification is shown (allow it in the site settings)
 - **Shortcuts**: four commands (terminal / file tree / source control / knowledge base) are
   registered with the **host's shortcut page** (Ctrl+/) — pressing keys to record, conflict
   marking, per-device defaults and persistence all belong to the host; both sidebars toggle with
@@ -127,6 +127,14 @@ and take no component slot).
   and toolbars point down, the bottom dock and the composer row point up, row-end buttons align end;
   commands carry their current keys and follow rebinding) — plain truncation hints keep the native
   `title`
+- **Diagnostics log** (no switch, always on): host-side and browser-side logs land in one file,
+  `<DSH_HOME>/dsh-kit/logs/kit.log` (rotating, 2MB × 5), one event per line — time, level,
+  component, **the operation in flight**, message and fields. The line carrying an error already
+  names the operation it happened in, and the lines before it are what the plugin was doing
+  just before. Uncaught exceptions and failed requests on the page side go into the same file,
+  so blank panes and dead buttons leave a trace too. Default level `info`; `DSH_KIT_LOG`
+  tunes it (`off`/`error`/`warn`/`info`/`debug`). Read it with `pnpm logs` in the repo
+  (`--err` shows only failures with the lines leading up to them).
 - **Config pages**: component rows that take settings each carry their own config page in the
   Plugins page — the **phone-access row** covers the outward port, remote domain and
   keep-gateway-on (row switch = master switch); the **knowledge base · schedule row**
@@ -191,7 +199,7 @@ the WebSocket base the host injects).
 - `src/core`, `src/files`, `src/skills`, `src/terminal`, `src/monitor`, `src/browser`,
   `src/vault`, `src/phone`: component boundaries as directories (0.5.3 single-package components — a component is a patch
   row, not a package) — `core` is the host shared library (same-origin check, recycle-bin
-  delete, text decoding, session-header injection, dsh-tools loading);
+  delete, text decoding, session-header injection, dsh-tools loading, logging);
   `files` serves tree/read/raw/fs-op/
   git endpoints + file tree and source control panels; `skills` serves `/dsh-kit/skills` and
   `/dsh-kit/skills/op` plus the `/dsh-kit-skills/config` probe (skill-pool manager page);
