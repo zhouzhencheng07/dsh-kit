@@ -344,18 +344,18 @@ test('summary：日汇总含事件行与待办行，空时段有兜底句', () =
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('不做计时：计时器的 timer.json 不读不写，条目删除不牵动它', () => {
+test('计时：timer.json 是真源（读它；删掉挂着的那条，表随之退场）', () => {
   const dir = tmp()
   const sched = path.join(dir, 'sched')
-  const timerRaw = JSON.stringify({ id: 'e1', start: '2026-09-08T09:00:00' })
   fs.mkdirSync(path.join(sched, 'events'), { recursive: true })
-  fs.writeFileSync(path.join(sched, 'timer.json'), timerRaw, 'utf8')
+  fs.writeFileSync(path.join(sched, 'timer.json'), JSON.stringify({ id: 'e1', start: '2026-09-08T09:00:00' }), 'utf8')
   writeEvent(dir, 'sched', { id: 'e1', title: '被计时的', due: '2026-09-08' })
   const store = new ScheduleStore(sched)
   assert.equal(store.list().length, 1)
+  assert.equal(store.getRunningTimer().title, '被计时的')
   store.remove('e1')
   assert.equal(store.list().length, 0)
-  assert.equal(fs.readFileSync(path.join(sched, 'timer.json'), 'utf8'), timerRaw)
+  assert.equal(fs.existsSync(path.join(sched, 'timer.json')), false)
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
@@ -752,6 +752,133 @@ test('标题统一上限 16 字（面板/agent 工具同一口径，细节让位
   const up = store.create({ title: 'x' })
   store.update(up.id, { title: long })
   assert.equal(store.list().find((e) => e.id === up.id).title.length, 16)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('setDone：勾选写完成时刻、取消清掉，事件文件即真源', () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'sched'))
+  const todo = store.create({ title: '交报告' })
+  const done = store.setDone(todo.id, true)
+  assert.equal(typeof done.completedAt, 'string')
+  const reread = JSON.parse(fs.readFileSync(path.join(dir, 'sched', 'events', `${todo.id}.json`), 'utf8'))
+  assert.equal(reread.completedAt, done.completedAt)
+  const back = store.setDone(todo.id, false)
+  assert.equal(back.completedAt, undefined)
+  assert.equal(store.setDone('nope', true), null)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('计时：挂条目的段落进 timeEntries，timer.json 记进行中的表', () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'sched'))
+  const todo = store.create({ title: '写方案' })
+  const running = store.startTimer(todo.id, null)
+  assert.equal(running.id, todo.id)
+  assert.match(running.start, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)
+  // 进行中的段 end 缺省；标题跟条目走，不进 timer.json（那里只有 id 与起表时刻）
+  const ev = store.list().find((e) => e.id === todo.id)
+  assert.equal(ev.timeEntries.length, 1)
+  assert.equal(ev.timeEntries[0].end, undefined)
+  const onDisk = JSON.parse(fs.readFileSync(path.join(dir, 'sched', 'timer.json'), 'utf8'))
+  assert.deepEqual(Object.keys(onDisk).sort(), ['id', 'start'])
+  assert.equal(store.getRunningTimer().title, '写方案')
+  assert.equal(store.stopTimer(), true)
+  const closed = store.list().find((e) => e.id === todo.id).timeEntries[0]
+  assert.equal(typeof closed.end, 'string')
+  assert.equal(fs.existsSync(path.join(dir, 'sched', 'timer.json')), false)
+  assert.equal(store.getRunningTimer(), null)
+  assert.equal(store.stopTimer(), false)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('计时：独立段落 entries/<id>.json（带标题），且必须有名目', () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'sched'))
+  const running = store.startTimer(null, '  读论文  ')
+  assert.equal(running.id, '')
+  assert.equal(running.title, '读论文')
+  // 标题上限与日程标题同口径（网格上它就是这段的标题）
+  assert.equal(store.startTimer(null, 'x'.repeat(50)).title.length, 16)
+  assert.equal(store.stopTimer(), true)
+  const entries = store.listOrphans()
+  assert.equal(entries.length, 2)
+  assert.equal(entries[0].note, '读论文')
+  const file = path.join(dir, 'sched', 'entries', `${entries[0].id}.json`)
+  assert.equal(fs.existsSync(file), true)
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).start, running.start)
+  assert.throws(() => store.startTimer(null, '   '), /独立计时需要标题/)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('计时：起新表先闭合在跑的那只（全局单实例）', () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'sched'))
+  const a = store.create({ title: '甲' })
+  const b = store.create({ title: '乙' })
+  store.startTimer(a.id, null)
+  store.startTimer(b.id, null)
+  const first = store.list().find((e) => e.id === a.id).timeEntries[0]
+  assert.equal(typeof first.end, 'string')
+  assert.equal(store.getRunningTimer().id, b.id)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('计时状态从盘面读：别处（同步 / 另一个客户端）写下的 timer.json 本端立刻可见', () => {
+  const dir = tmp()
+  const schedDir = path.join(dir, 'sched')
+  const store = new ScheduleStore(schedDir)
+  const todo = store.create({ title: '跨端计时' })
+  fs.writeFileSync(path.join(schedDir, 'timer.json'), JSON.stringify({ id: todo.id, start: '2026-10-02T09:00:00' }), 'utf8')
+  assert.equal(store.getRunningTimer().id, todo.id)
+  // 坏内容当空闲，但不挪走别人的活文件
+  fs.writeFileSync(path.join(schedDir, 'timer.json'), '{ 坏内容', 'utf8')
+  assert.equal(store.getRunningTimer(), null)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('删除挂着计时的条目：那只表随之退场（段不会挂在不存在的条目上）', () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'sched'))
+  const todo = store.create({ title: '删掉' })
+  store.startTimer(todo.id, null)
+  assert.equal(store.remove(todo.id), true)
+  assert.equal(store.getRunningTimer(), null)
+  assert.equal(fs.existsSync(path.join(dir, 'sched', 'timer.json')), false)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('计时段编辑：改时刻与备注、非法时刻与进行中段一律拒绝、删除落盘', () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'sched'))
+  const todo = store.create({ title: '复习' })
+  store.startTimer(todo.id, null)
+  // 进行中的段改不动也删不掉（先停表）
+  assert.equal(store.entryUpdate(todo.id, 0, { note: '偷跑' }), null)
+  assert.equal(store.entryDelete(todo.id, 0), false)
+  store.stopTimer()
+
+  const ok = store.entryUpdate(todo.id, 0, { start: '2026-10-01T08:00', end: '2026-10-01T09:30', note: '  第一章  ' })
+  assert.equal(ok.start, '2026-10-01T08:00')
+  assert.equal(ok.end, '2026-10-01T09:30')
+  assert.equal(ok.note, '第一章')
+  // 给了非法时刻就是拒绝：静默忽略会让用户以为改掉了
+  assert.equal(store.entryUpdate(todo.id, 0, { start: '2026-10-01 08:00' }), null)
+  assert.equal(store.entryUpdate(todo.id, 0, { end: '2026-10-01T07:00' }), null)
+  assert.equal(store.entryUpdate(todo.id, 9, { end: '2026-10-01T07:00' }), null)
+  // 备注清空 = 删键
+  assert.equal(store.entryUpdate(todo.id, 0, { note: '  ' }).note, undefined)
+  assert.equal(store.entryDelete(todo.id, 0), true)
+  assert.equal(store.list().find((e) => e.id === todo.id).timeEntries.length, 0)
+
+  // 独立段：owner 空、note 上限 16 字、删除要删文件
+  store.startTimer(null, '读文献')
+  store.stopTimer()
+  const entry = store.listOrphans()[0]
+  const file = path.join(dir, 'sched', 'entries', `${entry.id}.json`)
+  assert.equal(store.entryUpdate(null, 0, { note: 'y'.repeat(30) }).note.length, 16)
+  assert.equal(store.entryDelete(null, 0), true)
+  assert.equal(fs.existsSync(file), false)
   fs.rmSync(dir, { recursive: true, force: true })
 })
 

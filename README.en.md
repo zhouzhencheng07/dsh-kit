@@ -83,9 +83,17 @@ and take no component slot).
   the weekly grid fills the right dock tab; its header stats follow the week you are looking at
   (a failed fetch says so instead of quietly showing stale numbers); the all-day band holds
   date-only tasks, stacked one per row per day, with out-of-week ones on Monday; block colors
-  encode state only (upcoming orange / running green / past blue / overdue red); the agent gets
-  `schedule_query`, `schedule_create`, `schedule_update` and `schedule_delete`; data is stored
-  one-entry-per-file under `$DSH_HOME/dsh-kit/schedule/` (`events/` + `entries/`); entries written
+  encode state only (upcoming orange / running green / past blue / overdue red);
+  **the panel edits**: tick a row done, click its title to edit the item (repeat rule, location and
+  notes included), click a grid block to edit it (event blocks edit the item, time-segment blocks
+  edit that segment), and "New" at the top of the cell creates a task or an event; **timing is one
+  global timer**: "Start timer" in the schedule cell attaches an unfinished task or takes a title for
+  a standalone run, the floating ball at the bottom right keeps the seconds and stops it (it stays
+  up with every panel closed), and closed segments land on the grid and in the stats; the agent gets
+  `schedule_query`, `schedule_create`, `schedule_update` and `schedule_delete` over the same store
+  the panel writes to; data is stored
+  one-entry-per-file under `$DSH_HOME/dsh-kit/schedule/` (`events/` + `entries/` + `timer.json`);
+  entries written
   by other programs show up in the panel, and agent updates merge by id instead of overwriting
   what someone else changed
 - **Built-in browser** (right-dock tabs, **one page per tab** — the title is the page title and

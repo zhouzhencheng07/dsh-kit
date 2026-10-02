@@ -115,10 +115,13 @@ const harness = new Function("require", wrapper);
 const reactDomStub = {
   createPortal: (children, container, key) => { callLog.push(["portal", children, container, key]); return { type: "portal", props: { children, container, key }, $$dshk: "portal" }; },
 };
+// 计时悬浮球挂的是全局根（不进槽位），走 react-dom/client 的 createRoot
+const reactDomClientStub = { createRoot: () => ({ render: () => {} }) };
 const comps = harness((name) => {
   if (name === "react") return reactStub;
   if (name === "react/jsx-runtime") return jsxRuntimeStub;
   if (name === "react-dom") return reactDomStub;
+  if (name === "react-dom/client") return reactDomClientStub;
   if (name === "@deepseek-ai/dsh-client-ui-primitives") return primStub;
   throw new Error("unexpected require: " + name);
 });
@@ -264,20 +267,32 @@ try { comps.closeRightbarTab("file"); } catch { rbCloseOk = false; }
 check("closeRightbarTab 服务未就绪时静默不抛", rbCloseOk);
 callLog = [];
 out = comps.ScheduleTasksPanel({});
-const taskChecks = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].type === "checkbox");
-const timerBtns = callLog.filter((c) => c[2] && c[2].className === "dshk-sched-tasktimer");
 const scopeChips = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-sched-wdchip"));
+const barBtns = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-sched-actionbtn"));
 check("ScheduleTasksPanel 渲染清单壳（标题带行数 + 近三日/近一周/全部三档）", !!out && scopeChips.length === 3);
-check("ScheduleTasksPanel 只读行：无勾选框、无计时钮", taskChecks.length === 0 && timerBtns.length === 0);
-// 预置 useScheduleData 的数据槽（0）让清单真出行：标题 + 截止徽章
+check("计时入口在侧栏日程 tab 顶部（新建 + 开始计时两枚）", barBtns.length === 2);
+// 预置 useScheduleData 的数据槽（0）让清单真出行：标题 + 截止徽章 + 行尾动作
 stateSeq = 0;
 stateStore.clear();
-stateStore.set(0, { events: [{ id: "t1", title: "交报告", due: "2026-09-10" }], occurrences: [], orphans: [] });
+stateStore.set(0, { events: [{ id: "t1", title: "交报告", due: "2026-09-10" }], occurrences: [], orphans: [], runningTimer: null });
 callLog = [];
 out = comps.ScheduleTasksPanel({});
 const taskRows = callLog.filter((c) => c[2] && c[2].className === "dshk-sched-task");
 const rowBadges = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-sched-taskduebadge"));
+const taskChecks = callLog.filter((c) => c[2] && c[2].type === "checkbox");
+const timerBtns = callLog.filter((c) => c[2] && c[2].className === "dshk-sched-tasktimer");
+const rowActs = callLog.filter((c) => c[2] && c[2].className === "dshk-sched-taskact");
 check("ScheduleTasksPanel 出行：待办一行 + 右端截止徽章", taskRows.length === 1 && rowBadges.length === 1);
+check("清单行可写：行首完成勾选 + 行尾计时 / 编辑 / 删除", taskChecks.length === 1 && timerBtns.length === 1 && rowActs.length === 2);
+// 计时中：顶部退成状态（走秒与停表在悬浮球），行上那枚钮变成停表
+stateSeq = 0;
+stateStore.clear();
+stateStore.set(0, { events: [{ id: "t1", title: "交报告", due: "2026-09-10" }], occurrences: [], orphans: [], runningTimer: { id: "t1", start: "2026-09-10T09:00:00" } });
+callLog = [];
+out = comps.ScheduleTasksPanel({});
+const runningBadges = callLog.filter((c) => c[2] && c[2].className === "dshk-sched-running");
+const timingRows = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-sched-task is-timing"));
+check("计时中：顶部挂走秒状态、挂表那一行亮起", runningBadges.length === 1 && /\d\d:\d\d/.test(String(runningBadges[0][2].children)) && timingRows.length === 1);
 stateSeq = 0;
 stateStore.clear();
 // openFileAndDock / openVaultPageAndDock：签归官方签表，这里断言「开出来的地址对不对」
@@ -1204,6 +1219,98 @@ setTimeout(async () => {
     scripted = { status: 409, body: { error: "conflict", mtimeMs: 7 } };
     const conflict = await rejection(comps.kitPostJson("/dsh-kit/write", {}));
     check("kitPostJson：失败带 status/body（写文件按 409 进冲突条）", !!conflict && conflict.status === 409 && conflict.body.mtimeMs === 7);
+  }
+  // 日程写路径（面板浮层 + 悬浮球）：渲染体出表单，写请求的 op 载荷逐个钉住。
+  // 桩不重渲染，所以每次改完表单字段要再渲染一次拿新 state（与 React 同序）
+  {
+    const calls = [];
+    const prevFetch = global.fetch;
+    global.fetch = async (url, opts) => {
+      calls.push({ url: String(url), body: JSON.parse(String((opts || {}).body || "{}")) });
+      return { ok: true, status: 200, json: async () => ({ event: { id: "x" }, entry: {}, deleted: true, stopped: true }) };
+    };
+    // 重渲染：stateSeq 归零让下一次渲染读回同一批 state 槽（桩按递增 id 存 state，
+    // 不归零就等于换了一批空槽——与 React「改完再渲一次」同序）
+    const rerender = (fn) => {
+      stateSeq = 0;
+      callLog = [];
+      fn();
+      return callLog.filter((c) => c[2] || c[1]);
+    };
+    const inputsOf = () => callLog.filter((c) => c[2] && c[2].className === "dshk-vault-modalinput").map((c) => c[2]);
+    const pressPrimary = async () => {
+      const btn = callLog.filter((c) => c[2] && c[2].className === "dshk-btn-primary").pop();
+      await btn[2].onClick();
+      return calls[calls.length - 1];
+    };
+    // 新建待办：只发 title / due，kind 派生的 start / end / recurrence 显式清空
+    stateSeq = 0;
+    stateStore.clear();
+    let rows = rerender(() => comps.SchedEventDialog({ ev: null, onClose: () => {} }));
+    let fields = inputsOf();
+    check("新建浮层：标题 + 截止日 + 时刻（待办默认无期限）", fields.length >= 3 && fields[0].type === undefined && fields[1].type === "date" && fields[2].type === "time");
+    fields[0].onChange({ target: { value: "写周报" } });
+    inputsOf()[1].onChange({ target: { value: "2026-10-05" } });
+    rows = rerender(() => comps.SchedEventDialog({ ev: null, onClose: () => {} }));
+    const created = await pressPrimary();
+    check(
+      "待办保存：op=create，落 title/due，start/end/recurrence 清成 null（成对由宿主校验）",
+      created.url === "/dsh-kit/schedule/op" && created.body.op === "create" && created.body.input.title === "写周报" &&
+        created.body.input.due === "2026-10-05" && created.body.input.start === null &&
+        created.body.input.end === null && created.body.input.recurrence === null,
+    );
+    // 改已有日程：起止与重复规则原样带回，完成勾选走 completedAt（不是独立 op）
+    stateSeq = 0;
+    stateStore.clear();
+    const ev = { id: "e1", title: "例会", start: "2026-10-06T09:00", end: "2026-10-06T10:00", recurrence: { type: "weekly", days: [2] }, completedAt: "2026-10-06T10:05" };
+    rerender(() => comps.SchedEventDialog({ ev, onClose: () => {} }));
+    const updated = await pressPrimary();
+    check(
+      "日程保存：op=update + id，起止与重复规则原样带回",
+      updated.body.op === "update" && updated.body.id === "e1" && updated.body.patch.start === "2026-10-06T09:00" &&
+        updated.body.patch.end === "2026-10-06T10:00" && updated.body.patch.recurrence.type === "weekly" &&
+        updated.body.patch.due === null,
+    );
+    // 取消完成：completedAt 显式 null（面板不另开一个 done 分支）
+    stateSeq = 0;
+    stateStore.clear();
+    rerender(() => comps.SchedEventDialog({ ev: { id: "e2", title: "写周报" }, onClose: () => {} }));
+    const undone = await pressPrimary();
+    check("取消完成：completedAt=null（待办无 start 时不补 due）", undone.body.patch.completedAt === null && undone.body.patch.due === null);
+    // 独立计时：标题必填（有标题才发请求）
+    stateSeq = 0;
+    stateStore.clear();
+    rerender(() => comps.SchedTimerStartDialog({ events: [{ id: "t1", title: "交报告", due: "2026-10-05" }], onClose: () => {} }));
+    check("开始计时浮层列出未完成待办", callLog.filter((c) => c[2] && c[2].type === "radio").length === 1);
+    inputsOf()[0].onChange({ target: { value: "读文献" } });
+    rerender(() => comps.SchedTimerStartDialog({ events: [], onClose: () => {} }));
+    const started = await pressPrimary();
+    check("独立计时：op=timer-start 带标题", started.body.op === "timer-start" && started.body.title === "读文献");
+    // 计时段编辑：起止 + 备注走 entry-update，owner 空 = 独立段
+    stateSeq = 0;
+    stateStore.clear();
+    rerender(() => comps.SchedEntryDialog({ owner: null, index: 2, entry: { id: "s1", start: "2026-10-02T09:00", end: "2026-10-02T10:00" }, onClose: () => {} }));
+    const entrySave = await pressPrimary();
+    check(
+      "计时段保存：op=entry-update 带 owner/index 与起止",
+      entrySave.body.op === "entry-update" && entrySave.body.owner === null && entrySave.body.index === 2 &&
+        entrySave.body.patch.start === "2026-10-02T09:00" && entrySave.body.patch.end === "2026-10-02T10:00",
+    );
+    // 悬浮球：空闲不渲染；有表在跑就出走秒 + 停表
+    stateSeq = 0;
+    stateStore.clear();
+    let ball = comps.SchedTimerBall({});
+    check("悬浮球空闲时不占位", ball === null || ball === undefined);
+    stateSeq = 0;
+    stateStore.clear();
+    const ago = new Date(Date.now() - 90 * 1000);
+    const p2 = (n) => String(n).padStart(2, "0");
+    stateStore.set(0, { id: "", start: `${ago.getFullYear()}-${p2(ago.getMonth() + 1)}-${p2(ago.getDate())}T${p2(ago.getHours())}:${p2(ago.getMinutes())}:${p2(ago.getSeconds())}`, title: "读文献" });
+    callLog = [];
+    comps.SchedTimerBall({});
+    const face = callLog.filter((c) => c[2] && c[2].className === "dshk-sched-balltime");
+    check("悬浮球走秒（不足一小时 MM:SS，超过一小时 H:MM:SS）", face.length === 1 && /^\d\d:\d\d$/.test(String(face[0][2].children)) && /^\d+:\d\d:\d\d$/.test(comps.schedElapsed("2026-10-02T09:00:00", new Date(2026, 9, 2, 12, 30, 0).getTime())));
+    global.fetch = prevFetch;
   }
   global.fetch = vaultFetchPrev;
   console.log(failed === 0 ? "ALL RENDER OK" : `${failed} FAIL`);

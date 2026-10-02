@@ -19,8 +19,10 @@
 //   POST /dsh-kit/vault/create|rename|move|import|delete —— 目录级文件管理
 //   POST /dsh-kit/vault/write  —— 正文写回（mtime CAS，不符回 modified）
 //   POST /dsh-kit/vault/attach —— 编辑面粘贴的图片进 attachments/（内容寻址）
-//   GET  /dsh-kit/schedule/data     —— 事件 + 区间展开 + 独立计时段
+//   GET  /dsh-kit/schedule/data     —— 事件 + 区间展开 + 独立计时段 + 进行中的计时
 //   GET  /dsh-kit/schedule/stats    —— 统计
+//   GET  /dsh-kit/schedule/timer    —— 进行中的计时（悬浮球轮询用）
+//   POST /dsh-kit/schedule/op       —— 面板写路径（建/改/删/完成/起停表/计时段增改删）
 // 知识库端点未配置 / 根不存在时回 400 vault-not-configured（前端渲染引导）。
 import fs from 'node:fs';
 import http from 'node:http';
@@ -121,11 +123,46 @@ export async function apply(ctx, config = {}) {
                     handler(req, res, new URL(req.url ?? '/', 'http://dsh-kit.local'));
                 },
             });
+            /** 读请求体（超限回 null = 413）。**超限必须让 promise 落地**：只 destroy
+             *  不 resolve 的话 end/error 都不来，这个挂起的 promise 会让请求既不回包
+             *  也不释放，调用方只能等客户端超时 */
+            const readBody = (req, limit) => new Promise((resolve) => {
+                let raw = '';
+                let settled = false;
+                const done = (value) => {
+                    if (settled)
+                        return;
+                    settled = true;
+                    resolve(value);
+                };
+                req.on('data', (c) => {
+                    if (settled)
+                        return;
+                    raw += c;
+                    // 超限：立刻落地（不再攒），由回包那边发 413 后再断流——
+                    // 这里就 destroy 的话响应根本发不出去，客户端只看到一个连接重置
+                    if (raw.length > limit)
+                        done(null);
+                });
+                req.on('end', () => {
+                    if (settled)
+                        return;
+                    try {
+                        const body = JSON.parse(raw === '' ? '{}' : raw);
+                        done(body !== null && typeof body === 'object' ? body : {});
+                    }
+                    catch {
+                        done({});
+                    }
+                });
+                req.on('error', () => done({}));
+                req.on('aborted', () => done({}));
+            });
             // ── 日程端点：/dsh-kit/schedule/*（./schedule.ts 单例 store）──
-            //   面板只读，端点也只有读：GET data?from&to → { events(raw 全量),
-            //   occurrences(区间展开,带 endDate/state), orphans }；GET stats?scope&date → 统计。
-            //   写路径走 agent 工具（工具直调 store，不经 HTTP）；store 每次调用都与盘面
-            //   重新对齐，别处（同步/其它程序）写进来的条目面板立刻可见、agent 的更新
+            //   GET data?from&to → { events(raw 全量), occurrences(区间展开,带 endDate/state),
+            //   orphans, runningTimer }；GET stats?scope&date → 统计；GET timer → 进行中的表；
+            //   POST op → 面板写路径（同一份 store，agent 工具也走它，规则不分叉）。store 每次
+            //   调用都与盘面重新对齐，别处（同步 / 另一个客户端）写进来的条目面板立刻可见、agent 的更新
             //   也不会盖掉别处改过的版本；重复展开只在宿主做（客户端只渲染 occurrence）；
             //   个人规模 raw 全量直发。
             const schedDateParam = (url, key) => {
@@ -135,6 +172,8 @@ export async function apply(ctx, config = {}) {
             /** 区间跨度上限：重复日程是按天展开的，from=0000-01-01&to=9999-12-31 能把
              *  宿主事件循环占死（手机网关是全路径反代，链接持有人能自己拼这个 URL） */
             const SCHED_MAX_SPAN_DAYS = 400;
+            /** 日程写请求体上限：一条事件（含描述 2000 字 + 重复规则）远用不满 */
+            const SCHED_BODY_LIMIT = 256 * 1024;
             const schedSpanOk = (from, to) => {
                 const span = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000;
                 return Number.isFinite(span) && span >= 0 && span <= SCHED_MAX_SPAN_DAYS;
@@ -151,7 +190,13 @@ export async function apply(ctx, config = {}) {
                     events: scheduleStore.list(),
                     occurrences: scheduleStore.occurrences(from, to),
                     orphans: scheduleStore.listOrphans(),
+                    runningTimer: scheduleStore.getRunningTimer(),
                 });
+            }));
+            disposeSchedule.push(route('/dsh-kit/schedule/timer', (req, res) => {
+                if (req.method !== 'GET')
+                    return json(res, 405, { error: 'method not allowed' });
+                json(res, 200, { runningTimer: scheduleStore.getRunningTimer() });
             }));
             disposeSchedule.push(route('/dsh-kit/schedule/stats', (req, res, url) => {
                 if (req.method !== 'GET')
@@ -159,6 +204,70 @@ export async function apply(ctx, config = {}) {
                 const rawScope = url.searchParams.get('scope') ?? 'day';
                 const scope = rawScope === 'week' || rawScope === 'month' ? rawScope : 'day';
                 json(res, 200, scheduleStore.stats(scope, schedDateParam(url, 'date')));
+            }));
+            // 写端点：面板的建/改/删/完成/计时/计时段编辑都走这一个 op 分发（与 files/
+            // git 的 op 端点同款）。字段口径、校验与原子写全在 store 里，与 agent 工具
+            // 走的是同一份实现——两边不会长出两套规则。
+            // 错误语义：参数/规则不合法（store 抛错）回 400，按 id 定位不到回 404。
+            disposeSchedule.push(route('/dsh-kit/schedule/op', (req, res) => {
+                if (req.method !== 'POST')
+                    return json(res, 405, { error: 'method not allowed' });
+                if (!sameOrigin(req))
+                    return json(res, 403, { error: 'cross-origin denied' });
+                void readBody(req, SCHED_BODY_LIMIT).then((body) => {
+                    if (body === null) {
+                        json(res, 413, { error: 'body too large' });
+                        res.on('finish', () => req.destroy());
+                        return;
+                    }
+                    const str = (v) => (typeof v === 'string' ? v : '');
+                    const input = (body.input !== null && typeof body.input === 'object' ? body.input : {});
+                    const patch = (body.patch !== null && typeof body.patch === 'object' ? body.patch : {});
+                    try {
+                        switch (str(body.op)) {
+                            case 'create':
+                                return json(res, 200, { event: scheduleStore.create(input) });
+                            case 'update': {
+                                const event = scheduleStore.update(str(body.id), patch);
+                                return event ? json(res, 200, { event }) : json(res, 404, { error: '条目不存在' });
+                            }
+                            case 'delete':
+                                return scheduleStore.remove(str(body.id))
+                                    ? json(res, 200, { deleted: true })
+                                    : json(res, 404, { error: '条目不存在' });
+                            case 'done': {
+                                const event = scheduleStore.setDone(str(body.id), body.done !== false);
+                                return event ? json(res, 200, { event }) : json(res, 404, { error: '条目不存在' });
+                            }
+                            case 'timer-start':
+                                // 挂条目（id 命中）否则按 title 起独立计时；起新表先闭合在跑的那只
+                                return json(res, 200, { runningTimer: scheduleStore.startTimer(str(body.id) || null, typeof body.title === 'string' ? body.title : null) });
+                            case 'timer-stop':
+                                return json(res, 200, { stopped: scheduleStore.stopTimer() });
+                            case 'entry-update': {
+                                const index = Number(body.index);
+                                const entry = Number.isInteger(index) && index >= 0
+                                    ? scheduleStore.entryUpdate(str(body.owner) || null, index, {
+                                        ...(typeof patch.start === 'string' ? { start: patch.start } : {}),
+                                        ...(typeof patch.end === 'string' ? { end: patch.end } : {}),
+                                        ...(typeof patch.note === 'string' ? { note: patch.note } : {}),
+                                    })
+                                    : null;
+                                return entry ? json(res, 200, { entry }) : json(res, 400, { error: '计时段不存在、仍在进行中或时刻不合法' });
+                            }
+                            case 'entry-delete': {
+                                const index = Number(body.index);
+                                const ok = Number.isInteger(index) && index >= 0 && scheduleStore.entryDelete(str(body.owner) || null, index);
+                                return ok ? json(res, 200, { deleted: true }) : json(res, 400, { error: '计时段不存在或仍在进行中' });
+                            }
+                            default:
+                                return json(res, 400, { error: '未知 op' });
+                        }
+                    }
+                    catch (error) {
+                        return json(res, 400, { error: error instanceof Error ? error.message : String(error) });
+                    }
+                });
             }));
             // ── 知识库（./scanner.ts + ./fs.ts）──
             // vaultRoot 是配置页配置的绝对目录，在工作区外；读端点出索引 / 单页 mtime /
@@ -227,41 +336,6 @@ export async function apply(ctx, config = {}) {
             // 固定自动加序号。笔记页改名 / 移动会顺带改写指向它的双链（目录整体搬移不改，
             // 文件名没变解析结果就不变）；删除走回收站。导入两条来源：本机绝对路径直拷
             // （md 页连带把页内引用的本地图片收进 attachments/）与浏览器上传的字节。
-            /** 读请求体（超限回 null = 413）。**超限必须让 promise 落地**：只 destroy
-             *  不 resolve 的话 end/error 都不来，这个挂起的 promise 会让请求既不回包
-             *  也不释放，调用方只能等客户端超时 */
-            const vaultReadBody = (req, limit) => new Promise((resolve) => {
-                let raw = '';
-                let settled = false;
-                const done = (value) => {
-                    if (settled)
-                        return;
-                    settled = true;
-                    resolve(value);
-                };
-                req.on('data', (c) => {
-                    if (settled)
-                        return;
-                    raw += c;
-                    // 超限：立刻落地（不再攒），由回包那边发 413 后再断流——
-                    // 这里就 destroy 的话响应根本发不出去，客户端只看到一个连接重置
-                    if (raw.length > limit)
-                        done(null);
-                });
-                req.on('end', () => {
-                    if (settled)
-                        return;
-                    try {
-                        const body = JSON.parse(raw === '' ? '{}' : raw);
-                        done(body !== null && typeof body === 'object' ? body : {});
-                    }
-                    catch {
-                        done({});
-                    }
-                });
-                req.on('error', () => done({}));
-                req.on('aborted', () => done({}));
-            });
             const VAULT_BODY_LIMIT = 1024 * 1024;
             /** 导入上限：base64 文本长度（≈32MB 原始字节），PDF 这类文献够用 */
             const VAULT_IMPORT_LIMIT = 48 * 1024 * 1024;
@@ -274,7 +348,7 @@ export async function apply(ctx, config = {}) {
                     const root = vaultGuard(res);
                     if (root === null)
                         return;
-                    void vaultReadBody(req, limit).then((body) => {
+                    void readBody(req, limit).then((body) => {
                         if (body === null) {
                             // 413 先回、再断流：body 没收完，socket 得由回包收尾，否则客户端
                             // 永远等不到响应
