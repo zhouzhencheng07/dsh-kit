@@ -1,4 +1,4 @@
-# dsh-kit bundle patch：把套件基础设施行与八个组件行 insert 进 bundle 层。
+# dsh-kit bundle patch：把套件基础设施行与九个组件行 insert 进 bundle 层。
 # 组件行是同一个包（单包组件化）的 exports 子路径：行 name = dsh-kit/<行id>，exports 与
 # locale/<行id>/*.json 由 package.json 声明；行的中文显示名由宿主按行 name 解析 locale
 # meta（子路径名查不到包 → 回退显示 name 原文）。
@@ -17,6 +17,8 @@
     # 行id + 模块名」，id 与包名同文会两行重复
     - id: files
       name: dsh-kit/files
+    - id: chat
+      name: dsh-kit/chat
     - id: vault
       name: dsh-kit/vault
     - id: terminal

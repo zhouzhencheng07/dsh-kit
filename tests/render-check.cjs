@@ -1099,9 +1099,9 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
   }
   const comps = rows.filter((row) => typeof row.id === "string");
   const infra = rows.filter((row) => row.id === undefined);
-  const expected = ["files", "vault", "terminal", "browser", "skills", "phone", "monitor", "search"];
+  const expected = ["files", "chat", "vault", "terminal", "browser", "skills", "phone", "monitor", "search"];
   check(
-    "patch 形状：基础设施行无 id（不进组件列表）、八个组件行 id/name 齐备且顺序 = 描述顺序",
+    "patch 形状：基础设施行无 id（不进组件列表）、九个组件行 id/name 齐备且顺序 = 描述顺序",
     infra.length === 1 && infra[0].name === "dsh-kit" &&
       JSON.stringify(comps.map((row) => row.id)) === JSON.stringify(expected) &&
       comps.every((row) => row.name === "dsh-kit/" + row.id),
@@ -1113,9 +1113,9 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
   const zhDesc = JSON.parse(fs.readFileSync(__dirname + "/../locale/zh.json", "utf8")).meta.description;
   const enDesc = JSON.parse(fs.readFileSync(__dirname + "/../locale/en.json", "utf8")).meta.description;
   check(
-    "卡片描述按同一顺序枚举八个组件（zh/en 同序）",
-    inOrder(zhDesc, ["文件树·源代码管理", "知识库·日程", "终端", "浏览器", "技能", "手机访问", "用量与监视", "网页搜索"]) &&
-      inOrder(enDesc, ["File tree & SCM", "vault & schedule", "terminal", "browser", "skills", "phone access", "usage & monitor", "web search"]),
+    "卡片描述按同一顺序枚举九个组件（zh/en 同序）",
+    inOrder(zhDesc, ["文件树·源代码管理", "对话小窗", "知识库·日程", "终端", "浏览器", "技能", "手机访问", "用量与监视", "网页搜索"]) &&
+      inOrder(enDesc, ["File tree & SCM", "chat window", "vault & schedule", "terminal", "browser", "skills", "phone access", "usage & monitor", "web search"]),
   );
 }
 

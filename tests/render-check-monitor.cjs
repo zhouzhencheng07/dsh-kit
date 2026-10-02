@@ -194,6 +194,17 @@ async function checkApply() {
   rows3[1].running = false;
   const ev3 = comps.notifyDiffCore(st3, { ...listOf(rows3, "n3"), foreground: true }, cfgAll);
   check("N 前台但收尾的是另一个会话：照发", ev3.length === 1 && ev3[0].sessionId === "n4");
+  // 对话小窗正显示的那条同样算「人在跟前」：小窗开着时那条收尾不再弹系统通知
+  const stW = freshState();
+  const rowsW = [{ id: "w1", running: true }];
+  comps.notifyDiffCore(stW, { ...listOf(rowsW, "main1"), watched: "w1", foreground: true }, cfgAll);
+  rowsW[0].running = false;
+  check("N 前台且小窗正显示这条：不打扰（主面选中的却是另一条）", comps.notifyDiffCore(stW, { ...listOf(rowsW, "main1"), watched: "w1", foreground: true }, cfgAll).length === 0);
+  const stW2 = freshState();
+  const rowsW2 = [{ id: "w2", running: true }];
+  comps.notifyDiffCore(stW2, { ...listOf(rowsW2, "main1"), watched: "other", foreground: true }, cfgAll);
+  rowsW2[0].running = false;
+  check("N 前台但小窗显示的是另一条：照发", comps.notifyDiffCore(stW2, { ...listOf(rowsW2, "main1"), watched: "other", foreground: true }, cfgAll).length === 1);
 
   // —— 开关（就一个总开关；关闭期间照常记沿，打开后不补发）与子会话 ——
   const st4 = freshState();

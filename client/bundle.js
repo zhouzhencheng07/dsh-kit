@@ -1161,7 +1161,28 @@ window.__ModuleLoader__.load({
     // insertReference(ref, span) 引用芯片直插）——文件树「@到对话」优先直插
     // 真实引用 chip（不弹官方 @ 面板），失败兜底追加 @ 语法文本，均与手打
     // @ 等价（提交后按官方 file-reference 语法解析）。使用点现取（懒解析）。
-    /** 取当前会话的输入 shell；任一步未就绪返回 null */
+    // 对话小窗当前绑定（chat 组件渲染期发布）：其余组件据此决定「动作发给谁」
+    // ——引用写入的落点、回合完成通知的抑制都读它。收起时视为没有小窗。
+    const chatSurface = { open: false, sessionId: null };
+    function chatSurfaceSession() {
+      return chatSurface.open ? chatSurface.sessionId : null;
+    }
+
+    /** 光标此刻在哪个输入面：'chat' 小窗 / 'main' 主面 / null 都不在 */
+    function composerFocus() {
+      try {
+        const el = document.activeElement;
+        // 官方输入框外壳；小窗里那一套也是同一个类，靠是否在自家面板内区分
+        if (el === null || typeof el.closest !== "function" || el.closest('[class*="composerSeat"]') === null) return null;
+        return el.closest(".dshk-chat-panel") !== null ? "chat" : "main";
+      } catch {
+        return null;
+      }
+    }
+
+    /** 取「该收到这个动作」那条会话的输入 shell；任一步未就绪返回 null。
+     *  落点按光标：光标在哪个输入框就归那面；两处都没有光标（页面空白、编辑器里）
+     *  则小窗开着给小窗——它才是当下在用的那张脸。 */
     function currentComposerShell() {
       if (!slotsCtx) return null;
       let conv;
@@ -1178,10 +1199,13 @@ window.__ModuleLoader__.load({
       } catch {
         return null;
       }
-      const current = mainRowOf(sessions?.list?.getSnapshot?.())?.id;
-      if (!current) return null;
+      const chatId = chatSurfaceSession();
+      const mainId = mainRowOf(sessions?.list?.getSnapshot?.())?.id ?? null;
+      const focus = composerFocus();
+      const targetId = focus === "chat" ? chatId : focus === "main" ? mainId : (chatId ?? mainId);
+      if (!targetId) return null;
       try {
-        return hub.shell(current) ?? null;
+        return hub.shell(targetId) ?? null;
       } catch {
         return null;
       }
@@ -3354,10 +3378,10 @@ ellipsis，窄列只截字不破版 */
         });
         scanPreviewDownload();
       }
-      // 组件半边激活（files/monitor/terminal/skills/search/browser/vault/phone）：
+      // 组件半边激活（files/chat/monitor/terminal/skills/search/browser/vault/phone）：
       // client 入口注册总是发生，功能存在性由各组件自己的探针门控（行禁用只摘宿主
       // 半边端点，探针 404 的组件整体不注册）
-      for (const componentMod of [exports.files, exports.monitor, exports.terminal, exports.skills, exports.search, exports.browser, exports.vault, exports.phone]) {
+      for (const componentMod of [exports.files, exports.chat, exports.monitor, exports.terminal, exports.skills, exports.search, exports.browser, exports.vault, exports.phone]) {
         if (componentMod && typeof componentMod.apply === "function") componentMod.apply(ctx);
       }
     }
@@ -11606,7 +11630,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const jsxRuntime = require("react/jsx-runtime");
     const reactDom = require("react-dom");
     const dock = kit;
-    const { kitJson, resolveZh, subscribeLocale, getLocaleVersion } = dock;
+    const { kitJson, resolveZh, subscribeLocale, getLocaleVersion, chatSurfaceSession } = dock;
     const dswPrimIcons = require("@deepseek-ai/dsh-client-ui-primitives");
     const dswIcon = (...names) => {
       for (const n of names) {
@@ -12142,11 +12166,15 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       return notifyClip(text !== "" ? text : t("notifyQuestionBody"), NOTIFY_BODY_MAX);
     }
 
-    /** 值不值得打扰：总开关 + 不是「人正看着这个会话」（页面可见且聚焦、事件又正是
-     *  当前会话时，官方界面自己会说）。五类提醒共用这一条判据（不分类配置） */
-    function notifyWanted(cfg, sessionId, current, foreground) {
+    /** 值不值得打扰：总开关 + 不是「人正看着这个会话」（页面可见且聚焦、事件正是
+     *  被看着的会话时，界面自己会说）。被看着的可以是主面那条，也可以是对话小窗
+     *  正显示的那条——小窗开着时人就在看它，那条回合收尾不该再弹系统通知。
+     *  五类提醒共用这一条判据（不分类配置）
+     *  @param watched 主面会话 id；@param extraWatched 额外被看着的会话（小窗那条） */
+    function notifyWanted(cfg, sessionId, watched, foreground, extraWatched) {
       if (!cfg.notifyEnabled) return false;
-      return !(foreground === true && sessionId === current);
+      if (foreground !== true) return true;
+      return sessionId !== watched && sessionId !== extraWatched;
     }
 
     /**
@@ -12160,7 +12188,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const events = [];
       const byId = input.byId ?? {};
       const foreground = input.foreground === true;
-      const wanted = (sessionId) => notifyWanted(cfg, sessionId, input.current, foreground);
+      const wanted = (sessionId) => notifyWanted(cfg, sessionId, input.current, foreground, input.watched);
       const titleOf = (id) => byId[id]?.displayTitle ?? id;
       const seen = new Set();
       for (const id of input.ids ?? []) {
@@ -12256,7 +12284,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         const data = event.data;
         if (!data || data.error) continue; // 失败的压缩不算完成（那个回合的失败另有报法）
         if (input.origin === "subagent") continue; // 子会话属导航噪音
-        if (!notifyWanted(cfg, id, input.current, input.foreground === true)) continue;
+        if (!notifyWanted(cfg, id, input.current, input.foreground === true, input.watched)) continue;
         events.push({ kind: "compact", sessionId: id, title: input.title, body: notifyCompactBody(entries, data.compactionId) });
       }
       return events;
@@ -12405,7 +12433,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       } catch {
         return; // 服务异常：本轮跳过，下条推送再来
       }
-      const events = notifyDiffCore(notifyState, { ids: list.ids, byId: list.byId, current: mainRowOf(list)?.id, foreground: notifyForeground() }, cfg);
+      const events = notifyDiffCore(notifyState, { ids: list.ids, byId: list.byId, current: mainRowOf(list)?.id, watched: chatSurfaceSession(), foreground: notifyForeground() }, cfg);
       for (const ev of events) {
         // 只有回合收尾要落定判定（到点仍在列表且空闲）；提问/批准是既成事实，直接发。
         if (TURN_END_KINDS.has(ev.kind)) notifyCompleteSettled(sessions, ev);
@@ -12436,6 +12464,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           change: win.change,
           origin: row?.origin,
           current: mainRowOf(list)?.id,
+          watched: chatSurfaceSession(),
           foreground: notifyForeground(),
         },
         cfg,
@@ -15032,6 +15061,753 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     return module.exports;
 };
 
+    // ── dsh-kit/chat 组件（对话小窗）──
+    // 贴边常驻的把手 + 点开成浮窗。内核是宿主官方 conversation.content 工厂的
+    // embedded 变体（官方子智能体侧栏同款用法），本组件只自绘外壳与做会话绑定：
+    // 自己 retain 一条会话，与主面选中哪个会话无关（独立小窗）。
+    // 行开关 = 总开关：宿主半边不物化时 /dsh-kit-chat/config 404，apply 整体不注册。
+    const chatModule = (kit, require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+    const react = require("react");
+    const jsxRuntime = require("react/jsx-runtime");
+    const reactDom = require("react-dom");
+    const dock = kit;
+    const { resolveZh, subscribeLocale, getLocaleVersion, kitJson, flashToast, mainRowOf, KitTip, chatSurface, dswIcon } = dock;
+
+    // ─────────── 组件私有文案 ───────────
+    const zh = {
+      title: "对话小窗",
+      open: "打开对话小窗",
+      collapse: "收起小窗",
+      newChat: "新建对话",
+      toMain: "切到主面当前对话",
+      workspace: "工作区",
+      session: "对话",
+      noWorkspace: "还没有工作区，先在主面打开一个会话",
+      noSession: "这个工作区还没有对话",
+      pickSession: "选择已有对话",
+      createFail: "新建会话失败",
+      unsupported: "当前宿主不支持内嵌对话",
+      kcfgGroupChat: "对话小窗",
+      kcfgEdgeLeft: "把手贴左边",
+      kcfgEdgeLeftHint: "贴边把手与浮窗停靠左侧，否则在右侧。",
+      kcfgRememberWindow: "记住窗口位置",
+      kcfgRememberWindowHint: "浮窗拖动与缩放后的位置跨刷新恢复。",
+      kcfgRememberTarget: "记住工作区与会话",
+      kcfgRememberTargetHint: "下次打开小窗回到同一个工作区与对话。",
+
+    };
+    const en = {
+      title: "Chat window",
+      open: "Open chat window",
+      collapse: "Collapse chat window",
+      newChat: "New chat",
+      toMain: "Switch to the main session",
+      workspace: "Workspace",
+      session: "Chat",
+      noWorkspace: "No workspace yet — open a session in the main panel first",
+      noSession: "This workspace has no conversation yet",
+      pickSession: "Pick an existing chat",
+      createFail: "Failed to create a session",
+      unsupported: "This host does not support an embedded conversation",
+      kcfgGroupChat: "Chat window",
+      kcfgEdgeLeft: "Dock on the left edge",
+      kcfgEdgeLeftHint: "Dock the handle and window on the left edge instead of the right.",
+      kcfgRememberWindow: "Remember window geometry",
+      kcfgRememberWindowHint: "Restore the window position and size across reloads.",
+      kcfgRememberTarget: "Remember workspace and chat",
+      kcfgRememberTargetHint: "Reopen the chat window on the same workspace and conversation.",
+
+    };
+    const lang = () => (resolveZh() ? zh : en);
+    const t = (key) => lang()[key] ?? key;
+
+    // ─────────── 组件配置页（plugins.row.config，key = dsh-kit#chat）───────────
+    // 骨架在 dock；字段清单与 src/chat/index.ts 的 Config schema 同源（渲染级检查钉住）。
+    const CHAT_CFG_FIELDS = [
+      { key: "edgeLeft", type: "bool", group: "kcfgGroupChat", labelKey: "kcfgEdgeLeft", hintKey: "kcfgEdgeLeftHint" },
+      { key: "rememberWindow", type: "bool", group: "kcfgGroupChat", labelKey: "kcfgRememberWindow", hintKey: "kcfgRememberWindowHint" },
+      { key: "rememberTarget", type: "bool", group: "kcfgGroupChat", labelKey: "kcfgRememberTarget", hintKey: "kcfgRememberTargetHint" },
+    ];
+    const ChatConfigPage = dock.createConfigPage({ fields: CHAT_CFG_FIELDS, groups: ["kcfgGroupChat"], t });
+
+    // ─────────── 生效配置快照（/dsh-kit-chat/config）───────────
+    // 真源 = 本组件宿主 Config（src/chat/index.ts）。
+    const CHAT_CFG_DEFAULTS = { edgeLeft: false, rememberWindow: true, rememberTarget: true };
+    let cSnap = null;
+    const cCfgSubs = new Set();
+    const emitCfg = () => {
+      for (const fn of cCfgSubs) {
+        try {
+          fn();
+        } catch {
+          /* 订阅者已卸载 */
+        }
+      }
+    };
+    const getCSnap = () => cSnap;
+    const subscribeCfg = (fn) => {
+      cCfgSubs.add(fn);
+      return () => cCfgSubs.delete(fn);
+    };
+    function cCfgFromSnapshot(snap) {
+      const out = { ...CHAT_CFG_DEFAULTS };
+      if (!snap || snap.status !== "ready" || !snap.value || typeof snap.value !== "object") return out;
+      const v = snap.value;
+      for (const key of Object.keys(CHAT_CFG_DEFAULTS)) {
+        if (typeof v[key] === "boolean") out[key] = v[key];
+      }
+      return out;
+    }
+    /** 拉生效配置；返回 false = 行关闭（探针 404）= 本组件 client 面整体不注册 */
+    async function loadCfg() {
+      try {
+        const body = await kitJson("/dsh-kit-chat/config");
+        cSnap = body && typeof body === "object" ? { status: "ready", value: body } : null;
+      } catch {
+        cSnap = null;
+      }
+      emitCfg();
+      return cSnap !== null;
+    }
+
+    // ─────────── 小窗状态（跨槽共享的模块级 store）───────────
+    // 存的是「小窗自己那条会话」，与主面选中无关；记忆按配置决定要不要落盘。
+    const MEM_KEY = "dshk-chat/v1";
+    const EMPTY = [];
+    function readMem() {
+      try {
+        const raw = globalThis.localStorage ? globalThis.localStorage.getItem(MEM_KEY) : null;
+        const parsed = raw ? JSON.parse(raw) : null;
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+    const mem0 = readMem();
+    let chatSnap = {
+      open: false,
+      workspaceId: typeof mem0.workspaceId === "string" ? mem0.workspaceId : null,
+      sessionId: typeof mem0.sessionId === "string" ? mem0.sessionId : null,
+      rect: mem0.rect && typeof mem0.rect === "object" ? mem0.rect : null,
+      ball: mem0.ball && typeof mem0.ball === "object" ? mem0.ball : null,
+    };
+    const chatSubs = new Set();
+    function emitChat() {
+      for (const fn of chatSubs) {
+        try {
+          fn();
+        } catch {
+          /* 订阅者已卸载 */
+        }
+      }
+    }
+    const getChatSnap = () => chatSnap;
+    const subscribeChat = (fn) => {
+      chatSubs.add(fn);
+      return () => chatSubs.delete(fn);
+    };
+    const useChat = () => react.useSyncExternalStore(subscribeChat, getChatSnap);
+    function writeMem(cfg) {
+      if (typeof globalThis.localStorage === "undefined") return;
+      const payload = {};
+      if (cfg.rememberTarget) {
+        payload.workspaceId = chatSnap.workspaceId;
+        payload.sessionId = chatSnap.sessionId;
+      }
+      if (cfg.rememberWindow && chatSnap.rect) payload.rect = chatSnap.rect;
+      if (cfg.rememberWindow && chatSnap.ball) payload.ball = chatSnap.ball;
+      try {
+        globalThis.localStorage.setItem(MEM_KEY, JSON.stringify(payload));
+      } catch {
+        /* 隐私模式等：记忆失败不影响使用 */
+      }
+    }
+    /** 写小窗状态；persist = false 用于拖拽过程（松手再落盘） */
+    function setChat(patch, persist = true, cfg = null) {
+      chatSnap = { ...chatSnap, ...patch };
+      emitChat();
+      if (persist) writeMem(cfg ?? cCfgFromSnapshot(getCSnap()));
+    }
+
+    // ─────────── 宿主会话服务（apply 期 inject 捕获）───────────
+    let sessionsSvc = null;
+    const RETAIN_SOURCE = "dshKitChat";
+    function useSessionRef(sessionId) {
+      const [ref, setRef] = react.useState(null);
+      react.useEffect(() => {
+        if (!sessionId || !sessionsSvc || typeof sessionsSvc.retain !== "function") {
+          setRef(null);
+          return undefined;
+        }
+        let reference = null;
+        try {
+          reference = sessionsSvc.retain(sessionId, { source: RETAIN_SOURCE });
+        } catch {
+          setRef(null);
+          return undefined;
+        }
+        setRef(reference);
+        return () => {
+          try {
+            reference.release();
+          } catch {
+            /* 已释放 */
+          }
+          setRef(null);
+        };
+      }, [sessionId]);
+      return ref;
+    }
+
+    // ─────────── 目标解析（纯函数，渲染级检查直测）───────────
+    /** 路径归一（只用于比对）：反斜杠归 /、去尾分隔符、盘符不分大小写 */
+    function normPath(value) {
+      if (typeof value !== "string") return "";
+      const s = value.replace(/\\/g, "/").replace(/\/+$/, "");
+      return /^[a-z]:/i.test(s) ? s.toLowerCase() : s;
+    }
+    /** 主面会话 cwd 命中的工作区 */
+    function workspaceOfCwd(workspaces, cwd) {
+      const key = normPath(cwd);
+      if (key === "") return null;
+      for (const ws of workspaces ?? EMPTY) {
+        if (normPath(ws?.path) === key) return ws;
+      }
+      return null;
+    }
+    /** 工作区里可用的会话行：未归档、非子智能体，按更新时间倒序。空白会话留着
+     *  （它可能就是当前那条：草稿在里面，换走会丢），但下拉不列它——空白会话的
+     *  displayTitle 是工作区名，与「新建对话」同一件事，列出来只会让人以为点错了 */
+    function sessionsOfWorkspace(workspace, listState, archivedIds) {
+      if (!workspace) return EMPTY;
+      const byId = listState?.byId ?? {};
+      const archived = archivedIds instanceof Set ? archivedIds : new Set(Array.isArray(archivedIds) ? archivedIds : EMPTY);
+      const rows = [];
+      for (const id of Array.isArray(workspace.sessionIds) ? workspace.sessionIds : EMPTY) {
+        if (archived.has(id)) continue;
+        const row = byId[id];
+        if (!row || row.origin === "subagent") continue;
+        rows.push(row);
+      }
+      rows.sort((a, b) => (b?.updatedAt ?? 0) - (a?.updatedAt ?? 0));
+      return rows;
+    }
+    /** 下拉与标题里的会话名：空白会话一律显示「新建对话」 */
+    function sessionLabel(row, emptyLabel) {
+      if (!row) return emptyLabel;
+      return row.blank === true ? t("newChat") : (row.displayTitle ?? row.id);
+    }
+    /** 目标工作区：记忆 > 主面会话 cwd > 第一个 */
+    function resolveWorkspace(workspaces, rememberedId, mainCwd) {
+      const list = Array.isArray(workspaces) ? workspaces : EMPTY;
+      for (const ws of list) {
+        if (rememberedId && ws?.workspaceId === rememberedId) return ws;
+      }
+      return workspaceOfCwd(list, mainCwd) ?? list[0] ?? null;
+    }
+    /** 目标会话：记忆（仍在工作区且未归档）> 最近一条有内容的 > 空白会话 */
+    function resolveSessionId(rows, rememberedId) {
+      for (const row of rows ?? EMPTY) {
+        if (rememberedId && row?.id === rememberedId) return rememberedId;
+      }
+      return (rows ?? EMPTY).find((r) => r?.blank !== true)?.id ?? rows?.[0]?.id ?? null;
+    }
+
+    // ─────────── 窗口几何 ───────────
+    const PANEL_W = 420;
+    const PANEL_H = 620;
+    const NARROW = 640;
+    function clampNum(v, lo, hi) {
+      return Math.min(hi, Math.max(lo, v));
+    }
+    function viewport() {
+      const w = typeof window !== "undefined" && Number.isFinite(window.innerWidth) ? window.innerWidth : 1280;
+      const h = typeof window !== "undefined" && Number.isFinite(window.innerHeight) ? window.innerHeight : 800;
+      return { w, h };
+    }
+    /** 贴着视口的矩形：记忆值越界时收回视口内；窄屏（手机）整屏铺满，不摆浮窗 */
+    function rectOf(ui, cfg) {
+      const vp = viewport();
+      if (vp.w <= NARROW) return null;
+      const r = ui.rect;
+      const w = clampNum(typeof r?.w === "number" ? r.w : PANEL_W, 320, Math.min(720, vp.w - 32));
+      const h = clampNum(typeof r?.h === "number" ? r.h : PANEL_H, 320, Math.max(320, vp.h - 32));
+      const fallbackX = cfg.edgeLeft ? 12 : vp.w - w - 12;
+      const x = clampNum(typeof r?.x === "number" ? r.x : fallbackX, 8, Math.max(8, vp.w - w - 8));
+      const y = clampNum(typeof r?.y === "number" ? r.y : Math.max(48, Math.round((vp.h - h) / 2)), 8, Math.max(8, vp.h - h - 8));
+      return { x, y, w, h };
+    }
+
+    // ─────────── 内嵌对话内核 ───────────
+    /** 只留对话这一个 view（与官方子智能体侧栏同款取舍） */
+    function FixedChatView(props) {
+      return props.renderSlot("conversation.session", { view: "chat" });
+    }
+    /** 小窗正文：宿主官方 conversation.content 的 embedded 变体 */
+    function ChatSessionBody(props) {
+      const session = typeof props.useSession === "function" ? props.useSession((v) => v) : null;
+      const hero = !!session && session.blank === true && session.running !== true;
+      const note = jsxRuntime.jsx("div", { className: "dshk-chat-note", children: t("unsupported") });
+      if (typeof props.renderFactorySlot !== "function") return note;
+      return props.renderFactorySlot(
+        "conversation.content",
+        { variant: "embedded", phase: hero ? "hero" : "active", hero },
+        { slots: { views: FixedChatView }, fallback: note },
+      );
+    }
+
+    // ─────────── 下拉浮层 ───────────
+    function PickMenu({ label, title, items, onPick, onClose }) {
+      // 遮罩先渲染、条目带定位层：同为定位元素时靠 DOM 先后决定层叠，
+      // 反过来（遮罩在后）它会盖住条目，点条目永远点不中。
+      return jsxRuntime.jsxs("div", { className: "dshk-chat-menu", children: [
+        jsxRuntime.jsx("button", { type: "button", className: "dshk-chat-menu-mask", "aria-label": label, onClick: onClose }),
+        jsxRuntime.jsx("div", { className: "dshk-chat-menu-h", children: title }),
+        ...items.map((item) =>
+          jsxRuntime.jsx("button", {
+            type: "button",
+            key: item.key,
+            className: "dshk-chat-menu-i",
+            "aria-current": item.current === true ? "true" : undefined,
+            onClick: () => {
+              onPick(item);
+              onClose();
+            },
+            children: [
+              jsxRuntime.jsx("span", { className: "dshk-chat-menu-t", children: item.label }),
+              item.hint ? jsxRuntime.jsx("span", { className: "dshk-chat-menu-x", children: item.hint }) : null,
+            ],
+          }),
+        ),
+      ] });
+    }
+
+    // ─────────── 面板 ───────────
+    function ChatPanel(props) {
+      const { ui, cfg, workspaces, rows, ws, body, onSessionId, onWorkspaceId, onCreate, mainId, mainTitle, onPickMain } = props;
+      const [menu, setMenu] = react.useState(null);
+      const rect = rectOf(ui, cfg);
+      const running = rows.some((r) => r?.id === ui.sessionId && r?.running === true);
+      const sessionTitle = sessionLabel(rows.find((r) => r?.id === ui.sessionId), t("noSession"));
+      const wsTitle = ws?.title ?? ws?.path ?? t("noWorkspace");
+
+      react.useEffect(() => {
+        if (menu === null) return undefined;
+        const onKey = (e) => {
+          if (e.key === "Escape") setMenu(null);
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      }, [menu]);
+
+      const onKeyDown = (e) => {
+        if (e.key !== "Escape") return;
+        e.stopPropagation();
+        if (menu !== null) setMenu(null);
+        else setChat({ open: false });
+      };
+
+      /** 头部拖动 / 右下角缩放：过程只改内存，松手落盘 */
+      const startDrag = (ev) => {
+        if (ev.button !== 0 || rect === null) return;
+        if (ev.target instanceof Element && ev.target.closest("button") !== null) return;
+        ev.preventDefault();
+        const base = rect;
+        const from = { x: ev.clientX, y: ev.clientY };
+        const move = (e) => {
+          setChat(
+            {
+              rect: {
+                x: clampNum(base.x + (e.clientX - from.x), 8, Math.max(8, viewport().w - base.w - 8)),
+                y: clampNum(base.y + (e.clientY - from.y), 8, Math.max(8, viewport().h - base.h - 8)),
+                w: base.w,
+                h: base.h,
+              },
+            },
+            false,
+          );
+        };
+        const up = () => {
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          writeMem(cCfgFromSnapshot(getCSnap()));
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+      };
+
+      const startResize = (ev) => {
+        if (ev.button !== 0 || rect === null) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const base = rect;
+        const from = { x: ev.clientX, y: ev.clientY };
+        const move = (e) => {
+          const vp = viewport();
+          setChat(
+            {
+              rect: {
+                x: base.x,
+                y: base.y,
+                w: clampNum(base.w + (e.clientX - from.x), 320, Math.min(720, vp.w - base.x - 8)),
+                h: clampNum(base.h + (e.clientY - from.y), 320, Math.max(320, vp.h - base.y - 8)),
+              },
+            },
+            false,
+          );
+        };
+        const up = () => {
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          writeMem(cCfgFromSnapshot(getCSnap()));
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+      };
+
+      const headBtn = (key, title, children, onClick, opts) =>
+        jsxRuntime.jsxs("button", {
+          type: "button",
+          key,
+          className: "dshk-chat-hb",
+          title,
+          disabled: opts?.disabled === true,
+          "aria-pressed": opts?.pressed,
+          onClick,
+          children,
+        });
+
+      const style = rect === null ? { inset: "0" } : { left: rect.x + "px", top: rect.y + "px", width: rect.w + "px", height: rect.h + "px" };
+
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-chat-panel",
+        style,
+        onKeyDown,
+        children: [
+          jsxRuntime.jsxs("div", { className: "dshk-chat-head", onPointerDown: startDrag, children: [
+            jsxRuntime.jsxs("div", { className: "dshk-chat-hgroup", children: [
+              headBtn("ws", wsTitle, [jsxRuntime.jsx("span", { className: "dshk-chat-hlabel", children: t("workspace") }), jsxRuntime.jsx("span", { className: "dshk-chat-hval", children: wsTitle })], () => setMenu(menu === "ws" ? null : "ws"), menu === "ws" ? { pressed: true } : undefined),
+              headBtn("sess", sessionTitle, [jsxRuntime.jsx("span", { className: "dshk-chat-hlabel", children: t("session") }), jsxRuntime.jsx("span", { className: "dshk-chat-hval", children: sessionTitle })], () => setMenu(menu === "sess" ? null : "sess"), menu === "sess" ? { pressed: true } : undefined),
+              headBtn("new", t("newChat"), jsxRuntime.jsx("span", { className: "dshk-chat-hplus", children: "+" }), () => onCreate()),
+              headBtn("main", mainId !== null && mainId !== ui.sessionId ? t("toMain") + (mainTitle === "" ? "" : " · " + mainTitle) : undefined, jsxRuntime.jsx("span", { className: "dshk-chat-hfollow", children: "⇄" }), () => onPickMain(), { disabled: mainId === null || mainId === ui.sessionId }),
+              headBtn("close", t("collapse"), jsxRuntime.jsx("span", { className: "dshk-chat-hclose", children: "✕" }), () => setChat({ open: false })),
+            ] }),
+            running ? jsxRuntime.jsx("span", { className: "dshk-chat-run" }) : null,
+            menu === "ws"
+              ? jsxRuntime.jsx(PickMenu, {
+                  label: t("workspace"),
+                  title: t("workspace"),
+                  items: workspaces.map((w) => ({ key: w.workspaceId, label: w.title ?? w.path, hint: w.path, current: w.workspaceId === ws?.workspaceId })),
+                  onPick: (item) => onWorkspaceId(item.key),
+                  onClose: () => setMenu(null),
+                })
+              : null,
+            menu === "sess"
+              ? jsxRuntime.jsx(PickMenu, {
+                  label: t("session"),
+                  title: t("pickSession"),
+                  items: rows.filter((r) => r.blank !== true).map((r) => ({ key: r.id, label: sessionLabel(r, r.id), hint: r.running === true ? "…" : undefined, current: r.id === ui.sessionId })),
+                  onPick: (item) => onSessionId(item.key),
+                  onClose: () => setMenu(null),
+                })
+              : null,
+          ] }),
+          jsxRuntime.jsx("div", { className: "dshk-chat-body", children: body }),
+          rect === null ? null : jsxRuntime.jsx("div", { className: "dshk-chat-grip", onPointerDown: startResize }),
+        ],
+      });
+    }
+
+    // ─────────── 悬浮把手（可拖动 · 贴边收起 · 悬停滑出）───────────
+    const SNAP = 40; // 松手时离边缘多近算「贴边」（贴着才算，别在半路就收进去）
+    const BALL = 34; // 圆球边长
+    /** 把手停靠侧：null = 自由位置（拖到哪儿停哪儿）。没记忆过时按配置贴默认那侧 */
+    function ballDockOf(ui, cfg) {
+      const saved = ui.ball;
+      if (saved === null || saved === undefined) return cfg.edgeLeft ? "left" : "right";
+      return saved.dock;
+    }
+    function ChatBall({ cfg, ui, title, running }) {
+      const saved = ui.ball ?? null;
+      const dock = ballDockOf(ui, cfg);
+      const vp = viewport();
+      const ballStyle = dock === null
+        ? { left: clampNum(saved?.x ?? (vp.w - BALL), 0, Math.max(0, vp.w - BALL)), top: clampNum(saved?.y ?? Math.round(vp.h / 2), 0, Math.max(0, vp.h - BALL)) }
+        : {};
+      // 拖动与点击分家：位移不足几像素按点击算（开窗）
+      const startDrag = (ev) => {
+        if (ev.button !== 0) return;
+        ev.preventDefault();
+        const from = { x: ev.clientX, y: ev.clientY };
+        const origin = dock !== null
+          ? { x: (dock === "left" ? 0 : vp.w - BALL), y: clampNum(saved?.y ?? Math.round(vp.h / 2), 0, Math.max(0, vp.h - BALL)) }
+          : { x: clampNum(saved?.x ?? vp.w - BALL, 0, Math.max(0, vp.w - BALL)), y: clampNum(saved?.y ?? Math.round(vp.h / 2), 0, Math.max(0, vp.h - BALL)) };
+        let moved = false;
+        let last = origin;
+        const move = (e) => {
+          if (!moved && Math.abs(e.clientX - from.x) + Math.abs(e.clientY - from.y) < 4) return;
+          moved = true;
+          const now = viewport();
+          last = {
+            x: clampNum(origin.x + (e.clientX - from.x), 0, Math.max(0, now.w - BALL)),
+            y: clampNum(origin.y + (e.clientY - from.y), 0, Math.max(0, now.h - BALL)),
+          };
+          setChat({ ball: { dock: null, x: last.x, y: last.y } }, false);
+        };
+        const up = () => {
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          if (!moved) {
+            setChat({ open: true }, true, cfg);
+            return;
+          }
+          // 拖到边缘附近就贴边收起，否则停在拖到的地方
+          const v = viewport();
+          const nearLeft = last.x <= SNAP;
+          const nearRight = v.w - (last.x + BALL) <= SNAP;
+          const side = nearLeft && (!nearRight || last.x < v.w / 2) ? "left" : nearRight ? "right" : null;
+          setChat({ ball: side === null ? { dock: null, x: last.x, y: last.y } : { dock: side, x: last.x, y: last.y } }, true, cfg);
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+      };
+      const Fish = dswIcon("FishLogo");
+      return jsxRuntime.jsx(KitTip, {
+        label: title === "" ? t("open") : t("open") + " · " + title,
+        side: dock === "left" ? "right" : "left",
+        children: jsxRuntime.jsx("button", {
+          type: "button",
+          className: "dshk-chat-ball",
+          style: ballStyle,
+          "aria-label": t("open"),
+          onPointerDown: startDrag,
+          children: [
+            Fish ? jsxRuntime.jsx(Fish, { size: 16, className: "dshk-chat-ballfish" }) : jsxRuntime.jsx("span", { className: "dshk-chat-ballg" }),
+            running ? jsxRuntime.jsx("span", { className: "dshk-chat-baldot" }) : null,
+          ],
+        }),
+      });
+    }
+
+    // ─────────── 浮层宿主（shell.overlay，root 作用域常驻）───────────
+    function ChatSurface(props) {
+      react.useSyncExternalStore(subscribeLocale, getLocaleVersion);
+      const cfg = cCfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCSnap));
+      const ui = useChat();
+      const useWorkspaces = typeof props.useWorkspaces === "function" ? props.useWorkspaces : null;
+      const useSessions = typeof props.useSessions === "function" ? props.useSessions : null;
+      const workspaces = useWorkspaces ? (useWorkspaces((s) => s?.items) ?? EMPTY) : EMPTY;
+      const listState = useSessions ? useSessions((s) => s) : null;
+      const archived = useWorkspaces ? (useWorkspaces((s) => s?.archivedSessionIds) ?? EMPTY) : EMPTY;
+      const mainRow = mainRowOf(listState);
+
+      // 目标解析：记忆 > 主面会话 cwd > 第一个，再取该工作区最近一条未归档。
+      // 当前目标仍有效时不动（避免对话中途被换走）
+      const ws = react.useMemo(
+        () => resolveWorkspace(workspaces, ui.workspaceId, mainRow?.cwd),
+        [workspaces, ui.workspaceId, mainRow?.cwd],
+      );
+      const rows = react.useMemo(() => sessionsOfWorkspace(ws, listState, archived), [ws, listState, archived]);
+      const wantedId = resolveSessionId(rows, ui.sessionId);
+      const valid = wantedId !== null && rows.some((r) => r?.id === wantedId);
+
+      // 工作区里一条可用对话都没有 → 新建一条（空会话落在官方 hero 相位）
+      const creating = react.useRef(null);
+      const wsId = ws?.workspaceId ?? null;
+      react.useEffect(() => {
+        if (valid || !wsId || !sessionsSvc || typeof sessionsSvc.create !== "function") return;
+        if (creating.current === wsId) return;
+        creating.current = wsId;
+        sessionsSvc
+          .create({ workspaceId: wsId })
+          .then((id) => {
+            creating.current = null;
+            setChat({ sessionId: id, workspaceId: wsId }, true, cfg);
+          })
+          .catch(() => {
+            creating.current = null;
+            flashToast(t("createFail"));
+          });
+      }, [valid, wsId]);
+
+      react.useEffect(() => {
+        if (valid && wantedId !== ui.sessionId) setChat({ sessionId: wantedId }, true, cfg);
+        else if (wsId !== null && wsId !== ui.workspaceId) setChat({ workspaceId: wsId }, true, cfg);
+      }, [valid, wantedId, wsId]);
+
+      // 发布当前落点：引用写入按光标选面、回合完成通知对「正看着的那条」免打扰，
+      // 都读它。渲染期直接赋值（同 VaultShell 的 chatPreviewHook），收起即视为没有小窗。
+      chatSurface.open = ui.open;
+      chatSurface.sessionId = valid ? wantedId : null;
+
+      const ref = useSessionRef(valid ? wantedId : null);
+      const body =
+        ref && typeof props.SessionProvider === "function"
+          ? jsxRuntime.jsx(props.SessionProvider, { session: ref, children: props.renderSlot("dsh-kit.chat.session", {}) })
+          : jsxRuntime.jsx("div", { className: "dshk-chat-note", children: t("noSession") });
+
+      const current = rows.find((r) => r?.id === ui.sessionId) ?? null;
+      const onCreate = () => {
+        if (!wsId || !sessionsSvc || typeof sessionsSvc.create !== "function") return;
+        creating.current = wsId;
+        sessionsSvc
+          .create({ workspaceId: wsId })
+          .then((id) => setChat({ sessionId: id, workspaceId: wsId }, true, cfg))
+          .catch(() => {
+            creating.current = null;
+            flashToast(t("createFail"));
+          });
+      };
+
+      const node = jsxRuntime.jsxs("div", {
+        className: "dshk-chat-root " + (ballDockOf(ui, cfg) === null ? "is-free" : "is-dock-" + ballDockOf(ui, cfg)) + (cfg.edgeLeft ? " is-left" : ""),
+        children: [
+          ui.open
+            ? jsxRuntime.jsx(ChatPanel, {
+                ui,
+                cfg,
+                workspaces,
+                rows,
+                ws,
+                body,
+                onCreate,
+                mainId: mainRow?.id ?? null,
+                mainTitle: mainRow?.displayTitle ?? "",
+                onPickMain: () => {
+                  if (!mainRow?.id) return;
+                  setChat({ sessionId: mainRow.id }, true, cfg);
+                },
+                onSessionId: (id) => setChat({ sessionId: id }, true, cfg),
+                onWorkspaceId: (id) => setChat({ workspaceId: id, sessionId: null }, true, cfg),
+              })
+            : null,
+          // 展开时不留把手：它停靠在屏幕边缘，会压在浮窗右边沿上（收起态才常显）
+          ui.open ? null : jsxRuntime.jsx(ChatBall, { cfg, ui, title: sessionLabel(current, t("title")), running: current?.running === true }),
+        ],
+      });
+      // **portal 到 body**：右栏全屏时那张签的 pane 宿主 z-index 高于官方 overlay 层，
+      // 而本组件的渲染位置在那层内部——层内再大的 z-index 也压不过它（同样的道理，
+      // 计时悬浮球挂的是全局根）。脱离那层后把手与浮窗在所有面板之上。
+      if (reactDom && typeof reactDom.createPortal === "function" && typeof document !== "undefined" && document.body) {
+        return reactDom.createPortal(node, document.body);
+      }
+      return node;
+    }
+
+    // ─────────── 样式 ───────────
+    const CHAT_CSS = [
+      '.dshk-chat-root{position:fixed;inset:0;pointer-events:none;z-index:60}',
+      '.dshk-chat-root>*{pointer-events:auto}',
+      // 悬浮球：圆形把手，可拖到任意位置；贴边时只露一条边，悬停滑出
+      '.dshk-chat-ball{position:absolute;display:flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;border:none;border-radius:50%;cursor:grab;background:var(--dsw-alias-bg-base,rgba(20,20,20,.92));box-shadow:0 2px 10px rgba(0,0,0,.28);color:var(--dsw-alias-label-secondary,#888);transition:transform .18s ease}',
+      '.dshk-chat-ball:active{cursor:grabbing}',
+      '.dshk-chat-root.is-dock-right .dshk-chat-ball{right:0;top:50%;transform:translateY(-50%) translateX(calc(100% - 9px))}',
+      '.dshk-chat-root.is-dock-left .dshk-chat-ball{left:0;top:50%;transform:translateY(-50%) translateX(calc(-100% + 9px))}',
+      '.dshk-chat-root.is-dock-right:hover .dshk-chat-ball,.dshk-chat-root.is-dock-right .dshk-chat-ball:focus-visible{transform:translateY(-50%)}',
+      '.dshk-chat-root.is-dock-left:hover .dshk-chat-ball,.dshk-chat-root.is-dock-left .dshk-chat-ball:focus-visible{transform:translateY(-50%)}',
+      '.dshk-chat-root.is-free .dshk-chat-ball{transform:translateY(-50%)}',
+      '.dshk-chat-ball:hover{color:var(--dsw-alias-label-primary,#eee)}',
+      '@media (prefers-reduced-motion:reduce){.dshk-chat-ball{transition:none}}',
+      '.dshk-chat-ballfish{display:block}',
+      '.dshk-chat-ballg{width:15px;height:15px;border-radius:50%;border:1.4px solid currentColor;position:relative}',
+      '.dshk-chat-ballg:after{content:"";position:absolute;left:2.5px;top:1.5px;width:8px;height:5px;border-radius:1px 1px 2px 2px;background:currentColor}',
+      '.dshk-chat-baldot{position:absolute;top:-1px;right:-1px;width:8px;height:8px;border-radius:50%;background:#37c26b;box-shadow:0 0 0 2px var(--dsw-alias-bg-base,#fff)}',
+      '.dshk-chat-panel{position:fixed;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--dsw-alias-border-l3,rgba(255,255,255,.12));border-radius:12px;background:var(--dsw-alias-bg-base,#fff);box-shadow:0 12px 40px rgba(0,0,0,.34)}',
+      '@media (max-width:640px){.dshk-chat-panel{border-radius:0;border:none}}',
+      '.dshk-chat-head{flex:none;position:relative;display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(255,255,255,.12));cursor:grab;user-select:none}',
+      '.dshk-chat-hgroup{display:flex;align-items:center;gap:4px;min-width:0;flex:1}',
+      '.dshk-chat-hb{display:inline-flex;align-items:center;gap:4px;max-width:150px;padding:4px 8px;border:none;border-radius:6px;background:none;cursor:pointer;color:var(--dsw-alias-label-secondary,#888);font-size:12px;line-height:1.4}',
+      '.dshk-chat-hb:hover{background:rgba(127,127,127,.16);color:var(--dsw-alias-label-primary,#eee)}',
+      '.dshk-chat-hb[aria-pressed="true"]{background:rgba(127,127,127,.16);color:var(--dsw-alias-label-primary,#eee)}',
+      '.dshk-chat-hb:disabled{opacity:.45;cursor:default}',
+      '.dshk-chat-hlabel{color:var(--dsw-alias-label-tertiary,#777);font-size:11px}',
+      '.dshk-chat-hval{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.dshk-chat-hplus{font-size:15px;line-height:1}',
+      '.dshk-chat-hclose{font-size:12px;line-height:1}',
+      '.dshk-chat-run{flex:none;width:6px;height:6px;border-radius:50%;background:#37c26b;box-shadow:0 0 0 3px rgba(55,194,107,.18)}',
+      '.dshk-chat-body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}',
+      '.dshk-chat-body>*{flex:1;min-height:0}',
+      // 小窗里不显示 kit 的输入行入口钮（文件树 / 源代码管理 / 知识库 / 终端）：
+      // 它们开的是右栏与侧栏，在浮窗里点开只会把浮窗底下换成别的面板。只藏按钮不够
+      // ——官方 Tooltip 壳会留一个空占位，:has 一并收掉。
+      '.dshk-chat-panel .dshk-enbtn{display:none}',
+      '.dshk-chat-panel :has(> .dshk-enbtn){display:none}',
+      '.dshk-chat-note{padding:16px;color:var(--dsw-alias-label-tertiary,#777);font-size:12px;text-align:center}',
+      '.dshk-chat-grip{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize}',
+      '.dshk-chat-grip:after{content:"";position:absolute;right:3px;bottom:3px;width:7px;height:7px;border-right:1.2px solid var(--dsw-alias-label-tertiary,#777);border-bottom:1.2px solid var(--dsw-alias-label-tertiary,#777);border-radius:0 0 3px 0}',
+      '.dshk-chat-menu{position:absolute;top:100%;left:0;right:0;z-index:5;margin-top:4px;padding:6px;border-radius:10px;border:1px solid var(--dsw-alias-border-l3,rgba(255,255,255,.12));background:var(--dsw-alias-bg-base,#fff);box-shadow:0 10px 30px rgba(0,0,0,.3);max-height:320px;overflow:auto}',
+      '.dshk-chat-menu-h{position:relative;z-index:1;padding:4px 8px 6px;font-size:11px;color:var(--dsw-alias-label-tertiary,#777)}',
+      '.dshk-chat-menu-i{position:relative;z-index:1;display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:none;border-radius:6px;background:none;cursor:pointer;text-align:left;color:var(--dsw-alias-label-primary,#eee);font-size:12px}',
+      '.dshk-chat-menu-i:hover{background:rgba(127,127,127,.16)}',
+      '.dshk-chat-menu-i[aria-current="true"]{font-weight:600}',
+      '.dshk-chat-menu-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.dshk-chat-menu-x{flex:none;color:var(--dsw-alias-label-tertiary,#777);font-size:11px;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.dshk-chat-menu-mask{position:fixed;inset:0;border:none;background:none;cursor:default}',
+    ].join("\n");
+    function injectStyles() {
+      if (typeof document === "undefined") return;
+      if (document.querySelector('style[data-plugin-css="dsh-kit-chat/ui"]') !== null) return;
+      const tag = document.createElement("style");
+      tag.dataset.plugin = "dsh-kit-chat";
+      tag.dataset.pluginCss = "dsh-kit-chat/ui";
+      tag.textContent = CHAT_CSS;
+      document.head.appendChild(tag);
+    }
+
+    // ─────────── 插件体 ───────────
+    function apply(ctx) {
+      // 行禁用 → 探针 404 → 整体不注册（把手与浮窗全不出现）
+      void loadCfg();
+      ctx.inject(["sessions"], (sctx) => {
+        sessionsSvc = sctx.sessions ?? null;
+      });
+      // 贴边常驻面 + 小窗会话正文（子槽 scope=session → 本组件才拿到 SessionProvider）
+      ctx.slots.inject("shell.overlay", () =>
+        ctx.slots.register(
+          {
+            name: "shell.overlay",
+            id: "dsh-kit-chat",
+            order: 930,
+            children: { "dsh-kit.chat.session": { kind: "single", scope: "session" } },
+          },
+          ChatSurface,
+        ),
+      );
+      ctx.slots.inject("dsh-kit.chat.session", () =>
+        ctx.slots.register({ name: "dsh-kit.chat.session", id: "dsh-kit-chat-body" }, ChatSessionBody),
+      );
+      ctx.slots.inject("plugins.row.config", () =>
+        ctx.slots.register({ name: "plugins.row.config", key: "dsh-kit#chat" }, ChatConfigPage),
+      );
+      injectStyles();
+    }
+
+    exports.inject = ["slots"];
+    exports.apply = apply;
+    exports.ChatConfigPage = ChatConfigPage;
+    exports.CHAT_CFG_FIELDS = CHAT_CFG_FIELDS;
+    exports.ChatSurface = ChatSurface;
+    exports.ChatSessionBody = ChatSessionBody;
+    exports.ChatBall = ChatBall;
+    exports.ChatPanel = ChatPanel;
+    exports.CHAT_CFG_DEFAULTS = CHAT_CFG_DEFAULTS;
+    exports.cCfgFromSnapshot = cCfgFromSnapshot;
+    exports.loadCfg = loadCfg;
+    exports.normPath = normPath;
+    exports.workspaceOfCwd = workspaceOfCwd;
+    exports.sessionsOfWorkspace = sessionsOfWorkspace;
+    exports.resolveWorkspace = resolveWorkspace;
+    exports.resolveSessionId = resolveSessionId;
+    exports.sessionLabel = sessionLabel;
+    exports.rectOf = rectOf;
+    exports.getChatSnap = getChatSnap;
+    exports.setChat = setChat;
+    return exports;
+    };
+
     // 组件模块执行必须在 kitBase/root 设施组装完成之后（见下方 exports.files 赋值
     // 处）——组件体执行期会读 dock.createConfigPage 等成员
     // slots 是唯一依赖：配置走各组件自己的 Config schema + 原生设置页，client 拉
@@ -15046,6 +15822,9 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.currentSessionId = currentSessionId;
     exports.shellShare = shellShare;
     exports.currentComposerShell = currentComposerShell;
+    exports.chatSurface = chatSurface;
+    exports.chatSurfaceSession = chatSurfaceSession;
+    exports.composerFocus = composerFocus;
     exports.chatMentionText = chatMentionText;
     // 主行文案与官方文件签打开（组件半边的共用词条回落 rootT、资料库文件开官方右栏）
     exports.t = t;
@@ -15063,6 +15842,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     // 组件模块执行（files/monitor/terminal/skills/search/browser/vault/phone）：必须在 kitBase
     // 浅拷贝与 root 设施都挂上 exports 之后——组件体执行期会读 dock.createConfigPage 等成员
     exports.files = filesModule(exports, require);
+    exports.chat = chatModule(exports, require);
     exports.monitor = monitorModule(exports, require);
     exports.terminal = terminalModule(exports, require);
     exports.skills = skillsModule(exports, require);
