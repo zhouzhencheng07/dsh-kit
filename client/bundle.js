@@ -5184,10 +5184,8 @@ ellipsis，窄列只截字不破版 */
       return jsxRuntime.jsxs("div", { className: "dshk-sched-todo", children: [
         jsxRuntime.jsxs("div", { className: "dshk-sched-todohead", children: [
           jsxRuntime.jsx("div", { className: "dshk-sched-todotitle", children: `${t("schedTasks")} · ${rows.length}` }),
-          jsxRuntime.jsx("div", { className: "dshk-sched-scopes", children: SCHED_TODO_SCOPES.map((s) =>
-            jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-wdchip${scope === s ? " is-active" : ""}`, onClick: () => pickScope(s), children: t(SCHED_SCOPE_KEY[s]) }, s),
-          ) }),
-          // 计时入口在这一格：新建 + 开始计时（已开表时这里退成状态，停表在悬浮球）
+          // 计时入口在这一格：新建 + 开始计时（已开表时这里退成状态，停表在悬浮球）。
+          // 排在范围档上面：范围档是切清单的档位钮，紧挨着下面那片清单读起来才是"切这一片"
           jsxRuntime.jsxs("div", { className: "dshk-sched-todobar", children: [
             jsxRuntime.jsx(KitTip, { label: t("schedNew"), children:
               jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-actionbtn", "aria-label": t("schedNew"), onClick: () => setNewOpen(true), children: `＋ ${t("schedNew")}` }) }),
@@ -5197,8 +5195,11 @@ ellipsis，窄列只截字不破版 */
               : jsxRuntime.jsx(KitTip, { label: t("schedTimerPick"), children:
                   jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-actionbtn", "aria-label": t("schedTimerStart"), onClick: () => setTimerOpen(true), children: `▶ ${t("schedTimerStart")}` }) }),
           ] }),
+          jsxRuntime.jsx("div", { className: "dshk-sched-scopes", children: SCHED_TODO_SCOPES.map((s) =>
+            jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-wdchip${scope === s ? " is-active" : ""}`, onClick: () => pickScope(s), children: t(SCHED_SCOPE_KEY[s]) }, s),
+          ) }),
         ] }),
-        // 行全部渲染，这一层自己滚（表头、范围档与操作条钉死）
+        // 行全部渲染，这一层自己滚（表头、操作条与范围档钉死）
         jsxRuntime.jsx("div", { className: "dshk-sched-taskrows", children: [
           // 拉取失败：行照旧显示上一次的数据，但顶上挂一句（数据已旧，说出来）
           loadFail ? jsxRuntime.jsx("div", { className: "dshk-sched-taskfail", children: t("schedLoadFail") }) : null,
