@@ -1238,6 +1238,7 @@ setTimeout(async () => {
       return callLog.filter((c) => c[2] || c[1]);
     };
     const inputsOf = () => callLog.filter((c) => c[2] && c[2].className === "dshk-vault-modalinput").map((c) => c[2]);
+    const fieldRows = () => callLog.filter((c) => c[2] && c[2].className === "dshk-sched-field");
     const pressPrimary = async () => {
       const btn = callLog.filter((c) => c[2] && c[2].className === "dshk-btn-primary").pop();
       await btn[2].onClick();
@@ -1248,7 +1249,9 @@ setTimeout(async () => {
     stateStore.clear();
     let rows = rerender(() => comps.SchedEventDialog({ ev: null, onClose: () => {} }));
     let fields = inputsOf();
-    check("新建浮层：标题 + 截止日 + 时刻（待办默认无期限）", fields.length >= 3 && fields[0].type === undefined && fields[1].type === "date" && fields[2].type === "time");
+    check("新建浮层：标题 + 截止日 + 时刻（待办默认无期限）", fields.length >= 3 && fields[0].type === "text" && fields[1].type === "date" && fields[2].type === "time");
+    check("条目浮层一行一项（待办 5 行：标题/类型/截止/地点/备注）", fieldRows().length === 5);
+    check("类型行不套 label（点标签不该等于点第一枚按钮）", fieldRows()[1][1] === "div");
     fields[0].onChange({ target: { value: "写周报" } });
     inputsOf()[1].onChange({ target: { value: "2026-10-05" } });
     rows = rerender(() => comps.SchedEventDialog({ ev: null, onClose: () => {} }));
@@ -1264,6 +1267,9 @@ setTimeout(async () => {
     stateStore.clear();
     const ev = { id: "e1", title: "例会", start: "2026-10-06T09:00", end: "2026-10-06T10:00", recurrence: { type: "weekly", days: [2] }, completedAt: "2026-10-06T10:05" };
     rerender(() => comps.SchedEventDialog({ ev, onClose: () => {} }));
+    // 最长的组合（日程 + 每周重复）：标题/类型/开始/结束/重复/每/每周/重复到/地点/备注 10 行 + 完成勾选 1 行，一次排完
+    check("日程 + 周重复 10 行 + 完成勾选一次排完（不靠滚动）",
+      fieldRows().length === 10 && callLog.filter((c) => c[2] && c[2].className === "dshk-sched-checkline").length === 1);
     const updated = await pressPrimary();
     check(
       "日程保存：op=update + id，起止与重复规则原样带回",

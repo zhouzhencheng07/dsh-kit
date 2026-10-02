@@ -1672,16 +1672,21 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-tasktimer:hover,.dshk-sched-taskact:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-sched-tasktimer.is-on{color:var(--dsw-alias-brand-primary);border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 45%,transparent)}
 .dshk-sched-taskact.is-arm{width:auto;padding:0 6px;color:var(--dsw-alias-danger,#cd3131);border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent)}
-/* 表单（建 / 改条目与计时段共用）：字段纵向排，单列足够，两枚日期时刻并排 */
-.dshk-vault-modal.is-wide{width:min(94vw,420px)}
-.dshk-sched-form{display:flex;flex-direction:column;gap:8px}
-.dshk-sched-field{display:flex;flex-direction:column;gap:3px}
-.dshk-sched-fieldlabel{font-size:11px;color:var(--dsw-alias-label-tertiary)}
+/* 表单（建 / 改条目与计时段共用）：标签内联在左、控件在右，一行一项；
+   最长的周重复一次排完，切换类型 / 重复档都不出滚动 */
+.dshk-vault-modal.is-wide{width:min(94vw,460px)}
+.dshk-sched-form{display:flex;flex-direction:column;gap:5px}
+.dshk-sched-field{display:flex;align-items:center;gap:8px}
+.dshk-sched-fieldlabel{flex:none;width:52px;text-align:right;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dshk-sched-fieldbody{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:6px}
+.dshk-sched-form .dshk-vault-modalinput{margin-top:0}
+.dshk-sched-form .dshk-vault-modalinput[type="number"]{max-width:96px}
+.dshk-sched-form .dshk-sched-checkline{margin-left:60px}
 .dshk-sched-when{display:flex;gap:6px}
 .dshk-sched-when > *{flex:1 1 0;min-width:0}
-.dshk-sched-textarea{resize:vertical;min-height:52px}
-.dshk-sched-seg{display:flex;gap:4px;flex-wrap:wrap}
-.dshk-sched-segbtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
+.dshk-sched-textarea{resize:vertical;min-height:42px}
+.dshk-sched-seg{display:flex;gap:4px;flex:1 1 auto;min-width:0}
+.dshk-sched-segbtn{flex:1 1 0;min-width:0;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1;padding:5px 6px;border-radius:6px;cursor:pointer}
 .dshk-sched-segbtn.is-active{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
 .dshk-sched-weekdays{display:flex;gap:4px}
 .dshk-sched-formhint{font-size:11px;color:var(--dsw-alias-label-tertiary)}
@@ -3476,7 +3481,6 @@ ellipsis，窄列只截字不破版 */
       schedTitle: "标题",
       schedTitleRequired: "标题必填",
       schedType: "类型",
-      schedTime: "时刻",
       schedEndAfterStart: "日程要有起止时刻，且结束必须晚于开始",
       schedDone: "已完成",
       schedEntryTitle: "计时段",
@@ -3676,7 +3680,6 @@ ellipsis，窄列只截字不破版 */
       schedTitle: "Title",
       schedTitleRequired: "Title is required",
       schedType: "Type",
-      schedTime: "Time",
       schedEndAfterStart: "An event needs a start and an end, and the end must be after the start",
       schedDone: "Done",
       schedEntryTitle: "Time entry",
@@ -4777,12 +4780,33 @@ ellipsis，窄列只截字不破版 */
       };
     }
 
-    /** 一个带标签的表单项（表单里全是它，样式一处改全改） */
-    function schedField(label, control) {
-      return jsxRuntime.jsxs("label", { className: "dshk-sched-field", children: [
+    /** 一个带标签的表单项（表单里全是它，样式一处改全改）：标签在左，控件占满右侧。
+     *  group=true 时换成 div——分段选择没有可关联的表单元素，套 label 会让点标签变成"点第一枚按钮" */
+    function schedField(label, control, group) {
+      const Tag = group ? "div" : "label";
+      return jsxRuntime.jsxs(Tag, { className: "dshk-sched-field", children: [
         jsxRuntime.jsx("span", { className: "dshk-sched-fieldlabel", children: label }),
-        control,
+        jsxRuntime.jsx("span", { className: "dshk-sched-fieldbody", children: control }),
       ] });
+    }
+
+    /** 表单里的一枚输入：控件类型与额外属性透传，样式一处改全改 */
+    function schedInput(type, value, onChange, extra) {
+      return jsxRuntime.jsx("input", { type, className: "dshk-vault-modalinput", value, onChange, ...extra });
+    }
+
+    /** 日期 + 时刻并排（截止 / 开始 / 结束三处同形） */
+    function schedWhen(dateValue, timeValue, onDate, onTime) {
+      return jsxRuntime.jsx("div", { className: "dshk-sched-when", children: [
+        schedInput("date", dateValue, onDate),
+        schedInput("time", timeValue, onTime),
+      ] });
+    }
+
+    /** 分段选择（类型与重复两处同形）：options = [[值, 文案]] */
+    function schedSeg(value, options, onPick) {
+      return jsxRuntime.jsx("div", { className: "dshk-sched-seg", children: options.map(([val, text]) =>
+        jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-segbtn" + (value === val ? " is-active" : ""), onClick: () => onPick(val), children: text }, "seg-" + val)) });
     }
 
     /**
@@ -4857,63 +4881,45 @@ ellipsis，窄列只截字不破版 */
         wide: true,
         children: jsxRuntime.jsxs(react.Fragment, { children: [
           jsxRuntime.jsxs("div", { className: "dshk-sched-form", children: [
-            schedField(
-              t("schedTitle"),
-              jsxRuntime.jsx("input", {
-                className: "dshk-vault-modalinput",
-                value: f.title,
-                maxLength: 16,
-                placeholder: t("schedTitleHint"),
-                onChange: (e) => set({ title: e.target.value }),
-              }),
-            ),
-            schedField(t("schedType"), jsxRuntime.jsxs("div", { className: "dshk-sched-seg", children: [
-              jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-segbtn${f.kind === "todo" ? " is-active" : ""}`, onClick: () => set({ kind: "todo" }), children: t("schedKindTodo") }),
-              jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-segbtn${f.kind === "event" ? " is-active" : ""}`, onClick: () => set({ kind: "event" }), children: t("schedKindEvent") }),
-            ] })),
-            f.kind === "todo"
-              ? jsxRuntime.jsxs(react.Fragment, { children: [
-                  schedField(t("schedTaskDue"), jsxRuntime.jsx("input", { type: "date", className: "dshk-vault-modalinput", value: f.dueDate, onChange: (e) => set({ dueDate: e.target.value }) })),
-                  schedField(t("schedTime"), jsxRuntime.jsx("input", { type: "time", className: "dshk-vault-modalinput", value: f.dueTime, onChange: (e) => set({ dueTime: e.target.value }) })),
-                ] })
-              : jsxRuntime.jsxs(react.Fragment, { children: [
-                  schedField(t("schedStart"), jsxRuntime.jsxs("div", { className: "dshk-sched-when", children: [
-                    jsxRuntime.jsx("input", { type: "date", className: "dshk-vault-modalinput", value: f.startDate, onChange: (e) => set({ startDate: e.target.value }) }),
-                    jsxRuntime.jsx("input", { type: "time", className: "dshk-vault-modalinput", value: f.startTime, onChange: (e) => set({ startTime: e.target.value }) }),
-                  ] })),
-                  schedField(t("schedEnd"), jsxRuntime.jsxs("div", { className: "dshk-sched-when", children: [
-                    jsxRuntime.jsx("input", { type: "date", className: "dshk-vault-modalinput", value: f.endDate, onChange: (e) => set({ endDate: e.target.value }) }),
-                    jsxRuntime.jsx("input", { type: "time", className: "dshk-vault-modalinput", value: f.endTime, onChange: (e) => set({ endTime: e.target.value }) }),
-                  ] })),
-                ] }),
-            f.kind === "event"
-              ? jsxRuntime.jsxs(react.Fragment, { children: [
-                  schedField(t("schedRepeat"), jsxRuntime.jsxs("div", { className: "dshk-sched-seg", children: [
-                    jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-segbtn${f.repeat === "none" ? " is-active" : ""}`, onClick: () => set({ repeat: "none" }), children: t("schedRepeatNone") }),
-                    jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-segbtn${f.repeat === "daily" ? " is-active" : ""}`, onClick: () => set({ repeat: "daily" }), children: t("schedRepeatDaily") }),
-                    jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-segbtn${f.repeat === "weekly" ? " is-active" : ""}`, onClick: () => set({ repeat: "weekly" }), children: t("schedRepeatWeekly") }),
-                    jsxRuntime.jsx("button", { type: "button", className: `dshk-sched-segbtn${f.repeat === "monthly" ? " is-active" : ""}`, onClick: () => set({ repeat: "monthly" }), children: t("schedRepeatMonthly") }),
-                  ] })),
-                  f.repeat !== "none"
-                    ? jsxRuntime.jsxs(react.Fragment, { children: [
-                        schedField(t("schedRepeatEvery"), jsxRuntime.jsx("input", { type: "number", min: 1, max: 99, className: "dshk-vault-modalinput", value: f.interval, onChange: (e) => set({ interval: e.target.value }) })),
-                        f.repeat === "weekly" ? schedField(t("schedRepeatWeekly"), weekDayBtns) : null,
-                        // 结束日留空 = 一直重复（原生 date 控件不吃 placeholder，另起一行才标得清）
-                        schedField(t("schedRepeatEnd"), jsxRuntime.jsx("input", { type: "date", className: "dshk-vault-modalinput", value: f.repeatEnd, onChange: (e) => set({ repeatEnd: e.target.value }) })),
-                      ] })
-                    : null,
-                  // 改期 = 改整个系列（拆分与"只改这一次"是另外的语义，面板不做）
-                  ev?.recurrence ? jsxRuntime.jsx("div", { className: "dshk-sched-formhint", children: t("schedSeriesHint") }) : null,
-                ] })
-              : null,
-            schedField(t("schedLocation"), jsxRuntime.jsx("input", { className: "dshk-vault-modalinput", value: f.location, maxLength: 200, onChange: (e) => set({ location: e.target.value }) })),
-            schedField(t("schedDescription"), jsxRuntime.jsx("textarea", { className: "dshk-vault-modalinput dshk-sched-textarea", rows: 3, value: f.description, maxLength: 2000, onChange: (e) => set({ description: e.target.value }) })),
+            schedField(t("schedTitle"), schedInput("text", f.title, (e) => set({ title: e.target.value }), {
+              maxLength: 16, placeholder: t("schedTitleHint"),
+            })),
+            schedField(t("schedType"), schedSeg(f.kind, [["todo", t("schedKindTodo")], ["event", t("schedKindEvent")]], (v) => set({ kind: v })), true),
             !isNew
               ? jsxRuntime.jsxs("label", { className: "dshk-sched-checkline", children: [
                   jsxRuntime.jsx("input", { type: "checkbox", checked: f.done, onChange: (e) => set({ done: e.target.checked }) }),
                   jsxRuntime.jsx("span", { children: t("schedDone") }),
                 ] })
               : null,
+            f.kind === "todo"
+              ? schedField(t("schedTaskDue"), schedWhen(f.dueDate, f.dueTime,
+                  (e) => set({ dueDate: e.target.value }), (e) => set({ dueTime: e.target.value })))
+              : jsxRuntime.jsxs(react.Fragment, { children: [
+                  schedField(t("schedStart"), schedWhen(f.startDate, f.startTime,
+                    (e) => set({ startDate: e.target.value }), (e) => set({ startTime: e.target.value }))),
+                  schedField(t("schedEnd"), schedWhen(f.endDate, f.endTime,
+                    (e) => set({ endDate: e.target.value }), (e) => set({ endTime: e.target.value }))),
+                ] }),
+            f.kind === "event"
+              ? jsxRuntime.jsxs(react.Fragment, { children: [
+                  schedField(t("schedRepeat"), schedSeg(f.repeat, [
+                    ["none", t("schedRepeatNone")], ["daily", t("schedRepeatDaily")],
+                    ["weekly", t("schedRepeatWeekly")], ["monthly", t("schedRepeatMonthly")],
+                  ], (v) => set({ repeat: v })), true),
+                  f.repeat !== "none"
+                    ? jsxRuntime.jsxs(react.Fragment, { children: [
+                        schedField(t("schedRepeatEvery"), schedInput("number", f.interval, (e) => set({ interval: e.target.value }), { min: 1, max: 99 })),
+                        f.repeat === "weekly" ? schedField(t("schedRepeatWeekly"), weekDayBtns) : null,
+                        // 结束日留空 = 一直重复（原生 date 控件不吃 placeholder，另起一行才标得清）
+                        schedField(t("schedRepeatEnd"), schedInput("date", f.repeatEnd, (e) => set({ repeatEnd: e.target.value }))),
+                      ] })
+                    : null,
+                  // 改期 = 改整个系列（拆分与"只改这一次"是另外的语义，面板不做）
+                  ev?.recurrence ? jsxRuntime.jsx("div", { className: "dshk-sched-formhint", children: t("schedSeriesHint") }) : null,
+                ] })
+              : null,
+            schedField(t("schedLocation"), schedInput("text", f.location, (e) => set({ location: e.target.value }), { maxLength: 200 })),
+            schedField(t("schedDescription"), jsxRuntime.jsx("textarea", { className: "dshk-vault-modalinput dshk-sched-textarea", rows: 2, value: f.description, maxLength: 2000, onChange: (e) => set({ description: e.target.value }) })),
             err !== "" ? jsxRuntime.jsx("div", { className: "dshk-sched-formerr", children: err }) : null,
             delArm
               ? jsxRuntime.jsxs("div", { className: "dshk-sched-delask", children: [
@@ -4958,9 +4964,9 @@ ellipsis，窄列只截字不破版 */
         wide: true,
         children: jsxRuntime.jsxs(react.Fragment, { children: [
           jsxRuntime.jsxs("div", { className: "dshk-sched-form", children: [
-            schedField(t("schedStart"), jsxRuntime.jsx("input", { type: "datetime-local", className: "dshk-vault-modalinput", value: start, onChange: (e) => setStart(e.target.value) })),
-            schedField(t("schedEnd"), jsxRuntime.jsx("input", { type: "datetime-local", className: "dshk-vault-modalinput", value: end, onChange: (e) => setEnd(e.target.value) })),
-            schedField(t("schedEntryNote"), jsxRuntime.jsx("input", { className: "dshk-vault-modalinput", value: note, maxLength: owner ? 200 : 16, onChange: (e) => setNote(e.target.value) })),
+            schedField(t("schedStart"), schedInput("datetime-local", start, (e) => setStart(e.target.value))),
+            schedField(t("schedEnd"), schedInput("datetime-local", end, (e) => setEnd(e.target.value))),
+            schedField(t("schedEntryNote"), schedInput("text", note, (e) => setNote(e.target.value), { maxLength: owner ? 200 : 16 })),
             err !== "" ? jsxRuntime.jsx("div", { className: "dshk-sched-formerr", children: err }) : null,
           ] }),
           jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
@@ -5013,7 +5019,7 @@ ellipsis，窄列只截字不破版 */
                     typeof e2.due === "string" && e2.due !== "" ? jsxRuntime.jsx("span", { className: "dshk-sched-pickdue", children: e2.due.slice(5).replace("T", " ") }) : null,
                   ] }, `pick-${e2.id}`),
                 ) }),
-            schedField(t("schedTimerSoloBtn"), jsxRuntime.jsx("input", { className: "dshk-vault-modalinput", value: solo, maxLength: 16, placeholder: t("schedTimerSoloPh"), onChange: (e) => setSolo(e.target.value) })),
+            schedField(t("schedTimerSoloBtn"), schedInput("text", solo, (e) => setSolo(e.target.value), { maxLength: 16, placeholder: t("schedTimerSoloPh") })),
             err !== "" ? jsxRuntime.jsx("div", { className: "dshk-sched-formerr", children: err }) : null,
             // 挂表钮与"独立计时"钮两条路，摆在同一摞里（选中的待办才出这一条）
             picked !== ""
