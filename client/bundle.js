@@ -5610,6 +5610,30 @@ ellipsis，窄列只截字不破版 */
           report();
         });
         const onKeyDown = (e) => {
+          // 空图块退格删块：源码框空着时退格在框内是空操作，而图块节点的
+          // stopEvent 恒真（编辑器不接管），框和块都不动——自己收这个块。
+          // 位置按 DOM 反查（nodeDOM 与节点视图的 dom 是同一个对象），
+          // 不靠 posAtDOM：图块是 atom，边界位置推不准。
+          if (e.key === "Backspace" || e.key === "Delete") {
+            const ta = e.target;
+            const wrap = ta instanceof Element ? ta.closest(".dshk-mermaid") : null;
+            const ed = rteRef.current?.editor;
+            if (wrap !== null && ed !== undefined && ed !== null && ta.classList.contains("dshk-mermaid-input") && ta.value === "") {
+              let pos = -1;
+              ed.view.state.doc.descendants((node, p) => {
+                if (node.type.name !== "mermaidBlock") return true;
+                if (ed.view.nodeDOM(p) === wrap) { pos = p; return false; }
+                return true;
+              });
+              if (pos === -1) return;
+              e.preventDefault();
+              e.stopPropagation();
+              const view = ed.view;
+              view.dispatch(view.state.tr.delete(pos, pos + view.state.doc.nodeAt(pos).nodeSize));
+              view.focus();
+              return;
+            }
+          }
           // Tab / Shift+Tab：列表里升降级，其余一律吃掉（浏览器默认会把焦点带出编辑器）。
           // 表格与代码块放行给编辑器下层（表格跳格、代码块插两空格）
           if (e.key === "Tab") {
