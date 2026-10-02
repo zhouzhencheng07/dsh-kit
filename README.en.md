@@ -61,7 +61,7 @@ and take no component slot).
   on delete; chat integration (vault paths in chat open the page, "@" on a tree row cites
   page/selection); **page bodies are what-you-see-is-what-you-get editors** (TipTap rich
   text, no source/preview duality): `/` opens a two-level command menu (headings & text /
-  special blocks / lists / math & code / charts / attachments, the same groups as Wangshu),
+  special blocks / lists / math & code / charts / attachments),
   a selection floats an inline format bar (colour swatches and links included) and, inside a
   table, a second bar with row/column insert & delete, left/center/right alignment, header
   column and delete-table; the menu opens a page picker for wiki links (existing pages only),
@@ -80,11 +80,14 @@ and take no component slot).
   - **Schedule** (one shared entry — the composer-row Knowledge base / Schedule toggle opens the
   left sidebar cell, whose top tab strip switches between the two; no dedicated shortcut): the task
    list (3-day / week / all scopes) fills that cell and
-  the weekly grid fills the right dock tab with this week's stats in its header; block colors
+  the weekly grid fills the right dock tab; its header stats follow the week you are looking at
+  (a failed fetch says so instead of quietly showing stale numbers); the all-day band holds
+  date-only tasks, stacked one per row per day, with out-of-week ones on Monday; block colors
   encode state only (upcoming orange / running green / past blue / overdue red); the agent gets
   `schedule_query`, `schedule_create`, `schedule_update` and `schedule_delete`; data is stored
-  one-entry-per-file under `$DSH_HOME/dsh-kit/schedule/` (`events/` + `entries/` + `timer.json`,
-  shared with the Wangshu desktop app — editing and timers belong there, the plugin is read-only)
+  one-entry-per-file under `$DSH_HOME/dsh-kit/schedule/` (`events/` + `entries/`); entries written
+  by other programs show up in the panel, and agent updates merge by id instead of overwriting
+  what someone else changed
 - **Built-in browser** (right-dock tabs, **one page per tab** — the title is the page title and
   the official tab strip is the switcher; this component's row switch is the master
   switch — turning it off removes the tools and the panel, leaving only the official
