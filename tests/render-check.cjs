@@ -932,6 +932,21 @@ let vaultFetchPrev = null;
   check("页条不再挂表格按钮（浮条出条规则：选区落在表内）", !src.includes("vaultTableAddRow") && !src.includes("vaultTableDel"));
   check("Tab 手感：列表升降级、其余吃掉（不把焦点带出编辑器），Ctrl+Enter 跳出引用", src.includes('sinkListItem("listItem")') && src.includes('liftListItem("taskItem")') && src.includes('insertContentAt($from.after(d), { type: "paragraph" })'));
 }
+// 6.9e) 读端点限根 + 编辑器两处丢数据/失灵（就绪回调缺失、保存在途清脏）
+{
+  const hostFiles = fs.readFileSync(__dirname + "/../src/files/index.ts", "utf8");
+  const hostCore = fs.readFileSync(__dirname + "/../src/core/readable-roots.ts", "utf8");
+  const hostVault = fs.readFileSync(__dirname + "/../src/vault/index.ts", "utf8");
+  const hostSkills = fs.readFileSync(__dirname + "/../src/skills/index.ts", "utf8");
+  check("编辑器就绪真的回调 onReady（跨页锚点落位的唯一时机）", src.includes("onReadyRef.current?.()") && src.includes("onReady: onRteReady"));
+  check("自动保存按编辑代数清脏（在途时的改动另有一次保存，不被无条件清零）", src.includes("editGenRef.current += 1") && (src.match(/gen === editGenRef\.current/g) ?? []).length >= 4);
+  check("Ctrl+S 先撤防抖定时器（同内容不必再存一遍）", /clearTimeout\(saveTimer\);\s*saveTimer = null;/.test(src));
+  check("图片引用先解 .. 再判界，越界不接管", src.includes("const abs = absJoinUnder(base, raw);") && src.includes("if (!isPathInsideVaultRoot(root, abs)) return \"\";"));
+  check("读端点带工作区根（tree / diff 读 / 预览下载钮三处都带 cwd）", /function fetchTree\(path, signal, cwd\)/.test(src) && src.includes("fetchTree(dirPath, controller.signal, cwd)") && (src.match(/&cwd=\$\{encodeURIComponent/g) ?? []).length >= 2);
+  check("服务端：tree/read/raw 三处都过根闸（readGate）", (hostFiles.match(/readGate\(url, /g) ?? []).length === 3 && hostFiles.includes("不在可读根内"));
+  check("根集合来自注册表 + 请求 cwd，根自身不算内", hostCore.includes("export function registerReadableRoot") && hostCore.includes("export function withinReadable") && hostCore.includes("realpathSync") && hostCore.includes("trimmed === ''"));
+  check("知识库与技能各自注册自己的可读根（根归属方才知道自己的根是谁）", hostVault.includes("registerReadableRoot('vault'") && hostSkills.includes("registerReadableRoot('skills'") && hostSkills.includes("resolveRoots(cwd)"));
+}
 // 6.9b2) 阅读条「反链 N」：计数印在按钮上（来源页列表在浮层里，不再吊页尾）
 {
   stateSeq = 0;

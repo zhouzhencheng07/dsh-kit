@@ -27,7 +27,7 @@ import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 
-import { loadDep, loadToolsModule, sameOrigin } from '../core/index.ts'
+import { loadDep, loadToolsModule, sameOrigin, registerReadableRoot } from '../core/index.ts'
 import { VaultScanner, defaultVaultRoot } from './scanner.ts'
 import {
   createEntry,
@@ -128,6 +128,12 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       return ''
     }
   })
+  // 知识库根进「可读根」集合：它在工作区之外，页读与插图都走 files 的 /read 与
+  // /raw，端点限根后靠这条放行（根随配置热改，所以提供方现求值不缓存）
+  ctx.effect?.(
+    () => registerReadableRoot('vault', () => vaultScanner.root()),
+    'dsh-kit/vault: readable root',
+  )
 
   // webServer 可能在本组件 apply 之后才挂载，用动态注入等它就绪
   ctx.inject(['webServer'], (webCtx: KitWebCtx) => {

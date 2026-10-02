@@ -7,9 +7,9 @@
 
 import http from 'node:http'
 
-import { sameOrigin } from '../core/index.ts'
+import { sameOrigin, registerReadableRoot } from '../core/index.ts'
 import { ensurePoolBaselines } from './pool-git.ts'
-import { applySkillPool, defaultPoolDir } from './skill-pool.ts'
+import { applySkillPool, defaultPoolDir, resolveRoots } from './skill-pool.ts'
 
 interface KitCtx {
   inject(deps: string[], cb: (svc: any) => void): void
@@ -66,6 +66,16 @@ export function apply(ctx: KitCtx): void {
       }),
     )
   })
+
+  // 技能根进「可读根」集合：技能面板读 SKILL.md 走 files 的 /read，端点限根后
+  // 靠这条放行（池/用户/项目三组物理根，项目那组在 cwd 内本身就被放行）
+  ctx.effect(
+    () =>
+      registerReadableRoot('skills', (cwd) =>
+        resolveRoots(cwd).map((r) => r.dir),
+      ),
+    'dsh-kit/skills: readable roots',
+  )
 
   // entry 注销时撤路由（disposers 由注入回调在 apply 期间同步填充）
   ctx.effect(() => () => {

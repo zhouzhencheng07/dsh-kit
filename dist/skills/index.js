@@ -5,9 +5,9 @@
 // 唯一开关，GET /dsh-kit-skills/config 恒回空对象）——
 // client 拉 200 = 行启用、404（行禁用 → 本子模块不物化）= 不注册设置页。
 import http from 'node:http';
-import { sameOrigin } from "../core/index.js";
+import { sameOrigin, registerReadableRoot } from "../core/index.js";
 import { ensurePoolBaselines } from "./pool-git.js";
-import { applySkillPool, defaultPoolDir } from "./skill-pool.js";
+import { applySkillPool, defaultPoolDir, resolveRoots } from "./skill-pool.js";
 export const name = 'dsh-kit/skills';
 export function apply(ctx) {
     // skills 注册表是可选增强（归属展示），服务晚于本行就绪也无碍——注入回调捕获引用
@@ -43,6 +43,9 @@ export function apply(ctx) {
             },
         }));
     });
+    // 技能根进「可读根」集合：技能面板读 SKILL.md 走 files 的 /read，端点限根后
+    // 靠这条放行（池/用户/项目三组物理根，项目那组在 cwd 内本身就被放行）
+    ctx.effect(() => registerReadableRoot('skills', (cwd) => resolveRoots(cwd).map((r) => r.dir)), 'dsh-kit/skills: readable roots');
     // entry 注销时撤路由（disposers 由注入回调在 apply 期间同步填充）
     ctx.effect(() => () => {
         for (const dispose of disposers)

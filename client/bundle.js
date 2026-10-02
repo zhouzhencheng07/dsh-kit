@@ -1095,8 +1095,10 @@ window.__ModuleLoader__.load({
         // 的路径可能已过期
         const p = ev.currentTarget.closest("[data-textpreview-url]")?.querySelector("[data-textpreview-path]")?.getAttribute("title") || "";
         if (!p) return;
+        // 读端点限根：工作区那一根由当前会话的 cwd 带上；知识库根由 vault 组件注册
+        const cwd = currentSessionCwd();
         const a = document.createElement("a");
-        a.href = `/dsh-kit/raw?path=${encodeURIComponent(p)}&dl=1`;
+        a.href = `/dsh-kit/raw?path=${encodeURIComponent(p)}&dl=1${cwd === "" ? "" : `&cwd=${encodeURIComponent(cwd)}`}`;
         a.download = "";
         document.body.appendChild(a);
         a.click();
@@ -1637,6 +1639,17 @@ ellipsis，窄列只截字不破版 */
       try {
         const list = sessionsSvc && typeof sessionsSvc.list?.getSnapshot === "function" ? sessionsSvc.list.getSnapshot() : null;
         return mainRowOf(list)?.id ?? "";
+      } catch {
+        return "";
+      }
+    }
+    /** 当前主视图会话的工作区目录（读端点限根用：工作区那一根由调用方带上）；
+     *  拿不到给空串——服务端只把它当根集合里的一项，空着不影响其它根放行 */
+    function currentSessionCwd() {
+      try {
+        const list = sessionsSvc && typeof sessionsSvc.list?.getSnapshot === "function" ? sessionsSvc.list.getSnapshot() : null;
+        const cwd = mainRowOf(list)?.cwd;
+        return typeof cwd === "string" ? cwd.trim() : "";
       } catch {
         return "";
       }
@@ -2602,12 +2615,14 @@ ellipsis，窄列只截字不破版 */
       }
     }
 
-    function SkillContent({ file }) {
+    function SkillContent({ file, cwd }) {
       const [state, setState] = react.useState({ phase: "loading", text: "" });
       react.useEffect(() => {
         const controller = new AbortController();
         setState({ phase: "loading", text: "" });
-        kitGetJson(`/dsh-kit/read?path=${encodeURIComponent(file)}`, controller.signal)
+        // cwd 是「工作区那一根」——项目级技能池（<cwd>/.agents/skills）靠它才在可读根内
+        const root = typeof cwd === "string" && cwd.trim() !== "" ? `&cwd=${encodeURIComponent(cwd.trim())}` : "";
+        kitGetJson(`/dsh-kit/read?path=${encodeURIComponent(file)}${root}`, controller.signal)
           .then((body) =>
             setState({
               phase: "ready",
@@ -2618,7 +2633,7 @@ ellipsis，窄列只截字不破版 */
             if (!controller.signal.aborted) setState({ phase: "error", text: String(error?.message ?? error) });
           });
         return () => controller.abort();
-      }, [file]);
+      }, [file, cwd]);
       if (state.phase === "loading") return jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { padding: "6px 0 0" }, children: t("skLoading") });
       if (state.phase === "error")
         return jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { padding: "6px 0 0" }, children: `${t("contentFail")}：${state.text}` });
@@ -2792,7 +2807,7 @@ ellipsis，窄列只截字不破版 */
                 ],
               })
             : null,
-          open ? jsxRuntime.jsx("div", { className: "dshk-sk-detail", children: jsxRuntime.jsx(SkillContent, { file: skill.file }) }) : null,
+          open ? jsxRuntime.jsx("div", { className: "dshk-sk-detail", children: jsxRuntime.jsx(SkillContent, { file: skill.file, cwd }) }) : null,
         ],
       });
     }
@@ -3794,6 +3809,16 @@ ellipsis，窄列只截字不破版 */
         else out.push(s);
       }
       return out;
+    }
+
+    /** 相对引用解析成绝对路径：base 的分段 + 引用的分段（同样解 ..），按 base 的
+     *  分隔符拼回。**先解 .. 再判界**——引用里的 ../../.. 必须在拼 URL 之前消掉，
+     *  否则库内容（导入件 / 外部同步 / agent 写的 md）能用它拼出读库外文件的地址。 */
+    function absJoinUnder(baseAbs, rel) {
+      const base = String(baseAbs);
+      const sep = base.includes("\\") ? "\\" : "/";
+      const unixRoot = base.startsWith("/") && !/^[A-Za-z]:/.test(base) ? "/" : "";
+      return unixRoot + [...pathSegs(base), ...pathSegs(rel)].join(sep);
     }
 
     /** base 内的相对路径（`/` 分隔、无前导分隔符；base 本身回 ""）：不在 base 内回 null。
@@ -5036,6 +5061,9 @@ ellipsis，窄列只截字不破版 */
       // 脏态用**位**记而不是拿 md 比：每次按键都比一次等于每次按键整篇序列化，
       // 长文档直接卡；挂载即干净、改动即脏、存成功即干净
       const dirtyRef = react.useRef(false);
+      // 编辑代数：每次改动 +1。保存是异步的，返回时若代数已经变了（请求在飞期间
+      // 又敲了字），就不能清脏位——否则关签时清理「无脏可存」而丢掉最后几次按键
+      const editGenRef = react.useRef(0);
       const pausedRef = react.useRef(false); // 冲突 / 页面已不在 → 暂停自动保存
       const inTableRef = react.useRef(false);
       const initialMdRef = react.useRef(initialMd);
@@ -5297,6 +5325,10 @@ ellipsis，窄列只截字不破版 */
         pausedRef.current = false;
         dirtyRef.current = false;
         report();
+        // 就绪回报：新开页签时 pane 先以 active=true 挂载、那时编辑器还没建（内容还在
+        // 拉），激活沿那次锚点认领会落空——跨页锚点要在这里补认领（onReady 曾只赋值
+        // 没调用，锚点跳转因此静默失效）
+        onReadyRef.current?.();
         // 阅读位置：滚动节流记录 + create 之后一拍恢复（挂载即恢复会白设——
         // maxScroll 未建立）。docKey=归属路径
         let posTimer = null;
@@ -5325,9 +5357,12 @@ ellipsis，窄列只截字不破版 */
           if (pausedRef.current) return;
           const hh = rteRef.current;
           if (!hh) return;
+          const gen = editGenRef.current;
           const outcome = await onSaveRef.current(hh.getMd(), "auto");
-          if (outcome === "ok") dirtyRef.current = false;
-          else if (outcome !== "fail") pausedRef.current = true;
+          // 只有「这次请求发出的内容」仍是最新时才清脏；在飞期间的改动另有一次保存
+          if (outcome === "ok") {
+            if (gen === editGenRef.current) dirtyRef.current = false;
+          } else if (outcome !== "fail") pausedRef.current = true;
           report();
         };
         const flushSave = () => {
@@ -5337,6 +5372,7 @@ ellipsis，窄列只截字不破版 */
         };
         const offUpdate = h.onUpdate(() => {
           dirtyRef.current = true;
+          editGenRef.current += 1;
           report();
           clearTimeout(saveTimer);
           saveTimer = setTimeout(flushSave, 2000);
@@ -5422,16 +5458,21 @@ ellipsis，窄列只截字不破版 */
               /* 结构变了按默认走 */
             }
           }
-          // Ctrl+S：立即落盘（toast 反馈在 onSave 的 manual 分支）
+          // Ctrl+S：立即落盘（toast 反馈在 onSave 的 manual 分支）。
+          // 先撤掉待触发的防抖（同内容不必再存一遍，mtime 少搅一次），再按代数决定
+          // 能不能清脏——保存途中又有输入时，那部分另有一次自动保存兜底
           if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
             e.preventDefault();
             e.stopPropagation();
+            clearTimeout(saveTimer);
+            saveTimer = null;
             void (async () => {
               const hh = rteRef.current;
               if (!hh) return;
+              const gen = editGenRef.current;
               const outcome = await onSaveRef.current(hh.getMd(), "manual");
               if (outcome === "ok") {
-                dirtyRef.current = false;
+                if (gen === editGenRef.current) dirtyRef.current = false;
                 report();
               }
             })();
@@ -5556,15 +5597,17 @@ ellipsis，窄列只截字不破版 */
         // 日常保存不重挂（docTick 不动），打开新页（docKey）/外部重读（docTick）才重挂
       }, [libsReady, libsFailed, docKey, docTick]);
 
-      // 控制面暴露给父层：切签 flush / Ctrl+S 语义 / 覆盖盘上 / 脏判定
+      // 控制面暴露给父层：切签 flush / Ctrl+S 语义 / 覆盖盘上 / 脏判定。
+      // 三条保存路径都按代数决定清不清脏（见 editGenRef）：在飞期间的改动另有一次保存
       ctlRef.current = {
         dirty: () => dirtyRef.current,
         flush: async () => {
           const hh = rteRef.current;
           if (!hh || pausedRef.current) return "fail";
+          const gen = editGenRef.current;
           const outcome = await onSaveRef.current(hh.getMd(), "auto");
           if (outcome === "ok") {
-            dirtyRef.current = false;
+            if (gen === editGenRef.current) dirtyRef.current = false;
             report();
           }
           return outcome;
@@ -5572,9 +5615,10 @@ ellipsis，窄列只截字不破版 */
         flushManual: async () => {
           const hh = rteRef.current;
           if (!hh) return "fail";
+          const gen = editGenRef.current;
           const outcome = await onSaveRef.current(hh.getMd(), "manual");
           if (outcome === "ok") {
-            dirtyRef.current = false;
+            if (gen === editGenRef.current) dirtyRef.current = false;
             report();
           }
           return outcome;
@@ -7177,9 +7221,17 @@ ellipsis，窄列只截字不破版 */
                     },
                     resolveWiki: (target) => resolveVaultLink(pagesRef.current ?? [], target) !== null,
                     resolveSrc: (src) => {
-                      if (/^(https?:|data:)/i.test(src)) return src;
-                      const pageDir = () => path.split(/[\\/]/).slice(0, -1).join("\\");
-                      const abs = /^attachments\//i.test(src) ? `${root}/${src}` : `${pageDir()}/${src}`;
+                      const raw = String(src ?? "");
+                      if (/^(https?:|data:|blob:)/i.test(raw)) return raw;
+                      // 相对引用先解 .. 再判界：越界的（`../../..`）不接管，回空串让
+                      // 编辑器走破损占位——库内容不该拼出读库外文件的地址。服务端
+                      // 的读端点也限根（工作区 cwd + vault/skills 根），这里是第一道
+                      const sep = String(root).includes("\\") ? "\\" : "/";
+                      const base = /^attachments[\\/]/i.test(raw)
+                        ? String(root)
+                        : String(path).split(/[\\/]+/).slice(0, -1).join(sep);
+                      const abs = absJoinUnder(base, raw);
+                      if (!isPathInsideVaultRoot(root, abs)) return "";
                       // 相对地址（不带 origin）：桌面版页面在 dsh-app://app/ 下，图片走
                       // 宿主的应用协议转发才带得上鉴权；绝对 http://<host> 在桌面没有 cookie
                       return `/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
@@ -8555,8 +8607,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     // ─────────── 文件树 ───────────
     // 数据走宿主半边只读端点 /dsh-kit/tree（官方 browse RPC 只列目录不列文件）。
-    function fetchTree(path, signal) {
-      return kitGetJson(`/dsh-kit/tree?path=${encodeURIComponent(path)}`, signal, (b) => Array.isArray(b.entries));
+    // 端点限根（工作区 + 各组件注册的根），cwd 是「工作区那一根」——不带就被拒。
+    function fetchTree(path, signal, cwd) {
+      const root = typeof cwd === "string" && cwd.trim() !== "" ? `&cwd=${encodeURIComponent(cwd.trim())}` : "";
+      return kitGetJson(`/dsh-kit/tree?path=${encodeURIComponent(path)}${root}`, signal, (b) => Array.isArray(b.entries));
     }
 
     /** git 状态：available:false = 非 git 目录，前端隐藏徽标；available 时含
@@ -8932,7 +8986,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         const controller = new AbortController();
         abortsRef.current.add(controller);
         setExpanded((m) => ({ ...m, [dirPath]: { status: "loading" } }));
-        fetchTree(dirPath, controller.signal)
+        fetchTree(dirPath, controller.signal, cwd)
           .then((body) => {
             setExpanded((m) => ({
               ...m,
@@ -10262,7 +10316,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       react.useEffect(() => {
         if (diff.untracked !== true || deleted === true) return;
         const controller = new AbortController();
-        kitGetJson(`/dsh-kit/read?path=${encodeURIComponent(path)}`, controller.signal, (b) => typeof b.content !== "undefined")
+        kitGetJson(`/dsh-kit/read?path=${encodeURIComponent(path)}${typeof cwd === "string" && cwd.trim() !== "" ? `&cwd=${encodeURIComponent(cwd.trim())}` : ""}`, controller.signal, (b) => typeof b.content !== "undefined")
           .then((body) => {
             if (controller.signal.aborted) return;
             setState({ phase: "ready", body });

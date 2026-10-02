@@ -7,11 +7,17 @@
 // validate.ts）、git 联动端点（status/log/graph/branch/commit/diff）。
 // 另有 GET /dsh-kit-files/config 只读配置快照（client 半边的入口门控与快捷键
 // 真源），字段 = 本组件 Config schema。
+//
+// **读端点限根**（tree/read/raw）：同源调用方不得读根集合之外的文件。根 = 请求
+// 带的 `cwd`（工作区，client 半边三个调用点都带）+ 各组件注册的根（知识库
+// vaultRoot、技能池根，见 core/readable-roots.ts）。知识库在工作区之外、其图与
+// 页读都走这三个端点，所以边界必须是「根集合」而不是「工作区子树」——写端点
+// /fs/op 是另一个口径（只管工作区子树），别拿它当读端点的模板。
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { loadDep, decodePreviewText, sameOrigin, recycleDelete, findProjectRoot } from "../core/index.js";
+import { loadDep, decodePreviewText, sameOrigin, recycleDelete, findProjectRoot, readableRoots, withinReadable } from "../core/index.js";
 import { parseStatusBranch, parseLogRecords, parseBranchList, parseTrack } from "./git.js";
 /** git status 的条目上限（口径同文件树 TREE_LIMIT）：未跟踪目录展开没有天然边界 */
 const STATUS_ENTRY_LIMIT = 2000;
@@ -75,6 +81,13 @@ export function apply(ctx, config = {}) {
             },
         }));
         webCtx.effect(() => {
+            /** 读端点的根闸：null = 放行，字符串 = 拒绝理由（写进 403 的 error）。
+             *  根集合现求值：cwd 来自请求参数，各组件注册的根随配置/挂载变化。
+             *  列目录要 allowRoot——树根本身就是 cwd / 库根，列它才是入口 */
+            const readGate = (url, target, allowRoot = false) => {
+                const roots = readableRoots(url.searchParams.get('cwd') ?? '');
+                return withinReadable(target, roots, allowRoot) ? null : `不在可读根内：${path.basename(target)}`;
+            };
             // ── 文件树端点：GET /dsh-kit/tree?path=<绝对目录> ──
             // 只读单层列表（目录+文件，目录在前）。官方 browse RPC（ctx.workspaces
             // .listDirectory）只返回子目录不返回文件，文件树走这里。
@@ -102,6 +115,11 @@ export function apply(ctx, config = {}) {
                     const dir = validateCwd(url.searchParams.get('path') ?? '');
                     if (!dir.ok) {
                         json(400, { error: dir.message });
+                        return;
+                    }
+                    const denied = readGate(url, dir.path, true);
+                    if (denied !== null) {
+                        json(403, { error: denied });
                         return;
                     }
                     fs.readdir(dir.path, { withFileTypes: true }, (error, dirents) => {
@@ -178,6 +196,11 @@ export function apply(ctx, config = {}) {
                         json(400, { error: file.message });
                         return;
                     }
+                    const denied = readGate(url, file.path);
+                    if (denied !== null) {
+                        json(403, { error: denied });
+                        return;
+                    }
                     if (file.size > READ_LIMIT) {
                         // 大文件也回开头 512KB，让预览至少有内容可看
                         fs.open(file.path, 'r', (openError, fd) => {
@@ -244,6 +267,11 @@ export function apply(ctx, config = {}) {
                     const file = validateFile(url.searchParams.get('path') ?? '');
                     if (!file.ok) {
                         fail(400, file.message);
+                        return;
+                    }
+                    const denied = readGate(url, file.path);
+                    if (denied !== null) {
+                        fail(403, denied);
                         return;
                     }
                     // 白名单是给「能不能在浏览器里渲染」收的口，下载不适用：dl 模式下任意
