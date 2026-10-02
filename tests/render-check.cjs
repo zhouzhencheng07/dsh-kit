@@ -918,14 +918,14 @@ let vaultFetchPrev = null;
   check("冲突条两钮：覆盖盘上 / 读盘上的", src.includes('saveEditRef.current.overwrite()') && src.includes('saveEditRef.current.reload()'));
   check("编辑面不静默覆盖也不碰 git（写端点只回 modified，由人裁决）", !/stash|commitVault/.test(src));
 }
-// 6.9d) 编辑能力与望舒对齐：斜杠菜单补齐双链/流程图/图片、表格改自定义行列、
+// 6.9d) 编辑能力面：斜杠菜单含双链/流程图/图片、表格自定义行列、
 // 流程图真出图（自带 mermaid）、双链只列已有页、表格命令搬上选区浮条
 {
-  check("斜杠菜单分组与望舒同款：图表（表格/流程图）+ 附件（图片），特殊块末尾双链", src.includes('labelKey: "vmenuGChart"') && src.includes('labelKey: "vmenuGAttach"') && src.includes('key: "wiki"') && src.includes('key: "mermaid"') && src.includes('key: "image"'));
+  check("斜杠菜单分组：图表（表格/流程图）+ 附件（图片），特殊块末尾双链", src.includes('labelKey: "vmenuGChart"') && src.includes('labelKey: "vmenuGAttach"') && src.includes('key: "wiki"') && src.includes('key: "mermaid"') && src.includes('key: "image"'));
   check("表格不再列 1×2~5×5 固定档（点开自己填行列，默认 3×3 带表头）", !src.includes("vmenuTable1") && !src.includes("vmenuTable5") && src.includes("setTDlg({ rows: 3, cols: 3 })") && src.includes("insertTable(rows, cols)"));
   check("H5/H6 不进菜单（正文里已有的照常渲染）", !src.includes('key: "h5"') && !src.includes('key: "h6"') && src.includes("/^h[1-6]$/.test(key)"));
   check("流程图真出图：编辑器懒加载钩子 + 宿主白名单放行 mermaid", src.includes("/dsh-kit/vendor/mermaid.min.js") && src.includes("window.__dshkMermaidLoad") && src.includes("window.DshRTE.mermaidReady()") && fs.readFileSync(__dirname + "/../src/index.ts", "utf8").includes("['/dsh-kit/vendor/mermaid.min.js', 'mermaid.min.js']") && fs.existsSync(__dirname + "/../client/vendor/mermaid.min.js"));
-  check("双链选择框：只列库里已有的页、键盘选、插入 [[页名]] 后补空格", src.includes("const pickRowsOf") && src.includes("pickInsert") && src.includes('h.insertWikiLink({ target: pageBasename(p.rel) })') && /insertContent\(" "\)/.test(src));
+  check("双链选择框：只列库里已有的页、键盘选、重名时插 rel（不静默指向别的页）", src.includes("const pickRowsOf") && src.includes("pickInsert") && src.includes("const dup = (pagesRef.current ?? []).some") && src.includes('h.insertWikiLink({ target: dup ? p.rel.replace(/\\.md$/i, "") : base })') && /insertContent\(" "\)/.test(src));
   check("双链不监听 [[ 输入（字面文本要打得出来），建链只走菜单", !/__dshkWikiTrigger|wiki-link-trigger/.test(src));
   check("图片入口走系统文件选择器，与粘贴同一条入库管线", src.includes("input.accept = \"image/*\"") && src.includes("void attachAndInsert(files)") && src.includes("void attachAndInsert(files);"));
   check("表格命令在选区浮条：行/列增删 + 左中右对齐 + 表头列 + 删表", src.includes('children: "行↑"') && src.includes('children: "−列"') && src.includes('setCellAttribute("align", "center")') && src.includes("toggleHeaderColumn()") && src.includes('children: "✕表"'));
@@ -939,13 +939,40 @@ let vaultFetchPrev = null;
   const hostVault = fs.readFileSync(__dirname + "/../src/vault/index.ts", "utf8");
   const hostSkills = fs.readFileSync(__dirname + "/../src/skills/index.ts", "utf8");
   check("编辑器就绪真的回调 onReady（跨页锚点落位的唯一时机）", src.includes("onReadyRef.current?.()") && src.includes("onReady: onRteReady"));
-  check("自动保存按编辑代数清脏（在途时的改动另有一次保存，不被无条件清零）", src.includes("editGenRef.current += 1") && (src.match(/gen === editGenRef\.current/g) ?? []).length >= 4);
+  check("保存按编辑代数清脏（在途时的改动另有一次保存，不被无条件清零）", src.includes("editGenRef.current += 1") && src.includes("if (gen === editGenRef.current) dirtyRef.current = false;"));
   check("Ctrl+S 先撤防抖定时器（同内容不必再存一遍）", /clearTimeout\(saveTimer\);\s*saveTimer = null;/.test(src));
   check("图片引用先解 .. 再判界，越界不接管", src.includes("const abs = absJoinUnder(base, raw);") && src.includes("if (!isPathInsideVaultRoot(root, abs)) return \"\";"));
   check("读端点带工作区根（tree / diff 读 / 预览下载钮三处都带 cwd）", /function fetchTree\(path, signal, cwd\)/.test(src) && src.includes("fetchTree(dirPath, controller.signal, cwd)") && (src.match(/&cwd=\$\{encodeURIComponent/g) ?? []).length >= 2);
   check("服务端：tree/read/raw 三处都过根闸（readGate）", (hostFiles.match(/readGate\(url, /g) ?? []).length === 3 && hostFiles.includes("不在可读根内"));
   check("根集合来自注册表 + 请求 cwd，根自身不算内", hostCore.includes("export function registerReadableRoot") && hostCore.includes("export function withinReadable") && hostCore.includes("realpathSync") && hostCore.includes("trimmed === ''"));
   check("知识库与技能各自注册自己的可读根（根归属方才知道自己的根是谁）", hostVault.includes("registerReadableRoot('vault'") && hostSkills.includes("registerReadableRoot('skills'") && hostSkills.includes("resolveRoots(cwd)"));
+}
+// 6.9f) 共享目录一致性 + 保存串行化 + 浮层让路计数（评审批次二）
+{
+  const hostSchedule = fs.readFileSync(__dirname + "/../src/vault/schedule.ts", "utf8");
+  const hostFs = fs.readFileSync(__dirname + "/../src/vault/fs.ts", "utf8");
+  const hostVault2 = fs.readFileSync(__dirname + "/../src/vault/index.ts", "utf8");
+  check("日程 store 每次调用与盘面对齐（别处写入可见、agent 更新不覆盖）", hostSchedule.includes("private sync(): void") && hostSchedule.includes("this.diskStamp()") && (hostSchedule.match(/this\.sync\(\)/g) ?? []).length >= 7);
+  check("非法 recurrence 抛错而不是静默清空（patch 里 null 才是清空）", hostSchedule.includes("throw new Error('recurrence 不合法") && /if \(input\.recurrence === null\)/.test(hostSchedule));
+  check("每月 29/30/31 号在短月落到当月最后一天（系列不静默断掉）", hostSchedule.includes("startDom > lastDom && dom === lastDom"));
+  check("正文写回：tmp 名唯一 + rename 前再核一次 mtime（CAS 窗口收到最小）", hostFs.includes("crypto.randomBytes(6).toString('hex')") && hostFs.includes("const again = fs.statSync(target).mtimeMs") && hostFs.includes("if (again !== base)"));
+  check("超限请求体回 413 而不是挂着（destroy 前先把 promise 落地）", hostVault2.includes("json(res, 413, { error: 'body too large' })") && hostVault2.includes("res.on('finish', () => req.destroy())") && hostVault2.includes("done(null)"));
+  check("索引兜底形状与 VaultIndex 一致（folders，不是 spaces）", hostVault2.includes("{ root: null, folders: [], pages: [] }"));
+  check("保存串行：控制面与自动保存共用一条队列（并发写必撞 CAS）", src.includes("let saving = false;") && src.includes("let queuedMode = null;") && src.includes("saveQueueRef.current = enqueueSave;") && src.includes("flush: enqueued(\"auto\")"));
+  check("卸载保底用挂载那一刻的保存函数（ref 镜像此时已指向新页）", src.includes("const mountedSave = onSaveRef.current;") && src.includes("void mountedSave(rteRef.current.getMd(), \"auto\");"));
+  check("Esc 让路按计数持有（两个浮层同开，先关的不撤销让路）", src.includes("const holdEsc = () =>") && src.includes("const releaseEsc = () =>") && (src.match(/holdEsc\(\);/g) ?? []).length === 3 && (src.match(/releaseEsc\(\);/g) ?? []).length === 4 && (src.match(/dock\.vaultSearch\.open = true;/g) ?? []).length === 1 && (src.match(/dock\.vaultSearch\.open = false;/g) ?? []).length === 0);
+  check("读页上下文提交后发布（渲染期通知订阅者）+ 空页表用常量", src.includes("react.useEffect(() => {\n        const refreshIndex = () => void loadIndex();") && src.includes("?? VAULT_EMPTY_PAGES"));
+  check("反链 memo 依赖稳定（每次渲染现造 [] 会让 useMemo 恒不命中）", src.includes("const backlinks = react.useMemo(() => vaultBacklinks(indexPages ?? [], path), [indexPages, path]);"));
+  check("树路径按 root 的分隔符拼（缓存键/展开态/树上定位同一口径）", src.includes("return rel === \"\" ? base : absJoinUnder(base, rel);") && src.includes("samePath(el.getAttribute(\"title\"), revealPath)") && src.includes("const cur = joinRelPath(lib, segs.slice(0, i + 1).join(\"/\"));"));
+  check("行内改名只有资料库文件按扩展名切选区（笔记页名含点不被截半）", src.includes("const renameInput = (entry, label, keepExt) =>") && src.includes("ev.currentTarget.setSelectionRange(0, keepExt && i > 0 ? i : v.length);") && src.includes("renameInput(e, e.name, false)"));
+  check("批量导入失败报前三条 + 余量（不是只报首条）", src.includes("fails.slice(0, 3).join(\"；\")"));
+  check("斜杠菜单查询变化即重置高亮（下标越界会插入没高亮那条）", src.includes("if (q !== menuRef.current?.query) {"));
+  check("阅读位置重试可取消且宿主卸载即停", src.includes("const cancelRestore = restoreReadPos(") && src.includes("cancelRestore();") && src.includes("if (!el.isConnected) return;"));
+  check("粘贴图透明探测走缩略探针（PNG 源直接保 PNG）", src.includes("const PASTE_PROBE_EDGE = 256;") && src.includes("await decodeImage(file, file.type === \"image/png\")") && !src.includes("getImageData(0, 0, el.naturalWidth, el.naturalHeight)"));
+  check("库内非 md 相对链接交给官方文件右栏（不是死点击）", src.includes("onRelLink: (href) => {") && src.includes("else openOfficialFile(target);"));
+  check("周网格表头在滚动区之外（留在里面会被 sticky + y 轴吸附盖住全天带）", src.includes("className: \"dshk-sched-topgrid\"") && src.includes("scroll-padding-top:4px") && !/dshk-sched-dayhead\{position:sticky/.test(src));
+  check("周统计跟着周导航取（口径钉 weekStart），拉取失败挂提示", src.includes("useScheduleData(true, weekStart)") && src.includes('date=${encodeURIComponent(statsDate ?? schedToday())}') && src.includes('className: "dshk-sched-headfail"') && src.includes('className: "dshk-sched-taskfail"'));
+  check("全天带按列成栈 + 溢出折成 +N（平铺会全叠进同一网格单元）", src.includes("const SCHED_ALLDAY_MAX = 3;") && src.includes("const dateTodoByCol = react.useMemo") && src.includes('className: "dshk-sched-allday is-more"'));
 }
 // 6.9b2) 阅读条「反链 N」：计数印在按钮上（来源页列表在浮层里，不再吊页尾）
 {

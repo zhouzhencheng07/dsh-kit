@@ -13,8 +13,8 @@
 // - 时间全部存本地朴素串（无时区后缀），同格式字符串比较即时间序。
 // - 重复展开只在宿主查询层做（expandOccurrences，带 endDate/state），客户端拿
 //   现成 occurrence 渲染；支持 daily/weekly/monthly × interval × days(weekly) × end。
-// - 计时数据只读（起停与计时段编辑归望舒端）：timeEntries 照常载入并计入统计，
-//   目录里望舒端的 timer.json 不读不写。
+// - 计时数据只读（起停与计时段编辑不在本组件）：timeEntries 照常载入并计入统计，
+//   目录里计时器写下的 timer.json 不读不写。
 // 生命周期：模块级单例懒构造（首次端点/工具触达）；文件缺失=空库；JSON 损坏
 // → 坏文件改存 .bak 后降级空库，不让日程服务砖死。
 
@@ -76,7 +76,7 @@ export interface ScheduleData {
   events: ScheduleEvent[]
   /** 独立计时段（未挂条目）闭合后的时段：不进事件/待办列表，统计照计——
    *  没有它，停表即意味着这段时间凭空消失；note=独立计时的自由标题。
-   *  段本身由望舒端的计时产生，本端只读 */
+   *  段由计时功能写入，本端只读 */
   orphans?: ScheduleTimeEntry[]
 }
 
@@ -258,7 +258,7 @@ interface SanitizedFields {
   parentId?: string
 }
 
-/** 待办截止：纯日期或日期时刻都收（桌面端会写"今天18:00 交表"），统一截到分钟 */
+/** 待办截止：纯日期或日期时刻都收（"今天18:00 交表"这类带时刻的写法），统一截到分钟 */
 function sanitizeDue(raw: unknown): string | undefined {
   if (typeof raw !== 'string') return undefined
   if (DATE_RE.test(raw) || DT_RE.test(raw)) return raw.slice(0, 16)
@@ -273,7 +273,7 @@ function sanitizeFields(input: Record<string, unknown>, patch: boolean): Sanitiz
     const t = input.title
     if (typeof t === 'string' && t.trim() !== '') out.title = t.trim().slice(0, SCHED_TITLE_MAX)
   }
-  // 三态语义（与桌面端 patch 语义同一口径）：字符串落值、null/空串显式清空、其他类型不动
+  // 三态语义：字符串落值、null/空串显式清空、其他类型不动
   const clearableText = (key: 'description' | 'location', cap: number): void => {
     if (!has(key)) return
     const v = input[key]
@@ -290,7 +290,17 @@ function sanitizeFields(input: Record<string, unknown>, patch: boolean): Sanitiz
   }
   clearableDT('start')
   clearableDT('end')
-  if (has('recurrence')) out.recurrence = sanitizeRecurrence(input.recurrence)
+  // recurrence：null 才是「显式清空」，非 null 但不合法一律抛错——静默当成清空等于
+  // 一个拼错的 repeat 把整条系列抹掉（patch 里 out.recurrence=null 会被照单落盘）
+  if (has('recurrence')) {
+    if (input.recurrence === null) {
+      if (patch) out.recurrence = null
+    } else {
+      const rec = sanitizeRecurrence(input.recurrence)
+      if (rec === null) throw new Error('recurrence 不合法：type 需为 daily/weekly/monthly（weekly 还需 days）')
+      out.recurrence = rec
+    }
+  }
   if (has('color') && typeof input.color === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(input.color)) {
     out.color = input.color
   }
@@ -375,20 +385,23 @@ export function resolveScheduleDir(): string {
   return kitPath('schedule')
 }
 
-// 一条一文件（与桌面端、鸿蒙端同一份契约）：
+// 一条一文件（同步底座按文件合并的契约）：
 //   events/<id>.json    一条事件或待办（含 recurrence / timeEntries / rev）
 //   entries/<id>.json   一条独立计时段（原 orphans，自带 id）
-//   timer.json          进行中的计时（望舒端专用状态，本端不读不写）
+//   timer.json          进行中的计时（本端不读不写）
 // 为什么：同步（git 底座）按文件合并——整库单文件时两端各改一次必冲突，拆开后冲突面
 // 只剩"同一条"；文件名 = id，改期只改内容不移动文件、删除 = 删文件（不需要墓碑）。
 export class ScheduleStore {
   /** 当前数据目录（构造可注入别的路径供测试；默认 resolveScheduleDir()） */
   dir: string
   private data: ScheduleData = { events: [] }
+  /** 盘上签名（每个 json 的 名:体积:mtime + 目录项数）：变了才整库重读。
+   *  null = 还没记过 */
+  private stamp: string | null = null
 
   constructor(dir?: string) {
     this.dir = dir ?? resolveScheduleDir()
-    this.load()
+    this.sync()
   }
 
   private eventsDir(): string {
@@ -439,6 +452,40 @@ export class ScheduleStore {
     return out
   }
 
+  /** 盘上签名：只 stat 不读正文（轮询 30s 一次，这样才便宜）。目录项增删改都
+   *  会改到任一文件的体积/mtime 或目录本身的 mtime */
+  private diskStamp(): string {
+    const parts: string[] = []
+    for (const dir of [this.eventsDir(), this.entriesDir()]) {
+      let names: string[]
+      try {
+        names = fs.readdirSync(dir)
+      } catch {
+        continue
+      }
+      for (const name of names.sort()) {
+        if (!name.endsWith('.json')) continue
+        try {
+          const st = fs.statSync(path.join(dir, name))
+          parts.push(`${dir}/${name}:${st.size}:${st.mtimeMs}`)
+        } catch {
+          parts.push(`${dir}/${name}:gone`)
+        }
+      }
+    }
+    return parts.join('|')
+  }
+
+  /** 与盘面对齐后再答：库是共享目录，别的程序与同步随时在写，
+   *  启动时读一次就永远看不见那些改动，而且 agent 的更新会把别处改过的版本整条
+   *  覆盖掉。签名变了才重读，读写在同一个同步调用里完成。 */
+  private sync(): void {
+    const next = this.diskStamp()
+    if (next === this.stamp) return
+    this.load()
+    this.stamp = this.diskStamp() // load 自己会改盘（文件名归一/补 id），重取一次
+  }
+
   private load(): void {
     const events: ScheduleEvent[] = []
     for (const { file, value } of this.readJsonDir<ScheduleEvent>(this.eventsDir())) {
@@ -486,7 +533,8 @@ export class ScheduleStore {
 
   private writeEvent(id: string): void {
     const ev = this.data.events.find((e) => e.id === id)
-    if (ev) this.writeJson(path.join(this.eventsDir(), `${id}.json`), ev)
+    if (!ev) return
+    if (this.writeJson(path.join(this.eventsDir(), `${id}.json`), ev)) this.stamp = this.diskStamp()
   }
 
   private removeEventFile(id: string): void {
@@ -495,6 +543,7 @@ export class ScheduleStore {
     } catch {
       /* 不存在也算成功 */
     }
+    this.stamp = this.diskStamp()
   }
 
   /** 内容变了就推进版本号（同步用它判断"这条被改过几次"，不依赖时钟） */
@@ -504,17 +553,20 @@ export class ScheduleStore {
   }
 
   list(): ScheduleEvent[] {
+    this.sync()
     return this.data.events
   }
 
-  /** 独立计时段（不进事件列表，统计与网格展示用）；段由望舒端计时产生，本端只读 */
+  /** 独立计时段（不进事件列表，统计与网格展示用）；由计时功能写入，本端只读 */
   listOrphans(): ScheduleTimeEntry[] {
+    this.sync()
     return Array.isArray(this.data.orphans) ? this.data.orphans : []
   }
 
   create(input: Record<string, unknown>): ScheduleEvent {
     const fields = sanitizeFields(input, false)
     if (!fields.title) throw new Error('title 必填')
+    this.sync() // 落盘前先与盘面对齐：新 id 不冲突，但内存里不能是旧快照
     const now = new Date()
     const event: ScheduleEvent = {
       id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
@@ -532,6 +584,7 @@ export class ScheduleStore {
   }
 
   update(id: string, patch: Record<string, unknown>): ScheduleEvent | null {
+    this.sync() // 不先重读就会拿旧快照整条盖掉别处刚改过的内容
     const idx = this.data.events.findIndex((e) => e.id === id)
     const current = this.data.events[idx]
     if (idx < 0 || !current) return null
@@ -546,6 +599,7 @@ export class ScheduleStore {
   }
 
   remove(id: string): boolean {
+    this.sync()
     const before = this.data.events.length
     this.data.events = this.data.events.filter((e) => e.id !== id)
     if (this.data.events.length === before) return false
@@ -556,10 +610,12 @@ export class ScheduleStore {
   // ── 派生：展开 / 统计 / 汇总 ─────────────────────────────────────────────
 
   occurrences(from: string, to: string): Occurrence[] {
+    this.sync()
     return expandOccurrences(this.data.events, from, to)
   }
 
   stats(scope: 'day' | 'week' | 'month', date: string, now?: Date): { timedMs: number; totalMs: number; eventCount: number; completedCount: number; openCount: number } {
+    this.sync()
     const [from, to] = rangeOf(scope, date)
     const nowD = now ?? new Date()
     const timedMs = timedMsInRange(this.data.events, from, to, this.data.orphans)
@@ -592,6 +648,7 @@ export class ScheduleStore {
 
   /** agent 只看汇总（日/周/月）——schedule_query 工具的产物 */
   summary(scope: 'day' | 'week' | 'month', date: string): string {
+    this.sync()
     const [from, to] = rangeOf(scope, date)
     const stats = this.stats(scope, date)
     const lines: string[] = []
@@ -648,6 +705,7 @@ export class ScheduleStore {
   /** summary 的结构化并行视图：时段内条目 id/kind/标题/时间，供 agent 精确
    *  指向（删除/修改）。重复事件按 baseId 去重，待办含已完成（completedAt 落在时段） */
   items(scope: 'day' | 'week' | 'month', date: string): ScheduleItemRef[] {
+    this.sync()
     const [from, to] = rangeOf(scope, date)
     const out: ScheduleItemRef[] = []
     const seenEvents = new Set<string>()
@@ -798,7 +856,12 @@ export function expandOccurrences(events: ScheduleEvent[], from: string, to: str
         const days = rec.days ?? [isoWeekday(startDate)]
         hit = days.includes(isoWeekday(d)) && Math.floor(diffDays(mondayOf(startDate), mondayOf(d)) / 7) % interval === 0
       } else {
-        hit = d.slice(8, 10) === startDate.slice(8, 10) && diffMonths(startDate, d) % interval === 0
+        // 每月：同一天号；29/30/31 号在短月落到该月最后一天（"每月31号"不该
+        // 整个二月都不出现——静默跳过等于系列悄悄断了）
+        const startDom = Number(startDate.slice(8, 10))
+        const dom = Number(d.slice(8, 10))
+        const lastDom = new Date(Number(d.slice(0, 4)), Number(d.slice(5, 7)), 0).getDate()
+        hit = (dom === startDom || (startDom > lastDom && dom === lastDom)) && diffMonths(startDate, d) % interval === 0
       }
       if (!hit) continue
       const occ = mk(d, true)

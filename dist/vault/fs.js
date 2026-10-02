@@ -454,9 +454,18 @@ export function writePage(root, targetAbs, content, baseMtime) {
         throw new Error('目标不是文件');
     if (stat.mtimeMs !== base)
         return { mtimeMs: stat.mtimeMs, modified: true };
-    const tmp = `${target}.tmp`;
+    // tmp 名带 pid + 随机尾巴：固定 `<页>.tmp` 让两个页签同时保存同一页时互相踩
+    // （后写的覆盖先写的 tmp，两次 rename 只有一次落成，另一份内容凭空消失）
+    const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
     try {
         fs.writeFileSync(tmp, content, 'utf8');
+        // rename 前再核一次 mtime：上面那次 stat 到这里之间（写 tmp 的几毫秒）盘上
+        // 可能已被别处改过，CAS 窗口收在这最后一次判定上
+        const again = fs.statSync(target).mtimeMs;
+        if (again !== base) {
+            fs.rmSync(tmp, { force: true });
+            return { mtimeMs: again, modified: true };
+        }
         fs.renameSync(tmp, target);
     }
     catch (error) {

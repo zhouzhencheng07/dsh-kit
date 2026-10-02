@@ -942,7 +942,7 @@ window.__ModuleLoader__.load({
     // 知识库那两处与 root 的接线：座对象由 dsh-kit/vault 组件物化期填字段（root 只读）
     exports.vaultView = { renderer: null }; // 侧栏知识库目录索引视图（root 单槽分发）
     exports.vaultRoute = { open: null }; // 文件树行点击的 vault 改道（命中返回 true）
-    exports.vaultSearch = { open: false }; // 知识库搜索浮层开着（root 全局 Esc 让路）
+    exports.vaultSearch = { open: false, held: 0 }; // 知识库搜索浮层/对话框开着（root 全局 Esc 让路）
     // 底座是活动 entry：client runner 按 client 插件形状物化本模块，必须带 apply
     //（载体 entry，本体无行为）
     exports.apply = async (ctx) => {
@@ -1314,7 +1314,7 @@ window.__ModuleLoader__.load({
 /* 侧栏浏览区宿主（知识库目录 / 日程待办清单占 sidebar.workspaces） */
 .dshk-sidehost{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;pointer-events:auto;overflow:hidden}
 /* 侧栏那格（知识库 · 日程 共占）的顶部 tab 条：面板本体在下面 .dshk-sidebody。
-   选中态 = 品牌色 + 下划线（望舒侧栏同款，不给填充底） */
+   选中态 = 品牌色 + 下划线（不给填充底） */
 .dshk-sidetabs{flex:none;display:flex;align-items:stretch;padding:0 6px;border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dshk-sidetab{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:5px;appearance:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:12px;line-height:1;padding:9px 6px;cursor:pointer;white-space:nowrap;overflow:hidden}
 .dshk-sidetab>span{overflow:hidden;text-overflow:ellipsis}
@@ -1472,7 +1472,7 @@ window.__ModuleLoader__.load({
 .dshk-vault-bswatch{flex:none;width:16px;height:16px;border-radius:4px;border:1px solid var(--dsw-alias-border-l2);cursor:pointer;padding:0}
 .dshk-vault-bswatch-clear{width:100%;appearance:none;border:0;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:10px;line-height:1;padding:2px 0;cursor:pointer}
 .dshk-vault-bswatch-clear:hover{color:var(--dsw-alias-label-primary)}
-/* 双链选择框：只列库里已有的页（碎链没入口，与望舒一致），贴光标弹、键盘上下选 */
+/* 双链选择框：只列库里已有的页（碎链没入口），贴光标弹、键盘上下选 */
 .dshk-vault-pick{position:fixed;z-index:1300;width:300px;max-height:320px;display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18));overflow:hidden}
 .dshk-vault-pickinput{flex:none;width:100%;box-sizing:border-box;border:0;border-bottom:1px solid var(--dsw-alias-border-l1);background:none;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;padding:7px 10px;outline:none}
 .dshk-vault-picklist{flex:1;min-height:0;overflow-y:auto;padding:4px}
@@ -1488,7 +1488,7 @@ window.__ModuleLoader__.load({
 .dshk-vault-tabledlg-hint{font-size:11px;color:var(--dsw-alias-label-tertiary)}
 .dshk-vault-tabledlg-row{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
 .dshk-vault-tbtn.is-primary{border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-button-tool-bar-fill)}
-/* 日程：左栏待办清单 + 右栏周时间网格（望舒同款分工——清单在侧栏、网格占主区）。
+/* 日程：左栏待办清单 + 右栏周时间网格（清单在侧栏、网格占主区）。
    --dshk-sched-band = 表头带高（角格与日期头共用，网格 sticky 滚动的基准） */
 .dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px}
 .dshk-sched-head{flex:none;display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--dsw-alias-border-l2)}
@@ -1503,29 +1503,37 @@ window.__ModuleLoader__.load({
 .dshk-sched-headstat .dshk-sched-statrow{max-width:100%}
 /* 主区只剩网格：待办在侧栏、统计在表头（所有坞宽一致） */
 .dshk-sched-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;min-width:0}
-/* y 轴 mandatory 吸附到整点行：静止位置恒为「某小时标签贴在表头带下方」，
-标签既不会被 sticky 角格盖掉半截，也不会漂进表头区；
-scroll-padding 与 --dshk-sched-band 绑定，改带高只需改一处 */
-.dshk-sched-gridwrap{flex:1 1 auto;min-width:0;overflow:auto;scroll-snap-type:y mandatory;scroll-padding-top:calc(var(--dshk-sched-band) + 4px)}
-/* 顶部 8px 是 00:00 行与表头带的呼吸空间（s=0 时) */
+/* 表头（角格 + 7 个日期头 + 全天带）**放在滚动区之外**：留在滚动区里就得靠 sticky
+压住，而 y 轴 mandatory 吸附把静止位置钉在「整点行贴在 sticky 表头下方」，
+全天带那一行永远被盖住（chip 画了却看不见） */
+.dshk-sched-topgrid{flex:none;display:grid;grid-template-columns:52px repeat(7,minmax(0,1fr));border-bottom:1px solid var(--dsw-alias-border-l2)}
+/* y 轴 mandatory 吸附到整点行：静止位置恒为「某小时标签贴在滚动区上沿」 */
+.dshk-sched-gridwrap{flex:1 1 auto;min-width:0;overflow:auto;scroll-snap-type:y mandatory;scroll-padding-top:4px}
+/* 顶部 8px 是 00:00 行的呼吸空间 */
 .dshk-sched-gridinner{padding-top:8px}
 /* 每日列宽跟随坞宽（minmax(0,1fr) 均分），不设网格 min-width——设了的话窄坞
 （下限 480，(480-52)/7≈61px/天）会横向滚动只露出四-五天；事件/全天chip均有
 ellipsis，窄列只截字不破版 */
 .dshk-sched-grid{display:grid;grid-template-columns:52px repeat(7,minmax(0,1fr))}
-.dshk-sched-corner{position:sticky;top:0;z-index:3;height:var(--dshk-sched-band);box-sizing:border-box;background:var(--dsw-alias-bg-base)}
-.dshk-sched-dayhead{position:sticky;top:0;z-index:3;box-sizing:border-box;height:var(--dshk-sched-band);text-align:center;padding:6px 0 4px;background:var(--dsw-alias-bg-base);border-bottom:1px solid var(--dsw-alias-border-l2)}
+.dshk-sched-corner{height:var(--dshk-sched-band);box-sizing:border-box;background:var(--dsw-alias-bg-base)}
+.dshk-sched-dayhead{box-sizing:border-box;height:var(--dshk-sched-band);text-align:center;padding:6px 0 4px;background:var(--dsw-alias-bg-base)}
 .dshk-sched-wd{display:block;font-size:11px;color:var(--dshk-sched-wdcolor,var(--dsw-alias-label-tertiary))}
 .dshk-sched-dnum{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;border-radius:999px;font-size:12px;margin-top:2px}
 /* 主色底上的文字用 bg-base 而不是写死 #fff：品牌主色是单色令牌（浅色近黑 / 深色近白），
    写死白在深色主题就是白底白字——日程字体颜色不随深暗色变 */
 .dshk-sched-dayhead.is-today .dshk-sched-dnum{background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
 /* 表头下的全天带：只放「有截止日且不带时刻的待办」（桌面口径），待办橙浅底、
-   逾期红；不在本周的落周一列 */
-.dshk-sched-allday{grid-row:2;padding:2px 4px;font-size:11px;background:#ffe8cc;color:#d9480f;border-radius:4px;margin:2px 2px;min-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+   逾期红；不在本周的落周一列。**一列一个容器**（.dshk-sched-alldaycol）逐条堆叠
+   ——chip 各自当网格项会全落进同一格互相盖住，读者只看得见最后一条 */
+.dshk-sched-alldaycol{display:flex;flex-direction:column;gap:2px;padding:2px 0;min-width:0}
+.dshk-sched-allday{padding:2px 4px;font-size:11px;background:#ffe8cc;color:#d9480f;border-radius:4px;margin:0 2px;min-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .dshk-sched-allday:hover{filter:brightness(.97)}
 .dshk-sched-allday.is-overdue{background:#ffe3e3;color:#c92a2a}
 .dshk-sched-allday.is-done{background:#f1f3f5;color:#868e96}
+.dshk-sched-allday.is-more{background:transparent;color:var(--dsw-alias-label-tertiary);text-align:center;cursor:default;box-shadow:inset 0 0 0 1px var(--dsw-alias-border-l2)}
+/* 拉取失败提示（面板还挂着上一次的数据，口径已不可信——说出来而不是静默） */
+.dshk-sched-headfail{font-size:11px;color:var(--dsw-alias-label-tertiary);border:1px solid var(--dsw-alias-border-l2);border-radius:6px;padding:2px 8px}
+.dshk-sched-taskfail{flex:none;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-tertiary);padding:6px 10px;border-bottom:1px solid var(--dsw-alias-border-l1)}
 .dshk-sched-timeline{border-right:1px solid var(--dsw-alias-border-l2)}
 .dshk-sched-hourlabel{height:42px;padding-right:6px;font-size:10px;color:var(--dsw-alias-label-tertiary);text-align:right;scroll-snap-align:start}
 .dshk-sched-daycol{position:relative;border-left:1px solid var(--dsw-alias-border-l2);min-width:0}
@@ -3158,7 +3166,7 @@ ellipsis，窄列只截字不破版 */
       slotsCtx = ctx;
       kitBase.apply(ctx); // 底座服务捕获（官方右栏 sidebarRight）
 
-      // ── 官方文件预览的鸿蒙兼容兜底（依赖宿主断言，升级复核见知识库「DSH 插件开发坑」）──
+      // ── 官方文件预览的非 Chromium 引擎兜底（依赖宿主断言，升级复核见知识库「DSH 插件开发坑」）──
       // OpenHarmony 等引擎有两个叠加缺陷，缺一个就全站正常、只在真机发作：
       // ① 自定义 scheme 的 URL 解析：dsh-resource://file/… 的 hostname 恒为空 → 宿主
       //    client-resources 的 protocolOf 返回 undefined → 资源查找恒 none，预览恒报
@@ -3254,6 +3262,18 @@ ellipsis，窄列只截字不破版 */
     const jsxRuntime = require("react/jsx-runtime");
     const reactDom = require("react-dom");
     const dock = kit;
+    // Esc 让路：浮层/对话框/行内菜单开着时 root 的全局 Esc 收手，只关最上层。
+    // **按计数持有**，不用裸布尔——搜索浮层与对话框、行内菜单可能同时开着，
+    // 先关的那个把 open 抹回 false 会让下层浮层（乃至页签）被同一个 Esc 收走
+    const holdEsc = () => {
+      dock.vaultSearch.held = (dock.vaultSearch.held ?? 0) + 1;
+      dock.vaultSearch.open = true;
+    };
+    const releaseEsc = () => {
+      const n = Math.max(0, (dock.vaultSearch.held ?? 0) - 1);
+      dock.vaultSearch.held = n;
+      dock.vaultSearch.open = n > 0;
+    };
     const {
       getKitUi, setKitUi, useKitUi, KitTip, flashToast, writeClipboard,
       kitJson, kitPostJson, resolveZh, baseName, pageBasename,
@@ -3287,6 +3307,7 @@ ellipsis，窄列只截字不破版 */
       schedStatsDone: "已过",
       schedStatsOpen: "未到",
       schedStatsTitle: "本周统计",
+      schedLoadFail: "日程刷新失败（面板是上一次的数据）",
       schedTimerStandalone: "独立计时（不挂待办）",
       schedWeekdays: "一,二,三,四,五,六,日",
       vaultTitle: "知识库",
@@ -3445,6 +3466,7 @@ ellipsis，窄列只截字不破版 */
       schedStatsDone: "Past",
       schedStatsOpen: "Upcoming",
       schedStatsTitle: "This week",
+      schedLoadFail: "Schedule refresh failed (showing the last fetched data)",
       schedTimerStandalone: "Standalone timer (no task)",
       schedWeekdays: "Mo,Tu,We,Th,Fr,Sa,Su",
       vaultTitle: "Knowledge base",
@@ -3639,8 +3661,8 @@ ellipsis，窄列只截字不破版 */
 
     // ── 读页上下文（索引侧发布 → 页签侧消费）──
     // 页签正文渲染 VaultPagePane 需要库根 / 索引页表 / 开页入口 / 刷新 / toast，
-    // 这些都住在常驻的索引视图里。发布走最小 store：索引侧每次渲染后 publish，
-    // 页签侧订阅（索引刷新、搜索命中变化都会带着新对象过来）。
+    // 这些都住在常驻的索引视图里。发布走最小 store：索引侧**提交后** publish，
+    // 页签侧订阅（索引刷新才会带着新对象过来）。
     const vaultReader = { root: null, earlyBody: null, indexPages: null, openPath: null, refreshIndex: null, setToast: null };
     let vaultReaderVersion = 0;
     const vaultReaderSubs = new Set();
@@ -3649,6 +3671,8 @@ ellipsis，窄列只截字不破版 */
       vaultReaderVersion += 1;
       for (const fn of vaultReaderSubs) fn();
     }
+    /** 索引未就绪时的共享空页表：每次渲染现造 `[]` 会让页签侧的 useMemo 依赖恒变 */
+    const VAULT_EMPTY_PAGES = [];
     function useVaultReader() {
       react.useSyncExternalStore(
         (cb) => {
@@ -3842,11 +3866,12 @@ ellipsis，窄列只截字不破版 */
       return rel !== null && rel !== "";
     }
 
-    /** root 下 rel（`/` 分隔的相对路径）的绝对路径：正斜杠在 Node 侧照收，只用于
-     *  比对与请求参数（不落盘打印） */
+    /** root 下 rel（`/` 分隔的相对路径）的绝对路径：按 **root 的分隔符**拼（宿主
+     *  发来的 folders/library 路径是反斜杠，拼成正斜杠会让树缓存键、展开态、
+     *  树上定位整条链对不上——那些键全是宿主路径）；只用于比对与请求参数 */
     function joinRelPath(root, rel) {
       const base = String(root).replace(/[\\/]+$/, "");
-      return rel === "" ? base : `${base}/${rel}`;
+      return rel === "" ? base : absJoinUnder(base, rel);
     }
 
     /** 侧栏搜索的命中集合：宿主全文搜索给笔记页，笔记目录 / 资料库
@@ -3928,6 +3953,14 @@ ellipsis，窄列只截字不破版 */
     /** 路径是否等于某前缀或落在其下（改名/移动/删除后同步树与页签用；两种分隔符都认） */
     function pathUnder(p, prefix) {
       return p === prefix || p.startsWith(`${prefix}\\`) || p.startsWith(`${prefix}/`);
+    }
+
+    /** 路径等值（分隔符无关）：树行 title、目标地址、缓存键可能各用一种分隔符，
+     *  直接字符串比永远对不上——按分段比才是同一口径 */
+    function samePath(a, b) {
+      const x = pathSegs(String(a ?? ""));
+      const y = pathSegs(String(b ?? ""));
+      return x.length === y.length && x.every((s, i) => s === y[i]);
     }
 
     /** 改名/移动后把开着的那几张知识库签一起搬（等路径或整棵前缀）：旧地址收掉、
@@ -4122,7 +4155,7 @@ ellipsis，窄列只截字不破版 */
       react.useEffect(() => {
         // 让路座：Esc 归这个对话框（同 target 上 root 的捕获监听注册得更早，
         // 光 stopPropagation 拦不住它，会连带把右栏页签收了）
-        dock.vaultSearch.open = true;
+        holdEsc();
         const onKey = (e) => {
           if (e.key === "Escape") {
             e.stopPropagation();
@@ -4131,7 +4164,7 @@ ellipsis，窄列只截字不破版 */
         };
         window.addEventListener("keydown", onKey, true);
         return () => {
-          dock.vaultSearch.open = false;
+          releaseEsc();
           window.removeEventListener("keydown", onKey, true);
         };
       }, [onClose]);
@@ -4230,22 +4263,30 @@ ellipsis，窄列只截字不破版 */
     /** 恢复：优先锚点（选区落回），再设 scrollTop。恢复必须等内容渲染后——挂载
      *  即设会白设（maxScroll 未建立）。容器还隐藏着（非激活标签被后台重读）就
      *  定时重试到可见为止；期间用户自己滚过（偏离顶部）则放弃，不抢滚动权。
-     *  用 setTimeout 不用 rAF：后台/被遮挡的窗口 rAF 会停发，定时器照走 */
+     *  用 setTimeout 不用 rAF：后台/被遮挡的窗口 rAF 会停发，定时器照走。
+     *  返回取消函数：调用方卸载时必须撤——重试会一直打到容器可见为止，
+     *  页签早关了还在重试，回调摸的是已销毁的编辑器 */
     function restoreReadPos(key, el, applyAnchor) {
       const rec = readPosStore.get(key);
-      if (!rec || rec.scrollTop <= 0 || !el) return;
+      if (!rec || rec.scrollTop <= 0 || !el) return () => {};
       let tries = 0;
+      let timer = null;
       const step = () => {
         tries += 1;
+        if (!el.isConnected) return; // 宿主已卸载：不再重试
         if (el.getClientRects().length === 0) {
-          if (tries < 300) setTimeout(step, 60);
+          if (tries < 300) timer = setTimeout(step, 60);
           return;
         }
         if (el.scrollTop > 2) return;
         try { applyAnchor?.(rec.anchor); } catch { /* 选区失效按纯滚动恢复 */ }
         el.scrollTop = rec.scrollTop;
       };
-      setTimeout(step, 60);
+      timer = setTimeout(step, 60);
+      return () => {
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+      };
     }
 
     /** 知识库 · 日程 的唯一入口钮（输入行，源代码管理与终端之间）：
@@ -4273,12 +4314,14 @@ ellipsis，窄列只截字不破版 */
     // （重复展开与 state 派生都在宿主做，这里只渲染）+ orphans。
     // 块颜色只表达状态（浅底深字）：还没到橙 / 进行中绿 / 已过去蓝 / 逾期红——
     // 不按标题散列取色（color 字段不读）；已闭合计时段按已过去蓝展示。
-    // 面板只读：写路径归 agent 工具（schedule_query/create/update/delete）与望舒端；
-    // 计时数据只展示不编辑。
+    // 面板只读：写路径归 agent 工具（schedule_query/create/update/delete）与外部
+    // 写入；计时数据只展示不编辑。
 
-    const SCHED_DAY_START = 0; // 网格 0:00–24:00（与鸿蒙端一致，起止时刻零裁剪）
+    const SCHED_DAY_START = 0; // 网格 0:00–24:00（起止时刻零裁剪）
     const SCHED_DAY_END = 24 * 60;
     const SCHED_HOUR_PX = 42;
+    // 全天带一列最多画几条 chip，多的折成 +N（带高随之封顶）
+    const SCHED_ALLDAY_MAX = 3;
     // 宿主 occurrence.state → 状态色类（浅底深字）
     const SCHED_STATE_CLASS = { todo: "is-todo", doing: "is-doing", past: "is-past" };
 
@@ -4403,11 +4446,13 @@ ellipsis，窄列只截字不破版 */
 
     // ── 日程数据钩子（清单与网格各自挂载、各自轮询）：侧栏待办清单只要事件与
     // 实例（needStats=false 省掉统计那次请求），右栏网格另取周统计；
-    // 面板只读无写操作，30s 轮询兜底接住 agent 工具与望舒端写进来的变化 ──
-    function useScheduleData(needStats = true) {
+    // 面板只读无写操作，30s 轮询兜底接住 agent 工具与外部写入的变化 ──
+    // statsDate = 网格当前显示的那一周（周导航翻页即换口径）；清单不关心统计
+    function useScheduleData(needStats = true, statsDate = null) {
       const [data, setData] = react.useState(() => ({ events: [], occurrences: [], orphans: [] }));
-      // 统计口径固定周
       const [stats, setStats] = react.useState(null);
+      // 拉取失败不静默：面板继续显示上一次的数据，但挂出提示（口径不可信要说出来）
+      const [loadFail, setLoadFail] = react.useState(false);
       const [nowTick, setNowTick] = react.useState(() => Date.now());
       const fetchData = react.useCallback(async () => {
         try {
@@ -4421,16 +4466,20 @@ ellipsis，窄列只截字不破版 */
             orphans: Array.isArray(body.orphans) ? body.orphans : [],
           });
         } catch {
-          // 拉取失败保留旧数据，下一轮轮询再试
+          // 拉取失败保留旧数据，下一轮轮询再试（提示条由 loadFail 挂着）
+          return false;
         }
+        return true;
       }, []);
       const fetchStats = react.useCallback(async () => {
         try {
-          setStats(await kitJson(`/dsh-kit/schedule/stats?scope=week&date=${encodeURIComponent(schedToday())}`));
+          setStats(await kitJson(`/dsh-kit/schedule/stats?scope=week&date=${encodeURIComponent(statsDate ?? schedToday())}`));
         } catch {
           setStats(null);
+          return false;
         }
-      }, []);
+        return true;
+      }, [statsDate]);
       react.useEffect(() => {
         void fetchData();
       }, [fetchData]);
@@ -4441,7 +4490,10 @@ ellipsis，窄列只截字不破版 */
       react.useEffect(() => {
         const timer = setInterval(() => {
           if (document.visibilityState === "hidden") return;
-          void fetchData();
+          void fetchData().then((okData) => {
+            if (!needStats) return setLoadFail(!okData);
+            void fetchStats().then((okStats) => setLoadFail(!(okData && okStats)));
+          });
           setNowTick(Date.now());
         }, 30000);
         const minute = setInterval(() => setNowTick(Date.now()), 60000);
@@ -4449,11 +4501,11 @@ ellipsis，窄列只截字不破版 */
           clearInterval(timer);
           clearInterval(minute);
         };
-      }, [fetchData]);
-      return { data, stats, nowTick, fetchData, fetchStats };
+      }, [fetchData, fetchStats, needStats]);
+      return { data, stats, loadFail, nowTick, fetchData, fetchStats };
     }
 
-    /** 待办清单（侧栏「日程」tab 整格，望舒侧栏同款）——清单口径：
+    /** 待办清单（侧栏「日程」tab 整格）——清单口径：
      *  行 = 逾期待办 → 有截止日待办 → 无期限待办（仅「全部」）→ 还没过去的定时
      *  事件实例（**一次一次列**，重复系列不合并）。面板只读：行只展示标题与
      *  截止/时刻，无勾选、无计时、无编辑入口。范围档：近三日/近一周/全部
@@ -4485,7 +4537,7 @@ ellipsis，窄列只截字不破版 */
       };
     }
     function ScheduleTasksPanel() {
-      const { data } = useScheduleData(false);
+      const { data, loadFail } = useScheduleData(false);
       const [scope, setScope] = react.useState(schedTodoScopeSaved);
       const groups = react.useMemo(() => schedBuildTodoRows(data), [data]);
       const today = schedToday();
@@ -4524,7 +4576,9 @@ ellipsis，窄列只截字不破版 */
           ) }),
         ] }),
         // 行全部渲染，这一层自己滚（表头与范围档钉死）
-        jsxRuntime.jsx("div", { className: "dshk-sched-taskrows", children:
+        jsxRuntime.jsx("div", { className: "dshk-sched-taskrows", children: [
+          // 拉取失败：行照旧显示上一次的数据，但顶上挂一句（数据已旧，说出来）
+          loadFail ? jsxRuntime.jsx("div", { className: "dshk-sched-taskfail", children: t("schedLoadFail") }) : null,
           rows.length === 0
             ? jsxRuntime.jsx("div", { className: "dshk-sched-emptytasks", children: t("schedTasksEmpty") })
             : rows.map((row) => {
@@ -4545,13 +4599,14 @@ ellipsis，窄列只截字不破版 */
                     : jsxRuntime.jsx("span", { className: "dshk-sched-taskduebadge", children: t("schedNoDue") }),
                 ] }, row.key);
               }),
-        }),
+        ] }),
       ] });
     }
 
     function ScheduleView({ active }) {
-      const { data, stats, nowTick } = useScheduleData();
       const [weekStart, setWeekStart] = react.useState(() => schedMondayOf(schedToday()));
+      // 统计跟着网格走：翻到哪一周就报哪一周（口径写死本周会让翻页后的数字对不上眼前这周）
+      const { data, stats, loadFail, nowTick } = useScheduleData(true, weekStart);
       const gridRef = react.useRef(null);
 
       const weekDates = react.useMemo(() => {
@@ -4637,18 +4692,28 @@ ellipsis，窄列只截字不破版 */
         });
       }, [data.occurrences, choreOcc, timedOcc]);
       // 表头下的全天带：只放「有截止日且不带时刻的待办」——位置即语义，用自己的
-      // 状态色（未完成橙 / 逾期红 / 已完成灰置底）；不在本周的落周一列
-      const dateTodoOcc = react.useMemo(
-        () =>
-          (Array.isArray(data.events) ? data.events : [])
-            .filter((e) => e.start === undefined && typeof e.due === "string" && e.due !== "" && !e.due.includes("T"))
-            .map((e) => {
-              const done = !!e.completedAt;
-              const late = !done && schedIsOverdue(e);
-              return { baseId: e.id, date: e.due, title: e.title, done, late };
-            }),
-        [data.events],
-      );
+      // 状态色（未完成橙 / 逾期红 / 已完成灰置底）。不在本周的落周一列（tooltip
+      // 写明原截止日）。**按列成栈**：同列多条各占一行，平铺会全叠进同一个网格
+      // 单元互相盖住，读者只看得见最后一条（逾期一多整条带子就白了）
+      const dateTodoByCol = react.useMemo(() => {
+        const cols = new Map();
+        for (const date of weekDates) cols.set(date, []);
+        const monday = weekDates[0];
+        for (const ev of Array.isArray(data.events) ? data.events : []) {
+          if (ev.start !== undefined || typeof ev.due !== "string" || ev.due === "" || ev.due.includes("T")) continue;
+          const day = ev.due.slice(0, 10);
+          const inWeek = cols.has(day);
+          const arr = cols.get(inWeek ? day : monday) ?? [];
+          const done = !!ev.completedAt;
+          arr.push({ baseId: ev.id, date: day, title: ev.title, done, late: !done && schedIsOverdue(ev), outOfWeek: !inWeek });
+          cols.set(inWeek ? day : monday, arr);
+        }
+        // 本周那天的排前面，跨周堆积的按截止日从早到晚（逾期最久的先看见）
+        for (const arr of cols.values()) {
+          arr.sort((a, b) => (a.outOfWeek === b.outOfWeek ? a.date.localeCompare(b.date) : a.outOfWeek ? 1 : -1));
+        }
+        return cols;
+      }, [data.events, weekDates]);
 
       const today = schedToday();
       const isCurrentWeek = weekDates.includes(today);
@@ -4666,20 +4731,22 @@ ellipsis，窄列只截字不破版 */
             jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setWeekStart((s) => schedAddDays(s, 7)), children: "›" }),
             jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", onClick: () => setWeekStart(schedMondayOf(schedToday())), children: t("schedToday") }),
           ] }),
-          stats
-            ? jsxRuntime.jsxs("span", { className: "dshk-sched-headstat", title: t("schedStatsTitle"), children: [
-              jsxRuntime.jsx("b", { children: schedFmtDur(stats.totalMs) }),
-              jsxRuntime.jsx("span", { className: "dshk-sched-statrow", children: `${t("schedStatsEvents")} ${stats.eventCount} · ${t("schedStatsDone")} ${stats.completedCount} · ${t("schedStatsOpen")} ${stats.openCount}` }),
-            ] })
-            : null,
+          loadFail
+            ? jsxRuntime.jsx("span", { className: "dshk-sched-headfail", children: t("schedLoadFail") })
+            : stats
+              ? jsxRuntime.jsxs("span", { className: "dshk-sched-headstat", title: t("schedStatsTitle"), children: [
+                jsxRuntime.jsx("b", { children: schedFmtDur(stats.totalMs) }),
+                jsxRuntime.jsx("span", { className: "dshk-sched-statrow", children: `${t("schedStatsEvents")} ${stats.eventCount} · ${t("schedStatsDone")} ${stats.completedCount} · ${t("schedStatsOpen")} ${stats.openCount}` }),
+              ] })
+              : null,
         ],
       });
 
-      const grid = jsxRuntime.jsxs("div", {
-        className: "dshk-sched-grid",
+      // 表头（角格 + 日期头 + 全天带）与网格分成两块、上下叠：表头**不滚**，
+      // 留在滚动区里的话 y 轴吸附会让它压住全天带那一行（chip 画了看不见）
+      const topGrid = jsxRuntime.jsxs("div", {
+        className: "dshk-sched-topgrid",
         children: [
-          // 行定位全部显式（1 表头 / 2 全天带 / 3 时段）：全天带 chip 一旦出现，
-          // 自动布局会把 timeline/日列塞进第 2 行错位——旧代码这条带从没真跑过
           jsxRuntime.jsx("div", { className: "dshk-sched-corner", style: { gridRow: 1, gridColumn: 1 } }),
           // key 必须带前缀区分：日期头与日列同用裸日期曾致同级 key 冲突——React
           // 错配复用元素，切周时旧列不卸载不断往下叠加
@@ -4689,31 +4756,51 @@ ellipsis，窄列只截字不破版 */
               jsxRuntime.jsx("span", { className: "dshk-sched-dnum", children: Number(date.slice(8, 10)) }),
             ] }, `hd-${date}`),
           ),
-          ...dateTodoOcc.map((o) => {
-            const col = weekDates.indexOf(o.date);
-            const outOfWeek = col < 0;
+          ...weekDates.map((date, i) => {
+            const items = dateTodoByCol.get(date) ?? [];
+            if (items.length === 0) return null;
+            const shown = items.slice(0, SCHED_ALLDAY_MAX);
+            const rest = items.slice(SCHED_ALLDAY_MAX);
             const zh = resolveZh();
-            const hint =
-              `${o.title} · ${t("schedTaskDue")} ${o.date}` +
-              (o.done ? ` · ${zh ? "已完成" : "done"}` : o.late ? ` · ${t("schedOverdue")}` : "") +
-              (outOfWeek ? (zh ? `（不在本周）` : " (not this week)") : "");
-            return jsxRuntime.jsx(
-              "div",
-              {
-                className: `dshk-sched-allday${o.done ? " is-done" : o.late ? " is-overdue" : ""}`,
-                style: { gridRow: 2, gridColumn: outOfWeek ? 2 : col + 2 },
-                title: hint,
-                children: o.title,
-              },
-              `ad-${o.baseId}`,
-            );
+            const chip = (o) => {
+              const hint =
+                `${o.title} · ${t("schedTaskDue")} ${o.date}` +
+                (o.done ? ` · ${zh ? "已完成" : "done"}` : o.late ? ` · ${t("schedOverdue")}` : "") +
+                (o.outOfWeek ? (zh ? `（不在本周）` : " (not this week)") : "");
+              return jsxRuntime.jsx(
+                "div",
+                {
+                  className: `dshk-sched-allday${o.done ? " is-done" : o.late ? " is-overdue" : ""}`,
+                  title: hint,
+                  children: o.title,
+                },
+                `ad-${o.baseId}`,
+              );
+            };
+            return jsxRuntime.jsxs("div", { className: "dshk-sched-alldaycol", style: { gridRow: 2, gridColumn: i + 2 }, children: [
+              ...shown.map(chip),
+              // 溢出折叠成一条：带高随之封顶，不然一列十几条会把表头带撑得太高
+              rest.length > 0
+                ? jsxRuntime.jsx("div", {
+                    className: "dshk-sched-allday is-more",
+                    title: rest.map((o) => `${o.title} · ${t("schedTaskDue")} ${o.date}`).join("\n"),
+                    children: `+${rest.length}`,
+                  }, "ad-more")
+                : null,
+            ] }, `adc-${date}`);
           }),
-          jsxRuntime.jsx("div", { className: "dshk-sched-timeline", style: { gridRow: 3, gridColumn: 1 }, children: hours.map((h) =>
+        ],
+      });
+
+      const grid = jsxRuntime.jsxs("div", {
+        className: "dshk-sched-grid",
+        children: [
+          jsxRuntime.jsx("div", { className: "dshk-sched-timeline", style: { gridColumn: 1 }, children: hours.map((h) =>
             jsxRuntime.jsx("div", { className: "dshk-sched-hourlabel", children: `${schedPad2(h)}:00` }, h),
           ) }, "tl"),
           ...weekDates.map((date) => {
             const inWeek = gridOcc.filter((o) => o.date === date);
-            return jsxRuntime.jsxs("div", { className: "dshk-sched-daycol", "data-date": date, style: { gridRow: 3, gridColumn: weekDates.indexOf(date) + 2 }, children: [
+            return jsxRuntime.jsxs("div", { className: "dshk-sched-daycol", "data-date": date, style: { gridColumn: weekDates.indexOf(date) + 2 }, children: [
               hours.map((h) =>
                 jsxRuntime.jsx("div", {
                   className: "dshk-sched-cell",
@@ -4773,9 +4860,10 @@ ellipsis，窄列只截字不破版 */
       // 网格吃满整格：待办清单在侧栏、统计进了表头，主区只剩一张全宽周网格
       return jsxRuntime.jsxs("div", { className: "dshk-sched-root", children: [
         head,
-        jsxRuntime.jsx("div", { className: "dshk-sched-body", children:
+        jsxRuntime.jsx("div", { className: "dshk-sched-body", children: [
+          topGrid,
           jsxRuntime.jsx("div", { className: "dshk-sched-gridwrap", ref: gridRef, children: jsxRuntime.jsx("div", { className: "dshk-sched-gridinner", children: grid }) }),
-        }),
+        ] }),
       ] });
     }
     /** 计时段 "YYYY-MM-DDTHH:mm(:ss)" → 当日分钟数（网格块定位用） */
@@ -4803,39 +4891,49 @@ ellipsis，窄列只截字不破版 */
       return { fmText: m[0], rest: src.slice(m[0].length) };
     }
 
-    /** 粘贴图片的压缩阈值：最长边 >2048 或体积 >400KB 才重编码（望舒同款），
+    /** 粘贴图片的压缩阈值：最长边 >2048 或体积 >400KB 才重编码，
      *  透明通道保 PNG、否则 JPEG 0.85；没过阈值按原字节走 */
     const PASTE_MAX_EDGE = 2048;
     const PASTE_MAX_BYTES = 400 * 1024;
+    /** 透明探针的边长上限：整幅 getImageData 在 24MP 照片上是一次 ~96MB 分配加
+     *  两千多万次逐像素读，粘一张图卡住半秒；缩到探针尺寸足够判「整幅不透明」 */
+    const PASTE_PROBE_EDGE = 256;
     /** 图片 → {blob, ext}：小图/PNG 直接放行，中大图走 canvas 重编码 */
     async function shrinkPastedImage(file) {
-      if (file.type === "image/png" || file.size <= PASTE_MAX_BYTES) {
-        const img = await decodeImage(file);
-        if (img.width <= PASTE_MAX_EDGE && img.height <= PASTE_MAX_EDGE) {
-          return { blob: file, ext: file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "png" };
-        }
-        return encodeViaCanvas(img, img.hasAlpha);
+      // PNG 源按「有透明」处理：保 PNG 无损，也免了探针——缩略会把小块透明区
+      // 平均掉，logo 上一个洞被填成白块比多存几十 KB 难看得多
+      const img = await decodeImage(file, file.type === "image/png");
+      if (img.width <= PASTE_MAX_EDGE && img.height <= PASTE_MAX_EDGE && (file.type === "image/png" || file.size <= PASTE_MAX_BYTES)) {
+        return { blob: file, ext: file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "png" };
       }
-      const img = await decodeImage(file);
       return encodeViaCanvas(img, img.hasAlpha);
     }
-    function decodeImage(file) {
+    /** file → {width, height, hasAlpha, canvas}；assumeAlpha 为真时跳过透明探测 */
+    function decodeImage(file, assumeAlpha) {
       return new Promise((resolve, reject) => {
         const url = URL.createObjectURL(file);
         const el = new Image();
         el.onload = () => {
           URL.revokeObjectURL(url);
+          const width = el.naturalWidth;
+          const height = el.naturalHeight;
+          if (assumeAlpha === true) {
+            resolve({ width, height, hasAlpha: true, canvas: el });
+            return;
+          }
+          const scale = Math.min(1, PASTE_PROBE_EDGE / Math.max(width, height));
           const cv = document.createElement("canvas");
+          cv.width = Math.max(1, Math.round(width * scale));
+          cv.height = Math.max(1, Math.round(height * scale));
           const ctx = cv.getContext("2d", { willReadFrequently: true });
-          ctx.clearRect(0, 0, el.naturalWidth, el.naturalHeight);
-          ctx.drawImage(el, 0, 0);
+          ctx.drawImage(el, 0, 0, cv.width, cv.height);
           // 透明像素按「有无透明」分流：整幅不透明的一律出 JPEG（小一半）
-          const px = ctx.getImageData(0, 0, el.naturalWidth, el.naturalHeight).data;
+          const px = ctx.getImageData(0, 0, cv.width, cv.height).data;
           let hasAlpha = false;
           for (let i = 3; i < px.length; i += 4) {
             if (px[i] < 255) { hasAlpha = true; break; }
           }
-          resolve({ width: el.naturalWidth, height: el.naturalHeight, hasAlpha, canvas: el, ctx });
+          resolve({ width, height, hasAlpha, canvas: el });
         };
         el.onerror = () => {
           URL.revokeObjectURL(url);
@@ -4954,8 +5052,8 @@ ellipsis，窄列只截字不破版 */
     }
 
     // 斜杠菜单的项表：两级（分组 → 条目），labelKey/descKey 走 i18n，match 是过滤
-    // 用的附加关键词（英文 + 中文别名；命令本身由 vendor 句柄执行）。分组与条目同
-    // 望舒（两端一致）：标题与正文 / 特殊块 / 列表 / 数学公式与代码 / 图表 / 附件。
+    // 用的附加关键词（英文 + 中文别名；命令本身由 vendor 句柄执行）。分组：
+    // 标题与正文 / 特殊块 / 列表 / 数学公式与代码 / 图表 / 附件。
     // H5、H6 用得少不进菜单（正文里已有的照常渲染）；表格不列固定尺寸，点开自己填行列
     const VAULT_MENU = [
       {
@@ -5073,6 +5171,9 @@ ellipsis，窄列只截字不破版 */
       onReadyRef.current = onReady;
       const onSaveRef = react.useRef(onSave);
       onSaveRef.current = onSave;
+      // 本次挂载的串行保存入口（挂载 effect 建、清理时销）：控制面与自动保存共用一条
+      // 队列，并发写必撞 CAS
+      const saveQueueRef = react.useRef(null);
       const onStateRef = react.useRef(onState);
       onStateRef.current = onState;
       const onInsertImageRef = react.useRef(onInsertImage);
@@ -5167,7 +5268,7 @@ ellipsis，窄列只截字不破版 */
         return VAULT_MENU;
       };
       // 双链选择框：贴光标弹，**只列库里已有的页**（碎链没入口，要连先建页）——
-      // [[ 不做触发字符，那是要打得出来的字面文本，建链只走菜单，与望舒同一条路
+      // [[ 不做触发字符，那是要打得出来的字面文本，建链只走菜单
       const pickRowsOf = (query) => {
         const q = String(query ?? "").trim().toLowerCase();
         const list = pagesRef.current ?? [];
@@ -5194,8 +5295,11 @@ ellipsis，窄列只截字不破版 */
         setPick(null);
         const h = rteRef.current;
         if (!h || !p) return;
-        // 目标按页名（不含扩展名），解析走同名匹配，同空间优先——与望舒一致
-        h.insertWikiLink({ target: pageBasename(p.rel) });
+        // 目标写 rel 还是页名：全库唯一时写页名（短、可读）；有重名就写 rel——
+        // 解析同名优先，跨目录重名页照短名插会静默指向另一个页
+        const base = pageBasename(p.rel);
+        const dup = (pagesRef.current ?? []).some((q) => q !== p && pageBasename(q.rel).toLowerCase() === base.toLowerCase());
+        h.insertWikiLink({ target: dup ? p.rel.replace(/\.md$/i, "") : base });
         h.editor.commands.insertContent(" ");
         h.focus();
       };
@@ -5309,6 +5413,9 @@ ellipsis，窄列只截字不破版 */
         const host = rteHostRef.current;
         if (!libsReady || libsFailed || !host) return undefined;
         const mountedKey = docKey;
+        // 本次挂载的保存函数（卸载兜底用）：ref 镜像每帧都指向最新 onSave，清理时
+        // 已经是新页那一版了
+        const mountedSave = onSaveRef.current;
         const cf = confRef.current;
         const opts = {
           md: initialMdRef.current ?? "",
@@ -5343,7 +5450,7 @@ ellipsis，窄列只截字不破版 */
           }, 300);
         };
         host.addEventListener("scroll", onPosScroll);
-        restoreReadPos(mountedKey, host, (anchor) => {
+        const cancelRestore = restoreReadPos(mountedKey, host, (anchor) => {
           try {
             const size = h.editor.state.doc.content.size;
             if (typeof anchor === "number" && anchor <= size) h.editor.commands.setTextSelection(anchor);
@@ -5351,20 +5458,48 @@ ellipsis，窄列只截字不破版 */
             /* 选区失效按纯滚动恢复 */
           }
         });
-        // 自动保存（2s 防抖）：改动置脏，2s 后落盘；冲突/页面已不在则暂停
+        // 自动保存（2s 防抖）：改动置脏，2s 后落盘；冲突/页面已不在则暂停。
+        // **一条队列串行落盘**：并发两次写拿的是同一个 baseMtime，后一次必撞 CAS
+        // 回 modified，用户看到的是自己刚存过一次造成的假冲突条；在飞期间的请求
+        // 只记一次待办（manual/overwrite 优先），排在前一次落地后按最新内容再存
         let saveTimer = null;
-        const localAutosave = async () => {
-          if (pausedRef.current) return;
+        let saving = false;
+        let queuedMode = null;
+        const runSave = async (mode) => {
           const hh = rteRef.current;
-          if (!hh) return;
+          if (!hh) return "fail";
           const gen = editGenRef.current;
-          const outcome = await onSaveRef.current(hh.getMd(), "auto");
+          const outcome = await onSaveRef.current(hh.getMd(), mode);
           // 只有「这次请求发出的内容」仍是最新时才清脏；在飞期间的改动另有一次保存
           if (outcome === "ok") {
             if (gen === editGenRef.current) dirtyRef.current = false;
           } else if (outcome !== "fail") pausedRef.current = true;
           report();
+          return outcome;
         };
+        // 排队跑完当前这次与所有待办；mode=auto 且已暂停时不入队
+        const drain = async (first) => {
+          if (saving) {
+            if (first !== "auto" || queuedMode === null) queuedMode = first;
+            return "queued";
+          }
+          saving = true;
+          try {
+            let out = await runSave(first);
+            while (queuedMode !== null) {
+              const next = queuedMode;
+              queuedMode = null;
+              out = await runSave(next);
+            }
+            return out;
+          } finally {
+            saving = false;
+          }
+        };
+        const localAutosave = () => (pausedRef.current ? undefined : drain("auto"));
+        // 控制面（切签 flush / Ctrl+S / 冲突覆盖）走同一条队列
+        const enqueueSave = drain;
+        saveQueueRef.current = enqueueSave;
         const flushSave = () => {
           if (saveTimer === null) return;
           saveTimer = null;
@@ -5396,6 +5531,12 @@ ellipsis，窄列只截字不破版 */
               return;
             }
             const coords = ed.view.coordsAtPos($from.pos);
+            // 查询变了高亮要回第一条：过滤后行序整个换掉，沿用旧下标会点在
+            // 另一个条目上（甚至下标越界，按 Enter 插的是没高亮那一条）
+            if (q !== menuRef.current?.query) {
+              menuIdxRef.current = 0;
+              setMenuIdx(0);
+            }
             setMenu({ query: q, sub: null, x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4, at: coords?.top ?? 0 });
           } else if (menuRef.current !== null) {
             setMenu(null);
@@ -5459,23 +5600,14 @@ ellipsis，窄列只截字不破版 */
             }
           }
           // Ctrl+S：立即落盘（toast 反馈在 onSave 的 manual 分支）。
-          // 先撤掉待触发的防抖（同内容不必再存一遍，mtime 少搅一次），再按代数决定
-          // 能不能清脏——保存途中又有输入时，那部分另有一次自动保存兜底
+          // 先撤掉待触发的防抖（同内容不必再存一遍，mtime 少搅一次），再走串行队列
+          // ——清脏与排队都由队列按编辑代数决定
           if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
             e.preventDefault();
             e.stopPropagation();
             clearTimeout(saveTimer);
             saveTimer = null;
-            void (async () => {
-              const hh = rteRef.current;
-              if (!hh) return;
-              const gen = editGenRef.current;
-              const outcome = await onSaveRef.current(hh.getMd(), "manual");
-              if (outcome === "ok") {
-                if (gen === editGenRef.current) dirtyRef.current = false;
-                report();
-              }
-            })();
+            void enqueueSave("manual");
             return;
           }
           // 泡泡菜单开着时 Esc 关它（分层：先色板后泡泡），不拦编辑器的其它按键
@@ -5574,13 +5706,17 @@ ellipsis，窄列只截字不破版 */
         document.addEventListener("mousedown", onDocMouseDown, true);
         return () => {
           clearTimeout(saveTimer);
+          saveQueueRef.current = null;
           // 阅读位置兜底记一次（隐藏容器由 recordReadPos 自行跳过）
           if (posTimer !== null) clearTimeout(posTimer);
+          cancelRestore();
           host.removeEventListener("scroll", onPosScroll);
           recordReadPos(mountedKey, host, posAnchor());
-          // 有防抖未触发的改动 → 卸载前尽力落盘（保底；钉住挂载页路径）
+          // 有防抖未触发的改动 → 卸载前尽力落盘（保底）。**走挂载那一刻的保存
+          // 函数**：清理发生在新一次渲染之后，onSaveRef.current 已经是**新页**的
+          // 了——拿它存旧页的内容等于把上一页的字写进下一页
           if (!pausedRef.current && dirtyRef.current && rteRef.current) {
-            void onSaveRef.current(rteRef.current.getMd(), "auto");
+            void mountedSave(rteRef.current.getMd(), "auto");
           }
           offUpdate();
           offSelection();
@@ -5598,42 +5734,21 @@ ellipsis，窄列只截字不破版 */
       }, [libsReady, libsFailed, docKey, docTick]);
 
       // 控制面暴露给父层：切签 flush / Ctrl+S 语义 / 覆盖盘上 / 脏判定。
-      // 三条保存路径都按代数决定清不清脏（见 editGenRef）：在飞期间的改动另有一次保存
+      // 三条保存路径都走挂载那条**串行队列**（并发写必撞 CAS），清脏与排队由队列
+      // 按编辑代数决定（见 editGenRef）：在飞期间的改动另有一次保存
+      const enqueued = (mode) => async () => {
+        if (!rteRef.current) return "fail";
+        if (pausedRef.current && mode === "auto") return "fail";
+        const enqueue = saveQueueRef.current;
+        const outcome = enqueue === null ? "fail" : await enqueue(mode);
+        if (outcome === "ok" && mode === "overwrite") pausedRef.current = false;
+        return outcome;
+      };
       ctlRef.current = {
         dirty: () => dirtyRef.current,
-        flush: async () => {
-          const hh = rteRef.current;
-          if (!hh || pausedRef.current) return "fail";
-          const gen = editGenRef.current;
-          const outcome = await onSaveRef.current(hh.getMd(), "auto");
-          if (outcome === "ok") {
-            if (gen === editGenRef.current) dirtyRef.current = false;
-            report();
-          }
-          return outcome;
-        },
-        flushManual: async () => {
-          const hh = rteRef.current;
-          if (!hh) return "fail";
-          const gen = editGenRef.current;
-          const outcome = await onSaveRef.current(hh.getMd(), "manual");
-          if (outcome === "ok") {
-            if (gen === editGenRef.current) dirtyRef.current = false;
-            report();
-          }
-          return outcome;
-        },
-        overwrite: async () => {
-          const hh = rteRef.current;
-          if (!hh) return "fail";
-          const outcome = await onSaveRef.current(hh.getMd(), "overwrite");
-          if (outcome === "ok") {
-            pausedRef.current = false;
-            dirtyRef.current = false;
-            report();
-          }
-          return outcome;
-        },
+        flush: enqueued("auto"),
+        flushManual: enqueued("manual"),
+        overwrite: enqueued("overwrite"),
       };
 
       // 文档内链接点击：RTE 的 Link 扩展 openOnClick:false（点了不跳），相对链接
@@ -5748,7 +5863,7 @@ ellipsis，窄列只截字不破版 */
                     jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("link") ? " is-active" : ""}`, title: t("vtbLink"), onClick: bubLink, children: "🔗" }),
                     jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtbClear"), onClick: () => rteCmd((h) => h.clearFormat()), children: "⌫" }),
                   ] }),
-                  // 表格浮条（选区落在表内才出，与望舒同一条规则）：文字键同鸿蒙端 tablebar，
+                  // 表格浮条（选区落在表内才出）：文字键同一条 tablebar 规格，
                   // 命令作用在选区覆盖到的行列上。不做合并/拆分（md 管道表没有 colspan 载体）
                   inTableState
                     ? jsxRuntime.jsx("div", { className: "dshk-vault-bubblebar", children: [
@@ -6099,16 +6214,16 @@ ellipsis，窄列只截字不破版 */
       // 搜索框聚焦时也让路：去抖 + 请求在飞的那几百毫秒里座要是空的，Esc 会把页签收了
       react.useEffect(() => {
         if (searchRes === null && searchFocused !== true) return undefined;
-        dock.vaultSearch.open = true;
+        holdEsc();
         if (searchRes === null) return () => {
-          dock.vaultSearch.open = false;
+          releaseEsc();
         };
         const onDown = (e) => {
           if (e.target instanceof Element && !e.target.closest(".dshk-vault-vsearch") && !e.target.closest(".dshk-vault-search")) setSearchRes(null);
         };
         document.addEventListener("pointerdown", onDown, true);
         return () => {
-          dock.vaultSearch.open = false;
+          releaseEsc();
           document.removeEventListener("pointerdown", onDown, true);
         };
       }, [searchRes, searchFocused]);
@@ -6125,7 +6240,7 @@ ellipsis，窄列只截字不破版 */
       react.useEffect(() => {
         if (revealPath === null) return;
         const rail = railRef.current;
-        const row = rail === null ? null : Array.from(rail.querySelectorAll(".dshk-vault-treerow")).find((el) => el.getAttribute("title") === revealPath);
+        const row = rail === null ? null : Array.from(rail.querySelectorAll(".dshk-vault-treerow")).find((el) => samePath(el.getAttribute("title"), revealPath));
         if (!row) return;
         row.scrollIntoView({ block: "nearest" });
         setRevealPath(null);
@@ -6142,7 +6257,9 @@ ellipsis，窄列只截字不破版 */
         return () => document.removeEventListener("pointerdown", onDown, true);
       }, [createAt]);
 
-      const indexPages = index?.pages ?? [];
+      // 空表用同一个常量：`?? []` 每次渲染都是新数组，页签侧拿它当 useMemo 依赖
+      // 就算依赖没真变也会重算（反链是 O(页数×链接数)）
+      const indexPages = index?.pages ?? VAULT_EMPTY_PAGES;
       /** 行 ⋯ / 树头 ⋯ 开关：同一颗触发钮再点一次关掉（菜单的关闭手势会跳过落在它上面的点击） */
       const openRowMenu = (anchor, entry, head) => {
         setRowMenu((prev) => (prev && prev.anchor === anchor ? null : { entry, head: head === true, rect: anchor.getBoundingClientRect(), anchor }));
@@ -6164,9 +6281,10 @@ ellipsis，窄列只截字不破版 */
         const rel = relUnder(lib, dirPath);
         if (rel === null) return;
         const open = { [lib]: true };
-        let cur = lib;
-        for (const seg of rel === "" ? [] : rel.split("/")) {
-          cur = `${cur}/${seg}`;
+        // 逐层按库根的分隔符拼（树的缓存键与展开态全是宿主路径，拼成正斜杠整条链失配）
+        const segs = rel === "" ? [] : rel.split("/");
+        for (let i = 0; i < segs.length; i++) {
+          const cur = joinRelPath(lib, segs.slice(0, i + 1).join("/"));
           open[cur] = true;
           void fetchDir(cur);
         }
@@ -6357,7 +6475,9 @@ ellipsis，窄列只截字不破版 */
         } finally {
           setBusy(false);
         }
-        if (fails.length > 0) setToast(`${t("skOpFail")}：${fails[0]}`);
+        // 失败不只报首条：批量导入十条错只说一句等于没说（toast 两秒半就消，长单据
+        // 也读不完——列前三条 + 余量，逐条原因都在里面）
+        if (fails.length > 0) setToast(`${t("skOpFail")}：${fails.slice(0, 3).join("；")}${fails.length > 3 ? ` …+${fails.length - 3}` : ""}`);
         else {
           setDialog(null);
           const extra = [skipped > 0 ? t("vaultMoveSkipped") : "", images > 0 ? t("vaultImportImgs").replace("{n}", String(images)) : ""].join("");
@@ -6468,9 +6588,10 @@ ellipsis，窄列只截字不破版 */
             }),
           ],
         });
-      /** 行内改名输入：Enter 提交、Esc / 失焦取消；打开时只选中
-       *  主名（页与资料保留扩展名，目录选全名） */
-      const renameInput = (entry, label, isDir) =>
+      /** 行内改名输入：Enter 提交、Esc / 失焦取消。keepExt = 只有**资料库文件**
+       *  才按扩展名切选区：笔记页的输入值本来就不含 .md，按点号切会把
+       *  「2024.05 计划」切成「2024」，一动就成「2025.05 计划」 */
+      const renameInput = (entry, label, keepExt) =>
         jsxRuntime.jsx("input", {
           className: "dshk-rename",
           defaultValue: label,
@@ -6481,7 +6602,7 @@ ellipsis，窄列只截字不破版 */
           onFocus: (ev) => {
             const v = ev.currentTarget.value;
             const i = v.lastIndexOf(".");
-            ev.currentTarget.setSelectionRange(0, !isDir && i > 0 ? i : v.length);
+            ev.currentTarget.setSelectionRange(0, keepExt && i > 0 ? i : v.length);
           },
           onKeyDown: (ev) => {
             ev.stopPropagation();
@@ -6543,7 +6664,7 @@ ellipsis，窄列只截字不破版 */
                   // 展开箭头与文件树同一枚（官方 IconTriangleRightFill14）
                   jsxRuntime.jsx("span", { className: "dshk-vault-twist", children: hasChildren ? jsxRuntime.jsx(ChevronIcon, { open: expanded[e.path] === true }) : null }),
                   jsxRuntime.jsx(TreeFolderIcon, {}),
-                  renamingPath === e.path ? renameInput(e, e.name, true) : jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
+                  renamingPath === e.path ? renameInput(e, e.name, false) : jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
                   // 行尾「新建」（悬停显形）：落点 = 这个目录
                   jsxRuntime.jsx(KitTip, {
                     label: t("vaultNew"),
@@ -6584,7 +6705,7 @@ ellipsis，窄列只截字不破版 */
             title: e.path,
             children: [
               jsxRuntime.jsx(FileTypeIcon16, { name: e.name }),
-              renamingPath === e.path ? renameInput(e, label, false) : jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: label }),
+              renamingPath === e.path ? renameInput(e, label, lib) : jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: label }),
               rowActs(e, label),
             ],
           },
@@ -6607,6 +6728,26 @@ ellipsis，窄列只截字不破版 */
         return dirRow({ dir: true, name: `${t("vaultLibrary")}${count > 0 ? ` (${count})` : ""}`, path: libRoot }, 0, libItems.length > 0, true);
       };
 
+      // 读页上下文（页签侧 VaultPagePane 消费）在**提交后**发布，不在渲染期发：
+      // 渲染期通知订阅者等于拿未提交的状态惊动别的组件（并发渲染下会撕裂/丢弃），
+      // 而且每次渲染都换一份新对象的话页签侧 useMemo 恒不命中
+      react.useEffect(() => {
+        const refreshIndex = () => void loadIndex();
+        if (root !== null) {
+          publishVaultReader({ root, earlyBody: null, indexPages, openPath, refreshIndex, setToast });
+          return;
+        }
+        let earlyBody;
+        if (indexErr === "") earlyBody = jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("contentLoading") });
+        else if (indexErr === "vault-not-configured") {
+          earlyBody = jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+            jsxRuntime.jsx("div", { className: "dshk-vault-hinttitle", children: t("vaultNotConfigured") }),
+            jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultNotConfiguredHint") }),
+          ] });
+        } else earlyBody = jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: `${t("vaultIndexFail")} ${indexErr}` });
+        publishVaultReader({ root: null, earlyBody, indexPages: null, openPath, refreshIndex, setToast });
+      }, [root, indexErr, indexPages, openPath, setToast, loadIndex]);
+
       // root 未就绪的整页态：加载中 / 未配置 / 索引失败（root 就绪后的瞬时错误
       // 走主界面内的错误条，不早退）。发布给页签侧（页签正文自己渲染），
       // 侧栏索引在场时也照旧投一份
@@ -6619,7 +6760,6 @@ ellipsis，窄列只截字不破版 */
             jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultNotConfiguredHint") }),
           ] });
         } else earlyBody = jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: `${t("vaultIndexFail")} ${indexErr}` });
-        publishVaultReader({ root: null, earlyBody, indexPages: null, openPath, refreshIndex: () => void loadIndex(), setToast });
         return ui.vaultSideOpen && ui.vaultSideTab !== "schedule" && sideHost
           ? reactDom.createPortal(jsxRuntime.jsx("div", { className: "dshk-vault", children: earlyBody }), sideHost, "dshk-vault-early")
           : null;
@@ -6865,10 +7005,6 @@ ellipsis，窄列只截字不破版 */
         toast !== "" ? jsxRuntime.jsx("div", { className: "dshk-vault-toast", role: "status", children: toast }) : null,
       ] });
 
-      // 页签侧要用的读页上下文（库根 / 索引页表 / 开页入口 / 刷新 / toast）在这里
-      // 发布：页签正文自己渲染 VaultPagePane（一页一张签），不再靠 portal 投递
-      publishVaultReader({ root, earlyBody: null, indexPages, openPath, refreshIndex: () => void loadIndex(), setToast });
-
       return ui.vaultSideOpen && ui.vaultSideTab !== "schedule" && sideHost
         ? reactDom.createPortal(sideContent, sideHost, "dshk-vault-side")
         : null;
@@ -7109,7 +7245,7 @@ ellipsis，窄列只截字不破版 */
       // 点浮层与触发钮之外 / Esc 即关，Esc 不下传（别顺带收页签）
       react.useEffect(() => {
         if (barMenu === null) return undefined;
-        dock.vaultSearch.open = true;
+        holdEsc();
         const onDown = (e) => {
           if (!(e.target instanceof Element)) {
             setBarMenu(null);
@@ -7127,7 +7263,7 @@ ellipsis，窄列只截字不破版 */
         document.addEventListener("pointerdown", onDown, true);
         window.addEventListener("keydown", onKey, true);
         return () => {
-          dock.vaultSearch.open = false;
+          releaseEsc();
           document.removeEventListener("pointerdown", onDown, true);
           window.removeEventListener("keydown", onKey, true);
         };
@@ -7146,8 +7282,8 @@ ellipsis，窄列只截字不破版 */
                   jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
                     // 页条 = 文档级命令 + 阅读条（sticky）：撤销/重做、未保存脏点；
                     // 右端是目录/反链两个页面级入口（长文滚到哪儿都够得到——吊在
-                    // 页尾的老反链区就是够不到才撤掉的）。表格命令在选区浮条上
-                    // （与望舒一致），空了按钮留原位置灰，别忽长忽短
+                    // 页尾的老反链区就是够不到才撤掉的）。表格命令在选区浮条上，
+                    // 空了按钮留原位置灰，别忽长忽短
                     jsxRuntime.jsx(KitTip, {
                       label: t("vtbUndo"),
                       children: jsxRuntime.jsx("button", {
@@ -7236,11 +7372,13 @@ ellipsis，窄列只截字不破版 */
                       // 宿主的应用协议转发才带得上鉴权；绝对 http://<host> 在桌面没有 cookie
                       return `/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
                     },
-                    // 相对/站内链接解析到库内 md 页 → 按页打开（库外或非 md 不接管，
-                    // 别把只读阅读的语义混进工作区文件）
+                    // 相对/站内链接：库内 md 按页打开，库内非 md（文献/图片）走官方
+                    // 文件右栏——只读阅读面不开 PDF，拦下来又不给去处就是死点击
                     onRelLink: (href) => {
                       const target = resolveMdLink(path, root, href);
-                      if (target && /\.md$/i.test(target) && isPathInsideVaultRoot(root, target)) onOpenPage(target);
+                      if (!target || !isPathInsideVaultRoot(root, target)) return;
+                      if (/\.md$/i.test(target)) onOpenPage(target);
+                      else openOfficialFile(target);
                     },
                     onState: (s) => {
                       setDirtyDot(s.dirty === true);

@@ -33,7 +33,7 @@ const fm = (...lines) => parseFrontmatter(['---', ...lines, '---', ''].join('\n'
 /** 用户真机上的写法：折叠 + 去尾换行，面板曾只显示字面量 ">-" */
 eq(
   '折叠块（>-）两行折成一行',
-  fm('name: wangshu-vault', 'description: >-', '  第一句；', '  第二句。').description,
+  fm('name: vault-notes', 'description: >-', '  第一句；', '  第二句。').description,
   '第一句； 第二句。',
 )
 eq('保留换行块（|）默认留一个尾换行', fm('description: |', '  甲', '  乙').description, '甲\n乙\n')
@@ -57,10 +57,10 @@ eq('无 frontmatter 得空表', parseFrontmatter('# 标题\n\n正文\n').descrip
 eq('未闭合的块当没有 frontmatter', parseFrontmatter('---\ndescription: >-\n  甲\n').description, undefined)
 eq('正文里的 --- 不影响已解析的值', fm('description: >-', '  甲').description, '甲')
 
-// 真机样本回归：面板上 wangshu-vault 描述只剩 ">-" 的那份文件
+// 真机样本回归：技能面板上描述只剩 ">-" 的那份文件
 const real = parseFrontmatter([
   '---',
-  'name: wangshu-vault',
+  'name: vault-notes',
   'description: >-',
   '  知识库（vault）使用规则——往知识库里记笔记、写项目知识页、查已有知识、整理或合并页面；',
   '  写库前必读。库里既有用户笔记（学习、本机记录），也有项目知识（总览与功能活页）。',
@@ -70,7 +70,7 @@ const real = parseFrontmatter([
 ].join('\n'))
 assert.ok(real.description.startsWith('知识库（vault）使用规则——'), '真实样本的描述应完整')
 eq('真实样本：描述完整且不含 ">-"', real.description.includes('>-'), false)
-eq('真实样本：name 不被块吞掉', real.name, 'wangshu-vault')
+eq('真实样本：name 不被块吞掉', real.name, 'vault-notes')
 check('真实样本：描述长度合理', real.description.length > 40)
 
 // setDisableFlags：改写 frontmatter 不能顺手把整份文件的换行风格洗掉

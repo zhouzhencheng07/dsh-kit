@@ -67,7 +67,7 @@ test('create：title 必填、无时刻待办不补 due（无期限就是无期�
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('字段清洗：非法 recurrence 丢弃、days 过滤越界并去重', () => {
+test('字段清洗：days 过滤越界并去重；非法 recurrence 抛错（静默清空等于抹掉系列）', () => {
   const dir = tmp()
   const store = new ScheduleStore(path.join(dir, 'sched'))
   const ev = store.create({
@@ -77,8 +77,14 @@ test('字段清洗：非法 recurrence 丢弃、days 过滤越界并去重', () 
     recurrence: { type: 'weekly', days: [1, 9, 1, -2], interval: 1 },
   })
   assert.deepEqual(ev.recurrence.days, [1])
-  const bad = store.create({ title: 'x', start: '2026-09-07T09:00', end: '2026-09-07T10:00', recurrence: { type: 'yearly' } })
-  assert.equal(bad.recurrence, null)
+  assert.throws(() => store.create({ title: 'x', start: '2026-09-07T09:00', end: '2026-09-07T10:00', recurrence: { type: 'yearly' } }), /recurrence 不合法/)
+  assert.throws(() => store.update(ev.id, { recurrence: { type: 'yearly' } }), /recurrence 不合法/)
+  // weekly 不带 days 合法：展开按起始日的星期（sanitize 补 days 的语义在展开层）
+  assert.deepEqual(store.update(ev.id, { recurrence: { type: 'weekly' } }).recurrence, { type: 'weekly' })
+  // 抛错不做半截更新：系列还在
+  assert.equal(store.list()[0].recurrence.type, 'weekly')
+  // 显式 null 才是清空
+  assert.equal(store.update(ev.id, { recurrence: null }).recurrence, null)
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
@@ -180,6 +186,20 @@ test('expandOccurrences：daily/monthly 与区间外排除', () => {
   assert.equal(monthly[0].endMins, 600)
   // 非重复且在区间外 → 无 occurrence
   assert.equal(expandOccurrences([{ id: 's1', title: 'x', start: '2026-10-01T09:00' }], '2026-09-01', '2026-09-30').length, 0)
+})
+
+test('expandOccurrences：每月 29/30/31 号在短月落到当月最后一天（系列不静默断）', () => {
+  const evs = [
+    { id: 'e31', title: '月末结算', start: '2026-01-31T09:00', end: '2026-01-31T10:00', recurrence: { type: 'monthly' } },
+    { id: 'e30', title: '对账', start: '2026-01-30T09:00', end: '2026-01-30T10:00', recurrence: { type: 'monthly' } },
+  ]
+  const days = (id) => expandOccurrences(evs, '2026-02-01', '2026-04-30').filter((o) => o.baseId === id).map((o) => o.date)
+  // 2 月只有 28 天：31 号落 28、30 号也落 28（不丢整月）
+  assert.deepEqual(days('e31'), ['2026-02-28', '2026-03-31', '2026-04-30'])
+  assert.deepEqual(days('e30'), ['2026-02-28', '2026-03-30', '2026-04-30'])
+  // 4 月 30 天：31 号同样落 30；一个月里不会出两次
+  const april = expandOccurrences(evs, '2026-04-01', '2026-04-30').filter((o) => o.baseId === 'e31')
+  assert.equal(april.length, 1)
 })
 
 test('expandOccurrences：skip 里的日子不产出（"删单次"往这里加一天）', () => {
@@ -324,7 +344,7 @@ test('summary：日汇总含事件行与待办行，空时段有兜底句', () =
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('不做计时：望舒端的 timer.json 不读不写，条目删除不牵动它', () => {
+test('不做计时：计时器的 timer.json 不读不写，条目删除不牵动它', () => {
   const dir = tmp()
   const sched = path.join(dir, 'sched')
   const timerRaw = JSON.stringify({ id: 'e1', start: '2026-09-08T09:00:00' })
@@ -336,6 +356,55 @@ test('不做计时：望舒端的 timer.json 不读不写，条目删除不牵�
   store.remove('e1')
   assert.equal(store.list().length, 0)
   assert.equal(fs.readFileSync(path.join(sched, 'timer.json'), 'utf8'), timerRaw)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('共享目录：别处（同步/其它程序）写进来的条目立刻可见，update 不覆盖它改过的字段', () => {
+  const dir = tmp()
+  const sched = path.join(dir, 'sched')
+  const store = new ScheduleStore(sched)
+  const mine = store.create({ title: '站会', start: '2026-09-07T09:00', end: '2026-09-07T10:00', location: 'A 会议室' })
+  // 模拟别处直接改盘（同步拉取 / 另一个客户端）
+  const file = path.join(sched, 'events', `${mine.id}.json`)
+  const onDisk = JSON.parse(fs.readFileSync(file, 'utf8'))
+  onDisk.title = '站会（改名）'
+  onDisk.location = 'B 会议室'
+  onDisk.rev = 5
+  fs.writeFileSync(file, JSON.stringify(onDisk), 'utf8')
+  // 不重启、不新建实例：同一个 store 也要看得见
+  assert.equal(store.list()[0].title, '站会（改名）')
+  // agent 的更新按 id 合并：别处改的 location 保住，rev 继续往前推
+  const merged = store.update(mine.id, { title: '站会（最终）' })
+  assert.equal(merged.title, '站会（最终）')
+  assert.equal(merged.location, 'B 会议室')
+  assert.equal(merged.rev, 6)
+  // 外部新增的条目同样进库
+  writeEvent(dir, 'sched', { id: 'ext1', title: '外部建的', due: '2026-09-09' })
+  assert.ok(store.list().some((e) => e.id === 'ext1'))
+  assert.ok(store.items('day', '2026-09-09').some((i) => i.id === 'ext1'))
+  // 外部删掉的条目不再出现在面板数据里
+  fs.rmSync(file)
+  assert.equal(store.list().some((e) => e.id === mine.id), false)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('共享目录的合并口径：agent 的 update 按 id 合，别处改过的字段保住', () => {
+  const dir = tmp()
+  const sched = path.join(dir, 'sched')
+  const store = new ScheduleStore(sched)
+  const mine = store.create({ title: 'A', due: '2026-09-08' })
+  // 模拟别处直接改盘（同步拉取 / 另一个客户端）：改了标题与地点，还推进了 rev
+  const file = path.join(sched, 'events', `${mine.id}.json`)
+  const onDisk = JSON.parse(fs.readFileSync(file, 'utf8'))
+  onDisk.title = '别处改的'
+  onDisk.location = 'B 会议室'
+  onDisk.rev = 5
+  fs.writeFileSync(file, JSON.stringify(onDisk), 'utf8')
+  store.update(mine.id, { title: 'agent 改的' })
+  const after = JSON.parse(fs.readFileSync(file, 'utf8'))
+  assert.equal(after.title, 'agent 改的')
+  assert.equal(after.location, 'B 会议室')
+  assert.equal(after.rev, 6)
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
@@ -363,7 +432,7 @@ test('独立计时段持久化往返（entries/<id>.json，文件名即身份）
   const sched = path.join(dir, 'sched')
   const entriesDir = path.join(sched, 'entries')
   fs.mkdirSync(entriesDir, { recursive: true })
-  // 独立段由望舒端计时产生，这里直接落文件构造存量
+  // 独立段由计时功能写入，这里直接落文件构造存量
   fs.writeFileSync(
     path.join(entriesDir, 'o1.json'),
     JSON.stringify({ id: 'o1', start: '2026-09-08T08:00:00', end: '2026-09-08T08:20:00', note: '独立计时' }),

@@ -265,6 +265,18 @@ await test('writePage：mtime 对得上才落盘（原子写），对不上回 m
   assert.equal(exists('写回.md.tmp'), false)
 })
 
+await test('writePage：tmp 名唯一（两个页签同存一页不互踩）且不残留', () => {
+  const abs = write('并发.md', '原')
+  const before = new Set(fs.readdirSync(root).filter((n) => n.startsWith('并发.md')))
+  // 两次写连着来：tmp 名必须不同，否则后一次覆盖前一次的 tmp，一次 rename 就吃掉两份
+  const a = writePage(root, abs, 'A', fs.statSync(abs).mtimeMs)
+  const b = writePage(root, abs, 'B', a.mtimeMs)
+  assert.equal(read('并发.md'), 'B')
+  const after = fs.readdirSync(root).filter((n) => n.startsWith('并发.md'))
+  // 只剩正文一个（无 .tmp 残留），文件名与写前一致
+  assert.deepEqual(after, [...before])
+})
+
 await test('writePage：文件已不在回 missing（丢弃这次写，不把旧页写活）；非 md / 库外 / 超限拒写', () => {
   const gone = write('改名后.md', 'x')
   fs.rmSync(gone)

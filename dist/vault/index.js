@@ -124,8 +124,10 @@ export async function apply(ctx, config = {}) {
             // ── 日程端点：/dsh-kit/schedule/*（./schedule.ts 单例 store）──
             //   面板只读，端点也只有读：GET data?from&to → { events(raw 全量),
             //   occurrences(区间展开,带 endDate/state), orphans }；GET stats?scope&date → 统计。
-            //   写路径只走 agent 工具（工具直调 store，不经 HTTP）与望舒端；
-            //   重复展开只在宿主做（客户端只渲染 occurrence）；个人规模 raw 全量直发。
+            //   写路径走 agent 工具（工具直调 store，不经 HTTP）；store 每次调用都与盘面
+            //   重新对齐，别处（同步/其它程序）写进来的条目面板立刻可见、agent 的更新
+            //   也不会盖掉别处改过的版本；重复展开只在宿主做（客户端只渲染 occurrence）；
+            //   个人规模 raw 全量直发。
             const schedDateParam = (url, key) => {
                 const raw = url.searchParams.get(key) ?? '';
                 return isDateStr(raw) ? raw : todayStr();
@@ -182,7 +184,7 @@ export async function apply(ctx, config = {}) {
                     return;
                 void vaultScanner
                     .scan()
-                    .then((index) => json(res, 200, index ?? { root: null, spaces: [], pages: [] }))
+                    .then((index) => json(res, 200, index ?? { root: null, folders: [], pages: [] }))
                     .catch((error) => json(res, 500, { error: error instanceof Error ? error.message : String(error) }));
             });
             // 外部修改实时刷新：只回打开页的 mtime，不读正文——前端轮询发现 mtime 变化
@@ -225,23 +227,40 @@ export async function apply(ctx, config = {}) {
             // 固定自动加序号。笔记页改名 / 移动会顺带改写指向它的双链（目录整体搬移不改，
             // 文件名没变解析结果就不变）；删除走回收站。导入两条来源：本机绝对路径直拷
             // （md 页连带把页内引用的本地图片收进 attachments/）与浏览器上传的字节。
+            /** 读请求体（超限回 null = 413）。**超限必须让 promise 落地**：只 destroy
+             *  不 resolve 的话 end/error 都不来，这个挂起的 promise 会让请求既不回包
+             *  也不释放，调用方只能等客户端超时 */
             const vaultReadBody = (req, limit) => new Promise((resolve) => {
                 let raw = '';
+                let settled = false;
+                const done = (value) => {
+                    if (settled)
+                        return;
+                    settled = true;
+                    resolve(value);
+                };
                 req.on('data', (c) => {
+                    if (settled)
+                        return;
                     raw += c;
+                    // 超限：立刻落地（不再攒），由回包那边发 413 后再断流——
+                    // 这里就 destroy 的话响应根本发不出去，客户端只看到一个连接重置
                     if (raw.length > limit)
-                        req.destroy();
+                        done(null);
                 });
                 req.on('end', () => {
+                    if (settled)
+                        return;
                     try {
                         const body = JSON.parse(raw === '' ? '{}' : raw);
-                        resolve(body !== null && typeof body === 'object' ? body : {});
+                        done(body !== null && typeof body === 'object' ? body : {});
                     }
                     catch {
-                        resolve({});
+                        done({});
                     }
                 });
-                req.on('error', () => resolve({}));
+                req.on('error', () => done({}));
+                req.on('aborted', () => done({}));
             });
             const VAULT_BODY_LIMIT = 1024 * 1024;
             /** 导入上限：base64 文本长度（≈32MB 原始字节），PDF 这类文献够用 */
@@ -256,6 +275,13 @@ export async function apply(ctx, config = {}) {
                     if (root === null)
                         return;
                     void vaultReadBody(req, limit).then((body) => {
+                        if (body === null) {
+                            // 413 先回、再断流：body 没收完，socket 得由回包收尾，否则客户端
+                            // 永远等不到响应
+                            json(res, 413, { error: 'body too large' });
+                            res.on('finish', () => req.destroy());
+                            return;
+                        }
                         void Promise.resolve()
                             .then(() => action(body, root))
                             .then((result) => json(res, 200, { ok: true, ...result }))
