@@ -1044,6 +1044,33 @@ window.__ModuleLoader__.load({
       if (dock.vaultRoute.open !== null && dock.vaultRoute.open(path) === true) return;
       openOfficialFile(path);
     }
+    /** 打开外链：改投内置浏览器（端点落一个页 → 开成右栏签），端点不可用（浏览器
+     *  行关闭 / 拉不起来）时按官方口径自己开新标签——已被 preventDefault 掉的默认
+     *  跳转不兜底就是「点了毫无反应」。sessionId = 点击时所在会话，宿主按它把链接
+     *  落进该会话自己的浏览器分区；非 http(s)（mailto: 等）直接走系统 */
+    function openExternalUrl(href) {
+      const url = String(href ?? "").trim();
+      if (!/^(?:https?:)?\/\//i.test(url)) {
+        window.open(url, "_blank", "noopener,noreferrer");
+        return;
+      }
+      kitJson("/dsh-kit/browser/open", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url, sessionId: currentSessionId() }),
+      })
+        .then((r) => {
+          const id = r && r.tabId;
+          if (id === undefined || id === null) {
+            window.open(url, "_blank", "noopener,noreferrer");
+            return;
+          }
+          openRightbarItem("browser", String(id));
+        })
+        .catch(() => {
+          window.open(url, "_blank", "noopener,noreferrer");
+        });
+    }
 
     // ── 侧栏索引视图单槽与入口按钮（文件树/源代码管理/知识库，三个入口按钮
     // + 快捷键共用）──
@@ -1371,6 +1398,14 @@ window.__ModuleLoader__.load({
    语言选择器替代只读语言标签 */
 .dshk-rte-langsel{appearance:none;border:0;background:none;font:inherit;font-family:ui-monospace,Consolas,monospace;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--dsw-alias-label-tertiary);cursor:pointer;padding:0 2px}
 .dshk-rte-langsel:hover{color:var(--dsw-alias-label-primary)}
+/* 语言下拉：挂 body 上按 fixed 贴输入框（代码盒 overflow:hidden 会截掉它），
+   坐标由 rte-entry 按输入框实测位置写死，这层只管盒子长相 */
+.dshk-langdrop{position:fixed;z-index:1200;min-width:112px;max-width:220px;max-height:min(50vh,320px);overflow:auto;padding:4px 0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18));user-select:none}
+/* 收起走 hidden 属性：显式 display 会盖掉 UA 的 [hidden]{display:none}，不补这条收不住 */
+.dshk-langdrop[hidden]{display:none}
+.dshk-langopt{flex:none;padding:4px 10px;font-family:ui-monospace,Consolas,monospace;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dshk-langopt:hover,.dshk-langopt.active{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-langempty{flex:none;padding:6px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
 /* 数学：KaTeX 渲染 + 点击改 tex 的内联输入 */
 .dshk-rte-math{display:inline-block;cursor:pointer}
 .dshk-rte-mathblock{display:block;cursor:pointer;text-align:center;margin:.6em 0}
@@ -1944,6 +1979,9 @@ ellipsis，窄列只截字不破版 */
             if (dock.inlineEdit.active) return; // 树行改名输入激活（dsh-kit/files 经底座座上报）
             // 知识库搜索浮层开着时让路：Esc 归它自己（只关自己，不收标签页）
             if (dock.vaultSearch.open) return;
+            // 代码块语言下拉的输入框在编辑器里，收起走它自己的 keydown：这里再收一次
+            // 就是「Esc 顺手把这一页签关了」（浮层在 body 上，事件目标才是那个输入框）
+            if (e.target instanceof Element && e.target.closest(".dshk-rte-langsel") !== null) return;
             // Esc 关当前激活那张内容签（diff / 知识库页，与官方签条的 ✕ 同语义——
             // 内容类页类型一内容一签，关闭走官方 close）
             if (activeRightbarFeature("file") || activeRightbarFeature("vault")) {
@@ -5751,14 +5789,26 @@ ellipsis，窄列只截字不破版 */
         overwrite: enqueued("overwrite"),
       };
 
-      // 文档内链接点击：RTE 的 Link 扩展 openOnClick:false（点了不跳），相对链接
-      // 不接管就等于「点了没反应」——捕获期拦下来交父层解析成文件/页再打开
+      // 链接点击：RTE 的 Link 扩展 openOnClick:false（浏览器在 contenteditable 里
+      // 也不会自己跳），所有链接都得显式接管，否则一律「点了没反应」。文档内链接
+      //  （相对/站内/裸路径）交父层解析成文件/页，带协议或 // 的走外链。
       const onLinkClick = (e) => {
         const el = e.target && typeof e.target.closest === "function" ? e.target.closest("a[href]") : null;
         if (!el) return;
-        const href = el.getAttribute("href") || "";
+        const href = (el.getAttribute("href") || "").trim();
+        // 拖选后松手也会发 click：选区非折叠说明在选字，不是在点链接
+        const sel = window.getSelection();
+        if (sel && !sel.isCollapsed) return;
+        if (!isDocHref(href)) {
+          // 页内锚点仍归编辑器自己滚
+          if (href === "" || href.startsWith("#")) return;
+          e.preventDefault();
+          e.stopPropagation();
+          openExternalUrl(href);
+          return;
+        }
         const cb = confRef.current.onRelLink;
-        if (!isDocHref(href) || typeof cb !== "function") return;
+        if (typeof cb !== "function") return;
         e.preventDefault();
         e.stopPropagation();
         cb(href, el.textContent || "");
@@ -13277,26 +13327,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       if (!/^https?:\/\//i.test(href)) return;
       ev.preventDefault();
       ev.stopPropagation();
-      // 端点失败（行关闭/浏览器拉不起来/502）时按官方口径自己开新标签：
-      // 官方行为已经被 preventDefault 掉了，不兜就是「点了毫无反应」。
-      // sessionId = 点击时所在会话：宿主按它把链接落进该对话自己的浏览器分区；
-      // 回包的页 id 开成一张签（没有回包就由控制连接的页集对账补开）
-      kitJson("/dsh-kit/browser/open", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url: href, sessionId: currentSessionId() }),
-      })
-        .then((r) => {
-          const id = r && r.tabId;
-          if (id === undefined || id === null) {
-            window.open(href, "_blank", "noopener,noreferrer");
-            return;
-          }
-          openRightbarItem("browser", String(id));
-        })
-        .catch(() => {
-          window.open(href, "_blank", "noopener,noreferrer");
-        });
+      openExternalUrl(href);
     }
 
 
