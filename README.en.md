@@ -61,10 +61,17 @@ and take no component slot).
   on delete; chat integration (vault paths in chat open the page, "@" on a tree row cites
   page/selection); **page bodies are what-you-see-is-what-you-get editors** (TipTap rich
   text, no source/preview duality): `/` opens a two-level command menu (headings & text /
-  special blocks / lists / math & code / tables), a selection floats an inline format bar
-  (colour swatches and links included), pasted screenshots are compressed then stored
-  content-addressed under `attachments/` and inserted, and the page bar carries undo/redo,
-  table row/column buttons, an unsaved dot and the sticky reading bar (outline & backlinks);
+  special blocks / lists / math & code / charts / attachments, the same groups as Wangshu),
+  a selection floats an inline format bar (colour swatches and links included) and, inside a
+  table, a second bar with row/column insert & delete, left/center/right alignment, header
+  column and delete-table; the menu opens a page picker for wiki links (existing pages only),
+  a rows/columns dialog for tables (3x3 with header by default), inserts mermaid blocks
+  (bundled renderer, click to edit the source) and opens the system file picker for images —
+  pasted screenshots and picked files alike are compressed then stored content-addressed under
+  `attachments/` and inserted; `Tab` sinks/lifts list items (jumps cells in tables, inserts two
+  spaces in code blocks, and is swallowed elsewhere so focus never leaves the editor),
+  `Ctrl+Enter` jumps out of a blockquote; the page bar carries undo/redo, an unsaved dot and
+  the sticky reading bar (outline & backlinks);
   saving is a 2s-debounced autosave (`Ctrl+S` saves now, leaving a tab or unmounting flushes)
   over an mtime CAS — if the file changed underneath (agent or external editor), autosave
   pauses and a conflict bar asks you to choose overwrite-disk or load-disk (the plugin never
@@ -225,7 +232,7 @@ the WebSocket base the host injects).
   `/dsh-kit-phone/config` probe and starts the outward gateway (phone-access row).
   Rows are materialized by the root
   `cordis.patch.yml` through package exports subpaths (`dsh-kit/files` etc.)
-- `client/vendor/*`: xterm / TipTap rich text / KaTeX / qrcode, all lazily loaded
+- `client/vendor/*`: xterm / TipTap rich text / KaTeX / mermaid / qrcode, all lazily loaded
   and served from `/dsh-kit/vendor/*`
 - `src/search/`: the web-search component — `web-search.ts` points the web seam's
   provider at `free-search` and registers the keyless engine chain (`engine-chain.ts` +

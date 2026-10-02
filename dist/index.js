@@ -1,7 +1,7 @@
 // dsh-kit — DSH 页面能力套件（基础设施行宿主半边）
 //
-// 本行只有套件自己那点基础设施：vendor 静态资源（xterm / qrcode / 知识库阅读器的
-// TipTap 与 KaTeX）、OpenCode Go 会话头注入（./core/opencode-session.ts）。它没有页面
+// 本行只有套件自己那点基础设施：vendor 静态资源（xterm / qrcode / 知识库编辑器的
+// TipTap、KaTeX 与 mermaid）、OpenCode Go 会话头注入（./core/opencode-session.ts）。它没有页面
 // 能力，所以 patch 里不给 id、不进插件页组件列表（宿主只把带 id 的行当组件）。
 // 页面能力本身全部按组件行拆开（cordis.patch.yml 里 insert 八行，行 name = 包名 +
 // exports 子路径，行序即插件页显示顺序）：dsh-kit/files（文件树 · 源代码管理）、
@@ -15,7 +15,7 @@
 // client 面住在 bundle 尾部的 xModule 隔离壳里，激活由根 apply 尾部循环触发。
 //
 // 本行端点（webserver 默认只绑 loopback）：
-//   GET  /dsh-kit/vendor/*          —— xterm / qrcode / richeditor / katex 静态资源
+//   GET  /dsh-kit/vendor/*          —— xterm / qrcode / richeditor / katex / mermaid 静态资源
 //   POST /dsh-kit/log               —— 浏览器半边日志回传（client 侧的异常只有这里能留痕）
 import fs from 'node:fs';
 import http from 'node:http';
@@ -34,6 +34,9 @@ const VENDOR_FILES = new Map([
     ['/dsh-kit/vendor/qrcode.js', 'qrcode.js'],
     // vault 页面渲染器（TipTap 引擎只读态；懒加载）
     ['/dsh-kit/vendor/richeditor.bundle.js', 'richeditor.bundle.js'],
+    // mermaid 流程图渲染（```mermaid 围栏出图；宿主与 app.asar 都不带这个库，
+    // 编辑器只认 window.__dshkMermaidLoad，缺了图就退化成代码块。懒加载）
+    ['/dsh-kit/vendor/mermaid.min.js', 'mermaid.min.js'],
     // KaTeX 数学公式（vault 阅读态渲染 $...$ / $$...$$；懒加载）
     ['/dsh-kit/vendor/katex.min.js', 'katex.min.js'],
     ['/dsh-kit/vendor/katex.min.css', 'katex.min.css'],

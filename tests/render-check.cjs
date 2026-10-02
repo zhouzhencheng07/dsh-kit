@@ -918,6 +918,20 @@ let vaultFetchPrev = null;
   check("冲突条两钮：覆盖盘上 / 读盘上的", src.includes('saveEditRef.current.overwrite()') && src.includes('saveEditRef.current.reload()'));
   check("编辑面不静默覆盖也不碰 git（写端点只回 modified，由人裁决）", !/stash|commitVault/.test(src));
 }
+// 6.9d) 编辑能力与望舒对齐：斜杠菜单补齐双链/流程图/图片、表格改自定义行列、
+// 流程图真出图（自带 mermaid）、双链只列已有页、表格命令搬上选区浮条
+{
+  check("斜杠菜单分组与望舒同款：图表（表格/流程图）+ 附件（图片），特殊块末尾双链", src.includes('labelKey: "vmenuGChart"') && src.includes('labelKey: "vmenuGAttach"') && src.includes('key: "wiki"') && src.includes('key: "mermaid"') && src.includes('key: "image"'));
+  check("表格不再列 1×2~5×5 固定档（点开自己填行列，默认 3×3 带表头）", !src.includes("vmenuTable1") && !src.includes("vmenuTable5") && src.includes("setTDlg({ rows: 3, cols: 3 })") && src.includes("insertTable(rows, cols)"));
+  check("H5/H6 不进菜单（正文里已有的照常渲染）", !src.includes('key: "h5"') && !src.includes('key: "h6"') && src.includes("/^h[1-6]$/.test(key)"));
+  check("流程图真出图：编辑器懒加载钩子 + 宿主白名单放行 mermaid", src.includes("/dsh-kit/vendor/mermaid.min.js") && src.includes("window.__dshkMermaidLoad") && src.includes("window.DshRTE.mermaidReady()") && fs.readFileSync(__dirname + "/../src/index.ts", "utf8").includes("['/dsh-kit/vendor/mermaid.min.js', 'mermaid.min.js']") && fs.existsSync(__dirname + "/../client/vendor/mermaid.min.js"));
+  check("双链选择框：只列库里已有的页、键盘选、插入 [[页名]] 后补空格", src.includes("const pickRowsOf") && src.includes("pickInsert") && src.includes('h.insertWikiLink({ target: pageBasename(p.rel) })') && /insertContent\(" "\)/.test(src));
+  check("双链不监听 [[ 输入（字面文本要打得出来），建链只走菜单", !/__dshkWikiTrigger|wiki-link-trigger/.test(src));
+  check("图片入口走系统文件选择器，与粘贴同一条入库管线", src.includes("input.accept = \"image/*\"") && src.includes("void attachAndInsert(files)") && src.includes("void attachAndInsert(files);"));
+  check("表格命令在选区浮条：行/列增删 + 左中右对齐 + 表头列 + 删表", src.includes('children: "行↑"') && src.includes('children: "−列"') && src.includes('setCellAttribute("align", "center")') && src.includes("toggleHeaderColumn()") && src.includes('children: "✕表"'));
+  check("页条不再挂表格按钮（浮条出条规则：选区落在表内）", !src.includes("vaultTableAddRow") && !src.includes("vaultTableDel"));
+  check("Tab 手感：列表升降级、其余吃掉（不把焦点带出编辑器），Ctrl+Enter 跳出引用", src.includes('sinkListItem("listItem")') && src.includes('liftListItem("taskItem")') && src.includes('insertContentAt($from.after(d), { type: "paragraph" })'));
+}
 // 6.9b2) 阅读条「反链 N」：计数印在按钮上（来源页列表在浮层里，不再吊页尾）
 {
   stateSeq = 0;

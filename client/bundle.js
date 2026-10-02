@@ -1443,8 +1443,7 @@ window.__ModuleLoader__.load({
 .dshk-vault-radio{display:flex;align-items:center;gap:6px;font-size:12px;line-height:1.4;color:var(--dsw-alias-label-primary);margin-top:4px}
 .dshk-vault-srcline{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
 .dshk-vault-modalinput{width:100%;box-sizing:border-box;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:6px 8px;border-radius:6px;margin-top:4px}
-/* 编辑面：撤销/重做 + 表格行列表（选区落在表内才亮）| 分隔点 | 未保存脏点 */
-.dshk-vault-tbsep{flex:none;width:1px;height:14px;background:var(--dsw-alias-border-l2)}
+/* 编辑面：撤销/重做 + 未保存脏点（表格命令在选区浮条上） */
 .dshk-vault-dirtydot{flex:none;font-size:10px;line-height:1;color:var(--dsw-alias-warning,#e8a13c)}
 /* CAS 冲突条：盘上被改而自动保存已暂停（不静默覆盖、不存档——由人裁决） */
 .dshk-vault-conflict{flex:none;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dsw-alias-warning,#e8a13c);padding:0 0 8px}
@@ -1471,6 +1470,22 @@ window.__ModuleLoader__.load({
 .dshk-vault-bswatch{flex:none;width:16px;height:16px;border-radius:4px;border:1px solid var(--dsw-alias-border-l2);cursor:pointer;padding:0}
 .dshk-vault-bswatch-clear{width:100%;appearance:none;border:0;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:10px;line-height:1;padding:2px 0;cursor:pointer}
 .dshk-vault-bswatch-clear:hover{color:var(--dsw-alias-label-primary)}
+/* 双链选择框：只列库里已有的页（碎链没入口，与望舒一致），贴光标弹、键盘上下选 */
+.dshk-vault-pick{position:fixed;z-index:1300;width:300px;max-height:320px;display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18));overflow:hidden}
+.dshk-vault-pickinput{flex:none;width:100%;box-sizing:border-box;border:0;border-bottom:1px solid var(--dsw-alias-border-l1);background:none;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;padding:7px 10px;outline:none}
+.dshk-vault-picklist{flex:1;min-height:0;overflow-y:auto;padding:4px}
+.dshk-vault-pickitem{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer}
+.dshk-vault-pickitem.is-cur{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-vault-pickname{flex:1;min-width:0;font-size:13px;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-vault-pickrel{flex:none;max-width:44%;font-size:10px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl}
+.dshk-vault-pickempty{padding:12px 10px;text-align:center;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+/* 插入表格弹窗：两个数字框 + 首行表头说明 + 取消/插入 */
+.dshk-vault-tabledlg{display:flex;flex-direction:column;gap:8px}
+.dshk-vault-tabledlg label{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshk-vault-tabledlg label input{width:72px;box-sizing:border-box;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:5px 7px;border-radius:6px}
+.dshk-vault-tabledlg-hint{font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-tabledlg-row{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+.dshk-vault-tbtn.is-primary{border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-button-tool-bar-fill)}
 /* 日程：左栏待办清单 + 右栏周时间网格（望舒同款分工——清单在侧栏、网格占主区）。
    --dshk-sched-band = 表头带高（角格与日期头共用，网格 sticky 滚动的基准） */
 .dshk-sched-root{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px;--dshk-sched-band:52px}
@@ -3317,11 +3332,6 @@ ellipsis，窄列只截字不破版 */
       vaultSaveConflictReload: "读盘上的（丢弃我的改动）",
       vaultAttachFail: "图片入库失败",
       rtePlaceholder: "输入正文，/ 唤出命令菜单",
-      vaultTableAddRow: "加行",
-      vaultTableAddCol: "加列",
-      vaultTableDelRow: "删行",
-      vaultTableDelCol: "删列",
-      vaultTableDel: "删表",
       vmenuGHead: "标题与正文",
       vmenuH1: "标题 1",
       vmenuH1Desc: "一级标题",
@@ -3331,10 +3341,6 @@ ellipsis，窄列只截字不破版 */
       vmenuH3Desc: "三级标题",
       vmenuH4: "标题 4",
       vmenuH4Desc: "四级标题",
-      vmenuH5: "标题 5",
-      vmenuH5Desc: "五级标题",
-      vmenuH6: "标题 6",
-      vmenuH6Desc: "六级标题",
       vmenuBody: "正文",
       vmenuBodyDesc: "普通文本段落",
       vmenuGSpecial: "特殊块",
@@ -3358,17 +3364,35 @@ ellipsis，窄列只截字不破版 */
       vmenuCodeDesc: "代码区域（语法高亮）",
       vmenuQuote: "引用",
       vmenuQuoteDesc: "引用块",
-      vmenuGTable: "表格",
-      vmenuTable1: "1×2",
-      vmenuTable1Desc: "1 行 2 列",
-      vmenuTable2: "2×2",
-      vmenuTable2Desc: "2 行 2 列",
-      vmenuTable3: "3×3",
-      vmenuTable3Desc: "3 行 3 列",
-      vmenuTable4: "4×4",
-      vmenuTable4Desc: "4 行 4 列",
-      vmenuTable5: "5×5",
-      vmenuTable5Desc: "5 行 5 列",
+      vmenuWiki: "双链",
+      vmenuWikiDesc: "链接到其它页面 [[页面]]",
+      vmenuGChart: "图表",
+      vmenuTable: "表格",
+      vmenuTableDesc: "自定义行列（默认 3×3 带表头）",
+      vmenuMermaid: "流程图",
+      vmenuMermaidDesc: "Mermaid 文本绘图（流程 / 时序 / 甘特等）",
+      vmenuGAttach: "附件",
+      vmenuImage: "图片",
+      vmenuImageDesc: "本地图片（大图自动压缩）",
+      vlinkSearch: "搜索页面…",
+      vlinkEmpty: "未找到匹配页面（这里只列已有页面）",
+      vtableRows: "行",
+      vtableCols: "列",
+      vtableHint: "首行固定为表头",
+      vtableOk: "插入",
+      vtableCancel: "取消",
+      vtableRange: "行列需在 1–20 之间",
+      vtblRowAbove: "上方插入行",
+      vtblRowBelow: "下方插入行",
+      vtblRowDel: "删除行",
+      vtblColLeft: "左侧插入列",
+      vtblColRight: "右侧插入列",
+      vtblColDel: "删除列",
+      vtblAlignL: "左对齐",
+      vtblAlignC: "居中",
+      vtblAlignR: "右对齐",
+      vtblHeadCol: "切换表头列",
+      vtblDelTable: "删除表格",
       vtbUndo: "撤销",
       vtbRedo: "重做",
       vtbBold: "加粗",
@@ -3466,11 +3490,6 @@ ellipsis，窄列只截字不破版 */
       vaultSaveConflictReload: "Load the disk version (drop mine)",
       vaultAttachFail: "Failed to store the image",
       rtePlaceholder: "Type '/' for commands",
-      vaultTableAddRow: "Add row",
-      vaultTableAddCol: "Add col",
-      vaultTableDelRow: "Del row",
-      vaultTableDelCol: "Del col",
-      vaultTableDel: "Del table",
       vmenuGHead: "Headings & text",
       vmenuH1: "Heading 1",
       vmenuH1Desc: "Level 1 heading",
@@ -3480,10 +3499,6 @@ ellipsis，窄列只截字不破版 */
       vmenuH3Desc: "Level 3 heading",
       vmenuH4: "Heading 4",
       vmenuH4Desc: "Level 4 heading",
-      vmenuH5: "Heading 5",
-      vmenuH5Desc: "Level 5 heading",
-      vmenuH6: "Heading 6",
-      vmenuH6Desc: "Level 6 heading",
       vmenuBody: "Body text",
       vmenuBodyDesc: "Plain text paragraph",
       vmenuGSpecial: "Special blocks",
@@ -3507,17 +3522,35 @@ ellipsis，窄列只截字不破版 */
       vmenuCodeDesc: "Code area with syntax highlighting",
       vmenuQuote: "Quote",
       vmenuQuoteDesc: "Blockquote",
-      vmenuGTable: "Tables",
-      vmenuTable1: "1×2",
-      vmenuTable1Desc: "1 row 2 cols",
-      vmenuTable2: "2×2",
-      vmenuTable2Desc: "2 rows 2 cols",
-      vmenuTable3: "3×3",
-      vmenuTable3Desc: "3 rows 3 cols",
-      vmenuTable4: "4×4",
-      vmenuTable4Desc: "4 rows 4 cols",
-      vmenuTable5: "5×5",
-      vmenuTable5Desc: "5 rows 5 cols",
+      vmenuWiki: "Wiki link",
+      vmenuWikiDesc: "Link to another page [[page]]",
+      vmenuGChart: "Charts",
+      vmenuTable: "Table",
+      vmenuTableDesc: "Custom rows and columns (3×3 with header by default)",
+      vmenuMermaid: "Diagram",
+      vmenuMermaidDesc: "Mermaid text diagrams (flow / sequence / gantt…)",
+      vmenuGAttach: "Attachment",
+      vmenuImage: "Image",
+      vmenuImageDesc: "Local image (large ones compressed)",
+      vlinkSearch: "Search pages…",
+      vlinkEmpty: "No matching page (only existing pages are listed)",
+      vtableRows: "Rows",
+      vtableCols: "Columns",
+      vtableHint: "The first row is always the header",
+      vtableOk: "Insert",
+      vtableCancel: "Cancel",
+      vtableRange: "Rows and columns must be between 1 and 20",
+      vtblRowAbove: "Insert row above",
+      vtblRowBelow: "Insert row below",
+      vtblRowDel: "Delete row",
+      vtblColLeft: "Insert column left",
+      vtblColRight: "Insert column right",
+      vtblColDel: "Delete column",
+      vtblAlignL: "Align left",
+      vtblAlignC: "Align center",
+      vtblAlignR: "Align right",
+      vtblHeadCol: "Toggle header column",
+      vtblDelTable: "Delete table",
       vtbUndo: "Undo",
       vtbRedo: "Redo",
       vtbBold: "Bold",
@@ -3997,6 +4030,14 @@ ellipsis，窄列只截字不破版 */
       return Promise.all(jobs);
     }
     function ensureRteLib() {
+      // mermaid 渲染器：vendor 的流程图节点只认 window.mermaid，没有就退化成代码块；
+      // 宿主与 app.asar 都不带这个库，本插件自带一份，编辑器第一次碰到流程图才下
+      if (typeof window.__dshkMermaidLoad !== "function") {
+        window.__dshkMermaidLoad = () =>
+          loadScript("/dsh-kit/vendor/mermaid.min.js").then(() => {
+            window.DshRTE && typeof window.DshRTE.mermaidReady === "function" && window.DshRTE.mermaidReady();
+          });
+      }
       return typeof window.DshRTE === "object" && window.DshRTE !== null
         ? Promise.resolve()
         : loadScript("/dsh-kit/vendor/richeditor.bundle.js");
@@ -4888,30 +4929,32 @@ ellipsis，窄列只截字不破版 */
     }
 
     // 斜杠菜单的项表：两级（分组 → 条目），labelKey/descKey 走 i18n，match 是过滤
-    // 用的附加关键词（英文 + 中文别名；命令本身由 vendor 句柄执行）
+    // 用的附加关键词（英文 + 中文别名；命令本身由 vendor 句柄执行）。分组与条目同
+    // 望舒（两端一致）：标题与正文 / 特殊块 / 列表 / 数学公式与代码 / 图表 / 附件。
+    // H5、H6 用得少不进菜单（正文里已有的照常渲染）；表格不列固定尺寸，点开自己填行列
     const VAULT_MENU = [
       {
         key: "head",
         labelKey: "vmenuGHead",
-        match: "heading h1 h2 h3 h4 h5 h6 body 标题 正文",
+        match: "heading h1 h2 h3 h4 body 标题 正文",
         children: [
           { key: "h1", icon: "H1", labelKey: "vmenuH1", descKey: "vmenuH1Desc", match: "h1 一级" },
           { key: "h2", icon: "H2", labelKey: "vmenuH2", descKey: "vmenuH2Desc", match: "h2 二级" },
           { key: "h3", icon: "H3", labelKey: "vmenuH3", descKey: "vmenuH3Desc", match: "h3 三级" },
           { key: "h4", icon: "H4", labelKey: "vmenuH4", descKey: "vmenuH4Desc", match: "h4 四级" },
-          { key: "h5", icon: "H5", labelKey: "vmenuH5", descKey: "vmenuH5Desc", match: "h5 五级" },
-          { key: "h6", icon: "H6", labelKey: "vmenuH6", descKey: "vmenuH6Desc", match: "h6 六级" },
           { key: "body", icon: "P", labelKey: "vmenuBody", descKey: "vmenuBodyDesc", match: "body paragraph 正文 段落" },
         ],
       },
       {
         key: "special",
         labelKey: "vmenuGSpecial",
-        match: "special divider hr fold quote 分割 特殊 引用 折叠",
+        match: "special divider hr fold quote wikilink 分割 特殊 引用 折叠 双链",
         children: [
           { key: "hr", icon: "—", labelKey: "vmenuHr", descKey: "vmenuHrDesc", match: "hr divider 分割线" },
           { key: "fold", icon: "▸", labelKey: "vmenuFold", descKey: "vmenuFoldDesc", match: "fold collapsible 折叠 折叠块" },
           { key: "quote", icon: "❝", labelKey: "vmenuQuote", descKey: "vmenuQuoteDesc", match: "quote blockquote 引用" },
+          // 双链放最后：前三条的 1-9 数字键位不动。正文一个字不动，弹选择框挑页
+          { key: "wiki", icon: "🔗", labelKey: "vmenuWiki", descKey: "vmenuWikiDesc", match: "wikilink link double 双链 链接" },
         ],
       },
       {
@@ -4935,15 +4978,20 @@ ellipsis，窄列只截字不破版 */
         ],
       },
       {
-        key: "table",
-        labelKey: "vmenuGTable",
-        match: "table 表格",
+        key: "chart",
+        labelKey: "vmenuGChart",
+        match: "table mermaid chart diagram 表格 图表 流程图",
         children: [
-          { key: "t1x2", icon: "⊟", labelKey: "vmenuTable1", descKey: "vmenuTable1Desc", match: "table 1x2 表格", rows: 1, cols: 2 },
-          { key: "t2x2", icon: "⊞", labelKey: "vmenuTable2", descKey: "vmenuTable2Desc", match: "table 2x2 表格", rows: 2, cols: 2 },
-          { key: "t3x3", icon: "⊟", labelKey: "vmenuTable3", descKey: "vmenuTable3Desc", match: "table 3x3 表格", rows: 3, cols: 3 },
-          { key: "t4x4", icon: "⊞", labelKey: "vmenuTable4", descKey: "vmenuTable4Desc", match: "table 4x4 表格", rows: 4, cols: 4 },
-          { key: "t5x5", icon: "⊟", labelKey: "vmenuTable5", descKey: "vmenuTable5Desc", match: "table 5x5 表格", rows: 5, cols: 5 },
+          { key: "table", icon: "⊞", labelKey: "vmenuTable", descKey: "vmenuTableDesc", match: "table grid 表格" },
+          { key: "mermaid", icon: "◇", labelKey: "vmenuMermaid", descKey: "vmenuMermaidDesc", match: "mermaid flow diagram 流程图" },
+        ],
+      },
+      {
+        key: "attach",
+        labelKey: "vmenuGAttach",
+        match: "attachment image picture 附件 图片",
+        children: [
+          { key: "image", icon: "IMG", labelKey: "vmenuImage", descKey: "vmenuImageDesc", match: "image picture photo 图片 插图" },
         ],
       },
     ];
@@ -4962,10 +5010,14 @@ ellipsis，窄列只截字不破版 */
      *  返回 'ok'|'conflict'|'gone'|'fail'。conflict / gone 都暂停自动保存：
      *  直到父层重载（docTick bump 重挂）或 overwrite 成功。
      *  ctlRef 暴露 { dirty, flush, flushManual, overwrite } 供切签与冲突条用。 */
-    function RteEditor({ rteRef, ctlRef, docKey, docTick, initialMd, placeholder, labels, onReady, onWikiLink, resolveWiki, resolveSrc, onRelLink, onSave, onState, onPaste }) {
+    function RteEditor({ rteRef, ctlRef, docKey, docTick, initialMd, placeholder, labels, pages, onInsertImage, onReady, onWikiLink, resolveWiki, resolveSrc, onRelLink, onSave, onState, onPaste }) {
       const [libsReady, setLibsReady] = react.useState(false);
       const [libsFailed, setLibsFailed] = react.useState(false);
       const [inTableState, setInTableState] = react.useState(false);
+      // 双链选择框：{x, y, above, query, sel} | null（只列库里已有的页，碎链没入口）
+      const [pick, setPick] = react.useState(null);
+      // 插入表格弹窗：{rows, cols} | null（斜杠菜单「图表 → 表格」点开自己填行列）
+      const [tDlg, setTDlg] = react.useState(null);
       const rteHostRef = react.useRef(null);
       // 斜杠菜单：{query, sub, x, y, at} | null（/ 触发：行首或空白后，键入过滤，Esc/失焦关）
       const [menu, setMenu] = react.useState(null);
@@ -4995,6 +5047,10 @@ ellipsis，窄列只截字不破版 */
       onSaveRef.current = onSave;
       const onStateRef = react.useRef(onState);
       onStateRef.current = onState;
+      const onInsertImageRef = react.useRef(onInsertImage);
+      onInsertImageRef.current = onInsertImage;
+      const pagesRef = react.useRef(pages);
+      pagesRef.current = pages;
       const confRef = react.useRef({ onWikiLink, resolveWiki, resolveSrc, onRelLink, labels, placeholder });
       confRef.current = { onWikiLink, resolveWiki, resolveSrc, onRelLink, labels, placeholder };
 
@@ -5027,7 +5083,7 @@ ellipsis，窄列只截字不破版 */
         return "";
       };
       const report = () => {
-        onStateRef.current?.({ dirty: dirtyRef.current, inTable: inTableRef.current, crumb: crumbOf() });
+        onStateRef.current?.({ dirty: dirtyRef.current, crumb: crumbOf() });
       };
 
       react.useEffect(() => {
@@ -5082,6 +5138,83 @@ ellipsis，窄列只截字不破版 */
         }
         return VAULT_MENU;
       };
+      // 双链选择框：贴光标弹，**只列库里已有的页**（碎链没入口，要连先建页）——
+      // [[ 不做触发字符，那是要打得出来的字面文本，建链只走菜单，与望舒同一条路
+      const pickRowsOf = (query) => {
+        const q = String(query ?? "").trim().toLowerCase();
+        const list = pagesRef.current ?? [];
+        return q === "" ? list : list.filter((p) => String(p.rel).toLowerCase().includes(q));
+      };
+      const openPick = () => {
+        const ed = rteRef.current?.editor;
+        if (!ed) return;
+        const c = ed.view.coordsAtPos(ed.state.selection.from);
+        const above = window.innerHeight - (c?.bottom ?? 220) < 260;
+        setPick({
+          x: Math.max(8, Math.min(c?.left ?? 240, (window.innerWidth || 1200) - 316)),
+          y: above ? (c?.top ?? 200) - 6 : (c?.bottom ?? 220) + 4,
+          above,
+          query: "",
+          sel: 0,
+        });
+      };
+      const pickClose = () => {
+        setPick(null);
+        rteRef.current?.focus();
+      };
+      const pickInsert = (p) => {
+        setPick(null);
+        const h = rteRef.current;
+        if (!h || !p) return;
+        // 目标按页名（不含扩展名），解析走同名匹配，同空间优先——与望舒一致
+        h.insertWikiLink({ target: pageBasename(p.rel) });
+        h.editor.commands.insertContent(" ");
+        h.focus();
+      };
+      // 选择框手势：↑↓ 选、Enter 落定、Esc 关；点框外即关（选区没动过，focus 即回原落点）
+      react.useEffect(() => {
+        if (pick === null) return undefined;
+        const onKey = (e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            e.stopPropagation();
+            const dir = e.key === "ArrowDown" ? 1 : -1;
+            setPick((prev) => {
+              const list = pickRowsOf(prev.query);
+              return { ...prev, sel: Math.max(0, Math.min(prev.sel + dir, list.length - 1)) };
+            });
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            const rows = pickRowsOf(pick.query);
+            if (rows[pick.sel]) pickInsert(rows[pick.sel]);
+            else pickClose();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            pickClose();
+          }
+        };
+        const onDown = (e) => {
+          if (e.target instanceof Element && e.target.closest(".dshk-vault-pick") !== null) return;
+          pickClose();
+        };
+        window.addEventListener("keydown", onKey, true);
+        document.addEventListener("mousedown", onDown, true);
+        return () => {
+          window.removeEventListener("keydown", onKey, true);
+          document.removeEventListener("mousedown", onDown, true);
+        };
+      }, [pick]);
+      const tDlgPatch = (patch) => setTDlg((prev) => (prev === null ? prev : { ...prev, ...patch }));
+      const tDlgInsert = () => {
+        const d = tDlg;
+        setTDlg(null);
+        const rows = Math.min(20, Math.max(1, Math.round(Number(d?.rows)) || 3));
+        const cols = Math.min(20, Math.max(1, Math.round(Number(d?.cols)) || 3));
+        rteRef.current?.insertTable(rows, cols);
+        rteRef.current?.focus();
+      };
       /** 斜杠命令落地：先删掉 "/查询" 再套模板（菜单非破坏性，/ 是真实文本） */
       const applyMenuTemplate = (item) => {
         const h = rteRef.current;
@@ -5097,7 +5230,10 @@ ellipsis，窄列只截字不破版 */
         h.focus();
         if (!m) return;
         const key = item.key ?? "";
-        if (item.rows) h.insertTable(item.rows, item.cols ?? item.rows);
+        if (key === "table") setTDlg({ rows: 3, cols: 3 });
+        else if (key === "mermaid") h.insertMermaidBlock();
+        else if (key === "image") onInsertImageRef.current?.();
+        else if (key === "wiki") openPick();
         else if (key === "mathinline") h.insertMathInline();
         else if (key === "mathblock") h.insertMathBlock();
         else if (key === "code") h.insertCodeBlock();
@@ -5240,6 +5376,52 @@ ellipsis，窄列只截字不破版 */
           report();
         });
         const onKeyDown = (e) => {
+          // Tab / Shift+Tab：列表里升降级，其余一律吃掉（浏览器默认会把焦点带出编辑器）。
+          // 表格与代码块放行给编辑器下层（表格跳格、代码块插两空格）
+          if (e.key === "Tab") {
+            const ed = rteRef.current?.editor;
+            if (!ed) return;
+            let ctx = "other";
+            try {
+              const { $from } = ed.state.selection;
+              for (let d = $from.depth; d > 0; d--) {
+                const name = $from.node(d).type.name;
+                if (name === "tableCell" || name === "tableHeader") { ctx = "table"; break; }
+                if (name === "codeBlock") { ctx = "code"; break; }
+                if (name === "listItem") { ctx = "list"; break; }
+                if (name === "taskItem") { ctx = "task"; break; }
+              }
+            } catch {
+              return;
+            }
+            if (ctx === "table" || ctx === "code") return;
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+              if (ctx === "list") (e.shiftKey ? ed.commands.liftListItem("listItem") : ed.commands.sinkListItem("listItem"));
+              else if (ctx === "task") (e.shiftKey ? ed.commands.liftListItem("taskItem") : ed.commands.sinkListItem("taskItem"));
+            } catch {
+              /* schema 没有对应命令就当没按 */
+            }
+            return;
+          }
+          // Ctrl+Enter 在引用里：在引用块之后插一段（跳出去继续写正文）
+          if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+            const ed = rteRef.current?.editor;
+            if (!ed) return;
+            try {
+              const { $from } = ed.state.selection;
+              for (let d = $from.depth; d > 0; d--) {
+                if ($from.node(d).type.name !== "blockquote") continue;
+                e.preventDefault();
+                e.stopPropagation();
+                ed.chain().focus().insertContentAt($from.after(d), { type: "paragraph" }).run();
+                return;
+              }
+            } catch {
+              /* 结构变了按默认走 */
+            }
+          }
           // Ctrl+S：立即落盘（toast 反馈在 onSave 的 manual 分支）
           if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
             e.preventDefault();
@@ -5522,6 +5704,27 @@ ellipsis，窄列只截字不破版 */
                     jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("link") ? " is-active" : ""}`, title: t("vtbLink"), onClick: bubLink, children: "🔗" }),
                     jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtbClear"), onClick: () => rteCmd((h) => h.clearFormat()), children: "⌫" }),
                   ] }),
+                  // 表格浮条（选区落在表内才出，与望舒同一条规则）：文字键同鸿蒙端 tablebar，
+                  // 命令作用在选区覆盖到的行列上。不做合并/拆分（md 管道表没有 colspan 载体）
+                  inTableState
+                    ? jsxRuntime.jsx("div", { className: "dshk-vault-bubblebar", children: [
+                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblRowAbove"), onClick: () => rteCmd((h) => h.tableAddRow(false)), children: "行↑" }),
+                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblRowBelow"), onClick: () => rteCmd((h) => h.tableAddRow(true)), children: "行↓" }),
+                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblRowDel"), onClick: () => rteCmd((h) => h.tableDeleteRow()), children: "−行" }),
+                      jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
+                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblColLeft"), onClick: () => rteCmd((h) => h.tableAddCol(false)), children: "列←" }),
+                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblColRight"), onClick: () => rteCmd((h) => h.tableAddCol(true)), children: "列→" }),
+                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblColDel"), onClick: () => rteCmd((h) => h.tableDeleteCol()), children: "−列" }),
+                      jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
+                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblAlignL"), onClick: () => rteCmd((h) => h.editor.chain().setCellAttribute("align", "left").run()), children: "左" }),
+                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblAlignC"), onClick: () => rteCmd((h) => h.editor.chain().setCellAttribute("align", "center").run()), children: "中" }),
+                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblAlignR"), onClick: () => rteCmd((h) => h.editor.chain().setCellAttribute("align", "right").run()), children: "右" }),
+                      jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
+                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblHeadCol"), onClick: () => rteCmd((h) => h.editor.chain().toggleHeaderColumn().run()), children: "头列" }),
+                      jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
+                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblDelTable"), onClick: () => rteCmd((h) => h.tableDelete()), children: "✕表" }),
+                    ] })
+                    : null,
                   bubPanel !== null
                     ? jsxRuntime.jsx("div", { className: "dshk-vault-bswatchrow", children: (bubPanel === "tc" ? BUB_COLORS : BUB_HIGHLIGHTS).map((c) =>
                         jsxRuntime.jsx("button", {
@@ -5550,6 +5753,80 @@ ellipsis，窄列只截字不破版 */
               },
               "bubble",
             )
+          : null,
+        // 双链选择框：贴光标弹（下方放不下翻到上方），只列库里已有的页
+        pick !== null
+          ? jsxRuntime.jsx(
+              "div",
+              {
+                className: "dshk-vault-pick",
+                style: {
+                  left: pick.x,
+                  top: pick.y,
+                  ...(pick.above ? { bottom: window.innerHeight - pick.y } : {}),
+                },
+                children: [
+                  jsxRuntime.jsx("input", {
+                    className: "dshk-vault-pickinput",
+                    value: pick.query,
+                    placeholder: t("vlinkSearch"),
+                    autoFocus: true,
+                    onChange: (e) => setPick((prev) => (prev === null ? prev : { ...prev, query: e.target.value, sel: 0 })),
+                  }),
+                  jsxRuntime.jsxs("div", { className: "dshk-vault-picklist", children: (() => {
+                    const rows = pickRowsOf(pick.query);
+                    if (rows.length === 0) return [jsxRuntime.jsx("div", { className: "dshk-vault-pickempty", children: t("vlinkEmpty") }, "empty")];
+                    return rows.map((p, i) =>
+                      jsxRuntime.jsxs(
+                        "div",
+                        {
+                          className: `dshk-vault-pickitem${i === pick.sel ? " is-cur" : ""}`,
+                          onMouseEnter: () => setPick((prev) => (prev === null ? prev : { ...prev, sel: i })),
+                          onMouseDown: (e) => {
+                            e.preventDefault();
+                            pickInsert(p);
+                          },
+                          children: [
+                            jsxRuntime.jsx("span", { className: "dshk-vault-pickname", children: pageBasename(p.rel) }),
+                            jsxRuntime.jsx("span", { className: "dshk-vault-pickrel", children: p.rel }),
+                          ],
+                        },
+                        p.path,
+                      ),
+                    );
+                  })() }),
+                ],
+              },
+              "wikipick",
+            )
+          : null,
+        // 插入表格弹窗：行列自己填（固定尺寸那几档实际只用得到一两个）
+        tDlg !== null
+          ? jsxRuntime.jsx(VaultDialog, {
+              title: t("vmenuTable"),
+              onClose: () => {
+                setTDlg(null);
+                rteRef.current?.focus();
+              },
+              children: jsxRuntime.jsxs("div", { className: "dshk-vault-tabledlg", children: [
+                jsxRuntime.jsxs("label", { children: [
+                  jsxRuntime.jsx("span", { children: t("vtableRows") }),
+                  jsxRuntime.jsx("input", { type: "number", min: 1, max: 20, value: tDlg.rows, onChange: (e) => tDlgPatch({ rows: e.target.value }) }),
+                ] }, "rows"),
+                jsxRuntime.jsxs("label", { children: [
+                  jsxRuntime.jsx("span", { children: t("vtableCols") }),
+                  jsxRuntime.jsx("input", { type: "number", min: 1, max: 20, value: tDlg.cols, onChange: (e) => tDlgPatch({ cols: e.target.value }) }),
+                ] }, "cols"),
+                jsxRuntime.jsx("span", { className: "dshk-vault-tabledlg-hint", children: `${t("vtableHint")} · ${t("vtableRange")}` }),
+                jsxRuntime.jsxs("div", { className: "dshk-vault-tabledlg-row", children: [
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", onClick: () => {
+                    setTDlg(null);
+                    rteRef.current?.focus();
+                  }, children: t("vtableCancel") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn is-primary", onClick: tDlgInsert, children: t("vtableOk") }),
+                ] }, "btns"),
+              ] }),
+            }, "tabledlg")
           : null,
       ] });
     }
@@ -6565,8 +6842,7 @@ ellipsis，窄列只截字不破版 */
       const [docTick, setDocTick] = react.useState(0);
       // CAS 冲突：{ diskMtime } | null —— 自动保存暂停，出冲突条（覆盖 / 读盘上）
       const [conflict, setConflict] = react.useState(null);
-      // 表格上下文按钮随选区显隐（选区落在表格内即亮）+ 脏点（RteEditor 上报）
-      const [inTable, setInTable] = react.useState(false);
+      // 未保存脏点（RteEditor 上报）
       const [dirtyDot, setDirtyDot] = react.useState(false);
       // 阅读条：面包屑 + 页面级下拉（目录/反链，同时至多开一个）
       const [crumb, setCrumb] = react.useState("");
@@ -6702,28 +6978,45 @@ ellipsis，窄列只截字不破版 */
         return () => clearInterval(timer);
       }, [active, path, loadCurrent, onIndexRefresh]);
 
-      /** 编辑态粘贴图片：浏览器侧先按阈值压缩 → POST /dsh-kit/vault/attach 进
-       *  attachments/（内容寻址，同内容不重写）→ 光标处插图片节点 */
+      /** 图片入库并插到光标处：浏览器侧先按阈值压缩 → POST /dsh-kit/vault/attach
+       *  进 attachments/（内容寻址，同内容不重写）→ 光标处插图片节点。
+       *  粘贴与斜杠菜单「附件 → 图片」共用这一条管线（落库规则因此只有一套） */
+      const attachAndInsert = async (files) => {
+        for (const f of files) {
+          try {
+            const img = await shrinkPastedImage(f);
+            const body = await kitJson("/dsh-kit/vault/attach", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ dataBase64: await blobToBase64(img.blob), fileName: `paste.${img.ext}` }),
+            });
+            if (typeof body.rel !== "string" || body.rel === "") throw new Error("no rel");
+            rteRef.current?.insertImage(body.rel, f.name || "");
+          } catch {
+            toast(t("vaultAttachFail"));
+          }
+        }
+      };
       const onEditPaste = (e) => {
         const files = Array.from(e.clipboardData?.files ?? []).filter((f) => /^image\//i.test(f.type));
         if (files.length === 0) return;
         e.preventDefault();
-        void (async () => {
-          for (const f of files) {
-            try {
-              const img = await shrinkPastedImage(f);
-              const body = await kitJson("/dsh-kit/vault/attach", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ dataBase64: await blobToBase64(img.blob), fileName: `paste.${img.ext}` }),
-              });
-              if (typeof body.rel !== "string" || body.rel === "") throw new Error("no rel");
-              rteRef.current?.insertImage(body.rel, f.name || "");
-            } catch {
-              toast(t("vaultAttachFail"));
-            }
-          }
-        })();
+        void attachAndInsert(files);
+      };
+      // 斜杠菜单「附件 → 图片」：系统文件选择器选一张走上面那条管线（取消不吭声）
+      const onPickImage = () => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
+        input.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px;opacity:0";
+        input.onchange = () => {
+          input.remove();
+          const files = Array.from(input.files ?? []);
+          if (files.length > 0) void attachAndInsert(files);
+        };
+        // 挂进文档再点：选择器在部分浏览器里只认在文档中的 input
+        document.body.appendChild(input);
+        input.click();
       };
 
       /** RTE 版标题锚滚动：vendor 按标题文本 slug 匹配，锚线摆位 + 装饰闪烁 */
@@ -6807,10 +7100,10 @@ ellipsis，窄列只截字不破版 */
               ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultBinaryHint") })
               : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
                   jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
-                    // 页条 = 文档级命令 + 阅读条（sticky）：撤销/重做、选区落在表内
-                    // 才亮的表格行列表、未保存脏点；右端仍是目录/反链两个页面级
-                    // 入口（长文滚到哪儿都够得到——吊在页尾的老反链区就是够不到
-                    // 才撤掉的）。空了按钮留原位置灰，别忽长忽短
+                    // 页条 = 文档级命令 + 阅读条（sticky）：撤销/重做、未保存脏点；
+                    // 右端是目录/反链两个页面级入口（长文滚到哪儿都够得到——吊在
+                    // 页尾的老反链区就是够不到才撤掉的）。表格命令在选区浮条上
+                    // （与望舒一致），空了按钮留原位置灰，别忽长忽短
                     jsxRuntime.jsx(KitTip, {
                       label: t("vtbUndo"),
                       children: jsxRuntime.jsx("button", {
@@ -6829,16 +7122,6 @@ ellipsis，窄列只截字不破版 */
                         children: "↷",
                       }),
                     }),
-                    inTable
-                      ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-                          jsxRuntime.jsx("span", { className: "dshk-vault-tbsep" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableAddRow"), onClick: () => rteRef.current?.tableAddRow(true), children: "＋行" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableAddCol"), onClick: () => rteRef.current?.tableAddCol(true), children: "＋列" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDelRow"), onClick: () => rteRef.current?.tableDeleteRow(), children: "－行" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDelCol"), onClick: () => rteRef.current?.tableDeleteCol(), children: "－列" }),
-                          jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-tbtn", title: t("vaultTableDel"), onClick: () => rteRef.current?.tableDelete(), children: "✕表" }),
-                        ] })
-                      : null,
                     dirtyDot ? jsxRuntime.jsx("span", { className: "dshk-vault-dirtydot", title: t("vaultUnsaved"), children: "●" }) : null,
                     jsxRuntime.jsx(KitTip, {
                       label: outline !== null && outline.items.length === 0 ? t("vaultTocEmpty") : t("vaultToc"),
@@ -6878,6 +7161,8 @@ ellipsis，窄列只截字不破版 */
                     initialMd: page.body ?? "",
                     placeholder: t("rtePlaceholder"),
                     labels: { codeCopy: t("vaultCopy"), codeCopied: t("vaultCopied") },
+                    pages: indexPages,
+                    onInsertImage: onPickImage,
                     onReady: onRteReady,
                     onWikiLink: (target, anchor) => {
                       if (target === "") {
@@ -6907,7 +7192,6 @@ ellipsis，窄列只截字不破版 */
                     },
                     onState: (s) => {
                       setDirtyDot(s.dirty === true);
-                      setInTable(s.inTable === true);
                       setCrumb(typeof s.crumb === "string" ? s.crumb : "");
                     },
                     onSave: saveVaultPage,
