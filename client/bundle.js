@@ -1412,6 +1412,20 @@ window.__ModuleLoader__.load({
 .dshk-rte-math.is-editing,.dshk-rte-mathblock.is-editing{background:var(--dsw-alias-bg-layer-3);border-radius:6px}
 .dshk-rte-math-input{font-family:ui-monospace,Consolas,monospace;font-size:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);padding:2px 6px;min-width:120px}
 .dshk-rte-mathblock .dshk-rte-math-input{width:70%}
+/* mermaid 图块：vendor 只给类名，三副面孔（空块提示 / 编辑态源码框 / 渲染态图）
+   的长相全在这层 CSS。少了 is-editing 那条「藏图」规则，编辑态就成了
+   「一行正文号占位提示 + 浏览器默认 textarea」摞在一起。编辑态按公式块
+   那副面孔做：灰底 + 一个等宽源码框，出框即渲染 */
+.dshk-mermaid{margin:.6em 0;cursor:pointer}
+.dshk-mermaid-body{overflow:auto;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dshk-mermaid-body svg{max-width:100%;height:auto}
+/* mermaid 库没就位时的纯文本回退：源码原样铺开，不是提示行 */
+.dshk-mermaid.as-code .dshk-mermaid-body{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;white-space:pre-wrap;text-align:left}
+.dshk-mermaid-err{font-size:12px;color:#d9480f;padding:4px 0}
+.dshk-mermaid.is-editing{background:var(--dsw-alias-bg-layer-3);border-radius:6px}
+.dshk-mermaid.is-editing .dshk-mermaid-body{display:none}
+.dshk-mermaid-input{display:block;box-sizing:border-box;width:100%;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);padding:4px 7px;resize:none;outline:none;white-space:pre;overflow:hidden}
+.dshk-mermaid-input:focus{border-color:var(--dsw-alias-brand-primary,#1971c2)}
 .dshk-vault-details{margin:.6em 0;position:relative;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);padding:2px 10px 2px 26px}
 .dshk-details-chev{position:absolute;left:8px;top:4px;width:16px;height:18px;display:flex;align-items:center;justify-content:center;border:0;background:none;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:1;cursor:pointer;padding:0;transition:transform .15s}
 .dshk-details-chev:hover{color:var(--dsw-alias-label-primary)}
@@ -5401,7 +5415,12 @@ ellipsis，窄列只截字不破版 */
         if (!m) return;
         const key = item.key ?? "";
         if (key === "table") setTDlg({ rows: 3, cols: 3 });
-        else if (key === "mermaid") h.insertMermaidBlock();
+        else if (key === "mermaid") {
+          h.insertMermaidBlock();
+          // 节点视图插入后自开源码框，但这次点击收尾时编辑器把焦点抢回正文，
+          // 框当场失焦即收起（空图块等于白插一次）；下一帧补一次点击把编辑态拉回来
+          requestAnimationFrame(() => rteHostRef.current?.querySelector(".dshk-mermaid")?.click());
+        }
         else if (key === "image") onInsertImageRef.current?.();
         else if (key === "wiki") openPick();
         else if (key === "mathinline") h.insertMathInline();

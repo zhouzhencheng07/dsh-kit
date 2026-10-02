@@ -977,6 +977,8 @@ let vaultFetchPrev = null;
   check("外链打开只有一份实现：对话改投与编辑器点击共用 openExternalUrl", src.includes("function openExternalUrl(href) {") && (src.match(/openExternalUrl\(href\);/g) ?? []).length === 2 && (src.match(/kitJson\("\/dsh-kit\/browser\/open"/g) ?? []).length === 1);
   check("拖选后松手不触发外链跳转（click 时选区非折叠是在选字）", src.includes("if (sel && !sel.isCollapsed) return;"));
   check("代码块语言下拉有盒子样式（挂 body 的 fixed 浮层，缺样式就掉出视口）", /\.dshk-langdrop\{position:fixed/.test(src) && /\.dshk-langopt\{flex:none/.test(src) && /\.dshk-langempty\{/.test(src) && /\.dshk-langdrop\[hidden\]\{display:none\}/.test(src));
+  check("mermaid 图块编辑态与公式块同副面孔（藏图 + 一个等宽源码框，不是提示行摞默认 textarea）", /\.dshk-mermaid\.is-editing \.dshk-mermaid-body\{display:none\}/.test(src) && /\.dshk-mermaid-input\{display:block/.test(src) && /\.dshk-mermaid\.is-editing\{background/.test(src) && /\.dshk-mermaid\.as-code \.dshk-mermaid-body\{/.test(src));
+  check("斜杠菜单插空图块后编辑态还留在原地（焦点被编辑器抢回会当场收起）", src.includes("h.insertMermaidBlock();") && src.includes('requestAnimationFrame(() => rteHostRef.current?.querySelector(".dshk-mermaid")?.click());'));
 }
 // 6.9b2) 阅读条「反链 N」：计数印在按钮上（来源页列表在浮层里，不再吊页尾）
 {
