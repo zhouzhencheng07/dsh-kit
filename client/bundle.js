@@ -1384,7 +1384,9 @@ window.__ModuleLoader__.load({
 .dshk-vault-editwrap{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding:8px 10px}
 .dshk-vault-editbar{position:sticky;top:0;z-index:2;flex:none;display:flex;align-items:center;gap:6px;padding:6px 0;background:var(--dsw-alias-bg-base)}
 .dshk-vault-crumb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:default;user-select:none}
-.dshk-vault-rtehost{flex:1 1 auto;min-height:0;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;overflow:hidden;background:var(--dsw-alias-bg-base)}
+/* 正文区不画外框：这一面是「页面」不是输入框，边框会把整页框成一块编辑区。
+   滚动仍是 rtehost 自己（下面 .dshk-md 那条），这里只留弹性与不透明底色 */
+.dshk-vault-rtehost{flex:1 1 auto;min-height:0;background:var(--dsw-alias-bg-base)}
 /* 复用 .dshk-md 排版（标题/表格/引用/代码），只覆盖编辑态差异：
    滚动容器是 rtehost 自身，ProseMirror 去描边、正文区给最小高度 */
 .dshk-vault-rtehost.dshk-md{flex:1 1 auto;overflow:auto;padding:12px 16px}
