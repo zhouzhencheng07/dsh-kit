@@ -1389,6 +1389,11 @@ window.__ModuleLoader__.load({
    滚动容器是 rtehost 自身，ProseMirror 去描边、正文区给最小高度 */
 .dshk-vault-rtehost.dshk-md{flex:1 1 auto;overflow:auto;padding:12px 16px}
 .dshk-vault-rtehost .ProseMirror{outline:none;min-height:60px;caret-color:var(--dsw-alias-brand-primary,#1971c2)}
+/* gap cursor：表格 / 折叠块 / 代码块这类非 textblock 的块下方留白处的落点（打字就在那儿
+   起一个段落）。vendor 把它画成 20px 横线 + 闪烁，看着像"横着的光标"。只改 ::after 的形状
+   与颜色做成竖光标，容器那两条 display（聚焦才显示）照旧；特异性要比 vendor 后注入的
+   .ProseMirror-gapcursor:after 高，否则被盖回去 */
+.dshk-vault-rtehost .ProseMirror-gapcursor:after{top:-.18em;width:2px;height:1.25em;border-top:none;background:currentColor}
 .dshk-vault-rtehost h5,.dshk-vault-rtehost h6{margin:1.2em 0 .5em;line-height:1.3}
 .dshk-rte-doc p.is-empty::before{content:attr(data-placeholder);color:var(--dsw-alias-label-tertiary);pointer-events:none;float:left;height:0}
 .dshk-rte-anchorflash,.dshk-rte-anchorflash-b{animation:dshkRteFlash 1.5s var(--ds-ease-in-out)}

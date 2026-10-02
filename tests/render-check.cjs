@@ -980,6 +980,7 @@ let vaultFetchPrev = null;
   check("mermaid 图块编辑态与公式块同副面孔（藏图 + 一个等宽源码框，不是提示行摞默认 textarea）", /\.dshk-mermaid\.is-editing \.dshk-mermaid-body\{display:none\}/.test(src) && /\.dshk-mermaid-input\{display:block/.test(src) && /\.dshk-mermaid\.is-editing\{background/.test(src) && /\.dshk-mermaid\.as-code \.dshk-mermaid-body\{/.test(src));
   check("斜杠菜单插空图块后编辑态还留在原地（焦点被编辑器抢回会当场收起）", src.includes("h.insertMermaidBlock();") && src.includes('requestAnimationFrame(() => rteHostRef.current?.querySelector(".dshk-mermaid")?.click());'));
   check("空图块退格删块（stopEvent 恒真，框与块都不动，得自己收；位置按 DOM 反查）", src.includes('ta.classList.contains("dshk-mermaid-input") && ta.value === ""') && src.includes("if (ed.view.nodeDOM(p) === wrap) { pos = p; return false; }") && src.includes("const view = ed.view;") && src.includes("view.dispatch(view.state.tr.delete(pos, pos + view.state.doc.nodeAt(pos).nodeSize));") && !src.includes("const { state, view } = ed.view;"));
+  check("gap cursor 画成竖光标（vendor 那条是 20px 横线，像横着的光标；只改 ::after，容器的 display 照旧）", /\.dshk-vault-rtehost \.ProseMirror-gapcursor:after\{[^}]*width:2px[^}]*height:1\.25em[^}]*border-top:none[^}]*background:currentColor/.test(src));
 }
 // 6.9b2) 阅读条「反链 N」：计数印在按钮上（来源页列表在浮层里，不再吊页尾）
 {
