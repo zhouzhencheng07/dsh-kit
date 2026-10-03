@@ -19,12 +19,12 @@ import http from 'node:http'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 
-import { loadDep, decodePreviewText, sameOrigin, recycleDelete, findProjectRoot, readableRoots, withinReadable } from '../core/index.ts'
+import { loadDep, decodePreviewText, sameOrigin, recycleDelete, findProjectRoot, readableRoots, withinReadable, sendRawFile } from '../core/index.ts'
 import { parseStatusBranch, parseLogRecords, parseBranchList, parseTrack } from './git.ts'
 
 /** git status 的条目上限（口径同文件树 TREE_LIMIT）：未跟踪目录展开没有天然边界 */
 const STATUS_ENTRY_LIMIT = 2000
-import { rawContentType, rawDownloadContentType, rawDisposition, parseRangeHeader } from './raw-file.ts'
+import { rawContentType, rawDownloadContentType } from './raw-file.ts'
 import { validateCwd, validateFile, validateAny, validatePathShape, withinTree, invalidFsName } from './validate.ts'
 
 interface KitWebRoute {
@@ -328,48 +328,12 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             fail(415, `不支持的类型：${path.extname(file.path) || '(无扩展名)'}`)
             return
           }
-          const headers = {
-            'content-type': type,
-            'cache-control': download ? 'no-store' : 'no-cache',
-            'accept-ranges': 'bytes',
-            'x-content-type-options': 'nosniff',
-            // CSP sandbox：raw 内容以文档形态打开（新标签/iframe）时进不透明源、
-            // 脚本不执行——svg 内嵌脚本是存储型 XSS 面（img/fetch 取字节不受影响）
-            'content-security-policy': 'sandbox',
-            // 编码文件名：浏览器标题 / 另存名取这里，中文不乱码
-            'content-disposition': rawDisposition(download, path.basename(file.path)),
-          }
-          const range = parseRangeHeader(req.headers.range, file.size)
-          if (range === null) {
-            res.writeHead(416, { ...headers, 'content-range': `bytes */${file.size}` })
-            res.end()
-            return
-          }
-          let stream: import('node:fs').ReadStream
-          try {
-            stream = fs.createReadStream(file.path, range !== undefined ? { start: range.start, end: range.end } : {})
-          } catch (error) {
-            fail(404, `读取文件失败：${error instanceof Error ? error.message : error}`)
-            return
-          }
-          stream.on('error', (error) => {
-            // 头已发出（流中途失败）只能掐断连接；否则还来得及回 404
-            if (res.headersSent) {
-              res.destroy()
-              return
-            }
-            fail(404, `读取文件失败：${error?.message ?? error}`)
-          })
-          if (range !== undefined) {
-            res.writeHead(206, {
-              ...headers,
-              'content-range': `bytes ${range.start}-${range.end}/${file.size}`,
-              'content-length': String(range.end - range.start + 1),
-            })
-          } else {
-            res.writeHead(200, { ...headers, 'content-length': String(file.size) })
-          }
-          stream.pipe(res)
+          sendRawFile(
+            req,
+            res,
+            { path: file.path, size: file.size, type, download, fileName: path.basename(file.path) },
+            fail,
+          )
         },
       })
 

@@ -1,7 +1,7 @@
 // dsh-kit — DSH 页面能力套件（基础设施行宿主半边）
 //
 // 本行只有套件自己那点基础设施：vendor 静态资源（xterm / qrcode / 知识库编辑器的
-// TipTap、KaTeX 与 mermaid）、OpenCode Go 会话头注入（./core/opencode-session.ts）。它没有页面
+// TipTap、KaTeX、mermaid 与 PDF 阅读器的 pdf.js）、OpenCode Go 会话头注入（./core/opencode-session.ts）。它没有页面
 // 能力，所以 patch 里不给 id、不进插件页组件列表（宿主只把带 id 的行当组件）。
 // 页面能力本身全部按组件行拆开（cordis.patch.yml 里 insert 八行，行 name = 包名 +
 // exports 子路径，行序即插件页显示顺序）：dsh-kit/files（文件树 · 源代码管理）、
@@ -71,6 +71,9 @@ const VENDOR_FILES = new Map([
   // KaTeX 数学公式（vault 阅读态渲染 $...$ / $$...$$；懒加载）
   ['/dsh-kit/vendor/katex.min.js', 'katex.min.js'],
   ['/dsh-kit/vendor/katex.min.css', 'katex.min.css'],
+  // pdf.js（知识库自带 PDF 阅读器：解析库 + worker；只在 PDF 签内懒加载）
+  ['/dsh-kit/vendor/pdf.min.mjs', 'pdf.min.mjs'],
+  ['/dsh-kit/vendor/pdf.worker.min.mjs', 'pdf.worker.min.mjs'],
 ])
 const VENDOR_SUBDIRS = new Map([
   // KaTeX 字体：css 里以 fonts/ 相对路径引用，URL 段固定 fonts，磁盘上隔离在
@@ -79,6 +82,7 @@ const VENDOR_SUBDIRS = new Map([
 ])
 const VENDOR_TYPES = new Map([
   ['.js', 'text/javascript; charset=utf-8'],
+  ['.mjs', 'text/javascript; charset=utf-8'],
   ['.css', 'text/css; charset=utf-8'],
   ['.woff2', 'font/woff2'],
   ['.woff', 'font/woff'],

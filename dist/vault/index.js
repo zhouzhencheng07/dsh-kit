@@ -7,15 +7,18 @@
 // 组件行关闭 = 本模块不物化 = 日程工具不注册、端点全 404，client 半边探到 404 后
 // 整体不注册（侧栏索引、右栏知识库/日程签、对话路径改投全不出现）——行开关就是
 // 这块能力的总开关。
-// 配置：vaultRoot（知识库根目录绝对路径，留空用默认根）；编辑面在插件页本组件行的
+// 配置：vaultRoot（知识库根目录绝对路径，留空用默认根）、builtinPdf（库内 PDF
+// 走自带阅读器，默认关）；编辑面在插件页本组件行的
 // 「配置」。日程存储固定 $DSH_HOME/dsh-kit/schedule/（一条一文件），与知识库根无关，
 // 无配置门槛。
 //
 // 端点（同源校验；webserver 默认只绑 loopback）：
 //   GET  /dsh-kit-vault/config      —— 生效配置快照（client 门控与可达性探针：404 = 行关闭）
 //   GET  /dsh-kit/vault/index       —— 索引（root / folders / pages / library）
-//   GET  /dsh-kit/vault/stat        —— 单页 mtime（外部修改轮询）
+//   GET  /dsh-kit/vault/stat        —— 单文件 mtime/size（外部修改轮询；PDF 阅读器
+//                                     拿它当内容身份的一部分）
 //   GET  /dsh-kit/vault/search      —— 全文搜索
+//   GET  /dsh-kit/vault/file?path=  —— 库内 PDF 原始字节（自带阅读器取数）
 //   POST /dsh-kit/vault/create|rename|move|import|delete —— 目录级文件管理
 //   POST /dsh-kit/vault/write  —— 正文写回（mtime CAS，不符回 modified）
 //   POST /dsh-kit/vault/attach —— 编辑面粘贴的图片进 attachments/（内容寻址）
@@ -27,9 +30,9 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { loadDep, loadToolsModule, sameOrigin, registerReadableRoot } from "../core/index.js";
+import { loadDep, loadToolsModule, sameOrigin, registerReadableRoot, sendRawFile } from "../core/index.js";
 import { VaultScanner, defaultVaultRoot } from "./scanner.js";
-import { createEntry, renameEntry, moveEntry, importEntry, deleteEntries, parseConflict, writePage, storeAttachment, } from "./fs.js";
+import { createEntry, renameEntry, moveEntry, importEntry, deleteEntries, parseConflict, writePage, storeAttachment, resolveInside, } from "./fs.js";
 import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from "./schedule.js";
 import { kitLogger } from "../core/log.js";
 const log = kitLogger('vault');
@@ -45,6 +48,10 @@ export const Config = z && typeof z.object === 'function'
         // 字段恒有值）。宿主据此提供只读索引 / 搜索端点与文件管理端点，数据契约见
         // ./scanner.ts 头注释；用户显式清空保存为 '' 时由读取侧兜回默认根。
         vaultRoot: z.string().default(defaultVaultRoot()).volatile(),
+        // builtinPdf = 库内 PDF 走自带阅读器（client/vendor 的 pdf.js），不走官方
+        // 文件右栏：换来页码跳转、阅读位置记忆、且不吃官方 readBytes 的整文件
+        // 字节上限。关 = 资料库 PDF 与从前一样开官方预览。
+        builtinPdf: z.boolean().default(false).volatile(),
     })
     : undefined;
 export async function apply(ctx, config = {}) {
@@ -109,7 +116,10 @@ export async function apply(ctx, config = {}) {
                 path: '/dsh-kit-vault/config',
                 handler: (_req, res) => {
                     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
-                    res.end(JSON.stringify({ vaultRoot: String(readSettings().vaultRoot ?? '') }));
+                    res.end(JSON.stringify({
+                        vaultRoot: String(readSettings().vaultRoot ?? ''),
+                        builtinPdf: readSettings().builtinPdf === true,
+                    }));
                 },
             });
             const json = (res, code, obj) => {
@@ -310,12 +320,51 @@ export async function apply(ctx, config = {}) {
                     return json(res, 400, { error: '页面不在 vault 内' });
                 try {
                     const stat = fs.statSync(resolved);
-                    return json(res, 200, { mtimeMs: stat.mtimeMs });
+                    return json(res, 200, { mtimeMs: stat.mtimeMs, size: stat.size });
                 }
                 catch {
                     // 文件已被外部删除：回 gone，前端按需重读（页签显示已消失）
                     return json(res, 200, { gone: true });
                 }
+            });
+            // 库内 PDF 原始字节：自带阅读器取数用（builtinPdf 开）。库外一律 400——
+            // 准入判据是 resolveInside 的库内判定，不是可读根集合（那是 /dsh-kit/raw 的口径）。
+            // 字节上限由 pdf.js 那边兜（见 client 的 PDF_MAX_BYTES），端点不截断。
+            vaultRoute('/dsh-kit/vault/file', (req, res, url) => {
+                if (req.method !== 'GET')
+                    return json(res, 405, { error: 'method not allowed' });
+                const root = vaultGuard(res);
+                if (root === null)
+                    return;
+                const fail = (code, msg) => {
+                    res.writeHead(code, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-cache' });
+                    res.end(msg);
+                };
+                let target;
+                try {
+                    target = resolveInside(root, String(url.searchParams.get('path') ?? ''));
+                }
+                catch (error) {
+                    fail(400, error instanceof Error ? error.message : String(error));
+                    return;
+                }
+                if (path.extname(target).toLowerCase() !== '.pdf') {
+                    fail(415, '只发 pdf');
+                    return;
+                }
+                let stat;
+                try {
+                    stat = fs.statSync(target);
+                    if (!stat.isFile()) {
+                        fail(404, '不是文件');
+                        return;
+                    }
+                }
+                catch {
+                    fail(404, '文件不存在');
+                    return;
+                }
+                sendRawFile(req, res, { path: target, size: stat.size, type: 'application/pdf', download: false, fileName: path.basename(target) }, fail);
             });
             vaultRoute('/dsh-kit/vault/search', (req, res, url) => {
                 if (req.method !== 'GET')
