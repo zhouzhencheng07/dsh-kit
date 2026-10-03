@@ -1,6 +1,7 @@
 // raw-file 单测：content-type 白名单 / Range 头解析（含 416 与忽略语义）/ 下载模式头。
 // 用法（dsh-kit 根）：node tests\test-raw-file.mjs
-import { rawExtOf, rawContentType, rawDownloadContentType, rawDisposition, parseRangeHeader } from '../src/files/raw-file.ts'
+import { rawExtOf, rawContentType, rawDownloadContentType } from '../src/files/raw-file.ts'
+import { rawDisposition, rawReplyHeaders, parseRangeHeader } from '../src/core/raw-reply.ts'
 
 let failed = 0
 const check = (label, cond) => {
@@ -50,6 +51,15 @@ check('下载模式：白名单类型照旧', rawDownloadContentType('a.png') ==
 check('预览 disposition 是 inline', rawDisposition(false, 'a.png') === "inline; filename*=UTF-8''a.png")
 check('下载 disposition 是 attachment', rawDisposition(true, 'a.zip') === "attachment; filename*=UTF-8''a.zip")
 check('disposition 中文名走 RFC 5987 编码', rawDisposition(true, '李白诗.md') === `attachment; filename*=UTF-8''${encodeURIComponent('李白诗.md')}`)
+
+// ── rawReplyHeaders：预览 / 下载两套头 ──
+const hPreview = rawReplyHeaders('application/pdf', false, 'a.pdf')
+check('预览头：inline + no-cache', hPreview['content-disposition'] === "inline; filename*=UTF-8''a.pdf" && hPreview['cache-control'] === 'no-cache')
+check('预览头带 sandbox 与 nosniff', hPreview['content-security-policy'] === 'sandbox' && hPreview['x-content-type-options'] === 'nosniff')
+check('预览头声明 Range 支持', hPreview['accept-ranges'] === 'bytes')
+const hDl = rawReplyHeaders('application/octet-stream', true, 'a.zip')
+check('下载头：attachment + no-store', hDl['content-disposition'].startsWith('attachment;') && hDl['cache-control'] === 'no-store')
+check('下载头同样带 sandbox（不能因为是下载就放开当文档渲染）', hDl['content-security-policy'] === 'sandbox')
 
 if (failed) {
   console.log(`\n${failed} 项失败`)

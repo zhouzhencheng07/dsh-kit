@@ -60,6 +60,8 @@ const reactStub = {
   useMemo: (fn) => fn(),
   useSyncExternalStore: (subscribe, getSnapshot) => { subscribe(() => {}); return getSnapshot(); },
   cloneElement: (el, props) => ({ ...el, props: { ...el.props, ...props } }),
+  // memo 只影响重渲染取舍，桩直接透传组件本体
+  memo: (component) => component,
   Fragment: function Fragment() {},
 };
 const jsxRuntimeStub = {

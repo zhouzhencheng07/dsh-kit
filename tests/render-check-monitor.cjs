@@ -77,6 +77,8 @@ const reactStub = {
   useRef: (v) => ({ current: v }),
   useMemo: (fn) => fn(),
   useSyncExternalStore: (subscribe, getSnapshot) => { subscribe(() => {}); return getSnapshot(); },
+  // memo 只影响重渲染取舍，桩直接透传组件本体
+  memo: (component) => component,
 };
 const jsxRuntimeStub = {
   Fragment: function Fragment() {},

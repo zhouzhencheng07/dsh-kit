@@ -41,12 +41,16 @@ const reactStub = {
   useSyncExternalStore: (subscribe, getSnapshot) => { subscribe(() => {}); return getSnapshot(); },
   // KitTip 用 cloneElement 往锚点补 aria-label/aria-keyshortcuts（官方 Tooltip 的锚点形状）
   cloneElement: (el, props) => ({ ...el, props: { ...el.props, ...props } }),
+  // memo 只影响重渲染取舍，桩直接透传组件本体（渲染级检查只关心「渲染体能不能跑完」）
+  memo: (component) => component,
   Fragment: function Fragment() {},
 };
+// 与宿主同签名：jsx(type, props, key)——第三参是 **key 不是 children**。桩若把第三参
+// 当 children，children 放错位置的错误就查不出来（页盒全丢而 render-check 全绿）
 const jsxRuntimeStub = {
   Fragment: function Fragment() {},
-  jsx: (type, props) => { callLog.push(["jsx", type, props]); return { type, props, $$dshk: "jsx" }; },
-  jsxs: (type, props) => { callLog.push(["jsxs", type, props]); return { type, props, $$dshk: "jsxs" }; },
+  jsx: (type, props, key) => { callLog.push(["jsx", type, props, key]); return { type, props: key === undefined ? props : { ...props, key }, $$dshk: "jsx" }; },
+  jsxs: (type, props, key) => { callLog.push(["jsxs", type, props, key]); return { type, props: key === undefined ? props : { ...props, key }, $$dshk: "jsxs" }; },
 };
 // 官方表单原语桩：配置页渲染走宿主 primitives（SettingsForm/SettingsValueField/
 // Switch/SegmentedTabs/Tag）。桩环境不执行组件函数体，jsx 记下的 type 就是函数
@@ -518,8 +522,8 @@ let vaultFetchPrev = null;
   const libFileRow = findRow("D:/v/library/统计.pdf");
   check("资料库文件行保留扩展名（点开走官方文件右栏）", !!libFileRow && nameOf(libFileRow) === "统计.pdf");
   check(
-    "资料库文件点击改投官方文件右栏（源码哨兵）",
-    src.includes("if (lib) openOfficialFile(e.path);") && src.includes("else if (hit.kind === \"libfile\") openOfficialFile(hit.path);"),
+    "资料库文件点击走 openVaultAsset（PDF 且自带阅读器开 → 知识库签，其余官方文件右栏）",
+    src.includes("if (lib) openVaultAsset(e.path);") && src.includes("else if (hit.kind === \"libfile\") openVaultAsset(hit.path);"),
   );
   // 树上行操作：页行与目录行同形状 = `@` + `⋯`（只读库没有别的写操作）
   const actSpans = callLog.filter((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[2] && c[2].className === "dshk-rowact");
@@ -689,8 +693,10 @@ let vaultFetchPrev = null;
       src.includes("dock.inlineEdit.active = renamingPath !== null || createAt !== null;"),
     );
     check(
-      "跨页 wikilink 的锚点透传（源码哨兵：onOpenPage 收第二个参数，一路传到 pendingAnchor）",
-      src.includes("onOpenPage: (p, anchor) => {") && src.includes("reader.openPath(p, anchor)") && src.includes("else openVaultPageAndDock(p, anchor);"),
+      "跨页 wikilink 的锚点透传（源码哨兵：onOpenPage 收 anchor + newPane，一路传到 pendingAnchor / preferNewPane）",
+      src.includes("onOpenPage: (p, anchor, newPane) => {") && src.includes("reader.openPath(p, anchor, newPane)") && src.includes("else openVaultPageAndDock(p, anchor, newPane);") &&
+        src.includes("onOpenPage(resolved.path, anchor, true);") &&
+        src.includes('newPane === true ? { preferNewPane: true } : undefined'),
     );
     check(
       "改名走宿主端点（源码哨兵：rename 提交后搬树键 + 把开着的那张页签换到新地址）",
@@ -921,6 +927,169 @@ let vaultFetchPrev = null;
   stateSeq = 0;
   stateStore.clear();
 }
+// 6.9b') PDF 阅读器：版面尺寸走 CSS（宽度百分比 + aspect-ratio），锚点与落位一律
+// 现量 DOM。假 DOM 把「页盒矩形是视口坐标、随 scrollTop 位移」实现出来——锚点 ↔
+// 滚动量必须往返一致，否则「记住上次读到哪」与拖分栏后的重钉都会飘
+{
+  const { pdfAnchorAt, pdfScrollFor, pdfTopRatio, pdfBaseWidth } = comps;
+  // ── 适宽基准：多数页的宽度（宽窄混排不抖），撞个数取宽的
+  const mk = (w, n) => Array.from({ length: n }, () => ({ w, h: 792 }));
+  check(
+    "适宽基准取多数页的页宽（宽窄混排不抖，撞个数取宽的）",
+    pdfBaseWidth([...mk(612, 5), ...mk(306, 3)]) === 612 && pdfBaseWidth([...mk(612, 2), ...mk(306, 2)]) === 612,
+  );
+  check("适宽基准：空页表给 0", pdfBaseWidth([]) === 0);
+
+  // ── 假 DOM
+  const fakePdfDom = (opts) => {
+    const o = { frameTop: 0, clientHeight: 300, scrollTop: 0, gap: 12, height: 100, count: 3, ...opts };
+    const topOf = (i) => i * (o.height + o.gap);
+    const pages = Array.from({ length: o.count }, (_, i) => ({
+      num: i + 1,
+      getAttribute: (k) => (k === "data-pdf-page" ? String(i + 1) : null),
+      getBoundingClientRect: () => {
+        const top = o.frameTop + topOf(i) - o.scrollTop;
+        return { top, bottom: top + o.height, height: o.height };
+      },
+    }));
+    const root = {
+      clientHeight: o.clientHeight,
+      scrollTop: o.scrollTop,
+      scrollHeight: topOf(o.count - 1) + o.height + o.clientHeight,
+      getBoundingClientRect: () => ({ top: o.frameTop }),
+      querySelector: (sel) => {
+        const m = /data-pdf-page="(\d+)"/.exec(sel);
+        return m === null ? null : pages[Number(m[1]) - 1] ?? null;
+      },
+    };
+    return { root, host: { children: pages }, page: (n) => pages[n - 1] };
+  };
+
+  // 锚点 = 视口中线落在哪一页的哪个比例（不是页顶）
+  {
+    const d = fakePdfDom({ count: 6, scrollTop: 100 });
+    const a = pdfAnchorAt(d.root, d.host);
+    check("锚点取视口中线那一页（中线口径，不是页顶）", a.page === 3 && Math.abs(a.ratio - 0.26) < 1e-9, a);
+  }
+  // 锚点 ↔ 滚动量往返：页内比例不能漂（这就是拖分栏重钉的正确性）
+  {
+    const rt = [0, 60, 140, 260].map((scrollTop) => {
+      const d = fakePdfDom({ count: 6, scrollTop });
+      return { scrollTop, want: pdfScrollFor(d.root, pdfAnchorAt(d.root, d.host)) };
+    });
+    check("锚点 ↔ 滚动量往返一致（页内比例不回漂）", rt.every((r) => Math.abs(r.want - r.scrollTop) < 1e-9), rt);
+  }
+  // 容器没高度（这张签隐着）/ 目标页还没排出来时给 null —— 别把位置抹成 0
+  {
+    const d = fakePdfDom({ clientHeight: 0 });
+    check(
+      "签不可见时锚点与落位都给 null（不把位置抹成 0）",
+      pdfAnchorAt(d.root, d.host) === null && pdfScrollFor(d.root, { page: 2, ratio: 0 }) === null,
+    );
+  }
+  {
+    const d = fakePdfDom({});
+    check("目标页还没排出来时落位给 null", pdfScrollFor(d.root, { page: 99, ratio: 0 }) === null);
+    check("页表空时锚点给 null", pdfAnchorAt(d.root, { children: [] }) === null);
+  }
+  // 「页顶对着视口顶」换算成中线口径（页码跳转 / 进场落位走它）
+  {
+    const d = fakePdfDom({ height: 400 });
+    const want = pdfScrollFor(d.root, { page: 2, ratio: pdfTopRatio(d.root, d.page(2)) });
+    const at = fakePdfDom({ height: 400, scrollTop: want });
+    check(
+      "页码跳转 = 该页页顶对齐视口顶",
+      Math.abs(at.page(2).getBoundingClientRect().top - at.root.getBoundingClientRect().top) < 1e-9,
+    );
+  }
+
+  // ── 渲染体
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  let pdfErr = null;
+  try {
+    comps.VaultPdfPane({ path: "D:/v/library/a.pdf", active: true });
+  } catch (e) {
+    pdfErr = e;
+  }
+  const opening = callLog.find((c) => c[2] && typeof c[2].children === "string" && c[2].children.includes("PDF"));
+  check("VaultPdfPane 渲染无异常且未就位时给加载态", pdfErr === null && !!opening);
+  if (pdfErr) console.log("  VaultPdfPane error:", pdfErr.message);
+  // 文档已就位那条路（工具条 + 全篇页盒）：预置 useState 顺序
+  //  doc/lib/boxes/ident/error/notice/containerW/rasterW/curPage/visible/attempt
+  stateSeq = 0;
+  stateStore.clear();
+  const fakeDoc = { numPages: 3, getPage: async () => ({ getViewport: () => ({ width: 612, height: 792 }) }) };
+  stateStore.set(0, fakeDoc);
+  stateStore.set(1, { TextLayer: function TextLayer() {} });
+  stateStore.set(2, [{ w: 612, h: 792 }, { w: 612, h: 792 }, { w: 612, h: 792 }]);
+  stateStore.set(3, "ident");
+  stateStore.set(4, null);
+  stateStore.set(5, null);
+  stateStore.set(6, 575);
+  stateStore.set(7, 575);
+  stateStore.set(8, 2);
+  stateStore.set(9, new Set([0, 1, 2]));
+  stateStore.set(10, 0);
+  callLog = [];
+  let readyErr = null;
+  try {
+    comps.VaultPdfPane({ path: "D:/v/library/a.pdf", active: true });
+  } catch (e) {
+    readyErr = e;
+  }
+  const bar = callLog.find((c) => c[2] && c[2].className === "dshk-pdf-bar");
+  const scroll = callLog.find((c) => c[2] && c[2].className === "dshk-pdf-scroll");
+  // 页盒是子组件，桩不展开它的 DOM：直接查 children 里有没有 3 个
+  const docBox = scroll && scroll[2] && Array.isArray(scroll[2].children) ? scroll[2].children[0] : null;
+  const pageBoxes = docBox && docBox.props && Array.isArray(docBox.props.children) ? docBox.props.children : [];
+  check(
+    "滚动容器与文档盒的 children 真挂在 props 上（jsx 第三参是 key，放错位置会全丢）",
+    !!scroll && Array.isArray(scroll[2].children) && docBox !== null && docBox.props.className === "dshk-pdf-doc" && pageBoxes.length === 3,
+  );
+  check("VaultPdfPane 文档就位后渲染工具条 + 全篇页盒", readyErr === null && !!bar && !!scroll && pageBoxes.length === 3);
+  // 页盒的尺寸交给 CSS：宽度百分比 + aspect-ratio，React 不写内联宽高
+  check(
+    "页盒尺寸交给 CSS（宽度百分比 + aspect-ratio，不写内联宽高）",
+    readyErr === null &&
+      pageBoxes.every(
+        (b) =>
+          b.props &&
+          b.props.box &&
+          b.props.box.w === 612 &&
+          b.props.base === 612 &&
+          b.props.rasterW === 575 &&
+          b.props.visible === true,
+      ),
+  );
+  check(
+    "文档盒占满内容宽（页宽的百分比得有个确定的分母）",
+    /\.dshk-pdf-doc\{[^}]*width:100%/.test(src) && !/\.dshk-pdf-doc\{[^}]*margin:0 auto/.test(src),
+  );
+  check(
+    "页盒走 CSS 尺寸（calc 百分比宽 + aspect-ratio）",
+    /style: \{ width: "calc\(100% \* " \+ ratio \+ "\)", aspectRatio: box\.w \+ " \/ " \+ box\.h \}/.test(src),
+  );
+  check("页盒 memo 住（拖栏宽时 props 不变，重排交给浏览器）", /const PdfPageBox = react\.memo\(/.test(src));
+  // 钉位不写依赖表：页高可能在任意一次 commit 里变，挂依赖表必然漏帧
+  check(
+    "钉位每次 commit 都做 + 下一帧复核（不写依赖表）",
+    /钉位[\s\S]*?react\.useLayoutEffect\(\(\) => \{[\s\S]*?\n      \}\);/.test(src),
+  );
+  // 锚点只由用户滚动改写：改栏宽那一刻回读 scrollTop 量到的是中间态
+  check("锚点只由用户滚动与页码跳转改写（改宽不回读 scrollTop）", /if \(fromScroll\) anchorRef\.current = a;/.test(src));
+  check("容器宽量到 0 不改版面（收起 / 签不可见不是窄栏）", /if \(w <= 0 \|\| w === last\) return;/.test(src));
+  check("光栅化去抖（拖着不逐帧重画画布）", /PDF_RASTER_SETTLE_MS/.test(src) && /setRasterW\(containerW\)/.test(src));
+  check("阅读位置只落页码（页内比例不出阅读器）", /pdfPosWrite\(ident, \{ page: a\.page \}\)/.test(src));
+  check("工具条只有页码与总页数（不做缩放档，栏宽是唯一版面旋钮）", !!bar && !callLog.some((c) => c[2] && c[2].className === "dshk-pdf-zooms"));
+  const pdfPageRule = (src.match(/\.dshk-pdf-page\{[^}]*\}/) || [""])[0];
+  check("PDF 页盒不留投影边框（页面边缘干净）", pdfPageRule.includes("background:#fff") && !pdfPageRule.includes("box-shadow"));
+  check("滚动容器不进条件分支（否则栏宽永远量不到）", /className: "dshk-pdf-scroll", ref: scrollRef/.test(src));
+  if (readyErr) console.log("  VaultPdfPane(ready) error:", readyErr.stack ?? readyErr.message);
+  stateSeq = 0;
+  stateStore.clear();
+}
 // 6.9c) 编辑面保存链路：落盘走 vault/write（mtime CAS 带 baseMtime，mtime 不符回
 // conflict），粘贴图片走 vault/attach；RTE 可编辑 + 2s 防抖自动保存 + Ctrl+S +
 // 切走即存；冲突条只在出冲突后出现，两钮给「覆盖盘上 / 读盘上的」
@@ -984,7 +1153,22 @@ let vaultFetchPrev = null;
   check("斜杠菜单查询变化即重置高亮（下标越界会插入没高亮那条）", src.includes("if (q !== menuRef.current?.query) {"));
   check("阅读位置重试可取消且宿主卸载即停", src.includes("const cancelRestore = restoreReadPos(") && src.includes("cancelRestore();") && src.includes("if (!el.isConnected) return;"));
   check("粘贴图透明探测走缩略探针（PNG 源直接保 PNG）", src.includes("const PASTE_PROBE_EDGE = 256;") && src.includes("await decodeImage(file, file.type === \"image/png\")") && !src.includes("getImageData(0, 0, el.naturalWidth, el.naturalHeight)"));
-  check("库内非 md 相对链接交给官方文件右栏（不是死点击）", src.includes("onRelLink: (href) => {") && src.includes("else openOfficialFile(target);"));
+  check("库内非 md 相对链接交给 openVaultAsset（不是死点击；PDF 在自带阅读器开时走知识库签）", src.includes("onRelLink: (href) => {") && src.includes("else openVaultAsset(target);"));
+  // tabVisible 内部调宿主钩子 useTabInfo：写在返回表达式里会被 early return 跳过，
+  // 两次渲染钩子数对不上 → React #300，槽位静默整片空白
+  check(
+    "tabVisible 提到组件顶部无条件调用（返回表达式里调会触发 React #300）",
+    src.includes("const active = tabVisible(props);") &&
+      (src.match(/active: tabVisible\(props\)/g) ?? []).length === 0 &&
+      src.indexOf("const active = tabVisible(props);") < src.indexOf("const root = reader.root"),
+  );
+  // children 必须挂在 props 上：宿主 jsx(type, props, key) 第三参是 key，放第三个位置
+  // 会被 React 当 key 丢掉（子树整个不渲染，而 render-check 若把第三参当 children 就查不出）
+  check(
+    // 第三参是 key，不是 children：子列表一律用 props.children（行为哨兵见上）
+    "jsx 无「第三参传 .map(...)」的写法",
+    (src.match(/jsxRuntime\.jsx?s?\([^;]*?, [a-zA-Z_$][\w.$]*\.map\(/g) ?? []).length === 0,
+  );
   check("周网格表头在滚动区之外（留在里面会被 sticky + y 轴吸附盖住全天带）", src.includes("className: \"dshk-sched-topgrid\"") && src.includes("scroll-padding-top:4px") && !/dshk-sched-dayhead\{position:sticky/.test(src));
   check("周统计跟着周导航取（口径钉 weekStart），拉取失败挂提示", src.includes("useScheduleData(true, weekStart)") && src.includes('date=${encodeURIComponent(statsDate ?? schedToday())}') && src.includes('className: "dshk-sched-headfail"') && src.includes('className: "dshk-sched-taskfail"'));
   check("全天带按列成栈 + 溢出折成 +N（平铺会全叠进同一网格单元）", src.includes("const SCHED_ALLDAY_MAX = 3;") && src.includes("const dateTodoByCol = react.useMemo") && src.includes('className: "dshk-sched-allday is-more"'));

@@ -1405,6 +1405,21 @@ window.__ModuleLoader__.load({
 .dshk-vault-ticon{width:13px;height:13px;flex:none;opacity:.75}
 .dshk-vault-treeload{padding:3px 4px;color:var(--dsw-alias-label-tertiary);font-size:11px}
 .dshk-vault-reader{flex:1 1 auto;min-width:0;overflow:auto;display:flex;flex-direction:column}
+.dshk-pdf{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-document-preview,var(--dsw-alias-bg-base))}
+.dshk-pdf-bar{flex:none;display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base)}
+.dshk-pdf-pageno{width:52px;box-sizing:border-box;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:3px 6px;border-radius:6px;text-align:center;font-variant-numeric:tabular-nums}
+.dshk-pdf-total{font-size:12px;color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums}
+.dshk-pdf-scroll{flex:1 1 auto;min-height:0;overflow:auto;padding:12px}
+.dshk-pdf-doc{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%}
+.dshk-pdf-page{position:relative;flex:none;overflow:hidden;background:#fff}
+.dshk-pdf-canvas{position:absolute;inset:0;display:block;width:100%;height:100%}
+/* 文字层：版式全由 pdf.js 写在这几个变量上（字号 = --total-scale-factor × 页内
+   单位高度；--total-scale-factor 由正文里那一行 setProperty 给），这里只补形状 */
+.dshk-pdf-text{position:absolute;inset:0;overflow:clip;z-index:0;text-align:initial;letter-spacing:normal;word-spacing:normal;text-size-adjust:none;forced-color-adjust:none;transform-origin:0 0;caret-color:canvastext;line-height:1;--text-scale-factor:calc(var(--total-scale-factor) * var(--min-font-size));--min-font-size-inv:calc(1 / var(--min-font-size))}
+.dshk-pdf-text :is(span,br){color:#0000;white-space:pre;cursor:text;transform-origin:0 0;user-select:text;position:absolute;z-index:1;--font-height:0;--scale-x:1;--rotate:0deg;font-size:calc(var(--text-scale-factor) * var(--font-height));transform:rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv))}
+.dshk-pdf-text ::selection{background:var(--dsw-alias-bg-document-selection,rgba(0,90,200,.32));color:#0000}
+.dshk-pdf-text br::selection{background:none}
+.dshk-pdf-pagefail{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;padding:8px;text-align:center;font-size:12px;color:#b3261e;background:rgba(255,255,255,.9)}
 .dshk-vault-editwrap{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding:8px 10px}
 .dshk-vault-editbar{position:sticky;top:0;z-index:2;flex:none;display:flex;align-items:center;gap:6px;padding:6px 0;background:var(--dsw-alias-bg-base)}
 .dshk-vault-crumb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:default;user-select:none}
@@ -3436,6 +3451,8 @@ ellipsis，窄列只截字不破版 */
       kcfgGroupVault: "知识库",
       kcfgVaultRoot: "知识库根目录（绝对路径）",
       kcfgVaultRootHint: "普通 md 目录，指向哪里读哪里；清空恢复默认根。",
+      kcfgBuiltinPdf: "PDF 用自带阅读器",
+      kcfgBuiltinPdfHint: "库内 PDF 开成知识库页签（页码跳转、记住上次读到哪一页，不受官方预览的整文件大小上限）。关掉则一律走官方文件预览。",
       scVault: "知识库索引",
       scVaultOff: "知识库已在配置页关闭",
       schedTab: "日程",
@@ -3541,6 +3558,12 @@ ellipsis，窄列只截字不破版 */
       vaultBlEmpty: "没有页面引用本页",
       vaultLibsFail: "渲染组件加载失败",
       vaultPickPage: "从左侧选择一页开始",
+      pdfOpening: "正在打开 PDF…",
+      pdfFailed: "PDF 打开失败",
+      pdfMissing: "文件不存在或已被移动",
+      pdfTooLarge: "文件过大，不在阅读器里打开",
+      pdfPage: "页码",
+      pdfFitOnly: "页宽随栏宽",
       vaultPageGone: "页面不存在（可能已被移动或删除）",
       vaultCiteUnavailable: "对话输入框未就绪（无会话或不可用）",
       vaultIdxTruncated: "笔记太多：索引已达单次扫描上限（5000 页），搜索与反链只覆盖已索引的部分",
@@ -3635,6 +3658,8 @@ ellipsis，窄列只截字不破版 */
       kcfgGroupVault: "Vault",
       kcfgVaultRoot: "Vault root directory (absolute path)",
       kcfgVaultRootHint: "A plain md directory read as-is; blank restores the default root.",
+      kcfgBuiltinPdf: "Built-in PDF reader",
+      kcfgBuiltinPdfHint: "In-vault PDFs open as knowledge-base tabs (page jump, remembers where you stopped, no official preview size cap). Off: everything goes to the official file preview.",
       scVault: "Vault index",
       scVaultOff: "Vault is switched off in the config page",
       schedTab: "Schedule",
@@ -3740,6 +3765,12 @@ ellipsis，窄列只截字不破版 */
       vaultBlEmpty: "No pages link here",
       vaultLibsFail: "Failed to load renderer components",
       vaultPickPage: "Pick a page on the left to start",
+      pdfOpening: "Opening PDF…",
+      pdfFailed: "PDF failed to open",
+      pdfMissing: "File is gone or was moved",
+      pdfTooLarge: "File is too large to open in the reader",
+      pdfPage: "Page number",
+      pdfFitOnly: "Page width follows the pane",
       vaultPageGone: "Page not found (it may have been moved or deleted)",
       vaultCiteUnavailable: "Composer is not ready (no active session)",
       vaultIdxTruncated: "Too many notes: the index hit the per-scan cap (5000 pages); search and backlinks cover indexed pages only",
@@ -3836,11 +3867,14 @@ ellipsis，窄列只截字不破版 */
     /** 打开知识库页并确保「知识库」dock 签在眼前（目录/搜索/反链/wikilink/
      *  对话路径统一走 VaultRootView 的 openPath）。anchor = `[[页#锚]]` 的锚点，
      *  跨页跳转时随开页带给 VaultPagePane 消费（见 vaultPendingAnchor） */
-    function openVaultPageAndDock(path, anchor) {
+    /** 开一张知识库页签。newPane = 对照阅读（双链 / 反链 / 页内链接）：交给宿主的
+     *  preferNewPane——目标页已在别处开着就跳过去、没开着就分割出另一格；树行与
+     *  搜索单击不走这里传 true，仍在本栏开。 */
+    function openVaultPageAndDock(path, anchor, newPane) {
       if (!rightbarSeat.available) return;
       // 先记锚再开签：开签可能同步挂载 pane，晚了就被它先消费掉
       vaultPendingAnchor = typeof anchor === "string" && anchor !== "" ? { path, anchor } : null;
-      openRightbarItem("vault", path);
+      openRightbarItem("vault", path, undefined, newPane === true ? { preferNewPane: true } : undefined);
     }
     /** 点击路径落知识库标签（树行/对话拦截器共用）：先落地再派发——知识库未
      *  挂载时 VaultRootView 不在，挂载后经 vaultOpenRequest 消费请求 */
@@ -6951,8 +6985,8 @@ ellipsis，窄列只截字不破版 */
       // 开页统一入口（侧栏目录/搜索/反链/对话路径/wikilink 都走这里）：
       // 打开或激活该页的知识库页签，右栏路径顺带把「知识库」dock 签带到眼前
       // （索引即入口）。anchor = [[页#锚]] 跨页跳转的落点，随开页交给目标 pane
-      const openPath = react.useCallback((path, anchor) => {
-        openVaultPageAndDock(path, anchor);
+      const openPath = react.useCallback((path, anchor, newPane) => {
+        openVaultPageAndDock(path, anchor, newPane === true);
       }, []);
 
       // M4 会话→笔记：消费拦截器转来的开页请求。两种时序都接——组件还没挂载时点
@@ -7105,7 +7139,7 @@ ellipsis，窄列只截字不破版 */
       const openHit = (hit) => {
         setSearchRes(null);
         if (hit.kind === "page") openPath(hit.path);
-        else if (hit.kind === "libfile") openOfficialFile(hit.path);
+        else if (hit.kind === "libfile") openVaultAsset(hit.path);
         else if (hit.kind === "libdir") revealLibDir(hit.path);
         else openHere(hit.path);
       };
@@ -7508,7 +7542,7 @@ ellipsis，窄列只截字不破版 */
             style: { paddingLeft: 10 + (depth + 1) * 14 },
             onClick: () => {
               if (renamingPath === e.path) return;
-              if (lib) openOfficialFile(e.path);
+              if (lib) openVaultAsset(e.path);
               else openPath(e.path);
             },
             title: e.path,
@@ -8161,7 +8195,7 @@ ellipsis，窄列只截字不破版 */
                       const pages = pagesRef.current ?? [];
                       const ownerSpace = pages.find((p) => p.path === path)?.space ?? "";
                       const resolved = resolveVaultLink(pages, target, ownerSpace);
-                      if (resolved) onOpenPage(resolved.path, anchor);
+                      if (resolved) onOpenPage(resolved.path, anchor, true);
                       else toast(t("vaultPageGone"));
                     },
                     resolveWiki: (target) => resolveVaultLink(pagesRef.current ?? [], target) !== null,
@@ -8186,8 +8220,8 @@ ellipsis，窄列只截字不破版 */
                     onRelLink: (href) => {
                       const target = resolveMdLink(path, root, href);
                       if (!target || !isPathInsideVaultRoot(root, target)) return;
-                      if (/\.md$/i.test(target)) onOpenPage(target);
-                      else openOfficialFile(target);
+                      if (/\.md$/i.test(target)) onOpenPage(target, undefined, true);
+                      else openVaultAsset(target);
                     },
                     onState: (s) => {
                       setDirtyDot(s.dirty === true);
@@ -8230,7 +8264,7 @@ ellipsis，窄列只截字不破版 */
                                       className: "dshk-vault-barmenu-item",
                                       title: p.rel,
                                       onClick: () => {
-                                        onOpenPage(p.path);
+                                        onOpenPage(p.path, undefined, true);
                                         setBarMenu(null);
                                       },
                                       children: pageBasename(p.rel),
@@ -8292,13 +8326,553 @@ ellipsis，窄列只截字不破版 */
       }, [feature]);
     }
 
+    // ─────────── 库内 PDF 自带阅读器（pdf.js）───────────
+    // 官方文件右栏的 PDF 是「字节视图」：不记阅读位置（重挂载 / 重载都回顶）、
+    // 受宿主 readBytes 的整文件字节上限（默认 32 MiB）约束、没有页码跳转。本组件
+    // 在 builtinPdf 开时把库内 PDF 收成自己的 dshk-vault 签，换来这三样。
+    //
+    // **版面尺寸走 CSS，不走 JS 算出来的内联宽高**：页盒宽度 = calc(100% × 相对基准
+    // 页宽的比例)，高度由 aspect-ratio 自己算。栏宽一变浏览器立刻重排几百个盒子，
+    // React 一帧里一个内联尺寸都不用写——**DOM 永远和容器同宽，不存在「容器已是新
+    // 宽度、页盒还是旧宽度」的那一帧**。JS 只在画布上量尺寸。
+    //
+    // **锚点是视口中线，钉位每次 commit 都做**（见下面的 pin）：中线口径一条线贯穿
+    // 落位 / 改栏宽 / 页码跳转 / 当前页。锚点只由用户滚动与页码跳转改写，改栏宽
+    // 一律按它钉回去——改宽那一刻回读 scrollTop 量到的是「页高已经换了、位置还没
+    // 钉回来」的中间态，记下来等于把漂移固化（页码就会没规律地跳）。
+    const PDF_LIB_URL = "/dsh-kit/vendor/pdf.min.mjs";
+    const PDF_WORKER_URL = "/dsh-kit/vendor/pdf.worker.min.mjs";
+    /** 整文件字节护栏：端点不截断，超了在这里拦（几百 MB 的 PDF 会把一个签撑爆）；
+     *  远高于官方那条 32 MiB，库里��� PDF 基本碰不到 */
+    const PDF_MAX_BYTES = 256 * 1024 * 1024;
+    /** 页间距 / 左右留白（px） */
+    const PDF_GAP = 12;
+    const PDF_PAD = 12;
+    /** 拖分栏时画布等停手这么久才按新宽度重画：否则每帧都要取消上一次、重发整页
+     *  渲染（几百页的书一帧几十到几百毫秒）。拖的过程中旧画面由 CSS 拉伸顶着 */
+    const PDF_RASTER_SETTLE_MS = 140;
+    /** 量不到尺寸的页（那一页自己坏了）先按 US Letter 铺，不让整篇排不出来 */
+    const PDF_FALLBACK_BOX = { w: 612, h: 792 };
+    const PDF_POS_KEY = "dshk.pdf.pos";
+
+    let pdfLibTask = null;
+    /** pdf.js 懒加载：只有库里真开了 PDF 签才下这 1.7MB */
+    function ensurePdfLib() {
+      if (pdfLibTask === null) {
+        pdfLibTask = import(PDF_LIB_URL).then((mod) => {
+          mod.GlobalWorkerOptions.workerSrc = PDF_WORKER_URL;
+          return mod;
+        });
+      }
+      return pdfLibTask;
+    }
+
+    /**
+     * 文档缓存：键 = 路径 + mtime + size（内容身份，改了就是另一份，位置也另记）。
+     * 官方分栏开关会把这一页在 React 树里从一栏挪到另一栏（组件卸载重挂），没有
+     * 缓存就是几十 MB 重下 + 重解析一遍。LRU 到量即 destroy——**不做引用计数**：
+     * 两栏共用这一份 Map 就够了，交接本来就是引用计数唯一的存在理由。
+     */
+    const pdfDocs = new Map();
+    const PDF_DOC_CACHE_BYTES = 64 * 1024 * 1024;
+    let pdfDocBytes = 0;
+    function pdfDocEvict() {
+      while (pdfDocBytes > PDF_DOC_CACHE_BYTES && pdfDocs.size > 1) {
+        const key = pdfDocs.keys().next().value;
+        const entry = pdfDocs.get(key);
+        pdfDocs.delete(key);
+        pdfDocBytes -= entry.bytes;
+        try {
+          entry.task.destroy();
+        } catch {
+          /* 已销毁或传输已断 */
+        }
+      }
+    }
+    /** 命中即提到队尾（Map 保序即 LRU） */
+    function pdfDocGet(key) {
+      const entry = pdfDocs.get(key);
+      if (entry === undefined) return null;
+      pdfDocs.delete(key);
+      pdfDocs.set(key, entry);
+      return entry;
+    }
+
+    /** 阅读位置：{[内容身份]: {page}}。**只落页码**，页内比例不出这个阅读器——
+     *  盘上那份比例是另一个口径的（旧算法记的是页顶相对视口顶），拿来当锚点会差
+     *  半个视口。同源共享（桌面端 dsh-app://app/ 也一样），刷新浏览器、切会话都还在 */
+    function pdfPosAll() {
+      try {
+        const raw = window.localStorage.getItem(PDF_POS_KEY);
+        const v = raw === null ? null : JSON.parse(raw);
+        return v !== null && typeof v === "object" && v !== null ? v : {};
+      } catch {
+        return {};
+      }
+    }
+    function pdfPosGet(key) {
+      const v = pdfPosAll()[key];
+      return v !== null && typeof v === "object" ? v : null;
+    }
+    function pdfPosWrite(key, val) {
+      try {
+        const all = pdfPosAll();
+        all[key] = val;
+        const keys = Object.keys(all);
+        for (const k of keys.slice(0, Math.max(0, keys.length - 200))) delete all[k];
+        window.localStorage.setItem(PDF_POS_KEY, JSON.stringify(all));
+      } catch {
+        /* 隐私模式 / 配额满：位置丢了不影响读 */
+      }
+    }
+
+    /** 适宽基准 = 版面上最常出现的页宽（多数 PDF 同宽；宽窄混排取"多数"不抖，
+     *  撞个数时取宽的） */
+    function pdfBaseWidth(boxes) {
+      if (boxes.length === 0) return 0;
+      const counts = new Map();
+      for (const b of boxes) {
+        const key = Math.round(b.w * 2) / 2;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      let best = 0;
+      let bestCount = -1;
+      for (const [w, c] of counts) {
+        if (c > bestCount || (c === bestCount && w > best)) {
+          best = w;
+          bestCount = c;
+        }
+      }
+      return best;
+    }
+
+    /** 锚点 = **视口中线**落在哪一页的哪个比例。一条线贯穿落位 / 改栏宽 / 页码跳转 /
+     *  当前页；二分找越过中线的那页，几百页的书也不逐页量 */
+    function pdfAnchorAt(root, host) {
+      if (root === null || host === null || root.clientHeight === 0) return null;
+      const kids = host.children;
+      const n = kids.length;
+      if (n === 0) return null;
+      const frame = root.getBoundingClientRect();
+      const y = frame.top + root.clientHeight / 2;
+      let lo = 0;
+      let hi = n - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (kids[mid].getBoundingClientRect().bottom > y) hi = mid;
+        else lo = mid + 1;
+      }
+      const rect = kids[lo].getBoundingClientRect();
+      const h = Math.max(1, rect.height);
+      return {
+        page: Number(kids[lo].getAttribute("data-pdf-page")) || lo + 1,
+        ratio: Math.min(1, Math.max(0, (y - rect.top) / h)),
+      };
+    }
+
+    /** 锚点该在的 scrollTop。**现量 DOM**：版面刚变的那一帧，state 里的页高已经是
+     *  新的、DOM 还是旧的，两边打架算出来的值会被旧的可滚范围夹掉。页还没排出来 /
+     *  容器没有高度（这张签隐着）时给 null——别把位置抹成 0 */
+    function pdfScrollFor(root, anchor) {
+      if (root === null || anchor === null || root.clientHeight === 0) return null;
+      const el = root.querySelector('.dshk-pdf-page[data-pdf-page="' + anchor.page + '"]');
+      if (el === null) return null;
+      const frame = root.getBoundingClientRect();
+      const box = el.getBoundingClientRect();
+      const want = root.scrollTop + (box.top - frame.top) + box.height * anchor.ratio - root.clientHeight / 2;
+      return Math.max(0, Math.min(root.scrollHeight - root.clientHeight, want));
+    }
+
+    /** 「页顶对着视口顶」换算成中线口径（页码跳转与进场落位用） */
+    function pdfTopRatio(root, el) {
+      const h = Math.max(1, (el !== null && el.getBoundingClientRect().height) || 1);
+      return Math.min(1, root.clientHeight / 2 / h);
+    }
+
+    /** 一页：盒子尺寸全交给 CSS（宽度百分比 + aspect-ratio），JS 只管光栅化与文字层。
+     *  memo 住——拖分栏时栏宽每帧都在变，但这里的 props 一个都不变，重排交给浏览器 */
+    const PdfPageBox = react.memo(function PdfPageBox(props) {
+      const { doc, index, box, base, rasterW, visible, lib, active } = props;
+      const canvasRef = react.useRef(null);
+      const textRef = react.useRef(null);
+      const [failed, setFailed] = react.useState(null);
+      const drawnRef = react.useRef("");
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      // 画布按**去抖后**的栏宽铺（不是按当下的盒子宽）：拖着的时候盒子由 CSS 拉伸，
+      // 画布等停手再按新尺寸重画一次
+      const ratio = box.w / (base > 0 ? base : box.w);
+      const cssW = Math.max(40, Math.round(ratio * Math.max(120, rasterW - PDF_PAD * 2)));
+      const stamp = cssW + "@" + box.w + "x" + box.h + "@" + dpr.toFixed(2);
+      react.useEffect(() => {
+        // 滚出视野的页留着画面不重画（回来时尺寸没变直接跳过）
+        if (!visible || !active || rasterW === 0) return undefined;
+        if (drawnRef.current === stamp) return undefined;
+        drawnRef.current = stamp;
+        const canvas = canvasRef.current;
+        if (canvas === null) return undefined;
+        let disposed = false;
+        let task = null;
+        (async () => {
+          const page = await doc.getPage(index + 1);
+          if (disposed) return;
+          const natural = page.getViewport({ scale: 1 });
+          const cssScale = cssW / natural.width;
+          const viewport = page.getViewport({ scale: cssScale * dpr });
+          canvas.width = Math.max(1, Math.floor(viewport.width));
+          canvas.height = Math.max(1, Math.floor(viewport.height));
+          const textContent = await page.getTextContent();
+          if (disposed) return;
+          task = page.render({ canvas, viewport });
+          await task.promise;
+          const container = textRef.current;
+          if (disposed || container === null || lib === null || !lib.TextLayer) return;
+          container.textContent = "";
+          // 文字层版式全靠这几个 CSS 变量（字号 = --total-scale-factor × 页内单位高度）。
+          // pdf.js 自己只写 --min-font-size，缩放因子得由调用方给
+          container.style.setProperty("--total-scale-factor", String(cssScale));
+          const layer = new lib.TextLayer({
+            textContentSource: textContent,
+            container,
+            viewport: page.getViewport({ scale: cssScale }),
+          });
+          await layer.render();
+          if (disposed) layer.cancel();
+        })().catch((error) => {
+          if (!disposed) setFailed(String((error && error.message) || error));
+        });
+        return () => {
+          disposed = true;
+          if (task !== null) {
+            try {
+              task.cancel();
+            } catch {
+              /* 已画完 */
+            }
+          }
+        };
+      }, [doc, index, cssW, stamp, box, visible, rasterW, lib, active]);
+      return jsxRuntime.jsx("div", {
+        className: "dshk-pdf-page",
+        "data-pdf-page": index + 1,
+        // 宽度按「相对基准页宽的比例」铺满，高度由纵横比自己算——栏宽一变浏览器
+        // 当场重排，React 一个内联宽高都不用写
+        style: { width: "calc(100% * " + ratio + ")", aspectRatio: box.w + " / " + box.h },
+        children: [
+          jsxRuntime.jsx("canvas", { key: "c", ref: canvasRef, className: "dshk-pdf-canvas" }),
+          jsxRuntime.jsx("div", { key: "t", ref: textRef, className: "dshk-pdf-text" }),
+          failed === null ? null : jsxRuntime.jsx("div", { key: "e", className: "dshk-pdf-pagefail", children: failed }),
+        ],
+      });
+    });
+
+    /** 库内 PDF 签正文（path = 签地址解出的库内绝对路径） */
+    function VaultPdfPane(props) {
+      return vaultPdfPaneBody(props);
+    }
+    function vaultPdfPaneBody(props) {
+      const path = props.path;
+      const active = props.active !== false;
+      const [doc, setDoc] = react.useState(null);
+      const [lib, setLib] = react.useState(null);
+      /** 每页的用户单位尺寸：{w, h}。宽窄混排各按自己的纵横比，不会被压扁 */
+      const [boxes, setBoxes] = react.useState([]);
+      const [ident, setIdent] = react.useState("");
+      const [error, setError] = react.useState(null);
+      const [notice, setNotice] = react.useState(null);
+      /** 容器宽（ResizeObserver 量的当下值）与**光栅化用的宽**（停手后才跟上） */
+      const [containerW, setContainerW] = react.useState(0);
+      const [rasterW, setRasterW] = react.useState(0);
+      const [curPage, setCurPage] = react.useState(1);
+      /** 当下在视口附近（上下各 1.5 屏）的页：只有这些页要光栅化 */
+      const [visible, setVisible] = react.useState(() => new Set());
+      const [attempt, setAttempt] = react.useState(0);
+      const scrollRef = react.useRef(null);
+      const hostRef = react.useRef(null);
+      /** 「读到哪」= 视口中线落在哪一页的哪个比例。**只由用户滚动与页码跳转改写**；
+       *  改栏宽、进场落位都只按它钉回去，不在改宽那一刻回读 scrollTop 当锚点 */
+      const anchorRef = react.useRef(null);
+      /** 进场落点落在哪一页（盘上只记页码，记的就是它） */
+      const bootRef = react.useRef(1);
+      const count = boxes.length;
+      const base = pdfBaseWidth(boxes);
+
+      // 载入：内容身份 = 路径 + mtime + size（改过就是另一份，位置也另记）
+      react.useEffect(() => {
+        let alive = true;
+        setDoc(null);
+        setLib(null);
+        setBoxes([]);
+        setIdent("");
+        setError(null);
+        setNotice(null);
+        setVisible(new Set());
+        anchorRef.current = null;
+        (async () => {
+          const pdfLib = await ensurePdfLib();
+          const stat = await kitJson("/dsh-kit/vault/stat?path=" + encodeURIComponent(path));
+          if (!alive) return;
+          if (stat === null || typeof stat !== "object" || stat.gone === true) {
+            setError(t("pdfMissing"));
+            return;
+          }
+          const size = Number(stat.size);
+          if (Number.isFinite(size) && size > PDF_MAX_BYTES) {
+            setNotice(t("pdfTooLarge") + " " + Math.round(size / 1048576) + " MB");
+            return;
+          }
+          const key = path + "|" + stat.mtimeMs + "|" + stat.size;
+          const saved = pdfPosGet(key);
+          // 盘上只记页码：进来落在该页页顶。锚点等版面排出来由钉位那一步现算
+          bootRef.current = Math.max(1, Number(saved && saved.page) || 1);
+          let entry = pdfDocGet(key);
+          if (entry === null) {
+            const resp = await fetch("/dsh-kit/vault/file?path=" + encodeURIComponent(path), {
+              credentials: "same-origin",
+            });
+            if (!resp.ok) throw new Error("HTTP " + resp.status);
+            const buf = new Uint8Array(await resp.arrayBuffer());
+            const task = pdfLib.getDocument({ data: buf });
+            const parsed = await task.promise;
+            entry = { task, doc: parsed, bytes: buf.byteLength };
+            pdfDocs.set(key, entry);
+            pdfDocBytes += entry.bytes;
+            pdfDocEvict();
+          }
+          if (!alive) return;
+          setLib(pdfLib);
+          setIdent(key);
+          setDoc(entry.doc);
+        })().catch((err) => {
+          if (alive) setError(String((err && err.message) || err));
+        });
+        return () => {
+          alive = false;
+        };
+      }, [path, attempt]);
+
+      // 版面度量：逐页取用户单位下的宽高，攒够一批提交一次（每页一次 setState 会把
+      // 长文档的重渲染放大成几百上千次）。某一页自己坏了量不到就按 Letter 铺，
+      // 一页坏掉不毁整篇
+      react.useEffect(() => {
+        if (doc === null) return undefined;
+        let alive = true;
+        const n = doc.numPages;
+        const acc = new Array(n).fill(null);
+        let filled = 0;
+        let queued = false;
+        const flush = () => {
+          if (queued || !alive) return;
+          queued = true;
+          requestAnimationFrame(() => {
+            queued = false;
+            if (!alive) return;
+            setBoxes(acc.map((b) => b ?? PDF_FALLBACK_BOX));
+          });
+        };
+        const jobs = [];
+        for (let i = 0; i < n; i++) {
+          jobs.push(
+            doc.getPage(i + 1).then((page) => {
+              const v = page.getViewport({ scale: 1 });
+              acc[i] = { w: v.width, h: v.height };
+              filled++;
+              // 攒够一批提交一次（每页一次 setState 会把重渲染放大成几百上千次）
+              if (filled % 32 === 0 || filled === n) flush();
+            }),
+          );
+        }
+        void Promise.allSettled(jobs).then(() => flush());
+        return () => {
+          alive = false;
+        };
+      }, [doc]);
+
+      // 容器宽：一个 ResizeObserver 量滚动容器。量到 0 = 这张签被隐起来或栏被收起，
+      // 不是版面变窄——记下来会把整篇塌成最小宽，留着上一次的。**依赖 count**：
+      // 文档没就位时正文走的是另一棵树，滚动容器还不存在，挂不上观察器
+      react.useEffect(() => {
+        const root = scrollRef.current;
+        if (root === null) return undefined;
+        let last = 0;
+        const measure = () => {
+          const w = root.clientWidth;
+          if (w <= 0 || w === last) return;
+          last = w;
+          setContainerW(w);
+        };
+        if (typeof ResizeObserver === "undefined") {
+          measure();
+          return undefined;
+        }
+        const ro = new ResizeObserver(measure);
+        ro.observe(root);
+        measure();
+        return () => ro.disconnect();
+      }, [count]);
+
+      // 光栅化去抖：宽度每帧都在变，画布等停手 PDF_RASTER_SETTLE_MS 才按新宽重画。
+      // 版面照走（CSS 跟着容器即时重排），拖的过程中旧画面由 CSS 拉伸顶着
+      react.useEffect(() => {
+        if (containerW === rasterW) return undefined;
+        const timer = window.setTimeout(() => setRasterW(containerW), PDF_RASTER_SETTLE_MS);
+        return () => window.clearTimeout(timer);
+      }, [containerW, rasterW]);
+
+      // 钉位：每次 commit 都校一次 + 下一帧复核。**不写依赖表**——页高可能在任意一次
+      // commit 里变（容器的 ResizeObserver、页表出来、父组件重渲染……），挂依赖表必然
+      // 漏掉某一帧，而漏掉的那一帧就是「拖栏宽时页面自己上下跑」
+      react.useLayoutEffect(() => {
+        const root = scrollRef.current;
+        if (root === null || count === 0) return undefined;
+        let a = anchorRef.current;
+        if (a === null) {
+          // 还没定下读到哪（刚打开、也没滚过）：按进场页落在页顶
+          const boot = Math.min(bootRef.current, count);
+          const el = root.querySelector('.dshk-pdf-page[data-pdf-page="' + boot + '"]');
+          if (el === null) return undefined;
+          a = { page: boot, ratio: pdfTopRatio(root, el) };
+          anchorRef.current = a;
+        }
+        const pin = () => {
+          const want = pdfScrollFor(root, anchorRef.current);
+          if (want !== null && Math.abs(want - root.scrollTop) > 1) root.scrollTop = want;
+        };
+        pin();
+        const raf = requestAnimationFrame(pin);
+        return () => cancelAnimationFrame(raf);
+      });
+
+      // 滚动 → 当前页与「读到哪」；停手 400ms 记一次位置。**只有真滚过才改锚点**——
+      // 落位那一下的程序滚动不改（它就是按锚点来的，改回去只会把它钉歪）
+      react.useEffect(() => {
+        const root = scrollRef.current;
+        if (root === null) return undefined;
+        let frame = 0;
+        let timer = 0;
+        const measure = (fromScroll) => {
+          frame = 0;
+          const a = pdfAnchorAt(root, hostRef.current);
+          if (a === null) return;
+          if (fromScroll) anchorRef.current = a;
+          setCurPage((cur) => (cur === a.page ? cur : a.page));
+          if (!fromScroll || ident === "") return;
+          if (timer !== 0) window.clearTimeout(timer);
+          timer = window.setTimeout(() => pdfPosWrite(ident, { page: a.page }), 400);
+        };
+        const onScroll = () => {
+          if (frame === 0) frame = requestAnimationFrame(() => measure(true));
+        };
+        root.addEventListener("scroll", onScroll, { passive: true });
+        measure(false);
+        return () => {
+          root.removeEventListener("scroll", onScroll);
+          if (frame !== 0) cancelAnimationFrame(frame);
+          if (timer !== 0) window.clearTimeout(timer);
+        };
+      }, [count, ident]);
+
+      // 懒光栅：一个观察器管全篇（上下各 1.5 屏），进出视野都记一下——改栏宽后要重画的
+      // 正是此刻在视野里的那几页。观察器只随页数重建：挂在栏宽上会让拖分栏每帧重新
+      // observe 全部 N 页
+      react.useEffect(() => {
+        const root = scrollRef.current;
+        const host = hostRef.current;
+        if (root === null || host === null || count === 0) return undefined;
+        if (typeof IntersectionObserver === "undefined") {
+          setVisible(new Set(Array.from({ length: count }, (_, i) => i)));
+          return undefined;
+        }
+        const io = new IntersectionObserver(
+          (entries) => {
+            setVisible((prev) => {
+              let next = prev;
+              for (const entry of entries) {
+                const idx = Number(entry.target.getAttribute("data-pdf-page")) - 1;
+                if (!(idx >= 0) || prev.has(idx) === entry.isIntersecting) continue;
+                if (next === prev) next = new Set(prev);
+                if (entry.isIntersecting) next.add(idx);
+                else next.delete(idx);
+              }
+              return next === prev ? prev : next;
+            });
+          },
+          { root, rootMargin: "150% 0px" },
+        );
+        for (const el of host.children) io.observe(el);
+        return () => io.disconnect();
+      }, [count]);
+
+      const jumpTo = (page) => {
+        const root = scrollRef.current;
+        if (root === null || count === 0) return;
+        const p = Math.min(Math.max(1, Math.round(page)), count);
+        const el = root.querySelector('.dshk-pdf-page[data-pdf-page="' + p + '"]');
+        if (el === null) return;
+        const a = { page: p, ratio: pdfTopRatio(root, el) };
+        anchorRef.current = a;
+        const want = pdfScrollFor(root, a);
+        if (want !== null) root.scrollTop = want;
+        setCurPage(p);
+      };
+
+      if (error !== null) {
+        return jsxRuntime.jsx("div", { className: "dshk-vault-reader", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("pdfFailed") + "：" + error }) });
+      }
+      if (notice !== null) {
+        return jsxRuntime.jsx("div", { className: "dshk-vault-reader", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: notice }) });
+      }
+      if (doc === null || lib === null) {
+        return jsxRuntime.jsx("div", { className: "dshk-vault-reader", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("pdfOpening") }) });
+      }
+
+      return jsxRuntime.jsxs("div", { className: "dshk-pdf", children: [
+        jsxRuntime.jsxs("div", { key: "bar", className: "dshk-pdf-bar", children: [
+          jsxRuntime.jsx("input", {
+            key: "n",
+            className: "dshk-pdf-pageno",
+            type: "text",
+            inputMode: "numeric",
+            value: String(curPage),
+            "aria-label": t("pdfPage"),
+            onChange: (e) => jumpTo(Number(String(e.target.value).replace(/\D/g, "")) || 1),
+          }),
+          jsxRuntime.jsxs("span", { key: "of", className: "dshk-pdf-total", children: ["/ ", String(doc.numPages), " · ", t("pdfFitOnly")] }),
+        ] }),
+        jsxRuntime.jsxs("div", { key: "scroll", className: "dshk-pdf-scroll", ref: scrollRef, children: [
+          jsxRuntime.jsx("div", {
+            className: "dshk-pdf-doc",
+            ref: hostRef,
+            // children 必须进 props：宿主 jsx(type, props, key) 的第三参是 key，放第三个
+            // 位置会被 React 当 key 丢掉（页盒一个都不进 DOM）
+            children: boxes.map((b, i) =>
+              jsxRuntime.jsx(PdfPageBox, {
+                key: i,
+                doc,
+                index: i,
+                box: b,
+                base,
+                rasterW,
+                visible: visible.has(i),
+                lib,
+                active,
+              }),
+            ),
+          }),
+        ] }),
+      ] });
+    }
+
     /** 知识库 pane：一个页一张官方签（地址即页路径），正文只渲染自己这一页。
      *  读页所需的库根/索引页表/开页入口由常驻的索引视图经 publishVaultReader
      *  发布过来——页签侧不持有索引状态，索引侧也不再有 pane portal */
     function VaultPaneBody(props) {
       useFeaturePresence("vault");
+      useVCfgVersion();
       const reader = useVaultReader();
       const path = rightbarItem("vault", tabAddress(props)) ?? "";
+      // tabVisible 内部调的是宿主钩子（useTabInfo）——**必须每次渲染都调、且只调一次**：
+      // 写在返回表达式里会被上面的 early return 分支跳过，两次渲染钩子数对不上 → React #300
+      const active = tabVisible(props);
       // 索引侧没挂过（刷新后签被恢复、用户没开过侧栏）时正文自己拉一次索引：
       // 页正文要库根与页表（反链、相对链接、库内判定），缺了就只能白屏
       const [own, setOwn] = react.useState(null);
@@ -8324,23 +8898,25 @@ ellipsis，窄列只截字不破版 */
           ? jsxRuntime.jsx("div", { className: "dshk-vault", children: reader.earlyBody })
           : path === ""
             ? jsxRuntime.jsx("div", { className: "dshk-vault-reader", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPickPage") }) })
-            : root === null
-              ? jsxRuntime.jsx("div", { className: "dshk-vault-reader", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("contentLoading") }) })
-              : jsxRuntime.jsx(VaultPagePane, {
-                path,
-                active: tabVisible(props),
-                root,
-                indexPages,
-                // 索引侧不在时：开页退回本模块的入口、刷新无回调可调（页签本组件开）
-                onOpenPage: (p, anchor) => {
-                  if (typeof reader.openPath === "function") reader.openPath(p, anchor);
-                  else openVaultPageAndDock(p, anchor);
-                },
-                onIndexRefresh: () => {
-                  if (typeof reader.refreshIndex === "function") reader.refreshIndex();
-                },
-                toast: reader.setToast ?? (() => {}),
-              }),
+            : builtinPdfOn() && isPdfPath(path)
+              ? jsxRuntime.jsx(VaultPdfPane, { path, active })
+              : root === null
+                ? jsxRuntime.jsx("div", { className: "dshk-vault-reader", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("contentLoading") }) })
+                : jsxRuntime.jsx(VaultPagePane, {
+                    path,
+                    active,
+                    root,
+                    indexPages,
+                    // 索引侧不在时：开页退回本模块的入口、刷新无回调可调（页签本组件开）
+                    onOpenPage: (p, anchor, newPane) => {
+                      if (typeof reader.openPath === "function") reader.openPath(p, anchor, newPane);
+                      else openVaultPageAndDock(p, anchor, newPane);
+                    },
+                    onIndexRefresh: () => {
+                      if (typeof reader.refreshIndex === "function") reader.refreshIndex();
+                    },
+                    toast: reader.setToast ?? (() => {}),
+                  }),
       ] });
     }
     /** 日程 pane：ScheduleView（pane 内上待办 + 下网格） */
@@ -8355,11 +8931,42 @@ ellipsis，窄列只截字不破版 */
     let vSnap = null;
     let vAvailable = false;
     const getVSnap = () => vSnap;
-    const V_CFG_DEFAULTS = { vaultRoot: "" };
+    const V_CFG_DEFAULTS = { vaultRoot: "", builtinPdf: false };
     function vCfgFromSnapshot(snap) {
       if (!snap || snap.status !== "ready" || !snap.value || typeof snap.value !== "object") return { ...V_CFG_DEFAULTS };
       const v = snap.value;
-      return { vaultRoot: typeof v.vaultRoot === "string" ? v.vaultRoot : "" };
+      return {
+        vaultRoot: typeof v.vaultRoot === "string" ? v.vaultRoot : "",
+        builtinPdf: v.builtinPdf === true,
+      };
+    }
+    /** 库内 PDF 走自带阅读器（页码跳转 / 记阅读位置 / 不吃官方字节上限） */
+    function builtinPdfOn() {
+      return vCfgFromSnapshot(vSnap).builtinPdf;
+    }
+    /** 配置订阅：快照是模块变量（不是 state），不订阅的话**签先于配置到达时
+     *  会一直停在旧分支上**——配置到了也不重渲染 */
+    const vCfgSubs = new Set();
+    function useVCfgVersion() {
+      const [, bump] = react.useReducer((n) => n + 1, 0);
+      react.useEffect(() => {
+        vCfgSubs.add(bump);
+        return () => {
+          vCfgSubs.delete(bump);
+        };
+      }, []);
+    }
+    function isPdfPath(p) {
+      return /\.pdf$/i.test(String(p ?? ""));
+    }
+    /** 库内非 md 文件（资料库文献 / md 内链接）的去处：PDF 且自带阅读器开 → 知识库
+     *  签；其余照旧走官方文件右栏（图片 / xlsx / 未知类型官方认领得更好） */
+    function openVaultAsset(path) {
+      if (builtinPdfOn() && isPdfPath(path)) {
+        openVaultPageAndDock(path);
+        return;
+      }
+      openOfficialFile(path);
     }
     /** 拉生效配置；返回 false = 宿主半边不可达（行关闭）= 本组件 client 面整体不注册 */
     async function loadCfg() {
@@ -8371,6 +8978,7 @@ ellipsis，窄列只截字不破版 */
         vAvailable = false;
         vSnap = null;
       }
+      for (const bump of vCfgSubs) bump();
       return vAvailable;
     }
 
@@ -8379,6 +8987,7 @@ ellipsis，窄列只截字不破版 */
     // 字段清单与 src/vault/index.ts 的 Config schema 同源（render-check 钉住）。
     const VAULT_CFG_FIELDS = [
       { key: "vaultRoot", type: "string", group: "kcfgGroupVault", labelKey: "kcfgVaultRoot", hintKey: "kcfgVaultRootHint" },
+      { key: "builtinPdf", type: "bool", group: "kcfgGroupVault", labelKey: "kcfgBuiltinPdf", hintKey: "kcfgBuiltinPdfHint" },
     ];
     const VAULT_CFG_GROUPS = ["kcfgGroupVault"];
     const VaultConfigPage = dock.createConfigPage({
@@ -8543,6 +9152,13 @@ ellipsis，窄列只截字不破版 */
     exports.vaultTabsClose = vaultTabsClose;
     exports.vaultDirChoices = vaultDirChoices;
     exports.vaultCiteText = vaultCiteText;
+    // PDF 阅读器的版面算术：纯函数，render-check 直测（锚点 ↔ 滚动量往返）
+    exports.pdfAnchorAt = pdfAnchorAt;
+    exports.pdfScrollFor = pdfScrollFor;
+    exports.pdfTopRatio = pdfTopRatio;
+    exports.pdfBaseWidth = pdfBaseWidth;
+    exports.PdfPageBox = PdfPageBox;
+    exports.VaultPdfPane = VaultPdfPane;
     exports.pathUnder = pathUnder;
     exports.absParent = absParent;
     exports.resolveMdLink = resolveMdLink;
@@ -13999,6 +14615,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
      *  别的页签关的）即收掉这张签——人关签则是反过来撤签关页（见 pane 卸载） */
     function BrowserPaneBody(props) {
       useFeaturePresence("browser");
+      // tabVisible 内部调宿主钩子，必须每次渲染无条件调一次（见知识库「DSH 插件开发坑」）
+      const active = tabVisible(props);
       const scope = useCurrentRow(props)?.id ?? "";
       const pageId = brwPageIdOf(props);
       const seenRef = react.useRef(false);
@@ -14028,7 +14646,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           }
         }
       }, [gone]);
-      return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(BrowserPanel, { active: tabVisible(props), scope, pageId }) });
+      return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(BrowserPanel, { active, scope, pageId }) });
     }
 
     /** 壳层常驻（shell.overlay）：浏览器事件源 + 官方「浏览器」入口掩码。
@@ -15541,9 +16159,12 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       const saved = ui.ball ?? null;
       const dock = ballDockOf(ui, cfg);
       const vp = viewport();
+      // 纵向一律用记下的 y（贴边也不例外），top 取球的中心（CSS 一律 translateY(-50%)）。
+      // 贴边只把横向交给 CSS：left/right 定停哪侧，translateX 负责收进边缘那 9px
+      const top = clampNum(saved?.y ?? Math.round(vp.h / 2), 0, Math.max(0, vp.h - BALL));
       const ballStyle = dock === null
-        ? { left: clampNum(saved?.x ?? (vp.w - BALL), 0, Math.max(0, vp.w - BALL)), top: clampNum(saved?.y ?? Math.round(vp.h / 2), 0, Math.max(0, vp.h - BALL)) }
-        : {};
+        ? { left: clampNum(saved?.x ?? (vp.w - BALL), 0, Math.max(0, vp.w - BALL)), top }
+        : { top };
       // 拖动与点击分家：位移不足几像素按点击算（开窗）
       const startDrag = (ev) => {
         if (ev.button !== 0) return;
@@ -15708,11 +16329,12 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     const CHAT_CSS = [
       '.dshk-chat-root{position:fixed;inset:0;pointer-events:none;z-index:60}',
       '.dshk-chat-root>*{pointer-events:auto}',
-      // 悬浮球：圆形把手，可拖到任意位置；贴边时只露一条边，悬停滑出
+      // 悬浮球：圆形把手，可拖到任意位置（含纵向）；贴边时只露一条边，悬停滑出
       '.dshk-chat-ball{position:absolute;display:flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;border:none;border-radius:50%;cursor:grab;background:var(--dsw-alias-bg-base,rgba(20,20,20,.92));box-shadow:0 2px 10px rgba(0,0,0,.28);color:var(--dsw-alias-label-secondary,#888);transition:transform .18s ease}',
       '.dshk-chat-ball:active{cursor:grabbing}',
-      '.dshk-chat-root.is-dock-right .dshk-chat-ball{right:0;top:50%;transform:translateY(-50%) translateX(calc(100% - 9px))}',
-      '.dshk-chat-root.is-dock-left .dshk-chat-ball{left:0;top:50%;transform:translateY(-50%) translateX(calc(-100% + 9px))}',
+      // 贴边：top 由正文给（记住的纵向位置），这里只定侧别与收进边缘的位移
+      '.dshk-chat-root.is-dock-right .dshk-chat-ball{right:0;transform:translateY(-50%) translateX(calc(100% - 9px))}',
+      '.dshk-chat-root.is-dock-left .dshk-chat-ball{left:0;transform:translateY(-50%) translateX(calc(-100% + 9px))}',
       '.dshk-chat-root.is-dock-right:hover .dshk-chat-ball,.dshk-chat-root.is-dock-right .dshk-chat-ball:focus-visible{transform:translateY(-50%)}',
       '.dshk-chat-root.is-dock-left:hover .dshk-chat-ball,.dshk-chat-root.is-dock-left .dshk-chat-ball:focus-visible{transform:translateY(-50%)}',
       '.dshk-chat-root.is-free .dshk-chat-ball{transform:translateY(-50%)}',
