@@ -197,8 +197,8 @@ dsh plugin --profile web update dsh-kit
 ```
 
 The package declares `dsh.bundle.patch`, so it is activated as a profile bundle
-layer. After installing/updating, restart `dsh web`: four toggles — Files / Source
-Control / Knowledge base · Schedule / Terminal — appear on the composer tool row, the workbench
+layer. After installing/updating, restart `dsh web`: three toggles — Files / Source
+Control / Terminal — appear on the composer tool row, the workbench
 is carried by the official right sidebar (dock tabs for diffs / vault / schedule /
 browser), and the agent's `web_search` uses the free multi-source chain.
 
@@ -237,8 +237,8 @@ the WebSocket base the host injects).
   browser tab, shared control, link redirection); `vault` serves `/dsh-kit/vault/*`
   (index / search / per-page mtime / directory-level file management / body write-back with
   mtime CAS / pasted-image upload), `/dsh-kit/schedule/*`
-  (read-only data and stats) and the `/dsh-kit-vault/config` probe, and registers the four
-  `schedule_*` agent tools (knowledge base · schedule row); `phone` serves
+  (data, stats and the panel write path) and the `/dsh-kit-vault/config` probe (knowledge
+  base · schedule row; schedule editing goes through the `schedule-editing` skill); `phone` serves
   `/dsh-kit/phone/*` (status / links / rotation / start-stop) plus the
   `/dsh-kit-phone/config` probe and starts the outward gateway (phone-access row).
   Rows are materialized by the root

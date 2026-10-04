@@ -160,7 +160,7 @@ dsh plugin --profile web update dsh-kit
 ```
 
 本包声明了 `dsh.bundle.patch`，会被激活为 profile 的 bundle 层。安装/更新后重启
-`dsh web`：工具行出现文件树/源代码管理/知识库·日程/终端四个开关，工作台以官方右侧边栏
+`dsh web`：工具行出现文件树/源代码管理/终端三个开关，工作台以官方右侧边栏
 承载（文件 / 知识库 / 日程 / 浏览器四类 dock 签），AI 的 `web_search` 同时切到免费多源搜索。
 
 **宿主版本要求**：dsh ≥ 0.2.0-rc.2（组件行与插件页行配置、官方 `shortcuts` 服务、
@@ -190,8 +190,8 @@ dsh plugin --profile web update dsh-kit
   `/dsh-kit/browser`（面板 WS）、`/dsh-kit/browser/open` 与 `/dsh-kit-browser/config`
   探针（右栏浏览器签、人机共驾、链接改投）；`vault` 挂 `/dsh-kit/vault/*`（索引 / 搜索 /
   单页 mtime / 目录级文件管理 / 正文写回 mtime CAS / 粘贴图片入库 / `/dsh-kit/vault/file`
-  库内 PDF 字节通道）、`/dsh-kit/schedule/*`（只读数据与统计）与
-  `/dsh-kit-vault/config` 探针，并注册 4 个 `schedule_*` agent 工具（知识库·日程行）；
+  库内 PDF 字节通道）、`/dsh-kit/schedule/*`（数据、统计与面板写路径）与
+  `/dsh-kit-vault/config` 探针（知识库·日程行；日程编辑走技能池的 `schedule-editing` 技能）；
   `phone` 挂 `/dsh-kit/phone/*`（状态 / 链接 / 轮换 / 启停）与 `/dsh-kit-phone/config`
   探针，并起对外网关（手机访问行）。
   行经根包 `exports` 子路径（`dsh-kit/files` 等）由 `cordis.patch.yml` 物化

@@ -2,19 +2,18 @@
 // 无构建步骤：改完本文件刷新浏览器即生效（本地目录 junction 直装）。
 //
 // 结构：
-//   入口：conversation.input.left（composer 工具行，文件树/源代码管理/知识库/
-//     终端四个小图标钮，工作区级工具跟 session 走）——文件树/源代码管理两枚由
+//   入口：conversation.input.left（composer 工具行，文件树/源代码管理/终端三个
+//     小图标钮，工作区级工具跟 session 走）——文件树/源代码管理两枚由
 //     dsh-kit/files 组件半边自注册，终端入口与坞归 dsh-kit/terminal，本包
-//     只给它们共享面。知识库钮是开合切换：开 = 侧栏索引视图，再点 = 侧栏回
-//     会话列表；日程没有 composer 钮（日程只有一个家：右栏 dock 签，入口归右栏
-//     开始页条目与待办卡）。
+//     只给它们共享面。知识库 · 日程不占 composer 钮：入口是宿主「快捷键」页里
+//     那条命令（开/关侧栏那一格），日程的家是右栏 dock 签。
 //   右栏（唯一工作台形态）：sidebarRightTabs 注册四类 dock 签，
 //     pane 正文经 slots.inject（sidebar.right.pane.tab）按 id 提供，pane 内自管
-//     pane 正文。dock 签本身没有按钮：diff/知识库是被动签（SCM/树/对话点开
-//     即开），日程/浏览器走右栏开始页清单与自动跟随。开始页保留官方
-//     ShippedGuide（罗盘 + 胶囊条目），我们只贡献 guide 条目：日程/浏览器
-//     两枚（diff/知识库是被动签，不给条目），官方「工作区文件」条目
-//     垫底（配置可隐藏）。
+//     pane 正文。dock 签本身没有按钮：diff/知识库/日程都是被动签（SCM/树/对话
+//     点开即开，日程随侧栏那格切到「日程」tab 开），浏览器走右栏开始页清单与
+//     自动跟随。开始页保留官方 ShippedGuide（罗盘 + 胶囊条目），我们只贡献
+//     guide 条目：浏览器一枚（其余签都是被动签，不给条目），官方「工作区文件」
+//     条目垫底（配置可隐藏）。
 //     缺 sidebarRight 服务时只剩 getKitUi() 侧的存在性补丁——入口按钮
 //     不报错，签由官方侧自己决定要不要出现。
 //   功能存在性（getKitUi()）：vaultOpen/browserOpen 是功能签在场
@@ -3420,10 +3419,10 @@ ellipsis，窄列只截字不破版 */
 // dsh-kit/vault 浏览器半边 —— 知识库 · 日程组件的 client 面。
 // 收纳：侧栏那一格（顶部 tab 条切 知识库 目录索引 / 日程 待办清单）、右栏知识库页阅读面
 // （vendor RTE 编辑态 + 双链 / 反链 / 目录导航）、右栏日程签（周时间网格 + 统计）、
-// 输入行那一枚入口钮（开/关侧栏那一格）、对话文件路径改投知识库标签、组件配置页与快捷键。
+// 开/关侧栏那一格（宿主快捷键）、对话文件路径改投知识库标签、组件配置页与快捷键。
 // 数据走本组件宿主半边 /dsh-kit/vault/* 与 /dsh-kit/schedule/*；行开关即总开关：
 // 宿主半边不物化时 /dsh-kit-vault/config 404，apply 直接不注册任何槽位与监听
-//（侧栏、右栏签、入口按钮、对话改投全不出现）。
+//（侧栏、右栏签、对话改投全不出现）。
     const vaultModule = (kit, require) => {
     var module = { exports: {} };
     var exports = module.exports;
@@ -3898,7 +3897,7 @@ ellipsis，窄列只截字不破版 */
       expandSidebarNow();
       return sidebarViewPatch("vault");
     }
-    /** 知识库 · 日程 的唯一入口（输入行钮 + 快捷键 + 左栏 tab 条都归它）：
+    /** 知识库 · 日程 的唯一入口（宿主快捷键那条命令；左栏 tab 条也归它）：
      *  开 = 侧栏占住那一格（默认落在知识库 tab）；再点 = 回官方会话列表。
      *  那一格开着时点日程 tab 只是把面板换成待办清单并把右栏网格签带到眼前，
      *  不重跑本函数——整格的开合只有这一处入口。 */
@@ -8294,7 +8293,7 @@ ellipsis，窄列只截字不破版 */
       if (side.wide === false) return null;
       const ui = useKitUi();
       const tab = ui.vaultSideTab === "schedule" ? "schedule" : "vault";
-      // tab 条只切不收：整格的开合归输入行那一枚钮（与官方会话列表的互斥面）
+      // tab 条只切不收：整格的开合归那条快捷键（与官方会话列表的互斥面）
       const pick = (next) => {
         if (next === tab) return;
         if (next === "schedule") openRightbarTab("schedule");
@@ -9027,7 +9026,7 @@ ellipsis，窄列只截字不破版 */
     });
 
     // ─────────── 右栏两张功能签（官方 sidebarRightTabs）───────────
-    // 两张都是被动签，**开始页不给条目**：入口是左栏 tab 条与输入行两枚钮。
+    // 两张都是被动签，**开始页不给条目**：入口是快捷键与左栏 tab 条。
     // 服务运行期探测取用，缺服务只剩 kitUi 侧的存在性补丁（签不出现），不写进
     // dsh.client.inject。知识库是「一页一签」的内容类页类型：按 dsh-resource
     // 地址认领，签名取页名；日程仍是单张功能签（签里是周网格，没有多实例形态）
@@ -9106,7 +9105,7 @@ ellipsis，窄列只截字不破版 */
 
     exports.inject = ["slots"];
     // 行开关即总开关：宿主半边不物化时 /dsh-kit-vault/config 404，这里整体不注册
-    //（侧栏索引、右栏知识库/日程签、输入行入口、对话路径改投、快捷键全不出现）。
+    //（侧栏索引、右栏知识库/日程签、对话路径改投、快捷键全不出现）。
     exports.apply = async (ctx) => {
       if (!(await loadCfg())) return;
       // 计时悬浮球：全局根，与槽位无关（面板全关时那只表也看得见、停得掉）
@@ -16325,7 +16324,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       '.dshk-chat-run{flex:none;width:6px;height:6px;border-radius:50%;background:#37c26b;box-shadow:0 0 0 3px rgba(55,194,107,.18)}',
       '.dshk-chat-body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}',
       '.dshk-chat-body>*{flex:1;min-height:0}',
-      // 小窗里不显示 kit 的输入行入口钮（文件树 / 源代码管理 / 知识库 / 终端）：
+      // 小窗里不显示 kit 的输入行入口钮（文件树 / 源代码管理 / 终端）：
       // 它们开的是右栏与侧栏，在浮窗里点开只会把浮窗底下换成别的面板。只藏按钮不够
       // ——官方 Tooltip 壳会留一个空占位，:has 一并收掉。
       '.dshk-chat-panel .dshk-enbtn{display:none}',
