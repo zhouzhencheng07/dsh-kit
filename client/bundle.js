@@ -14147,12 +14147,24 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       }
     }
 
+    /** 画面容器 → 帧封顶（设备像素）。量容器不量画布：画布的尺寸由上一帧决定，
+     *  拿它量会自激（帧大 → 画布大 → 要更大的帧）。没布局（面板还没挂上/宽度为零）
+     *  返回 null，宿主落兜底封顶 */
+    function frameSizeOf(el) {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      if (!(r.width > 0) || !(r.height > 0)) return null;
+      const dpr = window.devicePixelRatio || 1;
+      return { w: Math.round(r.width * dpr), h: Math.round(r.height * dpr) };
+    }
+
     function BrowserPanel({ active, scope, pageId }) {
       const [state, setState] = react.useState({ running: false, launching: false, pages: [], activeId: null, viewId: null });
       const [draft, setDraft] = react.useState("");
       const [visible, setVisible] = react.useState(document.visibilityState === "visible");
       const [connLost, setConnLost] = react.useState(false);
       const canvasRef = react.useRef(null);
+      const bodyRef = react.useRef(null); // 画面容器：帧封顶按它的尺寸 ×DPR 报给宿主
       const imeRef = react.useRef(null); // 透明输入：IME 组合事件宿主（canvas 不可编辑，组合起不来）
       const wsRef = react.useRef(null);
       const frameRef = react.useRef(null); // 最新帧（绘制去抖：只画最新）
@@ -14316,7 +14328,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         const ws = wsRef.current;
         if (!ws || ws.readyState !== 1) return;
         try {
-          ws.send(JSON.stringify({ t: "watch", on: visibleRef.current === true && activeRef.current === true, scope: scopeRef.current ?? "", tabId: pageIdRef.current }));
+          ws.send(JSON.stringify({ t: "watch", on: visibleRef.current === true && activeRef.current === true, scope: scopeRef.current ?? "", tabId: pageIdRef.current, size: frameSizeOf(bodyRef.current) }));
         } catch {
           // 已断
         }
@@ -14330,6 +14342,25 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       react.useEffect(() => {
         sendWatch();
       }, [pageId]);
+      // 面板被拖大/缩放后要重报尺寸：不重报的话帧封顶还是旧的，画面被放大发虚。
+      // 去抖是因为拖动是连续的小变化，每一帧都重报只是徒增 WS 消息
+      react.useEffect(() => {
+        const el = bodyRef.current;
+        if (!el || typeof ResizeObserver !== "function") return undefined;
+        let timer = null;
+        const ro = new ResizeObserver(() => {
+          if (timer !== null) clearTimeout(timer);
+          timer = setTimeout(() => {
+            timer = null;
+            sendWatch();
+          }, 200);
+        });
+        ro.observe(el);
+        return () => {
+          ro.disconnect();
+          if (timer !== null) clearTimeout(timer);
+        };
+      }, []);
       react.useEffect(() => {
         const onVis = () => {
           // 事件回调先于重渲染：先同步 ref 再发，避免 watch 带着过期的可见态
@@ -14538,6 +14569,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           !connLost && !live && state.error ? jsxRuntime.jsx("div", { className: "dshk-brw-fail", role: "alert", children: state.error }) : null,
           jsxRuntime.jsx("div", {
             className: "dshk-brw-body",
+            ref: bodyRef,
             children: [
               jsxRuntime.jsx("canvas", {
                 className: `dshk-brw-canvas${start === null ? "" : " dshk-brw-canvas-off"}`,

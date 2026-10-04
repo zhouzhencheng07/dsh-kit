@@ -349,6 +349,56 @@ async function checkAdopt() {
       bundleSrc.includes('new WebSocket(kitWsUrl("/dsh-kit/browser"))') &&
       !bundleSrc.includes("${location.host}"),
   );
+
+  // 帧流画质与封顶：画质/帧率的取值是实测定的（见知识库「内置浏览器」），
+  // 改这里等于改那份实测，别凭感觉调
+  const svcSrc = read("src/browser/browser.ts");
+  check(
+    "帧流画质 85 且首帧兜底截图同档（否则首帧清晰度与后续帧跳变）",
+    /const FRAME_JPEG_QUALITY = 85/.test(svcSrc) &&
+      /format: 'jpeg',\s*quality: FRAME_JPEG_QUALITY,[\s\S]*?maxWidth/.test(svcSrc) &&
+      svcSrc.includes("Page.captureScreenshot', { format: 'jpeg', quality: FRAME_JPEG_QUALITY }"),
+  );
+  check(
+    "不再砍半帧率（everyNthFrame=1），改按时刻封顶 30fps",
+    /const FRAME_EVERY_NTH = 1/.test(svcSrc) && /const FRAME_MIN_INTERVAL_MS = 33/.test(svcSrc) &&
+      svcSrc.includes("if (now - lastSent < FRAME_MIN_INTERVAL_MS) return") &&
+      !/everyNthFrame: 2/.test(svcSrc),
+  );
+  check(
+    "ack 每帧都给（漏一帧 Chrome 停推），封顶只挡投给面板",
+    /Page\.screencastFrameAck[\s\S]{0,200}if \(now - lastSent < FRAME_MIN_INTERVAL_MS\) return/.test(svcSrc),
+  );
+  check(
+    "帧封顶按面板报的像素尺寸来，带上下限夹取，客户端没报时落兜底",
+    /const FRAME_MIN_PX = 640/.test(svcSrc) && /const FRAME_MAX_PX = 2560/.test(svcSrc) &&
+      svcSrc.includes("const FRAME_FALLBACK_BOX = { maxWidth: 1600, maxHeight: 1200 }") &&
+      svcSrc.includes("return { ...FRAME_FALLBACK_BOX }") &&
+      svcSrc.includes("const box = s.frameBoxes.get(tabId) ?? { ...FRAME_FALLBACK_BOX }"),
+  );
+  check(
+    "改封顶先停流再开（流已在跑时直接 startScreencast 不改参数，实测封顶纹丝不动）",
+    /setFrameSize[\s\S]*?Page\.stopScreencast[\s\S]*?Page\.startScreencast/.test(svcSrc),
+  );
+  check(
+    "面板把画面容器的像素尺寸随 watch 报给宿主（量容器不量画布：画布尺寸由上一帧决定，量它会自激）",
+    bundleSrc.includes("size: frameSizeOf(bodyRef.current)") &&
+      /function frameSizeOf\(el\)[\s\S]*?getBoundingClientRect\(\)/.test(bundleSrc) &&
+      /function frameSizeOf\(el\)[\s\S]*?window\.devicePixelRatio/.test(bundleSrc) &&
+      /function frameSizeOf\(el\)[\s\S]*?return null/.test(bundleSrc) &&
+      /className: "dshk-brw-body",\s*\n\s*ref: bodyRef,/.test(bundleSrc),
+  );
+  check(
+    "面板尺寸变了重报（ResizeObserver 去抖；不重报则拖大右栏画面仍按旧封顶投帧，越来越糊）",
+    /new ResizeObserver\(\(\) => \{[\s\S]*?sendWatch\(\);[\s\S]*?\}, 200\)/.test(bundleSrc) &&
+      bundleSrc.includes("ro.observe(el)"),
+  );
+  check(
+    "watch 的尺寸一路透传到开流（index.ts 收下面板尺寸，setFrameSize 改已开的流）",
+    compSrc.includes("browserService.setFrameSize(scope, want, size)") &&
+      /watcherOpen\(scope, tabId, ws,[\s\S]*?\), size\)/.test(compSrc) &&
+      /const size = msg\.size != null && typeof msg\.size === 'object'/.test(compSrc),
+  );
 }
 
 (async () => {

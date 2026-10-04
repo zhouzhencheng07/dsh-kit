@@ -197,13 +197,13 @@ export async function apply(ctx, config = {}) {
                      *  换分区或换页时先退订旧的 */
                     let watched = null;
                     const scopeOfConn = () => browserSockets.get(ws) ?? DEFAULT_SCOPE;
-                    const openWatch = (scope, tabId) => {
+                    const openWatch = (scope, tabId, size) => {
                         // 帧按页投：同页多连接复路同一条 CDP 会话，不同页各挂各的流。连接本身
                         // 当订阅者标识，退订只摘自己那一份。
                         // 失败必须回话：页不存在（宿主重启后页号从头数，而签地址里还留着旧页号）
                         // 时静默丢弃的话，这张签会永久空白且没有任何症状
                         void browserService
-                            .watcherOpen(scope, tabId, ws, (frameTabId, data) => sendTo(ws, { t: 'frame', tabId: frameTabId, data }))
+                            .watcherOpen(scope, tabId, ws, (frameTabId, data) => sendTo(ws, { t: 'frame', tabId: frameTabId, data }), size)
                             .then((r) => {
                             if (!r.ok)
                                 sendTo(ws, { t: 'event', kind: 'error', message: r.error });
@@ -244,13 +244,22 @@ export async function apply(ctx, config = {}) {
                             // 页还不存在时订阅会被拒并回一条 error（见 openWatch），客户端重开签即可。
                             // null 与 undefined 同义：没有页。Number(null) 是 0，会去订/关「0 号页」
                             const want = msg.on === true && msg.tabId != null ? Number(msg.tabId) : null;
+                            // 面板显示尺寸（设备像素）：帧封顶按它给，帧就是面板实际的像素密度。
+                            // 老客户端不带这个字段（null），宿主落兜底封顶，行为与从前一致
+                            const size = msg.size != null && typeof msg.size === 'object'
+                                ? { w: Number(msg.size.w), h: Number(msg.size.h) }
+                                : null;
                             if (want !== null && (watched === null || watched.scope !== scope || watched.tabId !== want)) {
                                 closeWatch();
                                 watched = { scope, tabId: want };
-                                openWatch(scope, want);
+                                openWatch(scope, want, size);
                             }
                             else if (want === null && watched !== null) {
                                 closeWatch();
+                            }
+                            else if (want !== null) {
+                                // 订阅没变、只是面板被拖大了：改封顶（差得不多宿主自己不动手）
+                                void browserService.setFrameSize(scope, want, size);
                             }
                             return;
                         }

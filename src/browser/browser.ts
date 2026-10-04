@@ -192,6 +192,41 @@ export function normalizeScope(raw: unknown): string {
 /** 帧流的投递口：一个订阅者（= 一条面板连接）收自己订的那一页的帧 */
 type FrameSink = (tabId: number, data: string, metadata: unknown) => void
 
+/** 帧流画质。小字页面上 q60 的 JPEG 明显发糊（字口周围的振铃最刺眼），
+ *  实测 q60→q85 只多约六成字节，而整条链实测不到 1.2MB/s——带宽从来不是约束。
+ *  首帧兜底截图必须同档，否则首帧清晰度与后续帧跳变 */
+const FRAME_JPEG_QUALITY = 85
+/** 帧率上限交给页面自身的重绘率。everyNthFrame=2 实测只是白砍一半流畅度，
+ *  没省下任何我们需要的带宽（帧率由重绘决定，不是由这一刀决定） */
+const FRAME_EVERY_NTH = 1
+/** 投给面板的帧率上限（毫秒间隔）。帧画得再快也只投这么多：面板是观察窗，
+ *  30fps 足够，而带宽与主线程绘制都按帧数线性涨 */
+const FRAME_MIN_INTERVAL_MS = 33
+
+/** 帧封顶（设备像素）。CDP 在这个框内等比缩放，拿面板的像素尺寸当封顶，
+ *  帧就是面板实际的像素密度——写死上限才会被面板放大发虚（高分屏尤其明显）。
+ *  客户端报的是 CSS 尺寸乘过 DPR 的结果，宿主不碰 devicePixelRatio */
+const FRAME_MIN_PX = 640
+const FRAME_MAX_PX = 2560
+/** 客户端没报尺寸时的兜底（与旧行为一致） */
+const FRAME_FALLBACK_BOX = { maxWidth: 1600, maxHeight: 1200 }
+/** 封顶变化小于这个量就不重开流：拖右栏是连续小变化，每次都重开只会抖 */
+const FRAME_BOX_EPSILON_PX = 96
+
+/** 面板显示尺寸 → 帧封顶。尺寸非法（没布局、隐藏、客户端没报）落兜底 */
+function frameBox(size: { w?: unknown; h?: unknown } | null | undefined): { maxWidth: number; maxHeight: number } {
+  const w = Number(size?.w)
+  const h = Number(size?.h)
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return { ...FRAME_FALLBACK_BOX }
+  const clamp = (v: number) => Math.min(FRAME_MAX_PX, Math.max(FRAME_MIN_PX, Math.round(v)))
+  return { maxWidth: clamp(w), maxHeight: clamp(h) }
+}
+
+/** 两份封顶是否「算同一个」（差值小于 eps 视为没变） */
+function sameFrameBox(a: { maxWidth: number; maxHeight: number }, b: { maxWidth: number; maxHeight: number }): boolean {
+  return Math.abs(a.maxWidth - b.maxWidth) < FRAME_BOX_EPSILON_PX && Math.abs(a.maxHeight - b.maxHeight) < FRAME_BOX_EPSILON_PX
+}
+
 /** 一个分区的全部可变状态（浏览器实例与 profile 不在这里——那是全局共享的） */
 interface ScopeState {
   pages: Map<number, PwPage>
@@ -206,6 +241,9 @@ interface ScopeState {
    *  不同页各投各的——投递槽必须按页分开，否则后开的签会顶掉先开那张的 */
   frames: Map<number, Map<object, FrameSink>>
   streams: Map<number, { cdp: PwCdpSession }>
+  /** 面板报来的帧封顶，按页记。帧流拆了重挂时按它恢复（CDP 的封顶只在开流那一刻生效，
+   *  不留着的话重挂会退回兜底值，把面板按清晰度调好的画面悄悄降级） */
+  frameBoxes: Map<number, { maxWidth: number; maxHeight: number }>
   lastActivity: number
   /** 人手高频输入与 agent 工具动作共用一页，必须顺序派发 */
   inputQueue: Promise<void>
@@ -393,6 +431,7 @@ export class BrowserService {
         viewId: null,
         frames: new Map(),
         streams: new Map(),
+        frameBoxes: new Map(),
         lastActivity: Date.now(),
         inputQueue: Promise.resolve(),
       }
@@ -1166,12 +1205,13 @@ export class BrowserService {
 
   /** 面板订阅某页的帧流。subscriber 标识这一个订阅者（连接），退订时按它摘，
    *  免得同页多张签张冠李戴 */
-  async watcherOpen(scope: string, tabId: number | null, subscriber: object, onFrame: FrameSink): Promise<{ ok: true; tabId?: number } | { ok: false; error: string }> {
+  async watcherOpen(scope: string, tabId: number | null, subscriber: object, onFrame: FrameSink, size?: { w?: unknown; h?: unknown } | null): Promise<{ ok: true; tabId?: number } | { ok: false; error: string }> {
     const ensured = await this.ensure()
     if (!ensured.ok) return ensured
     const s = this._s(scope)
     const id = Number(tabId)
     if (!Number.isFinite(id) || !s.pages.has(id)) return { ok: false, error: `页不存在：${tabId}` }
+    if (size !== undefined && size !== null) s.frameBoxes.set(id, frameBox(size))
     let sinks = s.frames.get(id)
     if (!sinks) {
       sinks = new Map()
@@ -1199,6 +1239,35 @@ export class BrowserService {
     if (s.frames.size === 0) this._dropIdleScope(normalizeScope(scope))
   }
 
+  /** 面板尺寸变了：改封顶得重发 startScreencast（参数只在开流那一刻生效）。
+   *  差得不多就不动——拖右栏是连续小变化，每次都重开只会抖。
+   *  流还没挂时只记进 frameBoxes，_attachStream 会照它开 */
+  async setFrameSize(scope: string, tabId: number, size?: { w?: unknown; h?: unknown } | null): Promise<void> {
+    if (!size) return
+    const s = this._s(scope)
+    const id = Number(tabId)
+    const next = frameBox(size)
+    const cur = s.frameBoxes.get(id)
+    if (cur !== undefined && sameFrameBox(cur, next)) return
+    s.frameBoxes.set(id, next)
+    const stream = s.streams.get(id)
+    if (!stream) return
+    try {
+      // 必须先停：流已在跑时再发 startScreencast 不改参数（实测封顶纹丝不动），
+      // 表现是面板拖大了画面仍按旧封顶投帧，越来越糊
+      await stream.cdp.send('Page.stopScreencast').catch(() => {})
+      await stream.cdp.send('Page.startScreencast', {
+        format: 'jpeg',
+        quality: FRAME_JPEG_QUALITY,
+        maxWidth: next.maxWidth,
+        maxHeight: next.maxHeight,
+        everyNthFrame: FRAME_EVERY_NTH,
+      })
+    } catch (error) {
+      this._log(`帧流改尺寸失败：${error instanceof Error ? error.message : error}`)
+    }
+  }
+
   /** 某页的一帧投给该页所有订阅者（一个订阅者抛错不拖累别的） */
   private _emitFrame(s: ScopeState, tabId: number, data: string, metadata: unknown): void {
     const sinks = s.frames.get(tabId)
@@ -1223,27 +1292,34 @@ export class BrowserService {
         await cdp.detach().catch(() => {})
         return
       }
+      // ack 每帧都要给，漏一帧 Chrome 就停推。投给面板的按时刻封顶：CDP 的
+      // everyNthFrame 是「砍一半」不是「封顶」——页面按 30fps 重绘就只剩 15，
+      // 按 125fps 重绘就剩 62，两头都不是我们要的帧率
+      let lastSent = 0
       cdp.on('Page.screencastFrame', (f) => {
+        cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {})
+        const now = Date.now()
+        if (now - lastSent < FRAME_MIN_INTERVAL_MS) return
+        lastSent = now
         try {
           this._emitFrame(s, tabId, f.data, f.metadata)
         } catch {}
-        cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {})
       })
-      // everyNthFrame: 2 —— screencast 每次重绘画一帧，60fps 的页面就是 60 帧/秒的
-      // JPEG 编码 + base64 + WS 发送；面板是"看 agent 在干什么"的观察窗，30fps 足够，
-      // 砍一半是这条链上最省的一刀（分辨率/质量不动，画质与可读性不受影响）
+      // 封顶取面板报来的显示尺寸（frameBoxes），CDP 在框内等比缩放——帧就是面板
+      // 实际的像素密度。写死上限在高分屏或宽面板上会被放大发虚。
+      const box = s.frameBoxes.get(tabId) ?? { ...FRAME_FALLBACK_BOX }
       await cdp.send('Page.startScreencast', {
         format: 'jpeg',
-        quality: 60,
-        maxWidth: 1600,
-        maxHeight: 1200,
-        everyNthFrame: 2,
+        quality: FRAME_JPEG_QUALITY,
+        maxWidth: box.maxWidth,
+        maxHeight: box.maxHeight,
+        everyNthFrame: FRAME_EVERY_NTH,
       })
       s.streams.set(tabId, { cdp })
       // 首帧兜底：screencast 只在重绘时推帧，静态页面可能长时间没有首帧（面板
       // 空白）。attach 后立即抓一帧推给面板，之后帧流自然接管。
       try {
-        const shot = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 60 })
+        const shot = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: FRAME_JPEG_QUALITY })
         const data = (shot as { data?: string })?.data
         if (data) this._emitFrame(s, tabId, data, null)
       } catch {}
