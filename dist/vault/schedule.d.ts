@@ -1,4 +1,3 @@
-import type { DefineTool, ToolDefinition } from '../core/tools.ts';
 export interface ScheduleRecurrence {
     type: 'daily' | 'weekly' | 'monthly';
     interval?: number;
@@ -24,7 +23,6 @@ export interface ScheduleEvent {
     start?: string;
     end?: string;
     recurrence?: ScheduleRecurrence | null;
-    color?: string;
     /** 待办截止 "YYYY-MM-DD" */
     due?: string;
     /** 重复日程里被跳过的那些天（"YYYY-MM-DD"）："删单次"只往这里加一天，
@@ -68,22 +66,10 @@ export interface Occurrence {
     /** 后端派生的三态（界面只取用不自己算）：todo 未到 / doing 进行中 / past 已过去 */
     state: 'todo' | 'doing' | 'past';
     title: string;
-    color?: string;
     location?: string;
     description?: string;
     /** 重复实例与 base 事件的对应关系（编辑时定位） */
     virtual: boolean;
-}
-/** schedule_query 返回的结构化条目（agent 拿 id 走 schedule_delete/schedule_update；不进渲染摘要） */
-export interface ScheduleItemRef {
-    id: string;
-    kind: '日程' | '待办' | '已完成待办';
-    title: string;
-    when: string;
-    /** 重复日程：删除的是整个系列 */
-    recurring?: boolean;
-    /** 待办已逾期（截止时刻一过即算，比到分钟） */
-    overdue?: true;
 }
 export declare function dateStrOf(d: Date): string;
 export declare function todayStr(): string;
@@ -98,7 +84,7 @@ export declare function parseDT(s: string): Date | null;
 export declare function addDays(dateStr: string, n: number): string;
 /** ISO 周一 */
 export declare function mondayOf(dateStr: string): string;
-/** 标题统一上限（面板输入框 maxLength/计数器、agent 工具同一口径）：标题只放
+/** 标题统一上限（面板输入框 maxLength/计数器与写入同一口径）：标题只放
  *  重要信息，细节写备注——周网格块内标题是识别主体，长标题展示必然截断 */
 export declare const SCHED_TITLE_MAX = 16;
 /** 日程数据目录：固定 $DSH_HOME/dsh-kit/schedule/（一条一文件），与知识库（vaultRoot）
@@ -180,11 +166,6 @@ export declare class ScheduleStore {
         completedCount: number;
         openCount: number;
     };
-    /** agent 只看汇总（日/周/月）——schedule_query 工具的产物 */
-    summary(scope: 'day' | 'week' | 'month', date: string): string;
-    /** summary 的结构化并行视图：时段内条目 id/kind/标题/时间，供 agent 精确
-     *  指向（删除/修改）。重复事件按 baseId 去重，待办含已完成（completedAt 落在时段） */
-    items(scope: 'day' | 'week' | 'month', date: string): ScheduleItemRef[];
 }
 export declare function dtStrOf(d: Date, withSeconds?: boolean): string;
 export declare function rangeOf(scope: 'day' | 'week' | 'month', date: string): [string, string];
@@ -199,20 +180,3 @@ export declare function timedMsInRange(events: ScheduleEvent[], from: string, to
  */
 export declare function expandOccurrences(events: ScheduleEvent[], from: string, to: string, now?: Date): Occurrence[];
 export declare function syncScheduleStore(): ScheduleStore;
-/**
- * schedule_create 扁平参数 → store.create 输入。纯函数（测试直接对表）：
- * date+time→start/end（缺 endTime 缺省 +1 小时）、endDate→跨天 end、仅
- * date→due（待办）、repeat* 组装 recurrence（store 层 sanitizeRecurrence 再
- * 兜底一道）。date/time 写错是显式意图，解析失败抛错让模型重试，不静默降级
- * 成别的日子或别的种类。
- * 日程 start/end 都必填（"有 start 就必须有 end"，缺 end 的条目在
- * 应用里判非法改不动），所以这里绝不落"有 start 没 end"的条目：endTime 缺省
- * 由 time+1 小时补出，跨零点则 end 落到次日 00:00。
- * 重复只对日程生效（expandOccurrences 跳过无 start 条目），待办带 repeat
- * 会变成永不展开的死配置，故直接拒绝。
- */
-export declare function toolArgsToCreateInput(args: Record<string, unknown>): Record<string, unknown>;
-export declare function buildScheduleTools({ defineTool, store, }: {
-    defineTool: DefineTool;
-    store: ScheduleStore;
-}): ToolDefinition[];

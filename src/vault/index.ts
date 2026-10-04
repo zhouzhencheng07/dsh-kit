@@ -32,7 +32,7 @@ import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 
-import { loadDep, loadToolsModule, sameOrigin, registerReadableRoot, sendRawFile } from '../core/index.ts'
+import { loadDep, sameOrigin, registerReadableRoot, sendRawFile } from '../core/index.ts'
 import { VaultScanner, defaultVaultRoot } from './scanner.ts'
 import {
   createEntry,
@@ -45,10 +45,7 @@ import {
   storeAttachment,
   resolveInside,
 } from './fs.ts'
-import { syncScheduleStore, buildScheduleTools, isRealDateStr, todayStr } from './schedule.ts'
-import { kitLogger } from '../core/log.ts'
-
-const log = kitLogger('vault')
+import { syncScheduleStore, isRealDateStr, todayStr } from './schedule.ts'
 
 /** 插件设置的运行时形状（loader 按 Config schema 解析后传入 apply 第二参） */
 type KitSettings = Record<string, unknown>
@@ -103,29 +100,9 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
   }
 
   // ── 日程模块（./schedule.ts）：结构化日程 / 待办 ──
-  //   agent 工具恒开（schedule_query 日/周/月汇总、schedule_create 建、
-  //   schedule_update 三态改（null=清空、skip 跳过重复系列的一次）、
-  //   schedule_delete 按 id 删整个系列）；只读日程签在 client/bundle.js 的
-  //   vaultModule。行关闭 = 本模块不物化 = 工具不存在。
+  //   agent 侧不注册工具——日程编辑走技能池的技能（直接改 events/<id>.json）；
+  //   面板在 client/bundle.js 的 vaultModule，读写经下面的 /dsh-kit/schedule/* 端点。
   const scheduleStore = syncScheduleStore()
-  const scheduleToolsMod = await loadToolsModule((m) => log.warn(m))
-  const scheduleDefs =
-    scheduleToolsMod && typeof scheduleToolsMod.defineTool === 'function'
-      ? buildScheduleTools({ defineTool: scheduleToolsMod.defineTool, store: scheduleStore })
-      : null
-  if (!scheduleDefs) {
-    log.warn('dsh-tools 不可达，日程 agent 工具未注册（日程面板不受影响）')
-  }
-  ctx.inject(['settings', 'tools'], (caps: { tools: { register: (def: unknown) => void } }) => {
-    if (!scheduleDefs) return
-    for (const def of scheduleDefs) {
-      try {
-        caps.tools.register(def)
-      } catch (error) {
-        log.error('日程工具注册失败', { err: error })
-      }
-    }
-  })
 
   // ── 知识库扫描器（./scanner.ts）：提到 apply 级——webServer 注入可能重进，
   //   知识库端点块共享同一实例（mtime 缓存也就不用重建）。

@@ -1,7 +1,7 @@
 // 日程模块单测：对构建产物 dist/vault/schedule.js 跑（先 pnpm build 再跑本文件）
 //   node tests/test-schedule.mjs
 // 覆盖：store CRUD、重复展开（daily/weekly/monthly × interval × days × end）、
-//       统计口径、summary 文本、计时段存量只读、持久化往返、字段清洗。
+//       统计口径、计时段存量只读、持久化往返、字段清洗。
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -15,8 +15,6 @@ import {
   mondayOf,
   isDateStr,
   timedMsInRange,
-  buildScheduleTools,
-  toolArgsToCreateInput,
   resolveScheduleDir,
   addDays,
   todayStr,
@@ -272,7 +270,7 @@ test('stats：事件数与已过/未到数 occurrence 口径、计时口径', ()
   const store = new ScheduleStore(sched)
   const stats = store.stats('day', '2026-09-08', new Date(2026, 8, 8, 12, 0))
   assert.equal(stats.eventCount, 1)
-  // completedCount/openCount 数 occurrence 的已过/未到，不是待办（待办口径在 summary）
+  // completedCount/openCount 数 occurrence 的已过/未到，不是待办
   assert.equal(stats.completedCount, 1)
   assert.equal(stats.openCount, 0)
   assert.equal(stats.timedMs, 30 * 60000)
@@ -292,55 +290,6 @@ test('stats：总时长=已结束日程占位+计时段，未来不记、挂段�
   const stats = store.stats('day', '2026-09-08', new Date(2026, 8, 8, 12, 0))
   assert.equal(stats.timedMs, 30 * 60000)
   assert.equal(stats.totalMs, (60 + 30 + 60) * 60000)
-  fs.rmSync(dir, { recursive: true, force: true })
-})
-
-test('summary：逾期单独点名，due 带时刻不把条目挤出当日窗口', () => {
-  const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'sched'))
-  const yest = addDays(todayStr(), -1)
-  const late = store.create({ title: '晚交', due: `${yest}T18:00` })
-  // 旧实现 due<=to 字符串比区间会把 "…T18:00" 判到日外；落窗按日期部分比
-  assert.ok(store.items('day', yest).some((i) => i.id === late.id && i.kind === '待办'))
-  // 查**含该条目日期**的那一周：拿"今天所在周"会在周一（昨天属上一周）查不到
-  const hit = store.items('week', yest).find((i) => i.id === late.id)
-  assert.equal(hit?.overdue, true)
-  const sum = store.summary('day', yest)
-  assert.match(sum, /逾期待办 1/)
-  assert.match(sum, /\[ \] 到期：晚交/)
-  fs.rmSync(dir, { recursive: true, force: true })
-})
-
-test('items：纯日期截止到当天结束前都不算逾期，带时刻比到分钟', () => {
-  const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'sched'))
-  const today = todayStr()
-  store.create({ title: '今天整日', due: today })
-  store.create({ title: '今晚交', due: `${today}T23:59` })
-  store.create({ title: '零点已过', due: `${today}T00:00` })
-  const items = store.items('day', today)
-  const byTitle = (t) => items.find((i) => i.title === t)
-  assert.equal(byTitle('今天整日').overdue, undefined)
-  // 23:59 那条的预期随「现在几点」变：跑在 23:59 这一分钟里它已经逾期（跨零点跑测试
-  // 不该翻车），那一分钟跳过这条断言，其余时刻照旧钉住「比到分钟」的语义
-  const endOfDay = new Date()
-  endOfDay.setHours(23, 59, 0, 0)
-  if (Date.now() < endOfDay.getTime()) assert.equal(byTitle('今晚交').overdue, undefined)
-  assert.equal(byTitle('零点已过').overdue, true)
-  fs.rmSync(dir, { recursive: true, force: true })
-})
-
-test('summary：日汇总含事件行与待办行，空时段有兜底句', () => {
-  const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'sched'))
-  store.create({ title: '站会', start: '2026-09-08T09:00', end: '2026-09-08T09:30', location: '线上' })
-  store.create({ title: '交周报', due: '2026-09-08' })
-  const day = store.summary('day', '2026-09-08')
-  assert.match(day, /2026-09-08/)
-  assert.match(day, /09:00.*站会（线上）/)
-  assert.match(day, /\[ \] 到期：交周报/)
-  const empty = store.summary('day', '2030-01-01')
-  assert.match(empty, /没有日程安排/)
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
@@ -381,7 +330,7 @@ test('共享目录：别处（同步/其它程序）写进来的条目立刻可�
   // 外部新增的条目同样进库
   writeEvent(dir, 'sched', { id: 'ext1', title: '外部建的', due: '2026-09-09' })
   assert.ok(store.list().some((e) => e.id === 'ext1'))
-  assert.ok(store.items('day', '2026-09-09').some((i) => i.id === 'ext1'))
+  assert.equal(store.list().find((e) => e.id === 'ext1')?.due, '2026-09-09')
   // 外部删掉的条目不再出现在面板数据里
   fs.rmSync(file)
   assert.equal(store.list().some((e) => e.id === mine.id), false)
@@ -463,173 +412,6 @@ test('update/delete：patch 白名单不产生脏字段', () => {
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('toolArgsToCreateInput：date+time→日程、仅 date→待办', () => {
-  assert.deepEqual(
-    toolArgsToCreateInput({ title: '开会', date: '2026-09-10', time: '15:00', endTime: '16:00' }),
-    { title: '开会', start: '2026-09-10T15:00', end: '2026-09-10T16:00' },
-  )
-  assert.deepEqual(
-    toolArgsToCreateInput({ title: '交报告', date: '2026-09-11' }),
-    { title: '交报告', due: '2026-09-11' },
-  )
-})
-
-test('toolArgsToCreateInput：跨天 endDate（22:00→次日 02:00；同 endDate 也接受）', () => {
-  assert.deepEqual(
-    toolArgsToCreateInput({ title: '夜班', date: '2026-09-19', time: '22:00', endDate: '2026-09-20', endTime: '02:00' }),
-    { title: '夜班', start: '2026-09-19T22:00', end: '2026-09-20T02:00' },
-  )
-  // endDate 与 date 同日：等价于不写 endDate（显式写出不报错）
-  const same = toolArgsToCreateInput({ title: 'x', date: '2026-09-19', time: '22:00', endDate: '2026-09-19', endTime: '23:30' })
-  assert.equal(same.end, '2026-09-19T23:30')
-  // 跨多天也照收（只校验 end > start）
-  const multi = toolArgsToCreateInput({ title: 'x', date: '2026-09-19', time: '09:00', endDate: '2026-09-21', endTime: '18:00' })
-  assert.equal(multi.end, '2026-09-21T18:00')
-})
-
-test('toolArgsToCreateInput：缺 endTime 默认 +1 小时（23:30 跨零点落次日 00:00）', () => {
-  assert.deepEqual(
-    toolArgsToCreateInput({ title: '评审', date: '2026-09-10', time: '15:00' }),
-    { title: '评审', start: '2026-09-10T15:00', end: '2026-09-10T16:00' },
-  )
-  // 23:30 + 1 小时跨过零点 → end 落次日 00:00（并据此得出 endDate）
-  assert.deepEqual(
-    toolArgsToCreateInput({ title: '守夜', date: '2026-09-19', time: '23:30' }),
-    { title: '守夜', start: '2026-09-19T23:30', end: '2026-09-20T00:00' },
-  )
-  // 23:00 + 1 小时 = 次日 00:00（正好跨零点的边界）
-  assert.equal(toolArgsToCreateInput({ title: 'x', date: '2026-09-19', time: '23:00' }).end, '2026-09-20T00:00')
-  // 跨天显式 endDate + 缺 endTime：按「开始 +1 小时」补出时刻，日期用给定的 endDate
-  assert.equal(
-    toolArgsToCreateInput({ title: 'x', date: '2026-09-19', time: '23:30', endDate: '2026-09-20' }).end,
-    '2026-09-20T00:00',
-  )
-  // date 带时刻（datetime 形）同样走默认 +1 小时
-  assert.equal(toolArgsToCreateInput({ title: 'x', date: '2026-09-10T15:00' }).end, '2026-09-10T16:00')
-})
-
-test('toolArgsToCreateInput：end 必填且必须晚于 start（不落"有 start 没 end"的条目）', () => {
-  // 任何给了 time 的输入都必然带 end
-  for (const args of [
-    { title: 'x', date: '2026-09-10', time: '15:00' },
-    { title: 'x', date: '2026-09-10', time: '15:00', endTime: '16:00' },
-    { title: 'x', date: '2026-09-10', time: '23:30' },
-    { title: 'x', date: '2026-09-10T15:00' },
-    { title: 'x', date: '2026-09-19', time: '22:00', endDate: '2026-09-20', endTime: '02:00' },
-  ]) {
-    const out = toolArgsToCreateInput(args)
-    assert.equal(typeof out.end, 'string', `缺 end：${JSON.stringify(args)}`)
-    assert.ok(out.end > out.start, `end 未晚于 start：${JSON.stringify(out)}`)
-  }
-})
-
-test('toolArgsToCreateInput：endDate 用法错误与 end<=start 显式抛错', () => {
-  // 没给 time 却给了 endDate（只给 date 是待办，没有 end 可言）
-  assert.throws(
-    () => toolArgsToCreateInput({ title: 'x', date: '2026-09-10', endDate: '2026-09-11' }),
-    /endDate 仅对日程生效：请同时提供 time/,
-  )
-  // endDate 格式非法 → 抛错，不静默降级成 date
-  assert.throws(
-    () => toolArgsToCreateInput({ title: 'x', date: '2026-09-10', time: '15:00', endDate: '9月11日' }),
-    /endDate 无法解析/,
-  )
-  assert.throws(
-    () => toolArgsToCreateInput({ title: 'x', date: '2026-09-10', time: '15:00', endDate: '2026-09-11T02:00' }),
-    /endDate 无法解析/,
-  )
-  // end <= start：同日倒挂、同刻零长、结束日期早于开始日期
-  assert.throws(() => toolArgsToCreateInput({ title: 'x', date: '2026-09-10', time: '15:00', endTime: '14:00' }), /end 必须晚于 start/)
-  assert.throws(() => toolArgsToCreateInput({ title: 'x', date: '2026-09-10', time: '15:00', endTime: '15:00' }), /end 必须晚于 start/)
-  assert.throws(
-    () => toolArgsToCreateInput({ title: 'x', date: '2026-09-10', time: '15:00', endDate: '2026-09-09', endTime: '16:00' }),
-    /end 必须晚于 start/,
-  )
-})
-
-test('toolArgsToCreateInput：宽松输入（datetime 形 date、一位小时）与显式错误', () => {
-  assert.equal(toolArgsToCreateInput({ title: 'x', date: '2026-09-10T15:00' }).start, '2026-09-10T15:00')
-  assert.equal(toolArgsToCreateInput({ title: 'x', date: '2026-09-10', time: '9:05' }).start, '2026-09-10T09:05')
-  assert.throws(() => toolArgsToCreateInput({ title: 'x', date: '9月10日' }), /date/)
-  assert.throws(() => toolArgsToCreateInput({ title: 'x', date: '2026-09-10T99:99' }), /date/)
-  assert.throws(() => toolArgsToCreateInput({ title: 'x', date: '2026-09-10', time: '25:00' }), /time/)
-  assert.throws(() => toolArgsToCreateInput({ title: 'x', date: '2026-09-10', endTime: 'abc' }), /endTime/)
-})
-
-test('toolArgsToCreateInput：repeat 系参数组装 recurrence、待办带 repeat 拒绝', () => {
-  assert.deepEqual(
-    toolArgsToCreateInput({ title: '例会', date: '2026-09-07', time: '09:00', repeat: 'weekly', repeatInterval: 2, repeatDays: '1,3', repeatEnd: '2026-12-31' }).recurrence,
-    { type: 'weekly', interval: 2, days: [1, 3], end: '2026-12-31' },
-  )
-  assert.deepEqual(
-    toolArgsToCreateInput({ title: '跑步', date: '2026-09-07', time: '07:00', repeat: 'daily', repeatInterval: 2 }).recurrence,
-    { type: 'daily', interval: 2 },
-  )
-  // 垃圾字符过滤成空 days → 缺省开始日星期
-  assert.deepEqual(
-    toolArgsToCreateInput({ title: 'x', date: '2026-09-07', time: '08:00', repeat: 'weekly', repeatDays: '周一、周三' }).recurrence,
-    { type: 'weekly' },
-  )
-  assert.equal(toolArgsToCreateInput({ title: 'x', date: '2026-09-07', time: '08:00', repeat: 'yearly' }).recurrence, undefined)
-  assert.throws(
-    () => toolArgsToCreateInput({ title: 'x', date: '2026-09-07', repeat: 'weekly' }),
-    /repeat 仅对日程生效/,
-  )
-})
-
-test('toolArgsToCreateInput：不存在的日历日与非法 repeat 参数都显式抛错（不静默降级）', () => {
-  // 2026-02-30 格式对但不是真实日子：Date 会把它滚成 03-02，字面串与派生层两套表示必须挡住
-  assert.throws(() => toolArgsToCreateInput({ title: 'x', date: '2026-02-30', time: '10:00' }), /date/)
-  assert.throws(
-    () => toolArgsToCreateInput({ title: 'x', date: '2026-03-01', time: '10:00', endDate: '2026-02-30', endTime: '11:00' }),
-    /endDate 无法解析/,
-  )
-  // repeatEnd 写错原先被静静忽略 → 变成无限重复
-  assert.throws(
-    () => toolArgsToCreateInput({ title: 'x', date: '2026-03-01', time: '10:00', repeat: 'daily', repeatEnd: '2026-9-1' }),
-    /repeatEnd 无法解析/,
-  )
-  assert.throws(
-    () => toolArgsToCreateInput({ title: 'x', date: '2026-03-01', time: '10:00', repeat: 'daily', repeatInterval: 0 }),
-    /repeatInterval/,
-  )
-  assert.deepEqual(
-    toolArgsToCreateInput({ title: 'x', date: '2026-03-01', time: '10:00', repeat: 'daily', repeatEnd: '2026-09-01' }).recurrence,
-    { type: 'daily', end: '2026-09-01' },
-  )
-})
-
-test('schedule_create 工具：date+time 建日程、date 建待办、重复透传与摘要', async () => {
-  const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'sched'))
-  const defineTool = (opts) => opts
-  const tools = buildScheduleTools({ defineTool, store })
-  const create = tools.find((t) => t.name === 'schedule_create')
-  const r1 = await create.execute({ title: '评审', date: '2026-09-10', time: '15:00', endTime: '16:00' })
-  assert.match(r1.summary, /已创建日程：评审（2026-09-10 15:00–16:00）/)
-  const r2 = await create.execute({ title: '例会', date: '2026-09-07', time: '09:00', repeat: 'weekly', repeatInterval: 2, repeatDays: '1' })
-  assert.match(r2.summary, /已创建日程：例会（2026-09-07 09:00–10:00，每2周\(1\)）/)
-  const ev2 = store.list().find((e) => e.id === r2.id)
-  assert.deepEqual(ev2.recurrence, { type: 'weekly', interval: 2, days: [1] })
-  assert.equal(ev2.end, '2026-09-07T10:00') // 重复日程同样不落"有 start 没 end"
-  // 展开对齐：9/7 起每两周周一 → 区间内落 9/7 与 9/21
-  const occ = expandOccurrences([ev2], '2026-09-07', '2026-09-30')
-  assert.deepEqual(occ.map((o) => o.date), ['2026-09-07', '2026-09-21'])
-  const r3 = await create.execute({ title: '交表', date: '2026-09-11' })
-  assert.match(r3.summary, /已创建待办：交表（截止 2026-09-11）/)
-  // 缺 endTime → 摘要里带出补出的 +1 小时（不再是"有 start 没 end"）
-  const r4 = await create.execute({ title: '外出', date: '2026-10-01', time: '09:00' })
-  assert.match(r4.summary, /已创建日程：外出（2026-10-01 09:00–10:00）/)
-  const ev4 = store.list().find((e) => e.id === r4.id)
-  assert.equal(ev4.start, '2026-10-01T09:00')
-  assert.equal(ev4.end, '2026-10-01T10:00')
-  // 跨天日程：end 落在次日，摘要只显示结束时刻
-  const r5 = await create.execute({ title: '夜班', date: '2026-09-19', time: '22:00', endDate: '2026-09-20', endTime: '02:00' })
-  assert.match(r5.summary, /已创建日程：夜班（2026-09-19 22:00–02:00）/)
-  assert.equal(store.list().find((e) => e.id === r5.id).end, '2026-09-20T02:00')
-  fs.rmSync(dir, { recursive: true, force: true })
-})
-
 test('外部文件带 allDay 键当没看见：不解析、不报损坏，写盘自然不再输出', () => {
   const dir = tmp()
   const sched = path.join(dir, 'sched')
@@ -648,8 +430,8 @@ test('外部文件带 allDay 键当没看见：不解析、不报损坏，写盘
   assert.equal(occ.length, 1)
   assert.equal(occ[0].startMins, 0) // 不再被归置成全天
   assert.deepEqual(Object.keys(occ[0]).includes('allDay'), false)
-  assert.match(store.summary('day', '2026-09-08'), /00:00.*老全天/)
-  assert.equal(store.items('day', '2026-09-08')[0].when, '2026-09-08 00:00')
+  assert.equal(occ[0].title, '老全天')
+  assert.equal(occ[0].date, '2026-09-08')
   // 改标题落盘：allDay 不因这次改动被解析/改写，读进来什么样还是什么样
   // （store 是 patch 语义，未触及的键原样保留——与其它未知键同一待遇）
   store.update('old1', { title: '改名' })
@@ -662,88 +444,7 @@ test('外部文件带 allDay 键当没看见：不解析、不报损坏，写盘
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('items：时段内条目结构化（id/kind/when），重复事件去重带 recurring', () => {
-  const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'sched'))
-  store.create({ title: '例会', start: '2026-09-07T09:00', end: '2026-09-07T10:00', recurrence: { type: 'weekly', days: [1] } })
-  store.create({ title: '交报告', due: '2026-09-08' })
-  const done = store.create({ title: '已办', due: '2026-09-08' })
-  // completedAt 写死固定日，避免依赖机器时钟
-  store.list().find((e) => e.id === done.id).completedAt = '2026-09-08T10:00'
-  const items = store.items('week', '2026-09-08') // 本周 9/7–9/13
-  assert.equal(items.length, 3)
-  const ev = items.find((i) => i.kind === '日程')
-  assert.equal(ev.title, '例会')
-  assert.equal(ev.when, '2026-09-07 09:00')
-  assert.equal(ev.recurring, true)
-  assert.ok(items.some((i) => i.kind === '待办' && i.title === '交报告' && i.when === '2026-09-08'))
-  assert.ok(items.some((i) => i.kind === '已完成待办' && i.title === '已办' && i.when === '2026-09-08'))
-  fs.rmSync(dir, { recursive: true, force: true })
-})
-
-test('schedule_update 工具：三态 patch、改类型、跳过重复系列的一次', async () => {
-  const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'sched'))
-  const defineTool = (opts) => opts
-  const tools = buildScheduleTools({ defineTool, store })
-  const upd = tools.find((t) => t.name === 'schedule_update')
-  const ev = store.create({ title: '例会', start: '2026-09-07T09:00', end: '2026-09-07T10:00', location: '301', recurrence: { type: 'weekly', days: [1] } })
-  // 跳过一次：只往 skip 加一天（系列不动）
-  const r0 = await upd.execute({ id: ev.id, skip: ['2026-09-14'] })
-  assert.equal(r0.ok, true)
-  assert.deepEqual(store.list().find((e) => e.id === ev.id).skip, ['2026-09-14'])
-  // 日程→待办：start/end 清空、重复规则显式清、due 给截止（含时刻）
-  const r1 = await upd.execute({ id: ev.id, start: null, end: null, recurrence: null, due: '2026-09-08T18:00', location: null })
-  assert.match(r1.summary, /已更新待办：例会（截止 2026-09-08T18:00）/)
-  const after = store.list().find((e) => e.id === ev.id)
-  assert.equal(after.start, undefined)
-  assert.equal(after.recurrence, null)
-  assert.equal(after.location, undefined)
-  // 待办→日程：start+end 成对给回、due 清成无期限
-  const r2 = await upd.execute({ id: ev.id, start: '2026-09-09T15:00', end: '2026-09-09T16:00', due: null })
-  assert.match(r2.summary, /已更新日程：例会（2026-09-09 15:00–16:00）/)
-  const back = store.list().find((e) => e.id === ev.id)
-  assert.equal(back.due, undefined)
-  // 校验错误原样抛给模型重试；未找到回 ok:false
-  await assert.rejects(() => upd.execute({ id: ev.id, end: '2026-09-09T14:00' }), /end 必须晚于 start/)
-  const r3 = await upd.execute({ id: 'nope', title: 'x' })
-  assert.equal(r3.ok, false)
-  fs.rmSync(dir, { recursive: true, force: true })
-})
-
-test('schedule_delete 工具：按 id 删除、重复系列整体移除、未找到回 ok:false', async () => {
-  const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'sched'))
-  const defineTool = (opts) => opts
-  const tools = buildScheduleTools({ defineTool, store })
-  const del = tools.find((t) => t.name === 'schedule_delete')
-  const ev = store.create({ title: '要删的', start: '2026-09-10T09:00', end: '2026-09-10T10:00', recurrence: { type: 'daily' } })
-  const r = await del.execute({ id: ev.id })
-  assert.equal(r.ok, true)
-  assert.match(r.summary, /已删除：要删的（重复日程，整个系列已移除）/)
-  assert.equal(store.list().length, 0)
-  const r2 = await del.execute({ id: 'nope' })
-  assert.equal(r2.ok, false)
-  assert.match(r2.summary, /未找到/)
-  fs.rmSync(dir, { recursive: true, force: true })
-})
-
-test('schedule_query 工具：返回 items 供删除定位', async () => {
-  const dir = tmp()
-  const store = new ScheduleStore(path.join(dir, 'sched'))
-  const defineTool = (opts) => opts
-  const tools = buildScheduleTools({ defineTool, store })
-  const query = tools.find((t) => t.name === 'schedule_query')
-  const ev = store.create({ title: '评审', start: '2026-09-10T15:00', end: '2026-09-10T16:00' })
-  const r = await query.execute({ scope: 'day', date: '2026-09-10' })
-  assert.equal(typeof r.summary, 'string')
-  assert.ok(Array.isArray(r.items) && r.items.length === 1)
-  assert.equal(r.items[0].id, ev.id)
-  assert.equal(r.items[0].kind, '日程')
-  fs.rmSync(dir, { recursive: true, force: true })
-})
-
-test('标题统一上限 16 字（面板/agent 工具同一口径，细节让位备注）', () => {
+test('标题统一上限 16 字（面板与 store 同一口径，细节让位备注）', () => {
   const dir = tmp()
   const store = new ScheduleStore(path.join(dir, 'sched'))
   const long = '一'.repeat(30)

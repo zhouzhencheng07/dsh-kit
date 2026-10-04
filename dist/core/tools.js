@@ -1,6 +1,6 @@
 // dsh-kit 组件间共享的宿主侧工具库：@deepseek-ai/dsh-tools 的类型契约与加载。
 //
-// 浏览器与日程两组工具各自装配（buildBrowserTools / buildScheduleTools），共用这一份
+// 浏览器工具（buildBrowserTools）等各组件的工具装配共用这一份
 // defineTool 契约与模块加载。dsh-tools 是 ESM（type: module），加载走两锚点：裸
 // import → dsh 本体锚点 resolve+import（profile/全局安装都命中）；monorepo 源码形态
 // 跳过（dev 环境是 npm 全局布局，bin 锚点已覆盖）。

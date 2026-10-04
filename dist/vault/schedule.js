@@ -2,9 +2,9 @@
 //
 // 职责：日程/待办的结构化数据持有者（一条一文件、单文件原子落盘，固定
 // $DSH_HOME/dsh-kit/schedule/，与知识库 vaultRoot 互不相干），以及派生层：
-// 区间重复展开、统计、文本汇总。UI 组件（可编辑面板）在 client/bundle.js 的
-// vaultModule；agent 工具（buildScheduleTools）在本文件定义、经 src/vault/index.ts
-// 用宿主 defineTool 注册；HTTP 端点（读写，UI 的写路径）同在该文件。
+// 区间重复展开、统计。UI 组件（可编辑面板）在 client/bundle.js 的 vaultModule；
+// HTTP 端点（读写，UI 的写路径）在 src/vault/index.ts。agent 侧不注册工具——
+// 日程编辑走技能池的技能，直接改 events/<id>.json（格式与校验见该技能）。
 //
 // 设计要点：
 // - 日程是强结构数据（起止/重复/位置），以 JSON 存 $DSH_HOME，不进知识库目录；
@@ -15,7 +15,7 @@
 //   现成 occurrence 渲染；支持 daily/weekly/monthly × interval × days(weekly) × end。
 // - 计时是全局单实例（timer.json）：起新表先把在跑的那段闭合；挂条目的段落进
 //   该条目的 timeEntries（进行中的段 end 缺省），独立段落成 entries/<id>.json。
-// 生命周期：模块级单例懒构造（首次端点/工具触达）；文件缺失=空库；JSON 损坏
+// 生命周期：模块级单例懒构造（首次端点触达）；文件缺失=空库；JSON 损坏
 // → 坏文件改存 .bak 后降级空库，不让日程服务砖死。
 import fs from 'node:fs';
 import path from 'node:path';
@@ -110,20 +110,8 @@ function minutesOfTimePart(s) {
     const [hh, mm] = t.split(':').map(Number);
     return hh * 60 + mm;
 }
-function fmtDur(ms) {
-    // 不足一分钟的段（快速起停的计时）显示秒，不然"0分"看不出时长
-    if (ms < 60000)
-        return `${Math.round(ms / 1000)}秒`;
-    const mins = Math.round(ms / 60000);
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    if (h > 0)
-        return `${h}小时${m}分`;
-    return `${m}分钟`;
-}
-const WEEKDAY_ZH = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 // ── 字段白名单与校验 ─────────────────────────────────────────────────────────
-/** 标题统一上限（面板输入框 maxLength/计数器、agent 工具同一口径）：标题只放
+/** 标题统一上限（面板输入框 maxLength/计数器与写入同一口径）：标题只放
  *  重要信息，细节写备注——周网格块内标题是识别主体，长标题展示必然截断 */
 export const SCHED_TITLE_MAX = 16;
 function sanitizeRecurrence(raw) {
@@ -202,9 +190,6 @@ function sanitizeFields(input, patch) {
             out.recurrence = rec;
         }
     }
-    if (has('color') && typeof input.color === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(input.color)) {
-        out.color = input.color;
-    }
     if (has('due')) {
         const d = sanitizeDue(input.due);
         if (d !== undefined)
@@ -258,21 +243,11 @@ function applyFields(ev, f) {
     setOrClear('end', f.end);
     if (f.recurrence !== undefined)
         ev.recurrence = f.recurrence;
-    if (f.color !== undefined)
-        ev.color = f.color;
     setOrClear('due', f.due);
     setOrClear('skip', f.skip);
     setOrClear('completedAt', f.completedAt);
     if (f.parentId !== undefined)
         ev.parentId = f.parentId;
-}
-/** 待办是否已逾期：纯日期到**当天结束前**都不算逾期（只比"今天"），带时刻比到分钟 */
-function dueOverdue(ev, now) {
-    if (ev.start !== undefined || ev.completedAt != null || ev.due === undefined)
-        return false;
-    if (ev.due.includes('T'))
-        return ev.due.slice(0, 16) <= dtStrOf(now);
-    return ev.due.slice(0, 10) < dateStrOf(now);
 }
 /**
  * 合并结果的整体校验（create 与 update 都先推演成完整条目再校验，不做半截更新）：
@@ -774,7 +749,6 @@ export class ScheduleStore {
         const occ = expandOccurrences(this.data.events, from, to, nowD);
         const eventCount = occ.length;
         // completedCount/openCount 是 occurrence 口径：数已过/未到，不是待办
-        // （agent 侧的待办口径见 summary——逾期/即将到期/完成在那里单独数）
         let completedCount = 0;
         let openCount = 0;
         for (const o of occ) {
@@ -799,105 +773,6 @@ export class ScheduleStore {
         }
         return { timedMs, totalMs: elapsedMs + timedMs, eventCount, completedCount, openCount };
     }
-    /** agent 只看汇总（日/周/月）——schedule_query 工具的产物 */
-    summary(scope, date) {
-        this.sync();
-        const [from, to] = rangeOf(scope, date);
-        const stats = this.stats(scope, date);
-        const lines = [];
-        if (scope === 'day') {
-            const wd = WEEKDAY_ZH[isoWeekday(date)] ?? '';
-            lines.push(`日程汇总 ${date}（${wd}）`);
-        }
-        else {
-            lines.push(`日程汇总 ${scope === 'week' ? '本周' : '本月'} ${from} ~ ${to}`);
-        }
-        // 待办口径（与统计卡的 occurrence 已过/未到是两回事）：逾期单独点名（纯日期
-        // 到当天结束前不算逾期，带时刻比到分钟）
-        const now = new Date();
-        const isOverdue = (ev) => dueOverdue(ev, now);
-        const dueDayOf = (ev) => ev.due?.slice(0, 10) ?? '';
-        const todos = this.data.events.filter((e) => e.start === undefined && !e.completedAt && e.due !== undefined);
-        const overdueCount = todos.filter(isOverdue).length;
-        const upcomingCount = todos.filter((e) => !isOverdue(e) && dueDayOf(e) >= from && dueDayOf(e) <= to).length;
-        const doneCount = this.data.events.filter((e) => e.start === undefined && e.completedAt != null && e.completedAt.slice(0, 10) >= from && e.completedAt.slice(0, 10) <= to).length;
-        lines.push(`合计：事件 ${stats.eventCount} · 逾期待办 ${overdueCount} · 即将到期 ${upcomingCount} · 待办完成 ${doneCount} · 总时长 ${fmtDur(stats.totalMs)}（内计时 ${fmtDur(stats.timedMs)}）`);
-        const occ = expandOccurrences(this.data.events, from, to);
-        const byDate = new Map();
-        for (const o of occ) {
-            const arr = byDate.get(o.date) ?? [];
-            arr.push(o);
-            byDate.set(o.date, arr);
-        }
-        const tasksWithDue = this.data.events.filter((e) => e.start === undefined && e.due);
-        const dates = [];
-        // 按天数推进而不是「按日加一天」：游标万一不前进（非法日期）也只跑有限次
-        const spanDays = diffDays(from, to);
-        for (let i = 0; i <= spanDays; i++)
-            dates.push(addDays(from, i));
-        for (const d of dates) {
-            const dayOcc = (byDate.get(d) ?? []).sort((a, b) => a.startMins - b.startMins);
-            const dueTasks = tasksWithDue.filter((e) => e.due?.slice(0, 10) === d && !e.completedAt);
-            const doneTasks = this.data.events.filter((e) => e.start === undefined && e.completedAt?.slice(0, 10) === d);
-            if (dayOcc.length === 0 && dueTasks.length === 0 && doneTasks.length === 0)
-                continue;
-            lines.push('');
-            lines.push(scope === 'day' ? '事件与待办：' : `${d}（${WEEKDAY_ZH[isoWeekday(d)] ?? ''}）：`);
-            for (const o of dayOcc) {
-                // 跨天块带上日期（只写时刻会读成同一天倒挂）
-                const when = o.endDate > o.date
-                    ? `${o.date.slice(5)} ${minsToHHmm(o.startMins)}–${o.endDate.slice(5)}${o.endMins !== null ? ` ${minsToHHmm(o.endMins)}` : ''}`
-                    : `${minsToHHmm(o.startMins)}${o.endMins !== null ? `–${minsToHHmm(o.endMins)}` : ''}`;
-                lines.push(`- ${when} ${o.title}${o.location ? `（${o.location}）` : ''}`);
-            }
-            for (const t of dueTasks)
-                lines.push(`- [ ] 到期：${t.title}`);
-            for (const t of doneTasks)
-                lines.push(`- [x] 已完成：${t.title}`);
-        }
-        if (lines.length <= 2)
-            lines.push('（该时段没有日程安排）');
-        return lines.join('\n');
-    }
-    /** summary 的结构化并行视图：时段内条目 id/kind/标题/时间，供 agent 精确
-     *  指向（删除/修改）。重复事件按 baseId 去重，待办含已完成（completedAt 落在时段） */
-    items(scope, date) {
-        this.sync();
-        const [from, to] = rangeOf(scope, date);
-        const out = [];
-        const seenEvents = new Set();
-        for (const o of expandOccurrences(this.data.events, from, to)) {
-            if (seenEvents.has(o.baseId))
-                continue;
-            seenEvents.add(o.baseId);
-            const ev = this.data.events.find((e) => e.id === o.baseId);
-            if (!ev)
-                continue;
-            out.push({
-                id: ev.id,
-                kind: '日程',
-                title: ev.title,
-                when: `${o.date} ${minsToHHmm(o.startMins)}`,
-                recurring: ev.recurrence != null ? true : undefined,
-            });
-        }
-        const now = new Date();
-        for (const ev of this.data.events) {
-            if (ev.start !== undefined)
-                continue;
-            if (ev.completedAt && ev.completedAt.slice(0, 10) >= from && ev.completedAt.slice(0, 10) <= to) {
-                out.push({ id: ev.id, kind: '已完成待办', title: ev.title, when: ev.completedAt.slice(0, 10) });
-            }
-            else if (!ev.completedAt && ev.due !== undefined) {
-                // due 兼容日期与日期时刻：落窗按日期部分比，时刻不把条目挤到窗外
-                const dueDate = ev.due.slice(0, 10);
-                if (dueDate >= from && dueDate <= to) {
-                    out.push({ id: ev.id, kind: '待办', title: ev.title, when: ev.due, ...(dueOverdue(ev, now) ? { overdue: true } : {}) });
-                }
-            }
-        }
-        return out;
-    }
 }
 export function dtStrOf(d, withSeconds = false) {
     const base = `${dateStrOf(d)}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
@@ -915,9 +790,6 @@ export function rangeOf(scope, date) {
     const first = `${y}-${pad2(m)}-01`;
     const lastDay = new Date(y, m, 0).getDate();
     return [first, `${y}-${pad2(m)}-${pad2(lastDay)}`];
-}
-function minsToHHmm(mins) {
-    return `${pad2(Math.floor(mins / 60) % 24)}:${pad2(mins % 60)}`;
 }
 /** 区间内计时合计（按计时段 start 归属日；进行中的不计入；orphans=独立计时段） */
 export function timedMsInRange(events, from, to, orphans) {
@@ -988,7 +860,6 @@ export function expandOccurrences(events, from, to, now = new Date()) {
                 endMins,
                 state: occurrenceState(date, occEndDate, startMins, endMins, now),
                 title: ev.title,
-                ...(ev.color !== undefined ? { color: ev.color } : {}),
                 ...(ev.location !== undefined ? { location: ev.location } : {}),
                 ...(ev.description !== undefined ? { description: ev.description } : {}),
                 virtual,
@@ -1038,284 +909,10 @@ export function expandOccurrences(events, from, to, now = new Date()) {
     }
     return out.sort((a, b) => (a.date === b.date ? a.startMins - b.startMins : a.date < b.date ? -1 : 1));
 }
-/** 模块级单例：端点与 agent 工具共享同一份内存态。文件位置固定，惰性构造一次 */
+/** 模块级单例：各端点共享同一份内存态。文件位置固定，惰性构造一次 */
 let singleton = null;
 export function syncScheduleStore() {
     if (!singleton)
         singleton = new ScheduleStore();
     return singleton;
-}
-// ── agent 工具（schedule_query / schedule_create / schedule_update / schedule_delete）─
-// agent 能查、能建、也能改（update 走 store 的三态 patch：null = 清空，改类型 =
-// start/end 与 due 二选一给）；删除仍由人发起（对话里确认）、agent 代执行，所以
-// query 返回 items（id）+ delete/update 按 id 精确指向。
-/** "H:mm"/"HH:mm" 归一成 "HH:mm"；缺位/越界返回 null */
-function normHHmm(raw) {
-    const m = /^(\d{1,2}):(\d{2})$/.exec(raw.trim());
-    if (m === null)
-        return null;
-    const hh = Number(m[1]);
-    const mm = Number(m[2]);
-    if (hh > 23 || mm > 59)
-        return null;
-    return `${pad2(hh)}:${pad2(mm)}`;
-}
-const REC_TYPE_ZH = { daily: '每天', weekly: '每周', monthly: '每月' };
-function recurrenceLabel(rec) {
-    // "每2周(1)" 形式：interval 与 days 直接拼接会有「每周×21」这类读法歧义
-    const unit = rec.type === 'daily' ? '天' : rec.type === 'weekly' ? '周' : '月';
-    const head = rec.interval !== undefined && rec.interval > 1 ? `每${rec.interval}${unit}` : REC_TYPE_ZH[rec.type];
-    const bits = [head];
-    if (rec.days !== undefined && rec.days.length > 0)
-        bits.push(`(${rec.days.join(',')})`);
-    if (rec.end !== undefined)
-        bits.push(`至${rec.end}`);
-    return bits.join('');
-}
-/** 条目一句话摘要：`日程：例会（2026-09-07 09:00–10:00，每周(1)）`——create/update 工具共用 */
-function eventDigest(ev) {
-    const kind = ev.start !== undefined ? '日程' : '待办';
-    const bits = [];
-    if (ev.start !== undefined) {
-        bits.push(`${ev.start.replace('T', ' ')}${ev.end !== undefined ? `–${ev.end.split('T')[1] ?? ''}` : ''}`);
-    }
-    else if (ev.due !== undefined)
-        bits.push(`截止 ${ev.due}`);
-    if (ev.recurrence)
-        bits.push(recurrenceLabel(ev.recurrence));
-    return `${kind}：${ev.title}${bits.length > 0 ? `（${bits.join('，')}）` : ''}`;
-}
-/**
- * schedule_create 扁平参数 → store.create 输入。纯函数（测试直接对表）：
- * date+time→start/end（缺 endTime 缺省 +1 小时）、endDate→跨天 end、仅
- * date→due（待办）、repeat* 组装 recurrence（store 层 sanitizeRecurrence 再
- * 兜底一道）。date/time 写错是显式意图，解析失败抛错让模型重试，不静默降级
- * 成别的日子或别的种类。
- * 日程 start/end 都必填（"有 start 就必须有 end"，缺 end 的条目在
- * 应用里判非法改不动），所以这里绝不落"有 start 没 end"的条目：endTime 缺省
- * 由 time+1 小时补出，跨零点则 end 落到次日 00:00。
- * 重复只对日程生效（expandOccurrences 跳过无 start 条目），待办带 repeat
- * 会变成永不展开的死配置，故直接拒绝。
- */
-export function toolArgsToCreateInput(args) {
-    const input = {};
-    if (typeof args.title === 'string')
-        input.title = args.title;
-    if (typeof args.description === 'string')
-        input.description = args.description;
-    if (typeof args.location === 'string')
-        input.location = args.location;
-    const rawDate = typeof args.date === 'string' ? args.date.trim() : '';
-    let date = isRealDateStr(rawDate) ? rawDate : '';
-    let dtTime = null;
-    if (date === '' && DT_RE.test(rawDate)) {
-        dtTime = normHHmm(rawDate.slice(11, 16));
-        if (dtTime === null)
-            throw new Error(`date 无法解析：${args.date}`);
-        date = rawDate.slice(0, 10);
-    }
-    if (date === '')
-        throw new Error('date 必填，格式 YYYY-MM-DD');
-    const timeArg = typeof args.time === 'string' && args.time.trim() !== '' ? args.time : null;
-    const time = timeArg !== null ? normHHmm(timeArg) : dtTime;
-    if (timeArg !== null && time === null)
-        throw new Error(`time 无法解析：${timeArg}`);
-    const endTimeArg = typeof args.endTime === 'string' && args.endTime.trim() !== '' ? args.endTime : null;
-    const endTime = endTimeArg !== null ? normHHmm(endTimeArg) : null;
-    if (endTimeArg !== null && endTime === null)
-        throw new Error(`endTime 无法解析：${endTimeArg}`);
-    const endDateArg = typeof args.endDate === 'string' && args.endDate.trim() !== '' ? args.endDate.trim() : null;
-    // endDate 是"跨天日程"的日期部分：没有时刻就无从谈起（只给日期是待办，没有 end）
-    if (endDateArg !== null && time === null)
-        throw new Error('endDate 仅对日程生效：请同时提供 time');
-    if (endDateArg !== null && !isRealDateStr(endDateArg))
-        throw new Error(`endDate 无法解析：${endDateArg}`);
-    if (time !== null) {
-        const startMins = Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
-        let end = endTime;
-        let endDate = endDateArg;
-        if (end === null) {
-            // 缺 endTime：开始 +1 小时；跨零点（如 23:30）落到次日 00:00，并据此得出 endDate
-            const plusHour = startMins + 60;
-            if (plusHour >= 1440) {
-                end = '00:00';
-                if (endDate === null)
-                    endDate = addDays(date, 1);
-            }
-            else {
-                end = minsToHHmm(plusHour);
-                if (endDate === null)
-                    endDate = date;
-            }
-        }
-        else if (endDate === null) {
-            endDate = date;
-        }
-        // 两端格式统一 "YYYY-MM-DDTHH:mm"，字符串比较即时间序；end 必须严格晚于
-        // start（相等=零长块，非法），抛错让模型重试
-        const start = `${date}T${time}`;
-        const endDT = `${endDate}T${end}`;
-        if (endDT <= start)
-            throw new Error(`end 必须晚于 start：start=${start}、end=${endDT}`);
-        input.start = start;
-        input.end = endDT;
-    }
-    else {
-        input.due = date;
-    }
-    const repeat = args.repeat;
-    if (repeat === 'daily' || repeat === 'weekly' || repeat === 'monthly') {
-        if (!('start' in input))
-            throw new Error('repeat 仅对日程生效：请提供 time');
-        const rec = { type: repeat };
-        if (args.repeatInterval !== undefined) {
-            // 写错就抛（与 date/time 同口径）：静默忽略会变成"每天重复"这种别的语义
-            const n = Number(args.repeatInterval);
-            if (!Number.isFinite(n) || n < 1)
-                throw new Error(`repeatInterval 需 ≥1：${String(args.repeatInterval)}`);
-            rec.interval = Math.floor(n);
-        }
-        if (repeat === 'weekly' && typeof args.repeatDays === 'string') {
-            const days = [...new Set(args.repeatDays.split(/[^0-9]+/).map(Number).filter((n) => n >= 1 && n <= 7))].sort((a, b) => a - b);
-            if (days.length > 0)
-                rec.days = days;
-        }
-        if (typeof args.repeatEnd === 'string' && args.repeatEnd.trim() !== '') {
-            const end = args.repeatEnd.trim();
-            if (!isRealDateStr(end))
-                throw new Error(`repeatEnd 无法解析：${end}`);
-            rec.end = end;
-        }
-        input.recurrence = rec;
-    }
-    return input;
-}
-export function buildScheduleTools({ defineTool, store, }) {
-    const query = defineTool({
-        name: 'schedule_query',
-        description: '查询用户的日程汇总（日/周/月粒度）：带时刻的事件、逾期待办、即将到期与已完成的待办、累计计时。' +
-            '用户问「今天/本周/本月有什么安排」「这周做了什么」，或安排新事项前想先看时间冲突时使用。' +
-            '返回值 items 带条目 id（逾期待办带 overdue 标记），是 schedule_delete / schedule_update 的定位依据。',
-        parameters: {
-            scope: { type: 'string', required: true, enum: ['day', 'week', 'month'], description: '汇总粒度：日/周/月' },
-            date: { type: 'string', description: '基准日期 YYYY-MM-DD，缺省今天' },
-        },
-        output: {
-            schema: { type: 'object', additionalProperties: true },
-            render: (_args, value) => [{ type: 'text', text: value.summary }],
-        },
-        presentCall: () => ({ card: 'generic', title: '查询日程', kind: 'read' }),
-        async execute(args) {
-            const scope = args?.scope === 'week' || args?.scope === 'month' ? args.scope : 'day';
-            const date = typeof args?.date === 'string' && isRealDateStr(args.date) ? args.date : todayStr();
-            return { summary: store.summary(scope, date), items: store.items(scope, date) };
-        },
-    });
-    const create = defineTool({
-        name: 'schedule_create',
-        description: '在用户日程里创建条目。三种用法：① 只给 date（YYYY-MM-DD）= 待办（待办列表显示）；' +
-            '② date + time（+ 可选 endTime）= 当天日程（周网格显示），缺 endTime 时默认「开始 +1 小时」；' +
-            '③ 再加 endDate = 跨天日程（结束落在次日及以后），' +
-            '如 date=2026-09-19, time=22:00, endDate=2026-09-20, endTime=02:00。' +
-            '用户说「帮我记个日程」「周三下午3点开会」「加个待办/周五要交报告」时使用；' +
-            '重复日程用 repeat 系参数（如每两周周一：repeat=weekly、repeatInterval=2、repeatDays="1"）。',
-        parameters: {
-            title: { type: 'string', required: true, description: `事项标题，最多 ${SCHED_TITLE_MAX} 字：重要信息做标题，其余写 description` },
-            date: { type: 'string', required: true, description: '开始日期 YYYY-MM-DD（只给日期=待办；也容忍 YYYY-MM-DDTHH:mm）' },
-            time: { type: 'string', description: '开始时刻 HH:mm（给了就是日程，不给则创建为待办）' },
-            endTime: { type: 'string', description: '结束时刻 HH:mm（仅与 time 同用；缺省 = 开始 +1 小时）' },
-            endDate: { type: 'string', description: '结束日期 YYYY-MM-DD（仅与 time 同用）：结束落在次日及以后时提供；缺省 = date' },
-            repeat: { type: 'string', enum: ['daily', 'weekly', 'monthly'], description: '重复类型，缺省不重复；仅日程（给了 time）生效' },
-            repeatInterval: { type: 'number', description: '重复间隔：每 N 天/周/月，缺省 1' },
-            repeatDays: { type: 'string', description: 'weekly 专用：重复星期，1=周一…7=周日，如 "1,3,5"；缺省=开始日的星期' },
-            repeatEnd: { type: 'string', description: '重复截止日 YYYY-MM-DD（含当天），缺省无限' },
-            description: { type: 'string', description: '备注' },
-            location: { type: 'string', description: '地点' },
-        },
-        output: {
-            schema: { type: 'object', additionalProperties: true },
-            render: (_args, value) => [{ type: 'text', text: value.summary }],
-        },
-        presentCall: (args) => ({
-            card: 'generic',
-            title: '创建日程',
-            kind: 'other',
-            ...(typeof args.title === 'string' && args.title !== '' ? { rawInput: args.title } : {}),
-        }),
-        async execute(args) {
-            const ev = store.create(toolArgsToCreateInput(args));
-            return { id: ev.id, summary: `已创建${eventDigest(ev)}` };
-        },
-    });
-    const upd = defineTool({
-        name: 'schedule_update',
-        description: '修改已有日程条目（部分更新：只给要改的字段，其余不动；id 来自 schedule_query）。' +
-            '清空语义（传 null 生效，不带键 = 不动）：due:null = 改成无期限、location/description:null = 清空、' +
-            'completedAt:null = 取消完成、skip:["YYYY-MM-DD"] = 跳过重复系列的某一次（skip:[] = 清空全部跳过）。' +
-            '改类型二选一：日程→待办给 start:null+end:null（重复系列再加 recurrence:null）；待办→日程给 start+end（成对，end 必须晚于 start）+ due:null。' +
-            'due 兼容 YYYY-MM-DD 或 YYYY-MM-DDTHH:mm。',
-        parameters: {
-            id: { type: 'string', required: true, description: 'schedule_query 返回的条目 id' },
-            title: { type: 'string', description: `新标题，最多 ${SCHED_TITLE_MAX} 字` },
-            description: { type: 'string', description: '备注；null/空串 = 清空' },
-            location: { type: 'string', description: '地点；null/空串 = 清空' },
-            start: { type: 'string', description: '开始时刻 YYYY-MM-DDTHH:mm；null = 清空（改待办，与 end 一起给）' },
-            end: { type: 'string', description: '结束时刻 YYYY-MM-DDTHH:mm（日程必填，须晚于 start）；null = 清空' },
-            due: { type: 'string', description: '待办截止 YYYY-MM-DD 或 YYYY-MM-DDTHH:mm；null = 无期限' },
-            completedAt: { type: 'string', description: '完成时刻 YYYY-MM-DDTHH:mm；null = 取消完成' },
-            skip: { type: 'array', description: '重复系列要跳过的日期（YYYY-MM-DD）数组；[] = 清空全部跳过' },
-        },
-        output: {
-            schema: { type: 'object', additionalProperties: true },
-            render: (_args, value) => [{ type: 'text', text: value.summary }],
-        },
-        presentCall: (args) => ({
-            card: 'generic',
-            title: '修改日程',
-            kind: 'edit',
-            ...(typeof args.title === 'string' && args.title !== ''
-                ? { rawInput: args.title }
-                : typeof args.id === 'string'
-                    ? { rawInput: args.id }
-                    : {}),
-        }),
-        async execute(args) {
-            const id = typeof args.id === 'string' ? args.id : '';
-            if (id === '')
-                throw new Error('id 必填');
-            const { id: _omit, ...patch } = args;
-            const ev = store.update(id, patch);
-            if (!ev)
-                return { ok: false, summary: `未找到条目 ${id}（可能已删除），请用 schedule_query 重新查询` };
-            return { ok: true, id: ev.id, summary: `已更新${eventDigest(ev)}` };
-        },
-    });
-    const del = defineTool({
-        name: 'schedule_delete',
-        description: '删除用户日程里的条目（按 id，id 来自 schedule_query 返回的 items）。' +
-            '用户说「把xx删了/取消周三的会」时：先 schedule_query 查时段拿 id，向用户确认后删除。' +
-            '重复日程删除的是整个重复系列；只想去掉某一次请改用 schedule_update 传 skip。',
-        parameters: {
-            id: { type: 'string', required: true, description: 'schedule_query 返回的条目 id' },
-        },
-        output: {
-            schema: { type: 'object', additionalProperties: true },
-            render: (_args, value) => [{ type: 'text', text: value.summary }],
-        },
-        presentCall: (args) => ({
-            card: 'generic',
-            title: '删除日程',
-            kind: 'delete',
-            ...(typeof args.id === 'string' ? { rawInput: args.id } : {}),
-        }),
-        async execute(args) {
-            const id = typeof args.id === 'string' ? args.id : '';
-            const ev = store.list().find((e) => e.id === id);
-            if (!ev)
-                return { ok: false, summary: `未找到条目 ${id}（可能已删除），请用 schedule_query 重新查询` };
-            store.remove(id);
-            return { ok: true, summary: `已删除：${ev.title}${ev.recurrence != null ? '（重复日程，整个系列已移除）' : ''}` };
-        },
-    });
-    return [query, create, upd, del];
 }

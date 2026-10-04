@@ -228,15 +228,15 @@ async function checkApply() {
   );
   check(
     "主包不再装配知识库与日程（无 scanner / vault-fs / schedule / 端点）",
-    !hostCode.includes("VaultScanner") && !hostCode.includes("createEntry") && !hostCode.includes("buildScheduleTools") &&
+    !hostCode.includes("VaultScanner") && !hostCode.includes("createEntry") && !hostCode.includes("syncScheduleStore") &&
       !hostCode.includes("/dsh-kit/vault/") && !hostCode.includes("/dsh-kit/schedule/"),
   );
   check(
-    "组件入口自持工具/端点/配置，且带 dsh-tools 不可达降级",
-    compSrc.includes("name = 'dsh-kit/vault'") && compSrc.includes("buildScheduleTools(") &&
+    "组件入口自持端点与配置（日程不注册 agent 工具）",
+    compSrc.includes("name = 'dsh-kit/vault'") && compSrc.includes("syncScheduleStore()") &&
+      !compSrc.includes("defineTool") && !compSrc.includes("buildScheduleTools") &&
       compSrc.includes("/dsh-kit-vault/config") && compSrc.includes("/dsh-kit/vault/index") &&
-      compSrc.includes("/dsh-kit/schedule/data") && compSrc.includes("vaultRoot") &&
-      compSrc.includes("dsh-tools 不可达，日程 agent 工具未注册"),
+      compSrc.includes("/dsh-kit/schedule/data") && compSrc.includes("vaultRoot"),
   );
   check(
     "root 的 open/closeRightbarTab 按 tabKinds 座查 kind（组件行不靠静态 RB_FEATURES）",

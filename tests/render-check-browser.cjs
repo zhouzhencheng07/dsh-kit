@@ -290,7 +290,7 @@ async function checkAdopt() {
     !hostCode.includes("BrowserService") && !hostCode.includes("buildBrowserTools") &&
       !hostCode.includes("/dsh-kit/browser") && !hostCode.includes("WebSocketServer"),
   );
-  check("dsh-tools 的 defineTool 契约与加载归 core/tools.ts（浏览器与知识库·日程组件共用）", coreSrc.includes("export async function loadToolsModule") && read("src/vault/schedule.ts").includes("from '../core/tools.ts'"));
+  check("dsh-tools 的 defineTool 契约与加载归 core/tools.ts（浏览器组件使用）", coreSrc.includes("export async function loadToolsModule") && read("src/browser/browser-tools.ts").includes("from '../core/tools.ts'"));
   check(
     "组件入口自持服务/工具/端点/配置，且带 dsh-tools 不可达降级",
     compSrc.includes("name = 'dsh-kit/browser'") && compSrc.includes("new BrowserService(") &&
