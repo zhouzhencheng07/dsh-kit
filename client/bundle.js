@@ -15698,9 +15698,9 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       pickSession: "选择已有对话",
       createFail: "新建会话失败",
       unsupported: "当前宿主不支持内嵌对话",
+      scChat: "对话小窗",
+      scChatOff: "对话小窗已在配置页关闭",
       kcfgGroupChat: "对话小窗",
-      kcfgEdgeLeft: "把手贴左边",
-      kcfgEdgeLeftHint: "贴边把手与浮窗停靠左侧，否则在右侧。",
       kcfgRememberWindow: "记住窗口位置",
       kcfgRememberWindowHint: "浮窗拖动与缩放后的位置跨刷新恢复。",
       kcfgRememberTarget: "记住工作区与会话",
@@ -15720,9 +15720,9 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       pickSession: "Pick an existing chat",
       createFail: "Failed to create a session",
       unsupported: "This host does not support an embedded conversation",
+      scChat: "Chat window",
+      scChatOff: "Chat window is switched off in the config page",
       kcfgGroupChat: "Chat window",
-      kcfgEdgeLeft: "Dock on the left edge",
-      kcfgEdgeLeftHint: "Dock the handle and window on the left edge instead of the right.",
       kcfgRememberWindow: "Remember window geometry",
       kcfgRememberWindowHint: "Restore the window position and size across reloads.",
       kcfgRememberTarget: "Remember workspace and chat",
@@ -15735,7 +15735,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     // ─────────── 组件配置页（plugins.row.config，key = dsh-kit#chat）───────────
     // 骨架在 dock；字段清单与 src/chat/index.ts 的 Config schema 同源（渲染级检查钉住）。
     const CHAT_CFG_FIELDS = [
-      { key: "edgeLeft", type: "bool", group: "kcfgGroupChat", labelKey: "kcfgEdgeLeft", hintKey: "kcfgEdgeLeftHint" },
       { key: "rememberWindow", type: "bool", group: "kcfgGroupChat", labelKey: "kcfgRememberWindow", hintKey: "kcfgRememberWindowHint" },
       { key: "rememberTarget", type: "bool", group: "kcfgGroupChat", labelKey: "kcfgRememberTarget", hintKey: "kcfgRememberTargetHint" },
     ];
@@ -15743,7 +15742,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 
     // ─────────── 生效配置快照（/dsh-kit-chat/config）───────────
     // 真源 = 本组件宿主 Config（src/chat/index.ts）。
-    const CHAT_CFG_DEFAULTS = { edgeLeft: false, rememberWindow: true, rememberTarget: true };
+    const CHAT_CFG_DEFAULTS = { rememberWindow: true, rememberTarget: true };
     let cSnap = null;
     const cCfgSubs = new Set();
     const emitCfg = () => {
@@ -15943,7 +15942,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       const r = ui.rect;
       const w = clampNum(typeof r?.w === "number" ? r.w : PANEL_W, 320, Math.min(720, vp.w - 32));
       const h = clampNum(typeof r?.h === "number" ? r.h : PANEL_H, 320, Math.max(320, vp.h - 32));
-      const fallbackX = cfg.edgeLeft ? 12 : vp.w - w - 12;
+      const fallbackX = vp.w - w - 12;
       const x = clampNum(typeof r?.x === "number" ? r.x : fallbackX, 8, Math.max(8, vp.w - w - 8));
       const y = clampNum(typeof r?.y === "number" ? r.y : Math.max(48, Math.round((vp.h - h) / 2)), 8, Math.max(8, vp.h - h - 8));
       return { x, y, w, h };
@@ -16132,15 +16131,15 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     // ─────────── 悬浮把手（可拖动 · 贴边收起 · 悬停滑出）───────────
     const SNAP = 40; // 松手时离边缘多近算「贴边」（贴着才算，别在半路就收进去）
     const BALL = 34; // 圆球边长
-    /** 把手停靠侧：null = 自由位置（拖到哪儿停哪儿）。没记忆过时按配置贴默认那侧 */
-    function ballDockOf(ui, cfg) {
+    /** 把手停靠侧：null = 自由位置（拖到哪儿停哪儿）。没记忆过时贴右边——左右由拖出来定 */
+    function ballDockOf(ui) {
       const saved = ui.ball;
-      if (saved === null || saved === undefined) return cfg.edgeLeft ? "left" : "right";
+      if (saved === null || saved === undefined) return "right";
       return saved.dock;
     }
     function ChatBall({ cfg, ui, title, running }) {
       const saved = ui.ball ?? null;
-      const dock = ballDockOf(ui, cfg);
+      const dock = ballDockOf(ui);
       const vp = viewport();
       // 纵向一律用记下的 y（贴边也不例外），top 取球的中心（CSS 一律 translateY(-50%)）。
       // 贴边只把横向交给 CSS：left/right 定停哪侧，translateX 负责收进边缘那 9px
@@ -16274,7 +16273,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       };
 
       const node = jsxRuntime.jsxs("div", {
-        className: "dshk-chat-root " + (ballDockOf(ui, cfg) === null ? "is-free" : "is-dock-" + ballDockOf(ui, cfg)) + (cfg.edgeLeft ? " is-left" : ""),
+        className: "dshk-chat-root " + (ballDockOf(ui) === null ? "is-free" : "is-dock-" + ballDockOf(ui)),
         children: [
           ui.open
             ? jsxRuntime.jsx(ChatPanel, {
@@ -16369,6 +16368,39 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       document.head.appendChild(tag);
     }
 
+    // ─────────── 快捷键（官方 shortcuts 服务，开合小窗）───────────
+    /** 开关小窗：收起态按它展开，已展开按它收起（把手只在收起态常显） */
+    function toggleChat() {
+      setChat({ open: !chatSnap.open });
+    }
+    function registerShortcuts(scCtx) {
+      const shortcuts = scCtx.shortcuts;
+      if (!shortcuts || typeof shortcuts.register !== "function") return;
+      attachShortcutCatalog(shortcuts.catalog);
+      scCtx.effect(() => shortcuts.register({
+        id: "dsh-kit.chat.toggle",
+        label: () => t("scChat"),
+        aliases: ["chat window", "chat pane", "dsh-kit"],
+        // 分号：Ctrl+Alt+; —— 字母键 C/V/X/Z/Y/Q/H 与 primary 组合是系统保留
+        // （剪贴板 / 退出 / 历史），web 端一律拒收；web:linux 只放行 Slash 与
+        // Comma/Period+shift，故不声明那一档
+        defaults: {
+          "web:macos": { code: "Semicolon", modifiers: ["primary", "alt"] },
+          "web:windows": { code: "Semicolon", modifiers: ["primary", "alt"] },
+          "desktop:macos": { code: "Semicolon", modifiers: ["primary", "alt"] },
+          "desktop:windows": { code: "Semicolon", modifiers: ["primary", "alt"] },
+          "desktop:linux": { code: "Semicolon", modifiers: ["primary", "alt"] },
+        },
+        // editable/terminal 都要：聊天输入行里、终端里按都该生效
+        regions: ["page", "editable", "terminal"],
+        modals: [],
+        resolve: () => {
+          if (getCSnap() === null) return { status: "blocked", reason: t("scChatOff") };
+          return { status: "handled", run: toggleChat };
+        },
+      }), "dsh-kit-chat: shortcut dsh-kit.chat.toggle");
+    }
+
     // ─────────── 插件体 ───────────
     function apply(ctx) {
       // 行禁用 → 探针 404 → 整体不注册（把手与浮窗全不出现）
@@ -16376,6 +16408,8 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       ctx.inject(["sessions"], (sctx) => {
         sessionsSvc = sctx.sessions ?? null;
       });
+      // 官方快捷键服务：运行期 inject
+      ctx.inject(["shortcuts"], registerShortcuts);
       // 贴边常驻面 + 小窗会话正文（子槽 scope=session → 本组件才拿到 SessionProvider）
       ctx.slots.inject("shell.overlay", () =>
         ctx.slots.register(
@@ -16406,6 +16440,8 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.ChatBall = ChatBall;
     exports.ChatPanel = ChatPanel;
     exports.CHAT_CFG_DEFAULTS = CHAT_CFG_DEFAULTS;
+    exports.registerShortcuts = registerShortcuts;
+    exports.toggleChat = toggleChat;
     exports.cCfgFromSnapshot = cCfgFromSnapshot;
     exports.loadCfg = loadCfg;
     exports.normPath = normPath;

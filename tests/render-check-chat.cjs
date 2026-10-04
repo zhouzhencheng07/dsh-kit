@@ -89,18 +89,19 @@ const comps = dockExports.chat;
 check("chat 导出 apply（client 插件形状）与 inject 声明 slots", typeof comps.apply === "function" && Array.isArray(comps.inject) && comps.inject[0] === "slots");
 check("chat 导出面齐全（浮层组件 + 解析纯函数 + 配置页字段表）", typeof comps.ChatSurface === "function" && typeof comps.ChatPanel === "function" && typeof comps.ChatBall === "function" && typeof comps.ChatSessionBody === "function" && typeof comps.resolveSessionId === "function" && Array.isArray(comps.CHAT_CFG_FIELDS));
 
-// 2) 配置页：四个布尔开关、单组、summary 返回 null
+// 2) 配置页：两个布尔开关、单组、summary 返回 null
 {
-  const fakeForm = { state: { status: "ready", value: { edgeLeft: false, rememberWindow: true, rememberTarget: true, followMain: false }, revision: 3, writable: true }, mutate: async () => true };
+  const fakeForm = { state: { status: "ready", value: { rememberWindow: true, rememberTarget: true, followMain: false }, revision: 3, writable: true }, mutate: async () => true };
   stateSeq = 0; stateStore.clear(); callLog = [];
   const out = comps.ChatConfigPage({ view: "page", form: fakeForm });
   const switches = callLog.filter((c) => c[1] === primStub.Switch);
-  check("配置页渲染无异常且三个开关都出", !!out && switches.length === 3);
+  check("配置页渲染无异常且两个开关都出", !!out && switches.length === 2);
   check(
-    "配置字段 = 贴边位置 / 记住窗口 / 记住工作区与会话",
+    "配置字段 = 记住窗口 / 记住工作区与会话（贴哪侧由拖动决定，不给配置项）",
     comps.CHAT_CFG_FIELDS.every((f) => f.type === "bool") &&
-      comps.CHAT_CFG_FIELDS.map((f) => f.key).join(",") === "edgeLeft,rememberWindow,rememberTarget",
+      comps.CHAT_CFG_FIELDS.map((f) => f.key).join(",") === "rememberWindow,rememberTarget",
   );
+  check("贴边侧不再有配置项（字段表里没有、源码里也不留 edgeLeft）", !comps.CHAT_CFG_FIELDS.some((f) => f.key === "edgeLeft"));
   check("summary 视图返回 null（行详情收起态）", comps.ChatConfigPage({ view: "summary", form: fakeForm }) === null);
 }
 
@@ -127,6 +128,27 @@ async function checkApply() {
   check("小窗正文注册进自声明的子槽", registered.some((r) => r.name === "dsh-kit.chat.session"));
   check("配置页挂本组件行（key = dsh-kit#chat）", registered.some((r) => r.name === "plugins.row.config" && r.key === "dsh-kit#chat"));
   check("apply 期 inject 官方 sessions 服务", injected.some((d) => Array.isArray(d) && d.includes("sessions")));
+
+  // 3b) 快捷键：开合小窗一条命令注册进官方 shortcuts（默认键避开宿主与自家其余命令）
+  const shortcutCmds = [];
+  const effects = [];
+  comps.registerShortcuts({
+    shortcuts: { catalog: { subscribe: () => () => {} }, register: (cmd) => { shortcutCmds.push(cmd); return () => {}; } },
+    effect: (fn) => { effects.push(fn); return () => {}; },
+  });
+  effects.forEach((fn) => fn());
+  const cmd = shortcutCmds.find((c) => c.id === "dsh-kit.chat.toggle");
+  const keys = cmd ? Object.values(cmd.defaults).map((d) => d.code + "+" + d.modifiers.join("+")).join(" ") : "";
+  check(
+    "快捷键注册进官方服务：开合小窗一条（默认键 primary+alt+分号，避开系统保留的字母键）",
+    !!cmd && typeof cmd.label === "function" && keys.split(" ").every((k) => k === "Semicolon+primary+alt") &&
+      !("web:linux" in cmd.defaults) &&
+      cmd.regions.includes("page") && cmd.regions.includes("editable") && cmd.regions.includes("terminal"),
+  );
+  check(
+    "快捷键动作 = 开关小窗；行关闭（探针 404）时 blocked",
+    !!cmd && typeof comps.toggleChat === "function" && cmd.resolve().status === "blocked" && typeof cmd.resolve().reason === "string",
+  );
 
   // 4) 渲染分支：把手 / 面板 / 浮层宿主 / 内嵌对话
   stateSeq = 0; stateStore.clear();
@@ -231,8 +253,8 @@ async function checkApply() {
   check(
     "配置快照回落内置默认（端点 404 / 字段缺失都不炸）",
     JSON.stringify(comps.cCfgFromSnapshot(null)) === JSON.stringify(comps.CHAT_CFG_DEFAULTS) &&
-      comps.cCfgFromSnapshot({ status: "ready", value: { edgeLeft: true } }).edgeLeft === true &&
-      comps.cCfgFromSnapshot({ status: "ready", value: { edgeLeft: "yes" } }).edgeLeft === false,
+      comps.cCfgFromSnapshot({ status: "ready", value: { rememberWindow: false } }).rememberWindow === false &&
+      comps.cCfgFromSnapshot({ status: "ready", value: { rememberWindow: "yes" } }).rememberWindow === true,
   );
 
   // 5b) 引用落点按光标（底座的 composerFocus）：光标在哪个输入框就归那面

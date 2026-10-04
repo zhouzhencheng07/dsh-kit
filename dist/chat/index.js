@@ -18,8 +18,6 @@ const schemastery = loadDep('@deepseek-ai/schemastery');
 const z = (schemastery?.default ?? schemastery ?? null);
 export const Config = z && typeof z.object === 'function'
     ? z.object({
-        // 把手与浮窗贴左侧（false = 贴右侧）。
-        edgeLeft: z.boolean().default(false).volatile(),
         // 记住浮窗的位置与尺寸（跨刷新恢复）。
         rememberWindow: z.boolean().default(true).volatile(),
         // 记住上次用的工作区与会话（小窗是独立的，与主面各自切换）。
