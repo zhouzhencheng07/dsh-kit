@@ -1179,10 +1179,24 @@ window.__ModuleLoader__.load({
         return null;
       }
     }
+    /** 最近一次光标落过的输入面：工具条 / 树行这类入口「先夺焦点再动手」，
+     *  动手那一刻已经不在输入框里了——不记住上一次就会落错面 */
+    let lastComposerFace = null;
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+      document.addEventListener(
+        "focusin",
+        () => {
+          const face = composerFocus();
+          if (face !== null) lastComposerFace = face;
+        },
+        true,
+      );
+    }
 
     /** 取「该收到这个动作」那条会话的输入 shell；任一步未就绪返回 null。
-     *  落点按光标：光标在哪个输入框就归那面；两处都没有光标（页面空白、编辑器里）
-     *  则小窗开着给小窗——它才是当下在用的那张脸。 */
+     *  落点按光标：光标在哪个输入框就归那面；动手时已经不在输入框里（点了工具条 /
+     *  树行的按钮）就按「最近一次落过的面」，都没有才退到小窗——它才是当下在用的
+     *  那张脸。 */
     function currentComposerShell() {
       if (!slotsCtx) return null;
       let conv;
@@ -1201,8 +1215,9 @@ window.__ModuleLoader__.load({
       }
       const chatId = chatSurfaceSession();
       const mainId = mainRowOf(sessions?.list?.getSnapshot?.())?.id ?? null;
-      const focus = composerFocus();
-      const targetId = focus === "chat" ? chatId : focus === "main" ? mainId : (chatId ?? mainId);
+      const face = composerFocus() ?? lastComposerFace;
+      // 记住的那面没有会话（小窗收起 / 主面空着）时让给另一面
+      const targetId = face === "chat" ? (chatId ?? mainId) : face === "main" ? (mainId ?? chatId) : (chatId ?? mainId);
       if (!targetId) return null;
       try {
         return hub.shell(targetId) ?? null;
@@ -10508,6 +10523,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         align: "end",
         children: jsxRuntime.jsx("button", {
           type: "button",
+          // 按下不夺焦点：光标留在输入框里，「@ 到对话」的落点判据（按光标选面）才准
+          onMouseDown: (e) => e.preventDefault(),
           onClick: (e) => {
             e.stopPropagation();
             onClick(e); // 事件转发：⋯ 菜单需要 currentTarget 定位锚点
@@ -15740,7 +15757,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       open: "打开对话小窗",
       collapse: "收起小窗",
       newChat: "新建对话",
-      toMain: "切到主面当前对话",
+      toMain: "与主面互换（小窗看主面这条）",
       workspace: "工作区",
       session: "对话",
       noWorkspace: "还没有工作区，先在主面打开一个会话",
@@ -15762,7 +15779,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       open: "Open chat window",
       collapse: "Collapse chat window",
       newChat: "New chat",
-      toMain: "Switch to the main session",
+      toMain: "Swap with the main session",
       workspace: "Workspace",
       session: "Chat",
       noWorkspace: "No workspace yet — open a session in the main panel first",
@@ -15891,6 +15908,8 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 
     // ─────────── 宿主会话服务（apply 期 inject 捕获）───────────
     let sessionsSvc = null;
+    /** 官方 uiWorkspace：⇄ 互换要把主面换到小窗这条会话（缺位时不动，免得两边撞同一条） */
+    let uiWorkspaceSvc = null;
     const RETAIN_SOURCE = "dshKitChat";
     /** 保留一条会话当锚，只把「仍对应当前目标」的那条交给 SessionProvider。
      *  effect 换引用（释放旧、保留新）与 state 落地之间，宿主 store 的同步重绘会
@@ -15978,12 +15997,16 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       }
       return workspaceOfCwd(list, mainCwd) ?? list[0] ?? null;
     }
-    /** 目标会话：记忆（仍在工作区且未归档）> 最近一条有内容的 > 空白会话 */
-    function resolveSessionId(rows, rememberedId) {
+    /** 目标会话：记忆（仍在工作区且未归档）> 最近一条有内容的 > 空白会话。
+     *  excludeId（主面那条）永不选：宿主一条会话只有一个输入框编辑器实例，两处同时
+     *  渲染同一条时后挂载的那份会抢走输入框，主面那个变成「假框」。 */
+    function resolveSessionId(rows, rememberedId, excludeId = null) {
       for (const row of rows ?? EMPTY) {
-        if (rememberedId && row?.id === rememberedId) return rememberedId;
+        if (rememberedId && row?.id === rememberedId && row.id !== excludeId) return rememberedId;
       }
-      return (rows ?? EMPTY).find((r) => r?.blank !== true)?.id ?? rows?.[0]?.id ?? null;
+      return (rows ?? EMPTY).find((r) => r?.blank !== true && r?.id !== excludeId)?.id
+        ?? (rows ?? EMPTY).find((r) => r?.id !== excludeId)?.id
+        ?? null;
     }
 
     // ─────────── 窗口几何 ───────────
@@ -16162,7 +16185,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
               headBtn("ws", wsTitle, [jsxRuntime.jsx("span", { className: "dshk-chat-hlabel", children: t("workspace") }), jsxRuntime.jsx("span", { className: "dshk-chat-hval", children: wsTitle })], () => setMenu(menu === "ws" ? null : "ws"), menu === "ws" ? { pressed: true } : undefined),
               headBtn("sess", sessionTitle, [jsxRuntime.jsx("span", { className: "dshk-chat-hlabel", children: t("session") }), jsxRuntime.jsx("span", { className: "dshk-chat-hval", children: sessionTitle })], () => setMenu(menu === "sess" ? null : "sess"), menu === "sess" ? { pressed: true } : undefined),
               headBtn("new", t("newChat"), jsxRuntime.jsx("span", { className: "dshk-chat-hplus", children: "+" }), () => onCreate()),
-              headBtn("main", mainId !== null && mainId !== ui.sessionId ? t("toMain") + (mainTitle === "" ? "" : " · " + mainTitle) : undefined, jsxRuntime.jsx("span", { className: "dshk-chat-hfollow", children: "⇄" }), () => onPickMain(), { disabled: mainId === null || mainId === ui.sessionId }),
+              headBtn("main", mainId !== null && mainId !== ui.sessionId ? t("toMain") + (mainTitle === "" ? "" : " · " + mainTitle) : undefined, jsxRuntime.jsx("span", { className: "dshk-chat-hfollow", children: "⇄" }), () => onPickMain(), { disabled: mainId === null || ui.sessionId === null || mainId === ui.sessionId }),
               headBtn("close", t("collapse"), jsxRuntime.jsx("span", { className: "dshk-chat-hclose", children: "✕" }), () => setChat({ open: false })),
             ] }),
             running ? jsxRuntime.jsx("span", { className: "dshk-chat-run" }) : null,
@@ -16179,7 +16202,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
               ? jsxRuntime.jsx(PickMenu, {
                   label: t("session"),
                   title: t("pickSession"),
-                  items: rows.filter((r) => r.blank !== true).map((r) => ({ key: r.id, label: sessionLabel(r, r.id), hint: r.running === true ? "…" : undefined, current: r.id === ui.sessionId })),
+                  items: rows.filter((r) => r.blank !== true && r.id !== mainId).map((r) => ({ key: r.id, label: sessionLabel(r, r.id), hint: r.running === true ? "…" : undefined, current: r.id === ui.sessionId })),
                   onPick: (item) => onSessionId(item.key),
                   onClose: () => setMenu(null),
                 })
@@ -16284,7 +16307,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
         [workspaces, ui.workspaceId, mainRow?.cwd],
       );
       const rows = react.useMemo(() => sessionsOfWorkspace(ws, listState, archived), [ws, listState, archived]);
-      const wantedId = resolveSessionId(rows, ui.sessionId);
+      const wantedId = resolveSessionId(rows, ui.sessionId, mainRow?.id ?? null);
       const valid = wantedId !== null && rows.some((r) => r?.id === wantedId);
 
       // 工作区里一条可用对话都没有 → 新建一条（空会话落在官方 hero 相位）
@@ -16350,11 +16373,21 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
                 mainId: mainRow?.id ?? null,
                 mainTitle: mainRow?.displayTitle ?? "",
                 onPickMain: () => {
-                  if (!mainRow?.id) return;
-                  // 主面那条可能属于别的工作区：连工作区一起换，否则目标会话不在
-                  // 当前工作区的列表里，解析会落回本区会话，「切到主面」等于没切
-                  const owner = workspaceOfSession(workspaces, mainRow.id);
-                  setChat({ sessionId: mainRow.id, workspaceId: owner?.workspaceId ?? ui.workspaceId }, true, cfg);
+                  const mainId = mainRow?.id ?? null;
+                  const chatId = ui.sessionId;
+                  if (mainId === null || chatId === null || mainId === chatId) return;
+                  // ⇄ 是两边互换：主面接手小窗这条，小窗接手主面这条。宿主一条会话只有
+                  // 一个输入框编辑器实例，两边同一条会互相抢（主面变假框、@ 引用插错面）
+                  // ——主面不让开，小窗就显示不了主面那条。先换主面（同步更新 mainView
+                  // 保留），再设小窗目标；主面那条可能属于别的工作区，连工作区一起换。
+                  if (!uiWorkspaceSvc || typeof uiWorkspaceSvc.openSession !== "function") return;
+                  try {
+                    uiWorkspaceSvc.openSession(chatId);
+                  } catch {
+                    return; // 主面没接走就别动小窗：两边撞同一条的代价更大
+                  }
+                  const owner = workspaceOfSession(workspaces, mainId);
+                  setChat({ sessionId: mainId, workspaceId: owner?.workspaceId ?? ui.workspaceId }, true, cfg);
                 },
                 onSessionId: (id) => setChat({ sessionId: id }, true, cfg),
                 onWorkspaceId: (id) => setChat({ workspaceId: id, sessionId: null }, true, cfg),
@@ -16474,6 +16507,9 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       if (!(await loadCfg())) return;
       ctx.inject(["sessions"], (sctx) => {
         sessionsSvc = sctx.sessions ?? null;
+      });
+      ctx.inject(["uiWorkspace"], (wctx) => {
+        uiWorkspaceSvc = wctx.uiWorkspace ?? null;
       });
       // 官方快捷键服务：运行期 inject
       ctx.inject(["shortcuts"], registerShortcuts);

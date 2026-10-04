@@ -40,6 +40,7 @@ const loadBundle = (path, requireMap) => {
 };
 
 let callLog = [];
+const swapCalls = [];
 const stateStore = new Map();
 let stateSeq = 0;
 const reactStub = {
@@ -121,7 +122,8 @@ async function checkApply() {
         register: (seat) => { registered.push(seat); return () => {}; },
         inject: (k, cb) => { seatInjects.push(k); if (typeof cb === "function") cb(); },
       },
-      inject: (deps, cb) => { injected.push(deps); },
+      // 服务注入按真宿主口径回调：⇄ 互换要拿 uiWorkspace，后面的渲染分支直接用它
+      inject: (deps, cb) => { injected.push(deps); if (typeof cb === "function") cb({ sessions: {}, uiWorkspace: { openSession: (id) => { swapCalls.push(id); } } }); },
     };
     await comps.apply(ctx);
     return { registered, seatInjects, injected };
@@ -138,6 +140,7 @@ async function checkApply() {
   check("小窗正文注册进自声明的子槽", registered.some((r) => r.name === "dsh-kit.chat.session"));
   check("配置页挂本组件行（key = dsh-kit#chat）", registered.some((r) => r.name === "plugins.row.config" && r.key === "dsh-kit#chat"));
   check("apply 期 inject 官方 sessions 服务", injected.some((d) => Array.isArray(d) && d.includes("sessions")));
+  check("apply 期 inject 官方 uiWorkspace（⇄ 互换要它把主面换到小窗这条）", injected.some((d) => Array.isArray(d) && d.includes("uiWorkspace")));
 
   // 3b) 快捷键：开合小窗一条命令注册进官方 shortcuts（默认键避开宿主与自家其余命令）
   const shortcutCmds = [];
@@ -244,6 +247,12 @@ async function checkApply() {
     comps.resolveSessionId(filtered, "s2") === "s2" && comps.resolveSessionId(filtered, "gone") === "s1" && comps.resolveSessionId([], "s2") === null,
   );
   check(
+    "目标会话永不选主面那条（排除项连记忆一起否掉，回落也跳过）",
+    comps.resolveSessionId(filtered, "s2", "s2") === "s1" &&
+      comps.resolveSessionId(filtered, null, "s1") === "s2" &&
+      comps.resolveSessionId([{ id: "s1", displayTitle: "只剩主面那条", updatedAt: 1 }], null, "s1") === null,
+  );
+  check(
     "空白会话不进下拉、且标题显示「新建对话」（空白会话的 displayTitle 是工作区名，与新建重复）",
     comps.sessionLabel({ id: "sx", blank: true, displayTitle: "test" }, "空") === "新建对话" &&
       comps.sessionLabel({ id: "sy", displayTitle: "你好" }, "空") === "你好" &&
@@ -265,27 +274,36 @@ async function checkApply() {
       comps.workspaceOfSession([ws], null) === null,
   );
 
-  // 5c) ⇄「切到主面当前对话」：主面在别的工作区时连工作区一起切，
-  // 否则目标会话不在当前工作区列表里，解析会落回本区会话，等于没切
+  // 5c) ⇄ 与主面互换：宿主一条会话只有一个输入框编辑器实例，两边不能同时渲染同一条
   {
     const mainRow = { id: "s9", displayTitle: "主面那条", updatedAt: 9, cwd: "D:\\other", retainedBy: { mainView: 1 } };
+    const smallRow = { id: "s1", displayTitle: "小窗那条", updatedAt: 2 };
     const wsA = { workspaceId: "wA", path: "D:\\work\\demo", title: "A", sessionIds: ["s1"] };
     const wsB = { workspaceId: "wB", path: "D:\\other", title: "B", sessionIds: ["s9"] };
-    const list = { ids: ["s1", "s9"], byId: { s1: rows[0], s9: mainRow } };
-    const wsState = { items: [wsA, wsB], archivedSessionIds: [] };
-    stateSeq = 0; stateStore.clear(); callLog = [];
-    comps.setChat({ open: true, workspaceId: "wA", sessionId: "s1", rect: null, ball: null }, false);
-    comps.ChatSurface({
-      useWorkspaces: (sel) => sel(wsState),
-      useSessions: (sel) => sel(list),
-      SessionProvider: (p) => ({ type: "session-provider", props: p }),
-      renderSlot: () => null,
-    });
-    const panel = callLog.find((c) => c[1] === comps.ChatPanel);
+    const wsC = { workspaceId: "wC", path: "D:\\c", title: "C", sessionIds: ["s1", "s9"] };
+    const list = { ids: ["s1", "s9"], byId: { s1: smallRow, s9: mainRow } };
+    const render = (items, wsId, sessionId) => {
+      stateSeq = 0; stateStore.clear(); callLog = [];
+      comps.setChat({ open: true, workspaceId: wsId, sessionId, rect: null, ball: null }, false);
+      comps.ChatSurface({
+        useWorkspaces: (sel) => sel({ items, archivedSessionIds: [] }),
+        useSessions: (sel) => sel(list),
+        SessionProvider: (p) => ({ type: "session-provider", props: p }),
+        renderSlot: () => null,
+      });
+      return callLog.find((c) => c[1] === comps.ChatPanel);
+    };
+    // 小窗目标记忆成主面那条（同区）→ 让开，换本区另一条
+    render([wsC], "wC", "s9");
+    check("小窗目标等于主面那条时让开（同区换另一条）", dockExports.chatSurface.sessionId === "s1");
+    // ⇄：主面接手小窗这条，小窗接手主面那条（主面那条在别的工作区 → 连工作区一起换）
+    swapCalls.length = 0;
+    const panel = render([wsA, wsB], "wA", "s1");
     check("⇄ 认得主面那条（主面属于别的工作区时仍可用）", !!panel && panel[2].mainId === "s9" && panel[2].ui.workspaceId === "wA");
     if (panel) panel[2].onPickMain();
     const after = comps.getChatSnap();
-    check("⇄ 切到主面当前对话：会话与工作区一起换", after.sessionId === "s9" && after.workspaceId === "wB");
+    check("⇄ 两边互换：主面接手小窗这条", swapCalls.join(",") === "s1");
+    check("⇄ 两边互换：小窗接手主面那条（连工作区一起换）", after.sessionId === "s9" && after.workspaceId === "wB");
   }
   check(
     "窗口矩形：贴右默认位置、记忆越界收回视口内、窄屏整屏",
@@ -336,6 +354,10 @@ async function checkApply() {
   check(
     "引用按目标 id 把门：effect 释放旧引用与 state 落地之间，旧引用不交给 SessionProvider",
     bundleSrc.includes("return held !== null && held.id === sessionId ? held.ref : null;"),
+  );
+  check(
+    "引用落点记住最近一次有光标的输入面（工具条 / 树行入口先夺焦点）",
+    bundleSrc.includes("const face = composerFocus() ?? lastComposerFace;"),
   );
 }
 checkApply().then(() => {
