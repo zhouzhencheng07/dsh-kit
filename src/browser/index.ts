@@ -313,11 +313,6 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
                 })
               return
             }
-            if (msg.t === 'close') {
-              // 优雅关闭（cookie 落盘；下次打开免重新登录）——实例级，所有对话一起收
-              void browserService.closeNow()
-              return
-            }
             if (msg.t === 'input') {
               // 人机共驾：面板输入回传该签对应的页（未运行时宿主拒绝，不误拉起）
               void browserService.humanInput(scope, msg, msg.tabId == null ? null : Number(msg.tabId))

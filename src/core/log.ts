@@ -200,11 +200,6 @@ export function kitLogger(component: string): KitLogger {
   }
 }
 
-/** 落盘路径（排查时告诉用户去哪儿找） */
-export function kitLogPath(): string {
-  return file()
-}
-
 /** 等队列里的待写落盘（单测与宿主退出前用；正常路径不等） */
 export function kitLogFlush(): Promise<void> {
   return pending

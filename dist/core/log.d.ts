@@ -21,8 +21,6 @@ export interface KitLogger {
 export declare function kitLogFormat(entry: KitLogEntry): string;
 /** 取组件自己的 logger。component 只用组件名（files/vault/…），作用域名另由 op 给 */
 export declare function kitLogger(component: string): KitLogger;
-/** 落盘路径（排查时告诉用户去哪儿找） */
-export declare function kitLogPath(): string;
 /** 等队列里的待写落盘（单测与宿主退出前用；正常路径不等） */
 export declare function kitLogFlush(): Promise<void>;
 /** 按给定作用域直接写一条（端点回传用：级别与作用域来自外部文本，由调用方净化） */

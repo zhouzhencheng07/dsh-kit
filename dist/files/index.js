@@ -311,12 +311,21 @@ export function apply(ctx, config = {}) {
                         return;
                     }
                     let raw = '';
+                    let tooLarge = false;
                     req.on('data', (c) => {
+                        if (tooLarge)
+                            return;
                         raw += c;
-                        if (raw.length > 65536)
-                            req.destroy();
+                        if (raw.length > 65536) {
+                            // 先回 413 再断流：只 destroy 的话客户端只看到连接重置，拿不到原因
+                            tooLarge = true;
+                            json(413, { error: 'body too large' });
+                            res.on('finish', () => req.destroy());
+                        }
                     });
                     req.on('end', async () => {
+                        if (tooLarge)
+                            return;
                         let body;
                         try {
                             body = JSON.parse(raw);
@@ -725,12 +734,21 @@ export function apply(ctx, config = {}) {
                         return;
                     }
                     let raw = '';
+                    let tooLarge = false;
                     req.on('data', (c) => {
+                        if (tooLarge)
+                            return;
                         raw += c;
-                        if (raw.length > 4096)
-                            req.destroy();
+                        if (raw.length > 4096) {
+                            // 先回 413 再断流：只 destroy 的话客户端只看到连接重置，拿不到原因
+                            tooLarge = true;
+                            json(413, { error: 'body too large' });
+                            res.on('finish', () => req.destroy());
+                        }
                     });
                     req.on('end', async () => {
+                        if (tooLarge)
+                            return;
                         let body;
                         try {
                             body = JSON.parse(raw);
@@ -787,12 +805,21 @@ export function apply(ctx, config = {}) {
                         return;
                     }
                     let raw = '';
+                    let tooLarge = false;
                     req.on('data', (c) => {
+                        if (tooLarge)
+                            return;
                         raw += c;
-                        if (raw.length > 65536)
-                            req.destroy();
+                        if (raw.length > 65536) {
+                            // 先回 413 再断流：只 destroy 的话客户端只看到连接重置，拿不到原因
+                            tooLarge = true;
+                            json(413, { error: 'body too large' });
+                            res.on('finish', () => req.destroy());
+                        }
                     });
                     req.on('end', async () => {
+                        if (tooLarge)
+                            return;
                         let body;
                         try {
                             body = JSON.parse(raw);
