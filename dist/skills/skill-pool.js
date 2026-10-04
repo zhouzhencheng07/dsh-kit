@@ -392,6 +392,9 @@ function readBody(req) {
             }
         });
         req.on('error', rejectPromise);
+        // 客户端中途断开（close 早于 end，且不一定触发 error）：给 promise 一个落定，
+        // 否则 handler 的 await 永远挂着
+        req.on('close', () => rejectPromise(new Error('request closed')));
     });
 }
 /**

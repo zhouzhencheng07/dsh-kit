@@ -288,6 +288,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
                   // 等不到它就只剩「回车没反应」（画面要等别的动作把签挤掉重来）
                   if (r.ok) sendTo(ws, { t: 'opened', tabId: r.tabId, url: r.url })
                 })
+                .catch(() => {})
               return
             }
 
@@ -296,6 +297,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
                 .then((r) => {
                   if (!r.ok) sendTo(ws, { t: 'event', kind: 'error', message: r.error })
                 })
+                .catch(() => {})
               return
             }
             if (msg.t === 'newTab') {
@@ -304,6 +306,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
                   if (!r.ok) sendTo(ws, { t: 'event', kind: 'error', message: r.error })
                   else sendTo(ws, { t: 'newTab', tabId: r.tabId ?? null })
                 })
+                .catch(() => {})
               return
             }
             if (msg.t === 'nav' && (msg.op === 'back' || msg.op === 'forward' || msg.op === 'reload')) {
@@ -311,6 +314,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
                 .then((r) => {
                   if (!r.ok) sendTo(ws, { t: 'event', kind: 'error', message: r.error })
                 })
+                .catch(() => {})
               return
             }
             if (msg.t === 'input') {
