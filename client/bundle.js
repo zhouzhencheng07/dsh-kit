@@ -5,8 +5,9 @@
 //   入口：conversation.input.left（composer 工具行，文件树/源代码管理/终端三个
 //     小图标钮，工作区级工具跟 session 走）——文件树/源代码管理两枚由
 //     dsh-kit/files 组件半边自注册，终端入口与坞归 dsh-kit/terminal，本包
-//     只给它们共享面。知识库 · 日程不占 composer 钮：入口是宿主「快捷键」页里
-//     那条命令（开/关侧栏那一格），日程的家是右栏 dock 签。
+//     只给它们共享面。知识库 · 日程不占 composer 钮：入口是左栏底部那一枚
+//     （sidebar.footer.action，与快捷键同一个动作：开/关侧栏那一格），日程的家
+//     是右栏 dock 签。
 //   右栏（唯一工作台形态）：sidebarRightTabs 注册四类 dock 签，
 //     pane 正文经 slots.inject（sidebar.right.pane.tab）按 id 提供，pane 内自管
 //     pane 正文。dock 签本身没有按钮：diff/知识库/日程都是被动签（SCM/树/对话
@@ -1374,6 +1375,14 @@ window.__ModuleLoader__.load({
 .dshk-sidetab:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-sidetab.is-active{color:var(--dsw-alias-brand-primary);border-bottom-color:var(--dsw-alias-brand-primary)}
 .dshk-sidebody{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+/* 左栏底部那枚入口钮（sidebar.footer.action）：整格（知识库 · 日程）的开合。手机上没有
+   键盘，这一枚才是可达入口——那一格里的两枚 tab 只有那格已经开着才看得见。
+   宿主给 wide：展开态一行图标 + 名，铁轨态只剩一枚 28px 方钮（与宿主 iconButton 同尺寸） */
+.dshk-sidebtn{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;appearance:none;border:0;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:14px;line-height:1;padding:5px 8px;border-radius:var(--dsw-radius-sm);cursor:pointer;text-align:left}
+.dshk-sidebtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-sidebtn[aria-pressed=true]{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-brand-primary)}
+.dshk-sidebtn>span{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-sidebtn.is-rail{width:28px;height:28px;justify-content:center;gap:0;padding:0}
 /* 知识库（vault）：工具条+目录树投侧栏索引宿主，页编辑器投右栏 pane 宿主（拆两半 portal）。 */
    「选库进入阅读」——空间=顶层目录，树懒加载，[[wikilink]] 页内跳转带历史 */
 .dshk-vault{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
@@ -3449,7 +3458,7 @@ ellipsis，窄列只截字不破版 */
       markFeaturePresence,
       openRightbarTab, closeRightbarTab, sidebarViewPatch,
       rightbarItem, openRightbarItem, rightbarItems, closeRightbarItem, useActiveRightbarItem, tabAddress, tabVisible,
-      rightbarSeat,
+      rightbarSeat, useRightbarSeat,
       useCurrentRow, currentComposerShell, chatMentionText,
       openOfficialFile, TreeRowMenu, TreeFolderIcon, FileTypeIcon16, ChevronIcon, OfficialIcon, dswIcon,
       expandSidebarNow, attachShortcutCatalog, t: rootT,
@@ -9093,6 +9102,33 @@ ellipsis，窄列只截字不破版 */
       }), "dsh-kit-vault: shortcut dsh-kit.vault.toggle");
     }
 
+    // ─────────── 左栏底部入口钮（sidebar.footer.action）───────────
+    /** 知识库 · 日程的常驻入口：开 = 左栏那一格占住并落在知识库 tab（与快捷键同语义
+     *  的 toggleVaultEntry），再点 = 回官方会话列表。手机上没键盘，这一枚才是可达的
+     *  入口——那一格里的「知识库/日程」两枚 tab 只有那格已经开着才看得见。
+     *  seat 不在场（没选会话 / 全局面板在前台）时不画：那时右栏压根不画、索引视图
+     *  也一并让位给官方会话列表，画出来点了也没有面可开。 */
+    function VaultFooterEntry({ wide }) {
+      const ui = useKitUi();
+      const seatUp = useRightbarSeat();
+      if (!seatUp) return null;
+      const rail = wide === false;
+      return jsxRuntime.jsx(KitTip, {
+        label: t("vaultTitle"),
+        command: "dsh-kit.vault.toggle",
+        side: "top",
+        children: jsxRuntime.jsx("button", {
+          type: "button",
+          className: rail ? "dshk-sidebtn is-rail" : "dshk-sidebtn",
+          "aria-pressed": ui.vaultSideOpen === true,
+          onClick: () => setKitUi(toggleVaultEntry(getKitUi())),
+          children: rail
+            ? jsxRuntime.jsx(VaultIcon, {})
+            : [jsxRuntime.jsx(VaultIcon, {}, "icon"), jsxRuntime.jsx("span", { children: t("vaultTitle") }, "label")],
+        }),
+      });
+    }
+
     // ─────────── 组件常驻壳（shell.overlay）───────────
     // 知识库单实例（侧栏目录 / 右栏页签任一在场即挂载，两侧 portal 自取）+ 对话文件
     // 点击路由的渲染期状态 + 快捷键动作闭包（闭包要最新会话与 cwd，不能注册期固定）。
@@ -9129,6 +9165,11 @@ ellipsis，窄列只截字不破版 */
       // vault root 预取：文件树/对话点击的判定同步读缓存，等点击时再取来不及
       //（索引端点宿主侧有 mtime 缓存，零成本）
       void ensureVaultRootHint();
+      // 左栏底部入口钮（sidebar.footer.action）：与快捷键同一个动作（整格开合）。
+      // 手机上没有键盘，这是那一格唯一的入口——输入行那枚钮已退场，格内的 tab 条
+      // 只有格已经开着才看得见
+      ctx.slots.inject("sidebar.footer.action", () =>
+        ctx.slots.register({ name: "sidebar.footer.action", id: "dsh-kit-vault", order: 20 }, VaultFooterEntry));
       // 常驻壳（order 910：根壳 900 之后）
       ctx.slots.inject("shell.overlay", () =>
         ctx.slots.register({ name: "shell.overlay", id: "dsh-kit-vault", order: 910 }, VaultShell));
@@ -9144,6 +9185,7 @@ ellipsis，窄列只截字不破版 */
     };
 
     // 渲染级检查取用
+    exports.VaultFooterEntry = VaultFooterEntry;
     exports.VaultShell = VaultShell;
     exports.VaultView = VaultView;
     exports.VaultRootView = VaultRootView;

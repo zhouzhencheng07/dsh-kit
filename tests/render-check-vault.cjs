@@ -1,5 +1,5 @@
 // dsh-kit/vault 浏览器半边渲染级检查：加载真实 root client bundle（kitBase 随 factory
-// 执行）后直测组件导出面、本组件行配置页、右栏两张签 + 快捷键注册、apply 装配门控
+// 执行）后直测组件导出面、本组件行配置页、右栏两张签 + 快捷键与左栏底部入口钮、apply 装配门控
 //（行关闭 = 探针 404 = 一个槽都不注册）与宿主半边源哨兵。
 // 组件 = 单包内模块（root client 的 exports.vault），无独立 bundle；
 // 知识库/日程的行为级渲染检查（VaultRootView/VaultPagePane/ScheduleView/纯函数）
@@ -96,7 +96,7 @@ check(
   typeof comps.VaultView === "function" && typeof comps.VaultRootView === "function" &&
     typeof comps.VaultPaneBody === "function" && typeof comps.SchedulePaneBody === "function" &&
     typeof comps.ScheduleView === "function" && typeof comps.ScheduleTasksPanel === "function" &&
-    typeof comps.VaultShell === "function" &&
+    typeof comps.VaultShell === "function" && typeof comps.VaultFooterEntry === "function" &&
     typeof comps.SidebarVaultIndex === "function" &&
     typeof comps.VaultConfigPage === "function" &&
     typeof comps.onChatOpenFileClick === "function" && Array.isArray(comps.VAULT_CFG_FIELDS),
@@ -177,13 +177,18 @@ async function checkApply() {
       on.slotInjects.includes("sidebar.right.pane.tab"),
   );
   check(
-    "两张签都是被动签：右栏开始页一律不给条目（入口在左栏 tab 条与快捷键）",
+    "两张签都是被动签：右栏开始页一律不给条目（入口在左栏：底部那一枚 + 格内 tab 条）",
     !on.registered.some((s) => s && Array.isArray(s.guide)),
   );
   check(
     "对话区那枚知识库入口钮已退场 + 常驻壳挂 shell.overlay（id 稳定）",
     on.registered.every((s) => !(s && s.name === "conversation.input.left")) &&
       on.registered.some((s) => s && s.name === "shell.overlay" && s.id === "dsh-kit-vault"),
+  );
+  check(
+    "左栏底部入口钮挂 sidebar.footer.action（手机没键盘时的唯一入口；不带 composer 钮回归）",
+    on.slotInjects.includes("sidebar.footer.action") &&
+      on.registered.some((s) => s && s.name === "sidebar.footer.action" && s.id === "dsh-kit-vault"),
   );
   check("对话文件点击路由挂 document capture 监听", on.clickListeners.some((c) => c[0] === "click" && c[1] === true));
   const vaultCmd = on.shortcutCmds.find((c) => c.id === "dsh-kit.vault.toggle");
@@ -201,6 +206,44 @@ async function checkApply() {
     "座对象填好：侧栏那格渲染器（tab 条 + 知识库目录 / 日程待办）+ 文件树行点击改道（命中返回 true）",
     typeof dockExports.vaultView.renderer === "function" && typeof dockExports.vaultRoute.open === "function" &&
       dockExports.vaultRoute.open("D:/not-vault/x.md") === false,
+  );
+}
+
+// 3.5) 左栏底部入口钮（VaultFooterEntry）：seat 在场才画；点了 = 那一格占住并落在
+//      知识库 tab（与快捷键同语义），再点回官方会话列表；铁轨态只出图标
+{
+  const walk = (node, pred, out = []) => {
+    if (!node || typeof node !== "object") return out;
+    if (pred(node)) out.push(node);
+    const kids = node.props ? node.props.children : undefined;
+    for (const ch of Array.isArray(kids) ? kids : kids === undefined || kids === null ? [] : [kids]) walk(ch, pred, out);
+    return out;
+  };
+  const btnOf = (el) => walk(el, (n) => n.type === "button" && typeof (n.props && n.props.className) === "string" && n.props.className.startsWith("dshk-sidebtn"))[0] ?? null;
+  const renderEntry = (wide) => { stateSeq = 0; stateStore.clear(); callLog = []; return comps.VaultFooterEntry({ wide }); };
+  dockExports.setKitUi({ treeOpen: false, gitOpen: false, vaultSideOpen: false, vaultSideTab: "vault" });
+  dockExports.rightbarSeat.set(false);
+  check("seat 不在场（没选会话 / 全局面板在前台）时不画入口钮", renderEntry(true) === null);
+  dockExports.rightbarSeat.set(true);
+  const wideBtn = btnOf(renderEntry(true));
+  const wideLabel = wideBtn ? walk(wideBtn, (n) => n.type === "span")[0] : null;
+  check(
+    "展开态入口钮：图标 + 名，未占用时 aria-pressed=false",
+    !!wideBtn && wideBtn.props.className === "dshk-sidebtn" && wideBtn.props["aria-pressed"] === false &&
+      !!wideLabel && ["知识库", "Knowledge base"].includes(wideLabel.props.children),
+  );
+  if (wideBtn) wideBtn.props.onClick();
+  check(
+    "点入口钮 = 左栏那一格占住并落在知识库 tab（与快捷键同一动作，文件树/SCM 让格）",
+    dockExports.getKitUi().vaultSideOpen === true && dockExports.getKitUi().vaultSideTab === "vault" &&
+      dockExports.getKitUi().treeOpen === false && dockExports.getKitUi().gitOpen === false,
+  );
+  if (wideBtn) wideBtn.props.onClick();
+  check("再点一次 = 回官方会话列表（整格开合只有这一处入口）", dockExports.getKitUi().vaultSideOpen === false);
+  const railBtn = btnOf(renderEntry(false));
+  check(
+    "铁轨态只出图标（28px 方钮，与宿主 iconButton 同尺寸）",
+    !!railBtn && railBtn.props.className === "dshk-sidebtn is-rail" && walk(railBtn, (n) => n.type === "span").length === 0,
   );
 }
 

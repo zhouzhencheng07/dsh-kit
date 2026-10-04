@@ -36,9 +36,9 @@ and take no component slot).
   ↑↓ sync (pull then push), commit graph (browse-only; hover a row for author/time/subject);
   one-click repo init for non-git directories
 - **Knowledge base · Schedule** (one component row; the row switch is the master switch —
-  turning it off removes the directory index, both dock tabs, the composer toggle and the
+  turning it off removes the directory index, both dock tabs, the sidebar-footer entry and the
   four schedule tools together)
-  - **Knowledge base** (composer-row toggle / default **Ctrl+Alt+/**): ready out
+  - **Knowledge base** (sidebar-footer entry / default **Ctrl+Alt+/**): ready out
   of the box (data-directory `dsh-kit\vault`, configurable absolute path on this row's
   config page) — a one-row search
   plus a tree on the left, each page reads in its own right-dock **Knowledge base** tab
@@ -77,8 +77,8 @@ and take no component slot).
   pauses and a conflict bar asks you to choose overwrite-disk or load-disk (the plugin never
   overwrites silently and never touches git); external changes while the page is clean are
   still re-read silently; the plugin creates no skeleton directories and never touches git
-  - **Schedule** (one shared entry — the composer-row Knowledge base / Schedule toggle opens the
-  left sidebar cell, whose top tab strip switches between the two; no dedicated shortcut): the task
+  - **Schedule** (one shared entry — the sidebar-footer Knowledge base entry and **Ctrl+Alt+/** open the
+  left sidebar cell, whose top tab strip switches between the two): the task
    list (3-day / week / all scopes) fills that cell and
   the weekly grid fills the right dock tab; its header stats follow the week you are looking at
   (a failed fetch says so instead of quietly showing stale numbers); the all-day band holds
