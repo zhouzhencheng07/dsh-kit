@@ -3560,7 +3560,7 @@ ellipsis，窄列只截字不破版 */
       vaultRefresh: "刷新索引与目录树",
       vaultRefreshed: "已刷新",
       vaultBinaryHint: "二进制文件，知识库不渲染",
-      vaultTooLargeHint: "文件超过 512KB，为避免写回截断，库内不编辑（请用外部编辑器）",
+      vaultTooLargeHint: "文件超过 1MB，为避免写回截断，库内不编辑（请用外部编辑器）",
       vaultCopy: "复制",
       vaultCopied: "已复制",
       vaultBacklinks: "反链",
@@ -3767,7 +3767,7 @@ ellipsis，窄列只截字不破版 */
       vaultRefresh: "Refresh index and tree",
       vaultRefreshed: "Refreshed",
       vaultBinaryHint: "Binary file — not rendered in the vault",
-      vaultTooLargeHint: "Larger than 512 KB — editing here is disabled to avoid truncating the file (use an external editor)",
+      vaultTooLargeHint: "Larger than 1 MB — editing here is disabled to avoid truncating the file (use an external editor)",
       vaultCopy: "Copy",
       vaultCopied: "Copied",
       vaultBacklinks: "Backlinks",
@@ -7845,6 +7845,11 @@ ellipsis，窄列只截字不破版 */
         : null;
     }
 
+    /** 单页正文上限（字节）：与宿主 src/vault/fs.ts 的 PAGE_WRITE_LIMIT 同值。
+     *  读端点默认只回 512KB，这里显式要 1MB——超过 1MB 的页读回来就是半截，
+     *  编辑器不给进（vaultTooLargeHint），否则自动保存会把尾部写丢 */
+    const VAULT_PAGE_MAX_BYTES = 1048576;
+
     /** 知识库单页编辑视图（一页一张签的正文）：正文加载/所见即所得编辑/自动保存
      *  /CAS 冲突/外部修改跟随/粘贴图片入库都在这一层，页条给文档级命令与阅读条
      *  （目录・反链・面包屑）。active=false 的签仍挂载（保住滚动与草稿），只停掉
@@ -7893,7 +7898,7 @@ ellipsis，窄列只截字不破版 */
       const loadCurrent = react.useCallback(async () => {
         setConflict(null);
         try {
-          const body = await kitJson(`/dsh-kit/read?path=${encodeURIComponent(path)}`);
+          const body = await kitJson(`/dsh-kit/read?path=${encodeURIComponent(path)}&maxBytes=${VAULT_PAGE_MAX_BYTES}`);
           const raw = body.binary ? "" : (body.content ?? "");
           const { fmText, rest } = body.binary ? { fmText: "", rest: "" } : vaultSplitFrontmatter(raw);
           fmRef.current = fmText;
@@ -8113,8 +8118,8 @@ ellipsis，窄列只截字不破版 */
             ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPageGone") })
             : page.binary === true
               ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultBinaryHint") })
-              // 读端点对 >512KB 只回前 512KB（truncated）：不能拿半截正文喂编辑器，
-              // 否则自动保存会把文件写回成前 512KB，尾部丢光
+              // 读端点对 >1MB 只回前 1MB（truncated）：不能拿半截正文喂编辑器，
+              // 否则自动保存会把文件写回成前 1MB，尾部丢光
               : page.truncated === true
                 ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultTooLargeHint") })
               : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [

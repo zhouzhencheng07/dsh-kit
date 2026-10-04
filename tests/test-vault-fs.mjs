@@ -285,7 +285,10 @@ await test('writePage：文件已不在回 missing（丢弃这次写，不把旧
   write('非页.txt', 't')
   assert.throws(() => writePage(root, path.join(root, '非页.txt'), 'y', 1), /只允许写 md/)
   assert.throws(() => writePage(root, path.join(root, '..', '外.md'), 'y', 1), /上跳段|不在知识库内/)
-  assert.throws(() => writePage(root, write('大.md', 'a'), 'x'.repeat(600 * 1024), 1), /超过 512KB/)
+  // 1MB 是编辑上限：库是编辑面，整篇读得回才允许写——600KB 现在能写，超 1MB 拒
+  const big = write('大.md', 'a')
+  assert.equal(writePage(root, big, 'x'.repeat(600 * 1024), fs.statSync(big).mtimeMs).mtimeMs > 0, true)
+  assert.throws(() => writePage(root, big, 'x'.repeat(1024 * 1024 + 1), fs.statSync(big).mtimeMs), /超过 1MB/)
 })
 
 await test('storeAttachment：内容寻址落 attachments/，同内容复用不重写；非图片按 png 落', () => {

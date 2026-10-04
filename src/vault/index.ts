@@ -499,7 +499,8 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       //   attach：粘贴图片内容寻址落 attachments/，同内容复用不重写。
       vaultPost('/dsh-kit/vault/write', (body, root) =>
         writePage(root, String(body.path ?? ''), body.content, body.baseMtime),
-        2 * 1024 * 1024,
+        // 正文上限 1MB + frontmatter 与 JSON 转义余量
+        4 * 1024 * 1024,
       )
       vaultPost(
         '/dsh-kit/vault/attach',

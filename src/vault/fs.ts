@@ -439,8 +439,9 @@ function rewriteRefs(pages: WikiRef[], oldRel: string, mode: RewriteMode, selfPa
 
 // ── 正文写回（编辑面）───────────────────────────────────────────────────────
 
-/** 正文上限：单页写回封顶，超了是误操作（粘贴误插二进制之类）不是正常长文 */
-const PAGE_WRITE_LIMIT = 512 * 1024
+/** 正文上限：单页写回封顶。知识库是编辑面，1MB 以内整篇读得回、写得回；
+ *  超了是误操作（粘贴误插二进制之类）不是正常长文。与 client 要的 maxBytes 同值。 */
+const PAGE_WRITE_LIMIT = 1024 * 1024
 
 /** 正文写回：mtime CAS + tmp/rename 原子落盘。
  *  盘上不是前端读过的那一版（baseMtime 不符）就回 `modified` 让前端出冲突条，
@@ -456,7 +457,7 @@ export function writePage(
   const target = resolveInside(root, targetAbs)
   if (!/\.(md|markdown)$/i.test(target)) throw new Error('只允许写 md 文件')
   if (typeof content !== 'string') throw new Error('缺少内容')
-  if (Buffer.byteLength(content, 'utf8') > PAGE_WRITE_LIMIT) throw new Error('内容超过 512KB 上限')
+  if (Buffer.byteLength(content, 'utf8') > PAGE_WRITE_LIMIT) throw new Error('内容超过 1MB 上限')
   const base = Number(baseMtime)
   if (!Number.isFinite(base)) throw new Error('缺少 baseMtime')
   let stat: fs.Stats

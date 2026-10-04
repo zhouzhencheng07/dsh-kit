@@ -448,7 +448,9 @@ export async function apply(ctx, config = {}) {
             //   裁决（覆盖 / 读盘上），插件不静默覆盖也不存档（不碰 git，见知识库页）；
             //   文件已不在回 missing，那次写丢弃（改名 / 删除后卸载兜底不写活旧页）。
             //   attach：粘贴图片内容寻址落 attachments/，同内容复用不重写。
-            vaultPost('/dsh-kit/vault/write', (body, root) => writePage(root, String(body.path ?? ''), body.content, body.baseMtime), 2 * 1024 * 1024);
+            vaultPost('/dsh-kit/vault/write', (body, root) => writePage(root, String(body.path ?? ''), body.content, body.baseMtime), 
+            // 正文上限 1MB + frontmatter 与 JSON 转义余量
+            4 * 1024 * 1024);
             vaultPost('/dsh-kit/vault/attach', (body, root) => {
                 const data = typeof body.dataBase64 === 'string' && body.dataBase64 !== '' ? Buffer.from(body.dataBase64, 'base64') : null;
                 if (data === null)

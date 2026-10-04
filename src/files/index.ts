@@ -214,10 +214,13 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
         },
       })
 
-      // ── 文件内容端点：GET /dsh-kit/read?path=<绝对文件> ──
+      // ── 文件内容端点：GET /dsh-kit/read?path=<绝对文件>[&maxBytes=<字节>] ──
       // 只读单文件文本内容（限长 + 二进制探测）。点击文件树中的文件后，
-      // 浏览器端把内容展示进右侧 details 列（对话左移让位）。
+      // 浏览器端把内容展示进右侧 details 列（对话左移让位）。默认只回开头
+      // 512KB 供预览；maxBytes 可要到上限——知识库单页编辑器要整篇正文，
+      // 半截正文写回会把文件尾部截掉（见 client 的 vaultTooLargeHint）。
       const READ_LIMIT = 512 * 1024
+      const READ_LIMIT_MAX = 1024 * 1024
       const disposeRead = webCtx.webServer.register({
         kind: 'exact',
         path: '/dsh-kit/read',
@@ -235,6 +238,8 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             return
           }
           const url = new URL(req.url ?? '/', 'http://dsh-kit.local')
+          const asked = Number(url.searchParams.get('maxBytes'))
+          const limit = Number.isInteger(asked) && asked > 0 ? Math.min(asked, READ_LIMIT_MAX) : READ_LIMIT
           const file = validateFile(url.searchParams.get('path') ?? '')
           if (!file.ok) {
             json(400, { error: file.message })
@@ -245,15 +250,15 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
             json(403, { error: denied })
             return
           }
-          if (file.size > READ_LIMIT) {
-            // 大文件也回开头 512KB，让预览至少有内容可看
+          if (file.size > limit) {
+            // 大文件也回开头 limit 字节，让预览至少有内容可看
             fs.open(file.path, 'r', (openError, fd) => {
               if (openError) {
                 json(404, { error: `读取文件失败：${openError?.message ?? openError}` })
                 return
               }
-              const buf = Buffer.alloc(READ_LIMIT)
-              fs.read(fd, buf, 0, READ_LIMIT, 0, (readError, bytesRead) => {
+              const buf = Buffer.alloc(limit)
+              fs.read(fd, buf, 0, limit, 0, (readError, bytesRead) => {
                 fs.close(fd, () => {})
                 if (readError) {
                   json(404, { error: `读取文件失败：${readError?.message ?? readError}` })
