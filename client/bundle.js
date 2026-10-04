@@ -12783,15 +12783,19 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     /**
      * 通知判定核心（依赖注入，render-check 直测）：把列表快照投影成应发的收尾通知，
-     * 顺带把沿写回 state。抑制：见 notifyWanted；子会话（导航细节，属噪音）与首帧
-     * 播种也不发。提问/批准不走这里——它们是既成事实，由事件瀑布那条口直接投递。
-     * @param input {ids,byId,current,foreground}
+     * 顺带把沿写回 state。抑制：见 notifyWanted；子会话（导航细节，属噪音）、首帧
+     * 播种、以及**已归档**的会话都不发。提问/批准不走这里——它们是既成事实，由
+     * 事件瀑布那条口直接投递。
+     * @param input {ids,byId,current,foreground,archived} archived = 已归档会话 id 集
      * @returns [{kind: TURN_END_KINDS 之一, sessionId, title}]
      */
     function notifyDiffCore(state, input, cfg) {
       const events = [];
       const byId = input.byId ?? {};
       const foreground = input.foreground === true;
+      // 归档动作（stopActivity）自己会停掉会话的活，那条 running 沿是用户动作的回声、
+      // 不是「回合收尾」——被归档的会话不再打扰（归档的会话仍在列表里，落定判定挡不住）
+      const archived = input.archived instanceof Set ? input.archived : new Set(Array.isArray(input.archived) ? input.archived : []);
       const wanted = (sessionId) => notifyWanted(cfg, sessionId, input.current, foreground, input.watched);
       const titleOf = (id) => byId[id]?.displayTitle ?? id;
       const seen = new Set();
@@ -12801,8 +12805,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         seen.add(id);
         const was = state.running.get(id);
         state.running.set(id, row.running === true);
-        // 只认 true→false 的沿：首帧播种、仍在跑、子会话都不发
+        // 只认 true→false 的沿：首帧播种、仍在跑、子会话、已归档都不发
         if (!state.primed || was !== true || row.running === true || row.origin === "subagent") continue;
+        if (archived.has(id)) continue;
         // 分类看本回合 turn/end 的 reason（事件窗口记在 state.turnEnd，见
         // notifyCompactionCore）：出错/中止/卡住/撞上限各有各的说法，不一律报完成
         if (wanted(id)) events.push({ kind: notifyTurnKind(state.turnEnd?.get(id)), sessionId: id, title: titleOf(id) });
@@ -13028,7 +13033,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const TURN_END_KINDS = new Set(["complete", "error", "aborted", "blocked", "maxTokens", "loopBreak"]);
 
     /** 事件入口（订阅回调与首帧共用）：读快照 → 核心判定 → 逐条投递 */
-    function notifyEvaluate(sessions) {
+    function notifyEvaluate(sessions, workspaces) {
       let cfg;
       let list;
       try {
@@ -13037,7 +13042,16 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       } catch {
         return; // 服务异常：本轮跳过，下条推送再来
       }
-      const events = notifyDiffCore(notifyState, { ids: list.ids, byId: list.byId, current: mainRowOf(list)?.id, watched: chatSurfaceSession(), foreground: notifyForeground() }, cfg);
+      // 归档集（软依赖）：归档动作自己停的会话不算「回合收尾」。读不到就当没有归档，
+      // 不让工作区服务的问题连累其余提醒
+      let archived = null;
+      try {
+        const wsnap = workspaces && typeof workspaces.list?.getSnapshot === "function" ? workspaces.list.getSnapshot() : null;
+        if (wsnap && Array.isArray(wsnap.archivedSessionIds)) archived = wsnap.archivedSessionIds;
+      } catch {
+        archived = null;
+      }
+      const events = notifyDiffCore(notifyState, { ids: list.ids, byId: list.byId, current: mainRowOf(list)?.id, watched: chatSurfaceSession(), foreground: notifyForeground(), archived }, cfg);
       for (const ev of events) {
         // 只有回合收尾要落定判定（到点仍在列表且空闲）；提问/批准是既成事实，直接发。
         if (TURN_END_KINDS.has(ev.kind)) notifyCompleteSettled(sessions, ev);
@@ -13618,13 +13632,18 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       // 会话通知：订阅官方数据源（就绪时机不保证，用 inject 等）
       ctx.inject(["sessions"], (sctx) => {
         const offs = [];
-        const evaluate = () => notifyEvaluate(sctx.sessions);
+        // 归档集（软依赖）：归档动作自己停的会话不算「回合收尾」；服务缺位退回旧行为
+        let workspacesSvc = null;
+        const evaluate = () => notifyEvaluate(sctx.sessions, workspacesSvc);
         // 点通知的导航口：uiWorkspace.openSession 是官方的一次 UI 导航动作
         // （选中会话 + 显示对话，内部管 mainView 引用计数与面板 reveal）。
         // 精简组合缺这个服务时，notifyOpenSession 只聚焦窗口。
         if (typeof sctx.inject === "function") {
           sctx.inject(["uiWorkspace"], (wctx) => {
             notifyState.nav = wctx.uiWorkspace ?? null;
+          });
+          sctx.inject(["workspaces"], (wctx) => {
+            workspacesSvc = wctx.workspaces ?? null;
           });
         }
         // 压缩完成：给列表里的会话各挂一个事件窗口订阅。窗口是会话「上台」才开的

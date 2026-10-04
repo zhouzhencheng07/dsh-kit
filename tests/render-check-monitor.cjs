@@ -221,6 +221,22 @@ async function checkApply() {
   rows5[0].running = false;
   check("N 子会话收尾不发（导航细节属噪音）", comps.notifyDiffCore(st5, listOf(rows5, null), cfgAll).length === 0);
 
+  // —— 归档：归档动作（stopActivity）自己停掉会话的活，那条 running 沿是用户动作
+  //    的回声，不是「回合收尾」；归档的会话仍在列表里，落定判定挡不住，在沿这层挡 ——
+  const st6 = freshState();
+  const rows6 = [{ id: "n7", running: true }, { id: "n8", running: true }];
+  comps.notifyDiffCore(st6, listOf(rows6, null), cfgAll);
+  rows6[0].running = false;
+  rows6[1].running = false;
+  const ev6 = comps.notifyDiffCore(st6, { ...listOf(rows6, null), archived: ["n7"] }, cfgAll);
+  check("N 归档的会话收尾不发（归档动作自己停的），同批其余会话照发", ev6.length === 1 && ev6[0].sessionId === "n8");
+  rows6[0].running = true;
+  rows6[1].running = true;
+  comps.notifyDiffCore(st6, { ...listOf(rows6, null), archived: ["n7"] }, cfgAll);
+  rows6[0].running = false;
+  rows6[1].running = false;
+  check("N 归档集给 Set 形也认", comps.notifyDiffCore(st6, { ...listOf(rows6, null), archived: new Set(["n7", "n8"]) }, cfgAll).length === 0);
+
   // —— 提问/批准/计划评审：走事件瀑布那条口直接投递，判定核心只管回合收尾。
   //    这里直测它俩共用的分类与正文取法（宿主没有 uiSession.pendingInteractions
   //    这个 store，官方待回应投影那条口在生产上永远拿不到东西，已删）——
