@@ -8,11 +8,13 @@
 # ——静态把 web 行的 searchProvider 钉成 free-search 会让「关掉该组件行」变成搜索直接抛
 # WEB_PROVIDER_CONFIGURED_MISSING（详见 src/search/web-search.ts 头注释）。
 - insert:
-    # 基础设施行：只有 vendor 静态资源与会话头注入，没有页面能力，故**不给 id**——宿主把
-    # patch 里带 id 的行当可管理组件（组件列表要求 id/name 都是字符串），所以它不进组件
-    # 列表、也没有行开关；loader 会给匿名行自配随机 id，照常挂载。一个 bundle 的宿主代码
-    # 只能经 patch 行挂载，因此它仍是一行。
-    - name: dsh-kit
+    # 基础设施行（vendor 静态资源 / 日志端点）：**必须有稳定 id**。匿名行由 loader 每次合成
+    # 现配随机 id，而 DSH 改设置（换模型 / 思考强度）会重写 profile 配置——行身份一变就整行
+    # 重挂，宿主客户端图谱随之删了又加，浏览器半边整包重载（知识库 / PDF / diff 等面板全部
+    # 重开）。一个 bundle 的宿主代码只能经 patch 行挂载，因此它仍是一行；带 id 的代价是它进
+    # 插件页的可管理组件列表（多一行带开关）。
+    - id: core
+      name: dsh-kit
     # 组件行 id 用短语义名（官方同款，如 agent-team）：插件页组件行显示「显示名 +
     # 行id + 模块名」，id 与包名同文会两行重复
     - id: files

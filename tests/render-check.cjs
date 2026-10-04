@@ -1311,8 +1311,9 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
       !src.includes("KitConfigPage") && !src.includes("applyConfigSnapshot"),
   );
 }
-// 10) 插件页组件列表形状：基础设施行无 id（宿主只把带 id 的行当组件，故不进列表），
-//     八个组件行的行序 = 卡片描述的枚举顺序（宿主按 patch insert 原样渲染、不排序）
+// 10) 插件页行形状：基础设施行带**稳定 id**（匿名行由 loader 现配随机 id，任何一次
+//     profile 写入都会把它换掉 → 该行重挂 → 本包浏览器半边整包重载），
+//     九个组件行的行序 = 卡片描述的枚举顺序（宿主按 patch insert 原样渲染、不排序）
 {
   const patchSrc = fs.readFileSync(__dirname + "/../cordis.patch.yml", "utf8");
   const rows = [];
@@ -1325,11 +1326,11 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
     else if (bare) rows.push(current = { id: undefined, name: bare[1].trim() });
     else if (nameOf && current !== null && current.name === undefined) current.name = nameOf[1].trim();
   }
-  const comps = rows.filter((row) => typeof row.id === "string");
-  const infra = rows.filter((row) => row.id === undefined);
+  const infra = rows.filter((row) => row.id === "core");
+  const comps = rows.filter((row) => typeof row.id === "string" && row.id !== "core");
   const expected = ["files", "chat", "vault", "terminal", "browser", "skills", "phone", "monitor", "search"];
   check(
-    "patch 形状：基础设施行无 id（不进组件列表）、九个组件行 id/name 齐备且顺序 = 描述顺序",
+    "patch 形状：基础设施行 id=core（匿名行的随机 id 每次 profile 写入都会换 → 该行重挂、整包客户端重载）、九个组件行 id/name 齐备且顺序 = 描述顺序",
     infra.length === 1 && infra[0].name === "dsh-kit" &&
       JSON.stringify(comps.map((row) => row.id)) === JSON.stringify(expected) &&
       comps.every((row) => row.name === "dsh-kit/" + row.id),
