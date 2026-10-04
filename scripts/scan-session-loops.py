@@ -92,7 +92,8 @@ def main() -> None:
             if t not in ("assistant/message", "assistant/chunk"):
                 continue
             d = e.get("data") or {}
-            step = d.get("step", "?")
+            # step 只是回合内的序号，跨回合会重号：键必须带上 turn
+            key = (d.get("turn", "?"), d.get("step", "?"))
             message = d.get("message") or {}
             content = message.get("content") or []
             n = 0
@@ -100,8 +101,8 @@ def main() -> None:
                 if isinstance(block, dict) and block.get("type") == "text":
                     n += len(block.get("text") or "")
             if n:
-                by_step_text[step] = by_step_text.get(step, 0) + n
-        for step, n in by_step_text.items():
+                by_step_text[key] = by_step_text.get(key, 0) + n
+        for (turn, step), n in by_step_text.items():
             if n >= 30000:
                 big_text.append((n, step, tag))
 

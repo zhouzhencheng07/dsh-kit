@@ -1517,6 +1517,10 @@ setTimeout(async () => {
     global.fetch = prevFetch;
   }
   global.fetch = vaultFetchPrev;
-  console.log(failed === 0 ? "ALL RENDER OK" : `${failed} FAIL`);
-  process.exit(failed === 0 ? 0 : 1);
+  // 底座共享面与 hookGlobal 幂等两处只置了 process.exitCode：收尾显式 exit(0) 会把它吞掉
+  const bad = failed !== 0 || process.exitCode === 1;
+  if (failed !== 0) console.log(`${failed} FAIL`);
+  else if (bad) console.log("FAIL（底座共享面 / hookGlobal 幂等）");
+  else console.log("ALL RENDER OK");
+  process.exit(bad ? 1 : 0);
 }, 0);

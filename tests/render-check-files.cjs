@@ -572,12 +572,10 @@ async function checkApply() {
     "掩码字段归本组件配置页（根配置页与默认表已交出）",
     (() => {
       const bundleSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
-      const fieldsStart = bundleSrc.indexOf("const KIT_CFG_FIELDS = [");
-      const rootFields = bundleSrc.slice(fieldsStart, bundleSrc.indexOf("const KIT_CFG_GROUPS", fieldsStart));
-      const defaultsStart = bundleSrc.indexOf("const CFG_DEFAULTS = {");
-      const rootDefaults = bundleSrc.slice(defaultsStart, bundleSrc.indexOf("};", defaultsStart));
+      // 根包的字段表/默认表已整体交出去（不是「切一段出来断言里面没有某字段」——
+      // 锚点没了的话那样切出空串，断言恒真）
       return (
-        !rootFields.includes("hideOfficialFilesEntry") && !rootDefaults.includes("hideOfficialFilesEntry") &&
+        bundleSrc.indexOf("const KIT_CFG_FIELDS = [") < 0 && bundleSrc.indexOf("const CFG_DEFAULTS = {") < 0 &&
         comps.F_CFG_DEFAULTS.hideOfficialFilesEntry === false && typeof comps.FilesConfigPage === "function"
       );
     })(),

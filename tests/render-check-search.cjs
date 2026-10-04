@@ -140,12 +140,10 @@ async function checkApply() {
     const j = bundleSrc.indexOf(to, i);
     return i < 0 || j < 0 ? "" : bundleSrc.slice(i, j);
   };
-  const rootCfg = sliceBetween("const CFG_DEFAULTS = {", "/** 从官方 scope 快照提取生效配置");
-  const rootFields = sliceBetween("const KIT_CFG_FIELDS = [", "/** KIT_CFG_FIELDS 的分组顺序");
   check(
     "主包 schema / client 默认表 / 字段表 / 词条都不再有搜索字段",
     !hostSrc.includes("searchEnabled") && !hostSrc.includes("searchMaxResults") &&
-      !/search(Enabled|MaxResults)/.test(rootCfg) && !/search(Enabled|MaxResults)/.test(rootFields) &&
+      !bundleSrc.includes("const CFG_DEFAULTS = {") && !bundleSrc.includes("const KIT_CFG_FIELDS = [") &&
       !bundleSrc.includes("kcfgSearchEnabled"),
   );
   check("patch 不再静态钉 web 行的 searchProvider（关行 = 不接管 seam）", !/^\s*searchProvider:/m.test(patchSrc) && !/^\s*- id: web\s*$/m.test(patchSrc));

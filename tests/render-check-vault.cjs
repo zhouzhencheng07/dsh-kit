@@ -217,13 +217,13 @@ async function checkApply() {
     const j = bundleSrc.indexOf(to, i);
     return i < 0 || j < 0 ? "" : bundleSrc.slice(i, j);
   };
-  const rootCfg = sliceBetween("const CFG_DEFAULTS = {", "/** 从官方 scope 快照提取生效配置");
-  const rootFields = sliceBetween("const KIT_CFG_FIELDS = [", "/** KIT_CFG_FIELDS 的分组顺序");
+
   // 迁移说明注释会提到旧键名，判据只看代码段
   const hostCode = hostSrc.replace(/\/\/[^\n]*/g, "");
   check(
     "主包 schema / client 默认表 / 字段表都不再有知识库与日程字段",
-    !/vault(Enabled|Root)/.test(hostCode) && !/vault(Enabled|Root)/.test(rootCfg) && !/vault(Enabled|Root)/.test(rootFields) &&
+    !/vault(Enabled|Root)/.test(hostCode) &&
+      !bundleSrc.includes("const CFG_DEFAULTS = {") && !bundleSrc.includes("const KIT_CFG_FIELDS = [") &&
       !bundleSrc.includes("kcfgVaultEnabled"),
   );
   check(

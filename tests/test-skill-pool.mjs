@@ -593,7 +593,7 @@ try {
   for (const dir of extra) fs.rmSync(dir, { recursive: true, force: true });
   fs.rmSync(tmp, { recursive: true, force: true });
   // 版本记录 / 边界测试用到的池技能（含各自的 .git）与平铺文件都清掉，别留在 dev 环境的池里
-  for (const name of ["ver-kit", "in-kit", "flat-in", "carri-kit", "del-kit", "idle-kit", "flat-ver.md"]) {
+  for (const name of ["hello-kit", "ver-kit", "in-kit", "flat-in", "carri-kit", "del-kit", "idle-kit", "flat-ver.md"]) {
     fs.rmSync(path.join(POOL, name), { recursive: true, force: true });
   }
 }

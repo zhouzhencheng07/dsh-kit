@@ -277,13 +277,12 @@ async function checkAdopt() {
   };
   // 注释里提到字段名不算装配（迁移说明会写这些词），只看代码
   const hostCode = hostSrc.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  const rootCfg = sliceBetween("const CFG_DEFAULTS = {", "/** 从官方 scope 快照提取生效配置");
-  const rootFields = sliceBetween("const KIT_CFG_FIELDS = [", "/** KIT_CFG_FIELDS 的分组顺序");
+
   const rootZh = bundleSrc.slice(bundleSrc.indexOf("const zh = {"), bundleSrc.indexOf("\n    };", bundleSrc.indexOf("const zh = {")));
   check(
     "主包 schema / client 默认表 / 字段表都不再有浏览器配置项",
     !hostCode.includes("browserEnabled") && !hostCode.includes("hideOfficialBrowserEntry") &&
-      !/browser[A-Za-z]*:/.test(rootCfg) && !/browser[A-Za-z]*:/.test(rootFields) &&
+      !bundleSrc.includes("const CFG_DEFAULTS = {") && !bundleSrc.includes("const KIT_CFG_FIELDS = [") &&
       !/^ {6}kcfgBrowser[A-Za-z]*:/m.test(rootZh),
   );
   check(

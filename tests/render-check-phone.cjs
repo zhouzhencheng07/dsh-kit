@@ -249,8 +249,8 @@ async function checkApply() {
   );
   check(
     "主行不再有 Config / 配置页 / 配置快照门控（行开关即唯一开关）",
-    !/export const Config/.test(hostCode) && sliceBetween("const CFG_DEFAULTS = {", "/** 从官方 scope 快照提取生效配置") === "" &&
-      sliceBetween("const KIT_CFG_FIELDS = [", "/** KIT_CFG_FIELDS 的分组顺序") === "" &&
+    !/export const Config/.test(hostCode) && !bundleSrc.includes("const CFG_DEFAULTS = {") &&
+      !bundleSrc.includes("const KIT_CFG_FIELDS = [") &&
       !bundleSrc.includes("kcfgPhoneEnabled") && !bundleSrc.includes("phoneEnabled"),
   );
   check(

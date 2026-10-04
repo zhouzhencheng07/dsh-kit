@@ -107,18 +107,28 @@ check("chat 导出面齐全（浮层组件 + 解析纯函数 + 配置页字段�
 
 // 3) apply 装配：贴边常驻面（带 session 子槽）+ 子槽正文 + 配置页 + sessions 捕获
 async function checkApply() {
-  const registered = [];
-  const seatInjects = [];
-  const injected = [];
-  let sessionsCallback = null;
-  const ctx = {
-    slots: {
-      register: (seat) => { registered.push(seat); return () => {}; },
-      inject: (k, cb) => { seatInjects.push(k); if (typeof cb === "function") cb(); },
-    },
-    inject: (deps, cb) => { injected.push(deps); sessionsCallback = cb; },
+  // apply 现在先等配置探针：行关闭（404）时一个槽都不注册，行可用才装配
+  const run = async (available) => {
+    global.fetch = async () =>
+      available
+        ? { ok: true, status: 200, json: async () => ({ rememberWindow: true, rememberTarget: true }) }
+        : { ok: false, status: 404, json: async () => ({ error: "HTTP 404" }) };
+    const registered = [];
+    const seatInjects = [];
+    const injected = [];
+    const ctx = {
+      slots: {
+        register: (seat) => { registered.push(seat); return () => {}; },
+        inject: (k, cb) => { seatInjects.push(k); if (typeof cb === "function") cb(); },
+      },
+      inject: (deps, cb) => { injected.push(deps); },
+    };
+    await comps.apply(ctx);
+    return { registered, seatInjects, injected };
   };
-  await comps.apply(ctx);
+  const off = await run(false);
+  check("行关闭（/dsh-kit-chat/config 404）：一个槽、一个服务注入都不发生", off.registered.length === 0 && off.seatInjects.length === 0 && off.injected.length === 0);
+  const { registered, seatInjects, injected } = await run(true);
   check("apply 挂三个槽位等待（shell.overlay / 子槽 / 配置页）", seatInjects.join(",") === "shell.overlay,dsh-kit.chat.session,plugins.row.config");
   const overlay = registered.find((r) => r.name === "shell.overlay" && r.id === "dsh-kit-chat");
   check(
@@ -145,10 +155,14 @@ async function checkApply() {
       !("web:linux" in cmd.defaults) &&
       cmd.regions.includes("page") && cmd.regions.includes("editable") && cmd.regions.includes("terminal"),
   );
-  check(
-    "快捷键动作 = 开关小窗；行关闭（探针 404）时 blocked",
-    !!cmd && typeof comps.toggleChat === "function" && cmd.resolve().status === "blocked" && typeof cmd.resolve().reason === "string",
-  );
+  check("快捷键动作 = 开关小窗", !!cmd && typeof comps.toggleChat === "function");
+  // 行关闭（探针 404）→ blocked；行可用 → handled（同一开关两处结论必须一致）
+  global.fetch = async () => ({ ok: false, status: 404, json: async () => ({ error: "HTTP 404" }) });
+  await comps.loadCfg();
+  check("快捷键：行关闭（探针 404）时 blocked", !!cmd && cmd.resolve().status === "blocked" && typeof cmd.resolve().reason === "string");
+  global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ rememberWindow: true, rememberTarget: true }) });
+  await comps.loadCfg();
+  check("快捷键：行可用时 handled", !!cmd && cmd.resolve().status === "handled");
 
   // 4) 渲染分支：把手 / 面板 / 浮层宿主 / 内嵌对话
   stateSeq = 0; stateStore.clear();

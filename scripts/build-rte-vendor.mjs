@@ -3,7 +3,7 @@
 // （vault 页面编辑器工厂：md ↔ 富文本往返 + schema + 节点视图）。
 // 源码在 scripts/vendor-src/rte-entry.js，改完重跑：node scripts/build-rte-vendor.mjs
 //
-// 与 build-vendor.mjs 同模式：依赖临时安装到系统临时目录，不进项目 package.json
+// 依赖临时安装到系统临时目录，不进项目 package.json
 // （保持插件零 dependencies 声明）。tiptap 锁 3.30.2。
 import fs from 'node:fs'
 import os from 'node:os'
