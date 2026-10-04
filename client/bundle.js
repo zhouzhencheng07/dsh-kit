@@ -3453,7 +3453,7 @@ ellipsis，窄列只截字不破版 */
       kcfgVaultRootHint: "普通 md 目录，指向哪里读哪里；清空恢复默认根。",
       kcfgBuiltinPdf: "PDF 用自带阅读器",
       kcfgBuiltinPdfHint: "库内 PDF 开成知识库页签（页码跳转、记住上次读到哪一页，不受官方预览的整文件大小上限）。关掉则一律走官方文件预览。",
-      scVault: "知识库索引",
+      scVault: "知识库 · 日程",
       scVaultOff: "知识库已在配置页关闭",
       schedTab: "日程",
       schedToday: "今天",
@@ -3563,7 +3563,6 @@ ellipsis，窄列只截字不破版 */
       pdfMissing: "文件不存在或已被移动",
       pdfTooLarge: "文件过大，不在阅读器里打开",
       pdfPage: "页码",
-      pdfFitOnly: "页宽随栏宽",
       vaultPageGone: "页面不存在（可能已被移动或删除）",
       vaultCiteUnavailable: "对话输入框未就绪（无会话或不可用）",
       vaultIdxTruncated: "笔记太多：索引已达单次扫描上限（5000 页），搜索与反链只覆盖已索引的部分",
@@ -3660,7 +3659,7 @@ ellipsis，窄列只截字不破版 */
       kcfgVaultRootHint: "A plain md directory read as-is; blank restores the default root.",
       kcfgBuiltinPdf: "Built-in PDF reader",
       kcfgBuiltinPdfHint: "In-vault PDFs open as knowledge-base tabs (page jump, remembers where you stopped, no official preview size cap). Off: everything goes to the official file preview.",
-      scVault: "Vault index",
+      scVault: "Vault · Schedule",
       scVaultOff: "Vault is switched off in the config page",
       schedTab: "Schedule",
       schedToday: "Today",
@@ -3770,7 +3769,6 @@ ellipsis，窄列只截字不破版 */
       pdfMissing: "File is gone or was moved",
       pdfTooLarge: "File is too large to open in the reader",
       pdfPage: "Page number",
-      pdfFitOnly: "Page width follows the pane",
       vaultPageGone: "Page not found (it may have been moved or deleted)",
       vaultCiteUnavailable: "Composer is not ready (no active session)",
       vaultIdxTruncated: "Too many notes: the index hit the per-scan cap (5000 pages); search and backlinks cover indexed pages only",
@@ -4549,25 +4547,6 @@ ellipsis，窄列只截字不破版 */
       };
     }
 
-    /** 知识库 · 日程 的唯一入口钮（输入行，源代码管理与终端之间）：
-     *  开 = 侧栏占住那一格并落在知识库 tab（点具体页才开右栏知识库签；日程待办
-     *  清单是那一格的另一个 tab）；再点 = 侧栏回会话列表（右栏各签不跟着关）。
-     *  与快捷键同语义（toggleVaultEntry） */
-    function VaultEntry() {
-      const ui = useKitUi();
-      return jsxRuntime.jsx(KitTip, {
-        label: t("vaultTitle"),
-        command: "dsh-kit.vault.toggle",
-        side: "top",
-        children: jsxRuntime.jsx("button", {
-          type: "button",
-          className: "dshk-btn dshk-enbtn",
-          "aria-pressed": ui.vaultSideOpen === true,
-          onClick: () => setKitUi(toggleVaultEntry(getKitUi())),
-          children: jsxRuntime.jsx(VaultIcon, {}),
-        }),
-      });
-    }
 
     // ─────────── 日程模块（左栏待办清单 + 右栏周时间网格 + 全局计时悬浮球）───────────
     // 数据走宿主 /dsh-kit/schedule/* 端点：raw 全量 events + 区间展开 occurrences
@@ -8518,14 +8497,23 @@ ellipsis，窄列只截字不破版 */
           const natural = page.getViewport({ scale: 1 });
           const cssScale = cssW / natural.width;
           const viewport = page.getViewport({ scale: cssScale * dpr });
-          canvas.width = Math.max(1, Math.floor(viewport.width));
-          canvas.height = Math.max(1, Math.floor(viewport.height));
+          // **画到离屏画布上再换**：直接改可见画布的 width/height 会当场把它清空，
+          // 重画完之前那一片是白的——停手那一瞬整片页闪一下就是这么来的
+          const buffer = document.createElement("canvas");
+          buffer.width = Math.max(1, Math.floor(viewport.width));
+          buffer.height = Math.max(1, Math.floor(viewport.height));
           const textContent = await page.getTextContent();
           if (disposed) return;
-          task = page.render({ canvas, viewport });
+          task = page.render({ canvas: buffer, viewport });
           await task.promise;
+          if (disposed) return;
+          // 同一个任务里换尺寸 + 贴图，浏览器来不及画出中间那张空白
+          canvas.width = buffer.width;
+          canvas.height = buffer.height;
+          const ctx = canvas.getContext("2d");
+          if (ctx !== null) ctx.drawImage(buffer, 0, 0);
           const container = textRef.current;
-          if (disposed || container === null || lib === null || !lib.TextLayer) return;
+          if (container === null || lib === null || !lib.TextLayer) return;
           container.textContent = "";
           // 文字层版式全靠这几个 CSS 变量（字号 = --total-scale-factor × 页内单位高度）。
           // pdf.js 自己只写 --min-font-size，缩放因子得由调用方给
@@ -8836,7 +8824,7 @@ ellipsis，窄列只截字不破版 */
             "aria-label": t("pdfPage"),
             onChange: (e) => jumpTo(Number(String(e.target.value).replace(/\D/g, "")) || 1),
           }),
-          jsxRuntime.jsxs("span", { key: "of", className: "dshk-pdf-total", children: ["/ ", String(doc.numPages), " · ", t("pdfFitOnly")] }),
+          jsxRuntime.jsxs("span", { key: "of", className: "dshk-pdf-total", children: ["/ ", String(doc.numPages)] }),
         ] }),
         jsxRuntime.jsxs("div", { key: "scroll", className: "dshk-pdf-scroll", ref: scrollRef, children: [
           jsxRuntime.jsx("div", {
@@ -9095,10 +9083,6 @@ ellipsis，窄列只截字不破版 */
       // vault root 预取：文件树/对话点击的判定同步读缓存，等点击时再取来不及
       //（索引端点宿主侧有 mtime 缓存，零成本）
       void ensureVaultRootHint();
-      // 输入行入口（conversation.input.left，order 12：文件树 10 → SCM 11 →
-      //   知识库·日程 → 终端 14）：知识库与日程共用这一枚，开的是侧栏那一格
-      ctx.slots.inject("conversation.input.left", () =>
-        ctx.slots.register({ name: "conversation.input.left", id: "dsh-kit-vault", order: 12 }, VaultEntry));
       // 常驻壳（order 910：根壳 900 之后）
       ctx.slots.inject("shell.overlay", () =>
         ctx.slots.register({ name: "shell.overlay", id: "dsh-kit-vault", order: 910 }, VaultShell));
@@ -9128,7 +9112,6 @@ ellipsis，窄列只截字不破版 */
     exports.schedOp = schedOp;
     exports.schedBus = schedBus;
     exports.schedElapsed = schedElapsed;
-    exports.VaultEntry = VaultEntry;
     exports.VaultDialog = VaultDialog;
     exports.VaultPagePane = VaultPagePane;
     exports.RteEditor = RteEditor;

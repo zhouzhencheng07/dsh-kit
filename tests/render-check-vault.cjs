@@ -96,7 +96,7 @@ check(
   typeof comps.VaultView === "function" && typeof comps.VaultRootView === "function" &&
     typeof comps.VaultPaneBody === "function" && typeof comps.SchedulePaneBody === "function" &&
     typeof comps.ScheduleView === "function" && typeof comps.ScheduleTasksPanel === "function" &&
-    typeof comps.VaultShell === "function" && typeof comps.VaultEntry === "function" &&
+    typeof comps.VaultShell === "function" &&
     typeof comps.SidebarVaultIndex === "function" &&
     typeof comps.VaultConfigPage === "function" &&
     typeof comps.onChatOpenFileClick === "function" && Array.isArray(comps.VAULT_CFG_FIELDS),
@@ -126,7 +126,7 @@ check(
 }
 
 // 3) apply 装配门控：行关闭（探针 404）= 一个槽都不注册；可用 = 壳 + 右栏两签 +
-//    输入行入口 + 两个配置页 key + 两个座 + 快捷键
+//    两个配置页 key + 两个座 + 快捷键
 async function checkApply() {
   const run = async (available) => {
     const registered = [];
@@ -177,13 +177,12 @@ async function checkApply() {
       on.slotInjects.includes("sidebar.right.pane.tab"),
   );
   check(
-    "两张签都是被动签：右栏开始页一律不给条目（入口在左栏 tab 条与输入行）",
+    "两张签都是被动签：右栏开始页一律不给条目（入口在左栏 tab 条与快捷键）",
     !on.registered.some((s) => s && Array.isArray(s.guide)),
   );
   check(
-    "输入行一枚入口（知识库 · 日程 共用，order 12）+ 常驻壳挂 shell.overlay（id 稳定）",
-    on.registered.filter((s) => s && s.name === "conversation.input.left").length === 1 &&
-      on.registered.some((s) => s && s.name === "conversation.input.left" && s.id === "dsh-kit-vault" && s.order === 12) &&
+    "对话区那枚知识库入口钮已退场 + 常驻壳挂 shell.overlay（id 稳定）",
+    on.registered.every((s) => !(s && s.name === "conversation.input.left")) &&
       on.registered.some((s) => s && s.name === "shell.overlay" && s.id === "dsh-kit-vault"),
   );
   check("对话文件点击路由挂 document capture 监听", on.clickListeners.some((c) => c[0] === "click" && c[1] === true));

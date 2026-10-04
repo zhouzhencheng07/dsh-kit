@@ -158,7 +158,7 @@ if (!baseOk) process.exitCode = 1;
 }
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["VaultEntry", "KitSurfaces", "TreeRowMenu", "RteEditor", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksPanel", "SidebarVaultIndex", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["KitSurfaces", "TreeRowMenu", "RteEditor", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksPanel", "SidebarVaultIndex", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -183,13 +183,17 @@ check("TreeRowMenu 目录行菜单(新建文件/目录单入口+复制相对/重
 
 // 5)/6) FileTreePanel 与 DiffPane 直测在 tests\render-check-files.cjs
 
-// 7) 入口按钮 / 浮层宿主顶部渲染（conversation.input.left + shell.overlay 槽位）：
+// 7) 入口：知识库 · 日程 收进对话区那一枚钮（输入行入口已退场，命令走快捷键）；
 //    终端入口与坞直测在 tests\render-check-terminal.cjs
-callLog = [];
-out = comps.VaultEntry({});
-const entryBtn = callLog.find((c) => c[2] && c[2].className === "dshk-btn dshk-enbtn");
-check("VaultEntry 渲染无异常且悬停走官方气泡（KitTip + 命令 id 对上快捷键注册）", !!out && out.type === comps.KitTip && out.props.command === "dsh-kit.vault.toggle" && typeof out.props.label === "string" && !!entryBtn);
-check("知识库 · 日程 只占输入行一枚钮（没有第二枚日程钮）", !src.includes("ScheduleEntry") && !src.includes("dsh-kit-schedule\", order: 13"));
+check(
+  "对话区不再挂知识库 · 日程入口钮（唯一入口是快捷键）",
+  !src.includes("function VaultEntry") &&
+    !src.includes("exports.VaultEntry") &&
+    !src.includes('id: "dsh-kit-vault", order: 12') &&
+    !src.includes("ScheduleEntry") &&
+    !src.includes('dsh-kit-schedule", order: 13'),
+);
+check("知识库 · 日程的快捷键说明用组件行名", /scVault: "知识库 · 日程"/.test(src) && /scVault: "Vault · Schedule"/.test(src));
 // 7.0) 侧栏那格单槽互斥（sidebarViewPatch 纯补丁语义；入口按钮交互在 files 组件直测）
 const svp = comps.sidebarViewPatch("vault");
 check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultSideOpen === true && svp.vaultSideTab === "vault" && svp.treeOpen === false && svp.gitOpen === false);
@@ -1081,8 +1085,18 @@ let vaultFetchPrev = null;
   check("锚点只由用户滚动与页码跳转改写（改宽不回读 scrollTop）", /if \(fromScroll\) anchorRef\.current = a;/.test(src));
   check("容器宽量到 0 不改版面（收起 / 签不可见不是窄栏）", /if \(w <= 0 \|\| w === last\) return;/.test(src));
   check("光栅化去抖（拖着不逐帧重画画布）", /PDF_RASTER_SETTLE_MS/.test(src) && /setRasterW\(containerW\)/.test(src));
+  // 直接改可见画布的 width/height 会当场清空它，重画完之前那一片是白的——
+  // 停手那一瞬整片页闪一下就是这么来的。画到离屏画布上再换
+  check(
+    "重画走离屏画布再换（不清空可见画布，停手不闪）",
+    /const buffer = document\.createElement\("canvas"\)/.test(src) &&
+      /task = page\.render\(\{ canvas: buffer, viewport \}\)/.test(src) &&
+      /ctx\.drawImage\(buffer, 0, 0\)/.test(src) &&
+      !/canvas\.width = Math\.max\(1, Math\.floor\(viewport\.width\)\)/.test(src),
+  );
   check("阅读位置只落页码（页内比例不出阅读器）", /pdfPosWrite\(ident, \{ page: a\.page \}\)/.test(src));
   check("工具条只有页码与总页数（不做缩放档，栏宽是唯一版面旋钮）", !!bar && !callLog.some((c) => c[2] && c[2].className === "dshk-pdf-zooms"));
+  check("工具条不再解释适宽口径（只剩「当前页 / 总页数」）", !src.includes("pdfFitOnly"));
   const pdfPageRule = (src.match(/\.dshk-pdf-page\{[^}]*\}/) || [""])[0];
   check("PDF 页盒不留投影边框（页面边缘干净）", pdfPageRule.includes("background:#fff") && !pdfPageRule.includes("box-shadow"));
   check("滚动容器不进条件分支（否则栏宽永远量不到）", /className: "dshk-pdf-scroll", ref: scrollRef/.test(src));
@@ -1331,7 +1345,7 @@ check(
   "日程不做专属快捷键（schedIdxOpen/schedShortcut/ScheduleIndexView 全链不存在）",
   !src.includes("schedIdxOpen") && !src.includes("schedShortcut") && !src.includes("cfgSchedShortcut") && !src.includes("ScheduleIndexView"),
 );
-// 右栏开始页不再给日程条目：入口 = 左栏 tab 条 + 输入行两枚钮，guide 与那条词条都退场
+// 右栏开始页不再给日程条目：入口 = 左栏 tab 条与快捷键，guide 与那条词条都退场
 check(
   "右栏日程签不再给开始页条目（知识库·日程两张都不给 guide，词条一并退场）",
   !src.includes("rbGuideSchedDesc") && !src.includes("const guideOf =") && src.includes("rbGuideBrowserDesc"),
