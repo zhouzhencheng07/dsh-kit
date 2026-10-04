@@ -5115,7 +5115,7 @@ ellipsis，窄列只截字不破版 */
       react.useEffect(() => {
         if (needStats) void fetchStats();
       }, [fetchStats, needStats, writeVersion]);
-      // 可见时 30s 轮询（agent 经 schedule_create 建的条目靠它进面板）+ 每分钟走当前时刻线
+      // 可见时 30s 轮询（别处写进来的条目靠它进面板）+ 每分钟走当前时刻线
       react.useEffect(() => {
         const timer = setInterval(() => {
           if (document.visibilityState === "hidden") return;

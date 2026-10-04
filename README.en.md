@@ -37,7 +37,7 @@ and take no component slot).
   one-click repo init for non-git directories
 - **Knowledge base · Schedule** (one component row; the row switch is the master switch —
   turning it off removes the directory index, both dock tabs, the sidebar-footer entry and the
-  four schedule tools together)
+  shortcut command together)
   - **Knowledge base** (sidebar-footer entry / default **Ctrl+Alt+/**): ready out
   of the box (data-directory `dsh-kit\vault`, configurable absolute path on this row's
   config page) — a one-row search
@@ -89,13 +89,12 @@ and take no component slot).
   edit that segment), and "New" at the top of the cell creates a task or an event; **timing is one
   global timer**: "Start timer" in the schedule cell attaches an unfinished task or takes a title for
   a standalone run, the floating ball at the bottom right keeps the seconds and stops it (it stays
-  up with every panel closed), and closed segments land on the grid and in the stats; the agent gets
-  `schedule_query`, `schedule_create`, `schedule_update` and `schedule_delete` over the same store
-  the panel writes to; data is stored
-  one-entry-per-file under `$DSH_HOME/dsh-kit/schedule/` (`events/` + `entries/` + `timer.json`);
-  entries written
-  by other programs show up in the panel, and agent updates merge by id instead of overwriting
-  what someone else changed
+  up with every panel closed), and closed segments land on the grid and in the stats; **there are
+  no schedule tools on the agent side** — editing goes through a skill-pool skill that reads and
+  writes the same files under `$DSH_HOME/dsh-kit/schedule/`
+  (`events/` + `entries/` + `timer.json`, one entry per file) exactly like the panel does:
+  entries written by other programs show up in the panel, and neither side overwrites
+  what the other changed
 - **Built-in browser** (right-dock tabs, **one page per tab** — the title is the page title and
   the official tab strip is the switcher; this component's row switch is the master
   switch — turning it off removes the tools and the panel, leaving only the official
