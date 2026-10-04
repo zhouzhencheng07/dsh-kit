@@ -3941,6 +3941,8 @@ ellipsis，窄列只截字不破版 */
     }
     /** 索引未就绪时的共享空页表：每次渲染现造 `[]` 会让页签侧的 useMemo 依赖恒变 */
     const VAULT_EMPTY_PAGES = [];
+    /** 同上，目录表那一份（树行的展开钮判据每次渲染都读它） */
+    const VAULT_EMPTY_DIRS = [];
     function useVaultReader() {
       react.useSyncExternalStore(
         (cb) => {
@@ -7094,6 +7096,7 @@ ellipsis，窄列只截字不破版 */
       // 空表用同一个常量：`?? []` 每次渲染都是新数组，页签侧拿它当 useMemo 依赖
       // 就算依赖没真变也会重算（反链是 O(页数×链接数)）
       const indexPages = index?.pages ?? VAULT_EMPTY_PAGES;
+      const indexDirs = index?.folders ?? VAULT_EMPTY_DIRS;
       /** 行 ⋯ / 树头 ⋯ 开关：同一颗触发钮再点一次关掉（菜单的关闭手势会跳过落在它上面的点击） */
       const openRowMenu = (anchor, entry, head) => {
         setRowMenu((prev) => (prev && prev.anchor === anchor ? null : { entry, head: head === true, rect: anchor.getBoundingClientRect(), anchor }));
@@ -7134,14 +7137,17 @@ ellipsis，窄列只截字不破版 */
         else if (hit.kind === "libdir") revealLibDir(hit.path);
         else openHere(hit.path);
       };
-      /** 目录行是否有可展开的后代：笔记树看索引页前缀，资料库子树看库内清单 */
+      /** 目录行是否有可展开的后代：笔记树看索引里的**下级目录**与页前缀，资料库子树
+       *  看库内清单。只看页的话，刚建好、只装了子目录还没放笔记的目录没有展开钮，
+       *  点了也不展开——那棵子树整片看不见（新目录本就该是能一层层点进去的） */
       const dirHasChildren = (dirPath) => {
         const lib = libRootRef.current;
         const libRel = lib === null ? null : relUnder(lib, dirPath);
         if (libRel !== null) return libItems.some((it) => it.rel.startsWith(libRel === "" ? "" : `${libRel}/`) && it.rel !== libRel);
         const rel = root === null ? null : relUnder(root, dirPath);
         if (rel === null || rel === "") return false;
-        return indexPages.some((p) => p.rel.startsWith(`${rel}/`));
+        const prefix = `${rel}/`;
+        return indexDirs.some((d) => d.startsWith(prefix)) || indexPages.some((p) => p.rel.startsWith(prefix));
       };
       const toggleDir = (dir) => {
         const opening = expanded[dir] !== true;

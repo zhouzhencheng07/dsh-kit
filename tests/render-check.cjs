@@ -793,6 +793,36 @@ let vaultFetchPrev = null;
     );
     renderVault(base);
   }
+  // 展开钮的判据要认「下级目录」：只有子目录、还没放进笔记的新建目录同样有后代——
+  // 只看页前缀的话那种目录行上没箭头、点了也不展开，刚建好的子树整片看不见
+  {
+    const newDirErr = renderVault({
+      0: { root: "D:/v", folders: ["数学", "数学/数学分析", "空目录"], pages: [], library: null },
+      1: "",
+      2: null,
+      3: {
+        "D:/v": [
+          { name: "数学", path: "D:/v/数学", dir: true },
+          { name: "空目录", path: "D:/v/空目录", dir: true, empty: true },
+        ],
+        "D:/v/数学": [{ name: "数学分析", path: "D:/v/数学/数学分析", dir: true }],
+      },
+      4: { "D:/v": true, "D:/v/数学": true },
+    });
+    const rowOf = (title) => callLog.find((c) => c[2] && c[2].className === "dshk-vault-treerow" && c[2].title === title);
+    const twistOf = (row) => (row ? row[2].children[0] : null);
+    const dirRow = rowOf("D:/v/数学");
+    const emptyRow = rowOf("D:/v/空目录");
+    check(
+      "只有子目录、还没笔记的目录也有展开钮（子目录行跟着出来）",
+      newDirErr === null &&
+        !!dirRow &&
+        twistOf(dirRow).props.children !== null &&
+        rowOf("D:/v/数学/数学分析") !== undefined,
+    );
+    check("真正空目录照旧不给展开钮（点了没东西可展开）", !!emptyRow && twistOf(emptyRow).props.children === null);
+    if (newDirErr) console.log("  VaultRootView error:", newDirErr.message);
+  }
   const refreshBtn = refreshWrap ? refreshWrap.props.children : null;
   if (refreshBtn) refreshBtn.props.onClick();
   // fetch 桩同步记账：loadIndex 的请求在 onClick 返回前就已发出；目录树重拉排在
