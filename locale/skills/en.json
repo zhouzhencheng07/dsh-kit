@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Skills",
-    "description": "Skill pool manager page: workspace / user-level / pool groups with copy, move, disable, and delete."
+    "description": "Skill pool manager page: workspace / user-level / pool groups with move, disable, and delete."
   }
 }
