@@ -15873,31 +15873,35 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     // ─────────── 宿主会话服务（apply 期 inject 捕获）───────────
     let sessionsSvc = null;
     const RETAIN_SOURCE = "dshKitChat";
+    /** 保留一条会话当锚，只把「仍对应当前目标」的那条交给 SessionProvider。
+     *  effect 换引用（释放旧、保留新）与 state 落地之间，宿主 store 的同步重绘会
+     *  插进来：那一拍里 state 还是刚释放的旧引用，喂给宿主会抛
+     *  「Session reference … is released」。故连目标 id 一起记、按 id 把门。 */
     function useSessionRef(sessionId) {
-      const [ref, setRef] = react.useState(null);
+      const [held, setHeld] = react.useState(null);
       react.useEffect(() => {
         if (!sessionId || !sessionsSvc || typeof sessionsSvc.retain !== "function") {
-          setRef(null);
+          setHeld(null);
           return undefined;
         }
         let reference = null;
         try {
           reference = sessionsSvc.retain(sessionId, { source: RETAIN_SOURCE });
         } catch {
-          setRef(null);
+          setHeld(null);
           return undefined;
         }
-        setRef(reference);
+        setHeld({ id: sessionId, ref: reference });
         return () => {
           try {
             reference.release();
           } catch {
             /* 已释放 */
           }
-          setRef(null);
+          setHeld(null);
         };
       }, [sessionId]);
-      return ref;
+      return held !== null && held.id === sessionId ? held.ref : null;
     }
 
     // ─────────── 目标解析（纯函数，渲染级检查直测）───────────
@@ -15913,6 +15917,15 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       if (key === "") return null;
       for (const ws of workspaces ?? EMPTY) {
         if (normPath(ws?.path) === key) return ws;
+      }
+      return null;
+    }
+    /** 会话归属的工作区：按 sessionIds 认（会话 cwd 未必等于工作区路径，
+     *  跨工作区「切到主面当前对话」要连工作区一起换，否则会话不在当前工作区里） */
+    function workspaceOfSession(workspaces, sessionId) {
+      if (!sessionId) return null;
+      for (const ws of workspaces ?? EMPTY) {
+        if (Array.isArray(ws?.sessionIds) && ws.sessionIds.includes(sessionId)) return ws;
       }
       return null;
     }
@@ -16319,7 +16332,10 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
                 mainTitle: mainRow?.displayTitle ?? "",
                 onPickMain: () => {
                   if (!mainRow?.id) return;
-                  setChat({ sessionId: mainRow.id }, true, cfg);
+                  // 主面那条可能属于别的工作区：连工作区一起换，否则目标会话不在
+                  // 当前工作区的列表里，解析会落回本区会话，「切到主面」等于没切
+                  const owner = workspaceOfSession(workspaces, mainRow.id);
+                  setChat({ sessionId: mainRow.id, workspaceId: owner?.workspaceId ?? ui.workspaceId }, true, cfg);
                 },
                 onSessionId: (id) => setChat({ sessionId: id }, true, cfg),
                 onWorkspaceId: (id) => setChat({ workspaceId: id, sessionId: null }, true, cfg),
@@ -16478,6 +16494,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.loadCfg = loadCfg;
     exports.normPath = normPath;
     exports.workspaceOfCwd = workspaceOfCwd;
+    exports.workspaceOfSession = workspaceOfSession;
     exports.sessionsOfWorkspace = sessionsOfWorkspace;
     exports.resolveWorkspace = resolveWorkspace;
     exports.resolveSessionId = resolveSessionId;

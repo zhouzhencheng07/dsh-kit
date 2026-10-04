@@ -258,6 +258,36 @@ async function checkApply() {
       comps.resolveWorkspace([], null, "x") === null,
   );
   check(
+    "会话归属工作区按 sessionIds 认（跨工作区切主面用，cwd 不作准）",
+    comps.workspaceOfSession([ws], "s2")?.workspaceId === "w1" &&
+      comps.workspaceOfSession([ws, { workspaceId: "w2", path: "D:\\other", sessionIds: ["s3"] }], "s3")?.workspaceId === "w2" &&
+      comps.workspaceOfSession([ws], "nope") === null &&
+      comps.workspaceOfSession([ws], null) === null,
+  );
+
+  // 5c) ⇄「切到主面当前对话」：主面在别的工作区时连工作区一起切，
+  // 否则目标会话不在当前工作区列表里，解析会落回本区会话，等于没切
+  {
+    const mainRow = { id: "s9", displayTitle: "主面那条", updatedAt: 9, cwd: "D:\\other", retainedBy: { mainView: 1 } };
+    const wsA = { workspaceId: "wA", path: "D:\\work\\demo", title: "A", sessionIds: ["s1"] };
+    const wsB = { workspaceId: "wB", path: "D:\\other", title: "B", sessionIds: ["s9"] };
+    const list = { ids: ["s1", "s9"], byId: { s1: rows[0], s9: mainRow } };
+    const wsState = { items: [wsA, wsB], archivedSessionIds: [] };
+    stateSeq = 0; stateStore.clear(); callLog = [];
+    comps.setChat({ open: true, workspaceId: "wA", sessionId: "s1", rect: null, ball: null }, false);
+    comps.ChatSurface({
+      useWorkspaces: (sel) => sel(wsState),
+      useSessions: (sel) => sel(list),
+      SessionProvider: (p) => ({ type: "session-provider", props: p }),
+      renderSlot: () => null,
+    });
+    const panel = callLog.find((c) => c[1] === comps.ChatPanel);
+    check("⇄ 认得主面那条（主面属于别的工作区时仍可用）", !!panel && panel[2].mainId === "s9" && panel[2].ui.workspaceId === "wA");
+    if (panel) panel[2].onPickMain();
+    const after = comps.getChatSnap();
+    check("⇄ 切到主面当前对话：会话与工作区一起换", after.sessionId === "s9" && after.workspaceId === "wB");
+  }
+  check(
     "窗口矩形：贴右默认位置、记忆越界收回视口内、窄屏整屏",
     comps.rectOf({ rect: null }, cfg) !== null &&
       comps.rectOf({ rect: { x: 99999, y: 99999, w: 420, h: 620 } }, cfg).x < 1600 &&
@@ -303,6 +333,10 @@ async function checkApply() {
       schemaKeys.join(",") === Object.keys(comps.CHAT_CFG_DEFAULTS).join(","),
   );
   check("宿主半边只有配置快照端点（会话与工作区全走官方服务）", compSrc.includes("/dsh-kit-chat/config") && !compSrc.includes("ctx.inject(['tools']"));
+  check(
+    "引用按目标 id 把门：effect 释放旧引用与 state 落地之间，旧引用不交给 SessionProvider",
+    bundleSrc.includes("return held !== null && held.id === sessionId ? held.ref : null;"),
+  );
 }
 checkApply().then(() => {
   console.log(failed === 0 ? "\nALL PASS" : "\nFAILED " + failed);
