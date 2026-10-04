@@ -24,8 +24,12 @@ const LIBRARY_LIMIT = 2000;
 export function defaultVaultRoot() {
     return kitPath('vault');
 }
-export function isMdPath(p) {
+function isMdPath(p) {
     return MD_EXTS.has(path.extname(p).toLowerCase());
+}
+/** 查询词进正则前转义：搜索框里打的元字符不能当模式用 */
+function escapeRegExp(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 /** 正文 wikilink 提取：[[目标]] / [[目标|别名]]，目标剥 #锚点；去重保序 */
 export function extractWikiLinks(content) {
@@ -255,7 +259,8 @@ export class VaultScanner {
                 continue;
             // snippet：第一个词的首个出现位置附近 ±60 字符
             const first = terms[0];
-            const at = first === undefined ? -1 : content.indexOf(first);
+            // 偏移必须在**原文**上求：小写副本一旦改变长度（İ 之类），拿它切原文就会错位
+            const at = first === undefined ? -1 : (new RegExp(escapeRegExp(first), 'i').exec(raw)?.index ?? -1);
             const snippet = at < 0 ? '' : raw.slice(Math.max(0, at - 60), at + 100).replace(/\s+/g, ' ').trim();
             results.push({ path: page.path, rel: page.rel, snippet, score });
         }

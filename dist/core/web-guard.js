@@ -1,4 +1,4 @@
-// dsh-kit HTTP/WS 守卫：同源校验 + Host 回环闸（index.ts 与 skill-pool.ts 共用）。
+// dsh-kit HTTP/WS 守卫：同源校验 + Host 回环闸（各组件入口的端点共用）。
 //
 // 两道闸的分工：
 //   Host 回环闸——主 webserver 只绑 loopback，但「只绑 loopback」防不了浏览器

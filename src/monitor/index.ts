@@ -34,9 +34,9 @@ export const Config =
         // client 半边出余额/配额芯片，关 = 端点 403 + 芯片不出。
         usageEnabled: z.boolean().default(true).volatile(),
         // 复读守卫（宿主侧 loop-breaker.ts 消费，客户端也读同名字段）：同一句话
-        // 或连续几句话在尾部连续重复时，宿主侧分两档处置——警告档只记录日志（当前
-        // 会话由客户端画提示），停止档才 cancel 该 agent 的当前回合。覆盖全部会话，
-        // 不依赖页面开着。
+        // 或连续几句话在尾部连续重复时，宿主侧分两档处置——警告档记日志并向模型注入
+        // 一条提醒（当前会话另由客户端画提示），停止档才 cancel 该 agent 的当前回合。
+        // 覆盖全部会话，不依赖页面开着。
         monitorEnabled: z.boolean().default(true).volatile(),
         // 警告档：尾部连续重复到这么多遍时提示（只警告，不停）
         monitorWarnCopies: z.number().step(1).min(3).max(10).default(3).volatile(),

@@ -74,7 +74,8 @@ export function validateAny(raw) {
 /** target 是否位于 dir 子树内（dir 本身不算在内——根目录不可改删） */
 export function withinTree(dirReal, targetReal) {
     const rel = path.relative(dirReal, targetReal);
-    return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+    // 只认「..」或「..\」开头的越界：`..cache/x` 这类首段以两点开头的合法路径不能误杀
+    return rel !== '' && rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel);
 }
 /** Windows 保留设备名（con.txt 这类同样保留，故只取第一个点之前的部分判） */
 const WIN_RESERVED_NAME = /^(con|prn|aux|nul|com\d|lpt\d)$/i;

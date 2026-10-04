@@ -616,6 +616,12 @@ export function startPhoneGateway({ port, upstreamPort, stateFile = defaultState
             upSock.on('close', die);
             socket.on('close', die);
         });
+        // 上游对升级请求回普通响应（鉴权 401 / 路径 404）走 response：不接的话既没人
+        // 消费也没人回客户端，手机端 WS 一直挂着等；回一行状态收尾，体丢掉即可
+        up.on('response', (upRes) => {
+            socket.end(`HTTP/1.1 ${upRes.statusCode} ${upRes.statusMessage ?? ''}\r\nConnection: close\r\n\r\n`);
+            upRes.resume();
+        });
         up.on('error', () => socket.destroy());
         up.end();
     });

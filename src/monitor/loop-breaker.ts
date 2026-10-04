@@ -154,7 +154,7 @@ export function registerLoopGuard(ctx: GuardCtx, options: LoopGuardOptions): () 
     try {
       agent.cancel({ kind: 'hook', reason: LOOP_CANCEL_REASON }, { keepInbox: true })
     } catch {
-      // agent 已结束或不可取消：状态已清，本 attempt 不会再有输出
+      // agent 已结束或不可取消：本 attempt 不会再产出帧（stopped 已置位）
     }
   })
 

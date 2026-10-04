@@ -96,7 +96,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       // ── 生效配置只读端点（client 门控与可达性探针）──
       // client 启动拉一次喂 cfgFromSnapshot；行关闭时本端点随模块不物化而 404，
       // client 探到 404 就整体不注册（设置页「手机访问」整块不出现）。
-      webCtx.webServer.register({
+      const disposePhoneConfig = webCtx.webServer.register({
         kind: 'exact',
         path: '/dsh-kit-phone/config',
         handler: (_req, res) => {
@@ -212,10 +212,14 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
             phoneGwError = String(error instanceof Error ? error.message : error)
             log.error('手机访问网关启动失败', { err: error, port: wantPort })
           }
-        } else if (!phoneGwWanted && phoneGw !== null) {
-          phoneGw.close()
-          log.info('网关已关闭')
-          phoneGw = null
+        } else if (!phoneGwWanted) {
+          if (phoneGw !== null) {
+            phoneGw.close()
+            log.info('网关已关闭')
+            phoneGw = null
+          }
+          // 关掉就清掉上次启动失败留下的错误，否则状态端点一直报已不存在的故障
+          phoneGwError = null
         }
       }
       // 启动评估（配置在本 entry 加载时已解析，无时序差）
@@ -357,6 +361,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
         },
       })
       return () => {
+        disposePhoneConfig()
         disposePhoneInfo()
         disposePhoneLink()
         disposePhoneRotate()

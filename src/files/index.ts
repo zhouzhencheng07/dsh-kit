@@ -4,7 +4,7 @@
 // 已按此路径接线，搬迁不改路径）：GET /dsh-kit/tree 目录树、GET /dsh-kit/read
 // 单文件文本（限长 + 二进制探测）、GET /dsh-kit/raw 原始字节（下载/附件预览）、
 // POST /dsh-kit/fs/op 文件管理（create/rename/delete，子树校验见
-// validate.ts）、git 联动端点（status/log/graph/branch/commit/diff）。
+// validate.ts）、git 联动端点（status/diff/log/branch/init/op）。
 // 另有 GET /dsh-kit-files/config 只读配置快照（client 半边的入口门控与快捷键
 // 真源），字段 = 本组件 Config schema。
 //
@@ -498,7 +498,8 @@ export function apply(ctx: { inject(deps: string[], cb: (svc: KitWebCtx) => void
       // ── git 联动端点 ──
       // spawn git CLI（不引库）；无 git / 非仓库 / 超时统一回 {available:false}，
       // 前端据此隐藏入口。status 供文件树徽标与分支/领先信息，diff 供预览面板
-      // 查看改动，log/show/branch 供提交图谱与分支管理，init/op 是写操作集。
+      // 查看改动，log/branch 供提交图谱与分支管理（提交详情走 diff?commit=），
+      // init/op 是写操作集。
       const GIT_TIMEOUT = 10000
       /** 推送等网络操作允许更长的等待（默认 10s 会误杀慢推） */
       const PUSH_TIMEOUT = 60000

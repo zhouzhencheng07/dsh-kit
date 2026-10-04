@@ -33,7 +33,7 @@ import path from 'node:path';
 import { loadDep, loadToolsModule, sameOrigin, registerReadableRoot, sendRawFile } from "../core/index.js";
 import { VaultScanner, defaultVaultRoot } from "./scanner.js";
 import { createEntry, renameEntry, moveEntry, importEntry, deleteEntries, parseConflict, writePage, storeAttachment, resolveInside, } from "./fs.js";
-import { syncScheduleStore, buildScheduleTools, isDateStr, todayStr } from "./schedule.js";
+import { syncScheduleStore, buildScheduleTools, isRealDateStr, todayStr } from "./schedule.js";
 import { kitLogger } from "../core/log.js";
 const log = kitLogger('vault');
 export const name = 'dsh-kit/vault';
@@ -114,7 +114,11 @@ export async function apply(ctx, config = {}) {
             const disposeConfig = webCtx.webServer.register({
                 kind: 'exact',
                 path: '/dsh-kit-vault/config',
-                handler: (_req, res) => {
+                handler: (req, res) => {
+                    if (!sameOrigin(req)) {
+                        json(res, 403, { error: 'cross-origin denied' });
+                        return;
+                    }
                     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
                     res.end(JSON.stringify({
                         vaultRoot: String(readSettings().vaultRoot ?? ''),
@@ -126,10 +130,16 @@ export async function apply(ctx, config = {}) {
                 res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
                 res.end(JSON.stringify(obj));
             };
+            // 同源校验统一在这一层（Host 回环闸 + Origin 比对，见 core/web-guard.ts）：
+            // 本组件的 GET 端点全在这里注册，逐个查必漏；handler 内不再重复校验
             const route = (path, handler) => webCtx.webServer.register({
                 kind: 'exact',
                 path,
                 handler: (req, res) => {
+                    if (!sameOrigin(req)) {
+                        json(res, 403, { error: 'cross-origin denied' });
+                        return;
+                    }
                     handler(req, res, new URL(req.url ?? '/', 'http://dsh-kit.local'));
                 },
             });
@@ -177,7 +187,7 @@ export async function apply(ctx, config = {}) {
             //   个人规模 raw 全量直发。
             const schedDateParam = (url, key) => {
                 const raw = url.searchParams.get(key) ?? '';
-                return isDateStr(raw) ? raw : todayStr();
+                return isRealDateStr(raw) ? raw : todayStr();
             };
             /** 区间跨度上限：重复日程是按天展开的，from=0000-01-01&to=9999-12-31 能把
              *  宿主事件循环占死（手机网关是全路径反代，链接持有人能自己拼这个 URL） */
@@ -222,8 +232,6 @@ export async function apply(ctx, config = {}) {
             disposeSchedule.push(route('/dsh-kit/schedule/op', (req, res) => {
                 if (req.method !== 'POST')
                     return json(res, 405, { error: 'method not allowed' });
-                if (!sameOrigin(req))
-                    return json(res, 403, { error: 'cross-origin denied' });
                 void readBody(req, SCHED_BODY_LIMIT).then((body) => {
                     if (body === null) {
                         json(res, 413, { error: 'body too large' });
@@ -392,8 +400,6 @@ export async function apply(ctx, config = {}) {
                 vaultRoute(path, (req, res) => {
                     if (req.method !== 'POST')
                         return json(res, 405, { error: 'method not allowed' });
-                    if (!sameOrigin(req))
-                        return json(res, 403, { error: 'cross-origin denied' });
                     const root = vaultGuard(res);
                     if (root === null)
                         return;

@@ -69,7 +69,8 @@ export function withinReadable(target: string, roots: string[], allowRoot = fals
       if (allowRoot) return true
       continue
     }
-    if (!rel.startsWith('..') && !path.isAbsolute(rel)) return true
+    // `..cache/x` 这类首段以两点开头的合法路径不能被前缀判成越界
+    if (rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)) return true
   }
   return false
 }

@@ -3,11 +3,12 @@
 // 本行只有套件自己那点基础设施：vendor 静态资源（xterm / qrcode / 知识库编辑器的
 // TipTap、KaTeX、mermaid 与 PDF 阅读器的 pdf.js）、OpenCode Go 会话头注入（./core/opencode-session.ts）。它没有页面
 // 能力，所以 patch 里不给 id、不进插件页组件列表（宿主只把带 id 的行当组件）。
-// 页面能力本身全部按组件行拆开（cordis.patch.yml 里 insert 八行，行 name = 包名 +
+// 页面能力本身全部按组件行拆开（cordis.patch.yml 里 insert 九行，行 name = 包名 +
 // exports 子路径，行序即插件页显示顺序）：dsh-kit/files（文件树 · 源代码管理）、
-// dsh-kit/vault（知识库 · 日程）、dsh-kit/terminal（终端）、dsh-kit/browser（内置浏览器）、
-// dsh-kit/skills（技能）、dsh-kit/phone（手机访问）、dsh-kit/monitor（用量与监视）、
-// dsh-kit/search（网页搜索）——行关闭 = 该子模块不物化 = 它的端点与 agent 工具一起消失。
+// dsh-kit/chat（对话小窗）、dsh-kit/vault（知识库 · 日程）、dsh-kit/terminal（终端）、
+// dsh-kit/browser（内置浏览器）、dsh-kit/skills（技能）、dsh-kit/phone（手机访问）、
+// dsh-kit/monitor（用量与监视）、dsh-kit/search（网页搜索）——行关闭 = 该子模块不物化
+// = 它的端点与 agent 工具一起消失。
 // 组件各有自己的 Config（src/<组件>/index.ts）；本行没有可调参数。
 //
 // 浏览器半边（client/bundle.js）：各功能入口注册在对话输入框工具行
@@ -15,7 +16,7 @@
 // client 面住在 bundle 尾部的 xModule 隔离壳里，激活由根 apply 尾部循环触发。
 //
 // 本行端点（webserver 默认只绑 loopback）：
-//   GET  /dsh-kit/vendor/*          —— xterm / qrcode / richeditor / katex / mermaid 静态资源
+//   GET  /dsh-kit/vendor/*          —— xterm / qrcode / richeditor / katex / mermaid / pdf.js 静态资源
 //   POST /dsh-kit/log               —— 浏览器半边日志回传（client 侧的异常只有这里能留痕）
 
 import fs from 'node:fs'

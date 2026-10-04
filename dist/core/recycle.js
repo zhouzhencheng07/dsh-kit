@@ -44,12 +44,23 @@ export function recycleDeleteBatch(targets) {
         }
         let out = '';
         let settled = false;
+        /** 从已收到的 R<i>=0|1 行对账：没输出到的项按失败计（超时/中断也走它） */
+        const parse = () => {
+            const results = targets.map(() => false);
+            for (const m of out.matchAll(/R(\d+)=(1|0)/g)) {
+                const idx = Number(m[1]);
+                if (idx >= 0 && idx < results.length)
+                    results[idx] = m[2] === '1';
+            }
+            return results;
+        };
         const timer = setTimeout(() => {
             try {
                 child.kill();
             }
             catch { }
-            finish();
+            // 已处理完的项 stdout 已经落地，别把成功的也记成失败
+            finish(parse());
         }, timeout);
         const finish = (results) => {
             if (settled)
@@ -61,16 +72,8 @@ export function recycleDeleteBatch(targets) {
         child.stdout?.on('data', (d) => {
             out += String(d);
         });
-        child.on('error', () => finish());
-        child.on('close', () => {
-            const results = targets.map(() => false);
-            for (const m of out.matchAll(/R(\d+)=(1|0)/g)) {
-                const idx = Number(m[1]);
-                if (idx >= 0 && idx < results.length)
-                    results[idx] = m[2] === '1';
-            }
-            finish(results);
-        });
+        child.on('error', () => finish(parse()));
+        child.on('close', () => finish(parse()));
     });
 }
 /** 单目标移入回收站；true=已消失。目标类型（文件/目录）现场探测。 */

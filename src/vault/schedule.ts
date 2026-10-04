@@ -398,7 +398,7 @@ export function resolveScheduleDir(): string {
 // 一条一文件（同步底座按文件合并的契约）：
 //   events/<id>.json    一条事件或待办（含 recurrence / timeEntries / rev）
 //   entries/<id>.json   一条独立计时段（原 orphans，自带 id）
-//   timer.json          进行中的计时（本端不读不写）
+//   timer.json          进行中的计时（本端读写：起停表与快照都经它）
 // 为什么：同步（git 底座）按文件合并——整库单文件时两端各改一次必冲突，拆开后冲突面
 // 只剩"同一条"；文件名 = id，改期只改内容不移动文件、删除 = 删文件（不需要墓碑）。
 /** 新身份：时间戳 36 进制 + 4 位随机（同 36 进制） */
@@ -635,7 +635,7 @@ export class ScheduleStore {
     return this.data.events
   }
 
-  /** 独立计时段（不进事件列表，统计与网格展示用）；由计时功能写入，本端只读 */
+  /** 独立计时段（不进事件列表，统计与网格展示用）；由计时功能写入，本访问器只读 */
   listOrphans(): ScheduleTimeEntry[] {
     this.sync()
     return Array.isArray(this.data.orphans) ? this.data.orphans : []
@@ -833,7 +833,7 @@ export class ScheduleStore {
     this.sync()
     const list = this.entryListOf(owner)
     if (!list || list[index] === undefined || list[index]?.end === undefined) return false
-    const removed = list.splice(index, 1)[index]
+    const removed = list.splice(index, 1)[0]
     if (owner) {
       const ev = this.data.events.find((e) => e.id === owner)
       if (ev) this.touch(ev)
@@ -916,7 +916,9 @@ export class ScheduleStore {
     }
     const tasksWithDue = this.data.events.filter((e) => e.start === undefined && e.due)
     const dates: string[] = []
-    for (let d = from; d <= to; d = addDays(d, 1)) dates.push(d)
+    // 按天数推进而不是「按日加一天」：游标万一不前进（非法日期）也只跑有限次
+    const spanDays = diffDays(from, to)
+    for (let i = 0; i <= spanDays; i++) dates.push(addDays(from, i))
     for (const d of dates) {
       const dayOcc = (byDate.get(d) ?? []).sort((a, b) => a.startMins - b.startMins)
       const dueTasks = tasksWithDue.filter((e) => e.due?.slice(0, 10) === d && !e.completedAt)
@@ -1086,7 +1088,10 @@ export function expandOccurrences(events: ScheduleEvent[], from: string, to: str
     // skip："删掉重复日程的某一次"写的那些天（一条系列里被跳过的日期），
     // 展开时直接不产出；不认识的实现会忽略这个字段，读进来也不会丢
     const skip = ev.skip ?? []
-    for (let d = iterFrom; d <= iterTo; d = addDays(d, 1)) {
+    // 同上：以天数封顶推进，非法日期不会把宿主事件循环转死
+    const iterDays = diffDays(iterFrom, iterTo)
+    for (let i = 0; i <= iterDays; i++) {
+      const d = addDays(iterFrom, i)
       if (d < startDate || skip.includes(d)) continue
       let hit = false
       if (rec.type === 'daily') hit = diffDays(startDate, d) % interval === 0
@@ -1266,7 +1271,7 @@ export function buildScheduleTools({
     presentCall: () => ({ card: 'generic', title: '查询日程', kind: 'read' }),
     async execute(args: { scope?: 'day' | 'week' | 'month'; date?: string }) {
       const scope = args?.scope === 'week' || args?.scope === 'month' ? args.scope : 'day'
-      const date = typeof args?.date === 'string' && DATE_RE.test(args.date) ? args.date : todayStr()
+      const date = typeof args?.date === 'string' && isRealDateStr(args.date) ? args.date : todayStr()
       return { summary: store.summary(scope, date), items: store.items(scope, date) }
     },
   })

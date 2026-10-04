@@ -102,14 +102,14 @@ export function resolveInside(root: string, raw: string, opts: { allowRoot?: boo
     if (opts.allowRoot === true) return targetReal
     throw new Error('指向知识库根目录本身')
   }
-  if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`不在知识库内：${trimmed}`)
+  if (rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) throw new Error(`不在知识库内：${trimmed}`)
   return targetReal
 }
 
 /** 路径相对 root 的 `/` 分隔形式（不在 root 内返 null） */
 export function relUnderRoot(root: string, target: string): string | null {
   const rel = path.relative(root, target)
-  if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) return null
+  if (rel === '' || rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) return null
   return rel.split(path.sep).join('/')
 }
 
@@ -532,7 +532,9 @@ function scanImageSrcs(text: string): Array<{ start: number; end: number; src: s
   const html = /<img\b[^>]*\bsrc\s*=\s*("([^"]*)"|'([^']*)')/gi
   for (const m of text.matchAll(html)) {
     const src = m[2] ?? m[3] ?? ''
-    const at = (m.index ?? 0) + m[0].indexOf(src)
+    // 用带引号的捕获串定位：直接找 src 会命中更早的同名属性值（alt="a.png" src="a.png"）
+    const quoted = m[1] ?? ''
+    const at = (m.index ?? 0) + m[0].indexOf(quoted) + 1
     out.push({ start: at, end: at + src.length, src })
   }
   return out.sort((a, b) => a.start - b.start)
@@ -596,6 +598,10 @@ export interface ImportOptions {
   conflict: Conflict
 }
 
+/** srcPath 直读导入的字节上限：与上传通道（base64 体 48MB）同量级，
+ *  免得一次 readFileSync 把超大文件整份读进内存 */
+const IMPORT_SRC_MAX_BYTES = 32 * 1024 * 1024
+
 /** 导入一个文件到库内目录。资料（资料库那一支、或上传的任意文件）按字节原样落盘，
  *  一律自动加序号不覆盖；笔记页收正文并把页内引用的本地图片收进 attachments/。 */
 export async function importEntry(
@@ -617,7 +623,9 @@ export async function importEntry(
     } catch {
       throw new Error(`源文件不可达：${raw}`)
     }
-    if (!fs.statSync(srcReal).isFile()) throw new Error('只能导入文件（文件夹请逐个导入）')
+    const srcStat = fs.statSync(srcReal)
+    if (!srcStat.isFile()) throw new Error('只能导入文件（文件夹请逐个导入）')
+    if (srcStat.size > IMPORT_SRC_MAX_BYTES) throw new Error(`源文件超过 ${IMPORT_SRC_MAX_BYTES / 1024 / 1024}MB 上限`)
     const rootReal = fs.realpathSync(root)
     if (srcReal === rootReal || relUnderRoot(rootReal, srcReal) !== null) throw new Error('源文件已在知识库内')
     bytes = fs.readFileSync(srcReal)

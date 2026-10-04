@@ -3,7 +3,7 @@
 //
 // 三锚点：本模块 require（dev 目录直装时命中工作区）→ dsh 本体锚点（process.argv[1]，
 // profile / 全局安装都命中）→ monorepo 的 .pnpm 目录扫描（源码形态兜底）。
-// 六个组件入口原本各抄一份，其中两份漏了模块级 require 绑定——ESM 里裸 require 是
+// 组件入口原本各抄一份，其中两份漏了模块级 require 绑定——ESM 里裸 require 是
 // ReferenceError，被 catch 吞掉后第一锚点等于不存在；这里只留一份。
 //
 // 认不出就回 null，由各组件按「宿主依赖不可达」降级。

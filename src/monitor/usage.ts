@@ -143,26 +143,29 @@ function pathOf(d: Discovered): string {
 /** 注册 /dsh-kit/usage；返回注销函数（插件卸载时撤路由） */
 export function registerUsageRoutes(deps: UsageDeps): () => void {
   const cache = new Map<ProviderKind, CacheEntry>()
-  const inflight = new Map<ProviderKind, Promise<ProviderResult>>()
+  /** 单飞按「家 + 配置 tag」分键：tag 不同的并发请求不能互相顶包（配置热改期间） */
+  const inflight = new Map<string, Promise<ProviderResult>>()
 
   const getCard = async (d: Discovered, fresh: boolean): Promise<ProviderResult> => {
     const tag = `${d.envRef}@${d.base}`
     const hit = cache.get(d.kind)
-    if (hit?.tag === tag) {
-      if (!fresh && Date.now() - hit.at < CACHE_TTL_MS) return hit.value
-      const running = inflight.get(d.kind)
-      if (running) return running
-    }
-    const run = (async (): Promise<ProviderResult> => {
+    if (hit?.tag === tag && !fresh && Date.now() - hit.at < CACHE_TTL_MS) return hit.value
+    // 缓存没有/过期时也要先看有没有在飞的那次：否则并发首次请求各打一次上游
+    const key = `${d.kind}@${tag}`
+    const running = inflight.get(key)
+    if (running) return running
+    let run!: Promise<ProviderResult>
+    run = (async (): Promise<ProviderResult> => {
       try {
         const resolved = await deps.credentials.resolve?.(d.envRef).catch(() => undefined)
         if (!resolved?.value) return { ok: false, error: `未配置凭证引用 ${d.envRef}` }
         return await fetchUpstream(d, resolved.value)
       } finally {
-        inflight.delete(d.kind)
+        // 只清自己那一条：期间 tag 变了会有另一条同 kind 的在飞记录
+        if (inflight.get(key) === run) inflight.delete(key)
       }
     })()
-    inflight.set(d.kind, run)
+    inflight.set(key, run)
     const value = await run
     cache.set(d.kind, { tag, at: Date.now(), value })
     return value

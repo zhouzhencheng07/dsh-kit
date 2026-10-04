@@ -38,7 +38,10 @@ export const sogouEngine = {
         }
       }),
     )
-    return { items: resolved.filter((it) => it.url) }
+    const items = resolved.filter((it) => it.url)
+    // 全部 /link 解析失败与「没有结果」同义：抛错让链继续往下走，别当成功返回空
+    if (items.length === 0) throw new Error('sogou: no resolvable results')
+    return { items }
   },
 }
 

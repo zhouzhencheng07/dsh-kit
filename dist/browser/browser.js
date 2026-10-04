@@ -301,7 +301,15 @@ export class BrowserService {
             const now = Date.now();
             // 分区级回收：没人看且十分钟没动过的对话，只收它自己的页（别的对话不受影响）
             for (const [key, s] of [...this._scopes]) {
-                if (s.frames.size > 0 || s.pages.size === 0 || now - s.lastActivity <= IDLE_CLOSE_MS)
+                if (now - s.lastActivity <= IDLE_CLOSE_MS)
+                    continue;
+                if (s.pages.size === 0) {
+                    // 空壳同样回收：_s() 对任意 scope 建条目、面板又接受任意 scope 串，
+                    // 只跳过的话用过的每个 scope 都是一条永不消失的记录
+                    this._dropIdleScope(key);
+                    continue;
+                }
+                if (s.frames.size > 0)
                     continue;
                 this._log(`分区空闲超时，收起该对话的 ${s.pages.size} 页`);
                 void this._closeScopePages(key, s);
@@ -327,7 +335,7 @@ export class BrowserService {
         this._emit({ kind: 'scope', scope });
     }
     /** 启动前清理上次异常留下的孤儿实例（pidfile 信任 + 进程名核验） */
-    _cleanupOrphan() {
+    async _cleanupOrphan() {
         const pidFile = kitPath('browser-profile', '.pid');
         let pid = 0;
         try {
@@ -366,21 +374,19 @@ export class BrowserService {
             child.on('error', () => resolve(false));
             child.on('close', () => resolve(true));
         });
-        void (async () => {
-            if (!(process.platform === 'win32' ? await isBrowser() : true)) {
-                try {
-                    fs.unlinkSync(pidFile);
-                }
-                catch { }
-                return;
-            }
-            await kill();
+        if (!(process.platform === 'win32' ? await isBrowser() : true)) {
             try {
                 fs.unlinkSync(pidFile);
             }
             catch { }
-            this._log(`清理上次残留的浏览器实例（pid ${pid}）`);
-        })();
+            return;
+        }
+        await kill();
+        try {
+            fs.unlinkSync(pidFile);
+        }
+        catch { }
+        this._log(`清理上次残留的浏览器实例（pid ${pid}）`);
     }
     /** 懒启动持久化上下文（幂等；并发调用共享同一次启动） */
     async ensure() {
@@ -403,7 +409,8 @@ export class BrowserService {
             this._launchError = 'playwright-core vendor 不可用（host-vendor 缺失或损坏）';
             return { ok: false, error: this._launchError };
         }
-        this._cleanupOrphan();
+        // 必须等：上次异常退出的实例还占着 profile 时，抢跑 launch 会失败并落进重试窗口
+        await this._cleanupOrphan();
         // 启动即广播：面板拿到 launching 状态可提示「启动中」而不是空白等待
         this._emit({ kind: 'state' });
         const userDataDir = kitPath('browser-profile');

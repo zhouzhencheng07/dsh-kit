@@ -26,14 +26,15 @@ interface KitWebServer {
 
 interface KitWebCtx {
   webServer: KitWebServer
+  effect(fn: () => void | (() => void), label?: string): void
 }
 
 export const name = 'dsh-kit/chat'
 
 // ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile 写入
-// = 热提交，readSettings 统一解引用后每次现读。取值语义与默认值的唯一副本在
-// client/bundle.js 的 CHAT_CFG_DEFAULTS（渲染级检查钉住两处同源）。
+// = 热提交，readSettings 统一解引用后每次现读。client 侧另有一份默认值
+// （client/bundle.js 的 CHAT_CFG_DEFAULTS），渲染级检查钉住两处同源。
 const schemastery = loadDep('@deepseek-ai/schemastery')
 const z = (schemastery?.default ?? schemastery ?? null) as any
 
@@ -61,7 +62,9 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
   }
 
   ctx.inject(['webServer'], (webCtx: KitWebCtx) => {
-    webCtx.webServer.register({
+    // 路由必须随 fiber 注销（宿主 register 对重复 path 直接抛错）：行关闭再开会
+    // 因残留路由重复注册失败，行关闭期间探针也仍 200、client 门控失效
+    webCtx.effect(() => webCtx.webServer.register({
       kind: 'exact',
       path: '/dsh-kit-chat/config',
       handler: (req, res) => {
@@ -79,6 +82,6 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
         }
         json(200, readSettings())
       },
-    })
+    }), 'dsh-kit/chat: config endpoint')
   })
 }
