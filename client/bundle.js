@@ -980,7 +980,7 @@ window.__ModuleLoader__.load({
       openRightbarTab, closeRightbarTab, openFileAndDock,
     rightbarAddress, rightbarItem, rightbarQuery, openRightbarItem,
       useRightbarItems, rightbarItems, closeRightbarItem, activeRightbarFeature, closeActiveRightbarTab, tabAddress,
-      sidebarViewPatch, toggleTermDock, spawnTerm, killTerm, makeTerm, getRightbarSr,
+      sidebarViewPatch, getRightbarSr,
       rightbarSeat, useRightbarSeat,
     } = dock;
 
@@ -1262,6 +1262,8 @@ window.__ModuleLoader__.load({
       moved: "已移动",
       imported: "已导入",
       cancel: "取消",
+      // 组件半边（vault 等）的共用失败前缀：它们经 rootT 回落，缺了会显示键名
+      skOpFail: "操作失败",
     };
     const en = {
       treeNewAny: "New file/folder",
@@ -1302,6 +1304,7 @@ window.__ModuleLoader__.load({
       moved: "Moved",
       imported: "Imported",
       cancel: "Cancel",
+      skOpFail: "Operation failed",
     };
     /** 语言判定与切换响应住在共享底座（所有组件共享同一份 locale store 与
      *  <html lang> MutationObserver），这里解构取用。 */
@@ -3107,7 +3110,14 @@ ellipsis，窄列只截字不破版 */
               return;
             }
             if (err && err.status === 409 && window.confirm(t("skOverwrite"))) {
-              body = await postSkillOp({ ...payload, overwrite: true });
+              // 覆盖重试同样可能失败：外层只有 finally，这里再抛就是未处理拒绝——
+              // 用户只看到忙态消失、没有任何提示
+              try {
+                body = await postSkillOp({ ...payload, overwrite: true });
+              } catch (retryErr) {
+                setMessage(`${t("skOpFail")}：${skErrText(retryErr)}`);
+                return;
+              }
             } else {
               setMessage(`${t("skOpFail")}：${skErrText(err)}`);
               return;
@@ -3409,7 +3419,7 @@ ellipsis，窄列只截字不破版 */
     // ── dsh-kit/vault 组件（知识库 · 日程）──
 // dsh-kit/vault 浏览器半边 —— 知识库 · 日程组件的 client 面。
 // 收纳：侧栏那一格（顶部 tab 条切 知识库 目录索引 / 日程 待办清单）、右栏知识库页阅读面
-// （vendor RTE 只读态 + 双链 / 反链 / 目录导航）、右栏日程签（周时间网格 + 统计）、
+// （vendor RTE 编辑态 + 双链 / 反链 / 目录导航）、右栏日程签（周时间网格 + 统计）、
 // 输入行那一枚入口钮（开/关侧栏那一格）、对话文件路径改投知识库标签、组件配置页与快捷键。
 // 数据走本组件宿主半边 /dsh-kit/vault/* 与 /dsh-kit/schedule/*；行开关即总开关：
 // 宿主半边不物化时 /dsh-kit-vault/config 404，apply 直接不注册任何槽位与监听
@@ -3550,6 +3560,7 @@ ellipsis，窄列只截字不破版 */
       vaultRefresh: "刷新索引与目录树",
       vaultRefreshed: "已刷新",
       vaultBinaryHint: "二进制文件，知识库不渲染",
+      vaultTooLargeHint: "文件超过 512KB，为避免写回截断，库内不编辑（请用外部编辑器）",
       vaultCopy: "复制",
       vaultCopied: "已复制",
       vaultBacklinks: "反链",
@@ -3756,6 +3767,7 @@ ellipsis，窄列只截字不破版 */
       vaultRefresh: "Refresh index and tree",
       vaultRefreshed: "Refreshed",
       vaultBinaryHint: "Binary file — not rendered in the vault",
+      vaultTooLargeHint: "Larger than 512 KB — editing here is disabled to avoid truncating the file (use an external editor)",
       vaultCopy: "Copy",
       vaultCopied: "Copied",
       vaultBacklinks: "Backlinks",
@@ -5049,7 +5061,8 @@ ellipsis，窄列只截字不破版 */
 
     // ── 日程数据钩子（清单与网格各自挂载、各自轮询）：侧栏待办清单只要事件与
     // 实例（needStats=false 省掉统计那次请求），右栏网格另取周统计；
-    // 面板只读无写操作，30s 轮询兜底接住 agent 工具与外部写入的变化 ──
+    // 面板的建/改/删/完成/计时都走写端点（写完经 schedBus 立刻重取），30s 轮询兜底
+    // 接住 agent 工具与外部写入的变化 ──
     // statsDate = 网格当前显示的那一周（周导航翻页即换口径）；清单不关心统计
     function useScheduleData(needStats = true, statsDate = null) {
       const [data, setData] = react.useState(() => ({ events: [], occurrences: [], orphans: [], runningTimer: null }));
@@ -5655,12 +5668,12 @@ ellipsis，窄列只截字不破版 */
     // ─────────── 知识库（vault：侧栏目录索引 + 右栏页阅读面，portal 拆两半）───────────
     // vault = 本组件行配置页配置的绝对目录，其内一切 md 即页面（数据契约见 src/vault/scanner.ts）。
     // 布局「选库进入阅读」：左 = 工具条（搜索 + ↻）+ 懒加载目录树；右 = 页阅读面
-    // （TipTap 只读态，vendor/richeditor.bundle.js 的 window.DshRTE 工厂：md ↔ 富文本
+    // （TipTap 编辑态，vendor/richeditor.bundle.js 的 window.DshRTE 工厂：md ↔ 富文本
     // 往返、[[wikilink]]/公式/未知块 HTML 原样保留）。VaultRootView 单实例挂在组件壳里，
     // 两半经 portal 分投侧栏与右栏 pane 宿主。
-    // 只读阅读面：目录 / 搜索 / 双链 / 反链 / 大纲导航。页面本体由 agent 文件工具或
-    // 外部编辑器写（文件即接口），插件没有正文写入端点——盘上被改（stat 轮询发现
-    // mtime 变化）就整页静默重读。全文搜索走本组件宿主端点（路径 8 / 文件名 5 / 正文 2）。
+    // 编辑面：目录 / 搜索 / 双链 / 反链 / 大纲导航 + 正文所见即所得（自动保存走
+    // POST /dsh-kit/vault/write，mtime CAS 防覆盖别处改动）；盘上被别处改（stat 轮询
+    // 发现 mtime 变化）就整页静默重读。全文搜索走本组件宿主端点（路径 8 / 文件名 5 / 正文 2）。
 
     /** 拆 frontmatter：返回 { fmText, rest }。fmText = "---…---" 块（含随后的
      *  首个换行）的字节级原文，无 frontmatter 时 fmText=""；rest = 其余全部。
@@ -7837,7 +7850,7 @@ ellipsis，窄列只截字不破版 */
      *  （目录・反链・面包屑）。active=false 的签仍挂载（保住滚动与草稿），只停掉
      *  stat 轮询，并在失活那一刻把防抖未落盘的改动写掉（「切走即存」）。 */
     function VaultPagePane({ path, active, root, indexPages, onOpenPage, onIndexRefresh, toast }) {
-      // page: { loading, body(编辑器入参), binary, gone }——frontmatter 字节级原文
+      // page: { loading, body(编辑器入参), binary, truncated, gone }——frontmatter 字节级原文
       // 存 ref（保存时原样拼回），不进 state（它不驱动渲染）
       const [page, setPage] = react.useState(null);
       // RTE 重挂载 tick：首次加载/外部修改重读/冲突回读时 bump（日常保存不重挂）
@@ -7885,18 +7898,18 @@ ellipsis，窄列只截字不破版 */
           const { fmText, rest } = body.binary ? { fmText: "", rest: "" } : vaultSplitFrontmatter(raw);
           fmRef.current = fmText;
           mtimeRef.current = body.mtimeMs ?? 0;
-          setPage({ loading: false, body: rest.trimStart(), binary: body.binary === true, gone: false });
+          setPage({ loading: false, body: rest.trimStart(), binary: body.binary === true, truncated: body.truncated === true, gone: false });
           setDocTick((t) => t + 1);
         } catch {
           fmRef.current = "";
           mtimeRef.current = 0;
-          setPage({ loading: false, body: "", binary: false, gone: true });
+          setPage({ loading: false, body: "", binary: false, truncated: false, gone: true });
           setDocTick((t) => t + 1);
         }
       }, [path]);
 
       react.useEffect(() => {
-        setPage({ loading: true, body: "", binary: false, gone: false });
+        setPage({ loading: true, body: "", binary: false, truncated: false, gone: false });
         void loadCurrent();
         return undefined;
       }, [loadCurrent]);
@@ -7918,7 +7931,7 @@ ellipsis，窄列只截字不破版 */
               body: JSON.stringify({ path, content, baseMtime: base }),
             });
             if (body.missing === true) {
-              setPage({ loading: false, body: "", binary: false, gone: true });
+              setPage({ loading: false, body: "", binary: false, truncated: false, gone: true });
               toast(t("vaultPageGone"));
               return "gone";
             }
@@ -8100,6 +8113,10 @@ ellipsis，窄列只截字不破版 */
             ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultPageGone") })
             : page.binary === true
               ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultBinaryHint") })
+              // 读端点对 >512KB 只回前 512KB（truncated）：不能拿半截正文喂编辑器，
+              // 否则自动保存会把文件写回成前 512KB，尾部丢光
+              : page.truncated === true
+                ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultTooLargeHint") })
               : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
                   jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
                     // 页条 = 文档级命令 + 阅读条（sticky）：撤销/重做、未保存脏点；
@@ -8349,15 +8366,24 @@ ellipsis，窄列只截字不破版 */
     /**
      * 文档缓存：键 = 路径 + mtime + size（内容身份，改了就是另一份，位置也另记）。
      * 官方分栏开关会把这一页在 React 树里从一栏挪到另一栏（组件卸载重挂），没有
-     * 缓存就是几十 MB 重下 + 重解析一遍。LRU 到量即 destroy——**不做引用计数**：
-     * 两栏共用这一份 Map 就够了，交接本来就是引用计数唯一的存在理由。
+     * 缓存就是几十 MB 重下 + 重解析一遍。LRU 到量即 destroy，但**要引用计数**：
+     * 签是 keepMounted 的，后台那栏仍持有 doc，销毁它等于把切回来的那栏打死。
      */
     const pdfDocs = new Map();
+    /** 内容身份 → 仍挂着阅读器的数量（>0 的条目不可淘汰） */
+    const pdfDocRefs = new Map();
     const PDF_DOC_CACHE_BYTES = 64 * 1024 * 1024;
     let pdfDocBytes = 0;
     function pdfDocEvict() {
       while (pdfDocBytes > PDF_DOC_CACHE_BYTES && pdfDocs.size > 1) {
-        const key = pdfDocs.keys().next().value;
+        let key = null;
+        for (const k of pdfDocs.keys()) {
+          if ((pdfDocRefs.get(k) ?? 0) === 0) {
+            key = k;
+            break;
+          }
+        }
+        if (key === null) break; // 全都被在用的阅读器持有：宁可超限也不打死活着的
         const entry = pdfDocs.get(key);
         pdfDocs.delete(key);
         pdfDocBytes -= entry.bytes;
@@ -8587,6 +8613,8 @@ ellipsis，窄列只截字不破版 */
       // 载入：内容身份 = 路径 + mtime + size（改过就是另一份，位置也另记）
       react.useEffect(() => {
         let alive = true;
+        /** 本阅读器占住的内容身份（清理时释放，见 pdfDocRefs） */
+        let heldKey = null;
         setDoc(null);
         setLib(null);
         setBoxes([]);
@@ -8609,6 +8637,8 @@ ellipsis，窄列只截字不破版 */
             return;
           }
           const key = path + "|" + stat.mtimeMs + "|" + stat.size;
+          heldKey = key;
+          pdfDocRefs.set(key, (pdfDocRefs.get(key) ?? 0) + 1);
           const saved = pdfPosGet(key);
           // 盘上只记页码：进来落在该页页顶。锚点等版面排出来由钉位那一步现算
           bootRef.current = Math.max(1, Number(saved && saved.page) || 1);
@@ -8635,6 +8665,12 @@ ellipsis，窄列只截字不破版 */
         });
         return () => {
           alive = false;
+          if (heldKey !== null) {
+            const left = (pdfDocRefs.get(heldKey) ?? 1) - 1;
+            if (left <= 0) pdfDocRefs.delete(heldKey);
+            else pdfDocRefs.set(heldKey, left);
+            pdfDocEvict();
+          }
         };
       }, [path, attempt]);
 
@@ -9423,8 +9459,12 @@ ellipsis，窄列只截字不破版 */
 
       // 打开即取状态与链接；网关未跑时只显示原因。端口与远程域名是热提交，
       // 这一页不会自己重挂——切回窗口时重取一次，否则改完设置回来看到的还是旧二维码
+      const refreshCtrl = react.useRef(null);
       const refresh = react.useCallback(() => {
+        // 上一发还在飞就掐掉：切回窗口/焦点连发时，旧回包可能盖住新状态
+        refreshCtrl.current?.abort();
         const ctrl = new AbortController();
+        refreshCtrl.current = ctrl;
         fetchPhoneInfo(ctrl.signal)
           .then((body) => {
             // 成功即清错误位：否则一次瞬时失败会永久盖住状态行（只能重挂组件才消）
@@ -9442,7 +9482,10 @@ ellipsis，窄列只截字不破版 */
         refresh();
         const onFocus = () => refresh();
         window.addEventListener("focus", onFocus);
-        return () => window.removeEventListener("focus", onFocus);
+        return () => {
+          window.removeEventListener("focus", onFocus);
+          refreshCtrl.current?.abort();
+        };
       }, [refresh]);
       // vendored 二维码库按需加载一次
       react.useEffect(() => {
@@ -9677,9 +9720,7 @@ ellipsis，窄列只截字不破版 */
       treeNewAny: "新建文件/目录",
       treeNewPh: "名称，\\ 开头新建文件夹，可含 / 多级，回车创建",
       treeRename: "重命名",
-      treeDelete: "删除",
       treeCopyAbs: "复制绝对路径",
-      treeCopyRel: "复制相对路径",
       treeCopied: "已复制路径",
       treeAt: "@ 到对话",
       treeAtUnavailable: "输入框未就绪（无会话或不可用）",
@@ -9787,9 +9828,7 @@ ellipsis，窄列只截字不破版 */
       treeNewAny: "New file/folder",
       treeNewPh: "Name, \\ prefix creates a folder, / for nesting, Enter to create",
       treeRename: "Rename",
-      treeDelete: "Delete",
       treeCopyAbs: "Copy absolute path",
-      treeCopyRel: "Copy relative path",
       treeCopied: "Path copied",
       treeAt: "Insert @ mention",
       treeAtUnavailable: "Composer is not ready (no active session)",
@@ -10035,7 +10074,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 .dshk-branch-del{appearance:none;flex:none;width:18px;height:18px;font-size:10px;line-height:1;border:0;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer;border-radius:4px;padding:0}
 .dshk-branch-newtag{flex:none;font-size:10px;color:var(--dsw-alias-brand-primary)}
 .dshk-branch-del:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-/* 分支按钮的领先/落后计数（main ↑1↓2） */
 /* 分支浮层（fixed 悬浮面板）：自带内部滚动，不参与 .dshk-tree 的 flex 挤压 */
 .dshk-branch-menu{width:236px;max-height:min(70vh,420px);display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
 .dshk-branch-menu .dshk-branch-title{flex:none;padding:6px 10px 4px;background:none;border-bottom:1px solid var(--dsw-alias-border-l1)}
@@ -10222,10 +10260,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     }
 
     /** git 状态轮询周期：可见时低频拉取，回窗口/聚焦立即补一次 */
-    // git 轮询间隔：每次轮询都要 spawn 一个 git 进程（实测本机 status 54–276ms、
-    // log 81–110ms），4s 一拍在 SCM 视图常开时是稳定可见的后台开销。动作后的刷新
-    // （stage/commit/branch 成功后各自 kick）与「可见性/焦点变化立即补一拍」不受影响，
-    // 所以拉长到 8s 只影响"放着不动时的自动跟随"这一档。
+    // 每次轮询都要 spawn 一个 git 进程（实测本机 status 54–276ms、log 81–110ms），
+    // 所以默认档取 8s：动作后的刷新（stage/commit/branch 成功后各自 kick）与
+    // 「可见性/焦点变化立即补一拍」不受影响，只影响"放着不动时的自动跟随"这一档。
   const GIT_POLL_MS = 8000;
   /** SCM 清单常开时用快拍：人盯着面板等的就是「agent 刚改完有没有出现」
    *  （一次 status+numstat 在本机 54–276ms，3s 一拍的代价可接受，且不可见时本就不轮） */
@@ -11011,9 +11048,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const [err, setErr] = react.useState("");
       const fetchRef = react.useRef(null);
       const seqRef = react.useRef(0);
+      const ctrlRef = react.useRef(null);
       fetchRef.current = () => {
         if (!cwd) return;
+        ctrlRef.current?.abort();
         const c = new AbortController();
+        ctrlRef.current = c;
         const seq = ++seqRef.current;
         fetchGitStatus(cwd, c.signal)
           .then((b) => {
@@ -11044,6 +11084,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           unsubscribe();
           document.removeEventListener("visibilitychange", tick);
           window.removeEventListener("focus", tick);
+          ctrlRef.current?.abort();
         };
       }, [cwd, view]);
       // agent 一回合跑完（会话行 running 由真变假）立刻补一拍：人盯着面板等的就是
@@ -11243,7 +11284,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         const segs = rel.split(/[\\/]/);
         const name = segs[segs.length - 1];
         const dir = segs.slice(0, -1).join("/");
-        const isUntracked = String(item.xy).trim() === "?";
+        const isUntracked = String(item.xy).trim() === "??";
         // 已删除文件（xy 含 D）：工作区里已无文本可读，点击进「仅删除 diff」预览
         // （git diff HEAD 能给出被删内容；不做文本预览以免"文件不存在"报错）
         const isDeleted = !isUntracked && (item.xy[0] === "D" || item.xy[1] === "D");
@@ -11652,9 +11693,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       // 序号守卫：轮询与「加载更多」并发时，先发后到的整页响应会把已追加的记录
       // 盖回第一页（GitChangesPanel 同款）
       const seqRef = react.useRef(0);
+      const ctrlRef = react.useRef(null);
       fetchRef.current = () => {
         if (!cwd) return;
+        ctrlRef.current?.abort();
         const c = new AbortController();
+        ctrlRef.current = c;
         const seq = ++seqRef.current;
         fetchGitLog(cwd, 200, 0, c.signal)
           .then((b) => {
@@ -11670,7 +11714,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       // 新记录只会消费/延续已有槽位，不改变前面行的画法）
       const loadMore = () => {
         if (!cwd || more || !data || data.available !== true || data.hasMore !== true) return;
+        ctrlRef.current?.abort();
         const c = new AbortController();
+        ctrlRef.current = c;
         const seq = ++seqRef.current;
         setMore(true);
         fetchGitLog(cwd, 200, Array.isArray(data.records) ? data.records.length : 0, c.signal)
@@ -11703,6 +11749,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           unsubscribe();
           document.removeEventListener("visibilitychange", tick);
           window.removeEventListener("focus", tick);
+          ctrlRef.current?.abort();
         };
       }, [cwd]);
 
@@ -12428,7 +12475,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // 单位是句子：结尾同一句（或连续几句话）连续重复 N 遍才算复读。字符级周期扫描与
     // 「单步字符上限」都已删除——它们把正常长输出、结构重复当成失控，是误杀来源。
     const MONITOR_WARN_COPIES = 3;
-    const MONITOR_STOP_COPIES = 5;
     const MONITOR_MIN_BLOCK_CHARS = 6;
     const MONITOR_MAX_BLOCK_UNITS = 8;
     const MONITOR_SCAN_MS = 1000; // 界面扫描节奏；判据本身与时间无关
@@ -12993,7 +13039,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       } catch {
         return; // 服务异常：放弃本次（作答链路不受影响）
       }
-      if (!notifyWanted(cfg, sessionId, mainRowOf(list)?.id, notifyForeground())) return;
+      // 第 5 个参数不能漏：小窗正显示这条会话时人也算「看着」，不该再弹桌面通知
+      if (!notifyWanted(cfg, sessionId, mainRowOf(list)?.id, notifyForeground(), chatSurfaceSession())) return;
       notifyDeliver({
         kind,
         sessionId,
@@ -16325,9 +16372,10 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     }
 
     // ─────────── 插件体 ───────────
-    function apply(ctx) {
-      // 行禁用 → 探针 404 → 整体不注册（把手与浮窗全不出现）
-      void loadCfg();
+    async function apply(ctx) {
+      // 行禁用 → 探针 404 → 整体不注册（把手与浮窗全不出现）；返回值必须等、必须判，
+      // 否则配置快照缺失会回落默认全开，关行后小窗照常渲染
+      if (!(await loadCfg())) return;
       ctx.inject(["sessions"], (sctx) => {
         sessionsSvc = sctx.sessions ?? null;
       });
