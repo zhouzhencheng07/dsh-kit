@@ -1,80 +1,125 @@
-// 输出侧死循环判据（宿主与客户端共用一份，避免两处漂移）
+// 输出侧复读判据（宿主与客户端共用一份，避免两处漂移）
 //
-// 判三类形态，都是纯函数、无宿主依赖。客户端 bundle 侧是零构建的手写 bundle、
-// import 不了本包，那里手抄一份（改判据时两边都要动，见知识库
-// [[dsh-kit 会话监视]] 的「判据」一节）：
-//   ① 尾部整块重复——逐字复读同一整段；
-//   ② 周期性复读——绕圈说同一件事，重复单元边界随流式切片漂移，① 抓不到；
-//   ③ 单步输出过长——不重复但一直吐字的退化。
-// ②③ 的必要性见官方讨论 #2848（"no circuit breaker — only a manual abort
-// stops it"）。
+// 单位是**句子**而不是字符：模型陷入复读时的真实形态是「一句话或连续几句话绕着圈
+// 说」——「重复一句话」在字符层面只是尾部一小段自重叠，还夹着换行/标点噪声，用字符
+// 周期去猜周期既贵又容易误伤正常长文（旧实现正是这么误杀的）。切句之后，「同一句
+// （或同一组连续句）连续出现 N 遍」就是直接判据，与流式切片方式无关。
+//
+// 三类误报在这一层被排除：
+//   ① 长但不重复的正常输出——不构成连续重复块，永不命中（旧实现的「单步字符上限」
+//      把几万字的正常推理直接当失控，已删除）；
+//   ② 列表 / 表格 / 代码里结构相同但内容不同的行——句子文本不同，不构成重复；
+//   ③ 正常的强调性复述（「说三遍」）——到警告档只提示，继续重复到停止档才动。
+//
+// 客户端 bundle 是零构建的手写 bundle、import 不了本包，那里手抄一份
+// （tests/render-check-monitor.cjs 用同一语料比对两份判据，防漂移）。
 
-/** 重复块最短长度：放过短分隔符/标点（--- 、换行噪声） */
-export const MIN_BLOCK = 8
-/** 重复块最长扫描长度：兜住长句循环，扫描成本封顶 */
-export const MAX_BLOCK = 128
-/** 周期检测的尾部窗口：够放下几个循环单元 */
-export const CYCLE_WINDOW = 4000
-/** 周期下限：放过「好/是」这类短词偶然重复 */
-export const CYCLE_MIN = 12
-/** 周期上限：长句绕圈也抓，扫描成本 O(窗口×周期) */
-export const CYCLE_MAX = 400
+/** 判定为复读所需的最少连续重复遍数（低档=警告，只提示不停） */
+export const WARN_COPIES = 3
+/** 停止档：重复继续到这么多遍才停止回合（先警告、继续才停的分档策略） */
+export const STOP_COPIES = 5
+/** 重复块（一句或连续几句）的最小字符数：放过「好。」这类短噪声 */
+export const MIN_BLOCK_CHARS = 6
+/** 重复块最多由几句组成：循环单元通常是「一句话或几句话」 */
+export const MAX_BLOCK_UNITS = 8
 
-/**
- * 尾部自重叠扫描：累计文本末尾连续重复块的最大次数（块长在 MIN_BLOCK..MAX_BLOCK
- * 内穷举对齐，与流式分块方式无关）。文本不足两个最短块时返回 1。
- */
-export function tailRepeatCount(text: string): number {
-  const len = text.length
-  let best = 1
-  for (let p = MIN_BLOCK; p <= MAX_BLOCK && p * 2 <= len; p++) {
-    const block = text.slice(len - p)
-    let m = 1
-    while (len - (m + 1) * p >= 0 && text.slice(len - (m + 1) * p, len - m * p) === block) m++
-    if (m > best) best = m
-  }
-  return best
+/** 句末标点：这些字符处断句（连续出现时并入同一句） */
+const SENTENCE_END = new Set(['。', '！', '？', '；', '…', '!', '?', ';'])
+
+/** 一句话：归一化文本 + 是否已收束（流式尾部未完成的句子不参与判定） */
+export interface SentenceUnit {
+  /** 归一化后的句子文本（压缩空白后 trim） */
+  text: string
+  /** 是否以句末标点/换行收尾 */
+  complete: boolean
+}
+
+/** 一次复读命中：尾部由 units 句组成的块连续重复了 copies 遍 */
+export interface LoopHit {
+  /** 重复块由几句组成 */
+  units: number
+  /** 连续重复了几遍 */
+  copies: number
+  /** 重复块（一遍）的字符数 */
+  chars: number
+}
+
+function normalizeUnit(raw: string): string {
+  return raw.replace(/\s+/g, ' ').trim()
 }
 
 /**
- * 周期性重复检测（跨块边界）：取尾部窗口，对每种周期 p 检查「p 位移上连续相同
- * 的位置」，即 tail[i] === tail[i-p] 的最长连续长度；该长度 ≥2p 说明这段至少
- * 连着走了两个完整周期，才判为复读。与分块方式无关，也不依赖重复起点对齐。
- * 返回命中的最大周期（0 = 无）。
- *
- * 阈值取 2p 而非 p：只重复一个完整周期（如「把刚才那段结论复述一遍」）是正常
- * 输出，判成循环会误伤；真正的复读会持续绕圈，连着两个周期以上。
+ * 把文本切成句子。断句点：句末标点（。！？；…!?;）、换行、以及不夹在数字中间的
+ * 英文句点（跟随空白或行尾）。尾部没有断句点的内容标记为未完成。
  */
-export function cyclePeriod(text: string): number {
-  const tail = text.length > CYCLE_WINDOW ? text.slice(-CYCLE_WINDOW) : text
-  const n = tail.length
-  let best = 0
-  for (let p = CYCLE_MIN; p * 2 <= n && p <= CYCLE_MAX; p++) {
-    let run = 0
-    for (let i = p; i < n; i++) {
-      run = tail[i] === tail[i - p] ? run + 1 : 0
-      if (run >= p * 2) {
-        if (p > best) best = p
-        break
-      }
+export function segmentSentences(text: string): SentenceUnit[] {
+  const out: SentenceUnit[] = []
+  if (typeof text !== 'string' || text === '') return out
+  const n = text.length
+  let start = 0
+  const push = (end: number, complete: boolean): void => {
+    const norm = normalizeUnit(text.slice(start, end))
+    if (norm !== '') out.push({ text: norm, complete })
+    start = end
+  }
+  for (let i = 0; i < n; i++) {
+    const ch = text[i]!
+    if (ch === '\n') {
+      push(i + 1, true)
+      continue
+    }
+    if (SENTENCE_END.has(ch)) {
+      let j = i + 1
+      while (j < n && SENTENCE_END.has(text[j]!)) j++
+      push(j, true)
+      i = j - 1
+      continue
+    }
+    if (ch === '.') {
+      const prev = text[i - 1]
+      const next = text[i + 1]
+      const digitPrev = prev !== undefined && prev >= '0' && prev <= '9'
+      const digitNext = next !== undefined && next >= '0' && next <= '9'
+      if (!digitPrev && !digitNext && (next === undefined || /\s/.test(next))) push(i + 1, true)
     }
   }
-  return best
+  if (start < n) push(n, false)
+  return out
 }
 
-/** 复读两条判据（① 尾部整块重复 ② 周期复读）的合成。与 looksLooped 拆开是因为宿主
- *  侧的累积文本有内存闸（loop-breaker 的 ACCUM_MAX），那边「单步过长」得自己记账
- *  字符数——拿被截断后的 text.length 判会让这条判据永远不成立。 */
-export function repeatsLooped(text: string, threshold: number): boolean {
-  if (typeof text !== 'string' || text === '') return false
-  if (tailRepeatCount(text) >= threshold) return true
-  return cyclePeriod(text) > 0
+/**
+ * 尾部连续重复块扫描：从尾部往回看，找最小的块（1..MAX_BLOCK_UNITS 句），要求它
+ * 连续完整地重复至少 WARN_COPIES 遍（块字符数不足 MIN_BLOCK_CHARS 的短句跳过）。
+ * 只认尾部——重复之后已经说了别的，就是自愈了，不该再动它。
+ */
+export function tailLoop(units: readonly SentenceUnit[]): LoopHit | null {
+  let end = units.length
+  while (end > 0 && units[end - 1]!.complete !== true) end--
+  const n = end
+  if (n < WARN_COPIES) return null
+  for (let p = 1; p <= MAX_BLOCK_UNITS && p * WARN_COPIES <= n; p++) {
+    let chars = 0
+    for (let k = n - p; k < n; k++) chars += units[k]!.text.length
+    if (chars < MIN_BLOCK_CHARS) continue
+    let copies = 1
+    while ((copies + 1) * p <= n) {
+      let same = true
+      for (let k = 0; k < p; k++) {
+        if (units[n - (copies + 1) * p + k]!.text !== units[n - p + k]!.text) {
+          same = false
+          break
+        }
+      }
+      if (!same) break
+      copies++
+    }
+    if (copies >= WARN_COPIES) return { units: p, copies, chars }
+  }
+  return null
 }
 
-/** 死循环判定的总入口：三条判据合成一个布尔。maxChars 按 text.length 判——只有
- *  传进来的 text 未被截断时这条才成立（客户端那份手抄副本正是如此）。 */
-export function looksLooped(text: string, threshold: number, maxChars: number): boolean {
-  if (typeof text !== 'string' || text === '') return false
-  if (text.length > maxChars) return true
-  return repeatsLooped(text, threshold)
+/** 判据总入口：切句 + 尾部连续重复扫描。命中返回重复块信息，否则 null。 */
+export function detectLoop(text: string): LoopHit | null {
+  if (typeof text !== 'string' || text === '') return null
+  return tailLoop(segmentSentences(text))
 }

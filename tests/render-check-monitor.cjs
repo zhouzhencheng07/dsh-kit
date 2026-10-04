@@ -151,7 +151,7 @@ async function checkApply() {
   check("U apply 槽位与配置页都经 slots.inject 等声明", seatInjects.filter((k) => k === "conversation.composer.dock").length === 2 && seatInjects.includes("plugins.row.config") && !seatInjects.includes("conversation.session.header.actions"));
   const seat = (id) => registered.find((s) => s.id === id);
   check("U 槽位座席：用量芯片 composer.dock order 6", seat("dsh-kit-usage") && seat("dsh-kit-usage").order === 6);
-  check("U 槽位座席：熔断条 composer.dock order 5", seat("dsh-kit-monitor") && seat("dsh-kit-monitor").order === 5);
+  check("U 槽位座席：复读提示条 composer.dock order 5", seat("dsh-kit-monitor") && seat("dsh-kit-monitor").order === 5);
   check("U 头部状态条座位已随 429 机制退役", seat("dsh-kit-monitor-bg") === undefined);
   const cfgKeys = registered.filter((s) => s.name === "plugins.row.config").map((s) => s.key);
   check("U 配置页挂本组件行（单包单口径 key）", cfgKeys.includes("dsh-kit#monitor") && cfgKeys.length === 1);
@@ -437,8 +437,8 @@ async function checkApply() {
 }
 
 
-// 10) MonitorLine（会话监视条）：空闲无 turn-error 时渲染 null（占位不占视觉）；
-//     桩 useEffect 不执行 → 检测逻辑不跑，只验证渲染体不抛异常。
+// 10) MonitorLine（复读提示条）：空闲/未命中时渲染 null（占位不占视觉）；
+//     桩 useEffect 不执行 → 扫描不跑，只验证渲染体不抛异常；实机动作由宿主守卫执行。
 callLog = [];
 const fakeSnap = {
   legacy: {
@@ -456,43 +456,75 @@ out = comps.MonitorLine({
 check("MonitorLine 空闲渲染无异常（null/条）", out === null || (typeof out === "object" && !!out));
 
 
-// 10b) monitorTailRepeatCount：死循环判定的纯函数（尾部自重叠扫描）
+// 10b) 句子级复读判据（客户端手抄副本）：正常长文/结构重复不误报，同句或连续几句
+//      重复命中；下面的 10b3 用同一语料与宿主 dist 逐条比对，防两份漂移
 const rep = (unit, n) => unit.repeat(n);
-check("尾部重复块 ≥3 次被检出", comps.monitorTailRepeatCount(rep("我不能继续回答这个问题。", 5)) >= 3);
-check("尾部重复短块按对齐穷举检出", comps.monitorTailRepeatCount("前文正常叙述。" + rep("ABCDEFGH", 4)) >= 4);
-check("普通非重复文本不误报", comps.monitorTailRepeatCount("这是一段完全正常的回复内容，包含各种各样的字符与句子结构，不会触发循环判定。") < 3);
-check("短于两倍最短块长的文本不误报", comps.monitorTailRepeatCount("abcabc") < 2);
-check("短分隔符块（<8字符）不误报", comps.monitorTailRepeatCount("---\n---\n---\n---\n") < 3);
-check("重复不在尾部不算（历史重复已翻篇）", comps.monitorTailRepeatCount(rep("重复片段测样", 5) + "之后是完全不同的收尾内容，正常结束。") < 3);
-check("空串安全", comps.monitorTailRepeatCount("") === 1);
+const longText = (() => {
+  let t = "";
+  for (let i = 0; t.length < 65000; i++) t += `第 ${i} 步：检查模块 m${i} 的边界条件与错误分支，然后记录结论。\n`;
+  return t;
+})();
+const numbered = Array.from({ length: 40 }, (_, i) => `${i + 1}. 检查第 ${i + 1} 项配置`).join("\n");
+const table = "| 项目 | 状态 |\n|---|---|\n" + Array.from({ length: 30 }, (_, i) => `| 模块${i} | 通过 |`).join("\n");
+const code = "\u0060\u0060\u0060js\n" + Array.from({ length: 40 }, (_, i) => `  const v${i} = compute(${i});`).join("\n") + "\n\u0060\u0060\u0060";
+check("正常长文（6.5 万字符、不重复）不误报", comps.monitorDetectLoop(longText) === null);
+check("编号列表（结构相同、内容不同）不误报", comps.monitorDetectLoop(numbered) === null);
+check("markdown 表格不误报", comps.monitorDetectLoop(table) === null);
+check("代码块（缩进/分号重复）不误报", comps.monitorDetectLoop(code) === null);
+check("短噪声「好。」连说 5 遍不误报", comps.monitorDetectLoop(rep("好。", 5)) === null);
+check("重复之后说了别的（已自愈）不误报", comps.monitorDetectLoop(rep("这段在复读。", 3) + "后面是完全不同的一句收尾。") === null);
+{
+  const h = comps.monitorDetectLoop(rep("这个方案需要再确认一下。", 3));
+  check("同一句话连说 3 遍命中（1 句块 × 3 遍）", h !== null && h.units === 1 && h.copies === 3);
+}
+{
+  const h = comps.monitorDetectLoop(rep("先定位问题。再修复它。", 3));
+  check("两句话绕圈 3 遍命中（2 句块）", h !== null && h.units === 2 && h.copies === 3);
+}
+{
+  const h = comps.monitorDetectLoop(rep("第一步定位文件。第二步读取内容。第三步修改配置。", 3));
+  check("三句话绕圈 3 遍命中（3 句块）", h !== null && h.units === 3 && h.copies === 3);
+}
+check("尾部未完成的第 4 句不参与判定", comps.monitorDetectLoop(rep("这个方案需要再确认一下。", 3) + "这个方案")?.copies === 3);
+check("只有 2 个完整重复句 + 半句：不命中", comps.monitorDetectLoop(rep("这个方案需要再确认一下。", 2) + "这个方案") === null);
+{
+  const seg = comps.monitorSegment("Version 1.2.3 is ready. Next sentence. 中文一句。");
+  check("切句：英文句点断句、版本号里的点不断、尾句已收束", seg.length === 3 && seg[0].text === "Version 1.2.3 is ready." && seg[2].complete === true);
+}
+check("空文本安全", comps.monitorDetectLoop("") === null && comps.monitorSegment("").length === 0);
 
-// 10b2) 周期复读（monitorCyclePeriod）与总判据（monitorLooksLooped）。
-// 模型陷入「重复思考/重复说话」时，重复单元的边界随流式切片漂移，尾部整块对齐
-// 的判据抓不到；周期检测对每种周期 p 找 p 位移上的等值长度，与边界无关。
-check("绕圈复读被周期检测抓到", comps.monitorCyclePeriod(rep("让我再确认一下这个结论是否正确", 12)) > 0);
-check("周期检测不误报正常长文", comps.monitorCyclePeriod("模型的正常回答通常句式变化丰富，用词与结构都不重复，句子长短也不一致，因此不会命中任何固定周期的循环判据。") === 0);
-check("短于两倍周期下限的文本不误报", comps.monitorCyclePeriod("abcabc") === 0);
-check(
-  "总判据：绕圈复读（尾部未对齐）也能命中",
-  comps.monitorLooksLooped(rep("换一种方式继续推进任务", 30), 3, 60000) === true,
-);
-check(
-  "总判据：复述一遍完整段落不误伤（只走一个周期）",
-  comps.monitorLooksLooped(rep("让我检查一下这个错误。第一步：定位文件。第二步：读取配置。", 2), 3, 60000) === false,
-);
-check(
-  "总判据：连绕三圈必被熔断（≥2 个周期）",
-  comps.monitorLooksLooped(rep("让我检查一下这个错误。第一步：定位文件。第二步：读取配置。", 3), 3, 60000) === true,
-);
-check(
-  "总判据：尾部整块重复仍命中（原有能力不回退）",
-  comps.monitorLooksLooped("前文正常。" + rep("ABCDEFGH", 5), 3, 60000) === true,
-);
-check("总判据：正常文本不误报", comps.monitorLooksLooped("这是一次完全正常的回答，内容丰富且不重复，应当顺利通过检测而不被误判为循环。", 3, 60000) === false);
-check("总判据：超长单步输出被兜住（复读尚未成周期时的退化）", comps.monitorLooksLooped("内容不重复但一直吐字".repeat(2000), 3, 60000) === true);
-check("总判据：空串与超长阈值可配", comps.monitorLooksLooped("", 3, 60000) === false && comps.monitorLooksLooped("x".repeat(20001), 3, 20000) === true);
-
-
+// 10b3) 宿主与客户端判据同源（客户端是手抄副本，用同一语料逐条比对防漂移）
+async function checkGuardParity() {
+  let host = null;
+  try {
+    host = await import(`file://${__dirname.replace(/\\/g, "/")}/../dist/monitor/loop-guard.js`);
+  } catch {
+    console.log("NOTE  宿主判据 dist 缺失，跳过同源比对");
+    return;
+  }
+  const corpus = [
+    longText,
+    numbered,
+    table,
+    code,
+    rep("好。", 5),
+    rep("这个方案需要再确认一下。", 3),
+    rep("先定位问题。再修复它。", 3),
+    rep("第一步定位文件。第二步读取内容。第三步修改配置。", 3),
+    rep("这个方案需要再确认一下。", 3) + "这个方案",
+    rep("这段在复读。", 3) + "后面是完全不同的一句收尾。",
+    "Version 1.2.3 is ready. Next sentence. 中文一句。",
+    "",
+  ];
+  const sig = (h) => (h === null ? "null" : `${h.units}/${h.copies}/${h.chars}`);
+  const drift = [];
+  for (const text of corpus) {
+    const a = sig(comps.monitorDetectLoop(text));
+    const b = sig(host.detectLoop(text));
+    if (a !== b) drift.push(`${a}≠${b}`);
+  }
+  check(`宿主与客户端判据同源（${corpus.length} 条语料${drift.length ? "，漂移：" + drift.join(",") : "，无漂移"}）`, drift.length === 0);
+}
 
 // 3) U 系列：用量芯片峰谷判定（usageIsPeak 直测）——工作日双峰、周末与调休
 //    上班的周末全天免标、法定节假日（落在工作日的）全天免标；只有 deepseek 标峰；
@@ -519,7 +551,7 @@ function checkConfigSurface() {
   const hostSrc = fs.readFileSync(__dirname + "/../src/monitor/index.ts", "utf8");
   const usageSrc = fs.readFileSync(__dirname + "/../src/monitor/usage.ts", "utf8");
   check("U 快照不可达时芯片开关回落默认开", comps.cfgFromSnapshot(null).usageEnabled === true);
-  const fakeForm = { state: { status: "ready", value: { ...comps.M_CFG_DEFAULTS, monitorMaxAuto: 2 }, revision: 3, writable: true }, mutate: async () => true };
+  const fakeForm = { state: { status: "ready", value: { ...comps.M_CFG_DEFAULTS }, revision: 3, writable: true }, mutate: async () => true };
   stateSeq = 0;
   stateStore.clear();
   callLog = [];
@@ -556,6 +588,7 @@ function checkConfigSurface() {
 
 (async () => {
   await checkApply();
+  await checkGuardParity();
   checkPeaks();
   checkConfigSurface();
   console.log(failed === 0 ? "ALL RENDER OK (monitor)" : `FAILED: ${failed}`);

@@ -1,268 +1,240 @@
-// 宿主侧输出侧熔断器的直测（tests/test-loop-breaker.mjs）
+// 宿主侧复读守卫生测（tests/test-loop-breaker.mjs）
 //
-// 熔断器本体是 TS，跑测试前需 pnpm build（本脚本读 dist 产物，与
-// test-schedule / test-vault-git 同一口径）。覆盖：
-//   ① 复读/绕圈/超长三种输入都会 cancel，且 cause 带我们写的 reason；
-//   ② 正常长输出不 cancel；
-//   ③ 开关关着不 cancel；配置读不到不 cancel；
-//   ④ 一次 attempt 只熔断一次（不反复 cancel）；
-//   ⑤ start 帧重置累积（新 attempt 不受上次影响）；
-//   ⑥ 注销后不再监听。
-import assert from 'node:assert/strict'
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, dirname } from 'node:path'
+// 判据是 TS，跑测试前需 pnpm build（本脚本读 dist 产物）。
+// 覆盖：① 句子级判据——正常长文/列表/表格/代码不误报，同句或连续几句重复命中，
+//      与流式切片方式无关；② 分档动作——警告档只记日志不 cancel，停止档才 cancel；
+//      ③ 开关、换回合清零、同回合跨 attempt 续接、熔断只 cancel 一次。
+import { existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const dist = join(here, '..', 'dist', 'monitor', 'loop-breaker.js')
-if (!existsSync(dist)) {
-  console.error(`缺 ${dist}——先跑 pnpm build`)
-  process.exit(1)
+const dist = (f) => join(here, '..', 'dist', 'monitor', f)
+for (const f of ['loop-guard.js', 'loop-breaker.js']) {
+  if (!existsSync(dist(f))) {
+    console.error(`缺 ${dist(f)}——先跑 pnpm build`)
+    process.exit(1)
+  }
 }
-
-const { registerLoopGuard, LOOP_CANCEL_REASON } = await import(`file://${dist.replace(/\\/g, '/')}`)
+const guardMod = await import(`file://${dist('loop-guard.js').replace(/\\/g, '/')}`)
+const breakerMod = await import(`file://${dist('loop-breaker.js').replace(/\\/g, '/')}`)
+const { detectLoop, segmentSentences, tailLoop } = guardMod
+const { registerLoopGuard, LOOP_CANCEL_REASON } = breakerMod
 
 let failed = 0
 const check = (label, ok) => {
   console.log((ok ? 'PASS  ' : 'FAIL  ') + label)
   if (!ok) failed++
 }
+const rep = (unit, n) => unit.repeat(n)
 
-/** 最小 ctx 桩：只实现 on 与派发 */
+// ─────────── ① 句子级判据 ───────────
+
+// 正常长文：几万字不重复（旧实现的「单步字符上限」正是在这里误杀）
+let longText = ''
+for (let i = 0; longText.length < 65000; i++) {
+  longText += `第 ${i} 步：检查模块 m${i} 的边界条件，确认输入校验、错误分支与资源释放都已覆盖，然后记录结论。\n`
+}
+check('正常长文（6.5 万字符、不重复）不误报', detectLoop(longText) === null)
+
+const numbered = Array.from({ length: 40 }, (_, i) => `${i + 1}. 检查第 ${i + 1} 项配置是否正确`).join('\n')
+check('编号列表（结构相同、内容不同）不误报', detectLoop(numbered) === null)
+const table = '| 项目 | 状态 |\n|---|---|\n' + Array.from({ length: 30 }, (_, i) => `| 模块${i} | 通过 |`).join('\n')
+check('markdown 表格不误报', detectLoop(table) === null)
+const code = '\u0060\u0060\u0060js\n' + Array.from({ length: 40 }, (_, i) => `  const v${i} = compute(${i});`).join('\n') + '\n\u0060\u0060\u0060'
+check('代码块（缩进/分号重复）不误报', detectLoop(code) === null)
+check('短噪声「好。」连说 5 遍不误报（块不足最小字符数）', detectLoop(rep('好。', 5)) === null)
+check('重复之后说了别的（已自愈）不误报', detectLoop(rep('这段在复读。', 3) + '后面是完全不同的一句收尾。') === null)
+
+const one = detectLoop(rep('这个方案需要再确认一下。', 3))
+check('同一句话连说 3 遍命中（1 句块 × 3 遍）', one !== null && one.units === 1 && one.copies === 3)
+const two = detectLoop(rep('先定位问题。再修复它。', 3))
+check('两句话绕圈 3 遍命中（2 句块）', two !== null && two.units === 2 && two.copies === 3)
+const three = detectLoop(rep('第一步定位文件。第二步读取内容。第三步修改配置。', 3))
+check('三句话绕圈 3 遍命中（3 句块）', three !== null && three.units === 3 && three.copies === 3)
+const five = detectLoop(rep('这个问题我需要再确认一下。', 5))
+check('同句 5 遍时 copies 记账为 5（停止档判据）', five !== null && five.copies === 5)
+
+// 流式：尾句未收束时不判，收束后才判
+const partialTail = rep('这个方案需要再确认一下。', 3) + '这个方案'
+check('尾部未完成的第 4 句不参与判定（仍是 3 遍命中）', detectLoop(partialTail)?.copies === 3)
+const twoAndHalf = rep('这个方案需要再确认一下。', 2) + '这个方案'
+check('只有 2 个完整重复句 + 半句：不命中', detectLoop(twoAndHalf) === null)
+
+// 切句：英文句点、数字里的点不误断
+const seg = segmentSentences('Version 1.2.3 is ready. Next sentence. 中文一句。')
+check(
+  '英文句点断句、版本号里的点不断',
+  seg.length === 3 && seg[0].text === 'Version 1.2.3 is ready.' && seg[1].text === 'Next sentence.' && seg[2].text === '中文一句。',
+)
+check('尾部无标点标记为未完成', seg.every((u) => u.complete === true) && segmentSentences('没标点的残句')[0].complete === false)
+check('tailLoop 可直接吃单元数组', tailLoop(segmentSentences(rep('复读单元测试句。', 4)))?.copies === 4)
+check('空文本安全', detectLoop('') === null && segmentSentences('').length === 0)
+
+// ─────────── ②③ 守卫装配 ───────────
 function makeCtx() {
-  const listeners = new Map()
+  const handlers = new Map()
   return {
-    on(event, fn) {
-      if (!listeners.has(event)) listeners.set(event, [])
-      listeners.get(event).push(fn)
-      return () => {
-        const arr = listeners.get(event) || []
-        const i = arr.indexOf(fn)
-        if (i >= 0) arr.splice(i, 1)
-      }
-    },
-    fire(event, payload) {
-      for (const fn of listeners.get(event) || []) fn(payload)
-    },
-    count(event) {
-      return (listeners.get(event) || []).length
+    handlers,
+    on(event, listener) {
+      handlers.set(event, listener)
+      return () => handlers.delete(event)
     },
   }
 }
-
 function makeAgent() {
   const cancels = []
-  return { cancels, cancel: (cause) => cancels.push(cause) }
-}
-
-/** 逐帧推文本（模拟 provider 的流式切片） */
-function stream(ctx, agent, text, { chunkSize = 7, start = true } = {}) {
-  if (start) ctx.fire('agent/assistant-stream', { agent, frame: { type: 'start', index: 0 } })
-  let i = 0
-  for (; i < text.length; i += chunkSize) {
-    ctx.fire('agent/assistant-stream', {
-      agent,
-      frame: { type: 'chunk', index: i, chunk: { type: 'text-delta', index: 0, text: text.slice(i, i + chunkSize) } },
-    })
+  const cancelOptions = []
+  const injected = []
+  return {
+    cancels,
+    cancelOptions,
+    injected,
+    cancel(cause, options) { cancels.push(cause); cancelOptions.push(options) },
+    inject(message) { injected.push(message) },
   }
 }
+const defaultCfg = { monitorEnabled: true, monitorWarnCopies: 3, monitorStopCopies: 5 }
 
-/** 不含任何重复单元的长文本（Lehmer 序列取汉字）：单独考核 ③「单步输出过长」。
- *  用「同一句话重复 N 遍」当输入是错的——那命中的是 ①，③ 就永远没被独立验证过 */
-function variedText(n) {
-  let seed = 20260930
-  let out = ''
-  for (let i = 0; i < n; i++) {
-    seed = (seed * 48271) % 2147483647
-    out += String.fromCharCode(0x4e00 + (seed % 1500))
-  }
-  return out
+function feed(ctx, agent, text, turn = 1, step = 1, chunkType = 'text-delta') {
+  ctx.handlers.get('agent/assistant-stream')({ agent, frame: { type: 'chunk', turn, step, chunk: { type: chunkType, text } } })
 }
+function startTurn(ctx, agent, turn, step = 1) {
+  ctx.handlers.get('agent/assistant-stream')({ agent, frame: { type: 'start', turn, step, attemptId: 'a' + turn + '-' + step, revision: 1 } })
+}
+const S = '这个方案需要再确认一下。'
 
-const CFG = { monitorEnabled: true, monitorRepeatThreshold: 3, monitorStepMaxChars: 60000 }
-const withCfg = (over = {}) => () => ({ ...CFG, ...over })
-
-// —— ① 三种形态都会熔断，且 cause 带 reason ——
+// 警告档不 cancel，停止档才 cancel
 {
   const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg() })
-  const a = makeAgent()
-  stream(ctx, a, '换一种方式继续推进任务。'.repeat(30))
-  check('绕圈复读触发熔断', a.cancels.length === 1)
-  check('熔断 cause 带我们写的 reason', a.cancels[0]?.kind === 'hook' && a.cancels[0]?.reason === LOOP_CANCEL_REASON)
-}
-{
-  const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg() })
-  const a = makeAgent()
-  stream(ctx, a, '前文正常叙述。' + 'ABCDEFGH'.repeat(10))
-  check('尾部整块重复触发熔断', a.cancels.length === 1)
-}
-{
-  // 反证：同一段变体文本在没有 ③ 阈值压力时不熔断 → 它确实不含 ①②，下面的用例才有意义
-  const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg({ monitorStepMaxChars: 400000 }) })
-  const a = makeAgent()
-  stream(ctx, a, variedText(30000), { chunkSize: 64 })
-  check('变体文本本身不触发复读判据（③ 独立成立的前提）', a.cancels.length === 0)
-}
-{
-  const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg({ monitorStepMaxChars: 20000 }) })
-  const a = makeAgent()
-  stream(ctx, a, variedText(26000), { chunkSize: 40 })
-  check('单步输出过长触发熔断（输入不含重复单元）', a.cancels.length === 1)
-}
-{
-  // 阈值高于累积内存闸（ACCUM_MAX = 20000）：累积文本被截断后，拿 text.length 判
-  // 永远不成立——只有「本 attempt 累计字符数」这条能抓到（此前正是漏在这里）
-  const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg({ monitorStepMaxChars: 25000 }) })
-  const a = makeAgent()
-  stream(ctx, a, variedText(30000), { chunkSize: 64 })
-  check('阈值高于累积上限时靠字符计数熔断', a.cancels.length === 1)
+  registerLoopGuard(ctx, { readSettings: () => ({ ...defaultCfg }) })
+  const agent = makeAgent()
+  startTurn(ctx, agent, 1)
+  feed(ctx, agent, rep(S, 3))
+  check('警告档（3 遍）不 cancel', agent.cancels.length === 0)
+  feed(ctx, agent, S)
+  check('4 遍仍不 cancel', agent.cancels.length === 0)
+  feed(ctx, agent, S)
+  check('5 遍到停止档 cancel 一次', agent.cancels.length === 1 && agent.cancels[0]?.kind === 'hook' && agent.cancels[0]?.reason === LOOP_CANCEL_REASON)
+  feed(ctx, agent, S)
+  check('同一回合继续重复不再重复 cancel', agent.cancels.length === 1)
 }
 
-// —— ② 正常长输出不熔断 ——
+// 警告档注入模型可见提醒（只一次）；停止档 cancel 带 keepInbox 让提醒不随取消丢
 {
   const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg() })
-  const a = makeAgent()
-  // 真实长回答：三段各不相同的分析，不含任何重复单元
-  const normal =
-    '我先看一下这个文件的结构，确认它把哪些能力挂在根 exports 上。' +
-    '接着检查 package.json 的 exports 字段是否与文档一致，若不一致则需要同步更新。' +
-    '最后跑一次类型检查确认没有引入新的错误，然后把结论写到活页里。'
-  stream(ctx, a, normal)
-  check('正常长输出不熔断', a.cancels.length === 0)
+  registerLoopGuard(ctx, {
+    readSettings: () => ({ ...defaultCfg }),
+    buildWarning: (hit) => ({ kind: 'dshk-warning', copies: hit.copies, units: hit.units }),
+  })
+  const agent = makeAgent()
+  startTurn(ctx, agent, 1)
+  feed(ctx, agent, rep(S, 3))
+  check('警告档注入一条模型可见提醒（带命中信息）', agent.injected.length === 1 && agent.injected[0]?.copies === 3)
+  feed(ctx, agent, S)
+  check('4 遍不重复注入', agent.injected.length === 1)
+  feed(ctx, agent, S)
+  check('停止档 cancel，且带 keepInbox（提醒留给下一回合）', agent.cancels.length === 1 && agent.cancelOptions[0]?.keepInbox === true)
 }
+// 提醒构造不可用（宿主包拿不到 / 失败）时只记日志，不抛错、不影响停止档
 {
-  // 「把刚才那段复述一遍」是正常输出，只走一个完整周期，不该判成循环
   const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg() })
-  const a = makeAgent()
-  const para =
-    '让我检查一下这个错误。\n第一步：定位文件。\n第二步：读取配置。\n第三步：修改代码。\n'
-  stream(ctx, a, para + para)
-  check('复述一遍完整段落不误伤（只走一个周期）', a.cancels.length === 0)
-}
-{
-  // 但连着绕三圈就必须抓
-  const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg() })
-  const a = makeAgent()
-  const para =
-    '让我检查一下这个错误。\n第一步：定位文件。\n第二步：读取配置。\n第三步：修改代码。\n'
-  stream(ctx, a, para + para + para)
-  check('连绕三圈被熔断（≥2 个周期）', a.cancels.length === 1)
-}
-{
-  // 模板化排版句：句式固定但各项内容不同
-  const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg() })
-  const a = makeAgent()
-  stream(
-    ctx,
-    a,
-    '让我检查一下这个错误。\n第一步：定位 bundle.js。\n第二步：读取配置。\n第三步：修改代码。\n' +
-      '让我检查一下这个报错。\n第一步：定位 host.ts。\n第二步：读取 schema。\n第三步：修改注释。\n',
-  )
-  check('模板化排版句不误伤（各项内容不同）', a.cancels.length === 0)
+  registerLoopGuard(ctx, { readSettings: () => ({ ...defaultCfg }), buildWarning: () => null })
+  const agent = makeAgent()
+  startTurn(ctx, agent, 1)
+  feed(ctx, agent, rep(S, 3))
+  check('无提醒可注入时警告档照常记账不抛错', agent.cancels.length === 0 && agent.injected.length === 0)
+  feed(ctx, agent, rep(S, 2))
+  check('无提醒可注入时停止档照常 cancel', agent.cancels.length === 1)
 }
 
-// —— ③ 开关关着 / 配置读不到，都不熔断 ——
+// 换 attempt 清零：每个模型请求独立判定——每步收尾说同一句不该被累计成复读
 {
   const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg({ monitorEnabled: false }) })
-  const a = makeAgent()
-  stream(ctx, a, '换一种方式继续推进任务。'.repeat(30))
-  check('总开关关着不熔断', a.cancels.length === 0)
+  registerLoopGuard(ctx, { readSettings: () => ({ ...defaultCfg }) })
+  const agent = makeAgent()
+  startTurn(ctx, agent, 1, 1)
+  feed(ctx, agent, rep(S, 4), 1, 1)
+  check('第 1 个 attempt 4 遍不 cancel', agent.cancels.length === 0)
+  startTurn(ctx, agent, 1, 2)
+  feed(ctx, agent, rep(S, 4), 1, 2)
+  check('换 attempt 后重新计数：再 4 遍仍不 cancel（不累计上一步的收尾句）', agent.cancels.length === 0)
+  feed(ctx, agent, S, 1, 2)
+  check('同一 attempt 内到 5 遍才 cancel', agent.cancels.length === 1)
+}
+
+// 换回合清零
+{
+  const ctx = makeCtx()
+  registerLoopGuard(ctx, { readSettings: () => ({ ...defaultCfg }) })
+  const agent = makeAgent()
+  startTurn(ctx, agent, 1)
+  feed(ctx, agent, rep(S, 5))
+  check('第 1 回合第 5 遍 cancel', agent.cancels.length === 1)
+  startTurn(ctx, agent, 2)
+  feed(ctx, agent, rep(S, 3), 2)
+  check('换回合后重新计数：3 遍不再 cancel', agent.cancels.length === 1)
+  feed(ctx, agent, rep(S, 2), 2)
+  check('第 2 回合到 5 遍再 cancel', agent.cancels.length === 2)
+}
+
+// 配置：关开关 / 自定义档位 / 停止档不大于警告档时按警告档+1 / 配置读不到
+{
+  const ctx = makeCtx()
+  registerLoopGuard(ctx, { readSettings: () => ({ monitorEnabled: false }) })
+  const agent = makeAgent()
+  startTurn(ctx, agent, 1)
+  feed(ctx, agent, rep(S, 10))
+  check('monitorEnabled=false 完全不动作', agent.cancels.length === 0)
 }
 {
   const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: () => { throw new Error('服务异常') } })
-  const a = makeAgent()
-  stream(ctx, a, '换一种方式继续推进任务。'.repeat(30))
-  check('配置读不到不熔断（放行而非误杀）', a.cancels.length === 0)
+  registerLoopGuard(ctx, { readSettings: () => ({ monitorEnabled: true, monitorWarnCopies: 3, monitorStopCopies: 4 }) })
+  const agent = makeAgent()
+  startTurn(ctx, agent, 1)
+  feed(ctx, agent, rep(S, 3))
+  check('自定义警告档 3 不 cancel', agent.cancels.length === 0)
+  feed(ctx, agent, S)
+  check('自定义停止档 4 cancel', agent.cancels.length === 1)
 }
-
-// —— ④ 一次 attempt 只熔断一次 ——
 {
   const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg() })
-  const a = makeAgent()
-  ctx.fire('agent/assistant-stream', { agent: a, frame: { type: 'start', index: 0 } })
-  for (let i = 0; i < 60; i++) {
-    ctx.fire('agent/assistant-stream', {
-      agent: a,
-      frame: { type: 'chunk', index: i, chunk: { type: 'text-delta', index: 0, text: '换一种方式继续推进任务。' } },
-    })
-  }
-  check('同一次 attempt 只熔断一次', a.cancels.length === 1)
+  registerLoopGuard(ctx, { readSettings: () => ({ monitorEnabled: true, monitorWarnCopies: 3, monitorStopCopies: 2 }) })
+  const agent = makeAgent()
+  startTurn(ctx, agent, 1)
+  feed(ctx, agent, rep(S, 3))
+  check('停止档≤警告档时按警告档+1：3 遍不 cancel', agent.cancels.length === 0)
+  feed(ctx, agent, S)
+  check('到 4 遍才 cancel（3+1）', agent.cancels.length === 1)
 }
-
-// —— ⑤ start 帧重置累积：新 attempt 不受上次影响 ——
 {
   const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg() })
-  const a = makeAgent()
-  // 第一个 attempt 快到阈值但没到
-  stream(ctx, a, '正在检查第一个方案的实现细节，看看它是否覆盖了全部入口。', { start: true })
-  // 第二个 attempt 全新 start，文本完全不同
-  stream(ctx, a, '换个方向：先读配置文件确认字段默认值，再决定是否要改。', { start: true })
-  check('新 attempt 重置累积（不会跨 attempt 误判）', a.cancels.length === 0)
+  registerLoopGuard(ctx, { readSettings: () => { throw new Error('boom') } })
+  const agent = makeAgent()
+  startTurn(ctx, agent, 1)
+  feed(ctx, agent, rep(S, 10))
+  check('配置读不到不动作（放行而非误杀）', agent.cancels.length === 0)
 }
 
-// —— ⑥ 非文本块不参与累积 ——
+// reasoning 帧同样计入
 {
   const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg() })
-  const a = makeAgent()
-  ctx.fire('agent/assistant-stream', { agent: a, frame: { type: 'start', index: 0 } })
-  for (let i = 0; i < 200; i++) {
-    ctx.fire('agent/assistant-stream', {
-      agent: a,
-      frame: { type: 'chunk', index: i, chunk: { type: 'tool-call-delta', index: 0, raw: 'x'.repeat(50) } },
-    })
-  }
-  check('工具调用块不参与输出侧判据', a.cancels.length === 0)
+  registerLoopGuard(ctx, { readSettings: () => ({ ...defaultCfg }) })
+  const agent = makeAgent()
+  startTurn(ctx, agent, 1)
+  feed(ctx, agent, rep(S, 5), 1, 1, 'reasoning-delta')
+  check('reasoning-delta 复读同样触发停止', agent.cancels.length === 1)
 }
 
-// —— ⑦ 注销后不再监听 ——
+// 注销后不再动作
 {
   const ctx = makeCtx()
-  const dispose = registerLoopGuard(ctx, { readSettings: withCfg() })
-  dispose()
-  const a = makeAgent()
-  stream(ctx, a, '换一种方式继续推进任务。'.repeat(30))
-  check('注销后不再熔断', a.cancels.length === 0)
-  check('注销后监听器已摘除', ctx.count('agent/assistant-stream') === 0)
+  const off = registerLoopGuard(ctx, { readSettings: () => ({ ...defaultCfg }) })
+  const agent = makeAgent()
+  startTurn(ctx, agent, 1)
+  off()
+  check('注销后监听器已摘除', ctx.handlers.get('agent/assistant-stream') === undefined)
 }
 
-// —— ⑧ 多个 agent 各自独立记账 ——
-{
-  const ctx = makeCtx()
-  registerLoopGuard(ctx, { readSettings: withCfg() })
-  const a = makeAgent()
-  const b = makeAgent()
-  stream(ctx, a, '换一种方式继续推进任务。'.repeat(30))
-  stream(ctx, b, '另一段完全不同的内容，用于验证不同 agent 之间互不影响，各自独立记账。')
-  check('每个 agent 独立记账（只有 loop 那个被熔断）', a.cancels.length === 1 && b.cancels.length === 0)
-}
-
-// 判据本身的直测（loop-guard.ts）——客户端那份是手抄的，这里钉住共同真源
-{
-  const guard = await import(`file://${join(here, '..', 'dist', 'monitor', 'loop-guard.js').replace(/\\/g, '/')}`)
-  check('tailRepeatCount：逐字复读检出', guard.tailRepeatCount('我不能继续回答这个问题。'.repeat(5)) >= 3)
-  check('cyclePeriod：绕圈复读检出', guard.cyclePeriod('让我再确认一下这个结论是否正确'.repeat(12)) > 0)
-  check('cyclePeriod：正常长文不误报', guard.cyclePeriod('模型的正常回答句式变化丰富，用词与结构都不重复，句子长短也不一致。') === 0)
-  check('looksLooped：正常文本不误报', guard.looksLooped('这是一次完全正常的回答，内容丰富且不重复。', 3, 60000) === false)
-  check('looksLooped：空串安全', guard.looksLooped('', 3, 60000) === false)
-  check('looksLooped：超长兜底生效', guard.looksLooped(variedText(20001), 3, 20000) === true)
-  check('repeatsLooped：变体文本不误报', guard.repeatsLooped(variedText(30000), 3) === false)
-  check('repeatsLooped：复读仍被抓到', guard.repeatsLooped('换一种方式继续推进任务。'.repeat(30), 3) === true)
-}
-
-console.log(failed === 0 ? '\nALL LOOP-BREAKER TESTS PASS' : `\nFAILED: ${failed}`)
+console.log(failed === 0 ? '\nALL PASS (test-loop-breaker)' : '\nFAILED: ' + failed)
 process.exit(failed === 0 ? 0 : 1)

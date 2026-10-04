@@ -123,16 +123,15 @@ and take no component slot).
   replaces the paid `deepseek-official` — specialized engines first when the query
   matches (GitHub / arXiv / StackExchange / HN), then the general ones (Tavily keyless →
   Bing → Sogou) with automatic failover; its config page only holds the result count
-- **Dead-loop guard** (on by default): when the model's output falls into a loop — verbatim
-  repetition, going in circles about the same thing, or a single step running too long — the
-  turn is stopped automatically. It applies to **every session, even with the page closed**
-  (the check lives in the host process, not in the browser). The detector is independent of
-  how the stream was chunked, so a repetition whose unit drifts with the chunk boundaries is
-  still caught, and restating something once does not count as a loop. It covers
-  **output-side** loops (text and reasoning); tool-call loops are left to the official
-  `repeat-tool-reminder`, which only warns and never stops. The currently open session also
-  gets a client-side second layer, which tells the agent to change approach after stopping it
-  (capped per session)
+- **Repetition guard** (on by default): when a sentence — or a few consecutive sentences —
+  repeats at the end of the output, a reminder is injected to the model (and shown in the
+  current session) at 3 repeats, and the turn is stopped only if it keeps repeating to 5
+  (both thresholds are configurable on this component's page). The unit is the **sentence**, not characters: long but non-repeating
+  output, and lists / tables / code whose shape repeats while the content differs, never
+  match; ordinary emphasis ("say it three times") only warns. It applies to **every
+  session, even with the page closed** (the check lives in the host process, not in the
+  browser). It covers **output-side** repetition (text and reasoning); tool-call loops are
+  left to the official `repeat-tool-reminder`, which only warns and never stops
 - **Session notifications** (on by default; one switch covers every alert): a desktop notification when a turn finishes,
   context compaction completes, or the agent asks a question / awaits tool approval /
   submits a plan for review (browser Notification API; click it to return to that
@@ -231,7 +230,7 @@ the WebSocket base the host injects).
   git endpoints + file tree and source control panels; `skills` serves `/dsh-kit/skills` and
   `/dsh-kit/skills/op` plus the `/dsh-kit-skills/config` probe (skill-pool manager page);
   `terminal` serves the `/dsh-kit-terminal/config` probe (terminal toggle and dock);
-  `monitor` serves `/dsh-kit/usage` + usage chip / dead-loop guard / session
+  `monitor` serves `/dsh-kit/usage` + usage chip / repetition guard / session
   notifications; `browser` serves the 7 `browser_*` tools, the `/dsh-kit/browser` panel
   WebSocket, `/dsh-kit/browser/open` and the `/dsh-kit-browser/config` probe (right-bar
   browser tab, shared control, link redirection); `vault` serves `/dsh-kit/vault/*`

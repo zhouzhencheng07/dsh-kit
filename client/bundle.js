@@ -12212,7 +12212,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     // ── dsh-kit/monitor 组件（用量与监视）──
 // dsh-kit/monitor 浏览器半边 —— 用量与监视组件的 client 面。
-// 现收纳：余额与用量芯片（UsageLine）+ 会话监视（死循环打断的 MonitorLine）
+// 现收纳：余额与用量芯片（UsageLine）+ 复读提示（MonitorLine）
 // + 会话通知（系统通知）。
 //
 // 数据走宿主 /dsh-kit/usage（key 在宿主侧复用模型配置，浏览器拿不到）。状态带
@@ -12263,12 +12263,10 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       usageResets: "重置",
       usageNoCard: "模型配置未提供此服务的用量数据",
       usageOfficialPage: "官方用量页",
-      // 会话监视（死循环打断）
-      monitorLoopBreakText: "检测到你的输出在重复相同内容，可能陷入了死循环。请立即停止重复，简要说明当前状态，换一种方式继续完成任务。",
-      monitorCancel: "取消",
-      monitorRepeatErr: "重复输出（死循环征兆）",
-      monitorStopping: "监视：检测到重复输出（死循环征兆），正在停止当前回合…",
-      monitorAutoIn: "监视：检测到{err}，{sec} 秒后自动继续（第 {n}/{max} 次）",
+      // 会话监视（复读提示）
+      monitorWarn: "检测到输出在重复（已连续 {copies} 遍），继续重复到 {stop} 遍将停止本回合",
+      monitorStopping: "重复持续，正在停止当前回合…",
+      monitorStop: "停止",
       // 会话通知
       notifyCompleteTitle: "{title} · 回合完成",
       notifyCompleteBody: "点击回到该会话",
@@ -12299,14 +12297,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       kcfgGroupMonitor: "会话监视与通知",
       kcfgNotifyEnabled: "会话桌面通知",
       kcfgNotifyEnabledHint: "页面不在前台时，回合收尾/压缩完成/agent 提问提醒你一次。",
-      kcfgMonitorEnabled: "死循环熔断",
-      kcfgMonitorEnabledHint: "当前会话的输出若陷入重复或失控（复读、绕圈、输出过长），自动停止该回合并提示。",
-      kcfgMonitorMaxLoopBreaks: "循环打断上限（1–10）",
-      kcfgMonitorMaxLoopBreaksHint: "同一会话最多自动打断几次，达上限后只停止不再发话术。",
-      kcfgMonitorStepMaxChars: "单步输出字符上限",
-      kcfgMonitorStepMaxCharsHint: "一轮里单个步骤的输出超过这个字符数即判定失控并停止。",
-      kcfgMonitorRepeatThreshold: "死循环判定重复次数（2–10）",
-      kcfgMonitorRepeatThresholdHint: "流式输出尾部自重叠达到该次数即停止并发打断话术。",
+      kcfgMonitorEnabled: "输出复读守卫",
+      kcfgMonitorEnabledHint: "同一句话或连续几句话在结尾连续重复时：先提示，继续重复才停止该回合。",
+      kcfgMonitorWarnCopies: "提示档：连续重复遍数（3–10）",
+      kcfgMonitorWarnCopiesHint: "结尾同一句（或同一组连续句）重复到这么多遍，先在当前会话提示。",
+      kcfgMonitorStopCopies: "停止档：连续重复遍数（4–20）",
+      kcfgMonitorStopCopiesHint: "重复继续到这么多遍才自动停止该回合；不大于提示档时按提示档+1 处理。",
     };
     const en = {
       usageRefresh: "Refresh",
@@ -12324,11 +12320,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       usageResets: "resets",
       usageNoCard: "No usage data for this service in the model config",
       usageOfficialPage: "Usage dashboard",
-      monitorLoopBreakText: "Your output appears to be repeating itself, which suggests an infinite loop. Stop repeating immediately, briefly state the current status, and continue the task in a different way.",
-      monitorCancel: "Cancel",
-      monitorRepeatErr: "repeated output (dead-loop sign)",
-      monitorStopping: "Monitor: repeated output detected (dead-loop sign), stopping the current turn…",
-      monitorAutoIn: "Monitor: {err}; auto-continue in {sec}s (attempt {n}/{max})",
+      monitorWarn: "Output is repeating (the same text {copies} times in a row); reaching {stop} will stop this turn",
+      monitorStopping: "Repetition continues — stopping this turn…",
+      monitorStop: "Stop",
       notifyCompleteTitle: "{title} · turn finished",
       notifyCompleteBody: "Click to return to this session",
       notifyErrorTitle: "{title} · turn errored",
@@ -12357,14 +12351,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       kcfgGroupMonitor: "Session monitor & notifications",
       kcfgNotifyEnabled: "Session desktop notifications",
       kcfgNotifyEnabledHint: "One reminder on turn completion / compaction / agent questions while the page is in the background.",
-      kcfgMonitorEnabled: "Dead-loop guard",
-      kcfgMonitorEnabledHint: "Stop the turn and nudge the agent when the current session's output repeats itself or runs away.",
-      kcfgMonitorMaxLoopBreaks: "Loop-break cap (1–10)",
-      kcfgMonitorMaxLoopBreaksHint: "How many times one session may be auto-broken before it only stops without speaking up again.",
-      kcfgMonitorStepMaxChars: "Per-step output character cap",
-      kcfgMonitorStepMaxCharsHint: "A single step producing more than this many characters is treated as runaway and stopped.",
-      kcfgMonitorRepeatThreshold: "Loop detection repeat count (2–10)",
-      kcfgMonitorRepeatThresholdHint: "Stop the turn and send the nudge once streamed output self-overlaps this many times.",
+      kcfgMonitorEnabled: "Repetition guard",
+      kcfgMonitorEnabledHint: "When a sentence (or a few consecutive sentences) repeats at the end: warn first, stop the turn only if it keeps repeating.",
+      kcfgMonitorWarnCopies: "Warn at N consecutive repeats (3–10)",
+      kcfgMonitorWarnCopiesHint: "Show an in-session hint once the same ending text repeats this many times.",
+      kcfgMonitorStopCopies: "Stop at N consecutive repeats (4–20)",
+      kcfgMonitorStopCopiesHint: "Stop the turn only once the repetition reaches this many times; values at or below the warn level are treated as warn+1.",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? key;
@@ -12375,9 +12367,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const M_CFG_DEFAULTS = {
       usageEnabled: true,
       monitorEnabled: true,
-      monitorMaxLoopBreaks: 3,
-      monitorStepMaxChars: 60000,
-      monitorRepeatThreshold: 3,
+      monitorWarnCopies: 3,
+      monitorStopCopies: 5,
       notifyEnabled: true,
     };
     let cfgSnap = null;
@@ -12411,23 +12402,20 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const v = snap.value;
       out.usageEnabled = v.usageEnabled === true;
       out.monitorEnabled = v.monitorEnabled !== false;
-      out.monitorMaxLoopBreaks =
-        Number.isInteger(v.monitorMaxLoopBreaks) && v.monitorMaxLoopBreaks >= 1 && v.monitorMaxLoopBreaks <= 10
-          ? v.monitorMaxLoopBreaks
-          : M_CFG_DEFAULTS.monitorMaxLoopBreaks;
-      out.monitorStepMaxChars =
-        Number.isInteger(v.monitorStepMaxChars) && v.monitorStepMaxChars >= 20000 && v.monitorStepMaxChars <= 400000
-          ? v.monitorStepMaxChars
-          : M_CFG_DEFAULTS.monitorStepMaxChars;
-      out.monitorRepeatThreshold =
-        Number.isInteger(v.monitorRepeatThreshold) && v.monitorRepeatThreshold >= 2 && v.monitorRepeatThreshold <= 10
-          ? v.monitorRepeatThreshold
-          : M_CFG_DEFAULTS.monitorRepeatThreshold;
+      out.monitorWarnCopies =
+        Number.isInteger(v.monitorWarnCopies) && v.monitorWarnCopies >= 3 && v.monitorWarnCopies <= 10
+          ? v.monitorWarnCopies
+          : M_CFG_DEFAULTS.monitorWarnCopies;
+      out.monitorStopCopies =
+        Number.isInteger(v.monitorStopCopies) && v.monitorStopCopies >= 4 && v.monitorStopCopies <= 20
+          ? v.monitorStopCopies
+          : M_CFG_DEFAULTS.monitorStopCopies;
+      if (out.monitorStopCopies <= out.monitorWarnCopies) out.monitorStopCopies = out.monitorWarnCopies + 1;
       out.notifyEnabled = v.notifyEnabled !== false;
       return out;
     }
     void loadCfg();
-    /** 带占位符的文案变体：tf("monitorAutoIn", { sec: 8 }) */
+    /** 带占位符的文案变体：tf("monitorWarn", { copies: 3, stop: 5 }) */
     const tf = (key, vars) => {
       let s = lang()[key] ?? key;
       for (const [name, value] of Object.entries(vars ?? {})) s = s.split(`{${name}}`).join(String(value));
@@ -12436,268 +12424,172 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // 主视图会话行判定随会话行共享收进 dock
     const mainRowOf = dock.mainRowOf;
 
-    // ─────────── 死循环打断（仅当前会话）───────────
-    // 回合运行中每 1s 扫描流文本尾部自重叠 ≥monitorRepeatThreshold 次 →
-    // sessions.cancel() 停止当前回合，停止完成后发循环打断话术。
-    const MONITOR_SCAN_MS = 1000; // 扫描周期：检测延迟 1-2s；真实死循环以分钟计，绰绰有余
-    const MONITOR_MIN_BLOCK = 8; // 重复块最短长度：放过短分隔符/标点（--- 、换行噪声）
-    const MONITOR_MAX_BLOCK = 128; // 重复块最长扫描长度：兜住长句循环，扫描成本封顶
-    const MONITOR_CYCLE_WINDOW = 4000; // 周期检测的尾部窗口：够放下几个循环单元
-    const MONITOR_CYCLE_MIN = 12; // 周期下限：放过「好/是」这类短词偶然重复
-    const MONITOR_CYCLE_MAX = 400; // 周期上限：长句绕圈也抓，扫描成本 O(窗口×周期)
-    const MONITOR_STEP_MAX_CHARS = 60000; // 单步输出字符兜底：官方单请求输出上限
-    // 256k token 量级，字符远小于它，重复若还没被前两条抓到，靠这条兜住
+    // ─────────── 句子级复读检测（判据真源 src/monitor/loop-guard.ts，此处手抄）───────────
+    // 单位是句子：结尾同一句（或连续几句话）连续重复 N 遍才算复读。字符级周期扫描与
+    // 「单步字符上限」都已删除——它们把正常长输出、结构重复当成失控，是误杀来源。
+    const MONITOR_WARN_COPIES = 3;
+    const MONITOR_STOP_COPIES = 5;
+    const MONITOR_MIN_BLOCK_CHARS = 6;
+    const MONITOR_MAX_BLOCK_UNITS = 8;
+    const MONITOR_SCAN_MS = 1000; // 界面扫描节奏；判据本身与时间无关
+    const MONITOR_ACCUM_MAX = 12000; // 只看尾部若干句，累积文本留余量封顶
+    const MONITOR_SENTENCE_END = new Set(["。", "！", "？", "；", "…", "!", "?", ";"]);
 
-
-    /** 尾部自重叠扫描：返回累计文本末尾连续重复块的最大次数（块长在
-     *  MONITOR_MIN_BLOCK..MAX_BLOCK 内穷举对齐，与流式分块方式无关；文本不足
-     *  两个最短块时返回 1）。死循环判定 = 返回值 ≥ monitorRepeatThreshold。 */
-    /**
-     * 尾部自重叠扫描：返回累计文本末尾连续重复块的最大次数（块长在
-     * MONITOR_MIN_BLOCK..MAX_BLOCK 内穷举对齐，与流式分块方式无关；文本不足
-     * 两个最短块时返回 1）。死循环判定 = 返回值 ≥ monitorRepeatThreshold。
-     */
-    function monitorTailRepeatCount(text) {
-      const len = text.length;
-      let best = 1;
-      for (let p = MONITOR_MIN_BLOCK; p <= MONITOR_MAX_BLOCK && p * 2 <= len; p++) {
-        const block = text.slice(len - p);
-        let m = 1;
-        while (len - (m + 1) * p >= 0 && text.slice(len - (m + 1) * p, len - m * p) === block) m++;
-        if (m > best) best = m;
-      }
-      return best;
+    function monitorNormalizeUnit(raw) {
+      return String(raw).replace(/\s+/g, " ").trim();
     }
 
-    /**
-     * 周期性重复检测（跨块边界）：模型陷入复读时的真实形态往往不是「末尾对齐的
-     * 整块重复」，而是「一小段话绕着圈说」——重复单元的边界随流式切片漂移，
-     * monitorTailRepeatCount 只能抓到恰好对齐的那些。这里取尾部窗口，对窗口内
-     * 出现的每一种周期 p，检查 p 位移上连续相同的位置是否达 2p，即至少连走两个
-     * 完整周期；与分块方式无关，也不依赖重复起点对齐。返回命中的最大周期（0=无）。
-     * 阈值 2p 而非 p：只复述一遍刚说过的内容是正常输出，判成循环会误伤。
-     * 真源是 src/monitor/loop-guard.ts，零构建的 bundle 没法 import，此处手抄一份。
-     */
-    function monitorCyclePeriod(text) {
-      const tail = text.length > MONITOR_CYCLE_WINDOW ? text.slice(-MONITOR_CYCLE_WINDOW) : text;
-      const n = tail.length;
-      let best = 0;
-      for (let p = MONITOR_CYCLE_MIN; p * 2 <= n && p <= MONITOR_CYCLE_MAX; p++) {
-        let run = 0;
-        for (let i = p; i < n; i++) {
-          run = tail[i] === tail[i - p] ? run + 1 : 0;
-          if (run >= p * 2) {
-            if (p > best) best = p;
-            break;
-          }
+    /** 切句：句末标点/换行/不夹在数字中间的英文句点处断句；尾部未收束句 complete=false */
+    function monitorSegment(text) {
+      const out = [];
+      if (typeof text !== "string" || text === "") return out;
+      const n = text.length;
+      let start = 0;
+      const push = (end, complete) => {
+        const norm = monitorNormalizeUnit(text.slice(start, end));
+        if (norm !== "") out.push({ text: norm, complete });
+        start = end;
+      };
+      for (let i = 0; i < n; i++) {
+        const ch = text[i];
+        if (ch === "\n") {
+          push(i + 1, true);
+          continue;
+        }
+        if (MONITOR_SENTENCE_END.has(ch)) {
+          let j = i + 1;
+          while (j < n && MONITOR_SENTENCE_END.has(text[j])) j++;
+          push(j, true);
+          i = j - 1;
+          continue;
+        }
+        if (ch === ".") {
+          const prev = text[i - 1];
+          const next = text[i + 1];
+          const digitPrev = prev !== undefined && prev >= "0" && prev <= "9";
+          const digitNext = next !== undefined && next >= "0" && next <= "9";
+          if (!digitPrev && !digitNext && (next === undefined || /\s/.test(next))) push(i + 1, true);
         }
       }
-      return best;
+      if (start < n) push(n, false);
+      return out;
     }
 
-    /**
-     * 死循环判定的总入口：把各判据合成一个布尔。与 src/monitor/loop-guard.ts
-     * 同一份判据（真源在 src/monitor/loop-guard.ts，零构建没法 import，此处手抄）。
-     * 宿主侧 loop-breaker 已做同样判据且覆盖全部会话；本函数只作**当前会话的
-     * 补充**：它看的是整段已落定/流式文本，能兜住跨 attempt 的复读（宿主侧按
-     * attempt 重置），代价是只管当前打开的会话。
-     * ① 尾部整块重复（monitorTailRepeatCount ≥ 阈值）——逐字复读整段；
-     * ② 周期性复读（monitorCyclePeriod 命中）——绕圈说同一件事，边界漂移也抓得到
-     *    （官方讨论 #2848 描述的正是这种：跑十分钟、只有手动打断才停）；
-     * ③ 单步输出过长（长度超 MONITOR_STEP_MAX_CHARS）——复读到长度阈值必被兜住，
-     *    也是「无任何重复特征但就是不停吐字」的退化形态的唯一抓手。
-     * 纯函数，render-check 直测。
-     * @param text 本源累计文本（text+reasoning 拼接）
-     * @returns true 表示判为死循环
-     */
-    function monitorLooksLooped(text, threshold, maxChars) {
-      if (typeof text !== "string" || text === "") return false;
-      if (text.length > (maxChars ?? MONITOR_STEP_MAX_CHARS)) return true;
-      if (monitorTailRepeatCount(text) >= threshold) return true;
-      return monitorCyclePeriod(text) > 0;
+    /** 尾部连续重复块扫描：最小块 1..8 句、块字符数 ≥6、连续重复 ≥3 遍即命中 */
+    function monitorTailLoop(units) {
+      let end = units.length;
+      while (end > 0 && units[end - 1].complete !== true) end--;
+      const n = end;
+      if (n < MONITOR_WARN_COPIES) return null;
+      for (let p = 1; p <= MONITOR_MAX_BLOCK_UNITS && p * MONITOR_WARN_COPIES <= n; p++) {
+        let chars = 0;
+        for (let k = n - p; k < n; k++) chars += units[k].text.length;
+        if (chars < MONITOR_MIN_BLOCK_CHARS) continue;
+        let copies = 1;
+        while ((copies + 1) * p <= n) {
+          let same = true;
+          for (let k = 0; k < p; k++) {
+            if (units[n - (copies + 1) * p + k].text !== units[n - p + k].text) {
+              same = false;
+              break;
+            }
+          }
+          if (!same) break;
+          copies++;
+        }
+        if (copies >= MONITOR_WARN_COPIES) return { units: p, copies, chars };
+      }
+      return null;
     }
 
+    function monitorDetectLoop(text) {
+      if (typeof text !== "string" || text === "") return null;
+      return monitorTailLoop(monitorSegment(text));
+    }
+
+    // 当前会话只做「提示 + 手动停止」：宿主侧 loop-breaker 才是执行档（覆盖全部会话，
+    // 命中停止档时 cancel）。旧实现自己 cancel 再自动续跑话术，正是误判扰民那一套，已删。
     function MonitorLine(props) {
-      const { useChat, useSession, useInput, inputActions, sessionId } = props;
+      const { useChat, useSession, sessionId } = props;
       react.useSyncExternalStore(subscribeLocale, getLocaleVersion);
       const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
       const nodes = typeof useChat === "function" ? useChat((s) => s.legacy.nodes) : [];
-      // 流式文本（text+reasoning）：assistant-step 运行中宿主才产 partial（turn/
-      // step/blocks），落定即清空、nodes 才出现 finalized assistant——所以 partial
-      // 天然只含"正在流出"的文本，天然排除历史回合误判
       const partial = typeof useChat === "function" ? useChat((s) => s.legacy.partial) : null;
       const running = typeof useSession === "function" ? useSession((s) => s.running) : false;
-      const draft = typeof useInput === "function" ? useInput((s) => s.draft) : "";
-      // plan（本地态，死循环链路）：null | {phase:"stopping"} | {phase:"waiting",fireAt,reason:"repeat"}
-      const [plan, setPlan] = react.useState(null);
-      const [now, setNow] = react.useState(() => Date.now());
-      const loopBreaksRef = react.useRef(0); // 死循环话术已发次数（达上限只停不发，防循环烧 token）
-      const partialTextRef = react.useRef(null); // 最新流式文本（partial.blocks 拼接）
-      const partialKeyRef = react.useRef(null); // 镜像侧记录的当前流 turn/step
-      const lastStreamKeyRef = react.useRef(null); // 上次扫描的数据源标识（换源 = 新回合）
-      const lastLenRef = react.useRef(0); // 本源扫描基线
-      const nodesSeqRef = react.useRef(null); // 最新「未中断」assistant 节点 seq
-      const nodesTextRef = react.useRef(null); // 该节点的文本（回合内步骤落地即扫一次）
-      const stoppingRef = react.useRef(false); // cancel 已发出（防重复触发；话术后复位）
-      // 会话切换：死循环链路状态归零
+      const [hit, setHit] = react.useState(null);
+      const textRef = react.useRef("");
+      // 组装运行中文本：partial（流式中）优先，否则最新未中断 assistant 节点兜底
       react.useEffect(() => {
-        loopBreaksRef.current = 0;
-        partialTextRef.current = null;
-        partialKeyRef.current = null;
-        lastStreamKeyRef.current = null;
-        lastLenRef.current = 0;
-        nodesSeqRef.current = null;
-        nodesTextRef.current = null;
-        stoppingRef.current = false;
-        setPlan(null);
-      }, [sessionId]);
-      // 流式文本镜像：partial 随 chunk 变化，只写 ref 不 setState（渲染开销趋零）。
-      // 部分宿主版本 legacy.partial 恒 null（运行中步骤不进投影或不广播），此路
-      // 不通时由 nodes 镜像兜底。
-      react.useEffect(() => {
-        if (!partial || !Array.isArray(partial.blocks)) {
-          partialTextRef.current = null;
+        if (!running) {
+          textRef.current = "";
+          setHit(null);
           return;
         }
-        partialKeyRef.current = partial.turn + "/" + partial.step;
         let text = "";
-        for (const b of partial.blocks) {
-          if ((b.kind === "text" || b.kind === "reasoning") && typeof b.text === "string") text += b.text;
+        if (partial && Array.isArray(partial.blocks)) {
+          for (const b of partial.blocks) {
+            if ((b.kind === "text" || b.kind === "reasoning") && typeof b.text === "string") text += b.text;
+          }
         }
-        partialTextRef.current = text;
-      }, [partial]);
-      // 最新「未中断」assistant 节点镜像：步骤落地即全长出现（0→full 一拍），
-      // interrupted（监视器停止的回合残余）不作扫描源——那是上一轮已处置的文本
-      react.useEffect(() => {
-        let seq = null;
-        let text = null;
-        for (let i = nodes.length - 1; i >= 0; i--) {
-          const n = nodes[i];
-          if (n && n.kind === "assistant") {
-            if (n.interrupted !== true && Array.isArray(n.blocks)) {
-              seq = n.seq;
-              text = "";
-              for (const b of n.blocks) {
-                if ((b.kind === "text" || b.kind === "reasoning") && typeof b.text === "string") text += b.text;
+        if (text === "") {
+          for (let i = nodes.length - 1; i >= 0; i--) {
+            const n = nodes[i];
+            if (n && n.kind === "assistant") {
+              if (n.interrupted !== true && Array.isArray(n.blocks)) {
+                let t = "";
+                for (const b of n.blocks) {
+                  if ((b.kind === "text" || b.kind === "reasoning") && typeof b.text === "string") t += b.text;
+                }
+                text = t;
               }
+              break;
             }
-            break;
           }
         }
-        nodesSeqRef.current = seq;
-        nodesTextRef.current = text;
-      }, [nodes]);
-      // ② 死循环扫描：仅回合运行中轮询（空闲不扫——历史文本不在观察面）。双数据
-      //    源取其一：partial（流式中，若宿主广播）优先；否则最新未中断 assistant
-      //    节点（步骤落地即全长出现，落地后立扫一次——快速流整段不可分时也有
-      //    检测机会）。对文本做尾部自重叠扫描：长度 ≥MONITOR_MIN_BLOCK 的块 B 在
-      //    末尾连续出现 ≥monitorRepeatThreshold 次（对齐长度穷举，与分块无关）。
-      //    换源（新流/新节点）→ 复位停止标记与基线。interval 依赖刻意不含
-      //    partial/nodes——流式高频换引用会让节拍永远跑不满，读取全走 ref。
+        textRef.current = text.length > MONITOR_ACCUM_MAX ? text.slice(-MONITOR_ACCUM_MAX) : text;
+      }, [partial, nodes, running]);
+      // 1s 节流扫描：只在命中结果变化时 setState（流式高频 setState 会拖渲染）
       react.useEffect(() => {
-        if (!cfg.monitorEnabled || !running) return undefined;
-        const timer = setInterval(() => {
-          let key = null;
-          let text = null;
-          if (partialTextRef.current !== null && partialKeyRef.current !== null) {
-            key = "p:" + partialKeyRef.current;
-            text = partialTextRef.current;
-          } else if (nodesSeqRef.current !== null && nodesTextRef.current !== null) {
-            key = "n:" + nodesSeqRef.current;
-            text = nodesTextRef.current;
-          }
-          if (key === null || text === null) return;
-          if (key !== lastStreamKeyRef.current) {
-            lastStreamKeyRef.current = key;
-            stoppingRef.current = false;
-            lastLenRef.current = 0;
-          }
-          if (stoppingRef.current) return;
-          const len = text.length;
-          if (len <= lastLenRef.current) return;
-          lastLenRef.current = len;
-          if (monitorLooksLooped(text, cfg.monitorRepeatThreshold, cfg.monitorStepMaxChars) !== true) return;
-          stoppingRef.current = true;
-          setPlan({ phase: "stopping" });
-          try {
-            const sessions = slotsCtx ? slotsCtx.get("sessions") : null;
-            const binding = sessions && typeof sessions.binding === "function" ? sessions.binding(sessionId) : null;
-            const sess = binding && binding.session;
-            if (sess && typeof sess.cancel === "function") void sess.cancel().catch(() => {});
-          } catch {
-            // 服务未就绪：放弃本次停止（等待自然结束），stopping 超时兜底会清态
-          }
-        }, MONITOR_SCAN_MS);
-        return () => clearInterval(timer);
-      }, [running, cfg.monitorEnabled, cfg.monitorRepeatThreshold, cfg.monitorStepMaxChars, sessionId]);
-      // stopping → 停止完成转等待发循环话术（连续次数达上限只停不发，防循环烧
-      // token）；停止超时（cancel 失败/被拒）放弃并复位
-      react.useEffect(() => {
-        if (plan?.phase !== "stopping") return undefined;
-        if (!running) {
-          if (loopBreaksRef.current >= cfg.monitorMaxLoopBreaks) {
-            // 达上限只停不发：这轮已经停了，提示要跟着收（否则取消钮不在这个相位，
-            // 用户会一直看着一条点不掉的「正在停止当前回合…」）
-            stoppingRef.current = false;
-            setPlan(null);
-            return undefined;
-          }
-          setPlan({ phase: "waiting", fireAt: Date.now() + 2500, reason: "repeat" });
+        if (!cfg.monitorEnabled || !running) {
+          setHit(null);
           return undefined;
         }
-        const giveUp = setTimeout(() => {
-          stoppingRef.current = false;
-          setPlan(null);
-        }, 15000);
-        return () => clearTimeout(giveUp);
-      }, [plan, running, cfg.monitorMaxLoopBreaks]);
-      // 等待期间用户介入（手动发消息使回合运行）→ 放弃本次打断话术
-      react.useEffect(() => {
-        if (plan?.phase === "waiting" && running) setPlan(null);
-      }, [running, plan]);
-      // 倒计时跳动（死循环链路 waiting）。进入等待先立即对表一次——now 可能是
-      // 组件挂载时的陈旧值，首帧会把剩余秒数显示得偏大
-      react.useEffect(() => {
-        if (plan?.phase !== "waiting") return undefined;
-        setNow(Date.now());
-        const timer = setInterval(() => setNow(Date.now()), 500);
+        const scan = () => {
+          const found = monitorDetectLoop(textRef.current);
+          setHit((prev) => {
+            if (found === null) return prev === null ? prev : null;
+            if (prev && prev.units === found.units && prev.copies === found.copies && prev.chars === found.chars) return prev;
+            return found;
+          });
+        };
+        const timer = setInterval(scan, MONITOR_SCAN_MS);
+        scan();
         return () => clearInterval(timer);
-      }, [plan]);
-      // 到点执行（仅死循环链路）：草稿非空（用户在打字）或回合又跑起来都视为
-      // 介入，放弃话术
-      react.useEffect(() => {
-        if (plan?.phase !== "waiting") return;
-        if (Date.now() < plan.fireAt) return;
-        if (running || String(draft ?? "").trim() !== "") {
-          setPlan(null);
-          return;
-        }
-        // 死循环话术：让 agent 知道自己卡在循环里，停止重复并换方式推进
-        inputActions.setDraft(tf("monitorLoopBreakText"));
-        inputActions.submit();
-        stoppingRef.current = false; // 话术已发：本会话下一回合的死循环仍要接管
-        loopBreaksRef.current += 1;
-        setPlan(null);
-      }, [plan, now, running, draft, inputActions]);
-      if (!cfg.monitorEnabled) return null;
-      if (plan?.phase !== "waiting" && plan?.phase !== "stopping") return null;
-      const cancelLabel = plan.phase === "waiting" ? t("monitorCancel") : "";
-      const line =
-        plan.phase === "waiting"
-          ? tf("monitorAutoIn", { err: tf("monitorRepeatErr"), sec: String(Math.max(0, Math.ceil((plan.fireAt - now) / 1000))), n: String(loopBreaksRef.current + 1), max: String(cfg.monitorMaxLoopBreaks) })
-          : tf("monitorStopping");
+      }, [running, cfg.monitorEnabled]);
+      if (!cfg.monitorEnabled || !running || !hit || hit.copies < cfg.monitorWarnCopies) return null;
+      const stopping = hit.copies >= cfg.monitorStopCopies;
+      const line = stopping
+        ? t("monitorStopping")
+        : tf("monitorWarn", { copies: String(hit.copies), stop: String(cfg.monitorStopCopies) });
       return jsxRuntime.jsxs("div", {
         className: "dshk-monitor-line",
         children: [
           jsxRuntime.jsx("span", { className: "dshk-monitor-text", children: line }),
-          cancelLabel
-            ? jsxRuntime.jsx("button", {
-                type: "button",
-                className: "dshk-monitor-cancel",
-                onClick: () => setPlan(null),
-                children: cancelLabel,
-              })
-            : null,
+          jsxRuntime.jsx("button", {
+            type: "button",
+            className: "dshk-monitor-cancel",
+            onClick: () => {
+              try {
+                const sessions = slotsCtx ? slotsCtx.get("sessions") : null;
+                const binding = sessions && typeof sessions.binding === "function" ? sessions.binding(sessionId) : null;
+                const sess = binding && binding.session;
+                if (sess && typeof sess.cancel === "function") void sess.cancel().catch(() => {});
+              } catch {
+                // 服务未就绪：忽略
+              }
+            },
+            children: t("monitorStop"),
+          }),
         ],
       });
     }
@@ -13148,9 +13040,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     const MONITOR_CFG_FIELDS = [
       { key: "usageEnabled", type: "bool", group: "kcfgGroupUsage", labelKey: "kcfgUsageEnabled", hintKey: "kcfgUsageEnabledHint" },
       { key: "monitorEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgMonitorEnabled", hintKey: "kcfgMonitorEnabledHint" },
-      { key: "monitorStepMaxChars", type: "number", min: 20000, max: 400000, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorStepMaxChars", hintKey: "kcfgMonitorStepMaxCharsHint" },
-      { key: "monitorMaxLoopBreaks", type: "number", min: 1, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorMaxLoopBreaks", hintKey: "kcfgMonitorMaxLoopBreaksHint" },
-      { key: "monitorRepeatThreshold", type: "number", min: 2, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorRepeatThreshold", hintKey: "kcfgMonitorRepeatThresholdHint" },
+      { key: "monitorWarnCopies", type: "number", min: 3, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorWarnCopies", hintKey: "kcfgMonitorWarnCopiesHint" },
+      { key: "monitorStopCopies", type: "number", min: 4, max: 20, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorStopCopies", hintKey: "kcfgMonitorStopCopiesHint" },
       { key: "notifyEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgNotifyEnabled", hintKey: "kcfgNotifyEnabledHint" },
     ];
     const MONITOR_CFG_GROUPS = ["kcfgGroupUsage", "kcfgGroupMonitor"];
@@ -13609,7 +13500,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           UsageLine,
         ),
       );
-      // 会话监视条（同槽 order 5，排官方 StatsLine 之后；monitorEnabled 门控在组件内）
+      // 复读提示条（同槽 order 5，排官方 StatsLine 之后；monitorEnabled 门控在组件内）
       ctx.slots.inject("conversation.composer.dock", () =>
         ctx.slots.register(
           { name: "conversation.composer.dock", id: "dsh-kit-monitor", order: 5 },
@@ -13703,9 +13594,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     // 渲染级检查与单测取用（依赖注入的纯核心，直测不经过 apply）
     exports.MonitorLine = MonitorLine;
-    exports.monitorTailRepeatCount = monitorTailRepeatCount;
-    exports.monitorCyclePeriod = monitorCyclePeriod;
-    exports.monitorLooksLooped = monitorLooksLooped;
+    exports.monitorSegment = monitorSegment;
+    exports.monitorTailLoop = monitorTailLoop;
+    exports.monitorDetectLoop = monitorDetectLoop;
     exports.notifyDiffCore = notifyDiffCore;
     exports.notifyKindOf = notifyKindOf;
     exports.notifyBodyOf = notifyBodyOf;
