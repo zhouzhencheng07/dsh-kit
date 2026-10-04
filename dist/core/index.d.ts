@@ -5,5 +5,4 @@ export * from './recycle.ts';
 export * from './readable-roots.ts';
 export * from './raw-reply.ts';
 export * from './text-decode.ts';
-export * from './opencode-session.ts';
 export * from './deps.ts';

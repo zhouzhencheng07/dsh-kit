@@ -1,8 +1,8 @@
 // dsh-kit — DSH 页面能力套件（基础设施行宿主半边）
 //
 // 本行只有套件自己那点基础设施：vendor 静态资源（xterm / qrcode / 知识库编辑器的
-// TipTap、KaTeX、mermaid 与 PDF 阅读器的 pdf.js）、OpenCode Go 会话头注入（./core/opencode-session.ts）。它没有页面
-// 能力，所以 patch 里不给 id、不进插件页组件列表（宿主只把带 id 的行当组件）。
+// TipTap、KaTeX、mermaid 与 PDF 阅读器的 pdf.js）。它没有页面能力，所以 patch 里不给 id、
+// 不进插件页组件列表（宿主只把带 id 的行当组件）。
 // 页面能力本身全部按组件行拆开（cordis.patch.yml 里 insert 九行，行 name = 包名 +
 // exports 子路径，行序即插件页显示顺序）：dsh-kit/files（文件树 · 源代码管理）、
 // dsh-kit/chat（对话小窗）、dsh-kit/vault（知识库 · 日程）、dsh-kit/terminal（终端）、
@@ -22,7 +22,6 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { applyOpenCodeSessionHeader } from "./core/index.js";
 import { sameOrigin } from "./core/web-guard.js";
 import { kitLogEmit, kitLogStartup } from "./core/log.js";
 export const name = 'dsh-kit';
@@ -101,8 +100,6 @@ function clientFields(raw) {
 }
 export async function apply(ctx) {
     kitLogStartup();
-    // OpenCode Go 会话头按会话注入（实现见 src/core/opencode-session.ts）
-    applyOpenCodeSessionHeader(ctx, (m) => kitLogEmit('warn', 'session-header', '', m));
     // webServer 可能在本插件 apply 之后才挂载，用动态注入等它就绪
     ctx.inject(['webServer'], (webCtx) => {
         webCtx.effect(() => {

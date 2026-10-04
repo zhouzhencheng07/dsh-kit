@@ -1,4 +1,4 @@
-// test-opencode-session.mjs — src/core/opencode-session.ts 单测（按会话注入机制）
+// test-opencode-session.mjs — src/monitor/opencode-session.ts 单测（按会话注入机制）
 // 覆盖：门控判定、fetch 补丁（注入/放行/已带头跳过）、withStore 的 ALS 传播、
 // applyOpenCodeSessionHeader 的接线（假 ctx 捕获监听 + fetch 补丁生命周期）。
 import assert from 'node:assert/strict'
@@ -8,7 +8,7 @@ import {
   patchFetch,
   withStore,
   applyOpenCodeSessionHeader,
-} from '../dist/core/opencode-session.js'
+} from '../dist/monitor/opencode-session.js'
 
 let passed = 0
 
@@ -190,10 +190,45 @@ check('端到端：监听命中 → 流内 fetch 带头；不命中 → 不带',
   globalThis.fetch = original
 })
 
+check('开关：enabled() 现读——关着原样放行，打开即注入', async () => {
+  const { calls, fake } = makeRecordingFetch()
+  const original = globalThis.fetch
+  globalThis.fetch = fake
+  const ctx = fakeCtx()
+  let on = false
+  applyOpenCodeSessionHeader(ctx, { enabled: () => on })
+  const disposes = ctx.effects.map((fn) => fn()).filter((d) => typeof d === 'function')
+  const installedFetch = globalThis.fetch
+  for (const d of disposes) d()
+  const { listener } = ctx.listeners['llm/stream'][0]
+  const downstreamFor = () => ({
+    async *[Symbol.asyncIterator]() {
+      await installedFetch('https://gw.example/v1/chat')
+      yield 'chunk'
+    },
+  })
+
+  // 关着：next() 的下游原样返回（无 withStore 包装），请求照发但不带头
+  const downstream = downstreamFor()
+  const plain = listener({ provider: 'opencode-go', sessionId: 'session-off' }, () => downstream)
+  assert.equal(plain, downstream)
+  await plain[Symbol.asyncIterator]().next()
+  assert.deepEqual(calls, [null])
+
+  // 同一条监听里把开关打开：下一次调用立刻注入（门控是现读，不用重装）
+  on = true
+  const downstream2 = downstreamFor()
+  const wrapped = listener({ provider: 'opencode-go', sessionId: 'session-on' }, () => downstream2)
+  assert.notEqual(wrapped, downstream2) // 已包 withStore（不是原样返回）
+  for await (const _chunk of wrapped) break
+  assert.deepEqual(calls, [null, 'session-on'])
+  globalThis.fetch = original
+})
+
 check('降级：无 ctx.on 时 fetch 补丁回滚、不注册监听', () => {
   const original = globalThis.fetch
   const warns = []
-  applyOpenCodeSessionHeader({ inject() {} }, (m) => warns.push(m))
+  applyOpenCodeSessionHeader({ inject() {} }, { log: (m) => warns.push(m) })
   assert.equal(globalThis.fetch, original)
   assert.ok(warns.length > 0)
 })

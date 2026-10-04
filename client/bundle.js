@@ -12355,6 +12355,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       kcfgMonitorWarnCopiesHint: "结尾同一句（或同一组连续句）重复到这么多遍，先在当前会话提示。",
       kcfgMonitorStopCopies: "停止档：连续重复遍数（4–20）",
       kcfgMonitorStopCopiesHint: "重复继续到这么多遍才自动停止该回合；不大于提示档时按提示档+1 处理。",
+      kcfgGroupRequest: "模型请求",
+      kcfgSessionHeader: "OpenCode Go 会话头",
+      kcfgSessionHeaderHint: "发往 opencode / opencode-go 的模型请求按会话携带 x-opencode-session（复用 DSH 会话 id）：网关按它做路由亲和与提示词缓存，缺失会 400。关掉后不再注入。",
     };
     const en = {
       usageRefresh: "Refresh",
@@ -12409,12 +12412,15 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       kcfgMonitorWarnCopiesHint: "Show an in-session hint once the same ending text repeats this many times.",
       kcfgMonitorStopCopies: "Stop at N consecutive repeats (4–20)",
       kcfgMonitorStopCopiesHint: "Stop the turn only once the repetition reaches this many times; values at or below the warn level are treated as warn+1.",
+      kcfgGroupRequest: "Model requests",
+      kcfgSessionHeader: "OpenCode Go session header",
+      kcfgSessionHeaderHint: "Model requests to opencode / opencode-go carry x-opencode-session per session (reusing the DSH session id): the gateway uses it for routing affinity and prompt caching, and 400s without it. Turn off to stop injecting.",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? key;
 
-    // 组件配置快照：拉本组件自己的 /dsh-kit-monitor/config（用量开关 + 监视/通知
-    // 全部字段——组件的 Config schema 是唯一真源）。快照形状统一为
+    // 组件配置快照：拉本组件自己的 /dsh-kit-monitor/config（用量开关 + 监视/通知 +
+    // 会话头注入，全部字段——组件的 Config schema 是唯一真源）。快照形状统一为
     // { status:'ready', value }；端点不可达按全默认处理（与门控同源语义）。
     const M_CFG_DEFAULTS = {
       usageEnabled: true,
@@ -12422,6 +12428,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       monitorWarnCopies: 3,
       monitorStopCopies: 5,
       notifyEnabled: true,
+      sessionHeaderEnabled: true,
     };
     let cfgSnap = null;
     const cfgSubs = new Set();
@@ -12464,6 +12471,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           : M_CFG_DEFAULTS.monitorStopCopies;
       if (out.monitorStopCopies <= out.monitorWarnCopies) out.monitorStopCopies = out.monitorWarnCopies + 1;
       out.notifyEnabled = v.notifyEnabled !== false;
+      out.sessionHeaderEnabled = v.sessionHeaderEnabled !== false;
       return out;
     }
     void loadCfg();
@@ -13095,8 +13103,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       { key: "monitorWarnCopies", type: "number", min: 3, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorWarnCopies", hintKey: "kcfgMonitorWarnCopiesHint" },
       { key: "monitorStopCopies", type: "number", min: 4, max: 20, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorStopCopies", hintKey: "kcfgMonitorStopCopiesHint" },
       { key: "notifyEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgNotifyEnabled", hintKey: "kcfgNotifyEnabledHint" },
+      { key: "sessionHeaderEnabled", type: "bool", group: "kcfgGroupRequest", labelKey: "kcfgSessionHeader", hintKey: "kcfgSessionHeaderHint" },
     ];
-    const MONITOR_CFG_GROUPS = ["kcfgGroupUsage", "kcfgGroupMonitor"];
+    const MONITOR_CFG_GROUPS = ["kcfgGroupUsage", "kcfgGroupMonitor", "kcfgGroupRequest"];
     const MonitorConfigPage = dock.createConfigPage({
       fields: MONITOR_CFG_FIELDS,
       groups: MONITOR_CFG_GROUPS,

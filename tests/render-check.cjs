@@ -1322,12 +1322,19 @@ check(
   "过时文案已更新（无侧栏底部钮现行说法/默认 5/schedIdxTitle）",
   !src.includes("侧栏底部「") && !src.includes("默认 5") && !src.includes("schedIdxTitle"),
 );
-// OpenCode Go 会话头是内置行为、不是配置项：i18n 键与写入端点都必须不存在；
-// 注入机制本身由 test-opencode-session.mjs 覆盖
-check(
-  "OpenCode Go 会话头不在配置里（i18n 键与端点均移除）",
-  !src.includes("cfgOpenCodeSession") && !src.includes('"/dsh-kit/opencode-session"'),
-);
+// OpenCode Go 会话头归 dsh-kit/monitor 组件：开关 sessionHeaderEnabled 进本行配置页
+// （默认开）；旧的静态头写入端点与旧设置卡提示行都不得复现——机制由
+// test-opencode-session.mjs 覆盖
+{
+  const monSrc = fs.readFileSync(__dirname + "/../src/monitor/index.ts", "utf8");
+  check(
+    "OpenCode Go 会话头归 monitor 组件且可开关（旧写入端点与旧设置卡键不复现）",
+    !src.includes("cfgOpenCodeSession") && !src.includes('"/dsh-kit/opencode-session"') &&
+      /sessionHeaderEnabled: z\.boolean\(\)\.default\(true\)\.volatile\(\),/.test(monSrc) &&
+      src.includes('{ key: "sessionHeaderEnabled", type: "bool", group: "kcfgGroupRequest"') &&
+      src.includes("kcfgSessionHeaderHint"),
+  );
+}
 
 // 工作区文件编辑/预览面已退役（树与对话区点击改投官方右栏文件签，diff 签归 SCM
 // 专用）：CM/编辑区/保存链路/pdf·xlsx·docx 沙箱与其 vendor 都不得再出现

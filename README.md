@@ -11,7 +11,7 @@
 签**——一个 diff、一个知识库页、一个浏览器页各占一张 dock 签，切换器就是官方签条（日程
 仍是单张功能签）。每个能力都是插件页里可单独
 开关的**组件行**——行关掉 = 该能力的端点、agent 工具与界面入口一起退场，全部关掉即
-DSH 原版形态；插件页里本插件正好**九个组件行**（静态资源与会话头注入这类基础设施不占组件位）。工作区文件的查看
+DSH 原版形态；插件页里本插件正好**九个组件行**（静态资源这类基础设施不占组件位）。工作区文件的查看
 走**官方文件预览**（kit 在其头部补一枚「下载到本机」）；工作区文件不做插件内编辑——
 编辑走 VS Code 或让 agent 改。
 索引类视图（文件树、源代码管理、知识库 · 日程）共用左侧边栏一格，对话列常驻。
@@ -135,9 +135,9 @@ DSH 原版形态；插件页里本插件正好**九个组件行**（静态资源
   **对话小窗行**管记不记住浮窗位置尺寸、记不记住上次的工作区与会话；
   **网页搜索行**只有搜索结果条数（行开关 = 总开关，关掉即回官方搜索）；
   **内置浏览器行**管「对话链接改投内置浏览器」与「隐藏官方『浏览器』入口」（行开关 = 总开关）；
-  **用量与监视行**管余额与用量芯片开关、复读提示/停止档位与桌面通知；**文件树 · 源代码管理行**
+  **用量与监视行**管余额与用量芯片开关、复读提示/停止档位、桌面通知与 OpenCode Go 会话头注入；**文件树 · 源代码管理行**
   管文件树 / 源代码管理开关与「隐藏官方『工作区文件』入口」；**终端**与**技能**两行没有配置
-  字段（行开关 = 唯一开关，关掉即入口消失），**基础设施行**（无 id，不进组件列表）只伺服静态资源与会话头注入、同样没有配置字段；保存即写入 profile 并热生效（部分启动期门控在重启 dsh 后生效）
+  字段（行开关 = 唯一开关，关掉即入口消失），**基础设施行**（无 id，不进组件列表）只伺服静态资源、同样没有配置字段；保存即写入 profile 并热生效（部分启动期门控在重启 dsh 后生效）
 
 ## 安装与更新
 
@@ -169,7 +169,7 @@ dsh plugin --profile web update dsh-kit
 ## 工作原理
 
 - `src/*.ts` → `dist/`（tsc 构建产物入库）：宿主半边——基础设施行只挂 `/vendor/*`
-  （xterm / TipTap / KaTeX / qrcode）与 OpenCode 会话头注入（它没有页面能力，因此不给 id、
+  （xterm / TipTap / KaTeX / qrcode）（它没有页面能力，因此不给 id、
   不进插件页组件列表）；文件树
   （`/tree`、`/read`、`/raw`、`/fs/op`、`/upload`、`/git/*`）、技能池、知识库
   （`/vault/*`）、日程（`/schedule/*`）、浏览器等端点各归组件
@@ -180,12 +180,13 @@ dsh plugin --profile web update dsh-kit
   配置页经 `plugins.row.config`；终端坞引擎为官方 `webTerminals` 服务）
 - `src/core`、`src/files`、`src/chat`、`src/skills`、`src/terminal`、`src/monitor`、`src/browser`、
   `src/vault`、`src/phone`：组件按目录分边界（0.5.3 单包组件化，组件 = patch 行而非独立包）——`core` 宿主共享库
-  （同源校验、回收站删除、文本解码、会话头注入、dsh-tools 加载、日志）；`files` 挂 tree/
+  （同源校验、回收站删除、文本解码、dsh-tools 加载、日志）；`files` 挂 tree/
   read/raw/fs-op/git 端点 + 文件树·源代码管理面板；`chat` 只挂 `/dsh-kit-chat/config`
   探针（对话内核与外壳都在 client 半边，会话/工作区全走官方服务）；`skills` 挂 `/dsh-kit/skills` 与
   `/dsh-kit/skills/op` + `/dsh-kit-skills/config` 探针（技能池管理页）；`terminal` 挂
   `/dsh-kit-terminal/config` 探针（终端入口与坞）；`monitor` 挂 `/dsh-kit/usage` + 用量
-  芯片 / 输出复读守卫 / 会话通知；`browser` 挂 7 个 `browser_*` 工具 +
+  芯片 / 输出复读守卫 / 会话通知 + OpenCode Go 会话头按会话注入（配置页「模型请求」页签可关）；
+  `browser` 挂 7 个 `browser_*` 工具 +
   `/dsh-kit/browser`（面板 WS）、`/dsh-kit/browser/open` 与 `/dsh-kit-browser/config`
   探针（右栏浏览器签、人机共驾、链接改投）；`vault` 挂 `/dsh-kit/vault/*`（索引 / 搜索 /
   单页 mtime / 目录级文件管理 / 正文写回 mtime CAS / 粘贴图片入库 / `/dsh-kit/vault/file`

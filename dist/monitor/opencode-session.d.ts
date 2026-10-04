@@ -27,5 +27,8 @@ interface KitCtx {
     on?(event: string, listener: (...args: any[]) => any, options?: unknown): unknown;
 }
 /** 注册按会话注入。fetch 补丁即时生效，监听挂在 llm/stream 瀑布最前面 */
-export declare function applyOpenCodeSessionHeader(ctx: KitCtx, log?: (message: string) => void): void;
+export declare function applyOpenCodeSessionHeader(ctx: KitCtx, options?: {
+    log?: (message: string) => void;
+    enabled?: () => boolean;
+}): void;
 export {};

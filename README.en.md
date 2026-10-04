@@ -18,7 +18,7 @@ Index views (file tree, source control, vault directory) share a single left-sid
 slot; the conversation column stays put. Every capability is a **component row** you can
 switch off independently on the Plugins page — turning a row off removes its endpoints,
 agent tools and UI entries together; with all rows off, dsh is stock again. The pack shows
-exactly **eight component rows** (static assets and session-header injection are infrastructure
+exactly **nine component rows** (static assets are infrastructure
 and take no component slot).
 
 - **Terminal** (composer-row toggle / default **Ctrl+Alt+\`**): a tabbed bottom terminal dock
@@ -169,11 +169,11 @@ and take no component slot).
   off restores the official search); the **built-in browser row** covers "open chat links in
   the built-in browser" and "hide the official Browser entry" (row switch = master switch);
   the **usage & monitoring row** covers the balance chip
-  switch, monitor parameters and desktop notifications; the **file tree · source control row**
+  switch, monitor parameters, desktop notifications and OpenCode session-header injection; the **file tree · source control row**
   covers the file-tree and source-control switches plus hiding the official Workspace Files
   entry. The **terminal** and **skills** rows have no config field (the row switch is the only
   switch — turning it off hides the entry), and neither has the **infrastructure row** (no id, so it never shows up in the component
-  list), which only serves static assets and session-header injection. Saving writes to the profile and takes effect
+  list), which only serves static assets. Saving writes to the profile and takes effect
   immediately (a few startup-time gates need a dsh restart)
 
 ## Install & update
@@ -210,7 +210,7 @@ the WebSocket base the host injects).
 ## How it works
 
 - `src/*.ts` → `dist/` (committed tsc output): host side — the main row serves only
-  `/vendor/*` (xterm / TipTap / KaTeX / qrcode) plus OpenCode session-header injection;
+  `/vendor/*` (xterm / TipTap / KaTeX / qrcode);
   file-tree (`/tree`, `/read`, `/raw`, `/fs/op`,
   `/upload`, `/git/*`), skill-pool, vault (`/vault/*`), schedule (`/schedule/*`) and
   browser endpoints belong to their components
@@ -225,13 +225,14 @@ the WebSocket base the host injects).
 - `src/core`, `src/files`, `src/skills`, `src/terminal`, `src/monitor`, `src/browser`,
   `src/vault`, `src/phone`: component boundaries as directories (0.5.3 single-package components — a component is a patch
   row, not a package) — `core` is the host shared library (same-origin check, recycle-bin
-  delete, text decoding, session-header injection, dsh-tools loading, logging);
+  delete, text decoding, dsh-tools loading, logging);
   `files` serves tree/read/raw/fs-op/
   git endpoints + file tree and source control panels; `skills` serves `/dsh-kit/skills` and
   `/dsh-kit/skills/op` plus the `/dsh-kit-skills/config` probe (skill-pool manager page);
   `terminal` serves the `/dsh-kit-terminal/config` probe (terminal toggle and dock);
   `monitor` serves `/dsh-kit/usage` + usage chip / repetition guard / session
-  notifications; `browser` serves the 7 `browser_*` tools, the `/dsh-kit/browser` panel
+  notifications and the per-session OpenCode session-header injection (switchable on its
+  config page); `browser` serves the 7 `browser_*` tools, the `/dsh-kit/browser` panel
   WebSocket, `/dsh-kit/browser/open` and the `/dsh-kit-browser/config` probe (right-bar
   browser tab, shared control, link redirection); `vault` serves `/dsh-kit/vault/*`
   (index / search / per-page mtime / directory-level file management / body write-back with

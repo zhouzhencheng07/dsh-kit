@@ -558,8 +558,8 @@ function checkConfigSurface() {
   comps.MonitorConfigPage({ view: "page", form: fakeForm });
   const tabs = callLog.find((c) => c[1] === primStub.SegmentedTabs);
   check(
-    "U 配置页两组页签（用量与余额在前）",
-    !!tabs && tabs[2].items.length === 2 && tabs[2].items[0].value === "kcfgGroupUsage" && tabs[2].value === "kcfgGroupUsage",
+    "U 配置页三组页签（用量与余额在前）",
+    !!tabs && tabs[2].items.length === 3 && tabs[2].items[0].value === "kcfgGroupUsage" && tabs[2].value === "kcfgGroupUsage",
   );
   const sw = callLog.filter((c) => c[1] === primStub.Switch);
   check(

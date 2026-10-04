@@ -1,14 +1,17 @@
 // dsh-kit 用量与监视组件（宿主半边入口）
 //
 // 组件化切片：/dsh-kit/usage 聚合端点 + 用量芯片（client/bundle.js）+ 输出侧
-// 复读守卫（loop-breaker.ts，宿主侧覆盖全部会话）+ 会话通知，从 dsh-kit 主包
-// 迁出，独立成 entry（bundle patch 插单，profile 里行 id: monitor）。provider
-// 配置读取不依赖主包：经宿主 configEditor 服务现读 llm-pi-ai entry 的合成配置
+// 复读守卫（loop-breaker.ts，宿主侧覆盖全部会话）+ 会话通知 + OpenCode Go 会话头
+// 按会话注入（opencode-session.ts），从 dsh-kit 主包迁出，独立成 entry（bundle
+// patch 插单，profile 里行 id: monitor）。provider 配置读取不依赖主包：经宿主
+// configEditor 服务现读 llm-pi-ai entry 的合成配置
 // （inherited+override 两层 providers 浅合并），凭证经宿主 credentials 按引用
 // 解析，key 不出宿主进程。
 import { registerUsageRoutes } from "./usage.js";
 import { registerLoopGuard } from "./loop-breaker.js";
+import { applyOpenCodeSessionHeader } from "./opencode-session.js";
 import { loadDep, sameOrigin } from "../core/index.js";
+import { kitLogEmit } from "../core/log.js";
 // ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile
 // 写入 = 热提交（fiber config 里的稳定 ref），readSettings 统一解引用。
@@ -34,12 +37,17 @@ export const Config = z && typeof z.object === 'function'
         // API，未授权就不发（不再退回标题闪烁）。收尾按 turn/end 的 reason 分类（完成/出错/中止/
         // 卡住/撞上限各有文案）。一个总开关管全部提醒，不分类配置。
         notifyEnabled: z.boolean().default(true).volatile(),
+        // OpenCode Go 会话头注入（宿主侧 opencode-session.ts）：发往 opencode /
+        // opencode-go 的模型请求按会话带 x-opencode-session，网关缺它直接 400。
+        // 门控在 llm/stream 监听里现读，关掉当场生效（不用重启）；行关闭 = 模块
+        // 不物化 = 同样不注入。
+        sessionHeaderEnabled: z.boolean().default(true).volatile(),
     })
     : undefined;
 export async function apply(ctx, config = {}) {
     const defaults = Config
         ? Config({})
-        : { usageEnabled: true, monitorEnabled: true, monitorWarnCopies: 3, monitorStopCopies: 5, notifyEnabled: true };
+        : { usageEnabled: true, monitorEnabled: true, monitorWarnCopies: 3, monitorStopCopies: 5, notifyEnabled: true, sessionHeaderEnabled: true };
     // volatile 字段在 fiber config 里是稳定 ref（{get}），统一解引用
     const readRef = (v) => v !== null && typeof v === 'object' && typeof v.get === 'function'
         ? v.get()
@@ -50,6 +58,12 @@ export async function apply(ctx, config = {}) {
             out[key] = readRef(value);
         return out;
     };
+    // OpenCode Go 会话头按会话注入（实现见 ./opencode-session.ts）。本组件是它唯一的
+    // 归属：开关走本行配置页，行关闭则模块不物化、等于不注入。
+    applyOpenCodeSessionHeader(ctx, {
+        log: (m) => kitLogEmit('warn', 'session-header', '', m),
+        enabled: () => readSettings().sessionHeaderEnabled !== false,
+    });
     const disposers = [];
     ctx.inject(['webServer', 'credentials'], (webCtx) => {
         // 组件自己的只读配置快照：client 半边拉它做芯片门控（各组件行同一口径：200 = 行启用、404 = 行关闭）

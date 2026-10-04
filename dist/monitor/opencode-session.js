@@ -8,6 +8,9 @@
 // x-opencode-session: <DSH 会话 id>。值每会话唯一、跨轮次/压缩/重启稳定，
 // 不同会话天然散在不同网关副本上，不像静态头那样全部流量共用一个 id 互相挤兑。
 //
+// 开关：本组件配置页的 sessionHeaderEnabled（默认开）。门控在 llm/stream 监听里
+// 现读，关掉当场生效、不用重启；fetch 补丁留着不打紧——store 不激活就不注入。
+//
 // 机制（三段，均挂在插件 fiber 上）：
 // 1. ctx.on('llm/stream', …, { prepend: true }) 瀑布监听：provider 命中目标
 //    集合且带 sessionId 的调用，next() 取到的下游惰性流被包进 withStore——
@@ -108,7 +111,9 @@ export function withStore(iterable, store, als) {
     };
 }
 /** 注册按会话注入。fetch 补丁即时生效，监听挂在 llm/stream 瀑布最前面 */
-export function applyOpenCodeSessionHeader(ctx, log) {
+export function applyOpenCodeSessionHeader(ctx, options = {}) {
+    const log = options.log;
+    const isEnabled = options.enabled ?? (() => true);
     const originalFetch = globalThis.fetch;
     if (typeof originalFetch !== 'function') {
         log?.('globalThis.fetch 不可用，x-opencode-session 注入未启用');
@@ -135,8 +140,10 @@ export function applyOpenCodeSessionHeader(ctx, log) {
         log?.('ctx.on 不可用，x-opencode-session 注入未启用');
         return;
     }
-    ctx.on('llm/stream', (options, next) => {
-        const value = shouldAttach(options, SESSION_PROVIDERS);
+    ctx.on('llm/stream', (call, next) => {
+        if (!isEnabled())
+            return next();
+        const value = shouldAttach(call, SESSION_PROVIDERS);
         if (!value)
             return next();
         // next() 只调一次；同步异常按原样抛给调用方（适配层派发失败走它自己的路）
