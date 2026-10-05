@@ -3426,10 +3426,12 @@ ellipsis，窄列只截字不破版 */
         });
         scanPreviewDownload();
       }
-      // 组件半边激活（files/chat/monitor/terminal/skills/search/browser/vault/phone）：
-      // client 入口注册总是发生，功能存在性由各组件自己的探针门控（行禁用只摘宿主
-      // 半边端点，探针 404 的组件整体不注册）
-      for (const componentMod of [exports.files, exports.chat, exports.monitor, exports.terminal, exports.skills, exports.search, exports.browser, exports.vault, exports.phone]) {
+      // 组件半边激活（十个组件行各一个：files/chat/monitor/terminal/skills/search/
+      // browser/vault/phone/logs）。**清单必须与组件行一一对应**：漏一个，那个组件的
+      // apply 永不执行，探针再通也没人拉（日志行的浏览器半边就栽过这一处）。client
+      // 入口注册总是发生，功能存在性由各组件自己的探针门控（行禁用只摘宿主半边端点，
+      // 探针 404 的组件整体不注册）
+      for (const componentMod of [exports.files, exports.chat, exports.monitor, exports.terminal, exports.skills, exports.search, exports.browser, exports.vault, exports.phone, exports.logs]) {
         if (componentMod && typeof componentMod.apply === "function") componentMod.apply(ctx);
       }
     }

@@ -56,7 +56,21 @@ const read = (rel) => fs.readFileSync(__dirname + "/../" + rel, "utf8");
     hostSrc.includes("setKitLogFileSink(true)") && hostSrc.includes("setKitLogFileSink(false)") &&
       read("src/core/log.ts").includes("let fileSink = false"),
   );
-  check("浏览器半边有 logsModule 且接进组装（行关时整体不注册）", bundleSrc.includes("const logsModule =") && bundleSrc.includes("exports.logs = logsModule(exports, require);"));
+  // 激活表：root apply 逐个调组件的 apply。exports 挂上但漏进这张表 = 那个组件的 apply
+  // 永不执行（探针没人拉、槽位全不注册）——日志行的浏览器半边就栽在这一处，字符串哨兵
+  // 查的是「挂上了」而不是「被调用」，所以补一条按表内容的断言。
+  const activation = (/for \(const componentMod of \[([^\]]*)\]\)/.exec(bundleSrc)?.[1] ?? "")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  check(
+    "浏览器半边有 logsModule 且接进组装与激活表（行关时整体不注册）",
+    bundleSrc.includes("const logsModule =") && bundleSrc.includes("exports.logs = logsModule(exports, require);") &&
+      activation.includes("exports.logs"),
+  );
+  check(
+    "激活表与十个组件行一一对应（少一个 = 那个组件的 apply 永不执行）",
+    ["files", "chat", "monitor", "terminal", "skills", "search", "browser", "vault", "phone", "logs"]
+      .every((k) => activation.includes("exports." + k)) && activation.length === 10,
+  );
   check(
     "上报口改名 /dsh-kit/logs：旧口不再出现",
 bundleSrc.includes('"/dsh-kit/logs"') && !/["'`]\/dsh-kit\/log["'`]/.test(bundleSrc),
