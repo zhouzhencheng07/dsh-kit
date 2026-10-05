@@ -1,4 +1,4 @@
-# dsh-kit bundle patch：把套件基础设施行与九个组件行 insert 进 bundle 层。
+# dsh-kit bundle patch：把一行载体行与十个组件行 insert 进 bundle 层。
 # 组件行是同一个包（单包组件化）的 exports 子路径：行 name = dsh-kit/<行id>，exports 与
 # locale/<行id>/*.json 由 package.json 声明；行的中文显示名由宿主按行 name 解析 locale
 # meta（子路径名查不到包 → 回退显示 name 原文）。
@@ -8,11 +8,15 @@
 # ——静态把 web 行的 searchProvider 钉成 free-search 会让「关掉该组件行」变成搜索直接抛
 # WEB_PROVIDER_CONFIGURED_MISSING（详见 src/search/web-search.ts 头注释）。
 - insert:
-    # 基础设施行（vendor 静态资源 / 日志端点）：**必须有稳定 id**。匿名行由 loader 每次合成
-    # 现配随机 id，而 DSH 改设置（换模型 / 思考强度）会重写 profile 配置——行身份一变就整行
-    # 重挂，宿主客户端图谱随之删了又加，浏览器半边整包重载（知识库 / PDF / diff 等面板全部
-    # 重开）。一个 bundle 的宿主代码只能经 patch 行挂载，因此它仍是一行；带 id 的代价是它进
-    # 插件页的可管理组件列表（多一行带开关）。
+    # 载体行（name 恰好等于包名）：**不能删**，它不伺服任何能力，只是浏览器半边的挂载点。
+    # 宿主把包的客户端半边挂在「name 等于包名」的那一行上——子路径行（dsh-kit/vault 之类）
+    # 不带 client 半边（实测：给子路径补 ./client 导出也不挂）。删掉这一行 = 插件页十行都在、
+    # 宿主端点都通，浏览器半边整包不加载。
+    # id 必须显式且稳定：匿名行由 loader 每次合成现配随机 id，DSH 改设置（换模型 / 思考强度）
+    # 会重写 profile 配置——行身份一变就整行重挂，宿主客户端图谱随之删了又加，浏览器半边
+    # 整包重载（知识库 / PDF / diff 等面板全部重开）。
+    # 代价：它进插件页的可管理组件列表（多一行带开关，关掉 = 本插件界面整体不出现）。
+    # vendor 静态资源归用它的组件行（终端 / 手机访问 / 知识库），日志归 dsh-kit/logs 行。
     - id: core
       name: dsh-kit
     # 组件行 id 用短语义名（官方同款，如 agent-team）：插件页组件行显示「显示名 +
@@ -35,3 +39,7 @@
       name: dsh-kit/monitor
     - id: search
       name: dsh-kit/search
+    # 日志行放最后：它是排障用的（关行 = 不写 kit.log、浏览器半边不上报），
+    # 不该排在页面能力前面抢视线
+    - id: logs
+      name: dsh-kit/logs

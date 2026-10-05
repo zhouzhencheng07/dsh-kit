@@ -1152,7 +1152,7 @@ let vaultFetchPrev = null;
   check("斜杠菜单分组：图表（表格/流程图）+ 附件（图片），特殊块末尾双链", src.includes('labelKey: "vmenuGChart"') && src.includes('labelKey: "vmenuGAttach"') && src.includes('key: "wiki"') && src.includes('key: "mermaid"') && src.includes('key: "image"'));
   check("表格不再列 1×2~5×5 固定档（点开自己填行列，默认 3×3 带表头）", !src.includes("vmenuTable1") && !src.includes("vmenuTable5") && src.includes("setTDlg({ rows: 3, cols: 3 })") && src.includes("insertTable(rows, cols)"));
   check("H5/H6 不进菜单（正文里已有的照常渲染）", !src.includes('key: "h5"') && !src.includes('key: "h6"') && src.includes("/^h[1-6]$/.test(key)"));
-  check("流程图真出图：编辑器懒加载钩子 + 宿主白名单放行 mermaid", src.includes("/dsh-kit/vendor/mermaid.min.js") && src.includes("window.__dshkMermaidLoad") && src.includes("window.DshRTE.mermaidReady()") && fs.readFileSync(__dirname + "/../src/index.ts", "utf8").includes("['/dsh-kit/vendor/mermaid.min.js', 'mermaid.min.js']") && fs.existsSync(__dirname + "/../client/vendor/mermaid.min.js"));
+  check("流程图真出图：编辑器懒加载钩子 + 知识库行的白名单放行 mermaid", src.includes("/dsh-kit/vendor/mermaid.min.js") && src.includes("window.__dshkMermaidLoad") && src.includes("window.DshRTE.mermaidReady()") && fs.readFileSync(__dirname + "/../src/vault/index.ts", "utf8").includes("['/dsh-kit/vendor/mermaid.min.js', 'mermaid.min.js']") && fs.existsSync(__dirname + "/../client/vendor/mermaid.min.js"));
   check("双链选择框：只列库里已有的页、键盘选、重名时插 rel（不静默指向别的页）", src.includes("const pickRowsOf") && src.includes("pickInsert") && src.includes("const dup = (pagesRef.current ?? []).some") && src.includes('h.insertWikiLink({ target: dup ? p.rel.replace(/\\.md$/i, "") : base })') && /insertContent\(" "\)/.test(src));
   check("双链不监听 [[ 输入（字面文本要打得出来），建链只走菜单", !/__dshkWikiTrigger|wiki-link-trigger/.test(src));
   check("图片入口走系统文件选择器，与粘贴同一条入库管线", src.includes("input.accept = \"image/*\"") && src.includes("void attachAndInsert(files)") && src.includes("void attachAndInsert(files);"));
@@ -1295,25 +1295,29 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
 }
 
 
-// 9) 插件配置（声明式模型）：主行没有可调参数，因此不导出 Config、也没有配置页
-//    （手机访问在 dsh-kit/phone 组件，字段与探针都在 src/phone/index.ts）。
-//    这里钉住「主行不再持有任何配置字段 / 默认表 / 配置页骨架」，避免退役字段借道回来。
+// 9) 插件配置（声明式模型）：载体行（name 等于包名，浏览器半边的挂载点）不导出 Config、
+//    也不物化任何端点——vendor 静态资源分给用它的组件行、日志归 dsh-kit/logs 行；每个组件
+//    行自己管自己的字段（手机访问在 dsh-kit/phone，字段与探针都在 src/phone/index.ts）。
+//    这里钉住「载体行没有能力、没有配置」与「root client 不持有配置表」。
 {
   const hostSrc = fs.readFileSync(__dirname + "/../src/index.ts", "utf8");
   const hostCode = hostSrc.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
   check(
-    "主行无 Config / 无配置字段 / 无配置快照端点（行开关即唯一开关）",
-    !/export const Config/.test(hostCode) && !hostCode.includes("volatile") && !hostCode.includes("/dsh-kit/config"),
+    "载体行不物化任何端点 / 无 Config（vendor 与日志都不再挂它）",
+    !/export const Config/.test(hostCode) && !hostCode.includes("volatile") &&
+      !hostCode.includes("webServer") && !hostCode.includes("register") &&
+      !hostCode.includes("/dsh-kit/"),
   );
   check(
-    "root client 不再持有配置默认表 / 字段表 / 配置页（随手机访问迁走）",
+    "root client 不再持有配置默认表 / 字段表 / 配置页（随各组件迁走）",
     !src.includes("const CFG_DEFAULTS = {") && !src.includes("const KIT_CFG_FIELDS = [") &&
       !src.includes("KitConfigPage") && !src.includes("applyConfigSnapshot"),
   );
 }
-// 10) 插件页行形状：基础设施行带**稳定 id**（匿名行由 loader 现配随机 id，任何一次
-//     profile 写入都会把它换掉 → 该行重挂 → 本包浏览器半边整包重载），
-//     九个组件行的行序 = 卡片描述的枚举顺序（宿主按 patch insert 原样渲染、不排序）
+// 10) 插件页行形状：一行载体行（name 恰好等于包名——浏览器半边挂在它上面，删不得）
+//     + 十个组件行，全部带稳定 id（匿名行由 loader 现配随机 id，任何一次 profile 写入都会
+//     把它换掉 → 该行重挂 → 本包浏览器半边整包重载），行序 = 卡片描述的枚举顺序
+//     （宿主按 patch insert 原样渲染、不排序）
 {
   const patchSrc = fs.readFileSync(__dirname + "/../cordis.patch.yml", "utf8");
   const rows = [];
@@ -1326,14 +1330,20 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
     else if (bare) rows.push(current = { id: undefined, name: bare[1].trim() });
     else if (nameOf && current !== null && current.name === undefined) current.name = nameOf[1].trim();
   }
-  const infra = rows.filter((row) => row.id === "core");
+  const carrier = rows.filter((row) => row.id === "core");
   const comps = rows.filter((row) => typeof row.id === "string" && row.id !== "core");
-  const expected = ["files", "chat", "vault", "terminal", "browser", "skills", "phone", "monitor", "search"];
+  const expected = ["files", "chat", "vault", "terminal", "browser", "skills", "phone", "monitor", "search", "logs"];
   check(
-    "patch 形状：基础设施行 id=core（匿名行的随机 id 每次 profile 写入都会换 → 该行重挂、整包客户端重载）、九个组件行 id/name 齐备且顺序 = 描述顺序",
-    infra.length === 1 && infra[0].name === "dsh-kit" &&
+    "patch 形状：一行载体行（id=core / name=包名，浏览器半边挂在它上面）+ 十个组件行 id/name 齐备且顺序 = 描述顺序（每行 id 必须显式且稳定：匿名行的随机 id 每次 profile 写入都会换 → 该行重挂、整包客户端重载）",
+    carrier.length === 1 && carrier[0].name === "dsh-kit" &&
+      rows.length === expected.length + 1 &&
       JSON.stringify(comps.map((row) => row.id)) === JSON.stringify(expected) &&
       comps.every((row) => row.name === "dsh-kit/" + row.id),
+  );
+  check(
+    "包根可解析（载体行要 import 得到：main / 根 exports 指向 dist/index.js）",
+    JSON.parse(fs.readFileSync(__dirname + "/../package.json", "utf8")).main === "./dist/index.js" &&
+      JSON.parse(fs.readFileSync(__dirname + "/../package.json", "utf8")).exports["."] === "./dist/index.js",
   );
   const inOrder = (text, words) => {
     const at = words.map((word) => text.indexOf(word));
@@ -1342,9 +1352,9 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
   const zhDesc = JSON.parse(fs.readFileSync(__dirname + "/../locale/zh.json", "utf8")).meta.description;
   const enDesc = JSON.parse(fs.readFileSync(__dirname + "/../locale/en.json", "utf8")).meta.description;
   check(
-    "卡片描述按同一顺序枚举九个组件（zh/en 同序）",
-    inOrder(zhDesc, ["文件树·源代码管理", "对话小窗", "知识库·日程", "终端", "浏览器", "技能", "手机访问", "用量与监视", "网页搜索"]) &&
-      inOrder(enDesc, ["File tree & SCM", "chat window", "vault & schedule", "terminal", "browser", "skills", "phone access", "usage & monitor", "web search"]),
+    "卡片描述按同一顺序枚举十个组件（zh/en 同序）",
+    inOrder(zhDesc, ["文件树·源代码管理", "对话小窗", "知识库·日程", "终端", "浏览器", "技能", "手机访问", "用量与监视", "网页搜索", "运行日志"]) &&
+      inOrder(enDesc, ["File tree & SCM", "chat window", "vault & schedule", "terminal", "browser", "skills", "phone access", "usage & monitor", "web search", "runtime logs"]),
   );
 }
 

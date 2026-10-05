@@ -58,6 +58,20 @@ const file = (): string => kitPath('logs', 'kit.log')
 let pending: Promise<void> = Promise.resolve()
 let knownBytes = -1
 
+// 写盘闸：日志组件行在场时由它打开，行关 = 一律不落文件（控制台镜像照旧，它不是文件）。
+// 默认关——没有组件行来开就没有写盘，行树里那个 logs 行就是唯一的开关。
+let fileSink = false
+
+/** 由日志组件行开/关写盘（行开关 = 唯一开关；组件注销时关回去） */
+export function setKitLogFileSink(on: boolean): void {
+  fileSink = on
+}
+
+/** 写盘闸当前状态（渲染级检查与单测用） */
+export function kitLogFileSinkOn(): boolean {
+  return fileSink
+}
+
 function stamp(ts: number): string {
   const d = new Date(ts)
   const p = (n: number, w = 2): string => String(n).padStart(w, '0')
@@ -149,6 +163,7 @@ function emit(level: KitLogLevel, component: string, scope: string, msg: string,
     else console.warn(line)
   }
   // 串行化追加：并发写的行不交错；队列自身的失败由 write 内部吞掉
+  if (!fileSink) return
   pending = pending.then(() => write(entry))
 }
 

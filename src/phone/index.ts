@@ -12,10 +12,12 @@
 //   GET  /dsh-kit-phone/config      —— 生效配置快照（client 门控与可达性探针：404 = 行关闭）
 //   GET  /dsh-kit/phone/info|link   —— 网关状态与带令牌链接
 //   POST /dsh-kit/phone/rotate|gateway —— 轮换令牌 / 热启停网关
+//   GET  /dsh-kit/vendor/qrcode.js  —— 设置页二维码用的 vendored 生成器，随本行伺服
 
 import http from 'node:http'
 
 import { loadDep, sameOrigin } from '../core/index.ts'
+import { registerVendorFiles } from '../core/vendor-route.ts'
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from './gateway.ts'
 import type { PhoneGatewayHandle } from './gateway.ts'
 import { kitLogger } from '../core/log.ts'
@@ -93,6 +95,11 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
   // webServer 可能在本组件 apply 之后才挂载，用动态注入等它就绪
   ctx.inject(['webServer', 'credentials'], (webCtx: KitWebCtx) => {
     webCtx.effect(() => {
+      // ── 二维码生成器：手机访问页面的静态资源，跟本行走 ──
+      const disposeVendor = registerVendorFiles(webCtx.webServer, new Map([
+        ['/dsh-kit/vendor/qrcode.js', 'qrcode.js'],
+      ]))
+
       // ── 生效配置只读端点（client 门控与可达性探针）──
       // client 启动拉一次喂 cfgFromSnapshot；行关闭时本端点随模块不物化而 404，
       // client 探到 404 就整体不注册（设置页「手机访问」整块不出现）。
@@ -361,6 +368,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
         },
       })
       return () => {
+        disposeVendor()
         disposePhoneConfig()
         disposePhoneInfo()
         disposePhoneLink()

@@ -11,7 +11,9 @@ process.env.DSH_HOME = home
 const LOG_FILE = path.join(home, 'dsh-kit', 'logs', 'kit.log')
 const MODULE = pathToFileURL(path.resolve('src/core/log.ts')).href
 
-const { kitLogger, kitLogFlush, kitLogFormat } = await import(MODULE)
+const { kitLogger, kitLogFlush, kitLogFormat, setKitLogFileSink, kitLogFileSinkOn } = await import(MODULE)
+// 写盘闸默认关（日志组件行不在场就不写文件），这里显式开——相当于那一行在场
+setKitLogFileSink(true)
 
 let failed = 0
 const check = (label, cond) => {
@@ -96,6 +98,7 @@ check('落盘失败不抛错', !threw)
 const runWith = (level, line) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-kit-lvl-'))
   const code = `const m = await import(${JSON.stringify(MODULE)});`
+    + `m.setKitLogFileSink(true);`
     + `m.kitLogger('x').info('${line}');`
     + `m.kitLogger('x').error('${line}2');`
     + `await m.kitLogFlush();`
@@ -120,12 +123,25 @@ console.error = (...args) => noise.push(args)
 process.env.DSH_KIT_LOG_CONSOLE = '0'
 process.env.DSH_HOME = silentDir
 const quietMod = await import(MODULE + '?quiet')
+quietMod.setKitLogFileSink(true)
 quietMod.kitLogger('x').error('静默目录的报错')
 await quietMod.kitLogFlush()
 console.warn = realWarn
 console.error = realError
 check('关镜像后 console 干净', noise.length === 0)
 check('关镜像后文件照写', fs.readFileSync(path.join(silentDir, 'dsh-kit', 'logs', 'kit.log'), 'utf8').includes('静默目录的报错'))
+
+// 8) 写盘闸：关掉 = 一律不落文件（这正是日志组件行的行开关在宿主半边的形状）
+process.env.DSH_HOME = home
+setKitLogFileSink(false)
+const sizeAtClose = fs.statSync(LOG_FILE).size
+kitLogger('files').error('闸关着，这一行不落盘')
+await settle()
+check('闸关时文件不再增长', fs.statSync(LOG_FILE).size === sizeAtClose && !read().includes('闸关着'))
+setKitLogFileSink(true)
+kitLogger('files').info('闸开着，这一行落盘')
+await settle()
+check('闸开时照常落盘', read().includes('闸开着'))
 
 fs.rmSync(home, { recursive: true, force: true })
 fs.rmSync(readOnly, { recursive: true, force: true })

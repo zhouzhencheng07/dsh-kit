@@ -52,6 +52,11 @@
       "default": "./dist/phone/index.js"
     },
     "./phone/locale/*.json": "./locale/phone/*.json",
+    "./logs": {
+      "types": "./dist/logs/index.d.ts",
+      "default": "./dist/logs/index.js"
+    },
+    "./logs/locale/*.json": "./locale/logs/*.json",
     "./client": "./client/bundle.js",
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"

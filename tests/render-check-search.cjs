@@ -129,7 +129,9 @@ async function checkApply() {
 {
   const read = (rel) => fs.readFileSync(__dirname + "/../" + rel, "utf8");
   const bundleSrc = read("client/bundle.js");
-  const hostSrc = read("src/index.ts");
+  // 套件没有根入口模块：查的是「搜索的配置字段没渗进别的组件行」
+  const hostSrc = ["browser", "chat", "files", "logs", "monitor", "phone", "skills", "terminal"]
+    .map((d) => read(`src/${d}/index.ts`)).join("\n");
   const compSrc = read("src/search/index.ts");
   const seamSrc = read("src/search/web-search.ts");
   const patchSrc = read("cordis.patch.yml");
@@ -141,7 +143,7 @@ async function checkApply() {
     return i < 0 || j < 0 ? "" : bundleSrc.slice(i, j);
   };
   check(
-    "主包 schema / client 默认表 / 字段表 / 词条都不再有搜索字段",
+    "别的组件行没有搜索字段，client 默认表 / 字段表 / 词条也没有",
     !hostSrc.includes("searchEnabled") && !hostSrc.includes("searchMaxResults") &&
       !bundleSrc.includes("const CFG_DEFAULTS = {") && !bundleSrc.includes("const KIT_CFG_FIELDS = [") &&
       !bundleSrc.includes("kcfgSearchEnabled"),

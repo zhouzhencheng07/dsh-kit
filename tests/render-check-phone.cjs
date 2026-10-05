@@ -230,7 +230,9 @@ async function checkApply() {
 {
   const read = (rel) => fs.readFileSync(__dirname + "/../" + rel, "utf8");
   const bundleSrc = read("client/bundle.js");
-  const hostSrc = read("src/index.ts");
+  // 套件没有根入口模块：查的是「手机访问的装配没渗进别的组件行」
+  const hostSrc = ["browser", "chat", "files", "logs", "monitor", "search", "skills", "terminal"]
+    .map((d) => read(`src/${d}/index.ts`)).join("\n");
   const compSrc = read("src/phone/index.ts");
   const gwSrc = read("src/phone/gateway.ts");
   const patchSrc = read("cordis.patch.yml");
@@ -242,16 +244,21 @@ async function checkApply() {
   };
   const hostCode = hostSrc.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
   check(
-    "主包不再装配手机访问（无网关/端点/端口/配置）",
+    "别的组件行不装配手机访问（无网关/端点/端口/配置）",
     !hostCode.includes("phone-gateway") && !hostCode.includes("startPhoneGateway") && !hostCode.includes("/dsh-kit/phone/") &&
       !hostCode.includes("phonePort") && !hostCode.includes("phoneEnabled") && !hostCode.includes("PHONE_PORT") &&
       !hostCode.includes("dsh-kit/config"),
   );
   check(
-    "主行不再有 Config / 配置页 / 配置快照门控（行开关即唯一开关）",
-    !/export const Config/.test(hostCode) && !bundleSrc.includes("const CFG_DEFAULTS = {") &&
+    "别的组件行不夹带配置页骨架（Config 字段表只在各组件自己的行里，client 根也不再持有）",
+    !bundleSrc.includes("const CFG_DEFAULTS = {") &&
       !bundleSrc.includes("const KIT_CFG_FIELDS = [") &&
       !bundleSrc.includes("kcfgPhoneEnabled") && !bundleSrc.includes("phoneEnabled"),
+  );
+  check(
+    "二维码静态资源归本行注册（行关 = 没有 qrcode.js），不夹带别家的资源",
+    compSrc.includes("registerVendorFiles") && compSrc.includes("['/dsh-kit/vendor/qrcode.js', 'qrcode.js']") &&
+      !/xterm[.]js|richeditor|katex|pdf[.]/.test(compSrc),
   );
   check(
     "组件入口自持端点与配置，且带探针（404 = 行关闭）",

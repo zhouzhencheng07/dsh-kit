@@ -18,8 +18,10 @@ Index views (file tree, source control, vault directory) share a single left-sid
 slot; the conversation column stays put. Every capability is a **component row** you can
 switch off independently on the Plugins page — turning a row off removes its endpoints,
 agent tools and UI entries together; with all rows off, dsh is stock again. The pack shows
-exactly **nine component rows** (static assets are infrastructure
-and take no component slot).
+**ten component rows plus one carrier row** — the carrier serves nothing, it is only the
+mount point for this package's browser half (the host attaches a package's client half to
+the row whose name equals the package name, so deleting it makes every capability vanish
+from the page). It stays in the list: **do not turn it off**.
 
 - **Terminal** (composer-row toggle / default **Ctrl+Alt+\`**): a tabbed bottom terminal dock
   bound to the session it was opened in (width follows the chat column); hidden
@@ -152,7 +154,7 @@ and take no component slot).
   and toolbars point down, the bottom dock and the composer row point up, row-end buttons align end;
   commands carry their current keys and follow rebinding) — plain truncation hints keep the native
   `title`
-- **Diagnostics log** (no switch, always on): host-side and browser-side logs land in one file,
+- **Runtime log row** (its row switch decides whether anything is written at all): host-side and browser-side logs land in one file,
   `<DSH_HOME>/dsh-kit/logs/kit.log` (rotating, 2MB × 5), one event per line — time, level,
   component, **the operation in flight**, message and fields. The line carrying an error already
   names the operation it happened in, and the lines before it are what the plugin was doing
@@ -171,8 +173,10 @@ and take no component slot).
   switch, monitor parameters, desktop notifications and OpenCode session-header injection; the **file tree · source control row**
   covers the file-tree and source-control switches plus hiding the official Workspace Files
   entry. The **terminal** and **skills** rows have no config field (the row switch is the only
-  switch — turning it off hides the entry), and neither has the **infrastructure row** (no id, so it never shows up in the component
-  list), which only serves static assets. Saving writes to the profile and takes effect
+  switch — turning it off hides the entry); the **runtime log row** has no config field either
+  (its row switch is whether log files get written; the level still comes from the
+  `DSH_KIT_LOG` environment variable). The carrier row has no config field and must stay on
+  (turning it off removes everything this plugin shows in the page). Saving writes to the profile and takes effect
   immediately (a few startup-time gates need a dsh restart)
 
 ## Install & update
@@ -208,11 +212,12 @@ the WebSocket base the host injects).
 
 ## How it works
 
-- `src/*.ts` → `dist/` (committed tsc output): host side — the main row serves only
-  `/vendor/*` (xterm / TipTap / KaTeX / qrcode);
-  file-tree (`/tree`, `/read`, `/raw`, `/fs/op`,
+- `src/*.ts` → `dist/` (committed tsc output): host side — file-tree
+  (`/tree`, `/read`, `/raw`, `/fs/op`,
   `/upload`, `/git/*`), skill-pool, vault (`/vault/*`), schedule (`/schedule/*`) and
-  browser endpoints belong to their components
+  browser endpoints belong to their components; the `/vendor/*` static assets are
+  registered by the component that uses them (xterm → terminal, qrcode → phone access,
+  TipTap / KaTeX / mermaid / pdf.js → vault)
 - `client/bundle.js`: browser side (hand-written ModuleLoader bundle, **no build**) —
   the root package keeps only the cross-slot base (kitUi open/close state, the config-page
   skeleton, entry seats, the preview download button); the client halves of the file-tree /
@@ -243,14 +248,18 @@ the WebSocket base the host injects).
   Rows are materialized by the root
   `cordis.patch.yml` through package exports subpaths (`dsh-kit/files` etc.)
 - `client/vendor/*`: xterm / TipTap rich text / KaTeX / mermaid / qrcode, all lazily loaded
-  and served from `/dsh-kit/vendor/*`
+  and served from `/dsh-kit/vendor/*` by the component row that uses them — disabling a row
+  takes its static assets with it
 - `src/search/`: the web-search component — `web-search.ts` points the web seam's
   provider at `free-search` and registers the keyless engine chain (`engine-chain.ts` +
   `engines/*`); disabling the component row leaves the seam untouched, so the official
   provider pinned by the base layer keeps serving
-- `cordis.patch.yml`: inserts the dsh-kit infrastructure row (no id, so it never shows up in the component list)
-  and the eight component rows (files / vault / terminal / browser / skills / phone /
-  monitor / search — row order is the Plugins-page order) into the bundle layer;
+- `cordis.patch.yml`: inserts the carrier row (`name: dsh-kit` — the mount point for the
+  browser half, serves nothing) and the ten dsh-kit component rows (files / chat / vault / terminal /
+  browser / skills / phone / monitor / search / logs — row order is the Plugins-page order)
+  into the bundle layer; every row id is explicit and
+  stable (the loader gives anonymous rows a fresh random id on every compose, so any profile
+  write would re-mount the row and reload the whole browser half);
   no official row is patched
 - Host-side `node-pty`/`ws`/`@deepseek-ai/*` declare no dependencies: resolved at
   runtime from the profile fallback node_modules (declaring them would install a

@@ -27,6 +27,17 @@ const scopes = new AsyncLocalStorage();
 const file = () => kitPath('logs', 'kit.log');
 let pending = Promise.resolve();
 let knownBytes = -1;
+// 写盘闸：日志组件行在场时由它打开，行关 = 一律不落文件（控制台镜像照旧，它不是文件）。
+// 默认关——没有组件行来开就没有写盘，行树里那个 logs 行就是唯一的开关。
+let fileSink = false;
+/** 由日志组件行开/关写盘（行开关 = 唯一开关；组件注销时关回去） */
+export function setKitLogFileSink(on) {
+    fileSink = on;
+}
+/** 写盘闸当前状态（渲染级检查与单测用） */
+export function kitLogFileSinkOn() {
+    return fileSink;
+}
 function stamp(ts) {
     const d = new Date(ts);
     const p = (n, w = 2) => String(n).padStart(w, '0');
@@ -124,6 +135,8 @@ function emit(level, component, scope, msg, fields) {
             console.warn(line);
     }
     // 串行化追加：并发写的行不交错；队列自身的失败由 write 内部吞掉
+    if (!fileSink)
+        return;
     pending = pending.then(() => write(entry));
 }
 /** 取组件自己的 logger。component 只用组件名（files/vault/…），作用域名另由 op 给 */

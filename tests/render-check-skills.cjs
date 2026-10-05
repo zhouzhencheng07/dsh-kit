@@ -307,10 +307,12 @@ async function checkApply() {
 // —— 宿主半边源哨兵：行开关 = 唯一开关（无独立配置字段），探针在组件入口 ——
 {
   const bundleSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
-  const hostSrc = fs.readFileSync(__dirname + "/../src/index.ts", "utf8");
+  // 套件没有根入口模块：查的是「技能的字段没渗进别的组件行」
+  const hostSrc = ["browser", "chat", "files", "logs", "monitor", "phone", "search", "terminal"]
+    .map((d) => fs.readFileSync(__dirname + "/../src/" + d + "/index.ts", "utf8")).join("\n");
   const compSrc = fs.readFileSync(__dirname + "/../src/skills/index.ts", "utf8");
   const poolSrc = fs.readFileSync(__dirname + "/../src/skills/skill-pool.ts", "utf8");
-  check("技能无独立配置字段（主包 schema/配置页/client 默认表都不再出现 skillsPageEnabled）", !hostSrc.includes("skillsPageEnabled") && !bundleSrc.includes("skillsPageEnabled"));
+  check("技能无独立配置字段（别的组件行与 client 默认表都不再出现 skillsPageEnabled）", !hostSrc.includes("skillsPageEnabled") && !bundleSrc.includes("skillsPageEnabled"));
   check("组件入口挂技能池端点与行可达性探针", compSrc.includes("applySkillPool") && compSrc.includes("/dsh-kit-skills/config"));
   check("技能页样式随组件自带（.dshk-sk 只在组件 CSS 块出现一次）", bundleSrc.includes("SKS_CSS") && bundleSrc.split(".dshk-sk{").length - 1 === 1);
   check(

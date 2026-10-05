@@ -11,7 +11,7 @@
 签**——一个 diff、一个知识库页、一个浏览器页各占一张 dock 签，切换器就是官方签条（日程
 仍是单张功能签）。每个能力都是插件页里可单独
 开关的**组件行**——行关掉 = 该能力的端点、agent 工具与界面入口一起退场，全部关掉即
-DSH 原版形态；插件页里本插件**九行组件 + 一行基础设施行**（行 id `core`，只伺服静态资源；它关掉 = 本插件浏览器半边整体不加载）。工作区文件的查看
+DSH 原版形态；插件页里本插件**十行组件 + 一行载体行**（载体行不伺服任何能力，只是浏览器半边的挂载点——宿主把包的客户端半边挂在「行名 = 包名」的那一行上，删掉它页面能力会整片消失，所以它留在列表里，**别关**）。工作区文件的查看
 走**官方文件预览**（kit 在其头部补一枚「下载到本机」）；工作区文件不做插件内编辑——
 编辑走 VS Code 或让 agent 改。
 索引类视图（文件树、源代码管理、知识库 · 日程）共用左侧边栏一格，对话列常驻。
@@ -136,7 +136,7 @@ DSH 原版形态；插件页里本插件**九行组件 + 一行基础设施行**
   **内置浏览器行**管「对话链接改投内置浏览器」与「隐藏官方『浏览器』入口」（行开关 = 总开关）；
   **用量与监视行**管余额与用量芯片开关、复读提示/停止档位、桌面通知与 OpenCode Go 会话头注入；**文件树 · 源代码管理行**
   管文件树 / 源代码管理开关与「隐藏官方『工作区文件』入口」；**终端**与**技能**两行没有配置
-  字段（行开关 = 唯一开关，关掉即入口消失），**基础设施行**（行 id `core`）只伺服静态资源、同样没有配置字段；保存即写入 profile 并热生效（部分启动期门控在重启 dsh 后生效）
+  字段（行开关 = 唯一开关，关掉即入口消失），**运行日志行**同样没有配置字段（写不写日志文件就是它的行开关，级别仍走 `DSH_KIT_LOG` 环境变量）；载体行没有配置字段也不该被关（关掉 = 本插件界面整体消失）；保存即写入 profile 并热生效（部分启动期门控在重启 dsh 后生效）
 
 ## 安装与更新
 
@@ -167,14 +167,14 @@ dsh plugin --profile web update dsh-kit
 
 ## 工作原理
 
-- `src/*.ts` → `dist/`（tsc 构建产物入库）：宿主半边——基础设施行只挂 `/vendor/*`
-  （xterm / TipTap / KaTeX / qrcode）（它没有页面能力，因此不给 id、
-  不进插件页组件列表）；文件树
+- `src/*.ts` → `dist/`（tsc 构建产物入库）：宿主半边——文件树
   （`/tree`、`/read`、`/raw`、`/fs/op`、`/upload`、`/git/*`）、技能池、知识库
-  （`/vault/*`）、日程（`/schedule/*`）、浏览器等端点各归组件
+  （`/vault/*`）、日程（`/schedule/*`）、浏览器等端点各归组件；`/vendor/*` 静态资源也按
+  用它的组件行走（xterm → 终端行，二维码 → 手机访问行，TipTap / KaTeX / mermaid /
+  pdf.js → 知识库行）
 - `client/bundle.js`：浏览器半边（手写 ModuleLoader bundle，**零构建**）——根包只剩跨槽
   共享底座（kitUi 开合状态、配置页骨架、入口座、文件预览下载钮）；文件树·源代码管理、终端、
-  技能、用量监视、网页搜索、内置浏览器、知识库·日程、手机访问、对话小窗九个组件的 client 半边同住本 bundle
+  技能、用量监视、网页搜索、内置浏览器、知识库·日程、手机访问、对话小窗、运行日志十个组件的 client 半边同住本 bundle
   （各带 `module/exports` 隔离壳，右栏 pane 正文经 `sidebar.right.pane.tab` 提供、
   配置页经 `plugins.row.config`；终端坞引擎为官方 `webTerminals` 服务）
 - `src/core`、`src/files`、`src/chat`、`src/skills`、`src/terminal`、`src/monitor`、`src/browser`、
@@ -196,13 +196,16 @@ dsh plugin --profile web update dsh-kit
   行经根包 `exports` 子路径（`dsh-kit/files` 等）由 `cordis.patch.yml` 物化
 - `client/vendor/*`：xterm / TipTap 富文本 / KaTeX / mermaid / qrcode / pdf.js，全部按需懒加载，
   由 `/dsh-kit/vendor/*` 静态伺服（mermaid 只在页内出现流程图时下载，pdf.js 只在打开库内 PDF
-  时下载，宿主与 app.asar 都不带这两个库）
+  时下载，宿主与 app.asar 都不带这两个库），路由按用它的组件行注册：关掉某一行 = 它那份
+  静态资源一起没有
 - `src/search/`：网页搜索组件——`web-search.ts` 把 web seam 的 provider 指向 `free-search`
   并注册免 key 引擎链（`engine-chain.ts` + `engines/*`）；组件行关掉 = 不接管 seam =
   base 钉的官方搜索原样生效
-- `cordis.patch.yml`：把 dsh-kit 基础设施行（行 id `core`）与九个组件行（files / chat / vault / terminal /
-  browser / skills / phone / monitor / search，行序即插件页显示顺序）insert 进 bundle 层（组件 = 本包的 exports 子路径，见
-  `dsh-kit/terminal` 等）；不 patch 任何官方行
+- `cordis.patch.yml`：把 dsh-kit 的载体行（`name: dsh-kit`，浏览器半边的挂载点，不伺服能力）
+  与十个组件行（files / chat / vault / terminal /
+  browser / skills / phone / monitor / search / logs，行序即插件页显示顺序）insert 进 bundle 层（组件 = 本包的 exports 子路径，见
+  `dsh-kit/terminal` 等）；不 patch 任何官方行（每行 id 显式且稳定：
+  匿名行的随机 id 每次 profile 写入都会换 → 该行重挂 → 浏览器半边整包重载）
 - 宿主侧 `node-pty`/`ws`/`@deepseek-ai/*` 不声明依赖：运行时从 profile fallback
   node_modules 解析（声明了 pnpm 会装出第二份实例）
 

@@ -174,10 +174,17 @@ check(
   dockExports.setKitUi({ terminals: [], activeTermId: null, termDockOpen: false });
 }
 
-// —— 源码哨兵：xterm 静态资源仍走主包 /dsh-kit/vendor 白名单，样式随组件自带 ——
+// —— 源码哨兵：xterm 静态资源由终端行自己伺服（行关 = 连 xterm 都没有），样式随组件自带 ——
 {
   const termSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
-  check("xterm 走主包 vendor 白名单（xterm.js/addon-fit.js/xterm.css 三个 URL 都在本包加载）", termSrc.includes("/dsh-kit/vendor/xterm.js") && termSrc.includes("/dsh-kit/vendor/addon-fit.js") && termSrc.includes("/dsh-kit/vendor/xterm.css"));
+  const termHost = fs.readFileSync(__dirname + "/../src/terminal/index.ts", "utf8");
+  check("xterm 三个 URL 都在本包加载（xterm.js/addon-fit.js/xterm.css）", termSrc.includes("/dsh-kit/vendor/xterm.js") && termSrc.includes("/dsh-kit/vendor/addon-fit.js") && termSrc.includes("/dsh-kit/vendor/xterm.css"));
+  check(
+    "xterm 的静态路由归终端行注册（registerVendorFiles + 三个文件，且不夹带别家的资源）",
+    termHost.includes("registerVendorFiles") &&
+      ["/dsh-kit/vendor/xterm.js", "/dsh-kit/vendor/addon-fit.js", "/dsh-kit/vendor/xterm.css"].every((u) => termHost.includes(`['${u}',`)) &&
+      !/qrcode|richeditor|mermaid|katex|pdf\./.test(termHost),
+  );
   check("坞样式随组件自带（.dshk-dock 与让位规则在本包 CSS，不在根包）", termSrc.includes(".dshk-dock{position:fixed") && termSrc.includes("body.dshk-open [class*=\"_centerCol\"]"));
   check("入口钮的悬停不再自带原生 title（全走官方气泡）", !/dshk-enbtn"[\s\S]{0,120}?\n\s*title:/.test(termSrc));
   const hostSrc = fs.readFileSync(__dirname + "/../src/terminal/index.ts", "utf8");

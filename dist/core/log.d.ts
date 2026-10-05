@@ -17,6 +17,10 @@ export interface KitLogger {
      *  fn 返回 Promise 时结果行在 settle 后补写，rejection 照原样抛给调用方。 */
     op<T>(name: string, fn: () => T, fields?: Record<string, unknown>): T;
 }
+/** 由日志组件行开/关写盘（行开关 = 唯一开关；组件注销时关回去） */
+export declare function setKitLogFileSink(on: boolean): void;
+/** 写盘闸当前状态（渲染级检查与单测用） */
+export declare function kitLogFileSinkOn(): boolean;
 /** 一行一事：时间 级别 组件 [作用域] "消息" key=value…；错误附带的 stack 缩进跟在后面 */
 export declare function kitLogFormat(entry: KitLogEntry): string;
 /** 取组件自己的 logger。component 只用组件名（files/vault/…），作用域名另由 op 给 */

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Page capability kit",
-    "description": "File tree & SCM / chat window / vault & schedule / terminal / browser / skills / phone access / usage & monitor / web search — toggle each component from the detail page."
+    "description": "File tree & SCM / chat window / vault & schedule / terminal / browser / skills / phone access / usage & monitor / web search / runtime logs — toggle each component from the detail page."
   }
 }

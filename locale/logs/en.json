@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Runtime logs",
+    "description": "Host and browser logs merge into kit.log (rotated by size): turning this row off writes no log file and stops the browser half from reporting page-only failures such as a blank screen."
+  }
+}

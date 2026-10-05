@@ -251,7 +251,9 @@ async function checkApply() {
 {
   const read = (rel) => fs.readFileSync(__dirname + "/../" + rel, "utf8");
   const bundleSrc = read("client/bundle.js");
-  const hostSrc = read("src/index.ts");
+  // 套件没有根入口模块：查的是「知识库的装配没渗进别的组件行」
+  const hostSrc = ["browser", "chat", "files", "logs", "monitor", "phone", "search", "skills", "terminal"]
+    .map((d) => read(`src/${d}/index.ts`)).join("\n");
   const compSrc = read("src/vault/index.ts");
   const patchSrc = read("cordis.patch.yml");
   const pkg = JSON.parse(read("package.json"));
@@ -264,15 +266,21 @@ async function checkApply() {
   // 迁移说明注释会提到旧键名，判据只看代码段
   const hostCode = hostSrc.replace(/\/\/[^\n]*/g, "");
   check(
-    "主包 schema / client 默认表 / 字段表都不再有知识库与日程字段",
+    "别的组件行没有知识库与日程字段，client 默认表 / 字段表也没有",
     !/vault(Enabled|Root)/.test(hostCode) &&
       !bundleSrc.includes("const CFG_DEFAULTS = {") && !bundleSrc.includes("const KIT_CFG_FIELDS = [") &&
       !bundleSrc.includes("kcfgVaultEnabled"),
   );
   check(
-    "主包不再装配知识库与日程（无 scanner / vault-fs / schedule / 端点）",
+    "别的组件行不装配知识库与日程（无 scanner / vault-fs / schedule / 端点）",
     !hostCode.includes("VaultScanner") && !hostCode.includes("createEntry") && !hostCode.includes("syncScheduleStore") &&
       !hostCode.includes("/dsh-kit/vault/") && !hostCode.includes("/dsh-kit/schedule/"),
+  );
+  check(
+    "阅读面的第三方库路由归知识库行注册（pdf.js / TipTap / mermaid / KaTeX + fonts 前缀），不夹带别家的资源",
+    compSrc.includes("registerVendorFiles") && compSrc.includes("registerVendorSubdir") &&
+      ["/dsh-kit/vendor/pdf.min.mjs", "/dsh-kit/vendor/pdf.worker.min.mjs", "/dsh-kit/vendor/richeditor.bundle.js", "/dsh-kit/vendor/mermaid.min.js", "/dsh-kit/vendor/katex.min.js", "/dsh-kit/vendor/katex.min.css"].every((u) => compSrc.includes("['" + u + "',")) &&
+      compSrc.includes("'/dsh-kit/vendor/fonts'") && !/xterm[.]js|qrcode[.]js/.test(compSrc),
   );
   check(
     "组件入口自持端点与配置（日程不注册 agent 工具）",

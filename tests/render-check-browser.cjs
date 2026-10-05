@@ -265,7 +265,9 @@ async function checkAdopt() {
 {
   const read = (rel) => fs.readFileSync(__dirname + "/../" + rel, "utf8");
   const bundleSrc = read("client/bundle.js");
-  const hostSrc = read("src/index.ts");
+  // 套件没有根入口模块：查的是「浏览器的装配没渗进别的组件行」
+  const hostSrc = ["chat", "files", "logs", "monitor", "phone", "search", "skills", "terminal"]
+    .map((d) => read(`src/${d}/index.ts`)).join("\n");
   const compSrc = read("src/browser/index.ts");
   const coreSrc = read("src/core/tools.ts");
   const patchSrc = read("cordis.patch.yml");
@@ -280,13 +282,13 @@ async function checkAdopt() {
 
   const rootZh = bundleSrc.slice(bundleSrc.indexOf("const zh = {"), bundleSrc.indexOf("\n    };", bundleSrc.indexOf("const zh = {")));
   check(
-    "主包 schema / client 默认表 / 字段表都不再有浏览器配置项",
+    "别的组件行没有浏览器配置项，client 默认表 / 字段表也没有",
     !hostCode.includes("browserEnabled") && !hostCode.includes("hideOfficialBrowserEntry") &&
       !bundleSrc.includes("const CFG_DEFAULTS = {") && !bundleSrc.includes("const KIT_CFG_FIELDS = [") &&
       !/^ {6}kcfgBrowser[A-Za-z]*:/m.test(rootZh),
   );
   check(
-    "主包不再装配浏览器（无 BrowserService/browser-tools/浏览器端点/ws）",
+    "别的组件行不装配浏览器（无 BrowserService/browser-tools/浏览器端点/ws）",
     !hostCode.includes("BrowserService") && !hostCode.includes("buildBrowserTools") &&
       !hostCode.includes("/dsh-kit/browser") && !hostCode.includes("WebSocketServer"),
   );

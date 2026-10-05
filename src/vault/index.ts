@@ -26,6 +26,10 @@
 //   GET  /dsh-kit/schedule/stats    —— 统计
 //   GET  /dsh-kit/schedule/timer    —— 进行中的计时（悬浮球轮询用）
 //   POST /dsh-kit/schedule/op       —— 面板写路径（建/改/删/完成/起停表/计时段增改删）
+//   GET  /dsh-kit/vendor/{richeditor.bundle,mermaid.min,katex.min,katex.min.css,
+//                          pdf.min.mjs,pdf.worker.min.mjs}.js|.mjs|.css
+//                                —— 阅读面懒加载的第三方库（pdf.js / TipTap / mermaid /
+//                                   KaTeX）与 fonts/ 字体，随本行伺服
 // 知识库端点未配置 / 根不存在时回 400 vault-not-configured（前端渲染引导）。
 
 import fs from 'node:fs'
@@ -33,6 +37,7 @@ import http from 'node:http'
 import path from 'node:path'
 
 import { loadDep, sameOrigin, registerReadableRoot, sendRawFile } from '../core/index.ts'
+import { registerVendorFiles, registerVendorSubdir } from '../core/vendor-route.ts'
 import { VaultScanner, defaultVaultRoot } from './scanner.ts'
 import {
   createEntry,
@@ -125,6 +130,28 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
   // webServer 可能在本组件 apply 之后才挂载，用动态注入等它就绪
   ctx.inject(['webServer'], (webCtx: KitWebCtx) => {
     webCtx.effect(() => {
+      // ── 阅读面的第三方库：pdf.js / TipTap / mermaid / KaTeX 与字体，跟本行走 ──
+      const disposeVendor = registerVendorFiles(webCtx.webServer, new Map([
+        // vault 页面渲染器（TipTap 引擎只读态；懒加载）
+        ['/dsh-kit/vendor/richeditor.bundle.js', 'richeditor.bundle.js'],
+        // mermaid 流程图渲染（```mermaid 围栏出图；宿主与 app.asar 都不带这个库，
+        // 编辑器只认 window.__dshkMermaidLoad，缺了图就退化成代码块。懒加载）
+        ['/dsh-kit/vendor/mermaid.min.js', 'mermaid.min.js'],
+        // KaTeX 数学公式（vault 阅读态渲染 $...$ / $$...$$；懒加载）
+        ['/dsh-kit/vendor/katex.min.js', 'katex.min.js'],
+        ['/dsh-kit/vendor/katex.min.css', 'katex.min.css'],
+        // pdf.js（知识库自带 PDF 阅读器：解析库 + worker；只在 PDF 签内懒加载）
+        ['/dsh-kit/vendor/pdf.min.mjs', 'pdf.min.mjs'],
+        ['/dsh-kit/vendor/pdf.worker.min.mjs', 'pdf.worker.min.mjs'],
+      ]))
+      // KaTeX 字体：css 里以 fonts/ 相对路径引用，磁盘上隔离在 katex_fonts/ 免得和
+      // 未来其他字体混放
+      const disposeVendorFonts = registerVendorSubdir(
+        webCtx.webServer,
+        '/dsh-kit/vendor/fonts',
+        'katex_fonts',
+      )
+
       // ── 生效配置快照（client 门控与可达性探针）──
       // client 启动拉一次；行关闭时本端点随模块不物化而 404，client 据此整体不注册。
       const disposeConfig = webCtx.webServer.register({
@@ -490,6 +517,8 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       )
 
       return () => {
+        disposeVendor()
+        disposeVendorFonts()
         disposeConfig()
         for (const dispose of disposeSchedule) dispose()
         for (const dispose of disposeVault) dispose()
