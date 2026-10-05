@@ -1334,8 +1334,8 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
   const comps = rows.filter((row) => typeof row.id === "string" && row.id !== "core");
   const expected = ["files", "chat", "vault", "terminal", "browser", "skills", "phone", "monitor", "search", "logs"];
   check(
-    "patch 形状：一行载体行（id=core / name=包名，浏览器半边挂在它上面）+ 十个组件行 id/name 齐备且顺序 = 描述顺序（每行 id 必须显式且稳定：匿名行的随机 id 每次 profile 写入都会换 → 该行重挂、整包客户端重载）",
-    carrier.length === 1 && carrier[0].name === "dsh-kit" &&
+    "patch 形状：一行载体行（id=core / name=包名，浏览器半边挂在它上面，放行序末尾不跟功能行混在一起）+ 十个组件行 id/name 齐备且顺序 = 描述顺序（每行 id 必须显式且稳定：匿名行的随机 id 每次 profile 写入都会换 → 该行重挂、整包客户端重载）",
+    carrier.length === 1 && carrier[0].name === "dsh-kit" && rows[rows.length - 1].id === "core" &&
       rows.length === expected.length + 1 &&
       JSON.stringify(comps.map((row) => row.id)) === JSON.stringify(expected) &&
       comps.every((row) => row.name === "dsh-kit/" + row.id),

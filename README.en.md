@@ -18,7 +18,8 @@ Index views (file tree, source control, vault directory) share a single left-sid
 slot; the conversation column stays put. Every capability is a **component row** you can
 switch off independently on the Plugins page — turning a row off removes its endpoints,
 agent tools and UI entries together; with all rows off, dsh is stock again. The pack shows
-**ten component rows plus one carrier row** — the carrier serves nothing, it is only the
+**ten component rows plus a carrier row at the very bottom of the list** — the carrier serves
+nothing, it is only the
 mount point for this package's browser half (the host attaches a package's client half to
 the row whose name equals the package name, so deleting it makes every capability vanish
 from the page). It stays in the list: **do not turn it off**.
@@ -254,11 +255,11 @@ the WebSocket base the host injects).
   provider at `free-search` and registers the keyless engine chain (`engine-chain.ts` +
   `engines/*`); disabling the component row leaves the seam untouched, so the official
   provider pinned by the base layer keeps serving
-- `cordis.patch.yml`: inserts the carrier row (`name: dsh-kit` — the mount point for the
-  browser half, serves nothing) and the ten dsh-kit component rows (files / chat / vault / terminal /
+- `cordis.patch.yml`: inserts the ten dsh-kit component rows (files / chat / vault / terminal /
   browser / skills / phone / monitor / search / logs — row order is the Plugins-page order)
-  into the bundle layer; every row id is explicit and
-  stable (the loader gives anonymous rows a fresh random id on every compose, so any profile
+  into the bundle layer, followed by one **carrier row** (`name: dsh-kit` — the mount point for
+  the browser half, serves nothing itself, hence last, after the functional rows); every row id
+  is explicit and stable (the loader gives anonymous rows a fresh random id on every compose, so any profile
   write would re-mount the row and reload the whole browser half);
   no official row is patched
 - Host-side `node-pty`/`ws`/`@deepseek-ai/*` declare no dependencies: resolved at
