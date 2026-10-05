@@ -40,9 +40,6 @@ interface KitWebServer {
 // 面板 WebSocket 服务器（ws 是 DSH 自身依赖，不在本包 dependencies 里）；
 // 取不到只影响面板帧流，agent 工具照常可用
 const WebSocketServer = loadDep('ws')?.WebSocketServer ?? null
-if (!WebSocketServer) {
-  log.warn('ws 不可用，浏览器面板不可用')
-}
 
 export const name = 'dsh-kit/browser'
 
@@ -64,6 +61,9 @@ export const Config =
     : undefined
 
 export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void> {
+  // 模块 import 与各行 apply 是乱序的，这条一次性诊断放模块顶层会赶在日志行的写盘闸
+  // 打开之前（被丢），挪进 apply 才留得下
+  if (!WebSocketServer) log.warn('ws 不可用，浏览器面板不可用')
   const defaults: KitSettings = Config ? Config({}) : { chatOpenLinkInBrowser: true, hideOfficialBrowserEntry: false }
   // volatile 字段在 fiber config 里是稳定 ref（{get}），统一解引用
   const readRef = (v: unknown): any =>

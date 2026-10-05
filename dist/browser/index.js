@@ -22,9 +22,6 @@ const log = kitLogger('browser');
 // 面板 WebSocket 服务器（ws 是 DSH 自身依赖，不在本包 dependencies 里）；
 // 取不到只影响面板帧流，agent 工具照常可用
 const WebSocketServer = loadDep('ws')?.WebSocketServer ?? null;
-if (!WebSocketServer) {
-    log.warn('ws 不可用，浏览器面板不可用');
-}
 export const name = 'dsh-kit/browser';
 // ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile
@@ -41,6 +38,10 @@ export const Config = z && typeof z.object === 'function'
     })
     : undefined;
 export async function apply(ctx, config = {}) {
+    // 模块 import 与各行 apply 是乱序的，这条一次性诊断放模块顶层会赶在日志行的写盘闸
+    // 打开之前（被丢），挪进 apply 才留得下
+    if (!WebSocketServer)
+        log.warn('ws 不可用，浏览器面板不可用');
     const defaults = Config ? Config({}) : { chatOpenLinkInBrowser: true, hideOfficialBrowserEntry: false };
     // volatile 字段在 fiber config 里是稳定 ref（{get}），统一解引用
     const readRef = (v) => v !== null && typeof v === 'object' && typeof v.get === 'function'
