@@ -230,7 +230,7 @@ async function checkApply() {
   check(
     "展开态入口钮：图标 + 名，未占用时 aria-pressed=false",
     !!wideBtn && wideBtn.props.className === "dshk-sidebtn" && wideBtn.props["aria-pressed"] === false &&
-      !!wideLabel && ["知识库", "Knowledge base"].includes(wideLabel.props.children),
+      !!wideLabel && ["知识库·日程", "Knowledge base · Schedule"].includes(wideLabel.props.children),
   );
   if (wideBtn) wideBtn.props.onClick();
   check(

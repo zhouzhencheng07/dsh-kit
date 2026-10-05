@@ -3546,6 +3546,8 @@ ellipsis，窄列只截字不破版 */
       schedTimerBallTip: "走秒与停表都在悬浮球上",
       schedWeekdays: "一,二,三,四,五,六,日",
       vaultTitle: "知识库",
+      // 左栏底部那枚入口钮的名：它开的是整格（知识库 + 日程两 tab），不是某一个 tab
+      vaultEntryTitle: "知识库·日程",
       vaultNotConfigured: "未配置知识库目录",
       vaultNotConfiguredHint: "在 设置 → 插件 → dsh-kit 里填写「知识库目录」后即可使用：目录内一切 md 文件即页面，支持双链跳转与全文搜索",
       vaultIndexFail: "索引失败：{error}",
@@ -3753,6 +3755,7 @@ ellipsis，窄列只截字不破版 */
       schedTimerBallTip: "Elapsed time and stop live on the floating timer",
       schedWeekdays: "Mo,Tu,We,Th,Fr,Sa,Su",
       vaultTitle: "Knowledge base",
+      vaultEntryTitle: "Knowledge base · Schedule",
       vaultNotConfigured: "Knowledge base directory not configured",
       vaultNotConfiguredHint: "Set the knowledge base directory in Settings → Plugins → dsh-kit: every md file inside becomes a page, with wiki-links and full-text search",
       vaultIndexFail: "Index failed: {error}",
@@ -9121,6 +9124,7 @@ ellipsis，窄列只截字不破版 */
     /** 知识库 · 日程的常驻入口：开 = 左栏那一格占住并落在知识库 tab（与快捷键同语义
      *  的 toggleVaultEntry），再点 = 回官方会话列表。手机上没键盘，这一枚才是可达的
      *  入口——那一格里的「知识库/日程」两枚 tab 只有那格已经开着才看得见。
+     *  名叫「知识库·日程」而不是「知识库」：它开的是整格，格名与两枚 tab 一致。
      *  seat 不在场（没选会话 / 全局面板在前台）时不画：那时右栏压根不画、索引视图
      *  也一并让位给官方会话列表，画出来点了也没有面可开。 */
     function VaultFooterEntry({ wide }) {
@@ -9129,7 +9133,7 @@ ellipsis，窄列只截字不破版 */
       if (!seatUp) return null;
       const rail = wide === false;
       return jsxRuntime.jsx(KitTip, {
-        label: t("vaultTitle"),
+        label: t("vaultEntryTitle"),
         command: "dsh-kit.vault.toggle",
         side: "top",
         children: jsxRuntime.jsx("button", {
@@ -9139,7 +9143,7 @@ ellipsis，窄列只截字不破版 */
           onClick: () => setKitUi(toggleVaultEntry(getKitUi())),
           children: rail
             ? jsxRuntime.jsx(VaultIcon, {})
-            : [jsxRuntime.jsx(VaultIcon, {}, "icon"), jsxRuntime.jsx("span", { children: t("vaultTitle") }, "label")],
+            : [jsxRuntime.jsx(VaultIcon, {}, "icon"), jsxRuntime.jsx("span", { children: t("vaultEntryTitle") }, "label")],
         }),
       });
     }
