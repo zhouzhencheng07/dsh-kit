@@ -1317,7 +1317,9 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
 // 10) 插件页行形状：一行载体行（name 恰好等于包名——浏览器半边挂在它上面，删不得）
 //     + 十个组件行，全部带稳定 id（匿名行由 loader 现配随机 id，任何一次 profile 写入都会
 //     把它换掉 → 该行重挂 → 本包浏览器半边整包重载），行序 = 卡片描述的枚举顺序
-//     （宿主按 patch insert 原样渲染、不排序）
+//     （宿主按 patch insert 原样渲染、不排序）。载体行的 id 是数字字面量：宿主只把 id / name
+//     都是字符串的 patch 行当可管理组件（declaredRows 跳过非字符串 id），所以它不进组件列表、
+//     也没有行开关——它不对应任何功能，关掉它只是让整包浏览器半边不加载。
 {
   const patchSrc = fs.readFileSync(__dirname + "/../cordis.patch.yml", "utf8");
   const rows = [];
@@ -1330,12 +1332,15 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
     else if (bare) rows.push(current = { id: undefined, name: bare[1].trim() });
     else if (nameOf && current !== null && current.name === undefined) current.name = nameOf[1].trim();
   }
-  const carrier = rows.filter((row) => row.id === "core");
-  const comps = rows.filter((row) => typeof row.id === "string" && row.id !== "core");
+  // 数字字面量在 YAML 里是 number：宿主据此把它排除在组件列表外（字符串 id 才是可管理组件）
+  const isComponent = (row) => typeof row.id === "string" && !/^-?\d+$/.test(row.id);
+  const carrier = rows.filter((row) => !isComponent(row));
+  const comps = rows.filter(isComponent);
   const expected = ["files", "chat", "vault", "terminal", "browser", "skills", "phone", "monitor", "search", "logs"];
   check(
-    "patch 形状：一行载体行（id=core / name=包名，浏览器半边挂在它上面，放行序末尾不跟功能行混在一起）+ 十个组件行 id/name 齐备且顺序 = 描述顺序（每行 id 必须显式且稳定：匿名行的随机 id 每次 profile 写入都会换 → 该行重挂、整包客户端重载）",
-    carrier.length === 1 && carrier[0].name === "dsh-kit" && rows[rows.length - 1].id === "core" &&
+    "patch 形状：一行载体行（name = 包名、id 写数字字面量 → 不当作可管理组件：不进组件列表、没有行开关；浏览器半边挂在它上面，放行序末尾不跟功能行混在一起）+ 十个组件行 id/name 齐备且顺序 = 描述顺序（组件行 id 必须显式且稳定：匿名行的随机 id 每次 profile 写入都会换 → 该行重挂、整包客户端重载）",
+    carrier.length === 1 && carrier[0].name === "dsh-kit" && /^-?\d+$/.test(carrier[0].id) &&
+      rows[rows.length - 1] === carrier[0] &&
       rows.length === expected.length + 1 &&
       JSON.stringify(comps.map((row) => row.id)) === JSON.stringify(expected) &&
       comps.every((row) => row.name === "dsh-kit/" + row.id),
