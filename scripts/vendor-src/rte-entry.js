@@ -1206,7 +1206,11 @@ const VaultCodeBlock = CodeBlockLowlight.extend({
         stopEvent(event) {
           return bar.contains(event.target);
         },
-        ignoreMutation: () => true,
+        // 语言条/复制钮自己的 DOM 改动不许被当成正文改动；正文（code）里的编辑必须放行——
+        // 全忽略会让打字/退格只改 DOM 不进文档，空块判定读到旧文档，一次退格整块被清掉
+        ignoreMutation(mutation) {
+          return !code.contains(mutation.target);
+        },
         update(node) {
           if (node.type.name !== "codeBlock") return false;
           props.node = node;
@@ -1321,7 +1325,7 @@ function buildExtensions(ctx = {}) {
     VaultCodeBlock.configure({ lowlight, ctx }),
     Table.configure({ resizable: false }),
     TableRow, TableCell, TableHeader,
-    VaultImage.configure({ inline: true, allowBase64: false }),
+    VaultImage.configure({ inline: true, allowBase64: false, ctx }),
     HardBreakPonyfill,
     Gapcursor, Dropcursor,
     WikiLink.configure({ ctx }),

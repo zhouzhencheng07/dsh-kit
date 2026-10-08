@@ -282,6 +282,22 @@ async function checkApply() {
       ["/dsh-kit/vendor/pdf.min.mjs", "/dsh-kit/vendor/pdf.worker.min.mjs", "/dsh-kit/vendor/richeditor.bundle.js", "/dsh-kit/vendor/mermaid.min.js", "/dsh-kit/vendor/katex.min.js", "/dsh-kit/vendor/katex.min.css"].every((u) => compSrc.includes("['" + u + "',")) &&
       compSrc.includes("'/dsh-kit/vendor/fonts'") && !/xterm[.]js|qrcode[.]js/.test(compSrc),
   );
+  // 代码盒正文可编辑的命门：node view 的 ignoreMutation 只许挡语言条/复制钮自己的改动，
+  // 全量忽略会让打字/退格只改 DOM 不进文档——空块判定读到旧文档，一次退格整块被清掉
+  const vendorSrc = read("client/vendor/richeditor.bundle.js");
+  check(
+    "代码盒 node view 放行正文编辑（ignoreMutation 只挡控件，不全量忽略）",
+    /ignoreMutation\(\w+\)\{return!\w+\.contains\(\w+\.target\)\},update\(\w+\)\{return \w+\.type\.name!=="codeBlock"/.test(vendorSrc) &&
+      !/ignoreMutation:\(\)=>!0,update\(\w+\)\{return \w+\.type\.name!=="codeBlock"/.test(vendorSrc),
+  );
+  // 语法高亮装饰只落 .hljs-* 类名：色板归面板层（浅色 + 宿主深色主题两套）
+  check(
+    "语法高亮色板在面板层（.hljs-* 浅色一套 + 宿主深色主题一套）",
+    /\.dshk-codebox \.hljs-keyword,/.test(bundleSrc) &&
+      /\.dshk-codebox \.hljs-string,/.test(bundleSrc) &&
+      /body\[data-ds-dark-theme\] \.dshk-codebox \.hljs-keyword,/.test(bundleSrc) &&
+      /body\[data-ds-dark-theme\] \.dshk-codebox \.hljs-string,/.test(bundleSrc),
+  );
   check(
     "组件入口自持端点与配置（日程不注册 agent 工具）",
     compSrc.includes("name = 'dsh-kit/vault'") && compSrc.includes("syncScheduleStore()") &&

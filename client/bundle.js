@@ -1532,6 +1532,29 @@ window.__ModuleLoader__.load({
 .dshk-codebar{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:rgba(135,131,120,.12);font-size:11px}
 .dshk-codecopy{appearance:none;border:0;background:none;color:var(--dsw-alias-label-secondary);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:5px}
 .dshk-codecopy:hover{background:rgba(135,131,120,.2);color:var(--dsw-alias-label-primary)}
+/* 语法高亮：lowlight 装饰只给 .hljs-* 类名，色板在这层补（浅色一套，宿主深色主题
+   body[data-ds-dark-theme] 一套）；底色与字体仍归代码盒 */
+.dshk-codebox .hljs-comment,.dshk-codebox .hljs-quote{color:#6a737d;font-style:italic}
+.dshk-codebox .hljs-doctag,.dshk-codebox .hljs-keyword,.dshk-codebox .hljs-template-tag,.dshk-codebox .hljs-type,.dshk-codebox .hljs-variable.language_{color:#d73a49}
+.dshk-codebox .hljs-title,.dshk-codebox .hljs-title.class_,.dshk-codebox .hljs-title.function_{color:#6f42c1}
+.dshk-codebox .hljs-attr,.dshk-codebox .hljs-attribute,.dshk-codebox .hljs-literal,.dshk-codebox .hljs-meta,.dshk-codebox .hljs-number,.dshk-codebox .hljs-operator,.dshk-codebox .hljs-selector-attr,.dshk-codebox .hljs-selector-class,.dshk-codebox .hljs-selector-id,.dshk-codebox .hljs-variable{color:#005cc5}
+.dshk-codebox .hljs-built_in,.dshk-codebox .hljs-symbol{color:#e36209}
+.dshk-codebox .hljs-string,.dshk-codebox .hljs-regexp,.dshk-codebox .hljs-link{color:#032f62}
+.dshk-codebox .hljs-name,.dshk-codebox .hljs-selector-tag,.dshk-codebox .hljs-tag{color:#116329}
+.dshk-codebox .hljs-section,.dshk-codebox .hljs-bullet{font-weight:600}
+.dshk-codebox .hljs-emphasis{font-style:italic}
+.dshk-codebox .hljs-strong{font-weight:600}
+.dshk-codebox .hljs-addition{color:#116329;background:rgba(53,177,89,.15)}
+.dshk-codebox .hljs-deletion{color:#c93c37;background:rgba(228,82,82,.15)}
+body[data-ds-dark-theme] .dshk-codebox .hljs-comment,body[data-ds-dark-theme] .dshk-codebox .hljs-quote{color:#8b949e}
+body[data-ds-dark-theme] .dshk-codebox .hljs-doctag,body[data-ds-dark-theme] .dshk-codebox .hljs-keyword,body[data-ds-dark-theme] .dshk-codebox .hljs-template-tag,body[data-ds-dark-theme] .dshk-codebox .hljs-type,body[data-ds-dark-theme] .dshk-codebox .hljs-variable.language_{color:#ff7b72}
+body[data-ds-dark-theme] .dshk-codebox .hljs-title,body[data-ds-dark-theme] .dshk-codebox .hljs-title.class_,body[data-ds-dark-theme] .dshk-codebox .hljs-title.function_{color:#d2a8ff}
+body[data-ds-dark-theme] .dshk-codebox .hljs-attr,body[data-ds-dark-theme] .dshk-codebox .hljs-attribute,body[data-ds-dark-theme] .dshk-codebox .hljs-literal,body[data-ds-dark-theme] .dshk-codebox .hljs-meta,body[data-ds-dark-theme] .dshk-codebox .hljs-number,body[data-ds-dark-theme] .dshk-codebox .hljs-operator,body[data-ds-dark-theme] .dshk-codebox .hljs-selector-attr,body[data-ds-dark-theme] .dshk-codebox .hljs-selector-class,body[data-ds-dark-theme] .dshk-codebox .hljs-selector-id,body[data-ds-dark-theme] .dshk-codebox .hljs-variable{color:#79c0ff}
+body[data-ds-dark-theme] .dshk-codebox .hljs-built_in,body[data-ds-dark-theme] .dshk-codebox .hljs-symbol{color:#ffa657}
+body[data-ds-dark-theme] .dshk-codebox .hljs-string,body[data-ds-dark-theme] .dshk-codebox .hljs-regexp,body[data-ds-dark-theme] .dshk-codebox .hljs-link{color:#a5d6ff}
+body[data-ds-dark-theme] .dshk-codebox .hljs-name,body[data-ds-dark-theme] .dshk-codebox .hljs-selector-tag,body[data-ds-dark-theme] .dshk-codebox .hljs-tag{color:#7ee787}
+body[data-ds-dark-theme] .dshk-codebox .hljs-addition{color:#aff5b4;background:rgba(46,160,67,.22)}
+body[data-ds-dark-theme] .dshk-codebox .hljs-deletion{color:#ffdcd7;background:rgba(248,81,73,.22)}
 /* 数学公式（KaTeX 渲染结果 + 库未就绪时的原文回退） */
 .dshk-md .dshk-math{color:inherit}
 .dshk-md .dshk-math .katex-display{margin:.5em 0}
