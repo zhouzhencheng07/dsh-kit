@@ -3581,6 +3581,7 @@ ellipsis，窄列只截字不破版 */
       vaultLibrary: "资料库",
       vaultParentRoot: "根目录",
       vaultBackRoot: "返回知识库",
+      vaultBackParent: "上一级",
       vaultNew: "新建",
       vaultNewPh: "名称；\\ 开头建目录，可含 / 多级",
       vaultExists: "同名已存在，未改动",
@@ -3789,6 +3790,7 @@ ellipsis，窄列只截字不破版 */
       vaultLibrary: "Library",
       vaultParentRoot: "root",
       vaultBackRoot: "Back to knowledge base",
+      vaultBackParent: "Up one level",
       vaultNew: "New",
       vaultNewPh: "Name; \\ prefix makes a folder, / for nested",
       vaultExists: "Already exists — nothing changed",
@@ -4026,6 +4028,9 @@ ellipsis，窄列只截字不破版 */
     let vaultRootHintFetching = null;
     let vaultOpenRequest = null;
     let vaultPendingAnchor = null;
+    // 侧栏树的当前根（进入的目录，null = 库根）：收起整格 / 切到别的侧栏视图会卸载
+    // VaultRootView，状态放模块级——再打开仍停在进的那层（同「空间状态提到壳里」）
+    let vaultSideRootHere = null;
     function ensureVaultRootHint() {
       if (vaultRootHint !== null) return Promise.resolve(vaultRootHint);
       if (vaultRootHintFetching === null) {
@@ -6913,16 +6918,21 @@ ellipsis，窄列只截字不破版 */
     /** 知识库索引半边（单实例，portal 进侧栏索引宿主）：工具条/目录树/搜索 +
      *  页标签编排（打开、关闭）。页编辑器不在本组件——每开一页一个
      *  VaultPagePane 经 portal 投进右栏 pane 宿主，一页一标签（多开）。
-     *  树根默认 = 库根（vaultRoot），可在任意目录行上「在此打开」（或 Ctrl+点击）
-     *  换到该目录，树头 ← 回库根。 */
+     *  树根默认 = 库根（vaultRoot），可在任意目录行上 Ctrl+点击换到该目录，
+     *  树头 ← 上一级 / ↑ 回库根。 */
     function VaultRootView() {
       const ui = useKitUi();
       const sideHost = useHostSlot(vaultSideSlot);
       const [index, setIndex] = react.useState(null);
       const [indexErr, setIndexErr] = react.useState("");
       // 面板的树根：null = 库根（vaultRoot）；非 null = 进入的绝对目录
-      // （Ctrl+点击目录行 / 搜索结果点笔记目录；只影响本组件显示，不写配置页）
-      const [rootHere, setRootHere] = react.useState(null);
+      // （Ctrl+点击目录行 / 搜索结果点笔记目录；只影响本组件显示，不写配置页）。
+      // 初值取模块级暂存，收起整格 / 切 tab 再回来不丢（写回也在同一个 setter 里）
+      const [rootHere, setRootHereState] = react.useState(vaultSideRootHere);
+      const setRootHere = react.useCallback((dir) => {
+        vaultSideRootHere = dir;
+        setRootHereState(dir);
+      }, []);
       // 目录树：path → entries|null(加载中)；expanded: path → bool
       const [treeDirs, setTreeDirs] = react.useState({});
       const [expanded, setExpanded] = react.useState({});
@@ -6942,6 +6952,11 @@ ellipsis，窄列只截字不破版 */
       // 整页态由下方早退分支承担
       const root = index !== null && typeof index.root === "string" && index.root !== "" ? index.root : null;
       const treeRoot = rootHere ?? root;
+      // 树头层级导航：← 上一级（父目录；父就是库根时回库根）、↑ 回库根。键位不随层级
+      // 跳——顶层目录的「上一级」与「↑」同一个落点（照文件管理器的摆法）
+      const rootHereRel = rootHere === null || root === null ? null : relUnder(root, rootHere);
+      const parentHereRel = rootHereRel === null ? null : rootHereRel.includes("/") ? rootHereRel.slice(0, rootHereRel.lastIndexOf("/")) : "";
+      const goParent = () => setRootHere(root === null || parentHereRel === null || parentHereRel === "" ? null : joinRelPath(root, parentHereRel));
       // 资料库（根下 library/）：宿主给的清单只为计数与检索，树仍逐层现拉
       const libRoot = index !== null && index.library && typeof index.library.root === "string" ? index.library.root : null;
       const libItems = (index !== null && index.library && Array.isArray(index.library.items) ? index.library.items : []);
@@ -6960,6 +6975,11 @@ ellipsis，窄列只截字不破版 */
       react.useEffect(() => {
         void loadIndex();
       }, [loadIndex]);
+      // 库根换了（配置页改目录）时，模块级暂存的树根可能已不在新库内：清掉回库根
+      react.useEffect(() => {
+        if (rootHere === null || root === null) return;
+        if (relUnder(root, rootHere) === null) setRootHere(null);
+      }, [root, rootHere, setRootHere]);
       /** 单层目录重取。silent = 背景重拉：不先清空成「加载中」，失败也保留旧条目
        *  （目录被删时父层的新条目已不含它，旧条目自然够不着，不必靠清空兜底）。
        *  非 silent = 交互路径（展开/换根后），要的就是「正在加载」与失败即空。
@@ -7186,7 +7206,7 @@ ellipsis，窄列只截字不破版 */
         setRowMenu((prev) => (prev && prev.anchor === anchor ? null : { entry, head: head === true, rect: anchor.getBoundingClientRect(), anchor }));
       };
       /** 进入目录（Ctrl（⌘）+点击目录行 / 搜索结果点笔记目录）：树根换成该目录，
-       *  树头 ← 回库根。换根只影响面板显示，不动配置页的 vaultRoot。
+       *  树头 ← 上一级 / ↑ 回库根。换根只影响面板显示，不动配置页的 vaultRoot。
        *  资料库那一支不参与换根（它是文献面，见 dirRow） */
       const openHere = (dir) => {
         setRootHere(dir === root ? null : dir);
@@ -7764,13 +7784,17 @@ ellipsis，窄列只截字不破版 */
         indexErr !== ""
           ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: indexErr === "vault-not-configured" ? t("vaultNotConfiguredHint") : `${t("vaultIndexFail")} ${indexErr}` })
           : null,
-        // 树头：当前根（库根 = 知识库；进了子目录就显示库内相对路径）+ ← 回库根
-        // + 新建 / 导入两个入口（树头没有自己的「行」，根级的建与导就落在这里）
+        // 树头：当前根（库根 = 知识库；进了子目录就显示库内相对路径）+ 层级导航
+        // （← 上一级 / ↑ 回库根）+ 新建 / 导入两个入口（树头没有自己的「行」，
+        // 根级的建与导就落在这里）
         jsxRuntime.jsxs("div", { className: "dshk-vault-rail", ref: railRef, children: [
           jsxRuntime.jsxs("div", { className: "dshk-vault-railhead", children: [
             rootHere === null
               ? null
-              : jsxRuntime.jsx(KitTip, { label: t("vaultBackRoot"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultBackRoot"), onClick: () => setRootHere(null), children: jsxRuntime.jsx(OfficialIcon, { names: ["IconChevronLeftOutline14"], glyph: "←" }) }) }),
+              : jsxRuntime.jsx(KitTip, { label: `${t("vaultBackParent")}（${parentHereRel === null || parentHereRel === "" ? t("vaultTitle") : parentHereRel}）`, children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultBackParent"), onClick: goParent, children: jsxRuntime.jsx(OfficialIcon, { names: ["IconChevronLeftOutline14"], glyph: "←" }) }) }),
+            rootHere === null
+              ? null
+              : jsxRuntime.jsx(KitTip, { label: t("vaultBackRoot"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultBackRoot"), onClick: () => setRootHere(null), children: jsxRuntime.jsx(OfficialIcon, { names: ["IconChevronUpOutline14", "IconArrowUpOutline16"], glyph: "↑" }) }) }),
             jsxRuntime.jsx("span", {
               className: "dshk-vault-railtitle",
               title: treeRoot ?? "",

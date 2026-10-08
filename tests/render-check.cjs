@@ -626,7 +626,7 @@ let vaultFetchPrev = null;
   // 资料库那支按 Ctrl 点也不换根：只当普通点击（展开/收起）
   findRow("D:/v/library")[2].onClick({ ctrlKey: true });
   check("Ctrl+点击资料库那一行不换根（当普通点击）", stateStore.get(2) === "D:/v/wiki" && stateStore.get(4)["D:/v/library"] === false);
-  // 换根后的树头：库内相对路径 + ← 回知识库；资料库那一行照旧在（它挂在树体上，与根无关）
+  // 换根后的树头：库内相对路径 + 层级导航（← 上一级 / ↑ 回库根）；资料库那一行照旧在
   const rootErr = renderVault({
     0: VAULT_INDEX,
     1: "",
@@ -634,9 +634,32 @@ let vaultFetchPrev = null;
     3: { "D:/v/wiki": [{ name: "a.md", path: "D:/v/wiki/a.md", dir: false }] },
     4: { "D:/v/wiki": true },
   });
-  const backBtn = callLog.find((c) => c[2] && ["返回知识库", "Back to knowledge base"].includes(c[2].label) && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-sched-navbtn");
+  const navBtn = (labels) => callLog.find((c) => c[2] && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-sched-navbtn" && labels.includes(c[2].children.props["aria-label"]));
   const railTitle = callLog.find((c) => c[2] && c[2].className === "dshk-vault-railtitle");
-  check("换根后树头给库内相对路径 + ← 回知识库", rootErr === null && !!backBtn && railTitle[2].children === "wiki");
+  check("换根后树头给库内相对路径 + ← 上一级 / ↑ 回库根", rootErr === null && !!navBtn(["上一级", "Up one level"]) && !!navBtn(["返回知识库", "Back to knowledge base"]) && railTitle[2].children === "wiki");
+  // 顶层目录的「上一级」就是库根：两个键同一个落点（键位不随层级跳，判断只剩父路径）
+  navBtn(["上一级", "Up one level"])[2].children.props.onClick();
+  check("顶层目录点「上一级」回库根（父为空 → null）", stateStore.get(2) === null);
+  // 进两层：← 上一级落到父目录（不是一步回库根），↑ 仍一步回库根
+  const nestedErr = renderVault({
+    0: VAULT_INDEX,
+    1: "",
+    2: "D:/v/wiki/Python",
+    3: { "D:/v/wiki/Python": [] },
+    4: { "D:/v/wiki/Python": true },
+  });
+  const nestedUp = navBtn(["上一级", "Up one level"]);
+  check("两层深处树头带「上一级」（气泡给父层名）", nestedErr === null && !!nestedUp && ["上一级（wiki）", "Up one level（wiki）"].includes(nestedUp[2].label));
+  nestedUp[2].children.props.onClick();
+  check("「上一级」落到父目录（不是直接回库根）", stateStore.get(2) === "D:/v/wiki");
+  navBtn(["返回知识库", "Back to knowledge base"])[2].children.props.onClick();
+  check("「返回知识库」从任意层级一步回库根", stateStore.get(2) === null);
+  check(
+    "树根暂存模块级：收起整格 / 切 tab 卸载后再展开仍停在进的那层（源哨兵）",
+    src.includes("let vaultSideRootHere = null;") &&
+      src.includes("const [rootHere, setRootHereState] = react.useState(vaultSideRootHere);") &&
+      src.includes("vaultSideRootHere = dir;"),
+  );
   check(
     "换根后资料库那一行照旧在（它挂在树体上，跟当前目录无关）",
     callLog.some((c) => c[2] && c[2].className === "dshk-vault-treerow" && c[2].title === "D:/v/library"),
