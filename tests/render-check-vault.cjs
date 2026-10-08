@@ -298,6 +298,11 @@ async function checkApply() {
       /body\[data-ds-dark-theme\] \.dshk-codebox \.hljs-keyword,/.test(bundleSrc) &&
       /body\[data-ds-dark-theme\] \.dshk-codebox \.hljs-string,/.test(bundleSrc),
   );
+  // 树行图标不参与 flex 收缩：窄面板 + 长名字会把 svg 图标按内容宽度分摊压小
+  check(
+    "树行图标 flex:none（窄面板不压小图标，收缩全走名字省略号）",
+    /\.dshk-vault-treerow>svg\{flex:none\}/.test(bundleSrc),
+  );
   check(
     "组件入口自持端点与配置（日程不注册 agent 工具）",
     compSrc.includes("name = 'dsh-kit/vault'") && compSrc.includes("syncScheduleStore()") &&

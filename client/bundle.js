@@ -1422,6 +1422,9 @@ window.__ModuleLoader__.load({
 .dshk-vault-treerow.is-active{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-label-primary)}
 /* 展开箭头位（内容 = 官方 IconTriangleRightFill14，自己管旋转），空目录留空位对齐 */
 .dshk-vault-twist{flex:none;display:inline-flex;align-items:center;justify-content:center;width:14px;color:var(--dsw-alias-label-tertiary)}
+/* 图标不参与收缩：窄面板下 flex 按内容宽度分摊收缩，长名字的行会把图标压到半截；
+   收缩全部交给名字（省略号兜底） */
+.dshk-vault-treerow>svg{flex:none}
 .dshk-vault-treename{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis}
 .dshk-vault-ticon{width:13px;height:13px;flex:none;opacity:.75}
 .dshk-vault-treeload{padding:3px 4px;color:var(--dsw-alias-label-tertiary);font-size:11px}
