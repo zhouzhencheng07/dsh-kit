@@ -244,7 +244,6 @@ interface ScopeState {
   /** 面板报来的帧封顶，按页记。帧流拆了重挂时按它恢复（CDP 的封顶只在开流那一刻生效，
    *  不留着的话重挂会退回兜底值，把面板按清晰度调好的画面悄悄降级） */
   frameBoxes: Map<number, { maxWidth: number; maxHeight: number }>
-  lastActivity: number
   /** 人手高频输入与 agent 工具动作共用一页，必须顺序派发 */
   inputQueue: Promise<void>
 }
@@ -432,7 +431,6 @@ export class BrowserService {
         frames: new Map(),
         streams: new Map(),
         frameBoxes: new Map(),
-        lastActivity: Date.now(),
         inputQueue: Promise.resolve(),
       }
       this._scopes.set(key, s)
@@ -447,9 +445,7 @@ export class BrowserService {
   }
 
   private _touch(scope?: string): void {
-    const now = Date.now()
-    this._lastActivity = now
-    if (scope !== undefined) this._s(scope).lastActivity = now
+    this._lastActivity = Date.now()
   }
 
   private _watchersTotal(): number {
@@ -469,38 +465,19 @@ export class BrowserService {
     this._idleTimer = setInterval(() => {
       if (this._disposed) return
       const now = Date.now()
-      // 分区级回收：没人看且十分钟没动过的对话，只收它自己的页（别的对话不受影响）
+      // 有页的分区永不按时限收页（与原生浏览器对齐：切回对话页还在）；
+      // 只清空壳记录——_s() 对任意 scope 建条目、面板又接受任意 scope 串，
+      // 不清的话用过的每个 scope 都是一条永不消失的记录
       for (const [key, s] of [...this._scopes]) {
-        if (now - s.lastActivity <= IDLE_CLOSE_MS) continue
-        if (s.pages.size === 0) {
-          // 空壳同样回收：_s() 对任意 scope 建条目、面板又接受任意 scope 串，
-          // 只跳过的话用过的每个 scope 都是一条永不消失的记录
-          this._dropIdleScope(key)
-          continue
-        }
-        if (s.frames.size > 0) continue
-        this._log(`分区空闲超时，收起该对话的 ${s.pages.size} 页`)
-        void this._closeScopePages(key, s)
+        if (s.pages.size === 0) this._dropIdleScope(key)
       }
+      // 全局没页、没观察者且空闲才收实例（登录态保留在专用 profile）
       if (this._context && this._watchersTotal() === 0 && this._pagesTotal() === 0 && now - this._lastActivity > IDLE_CLOSE_MS) {
         this._log('空闲超时，自动关闭（登录态保留在专用 profile）')
         void this._closeContext()
       }
     }, IDLE_TICK_MS)
     this._idleTimer.unref?.()
-  }
-
-  /** 收掉一个分区的全部页（空闲回收；不碰其它分区，也不关实例——实例的关由空闲 tick 判） */
-  private async _closeScopePages(scope: string, s: ScopeState): Promise<void> {
-    for (const page of [...s.pages.values()]) {
-      try {
-        await page.close()
-      } catch {
-        // 已关/崩：后面的清理照走
-      }
-    }
-    this._dropIdleScope(scope)
-    this._emit({ kind: 'scope', scope })
   }
 
   /** 启动前清理上次异常留下的孤儿实例（pidfile 信任 + 进程名核验） */

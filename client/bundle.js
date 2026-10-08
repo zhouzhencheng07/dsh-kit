@@ -14348,6 +14348,13 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
                 return;
               }
               if (msg.kind === "error" && typeof msg.message === "string") {
+                // 页不存在（已被回收/旧页号——宿主重启后页号从头数）：这张签永远空着，
+                // 静默收掉它，不弹「页不存在」打断人；其余错误照旧浮出
+                if (msg.message.includes("页不存在")) {
+                  const pid = pageIdRef.current;
+                  if (pid != null) closeRightbarItem("browser", pid);
+                  return;
+                }
                 flashToast(msg.message);
               }
             }
@@ -14389,6 +14396,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       const sendWatch = () => {
         const ws = wsRef.current;
         if (!ws || ws.readyState !== 1) return;
+        // 没有页的签（开始页开出来的那张）没东西可订：发 null 页号只会换回
+        // 一条「页不存在：(缺省)」的报错提示弹在脸上
+        if (pageIdRef.current == null) return;
         try {
           ws.send(JSON.stringify({ t: "watch", on: visibleRef.current === true && activeRef.current === true, scope: scopeRef.current ?? "", tabId: pageIdRef.current, size: frameSizeOf(bodyRef.current) }));
         } catch {

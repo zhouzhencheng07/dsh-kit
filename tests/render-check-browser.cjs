@@ -394,6 +394,18 @@ async function checkAdopt() {
     /new ResizeObserver\(\(\) => \{[\s\S]*?sendWatch\(\);[\s\S]*?\}, 200\)/.test(bundleSrc) &&
       bundleSrc.includes("ro.observe(el)"),
   );
+  // 没有页的签订不到东西，发 null 页号只换回「页不存在：(缺省)」的报错提示弹在脸上
+  check(
+    "空签不发 watch（pageId 为 null 直接返回）",
+    sliceBetween("const sendWatch", "\n      };").includes("if (pageIdRef.current == null) return;"),
+  );
+  // 页已被回收/旧页号（宿主重启页号从头数）：签永远空着，静默收掉不打断人
+  check(
+    "「页不存在」错误静默收签不弹提示（其余错误照旧浮出）",
+    bundleSrc.includes('msg.message.includes("页不存在")') &&
+      /页不存在"\)\) \{\s*\n\s*const pid = pageIdRef\.current;\s*\n\s*if \(pid != null\) closeRightbarItem\("browser", pid\);/.test(bundleSrc) &&
+      bundleSrc.includes("flashToast(msg.message)"),
+  );
   check(
     "watch 的尺寸一路透传到开流（index.ts 收下面板尺寸，setFrameSize 改已开的流）",
     compSrc.includes("browserService.setFrameSize(scope, want, size)") &&

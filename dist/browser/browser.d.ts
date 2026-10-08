@@ -142,8 +142,6 @@ export declare class BrowserService {
     private _watchersTotal;
     private _pagesTotal;
     private _startIdleTimer;
-    /** 收掉一个分区的全部页（空闲回收；不碰其它分区，也不关实例——实例的关由空闲 tick 判） */
-    private _closeScopePages;
     /** 启动前清理上次异常留下的孤儿实例（pidfile 信任 + 进程名核验） */
     private _cleanupOrphan;
     /** 懒启动持久化上下文（幂等；并发调用共享同一次启动） */
