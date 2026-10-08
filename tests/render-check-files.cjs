@@ -481,6 +481,10 @@ check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
     !filesSrc.includes("fileTreeShortcut") && !filesSrc.includes("scShortcut") && !filesSrc.includes("kcfgGroupShortcuts") &&
       !filesSrc.includes('type: "combo"') && !hostSrc.includes("fileTreeShortcut") && !hostSrc.includes("scShortcut"),
   );
+  check(
+    "git log 端点先探 HEAD 再带参（未出生不带 HEAD 跑，空库/孤儿分支不再误报图谱失败）",
+    hostSrc.includes("runGit(['rev-parse', '--verify', '--quiet', 'HEAD'], root)") && hostSrc.includes("...(h.ok ? ['HEAD'] : [])"),
+  );
   // 两处入口钮的悬停改由 KitTip 出官方气泡，不再自带原生 title
   check("入口钮的悬停不再自带原生 title（全走官方气泡）", !/dshk-enbtn"[\s\S]{0,120}?\n\s*title:/.test(filesSrc));
   // 行内动作小钮同理：RowActionBtn / SCM 行钮都包 KitTip，行尾一排用 align:end 免得盖住相邻行

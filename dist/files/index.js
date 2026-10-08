@@ -959,7 +959,8 @@ export function apply(ctx, config = {}) {
             //   结构化提交记录（p=父哈希数组，图谱 lane 由前端从 p 计算，宿主不做几何）；
             //   refs 面=HEAD+分支+标签+远端（不含 stash，噪声线少）；--topo-order 保证
             //   子先于父（前端 lane 分配依赖该顺序）；n 默认 120、上限 500；skip 翻页；
-            //   hasMore=max-count 取 n+1 条探得（截到 n 返回）。空库 → records:[]。
+            //   hasMore=max-count 取 n+1 条探得（截到 n 返回）。HEAD 未出生（空库/孤儿
+            //   分支）不带 HEAD 跑，空库 → records:[]。
             const LOG_DEFAULT = 120;
             const LOG_MAX = 500;
             const disposeGitLog = webCtx.webServer.register({
@@ -999,15 +1000,15 @@ export function apply(ctx, config = {}) {
                         skip = 0;
                     if (skip > 100000)
                         skip = 100000;
-                    runGit(['-c', 'core.quotePath=false', 'log', 'HEAD', '--branches', '--tags', '--remotes', '--topo-order',
+                    // HEAD 未出生（空库 / 孤儿分支）时带 `log HEAD` 直接 fatal（ambiguous
+                    // argument），所以先探 HEAD：未出生就不带 HEAD 跑——全空得 records:[]，
+                    // 别的分支有提交也照常画出；探到才带上，detached 的游离提交不漏
+                    runGit(['rev-parse', '--verify', '--quiet', 'HEAD'], root)
+                        .then((h) => runGit(['-c', 'core.quotePath=false', 'log', ...(h.ok ? ['HEAD'] : []), '--branches', '--tags', '--remotes', '--topo-order',
                         `--skip=${skip}`, `--max-count=${n + 1}`,
-                        '--pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%at%x1f%s%x1f%D%x1e'], root).then((r) => {
+                        '--pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%at%x1f%s%x1f%D%x1e'], root))
+                        .then((r) => {
                         if (!r.ok) {
-                            // 空库不是错误：git log 报 "does not have any commits yet"
-                            if (/does not have any commits/i.test(r.err + r.out)) {
-                                json(200, { available: true, root, records: [], hasMore: false });
-                                return;
-                            }
                             json(200, { available: false });
                             return;
                         }
