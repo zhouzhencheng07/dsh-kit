@@ -1195,6 +1195,8 @@ let vaultFetchPrev = null;
   check("行内改名只有资料库文件按扩展名切选区（笔记页名含点不被截半）", src.includes("const renameInput = (entry, label, keepExt) =>") && src.includes("ev.currentTarget.setSelectionRange(0, keepExt && i > 0 ? i : v.length);") && src.includes("renameInput(e, e.name, false)"));
   check("批量导入失败报前三条 + 余量（不是只报首条）", src.includes("fails.slice(0, 3).join(\"；\")"));
   check("斜杠菜单查询变化即重置高亮（下标越界会插入没高亮那条）", src.includes("if (q !== menuRef.current?.query) {"));
+  check("斜杠菜单只在键入 / 时开（keydown 武装）：挪光标到已有 /xxx、粘贴不开", src.includes("const armed = slashArmed;") && src.includes('if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {') && src.includes("if (armed && menuRef.current === null) {"));
+  check("斜杠菜单锚定那颗 /：光标挪出查询段即关、代码块不开，落地按锚删除（无前置边界集，多斜杠不误删）", src.includes("anchor !== menuRef.current.anchor") && src.includes(", anchor });") && /const armed = slashArmed;\s*slashArmed = false;\s*if \(ed\.isActive\("codeBlock"\)\)/.test(src) && src.includes("ed.view.state.tr.delete(anchor, $from.pos)") && (src.split("const m = /\\/(\\S*)$/.exec(textBefore);").length - 1) === 1 && !src.includes("\\u3000-\\u303F"));
   check("阅读位置重试可取消且宿主卸载即停", src.includes("const cancelRestore = restoreReadPos(") && src.includes("cancelRestore();") && src.includes("if (!el.isConnected) return;"));
   check("粘贴图透明探测走缩略探针（PNG 源直接保 PNG）", src.includes("const PASTE_PROBE_EDGE = 256;") && src.includes("await decodeImage(file, file.type === \"image/png\")") && !src.includes("getImageData(0, 0, el.naturalWidth, el.naturalHeight)"));
   check("库内非 md 相对链接交给 openVaultAsset（不是死点击；PDF 在自带阅读器开时走知识库签）", src.includes("onRelLink: (href) => {") && src.includes("else openVaultAsset(target);"));

@@ -5987,7 +5987,7 @@ ellipsis，窄列只截字不破版 */
       // 插入表格弹窗：{rows, cols} | null（斜杠菜单「图表 → 表格」点开自己填行列）
       const [tDlg, setTDlg] = react.useState(null);
       const rteHostRef = react.useRef(null);
-      // 斜杠菜单：{query, sub, x, y, at} | null（/ 触发：行首或空白后，键入过滤，Esc/失焦关）
+      // 斜杠菜单：{query, sub, x, y, at, anchor} | null（键入 "/" 唤出并锚定那颗 /，键入过滤，Esc/挪出即关）
       const [menu, setMenu] = react.useState(null);
       const [menuIdx, setMenuIdx] = react.useState(0);
       // 泡泡菜单：{x, y, above} | null（选区非空时浮在选区上/下方）；bubPanel =
@@ -6192,20 +6192,17 @@ ellipsis，窄列只截字不破版 */
         rteRef.current?.insertTable(rows, cols);
         rteRef.current?.focus();
       };
-      /** 斜杠命令落地：先删掉 "/查询" 再套模板（菜单非破坏性，/ 是真实文本） */
+      /** 斜杠命令落地：删掉锚定的那颗 "/查询" 再套模板（菜单非破坏性，/ 是真实文本） */
       const applyMenuTemplate = (item) => {
         const h = rteRef.current;
         if (!h) return;
         const ed = h.editor;
-        const { $from } = ed.state.selection;
-        const textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - 80), $from.parentOffset, "\n", "\n");
-        const m = /(?:^|[\s\u3000-\u303F\uFF01-\uFF5E])\/(\S*)$/.exec(textBefore);
+        const anchor = menuRef.current?.anchor;
         setMenu(null);
-        if (m) {
-          ed.view.dispatch(ed.view.state.tr.delete(Math.max(0, $from.pos - (m[1] ?? "").length - 1), $from.pos));
-        }
+        const { $from } = ed.state.selection;
+        if (typeof anchor !== "number" || anchor < 0 || anchor >= $from.pos) return;
+        ed.view.dispatch(ed.view.state.tr.delete(anchor, $from.pos));
         h.focus();
-        if (!m) return;
         const key = item.key ?? "";
         if (key === "table") setTDlg({ rows: 3, cols: 3 });
         else if (key === "mermaid") {
@@ -6362,21 +6359,47 @@ ellipsis，窄列只截字不破版 */
           clearTimeout(saveTimer);
           saveTimer = setTimeout(flushSave, 2000);
         });
-        // 斜杠菜单同步：光标前 /xxx（行首/空白/CJK 或全角标点后，行中也能触发）
-        // 即开/刷新菜单，前缀破坏即关。挂 update + selectionUpdate 覆盖全部输入
-        // 路径（真实键入/IME/命令改写）。边界集与 applyMenuTemplate 的删除正则
-        // 必须同源；ASCII 字母数字与 / 后不触发（URL 不捣乱）
+        // 斜杠菜单同步：真实键入 "/"（keydown 置 slashArmed）才开菜单——挪光标
+        // 到已有 /xxx 上、粘贴进来的不开。刚键入时锚就是那颗 "/"（anchor 记进
+        // menu），空查询直开、不查前文；开着期间查询跟光标刷新，锚被删、
+        // 光标挪出查询段、落进代码块即关。挂 selectionUpdate 覆盖全部输入
+        // 路径（真实键入/IME/命令改写）
+        let slashArmed = false;
         const syncSlashMenu = () => {
           const ed = rteRef.current?.editor;
           if (!ed) return;
+          const armed = slashArmed;
+          slashArmed = false;
+          if (ed.isActive("codeBlock")) {
+            if (menuRef.current !== null) setMenu(null);
+            return;
+          }
           const { $from } = ed.state.selection;
           const textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - 80), $from.parentOffset, "\n", "\n");
-          const m = /(?:^|[\s\u3000-\u303F\uFF01-\uFF5E])\/(\S*)$/.exec(textBefore);
+          // 刚键入 "/" 且没开着：空查询直开（文本里已有别的 / 不参与，查询
+          // 过滤从下一个字符才开始）
+          if (armed && menuRef.current === null) {
+            if (!textBefore.endsWith("/")) return;
+            const coords = ed.view.coordsAtPos($from.pos);
+            menuIdxRef.current = 0;
+            setMenuIdx(0);
+            setMenu({ query: "", sub: null, x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4, at: coords?.top ?? 0, anchor: $from.pos - 1 });
+            return;
+          }
+          const m = /\/(\S*)$/.exec(textBefore);
           if (m) {
             const q = m[1] ?? "";
             // 查询无匹配即关：字面 "/" 打完随后出现的字符会让过滤落空，自动消失
             // 才不纠缠（菜单非破坏性，/ 始终是真实文本）
             if (q !== "" && menuRows({ query: q, sub: null }).length === 0) {
+              setMenu(null);
+              return;
+            }
+            // 没武装不开（挪光标到已有 /xxx、粘贴）；开着时锚定那颗 "/"：光标
+            // 挪出查询段（点了别处/跳走了）即关
+            const anchor = $from.pos - q.length - 1;
+            if (menuRef.current === null) return;
+            if (anchor !== menuRef.current.anchor) {
               setMenu(null);
               return;
             }
@@ -6387,7 +6410,7 @@ ellipsis，窄列只截字不破版 */
               menuIdxRef.current = 0;
               setMenuIdx(0);
             }
-            setMenu({ query: q, sub: null, x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4, at: coords?.top ?? 0 });
+            setMenu({ query: q, sub: null, x: coords?.left ?? 240, y: (coords?.bottom ?? 200) + 4, at: coords?.top ?? 0, anchor });
           } else if (menuRef.current !== null) {
             setMenu(null);
           }
@@ -6403,6 +6426,17 @@ ellipsis，窄列只截字不破版 */
           report();
         });
         const onKeyDown = (e) => {
+          // 斜杠菜单武装：真实键入 "/" 才允许开菜单（挪光标到已有 /xxx、粘贴不开）。
+          // 代码块与不可编辑控件（流程图源码框）里的 "/" 是写内容不是插块；组合
+          // 输入期间 keydown 的 key 是 "Process"，到不了这里，组合提交不会误开
+          if (e.key !== "/") slashArmed = false;
+          if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            const ed = rteRef.current?.editor;
+            const tgt = e.target;
+            if (ed && !ed.isActive("codeBlock") && (tgt === ed.view.dom || (tgt instanceof Element && tgt.isContentEditable))) {
+              slashArmed = true;
+            }
+          }
           // 空图块退格删块：源码框空着时退格在框内是空操作，而图块节点的
           // stopEvent 恒真（编辑器不接管），框和块都不动——自己收这个块。
           // 位置按 DOM 反查（nodeDOM 与节点视图的 dom 是同一个对象），
