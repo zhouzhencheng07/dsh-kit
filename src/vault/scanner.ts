@@ -13,6 +13,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { kitPath } from '../core/data-path.ts'
+import { REFS_FILE, readFolderRefs, type KnowledgeSetRefs } from './fs.ts'
 
 export interface VaultPage {
   /** 绝对路径（realpath 归一后） */
@@ -52,8 +53,10 @@ export interface VaultIndex {
   /** 笔记目录（相对 root、`/` 分隔、含各级；不含资料库子树） */
   folders: string[]
   pages: VaultPage[]
-  /** 根下 library/ 的清单；目录不存在为 null（前端据此决定资料库那一行在不在） */
+  /** 根下 library/ 的清单（平铺清单：文件与目录都在，UI 只按名字用） */
   library: VaultLibrary | null
+  /** 全部知识集（笔记目录挂载资料的清单；dir = 相对 root 的目录，refs = 挂载的库内 rel） */
+  knowledgeSets: KnowledgeSetRefs[]
   /** 超过单次扫描上限被截断 */
   truncated?: boolean
 }
@@ -145,6 +148,7 @@ export class VaultScanner {
     if (root === null) return null
     const folders = new Set<string>()
     const pages: VaultPage[] = []
+    const knowledgeSets: KnowledgeSetRefs[] = []
     let truncated = false
     // 资料库用持有对象收（闭包里赋值，标量会被 TS 的控制流分析窄化成 never）
     const lib: { root: string | null; items: VaultLibraryEntry[]; truncated: boolean } = {
@@ -186,6 +190,11 @@ export class VaultScanner {
         dirents = await fs.promises.readdir(dir, { withFileTypes: true })
       } catch {
         return
+      }
+      // 知识集标记（目录体内的隐藏文件）：存在即这个目录是知识集，清单一起读出来。
+      // 只认子目录，库根本身不参与（树头没有可挂的「行」）
+      if (dir !== root && dirents.some((d) => d.isFile() && d.name === REFS_FILE)) {
+        knowledgeSets.push({ dir: path.relative(root, dir).split(path.sep).join('/'), refs: readFolderRefs(dir) })
       }
       for (const dirent of dirents) {
         if (pages.length >= SCAN_FILE_LIMIT) {
@@ -255,6 +264,7 @@ export class VaultScanner {
       folders: [...folders].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true })),
       pages,
       library: lib.root === null ? null : { root: lib.root, items: lib.items, truncated: lib.truncated },
+      knowledgeSets: knowledgeSets.sort((a, b) => a.dir.toLowerCase().localeCompare(b.dir.toLowerCase())),
       truncated,
     }
   }

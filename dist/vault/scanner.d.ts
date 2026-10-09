@@ -1,3 +1,4 @@
+import { type KnowledgeSetRefs } from './fs.ts';
 export interface VaultPage {
     /** 绝对路径（realpath 归一后） */
     path: string;
@@ -33,8 +34,10 @@ export interface VaultIndex {
     /** 笔记目录（相对 root、`/` 分隔、含各级；不含资料库子树） */
     folders: string[];
     pages: VaultPage[];
-    /** 根下 library/ 的清单；目录不存在为 null（前端据此决定资料库那一行在不在） */
+    /** 根下 library/ 的清单（平铺清单：文件与目录都在，UI 只按名字用） */
     library: VaultLibrary | null;
+    /** 全部知识集（笔记目录挂载资料的清单；dir = 相对 root 的目录，refs = 挂载的库内 rel） */
+    knowledgeSets: KnowledgeSetRefs[];
     /** 超过单次扫描上限被截断 */
     truncated?: boolean;
 }

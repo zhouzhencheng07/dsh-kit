@@ -456,8 +456,11 @@ let vaultFetchPrev = null;
         { path: "D:/v/library/大学", rel: "大学", dir: true },
         { path: "D:/v/library/大学/讲义.pdf", rel: "大学/讲义.pdf", dir: false },
         { path: "D:/v/library/统计.pdf", rel: "统计.pdf", dir: false },
+        { path: "D:/v/library/未挂.pdf", rel: "未挂.pdf", dir: false },
       ],
     },
+    // 知识集：wiki 目录挂了 统计.pdf 与 大学/讲义.pdf（资料实物在 library/ 里只存一份）
+    knowledgeSets: [{ dir: "wiki", refs: ["统计.pdf", "大学/讲义.pdf"] }],
   };
   // 预置 state：0 index / 1 indexErr / 2 rootHere / 3 treeDirs / 4 expanded / 5 rowMenu
   const renderVault = (preset) => {
@@ -521,34 +524,45 @@ let vaultFetchPrev = null;
     "面板里没有 前进/后退 钮（访问序随按钮一起退役）",
     !titles.includes("后退") && !titles.includes("前进") && !src.includes("vaultHist") && !src.includes("dshk-vault-fpick"),
   );
-  // 资料库那一行：库根下的第一项，名字带文件数（目录不算），展开后列库内文件
-  check("资料库那一行在库根下（名字带文件数）", !!findRow("D:/v/library") && ["资料库 (2)", "Library (2)"].includes(nameOf(findRow("D:/v/library"))));
-  const libFileRow = findRow("D:/v/library/统计.pdf");
-  check("资料库文件行保留扩展名（点开走官方文件右栏）", !!libFileRow && nameOf(libFileRow) === "统计.pdf");
+  // 库已扁平：侧栏不再有资料库那一行（资料入口 = 知识集「添加资料…」与搜索）
+  check("侧栏不再有资料库那一行（库已扁平）", !findRow("D:/v/library") && src.includes("// 侧栏不再有「资料库」那一行"));
+  check(
+    "知识集目录行：展开后先出「资料 (N)」子行（默认收起，不直接铺开挂载项）",
+    callLog.some((c) => c[2] && c[2].className === "dshk-vault-treerow" && ["资料", "Materials"].includes(c[2].title)) &&
+      !callLog.some((c) => c[2] && c[2].className === "dshk-vault-treerow" && c[2].title === "D:/v/library/统计.pdf"),
+  );
+  check(
+    "知识集行用「一摞书」图标 + 资料子组/资料行两个渲染件在场（源码哨兵）",
+    src.includes('jsxRuntime.jsx(OfficialIcon, { names: ["BookOutline16", "IconBookOutline16"], glyph: "▤" })') &&
+      src.includes("const ksGroupRow = (dirPath, refs, depth)") &&
+      src.includes("const refRow = (rel, dirPath, depth) => {"),
+  );
+  check(
+    "搜索里资料只按名字出一条（不再有资料库目录命中与树上定位）",
+    src.includes("if (it.dir === true) continue;") && !src.includes('hit.kind === "libdir"') && !src.includes("revealLibDir"),
+  );
   check(
     "资料库文件点击走 openVaultAsset（PDF 且自带阅读器开 → 知识库签，其余官方文件右栏）",
     src.includes("if (lib) openVaultAsset(e.path);") && src.includes("else if (hit.kind === \"libfile\") openVaultAsset(hit.path);"),
   );
-  // 树上行操作：页行与目录行同形状 = `@` + `⋯`（只读库没有别的写操作）
+  // 树上行操作：目录行/页行 = `@` + `⋯`（资料行的 ⋯ 在展开资料子组时才出现）
   const actSpans = callLog.filter((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[2] && c[2].className === "dshk-rowact");
   const actsOf = (sp) => (Array.isArray(sp[2].children) ? sp[2].children : [sp[2].children]);
   const twoBtnSpans = actSpans.filter((sp) => actsOf(sp).length === 2);
   check(
-    "知识库树每行 hover 都是 @ + ⋯（页行/目录行/资料库行同形状；新建另挂 + 钮）",
-    twoBtnSpans.length === actSpans.length &&
-      twoBtnSpans.length >= 4 &&
+    "知识库树：目录行/页行 hover = @ + ⋯（两枚都包在官方气泡里）",
+    twoBtnSpans.length >= 2 &&
       twoBtnSpans.every((sp) => {
         const b = actsOf(sp);
-        // 两枚都包在 KitTip 里（官方气泡）：断言包层 label 与内层按钮
         return ["@ 到对话", "Insert @ mention"].includes(b[0].props.label) && b[1].props.children.props.children === "⋯";
       }),
   );
-  // 新建入口：目录行与树头都有悬停「+」（资料库那一支也有——库里建文件夹）
+  // 新建入口：目录行与树头都有悬停「+」（资料库那一行退役，少一处）
   const plusWraps = callLog.filter((c) => c[0] === "jsx" && c[2] && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-vault-treeplus");
   check(
     "目录行与树头都挂了「新建」+ 钮（树头两枚：新建 + 更多操作）",
-    plusWraps.length >= 4 &&
-      plusWraps.filter((w) => ["新建", "New"].includes(w[2].label)).length >= 3 &&
+    plusWraps.length >= 3 &&
+      plusWraps.filter((w) => ["新建", "New"].includes(w[2].label)).length >= 2 &&
       plusWraps.some((w) => w[2].children.props.children === "+") &&
       plusWraps.some((w) => w[2].children.props.children === "⋯"),
   );
@@ -571,37 +585,34 @@ let vaultFetchPrev = null;
   const rowMenuActs = rowMenuEl ? rowMenuEl[2].actions : null;
   const rowExtraLabels = rowMenuActs && Array.isArray(rowMenuActs.extraItems) ? rowMenuActs.extraItems.map((it) => it.label) : [];
   check(
-    "知识库行 ⋯ 接线：复制绝对路径 + 重命名 + 移动到… + 导入 md（笔记目录）",
+    "已标记知识集的目录行 ⋯：添加资料… + 取消知识集 + 移动到… + 导入 md（+ 复制/改名/删除）",
     !!rowMenuActs &&
       rowMenuActs.copyMode === "abs" &&
       typeof rowMenuActs.onCopyPath === "function" &&
       typeof rowMenuActs.onRename === "function" &&
       typeof rowMenuActs.onDelete === "function" &&
       rowMenuActs.onOpenHere === undefined &&
-      rowExtraLabels.length === 2 &&
-      ["移动到…", "Move to…"].includes(rowExtraLabels[0]) &&
-      ["导入 md 文件…", "Import markdown…"].includes(rowExtraLabels[1]),
+      rowExtraLabels.length === 4 &&
+      ["添加资料…", "Add material…"].includes(rowExtraLabels[0]) &&
+      ["取消知识集", "Remove knowledge set"].includes(rowExtraLabels[1]) &&
+      ["移动到…", "Move to…"].includes(rowExtraLabels[2]) &&
+      ["导入 md 文件…", "Import markdown…"].includes(rowExtraLabels[3]),
   );
   // 复制绝对路径直接发 entry.path（clipboard 在 Node 桩里没有可信通道，见 writeClipboard 降级链）
   check("行 ⋯ 复制绝对路径取 entry.path（源码哨兵）", src.includes("void writeClipboard(entry.path).then"));
-  // ⋯ 触发钮是开关：再点一次关掉自己；目录行与页行各认自己的条目，且「在此打开」
-  // 只挂在笔记目录上（资料库那一行与库内目录都没有）
+  // ⋯ 触发钮是开关：再点一次关掉自己；目录行与页行各认自己的条目
   const anchorEl = { getBoundingClientRect: () => ({ left: 10, top: 100, bottom: 120, right: 30, width: 20, height: 20 }) };
   const clickEv = { stopPropagation: () => {}, currentTarget: anchorEl };
   // 行内两枚钮现在包在 KitTip 里（官方气泡）：取内层按钮
   const menuBtnOf = (row) => actsOfRow(row)[1].props.children;
   const dirMenuBtn = menuBtnOf(findRow("D:/v/wiki"));
   const pageMenuBtn = menuBtnOf(findRow("D:/v/wiki/a.md"));
-  const libMenuBtn = menuBtnOf(findRow("D:/v/library"));
   dirMenuBtn.props.onClick(clickEv);
   const dirOpened = stateStore.get(5);
   dirMenuBtn.props.onClick(clickEv);
   pageMenuBtn.props.onClick(clickEv);
   const menuOpened = stateStore.get(5);
   pageMenuBtn.props.onClick(clickEv);
-  libMenuBtn.props.onClick(clickEv);
-  const libOpened = stateStore.get(5);
-  libMenuBtn.props.onClick(clickEv);
   check(
     "行 ⋯ 再点一次关掉 + 目录行/页行各认自己的条目（锚点认的是同一颗按钮）",
     !!dirOpened &&
@@ -612,10 +623,8 @@ let vaultFetchPrev = null;
       menuOpened.entry.path === "D:/v/wiki/a.md" &&
       stateStore.get(5) === null,
   );
-  // 资料库根那一行：⋯ 菜单不给重命名/删除（根目录名是写死的约定），只给导入
-  check("资料库根那一行的 ⋯ 认的是库根条目（改名/删除由菜单接线挡掉）", !!libOpened && libOpened.entry.path === "D:/v/library" && libOpened.entry.here === undefined);
   check(
-    "资料库根行 ⋯ 只给导入（源码哨兵：atLibRoot 时 onRename/onDelete 为 undefined）",
+    "库根那条防御仍在（源码哨兵：atLibRoot 时 onRename/onDelete 为 undefined）",
     src.includes("onRename: atLibRoot ? undefined :") && src.includes("onDelete: atLibRoot ? undefined :"),
   );
   // Ctrl+点击笔记目录行 = 进入该目录：换树根（只影响面板显示，不动设置卡）
@@ -623,9 +632,7 @@ let vaultFetchPrev = null;
   check("Ctrl+点击笔记目录行 = 进入该目录（树根换成它）", stateStore.get(2) === "D:/v/wiki");
   findRow("D:/v/wiki")[2].onClick({ ctrlKey: false });
   check("普通点击目录行仍是折叠/展开（不换根）", stateStore.get(2) === "D:/v/wiki" && stateStore.get(4)["D:/v/wiki"] === false);
-  // 资料库那支按 Ctrl 点也不换根：只当普通点击（展开/收起）
-  findRow("D:/v/library")[2].onClick({ ctrlKey: true });
-  check("Ctrl+点击资料库那一行不换根（当普通点击）", stateStore.get(2) === "D:/v/wiki" && stateStore.get(4)["D:/v/library"] === false);
+
   // 换根后的树头：库内相对路径 + 层级导航（← 上一级 / ↑ 回库根）；资料库那一行照旧在
   const rootErr = renderVault({
     0: VAULT_INDEX,
@@ -661,18 +668,62 @@ let vaultFetchPrev = null;
       src.includes("vaultSideRootHere = dir;"),
   );
   check(
-    "换根后资料库那一行照旧在（它挂在树体上，跟当前目录无关）",
-    callLog.some((c) => c[2] && c[2].className === "dshk-vault-treerow" && c[2].title === "D:/v/library"),
+    "知识集动作走 refs 端点：set 全量回写清单 / unmark 删标记（源码哨兵）",
+    src.includes('vaultOp("/dsh-kit/vault/refs", { op: "set", dir: dirPath, refs })') &&
+      src.includes('vaultOp("/dsh-kit/vault/refs", { op: "unmark", dir: entry.path })') &&
+      src.includes("const addRef = (dirPath, rel) => {") &&
+      src.includes("const removeRef = (dirPath, rel) => {") &&
+      src.includes("const markFolderKs = (dirPath) => {") &&
+      src.includes("const submitRefRename = async (rel, rawName) => {") &&
+      src.includes("const deleteRefItem = (rel) => {"),
+  );
+  // 展开知识集下的「资料」子组（openRefGroups = 槽 19）：铺开挂载项、保留扩展名
+  const refsErr = renderVault({
+    0: VAULT_INDEX,
+    1: "",
+    2: null,
+    3: TREE,
+    4: { "D:/v": true, "D:/v/wiki": true },
+    18: { "D:/v/wiki": true },
+  });
+  const refRows = callLog.filter((c) => c[2] && c[2].className === "dshk-vault-treerow" && ["D:/v/library/统计.pdf", "D:/v/library/大学/讲义.pdf"].includes(c[2].title));
+  check(
+    "展开「资料」后铺开挂载项（保留扩展名，点开走官方文件面）",
+    refsErr === null && refRows.length === 2 && refRows.every((r) => nameOf(r).endsWith(".pdf")) && src.includes("openVaultAsset(item.path);"),
   );
   check(
-    "搜索点到资料库目录 = 树上定位（源码哨兵；展开祖先 + 滚到那一行，不换根）",
-    src.includes("else if (hit.kind === \"libdir\") revealLibDir(hit.path);") &&
-      src.includes("const revealLibDir = (dirPath) => {") &&
-      src.includes("row.scrollIntoView({ block: \"nearest\" });"),
+    "资料行 ⋯：重命名 / 从本文件夹移除 / 删除资料（悬挂的只留移除）",
+    src.includes('run: () => removeRef(refMenu.dirPath, refMenu.rel)') &&
+      src.includes('{ key: "rrn"') &&
+      src.includes('{ key: "kdl"') &&
+      src.includes("libItemsByRel.get(refMenu.rel) === undefined ? [] : ["),
+  );
+  // 添加资料弹层：列出库里还没挂的资料（已挂的不重复列）——addingDir 槽 21 / refQuery 槽 22
+  const addErr = renderVault({ 0: VAULT_INDEX, 1: "", 2: null, 3: TREE, 4: { "D:/v": true }, 20: "D:/v/wiki", 21: "" });
+  const cands = callLog.filter((c) => c[2] && c[2].className === "dshk-vault-diritem" && typeof c[2].title === "string" && c[2].title.startsWith("D:/v/library/"));
+  check(
+    "添加资料弹层：列出库里还没挂的资料（已挂的不重复列）",
+    addErr === null && cands.length === 1 && cands[0][2].title === "D:/v/library/未挂.pdf",
+  );
+  // 未标记的目录行给出「设为知识集」（有内容才给；空目录置灰）
+  const unmarkedErr = renderVault({
+    0: { ...VAULT_INDEX, knowledgeSets: [] },
+    1: "",
+    2: null,
+    3: TREE,
+    4: { "D:/v": true, "D:/v/wiki": true },
+    5: { entry: { dir: true, name: "wiki", path: "D:/v/wiki" }, rect: { left: 10, top: 100, bottom: 120, right: 30, width: 20, height: 20 } },
+  });
+  const unmarkedMenu = callLog.find((c) => c[1] === comps.TreeRowMenu);
+  const unmarkedItems = unmarkedMenu ? unmarkedMenu[2].actions.extraItems : [];
+  check(
+    "未标记的目录行 ⋯ 给「设为知识集」（有内容才给；空目录置灰）",
+    unmarkedErr === null && unmarkedItems.length === 3 && ["设为知识集", "Make knowledge set"].includes(unmarkedItems[0].label) && unmarkedItems[0].disabled === false &&
+      src.includes("disabled: dirHasChildren(entry.path) !== true"),
   );
   // ── 文件管理（建 / 改名 / 移动 / 导入 / 删除）：行内输入 + 三个对话框 ──
   // 预置 state（按 VaultRootView 的 useState 顺序，槽位随钩子增删整体位移）：
-  // 13 renamingPath / 14 createAt / 15 createName / 16 dialog
+  // 12 renamingPath / 13 createAt / 14 createName / 15 dialog
   {
     const base = {
       0: VAULT_INDEX,
@@ -690,7 +741,7 @@ let vaultFetchPrev = null;
       return out;
     };
     const byClass = (node, cls) => walk(node, (n) => typeof (n.props && n.props.className) === "string" && n.props.className.split(" ").includes(cls));
-    const createErr = renderVault({ ...base, 13: null, 14: "D:/v/wiki", 15: "新页" });
+    const createErr = renderVault({ ...base, 12: null, 13: "D:/v/wiki", 14: "新页" });
     const createRow = callLog.find((c) => c[2] && c[2].className === "dshk-createrow");
     const createInput = createRow && createRow[2].children ? createRow[2].children[0] : null;
     check(
@@ -708,8 +759,8 @@ let vaultFetchPrev = null;
     const createPlus = callLog.find((c) => c[2] && c[2].className === "dshk-vault-treerow" && c[2].title === "D:/v/wiki");
     const plusBtn = createPlus ? createPlus[2].children.find((ch) => ch && ch.props && ch.props.className === "dshk-vault-treeplus") : null;
     if (plusBtn) plusBtn.props.onClick({ stopPropagation: () => {} });
-    check("目录行尾 + 的落点 = 那一行目录（树头 + 落到当前树根）", stateStore.get(14) === "D:/v/wiki");
-    renderVault({ ...base, 13: "D:/v/wiki/a.md" });
+    check("目录行尾 + 的落点 = 那一行目录（树头 + 落到当前树根）", stateStore.get(13) === "D:/v/wiki");
+    renderVault({ ...base, 12: "D:/v/wiki/a.md" });
     const renameInput = callLog.find((c) => c[2] && c[2].className === "dshk-rename");
     check(
       "行内改名：页行换成输入框，初值取显示名（去 .md）",
@@ -734,7 +785,7 @@ let vaultFetchPrev = null;
     // 移动到…：候选目录列同侧全部分支（根 + wiki + wiki/Python）
     const moveErr = renderVault({
       ...base,
-      16: { kind: "move", entry: { dir: false, name: "a", path: "D:/v/wiki/a.md" }, lib: false, dest: "D:/v/wiki", conflict: "skip" },
+      15: { kind: "move", entry: { dir: false, name: "a", path: "D:/v/wiki/a.md" }, lib: false, dest: "D:/v/wiki", conflict: "skip" },
     });
     const moveDialog = callLog.find((c) => c[1] === comps.VaultDialog);
     const dirItems = moveDialog ? byClass({ props: moveDialog[2] }, "dshk-vault-diritem") : [];
@@ -757,7 +808,7 @@ let vaultFetchPrev = null;
     // 导入：资料库那一支给「导入文件…」（多选、不限格式），笔记侧给「导入 md 文件…」
     const importErr = renderVault({
       ...base,
-      16: { kind: "import", dest: "D:/v/library", lib: true, files: [], src: "", name: "", conflict: "skip" },
+      15: { kind: "import", dest: "D:/v/library", lib: true, files: [], src: "", name: "", conflict: "skip" },
     });
     const importDialog = callLog.find((c) => c[1] === comps.VaultDialog);
     const fileInput = importDialog ? walk({ props: importDialog[2] }, (n) => n.props && n.props.type === "file")[0] : null;
@@ -779,7 +830,7 @@ let vaultFetchPrev = null;
     );
     const notesImportErr = renderVault({
       ...base,
-      16: { kind: "import", dest: "D:/v/wiki", lib: false, files: [], src: "", name: "", conflict: "skip" },
+      15: { kind: "import", dest: "D:/v/wiki", lib: false, files: [], src: "", name: "", conflict: "skip" },
     });
     const notesDialog = callLog.find((c) => c[1] === comps.VaultDialog);
     const notesFile = notesDialog ? walk({ props: notesDialog[2] }, (n) => n.props && n.props.type === "file")[0] : null;
@@ -798,7 +849,7 @@ let vaultFetchPrev = null;
     );
     const delErr = renderVault({
       ...base,
-      16: { kind: "delete", entry: { dir: true, name: "wiki", path: "D:/v/wiki" } },
+      15: { kind: "delete", entry: { dir: true, name: "wiki", path: "D:/v/wiki" } },
     });
     const delDialog = callLog.find((c) => c[1] === comps.VaultDialog);
     check(
@@ -901,7 +952,7 @@ let vaultFetchPrev = null;
       hits[2].sub === "…统计…",
   );
   const libDirHits = comps.vaultSearchHits("大学", "D:/v", [], [], [{ path: "D:/v/library/大学", rel: "大学", dir: true }]);
-  check("资料库目录也搜得到（点它在树上定位，与笔记目录分道）", libDirHits.length === 1 && libDirHits[0].kind === "libdir" && libDirHits[0].path === "D:/v/library/大学");
+  check("库已扁平：资料库目录不再作为命中（资料只按名字出一条）", libDirHits.length === 0);
   check("空词/纯空白回空表", comps.vaultSearchHits("   ", "D:/v", [], [], []).length === 0);
   check("多词是 AND（一个词没中就不进表）", comps.vaultSearchHits("统计 不存在", "D:/v", [], [], []).length === 0);
   check("relUnder：base 内的相对路径（分隔符归一、大小写按盘符规则）", comps.relUnder("D:\\v", "D:/v/wiki/a.md") === "wiki/a.md" && comps.relUnder("D:\\v", "D:/other/a.md") === null);
@@ -1214,8 +1265,8 @@ let vaultFetchPrev = null;
   check("Esc 让路按计数持有（两个浮层同开，先关的不撤销让路）", src.includes("const holdEsc = () =>") && src.includes("const releaseEsc = () =>") && (src.match(/holdEsc\(\);/g) ?? []).length === 3 && (src.match(/releaseEsc\(\);/g) ?? []).length === 4 && (src.match(/dock\.vaultSearch\.open = true;/g) ?? []).length === 1 && (src.match(/dock\.vaultSearch\.open = false;/g) ?? []).length === 0);
   check("读页上下文提交后发布（渲染期通知订阅者）+ 空页表用常量", src.includes("react.useEffect(() => {\n        const refreshIndex = () => void loadIndex();") && src.includes("?? VAULT_EMPTY_PAGES"));
   check("反链 memo 依赖稳定（每次渲染现造 [] 会让 useMemo 恒不命中）", src.includes("const backlinks = react.useMemo(() => vaultBacklinks(indexPages ?? [], path), [indexPages, path]);"));
-  check("树路径按 root 的分隔符拼（缓存键/展开态/树上定位同一口径）", src.includes("return rel === \"\" ? base : absJoinUnder(base, rel);") && src.includes("samePath(el.getAttribute(\"title\"), revealPath)") && src.includes("const cur = joinRelPath(lib, segs.slice(0, i + 1).join(\"/\"));"));
-  check("行内改名只有资料库文件按扩展名切选区（笔记页名含点不被截半）", src.includes("const renameInput = (entry, label, keepExt) =>") && src.includes("ev.currentTarget.setSelectionRange(0, keepExt && i > 0 ? i : v.length);") && src.includes("renameInput(e, e.name, false)"));
+  check("树路径按 root 的分隔符拼（缓存键/展开态/知识集目录换算同一口径）", src.includes("return rel === \"\" ? base : absJoinUnder(base, rel);") && src.includes("const ksCurrentAbs = ksCurrentDirRel === null || root === null ? null : joinRelPath(root, ksCurrentDirRel);"));
+  check("行内改名只有资料文件按扩展名切选区（笔记页名含点不被截半）", src.includes("const renameInput = (entry, label, keepExt, submit = submitRename, cancel =") && src.includes("ev.currentTarget.setSelectionRange(0, keepExt && i > 0 ? i : v.length);") && src.includes("renameInput(e, e.name, false)"));
   check("批量导入失败报前三条 + 余量（不是只报首条）", src.includes("fails.slice(0, 3).join(\"；\")"));
   check("斜杠菜单查询变化即重置高亮（下标越界会插入没高亮那条）", src.includes("if (q !== menuRef.current?.query) {"));
   check("斜杠菜单只在键入 / 时开（keydown 武装）：挪光标到已有 /xxx、粘贴不开", src.includes("const armed = slashArmed;") && src.includes('if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {') && src.includes("if (armed && menuRef.current === null) {"));

@@ -136,6 +136,222 @@ export function inLibrary(root, target) {
 export function isLibraryRoot(root, target) {
     return libraryRoot(root) === target;
 }
+// ── 知识集（笔记目录挂载库内资料）─────────────────────────────────────────────
+// 标记与清单存在**目录体内的隐藏文件** .refs.json（存在 = 是知识集，内容 = 挂载清单）：
+// 跟着目录生死，改名 / 移动 / 删除都不用单独维护；扫描只收 .md，点前缀文件不进索引。
+// 清单里存的是库内 rel（相对 library/、正斜杠）；资料实物在 library/ 里只存一份，
+// 多个知识集挂同一本书就是多条 ref 指向同一个 rel。嵌套知识集没有语义（下面拦）。
+/** 知识集标记文件名 */
+export const REFS_FILE = '.refs.json';
+/** 知识集子树遍历要跳过的目录（与 scanner.ts 的 SKIP_DIRS 同口径；此处独立一份
+ *  免得 fs.ts 反过来 import scanner.ts 成环） */
+const REFS_SKIP_DIRS = new Set(['attachments', 'library', '.git', '.trash', 'node_modules']);
+/** 挂载项清洗：统一正斜杠、解 `.`/`..`、去空段、去重保序。**不校验存在**——
+ *  库里那一份被删 / 改名后清单可以悬挂（前端显示「不在库里」），这里只保证不越界。 */
+export function cleanRefs(raw) {
+    if (!Array.isArray(raw))
+        return [];
+    const out = [];
+    for (const value of raw) {
+        if (typeof value !== 'string')
+            continue;
+        const segs = [];
+        for (const seg of value.trim().replace(/\\/g, '/').split('/')) {
+            if (seg === '' || seg === '.')
+                continue;
+            if (seg === '..') {
+                segs.pop();
+                continue;
+            }
+            segs.push(seg);
+        }
+        const rel = segs.join('/');
+        if (rel !== '' && !out.includes(rel))
+            out.push(rel);
+    }
+    return out;
+}
+/** 读一个知识集的挂载清单（没标记 / 清单坏了都当空——坏清单不该挡住整个功能） */
+export function readFolderRefs(dirAbs) {
+    try {
+        const parsed = JSON.parse(fs.readFileSync(path.join(dirAbs, REFS_FILE), 'utf8'));
+        if (parsed !== null && typeof parsed === 'object')
+            return cleanRefs(parsed.refs);
+    }
+    catch {
+        /* 没标记或 JSON 坏了：都当空清单 */
+    }
+    return [];
+}
+/** 一个目录是不是知识集（标记文件存在即算） */
+export function isKnowledgeSet(dirAbs) {
+    return existsSync(path.join(dirAbs, REFS_FILE));
+}
+/** 目录有没有内容（任何子目录、任何 md 页；点前缀与约定目录不算）——
+ *  空目录没有「进入」的意义，不许设为知识集 */
+function dirHasContent(dirAbs) {
+    let entries;
+    try {
+        entries = fs.readdirSync(dirAbs, { withFileTypes: true });
+    }
+    catch {
+        return false;
+    }
+    for (const ent of entries) {
+        if (ent.name.startsWith('.') || REFS_SKIP_DIRS.has(ent.name))
+            continue;
+        if (ent.isDirectory())
+            return true;
+        if (ent.isFile() && /\.(md|markdown)$/i.test(ent.name))
+            return true;
+    }
+    return false;
+}
+/** 嵌套检查：祖先链上已有标记、或自己的子树里已有标记都算冲突。
+ *  返回冲突目录相对 vault 根的 rel（正斜杠）；没有冲突返 null。 */
+function nestedConflict(rootReal, dirAbs) {
+    let cur = path.dirname(dirAbs);
+    while (cur !== rootReal) {
+        if (relUnderRoot(rootReal, cur) === null)
+            break;
+        if (isKnowledgeSet(cur))
+            return relUnderRoot(rootReal, cur) ?? '';
+        const parent = path.dirname(cur);
+        if (parent === cur)
+            break;
+        cur = parent;
+    }
+    const stack = [dirAbs];
+    while (stack.length > 0) {
+        const dir = stack.pop();
+        if (dir === undefined)
+            continue;
+        let entries;
+        try {
+            entries = fs.readdirSync(dir, { withFileTypes: true });
+        }
+        catch {
+            continue;
+        }
+        for (const ent of entries) {
+            if (!ent.isDirectory())
+                continue;
+            if (ent.name.startsWith('.') || REFS_SKIP_DIRS.has(ent.name))
+                continue;
+            const sub = path.join(dir, ent.name);
+            if (isKnowledgeSet(sub))
+                return relUnderRoot(rootReal, sub) ?? '';
+            stack.push(sub);
+        }
+    }
+    return null;
+}
+/** 写一个知识集的挂载清单（**全量写回**——挂载 / 移除都由调用方拼好整张清单）。
+ *  嵌套冲突时报错；refs 为空也照写（「标记了但还没挂资料」是合法状态），取消标记走
+ *  unmarkFolder。**标记**动作要求目录非空（已标记的只更新清单，内容删光也还是知识集）。
+ *  tmp + rename 原子落盘。 */
+export function setFolderRefs(root, dirAbs, refs) {
+    const rootReal = fs.realpathSync(root);
+    const dir = resolveInside(root, dirAbs, { allowRoot: true });
+    if (dir === rootReal)
+        throw new Error('知识库根不能设为知识集');
+    if (!fs.statSync(dir).isDirectory())
+        throw new Error('落点不是文件夹');
+    const clash = nestedConflict(rootReal, dir);
+    if (clash !== null)
+        throw new Error(`知识集不能嵌套：${clash} 已经是知识集`);
+    if (!isKnowledgeSet(dir) && !dirHasContent(dir))
+        throw new Error('空目录不能设为知识集');
+    const doc = { dir: relUnderRoot(rootReal, dir) ?? '', refs: cleanRefs(refs) };
+    const tmp = path.join(dir, `${REFS_FILE}.${process.pid}.tmp`);
+    fs.writeFileSync(tmp, JSON.stringify(doc, null, 2), 'utf8');
+    fs.renameSync(tmp, path.join(dir, REFS_FILE));
+}
+/** 取消知识集：删标记文件（清单随之消失，资料实物不动） */
+export function unmarkFolder(root, dirAbs) {
+    const dir = resolveInside(root, dirAbs, { allowRoot: true });
+    if (dir === fs.realpathSync(root))
+        throw new Error('知识库根不是知识集');
+    const file = path.join(dir, REFS_FILE);
+    if (existsSync(file))
+        fs.rmSync(file, { force: true });
+}
+/** 全部知识集：从根往下找标记文件（点前缀与约定目录跳过）；坏清单按空清单收 */
+export function listKnowledgeSets(root) {
+    const rootReal = fs.realpathSync(root);
+    const out = [];
+    const stack = [rootReal];
+    while (stack.length > 0) {
+        const dir = stack.pop();
+        if (dir === undefined)
+            continue;
+        let entries;
+        try {
+            entries = fs.readdirSync(dir, { withFileTypes: true });
+        }
+        catch {
+            continue;
+        }
+        for (const ent of entries) {
+            if (!ent.isDirectory())
+                continue;
+            if (ent.name.startsWith('.') || REFS_SKIP_DIRS.has(ent.name))
+                continue;
+            const sub = path.join(dir, ent.name);
+            if (isKnowledgeSet(sub)) {
+                const rel = relUnderRoot(rootReal, sub);
+                if (rel !== null)
+                    out.push({ dir: rel, refs: readFolderRefs(sub) });
+            }
+            stack.push(sub);
+        }
+    }
+    out.sort((a, b) => a.dir.toLowerCase().localeCompare(b.dir.toLowerCase()));
+    return out;
+}
+/** target 在库内的 rel（相对 library/）；不在库里返 null */
+export function libraryRel(root, target) {
+    const lib = libraryRoot(root);
+    if (lib === null)
+        return null;
+    let libReal;
+    try {
+        libReal = fs.realpathSync(lib);
+    }
+    catch {
+        return null;
+    }
+    return relUnderRoot(libReal, target);
+}
+/** 库内 rel 改名 / 移动后改写全部挂载清单：旧 rel（或旧目录前缀）整段换新名。
+ *  改写失败静默——清单留旧名只是显示成「不在库里」，不该让改名这个主动作报错。 */
+export function rewriteLibraryRefs(root, oldRel, newRel) {
+    if (oldRel === '' || newRel === '' || oldRel === newRel)
+        return;
+    const prefix = oldRel + '/';
+    for (const set of listKnowledgeSets(root)) {
+        let changed = false;
+        const next = set.refs.map((r) => {
+            if (r === oldRel) {
+                changed = true;
+                return newRel;
+            }
+            if (r.startsWith(prefix)) {
+                changed = true;
+                return newRel + '/' + r.slice(prefix.length);
+            }
+            return r;
+        });
+        if (!changed)
+            continue;
+        try {
+            setFolderRefs(root, path.join(root, ...set.dir.split('/')), next);
+        }
+        catch {
+            /* 改写不了就留着旧名（显示成不在库里），改名本身已成立 */
+        }
+    }
+}
 /** 链接目标 → 页 rel：rel 全等 > rel 尾段 > 文件名（均不分大小写）；同层并列优先同空间 */
 export function resolveWikiRel(pages, target, hostSpace) {
     const t = stripMd(String(target ?? '').trim().replace(/\\/g, '/')).toLowerCase();
@@ -341,7 +557,14 @@ export function renameEntry(root, targetAbs, rawName, pages = []) {
             return { path: target, links: 0 };
         if (existsSync(next) && next.toLowerCase() !== target.toLowerCase())
             throw new Error(`同名文件夹已存在：${leaf}`);
+        const libOld = inLibrary(root, target) ? libraryRel(root, target) : null;
         fs.renameSync(target, next);
+        // 库内目录改名：挂载清单里的旧前缀整段换新（笔记目录不涉及）
+        if (libOld !== null) {
+            const libNew = libraryRel(root, next);
+            if (libNew !== null)
+                rewriteLibraryRefs(root, libOld, libNew);
+        }
         return { path: next, links: 0 };
     }
     if (!inLibrary(root, target) && !/\.(md|markdown)$/i.test(target))
@@ -357,9 +580,16 @@ export function renameEntry(root, targetAbs, rawName, pages = []) {
     if (existsSync(next) && next.toLowerCase() !== target.toLowerCase())
         throw new Error(`同名文件已存在：${finalLeaf}`);
     const oldRel = relUnderRoot(root, target);
+    const libOld = inLibrary(root, target) ? libraryRel(root, target) : null;
     fs.renameSync(target, next);
-    // 资料库里的 md 是文献不是页面，不参与双链
-    if (inLibrary(root, target) || oldRel === null)
+    // 资料库：清单里旧名换新；库里的 md 是文献不是页面，不参与双链
+    if (libOld !== null) {
+        const libNew = libraryRel(root, next);
+        if (libNew !== null)
+            rewriteLibraryRefs(root, libOld, libNew);
+        return { path: next, links: 0 };
+    }
+    if (oldRel === null)
         return { path: next, links: 0 };
     return { path: next, links: rewriteRefs(pages, stripMd(oldRel), { kind: 'name', name: stripMd(finalLeaf) }, next) };
 }
@@ -388,7 +618,14 @@ export async function moveEntry(root, targetAbs, destAbs, conflict, pages = []) 
     }
     const next = path.join(dest, settled.name);
     const oldRel = relUnderRoot(root, target);
+    const libOld = inLibrary(root, target) ? libraryRel(root, target) : null;
     fs.renameSync(target, next);
+    // 库内文献 / 目录移动：挂载清单里的旧 rel（或旧前缀）整段换新
+    if (libOld !== null) {
+        const libNew = libraryRel(root, next);
+        if (libNew !== null)
+            rewriteLibraryRefs(root, libOld, libNew);
+    }
     const newRel = relUnderRoot(root, next);
     const skipLinks = stat.isDirectory() || oldRel === null || newRel === null || inLibrary(root, next);
     const links = skipLinks ? 0 : rewriteRefs(pages, stripMd(oldRel), { kind: 'move', rel: stripMd(newRel) }, next);

@@ -12,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { kitPath } from "../core/data-path.js";
+import { REFS_FILE, readFolderRefs } from "./fs.js";
 const MD_EXTS = new Set(['.md', '.markdown']);
 /** 不进索引与树的目录名（attachments 约定放二进制，由外部工具维护；点前缀一律隐藏） */
 const SKIP_DIRS = new Set(['attachments', '.git', '.trash', 'node_modules']);
@@ -88,6 +89,7 @@ export class VaultScanner {
             return null;
         const folders = new Set();
         const pages = [];
+        const knowledgeSets = [];
         let truncated = false;
         // 资料库用持有对象收（闭包里赋值，标量会被 TS 的控制流分析窄化成 never）
         const lib = {
@@ -133,6 +135,11 @@ export class VaultScanner {
             }
             catch {
                 return;
+            }
+            // 知识集标记（目录体内的隐藏文件）：存在即这个目录是知识集，清单一起读出来。
+            // 只认子目录，库根本身不参与（树头没有可挂的「行」）
+            if (dir !== root && dirents.some((d) => d.isFile() && d.name === REFS_FILE)) {
+                knowledgeSets.push({ dir: path.relative(root, dir).split(path.sep).join('/'), refs: readFolderRefs(dir) });
             }
             for (const dirent of dirents) {
                 if (pages.length >= SCAN_FILE_LIMIT) {
@@ -207,6 +214,7 @@ export class VaultScanner {
             folders: [...folders].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true })),
             pages,
             library: lib.root === null ? null : { root: lib.root, items: lib.items, truncated: lib.truncated },
+            knowledgeSets: knowledgeSets.sort((a, b) => a.dir.toLowerCase().localeCompare(b.dir.toLowerCase())),
             truncated,
         };
     }

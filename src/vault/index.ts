@@ -20,6 +20,7 @@
 //   GET  /dsh-kit/vault/search      —— 全文搜索
 //   GET  /dsh-kit/vault/file?path=  —— 库内 PDF 原始字节（自带阅读器取数）
 //   POST /dsh-kit/vault/create|rename|move|import|delete —— 目录级文件管理
+//   POST /dsh-kit/vault/refs    —— 知识集标记与挂载清单（op=set|unmark）
 //   POST /dsh-kit/vault/write  —— 正文写回（mtime CAS，不符回 modified）
 //   POST /dsh-kit/vault/attach —— 编辑面粘贴的图片进 attachments/（内容寻址）
 //   GET  /dsh-kit/schedule/data     —— 事件 + 区间展开 + 独立计时段 + 进行中的计时
@@ -46,6 +47,8 @@ import {
   importEntry,
   deleteEntries,
   parseConflict,
+  setFolderRefs,
+  unmarkFolder,
   writePage,
   storeAttachment,
   resolveInside,
@@ -494,6 +497,17 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       vaultPost('/dsh-kit/vault/delete', async (body, root) => {
         const paths = Array.isArray(body.paths) ? body.paths : []
         return deleteEntries(root, paths)
+      })
+      // 知识集：目录体内的 .refs.json 是标记 + 挂载清单（见 fs.ts）。set 全量写回
+      // 清单、unmark 删标记；嵌套 / 空目录 / 库根都在 fs.ts 里拦，前端只发动作。
+      vaultPost('/dsh-kit/vault/refs', (body, root) => {
+        const dir = String(body.dir ?? '')
+        if (body.op === 'unmark') {
+          unmarkFolder(root, dir)
+          return { unmarked: true }
+        }
+        setFolderRefs(root, dir, body.refs)
+        return { ok: true }
       })
 
       // ── 编辑面写端点（./fs.ts）──

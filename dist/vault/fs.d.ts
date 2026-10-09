@@ -25,6 +25,35 @@ export declare function libraryRoot(root: string): string | null;
 export declare function inLibrary(root: string, target: string): boolean;
 /** 路径是不是资料库根本身（改名/移动/删除都要挡住它） */
 export declare function isLibraryRoot(root: string, target: string): boolean;
+/** 知识集标记文件名 */
+export declare const REFS_FILE = ".refs.json";
+export interface KnowledgeSetRefs {
+    /** 目录相对 vault 根的 `/` 分隔路径 */
+    dir: string;
+    /** 挂载的库内 rel 列表 */
+    refs: string[];
+}
+/** 挂载项清洗：统一正斜杠、解 `.`/`..`、去空段、去重保序。**不校验存在**——
+ *  库里那一份被删 / 改名后清单可以悬挂（前端显示「不在库里」），这里只保证不越界。 */
+export declare function cleanRefs(raw: unknown): string[];
+/** 读一个知识集的挂载清单（没标记 / 清单坏了都当空——坏清单不该挡住整个功能） */
+export declare function readFolderRefs(dirAbs: string): string[];
+/** 一个目录是不是知识集（标记文件存在即算） */
+export declare function isKnowledgeSet(dirAbs: string): boolean;
+/** 写一个知识集的挂载清单（**全量写回**——挂载 / 移除都由调用方拼好整张清单）。
+ *  嵌套冲突时报错；refs 为空也照写（「标记了但还没挂资料」是合法状态），取消标记走
+ *  unmarkFolder。**标记**动作要求目录非空（已标记的只更新清单，内容删光也还是知识集）。
+ *  tmp + rename 原子落盘。 */
+export declare function setFolderRefs(root: string, dirAbs: string, refs: unknown): void;
+/** 取消知识集：删标记文件（清单随之消失，资料实物不动） */
+export declare function unmarkFolder(root: string, dirAbs: string): void;
+/** 全部知识集：从根往下找标记文件（点前缀与约定目录跳过）；坏清单按空清单收 */
+export declare function listKnowledgeSets(root: string): KnowledgeSetRefs[];
+/** target 在库内的 rel（相对 library/）；不在库里返 null */
+export declare function libraryRel(root: string, target: string): string | null;
+/** 库内 rel 改名 / 移动后改写全部挂载清单：旧 rel（或旧目录前缀）整段换新名。
+ *  改写失败静默——清单留旧名只是显示成「不在库里」，不该让改名这个主动作报错。 */
+export declare function rewriteLibraryRefs(root: string, oldRel: string, newRel: string): void;
 export interface WikiRef {
     rel: string;
     space: string;

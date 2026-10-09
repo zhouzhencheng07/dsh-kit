@@ -6,17 +6,24 @@ import os from 'node:os'
 import path from 'node:path'
 import { VaultScanner } from '../dist/vault/scanner.js'
 import {
+  cleanRefs,
   createEntry,
   dedupeName,
   deleteEntries,
   importEntry,
+  isKnowledgeSet,
+  listKnowledgeSets,
   moveEntry,
+  readFolderRefs,
   renameEntry,
   resolveInside,
+  rewriteLibraryRefs,
   rewriteWikiLinks,
   safeLeaf,
   safeRel,
+  setFolderRefs,
   storeAttachment,
+  unmarkFolder,
   writePage,
 } from '../dist/vault/fs.js'
 
@@ -303,6 +310,55 @@ await test('storeAttachment：内容寻址落 attachments/，同内容复用不�
   const odd = storeAttachment(root, Buffer.from('gif89a'), 'clip.gif')
   assert.equal(odd.rel.endsWith('.gif'), true)
   assert.throws(() => storeAttachment(root, Buffer.alloc(0), 'x.png'), /空的/)
+})
+
+await test('知识集：cleanRefs 归一 + 标记写 .refs.json + 索引上报', async () => {
+  assert.deepEqual(cleanRefs([' 书.pdf ', '书.pdf', '../外.pdf', 'a\\b.pdf', '', 3]), ['书.pdf', '外.pdf', 'a/b.pdf'])
+  write('课/笔记.md', '# 课')
+  write('library/书.pdf', '%PDF')
+  const ke = path.join(root, '课')
+  setFolderRefs(root, ke, ['书.pdf', ' 书.pdf ', '../外.pdf'])
+  assert.equal(isKnowledgeSet(ke), true)
+  assert.deepEqual(readFolderRefs(ke), ['书.pdf', '外.pdf'])
+  assert.equal(exists('课/.refs.json'), true)
+  const index = await new VaultScanner(() => root).scan()
+  const set = (index.knowledgeSets ?? []).find((s) => s.dir === '课')
+  assert.deepEqual(set?.refs, ['书.pdf', '外.pdf'])
+  assert.equal(listKnowledgeSets(root).some((s) => s.dir === '课'), true)
+})
+
+await test('知识集：空目录 / 嵌套 / 库根都拒；unmark 删标记（资料实物不动）', () => {
+  write('课2/子/页.md', '# 页')
+  const ke2 = path.join(root, '课2')
+  const zi = path.join(root, '课2', '子')
+  setFolderRefs(root, zi, [])
+  // 子树里已有标记：从祖先设也拒（嵌套没有语义）
+  assert.throws(() => setFolderRefs(root, ke2, []), /知识集不能嵌套/)
+  unmarkFolder(root, zi)
+  assert.equal(exists('课2/子/.refs.json'), false)
+  assert.equal(exists('课2/子/页.md'), true)
+  const empty = path.join(root, '空课')
+  fs.mkdirSync(empty)
+  assert.throws(() => setFolderRefs(root, empty, []), /空目录/)
+  assert.throws(() => setFolderRefs(root, root, []), /知识库根/)
+  unmarkFolder(root, path.join(root, '课'))
+  assert.equal(exists('课/.refs.json'), false)
+})
+
+await test('知识集：库内文献 / 目录改名与移动改写挂载清单', async () => {
+  write('library/手册/上.pdf', '%PDF')
+  const ke = path.join(root, '课')
+  setFolderRefs(root, ke, ['书.pdf', '手册/上.pdf', '别的.pdf'])
+  renameEntry(root, path.join(root, 'library', '书.pdf'), '新书')
+  assert.deepEqual(readFolderRefs(ke), ['新书.pdf', '手册/上.pdf', '别的.pdf'])
+  renameEntry(root, path.join(root, 'library', '手册'), '手册2')
+  assert.deepEqual(readFolderRefs(ke), ['新书.pdf', '手册2/上.pdf', '别的.pdf'])
+  await moveEntry(root, path.join(root, 'library', '手册2', '上.pdf'), path.join(root, 'library'), 'skip')
+  assert.deepEqual(readFolderRefs(ke), ['新书.pdf', '上.pdf', '别的.pdf'])
+  // 库外改名不碰清单
+  write('wiki/页.md', '# 页')
+  rewriteLibraryRefs(root, '不存在的.pdf', 'x.pdf')
+  assert.deepEqual(readFolderRefs(ke), ['新书.pdf', '上.pdf', '别的.pdf'])
 })
 
 fs.rmSync(root, { recursive: true, force: true })
