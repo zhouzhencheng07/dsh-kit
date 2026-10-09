@@ -2,12 +2,11 @@
 // 无构建步骤：改完本文件刷新浏览器即生效（本地目录 junction 直装）。
 //
 // 结构：
-//   入口：conversation.input.left（composer 工具行，文件树/源代码管理/终端三个
-//     小图标钮，工作区级工具跟 session 走）——文件树/源代码管理两枚由
-//     dsh-kit/files 组件半边自注册，终端入口与坞归 dsh-kit/terminal，本包
-//     只给它们共享面。知识库 · 日程不占 composer 钮：入口是左栏底部那一枚
-//     （sidebar.footer.action，与快捷键同一个动作：开/关侧栏那一格），日程的家
-//     是右栏 dock 签。
+//   入口：左栏底部的形态切换条（sidebar.footer.action）——会话列表 / 文件树 /
+//     源代码管理 / 知识库·日程四枚一行，管的是侧栏那一格显示哪个形态（四形态
+//     天然互斥）。整条归 root 渲染（SideFormBar），组件那几枚由各自的组件半边
+//     物化期登记进 kitBase.sideForms。composer 工具行只剩终端一枚
+//     （conversation.input.left，dsh-kit/terminal 自注册）；日程的家是右栏 dock 签。
 //   右栏（唯一工作台形态）：sidebarRightTabs 注册四类 dock 签，
 //     pane 正文经 slots.inject（sidebar.right.pane.tab）按 id 提供，pane 内自管
 //     pane 正文。dock 签本身没有按钮：diff/知识库/日程都是被动签（SCM/树/对话
@@ -932,6 +931,15 @@ window.__ModuleLoader__.load({
     const tabKinds = { file: { id: "dsh-kit-file", kind: "dshk-file" } };
     exports.tabKinds = tabKinds;
     exports.sidebarView = { renderer: null }; // 侧栏浏览区 tree/git 分支渲染器（root 单槽分发）
+    // 侧栏形态切换条（左栏底部那一行）：形态 = 侧栏浏览区显示什么（官方会话列表 /
+    // 文件树 / 源代码管理 / 知识库·日程）。整条归 root 渲染，各组件物化期登记自己
+    // 那一枚；数组只 push 不换引用（同 tabKinds 的理由，后写的顶层键 root 读不到）
+    exports.sideForms = [];
+    /** 登记一枚形态钮（{ id, order, Component }）：同 id 幂等，apply 重入不叠加 */
+    exports.registerSideForm = (entry) => {
+      if (!entry || entry.id === undefined) return;
+      if (!exports.sideForms.some((e) => e.id === entry.id)) exports.sideForms.push(entry);
+    };
     exports.inlineEdit = { active: false }; // 树行内改名激活中（root 全局快捷键让路）
     exports.diffPane = { Component: null }; // diff 正文组件（root 右栏「差异」签正文用）
     // 知识库那两处与 root 的接线：座对象由 dsh-kit/vault 组件物化期填字段（root 只读）
@@ -1067,16 +1075,71 @@ window.__ModuleLoader__.load({
         });
     }
 
-    // ── 侧栏索引视图单槽与入口按钮（文件树/源代码管理/知识库，三个入口按钮
-    // + 快捷键共用）──
-    // 侧栏只有一格（会话 ↔ 文件树 ↔ 源代码管理 ↔ 知识库目录），三个按钮的
-    // 选中态直接取各自的开合位（选中态与侧栏显示相关、与右栏签
-    // 无关）——所以三者必须互斥：否则同一个侧栏位上会有两个按钮一起亮，
-    // 而视图按优先级只显示其中一个。
-    // 语义：关 → 开；开 → 只把侧栏索引收回会话列表（功能签
-    // 不跟着关——签的归宿是官方签 ✕ 与配置清场，入口按钮只管侧栏那格）。知识库钮
-    // 只切左侧目录，点具体页才开右栏签；收起态顺带展开
-    // 侧栏（视图渲染进铁轨等于不可见）。
+    // ── 侧栏形态切换条（sidebar.footer.action）与那四枚钮 ──
+    // 侧栏那一格只有四种形态：官方会话列表 / 文件树 / 源代码管理 / 知识库·日程。
+    // 四枚钮排成一行（铁轨态竖排），最左是交回官方会话列表的那枚，其余三枚由各
+    // 组件物化期登记进 dock.sideForms（行关 = 不登记 = 不出那枚）。选中态直接取
+    // 各自的开合位（与右栏签无关），所以四种形态天然互斥——否则同一格上会有两枚
+    // 一起亮，而视图按优先级只显示其一。
+    // 语义：点别的形态 = 换成那个形态（收起态顺带展开侧栏——视图渲染进铁轨等于
+    // 不可见）；点会话列表 = 把那一格交回官方列表（功能签不跟着关，签的归宿是
+    // 官方签 ✕ 与配置清场）。
+    /** 会话列表图标：清单三行（与文件夹/分支/书堆同一套 1.2 描边体系） */
+    function SessionListIcon() {
+      return jsxRuntime.jsxs(
+        "svg",
+        {
+          width: 15,
+          height: 15,
+          viewBox: "0 0 16 16",
+          "aria-hidden": true,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.2,
+          strokeLinecap: "round",
+          children: [
+            jsxRuntime.jsx("circle", { cx: 2.6, cy: 4.2, r: 0.9 }),
+            jsxRuntime.jsx("circle", { cx: 2.6, cy: 8, r: 0.9 }),
+            jsxRuntime.jsx("circle", { cx: 2.6, cy: 11.8, r: 0.9 }),
+            jsxRuntime.jsx("path", { d: "M5.6 4.2h8M5.6 8h8M5.6 11.8h8" }),
+          ],
+        },
+      );
+    }
+    /** 会话列表（最左那枚）：三枚 kit 形态全关 = 侧栏那一格交回官方列表。
+     *  收起态顺带展开（否则点了看不见东西），选中态 = 当前没占任何形态 */
+    function SideFormSessions() {
+      const ui = useKitUi();
+      return jsxRuntime.jsx(KitTip, {
+        label: t("sideFormSessions"),
+        side: "top",
+        children: jsxRuntime.jsx("button", {
+          type: "button",
+          className: "dshk-sfbtn",
+          "aria-pressed": !(ui.treeOpen || ui.gitOpen || ui.vaultSideOpen),
+          onClick: () => {
+            expandSidebarNow();
+            setKitUi(sidebarViewPatch(null));
+          },
+          children: jsxRuntime.jsx(SessionListIcon, {}),
+        }),
+      });
+    }
+    /** 整条：各组件登记的形态钮按 order 排开（同 id 只出一枚）。只剩「会话列表」
+     *  一枚时整条不画（没有可切的形态）；右栏不在场（没选会话 / 全局面板在前台）
+     *  时也不画——那时侧栏本就该是官方会话列表，点了也没有面可开 */
+    function SideFormBar({ wide }) {
+      const seatUp = useRightbarSeat();
+      if (!seatUp) return null;
+      const entries = dock.sideForms.slice().sort((a, b) => a.order - b.order);
+      if (entries.length < 2) return null;
+      return jsxRuntime.jsx("div", {
+        className: `dshk-sideforms${wide === false ? " is-rail" : ""}`,
+        role: "group",
+        "aria-label": t("sideFormsLabel"),
+        children: entries.map((e) => jsxRuntime.jsx(e.Component, {}, e.id)),
+      });
+    }
 
 
 
@@ -1266,6 +1329,8 @@ window.__ModuleLoader__.load({
       contentFail: "读取失败",
       officialOpenFail: "打开失败",
       scNoSeat: "当前不在对话中",
+      sideFormsLabel: "侧栏视图",
+      sideFormSessions: "会话列表",
 
       fileTabLabel: "差异",
       // 官方「快捷键」页里的命令名与「为什么按不动」的说明（键位本身归官方页管）
@@ -1309,6 +1374,8 @@ window.__ModuleLoader__.load({
       contentFail: "Failed to read",
       officialOpenFail: "Open failed",
       scNoSeat: "Not in a conversation",
+      sideFormsLabel: "Sidebar view",
+      sideFormSessions: "Session list",
 
       fileTabLabel: "Diff",
       moved: "Moved",
@@ -1385,14 +1452,15 @@ window.__ModuleLoader__.load({
 .dshk-sidetab:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-sidetab.is-active{color:var(--dsw-alias-brand-primary);border-bottom-color:var(--dsw-alias-brand-primary)}
 .dshk-sidebody{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
-/* 左栏底部那枚入口钮（sidebar.footer.action）：整格（知识库 · 日程）的开合。手机上没有
-   键盘，这一枚才是可达入口——那一格里的两枚 tab 只有那格已经开着才看得见。
-   宿主给 wide：展开态一行图标 + 名，铁轨态只剩一枚 28px 方钮（与宿主 iconButton 同尺寸） */
-.dshk-sidebtn{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;appearance:none;border:0;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:14px;line-height:1;padding:5px 8px;border-radius:var(--dsw-radius-sm);cursor:pointer;text-align:left}
-.dshk-sidebtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshk-sidebtn[aria-pressed=true]{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-brand-primary)}
-.dshk-sidebtn>span{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dshk-sidebtn.is-rail{width:28px;height:28px;justify-content:center;gap:0;padding:0}
+/* 侧栏形态切换条（sidebar.footer.action）：左栏那一格的四个形态——会话列表 /
+   文件树 / 源代码管理 / 知识库·日程（左→右）——图标钮均分一行；铁轨态竖排成
+   28px 方钮（与宿主 iconButton 同尺寸）。名字走悬停气泡，选中态 = 品牌色填充 */
+.dshk-sideforms{display:flex;align-items:center;gap:2px;width:100%;box-sizing:border-box;padding:2px 0}
+.dshk-sideforms.is-rail{flex-direction:column;width:auto}
+.dshk-sfbtn{flex:1 1 0;min-width:0;height:28px;display:flex;align-items:center;justify-content:center;appearance:none;border:0;background:none;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm);cursor:pointer;padding:0}
+.dshk-sfbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-sfbtn[aria-pressed=true],.dshk-sfbtn[aria-pressed=true]:hover{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-brand-primary)}
+.dshk-sideforms.is-rail .dshk-sfbtn{flex:none;width:28px;height:28px}
 /* 知识库（vault）：工具条+目录树投侧栏索引宿主，页编辑器投右栏 pane 宿主（拆两半 portal）。 */
    「选库进入阅读」——空间=顶层目录，树懒加载，[[wikilink]] 页内跳转带历史 */
 .dshk-vault{height:100%;display:flex;flex-direction:column;min-height:0;color:var(--dsw-alias-label-primary);font-size:13px}
@@ -2025,10 +2093,12 @@ ellipsis，窄列只截字不破版 */
 
 
     // ─────────── 入口按钮（conversation.input.left）───────────
-    // 终端入口与坞本体在 dsh-kit/terminal 组件（注册在它自己的 shell.overlay）。
+    // 输入行只剩终端一枚（dsh-kit/terminal 组件自注册）；文件树/源代码管理与
+    // 知识库·日程都已改挂左栏底部的形态切换条（见上面的 SideFormBar）。
     // 选中态标记：aria-pressed 属性选择器命中 .dshk-enbtn[aria-pressed="true"]
-    // 规则（底色 + 品牌色图标）。选中态底色必须用真实存在的 tool-bar-fill 令牌——
-    // 不存在的变量（如 --dsw-alias-fill-l2）会解析成透明，选中态等于没有。
+    // 规则（底色 + 品牌色图标）；形态条那几枚是同款观感的 .dshk-sfbtn 规则。
+    // 选中态底色必须用真实存在的 tool-bar-fill 令牌——不存在的变量（如
+    // --dsw-alias-fill-l2）会解析成透明，选中态等于没有。
 
     // ── 侧边栏兜底与快捷键 ──
     // 文件树/源代码管理视图承载在 sidebar.workspaces 里，侧边栏收起时只剩图标栏，
@@ -3431,6 +3501,12 @@ ellipsis，窄列只截字不破版 */
           { name: "shell.overlay", id: "dsh-kit-surfaces", order: 900 },
           KitSurfaces,
         ),
+      );
+      // 侧栏底部形态切换条：整条归 root 渲染（各组件往 dock.sideForms 登记自己那
+      // 一枚）。「会话列表」是根形态、不归任何组件行，在这里登记
+      dock.registerSideForm({ id: "dsh-kit-sessions", order: 10, Component: SideFormSessions });
+      ctx.slots.inject("sidebar.footer.action", () =>
+        ctx.slots.register({ name: "sidebar.footer.action", id: "dsh-kit-sideforms", order: 10 }, SideFormBar),
       );
       // 官方右侧边栏：功能 dock 签 + 引导页清单。只在宿主
       // 提供该服务时生效（缺服务 = 只剩 getKitUi() 存在性补丁，签不出现）。用 inject
@@ -9551,30 +9627,27 @@ ellipsis，窄列只截字不破版 */
       }), "dsh-kit-vault: shortcut dsh-kit.vault.toggle");
     }
 
-    // ─────────── 左栏底部入口钮（sidebar.footer.action）───────────
+    // ─────────── 侧栏形态切换条上的那一枚 ───────────
     /** 知识库 · 日程的常驻入口：开 = 左栏那一格占住并落在知识库 tab（与快捷键同语义
      *  的 toggleVaultEntry），再点 = 回官方会话列表。手机上没键盘，这一枚才是可达的
      *  入口——那一格里的「知识库/日程」两枚 tab 只有那格已经开着才看得见。
      *  名叫「知识库·日程」而不是「知识库」：它开的是整格，格名与两枚 tab 一致。
-     *  seat 不在场（没选会话 / 全局面板在前台）时不画：那时右栏压根不画、索引视图
-     *  也一并让位给官方会话列表，画出来点了也没有面可开。 */
-    function VaultFooterEntry({ wide }) {
+     *  seat 不在场（没选会话 / 全局面板在前台）时不画——整条形态切换条也由 root
+     *  一并收掉（那时侧栏本就该是官方会话列表，画出来点了也没有面可开）。 */
+    function VaultFooterEntry() {
       const ui = useKitUi();
       const seatUp = useRightbarSeat();
       if (!seatUp) return null;
-      const rail = wide === false;
       return jsxRuntime.jsx(KitTip, {
         label: t("vaultEntryTitle"),
         command: "dsh-kit.vault.toggle",
         side: "top",
         children: jsxRuntime.jsx("button", {
           type: "button",
-          className: rail ? "dshk-sidebtn is-rail" : "dshk-sidebtn",
+          className: "dshk-sfbtn",
           "aria-pressed": ui.vaultSideOpen === true,
           onClick: () => setKitUi(toggleVaultEntry(getKitUi())),
-          children: rail
-            ? jsxRuntime.jsx(VaultIcon, {})
-            : [jsxRuntime.jsx(VaultIcon, {}, "icon"), jsxRuntime.jsx("span", { children: t("vaultEntryTitle") }, "label")],
+          children: jsxRuntime.jsx(VaultIcon, {}),
         }),
       });
     }
@@ -9615,11 +9688,9 @@ ellipsis，窄列只截字不破版 */
       // vault root 预取：文件树/对话点击的判定同步读缓存，等点击时再取来不及
       //（索引端点宿主侧有 mtime 缓存，零成本）
       void ensureVaultRootHint();
-      // 左栏底部入口钮（sidebar.footer.action）：与快捷键同一个动作（整格开合）。
-      // 手机上没有键盘，这是那一格唯一的入口——输入行那枚钮已退场，格内的 tab 条
-      // 只有格已经开着才看得见
-      ctx.slots.inject("sidebar.footer.action", () =>
-        ctx.slots.register({ name: "sidebar.footer.action", id: "dsh-kit-vault", order: 20 }, VaultFooterEntry));
+      // 侧栏底部形态切换条上的知识库·日程那枚（整条由 root 渲染，这里只登记）：
+      // 与快捷键同一个动作（整格开合）；格内的 tab 条只有格已经开着才看得见
+      kit.registerSideForm({ id: "dsh-kit-vault", order: 40, Component: VaultFooterEntry });
       // 常驻壳（order 910：根壳 900 之后）
       ctx.slots.inject("shell.overlay", () =>
         ctx.slots.register({ name: "shell.overlay", id: "dsh-kit-vault", order: 910 }, VaultShell));
@@ -10173,7 +10244,8 @@ ellipsis，窄列只截字不破版 */
 // 收纳：侧栏文件树（目录树/新建/改名/删除/@ 到对话）+ 源代码管理（状态/差异/
 // 提交/分支/推送/提交图谱）+ SCM diff 签正文（DiffPane，挂 kitBase 的 diffPane
 // 座供 root 的 FilePaneBody 取用）。数据走本组件宿主半边的端点（路径沿用
-// /dsh-kit/*）。入口按钮经 slots.inject 自注册，开关 = 本组件自己的 Config
+// /dsh-kit/*）。形态钮经 kitBase.registerSideForm 登记进左栏底部切换条，开关 =
+// 本组件自己的 Config
 // （fileTreeEnabled/sourceControlEnabled，经 /dsh-kit-files/config 拉取）；
 // 侧栏浏览区的 tree/git 分支经 kitBase.sidebarView 座交给 root 单槽分发，
 // 全局快捷键经宿主 shortcuts 服务注册（键位与冲突归官方快捷键页），组合键读组件自己的配置。
@@ -12654,9 +12726,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       });
     }
 
-    /** 文件树入口：非文件树态 → 打开文件树（顺带展开收起的侧栏）；已是 → 关闭回
-     *  会话列表。走单槽互斥补丁（打开文件树同时让出源代码管理/知识库目录/日程
-     *  待办那一格），关闭动作保留已打开的文件标签（标签有独立 ✕） */
+    /** 文件树那枚形态钮（侧栏底部切换条）：开 = 侧栏那一格换成文件树（收起态顺带
+     *  展开侧栏），再点 = 交回官方会话列表。走单槽互斥补丁（顺带让出源代码管理/
+     *  知识库目录/日程待办那一格），关闭动作保留已打开的文件标签（标签有独立 ✕） */
     function FileTreeEntry() {
       const ui = useKitUi();
       const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
@@ -12667,7 +12739,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         side: "top",
         children: jsxRuntime.jsx("button", {
           type: "button",
-          className: "dshk-btn dshk-enbtn",
+          className: "dshk-sfbtn",
           "aria-pressed": ui.treeOpen,
           onClick: () => {
             if (!ui.treeOpen) expandSidebarNow();
@@ -12678,7 +12750,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       });
     }
 
-    /** 源代码管理入口：同文件树语义（互斥占格，关闭保留已打开的文件标签） */
+    /** 源代码管理那枚形态钮：同文件树语义（互斥占格，关闭保留已打开的文件标签） */
     function ScmEntry() {
       const ui = useKitUi();
       const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
@@ -12689,7 +12761,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         side: "top",
         children: jsxRuntime.jsx("button", {
           type: "button",
-          className: "dshk-btn dshk-enbtn",
+          className: "dshk-sfbtn",
           "aria-pressed": ui.gitOpen,
           onClick: () => {
             if (!ui.gitOpen) expandSidebarNow();
@@ -12706,15 +12778,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       ctx.slots.inject("plugins.row.config", () =>
         ctx.slots.register({ name: "plugins.row.config", key: "dsh-kit#files" }, FilesConfigPage),
       );
-      // 输入框入口（官方 conversation 挂载期声明槽位，inject 等声明落地再注册——
-      // 直接 register 会炸整树 boot）。开关门控在组件内读本组件配置（关 = 渲染
+      // 侧栏底部形态切换条：文件树 / 源代码管理两枚（整条由 root 渲染，这里只登记
+      // 入口；行关 = 不登记 = 不出那枚）。开关门控在组件内读本组件配置（关 = 渲染
       // null，volatile 热提交即时生效）
-      ctx.slots.inject("conversation.input.left", () =>
-        ctx.slots.register({ name: "conversation.input.left", id: "dsh-kit-filetree", order: 10 }, FileTreeEntry),
-      );
-      ctx.slots.inject("conversation.input.left", () =>
-        ctx.slots.register({ name: "conversation.input.left", id: "dsh-kit-scm", order: 11 }, ScmEntry),
-      );
+      kit.registerSideForm({ id: "dsh-kit-filetree", order: 20, Component: FileTreeEntry });
+      kit.registerSideForm({ id: "dsh-kit-scm", order: 30, Component: ScmEntry });
       // 侧栏浏览区 tree/git 分支渲染器：root 的 sidebar.workspaces 单槽分发到这
       // （owner 携带官方注入的 wide，收起态各占用者自判不渲染）
       dock.sidebarView.renderer = ({ ui, cwd, owner }) => {
@@ -16013,9 +16081,10 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     // ─────────── 入口按钮（conversation.input.left）───────────
     // 只负责开合与按压态；坞本体在本组件注册的 shell.overlay 里渲染
     // （fixed 定位不受 composer 祖先 stacking context 影响）。
-    /** 终端图标：描边同族（15px / viewBox 16 / 1.2 描边 / currentColor）——与文件树、
-     *  源代码管理、知识库三枚入口钮同一套画法。官方引导条目的实心深色卡（#17191d 底
-     *  + 白提示符）在输入行里比其余三枚重一大截，看着像另一套按钮 */
+    /** 终端图标：描边同族（15px / viewBox 16 / 1.2 描边 / currentColor）——与左栏
+     *  形态切换条那几枚（会话列表 / 文件树 / 源代码管理 / 知识库·日程）同一套画法。
+     *  官方引导条目的实心深色卡（#17191d 底 + 白提示符）在输入行里比其余钮重一大截，
+     *  看着像另一套按钮 */
     function TerminalIcon() {
       return jsxRuntime.jsxs(
         "svg",
@@ -16885,9 +16954,9 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       '.dshk-chat-run{flex:none;width:6px;height:6px;border-radius:50%;background:#37c26b;box-shadow:0 0 0 3px rgba(55,194,107,.18)}',
       '.dshk-chat-body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}',
       '.dshk-chat-body>*{flex:1;min-height:0}',
-      // 小窗里不显示 kit 的输入行入口钮（文件树 / 源代码管理 / 终端）：
-      // 它们开的是右栏与侧栏，在浮窗里点开只会把浮窗底下换成别的面板。只藏按钮不够
-      // ——官方 Tooltip 壳会留一个空占位，:has 一并收掉。
+      // 小窗里不显示输入行那枚终端入口钮：终端坞是主界面的面板，在浮窗里点开只会
+      // 把浮窗底下换成别的面板。只藏按钮不够——官方 Tooltip 壳会留一个空占位，
+      // :has 一并收掉。
       '.dshk-chat-panel .dshk-enbtn{display:none}',
       '.dshk-chat-panel :has(> .dshk-enbtn){display:none}',
       '.dshk-chat-note{padding:16px;color:var(--dsw-alias-label-tertiary,#777);font-size:12px;text-align:center}',

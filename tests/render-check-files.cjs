@@ -1,7 +1,7 @@
 // dsh-kit-files 浏览器半边渲染级检查：加载真实 dock bundle（root client）+ files
 // bundle，直测文件树/源代码管理面板群（TreeNode/FileTreePanel/TreeRowMenu/DiffPane/
 // GitChangesPanel/GitGraphPanel/CommitGraphSvg/GitBranchMenu/FileTreeEntry/ScmEntry）
-// 与 apply 激活契约（入口自注册/配置页/侧栏分支渲染器座）。
+// 与 apply 激活契约（形态条登记/配置页/侧栏分支渲染器座）。
 // 用法（dsh-kit 根）：node tests\render-check-files.cjs
 const fs = require("node:fs");
 
@@ -352,15 +352,23 @@ check("DiffPane 渲染无异常", !!out && typeof out === "object");
   check("parsePatchHunks 无 hunk 返回 null", comps.parsePatchHunks("diff --git a/f b/f\nindex 1..2\n") === null && comps.parsePatchHunks("") === null);
 }
 
-// —— 直测：入口按钮（门控默认开 = 配置快照未就绪按内置默认）——
+// —— 直测：形态切换条上的两枚（门控默认开 = 配置快照未就绪按内置默认）——
 callLog = [];
 out = comps.FileTreeEntry({});
 check("FileTreeEntry 渲染无异常", !!out && typeof out === "object");
-check("FileTreeEntry 悬停走官方气泡（KitTip 包住锚点，命令 id 对上快捷键注册）", out.type === dockExports.KitTip && out.props.command === "dsh-kit-files.tree.toggle" && typeof out.props.label === "string");
+check(
+  "FileTreeEntry 是形态条那枚图标钮（.dshk-sfbtn；名字与键帽走官方气泡，命令 id 对上快捷键注册）",
+  out.type === dockExports.KitTip && out.props.command === "dsh-kit-files.tree.toggle" && typeof out.props.label === "string" &&
+    out.props.children.props.className === "dshk-sfbtn",
+);
 callLog = [];
 out = comps.ScmEntry({});
 check("ScmEntry 渲染无异常", !!out && typeof out === "object");
-check("ScmEntry 悬停走官方气泡（同一条 KitTip 链路）", out.type === dockExports.KitTip && out.props.command === "dsh-kit-files.scm.toggle" && typeof out.props.label === "string");
+check(
+  "ScmEntry 同一条链路（同款图标钮 + 气泡）",
+  out.type === dockExports.KitTip && out.props.command === "dsh-kit-files.scm.toggle" && typeof out.props.label === "string" &&
+    out.props.children.props.className === "dshk-sfbtn",
+);
 {
   // 侧栏单槽互斥：源代码管理开着时点入口，知识库·日程那一格让出（kitBase 补丁语义）
   const sidebarResetPatch = { treeOpen: false, gitOpen: false, vaultSideOpen: false, vaultSideTab: "vault", files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null };
@@ -369,7 +377,7 @@ check("ScmEntry 悬停走官方气泡（同一条 KitTip 链路）", out.type ==
   dockExports.setKitUi({ vaultSideOpen: true, vaultSideTab: "vault", vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", gitOpen: false, treeOpen: false });
   callLog = [];
   comps.ScmEntry({ useSessions: () => ({ id: "s1", cwd: "C:/x" }) });
-  const scmBtnEl = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-enbtn"));
+  const scmBtnEl = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-sfbtn"));
   scmBtnEl[2].onClick();
   check("ScmEntry 点击后侧栏单槽互斥（知识库·日程那一格让出，两个钮不会同时亮）", dockExports.getKitUi().gitOpen === true && dockExports.getKitUi().vaultSideOpen === false && dockExports.getKitUi().vaultOpen === true);
   dockExports.setKitUi(sidebarResetPatch);
@@ -560,10 +568,19 @@ async function checkApply() {
   try { await comps.apply(ctxStub); } catch (e) { applyErr = e; }
   global.document = prevDoc;
   check("files apply 激活不抛错", applyErr === null);
-  check("files apply 三个槽位与配置页都经 slots.inject 等声明", seatInjects.filter((k) => k === "conversation.input.left").length === 2 && seatInjects.filter((k) => k === "plugins.row.config").length === 1);
-  const seat = (id) => registered.find((s) => s.id === id);
-  check("files 槽位座席：文件树入口 order 10", seat("dsh-kit-filetree") && seat("dsh-kit-filetree").order === 10);
-  check("files 槽位座席：源代码管理入口 order 11", seat("dsh-kit-scm") && seat("dsh-kit-scm").order === 11);
+  check(
+    "composer 不再挂文件树/源代码管理入口（已改左栏形态条），配置页仍走 slots.inject 等声明",
+    seatInjects.filter((k) => k === "conversation.input.left").length === 0 && seatInjects.filter((k) => k === "plugins.row.config").length === 1,
+  );
+  const form = (id) => dockExports.sideForms.find((e) => e && e.id === id);
+  check(
+    "形态条座席：文件树 order 20（组件指到本组件的入口）",
+    !!form("dsh-kit-filetree") && form("dsh-kit-filetree").order === 20 && form("dsh-kit-filetree").Component === comps.FileTreeEntry,
+  );
+  check(
+    "形态条座席：源代码管理 order 30",
+    !!form("dsh-kit-scm") && form("dsh-kit-scm").order === 30 && form("dsh-kit-scm").Component === comps.ScmEntry,
+  );
   const cfgKeys = registered.filter((s) => s.name === "plugins.row.config").map((s) => s.key);
   check("files 配置页挂本组件行（单包单口径 key）", cfgKeys.includes("dsh-kit#files") && cfgKeys.length === 1);
   // 官方「工作区文件」入口掩码随本组件配置走（字段从根包 Config 迁来）：apply 期按

@@ -15,7 +15,9 @@ viewed through the **official file preview** (kit adds a "Download" button to it
 header); there is no in-plugin editing of workspace files — edit in VS Code or let
 the agent do it.
 Index views (file tree, source control, vault directory) share a single left-sidebar
-slot; the conversation column stays put. Every capability is a **component row** you can
+slot — a four-way **form switch** at its bottom-left (sessions / file tree / source
+control / knowledge base · schedule) picks which one that slot shows; the conversation
+column stays put. Every capability is a **component row** you can
 switch off independently on the Plugins page — turning a row off removes its endpoints,
 agent tools and UI entries together; with all rows off, dsh is stock again. The pack shows
 **ten component rows plus a carrier row at the very bottom of the list** — the carrier serves
@@ -28,20 +30,20 @@ from the page). It stays in the list: **do not turn it off**.
   bound to the session it was opened in (width follows the chat column); hidden
   docks keep running; powered by the **official webTerminals service** (host-owned
   PTY: system-user permissions, survives page refreshes, shell selection)
-- **File tree** (composer-row toggle / default **Ctrl+Alt+,**): browse the session workspace;
+- **File tree** (bottom-left form toggle / default **Ctrl+Alt+,**): browse the session workspace;
   create/rename/delete (to Recycle Bin)/copy path / @-mention to chat; clicking a file
   opens it in the **official right-sidebar preview**, while md pages inside the vault
   go to the knowledge-base editor
-- **Source control** (composer-row toggle / default **Ctrl+Alt+.**): an in-page git
+- **Source control** (bottom-left form toggle / default **Ctrl+Alt+.**): an in-page git
   workbench — stage/unstage/discard/commit, click a file to see its diff in a
   right-dock diff tab (changed regions only, with line numbers and a side-by-side
   toggle; open the whole file in the sidebar from its header), branch switch/create/delete,
   ↑↓ sync (pull then push), commit graph (browse-only; hover a row for author/time/subject);
   one-click repo init for non-git directories
 - **Knowledge base · Schedule** (one component row; the row switch is the master switch —
-  turning it off removes the directory index, both dock tabs, the sidebar-footer entry and the
+  turning it off removes the directory index, both dock tabs, the form toggle and the
   shortcut command together)
-  - **Knowledge base** (sidebar-footer entry / default **Ctrl+Alt+/**): ready out
+  - **Knowledge base** (bottom-left form toggle / default **Ctrl+Alt+/**): ready out
   of the box (data-directory `dsh-kit\vault`, configurable absolute path on this row's
   config page) — a one-row search
   plus a tree on the left, each page reads in its own right-dock **Knowledge base** tab
@@ -80,7 +82,7 @@ from the page). It stays in the list: **do not turn it off**.
   pauses and a conflict bar asks you to choose overwrite-disk or load-disk (the plugin never
   overwrites silently and never touches git); external changes while the page is clean are
   still re-read silently; the plugin creates no skeleton directories and never touches git
-  - **Schedule** (one shared entry — the sidebar-footer Knowledge base entry and **Ctrl+Alt+/** open the
+  - **Schedule** (one shared entry — the bottom-left Knowledge base form toggle and **Ctrl+Alt+/** open the
   left sidebar cell, whose top tab strip switches between the two): the task
    list (3-day / week / all scopes) fills that cell and
   the weekly grid fills the right dock tab; its header stats follow the week you are looking at
@@ -201,8 +203,9 @@ dsh plugin --profile web update dsh-kit
 ```
 
 The package declares `dsh.bundle.patch`, so it is activated as a profile bundle
-layer. After installing/updating, restart `dsh web`: three toggles — Files / Source
-Control / Terminal — appear on the composer tool row, the workbench
+layer. After installing/updating, restart `dsh web`: the composer tool row keeps a single
+Terminal toggle and a four-way form switch (sessions / file tree / source control /
+knowledge base · schedule) appears at the bottom-left of the left sidebar; the workbench
 is carried by the official right sidebar (dock tabs for diffs / vault / schedule /
 browser), and the agent's `web_search` uses the free multi-source chain.
 

@@ -186,9 +186,9 @@ async function checkApply() {
       on.registered.some((s) => s && s.name === "shell.overlay" && s.id === "dsh-kit-vault"),
   );
   check(
-    "左栏底部入口钮挂 sidebar.footer.action（手机没键盘时的唯一入口；不带 composer 钮回归）",
-    on.slotInjects.includes("sidebar.footer.action") &&
-      on.registered.some((s) => s && s.name === "sidebar.footer.action" && s.id === "dsh-kit-vault"),
+    "入口钮登记进左栏形态切换条（dsh-kit-vault / order 40；整条归 root 渲染，本组件不再自己占槽）",
+    dockExports.sideForms.some((e) => e && e.id === "dsh-kit-vault" && e.order === 40 && e.Component === comps.VaultFooterEntry) &&
+      !on.slotInjects.includes("sidebar.footer.action"),
   );
   check("对话文件点击路由挂 document capture 监听", on.clickListeners.some((c) => c[0] === "click" && c[1] === true));
   const vaultCmd = on.shortcutCmds.find((c) => c.id === "dsh-kit.vault.toggle");
@@ -209,8 +209,8 @@ async function checkApply() {
   );
 }
 
-// 3.5) 左栏底部入口钮（VaultFooterEntry）：seat 在场才画；点了 = 那一格占住并落在
-//      知识库 tab（与快捷键同语义），再点回官方会话列表；铁轨态只出图标
+// 3.5) 形态切换条上的那一枚（VaultFooterEntry）：seat 在场才画；点了 = 那一格占住并
+//      落在知识库 tab（与快捷键同语义），再点回官方会话列表；名字/键帽走悬停气泡
 {
   const walk = (node, pred, out = []) => {
     if (!node || typeof node !== "object") return out;
@@ -219,32 +219,28 @@ async function checkApply() {
     for (const ch of Array.isArray(kids) ? kids : kids === undefined || kids === null ? [] : [kids]) walk(ch, pred, out);
     return out;
   };
-  const btnOf = (el) => walk(el, (n) => n.type === "button" && typeof (n.props && n.props.className) === "string" && n.props.className.startsWith("dshk-sidebtn"))[0] ?? null;
-  const renderEntry = (wide) => { stateSeq = 0; stateStore.clear(); callLog = []; return comps.VaultFooterEntry({ wide }); };
+  const btnOf = (el) => walk(el, (n) => n.type === "button" && typeof (n.props && n.props.className) === "string" && n.props.className === "dshk-sfbtn")[0] ?? null;
+  const renderEntry = () => { stateSeq = 0; stateStore.clear(); callLog = []; return comps.VaultFooterEntry({}); };
   dockExports.setKitUi({ treeOpen: false, gitOpen: false, vaultSideOpen: false, vaultSideTab: "vault" });
   dockExports.rightbarSeat.set(false);
-  check("seat 不在场（没选会话 / 全局面板在前台）时不画入口钮", renderEntry(true) === null);
+  check("seat 不在场（没选会话 / 全局面板在前台）时不画那一枚", renderEntry() === null);
   dockExports.rightbarSeat.set(true);
-  const wideBtn = btnOf(renderEntry(true));
-  const wideLabel = wideBtn ? walk(wideBtn, (n) => n.type === "span")[0] : null;
+  const raw = renderEntry();
   check(
-    "展开态入口钮：图标 + 名，未占用时 aria-pressed=false",
-    !!wideBtn && wideBtn.props.className === "dshk-sidebtn" && wideBtn.props["aria-pressed"] === false &&
-      !!wideLabel && ["知识库·日程", "Knowledge base · Schedule"].includes(wideLabel.props.children),
+    "那一枚是图标钮：名字与键帽走官方气泡（四枚一行，不出文字）",
+    raw.type === dockExports.KitTip && typeof raw.props.label === "string" && raw.props.command === "dsh-kit.vault.toggle" &&
+      walk(raw, (n) => n.type === "span").length === 0,
   );
-  if (wideBtn) wideBtn.props.onClick();
+  const vBtn = btnOf(raw);
+  check("未占用时 aria-pressed=false", !!vBtn && vBtn.props["aria-pressed"] === false);
+  if (vBtn) vBtn.props.onClick();
   check(
-    "点入口钮 = 左栏那一格占住并落在知识库 tab（与快捷键同一动作，文件树/SCM 让格）",
+    "点它 = 左栏那一格占住并落在知识库 tab（与快捷键同一动作，文件树/SCM 让格）",
     dockExports.getKitUi().vaultSideOpen === true && dockExports.getKitUi().vaultSideTab === "vault" &&
       dockExports.getKitUi().treeOpen === false && dockExports.getKitUi().gitOpen === false,
   );
-  if (wideBtn) wideBtn.props.onClick();
+  if (vBtn) vBtn.props.onClick();
   check("再点一次 = 回官方会话列表（整格开合只有这一处入口）", dockExports.getKitUi().vaultSideOpen === false);
-  const railBtn = btnOf(renderEntry(false));
-  check(
-    "铁轨态只出图标（28px 方钮，与宿主 iconButton 同尺寸）",
-    !!railBtn && railBtn.props.className === "dshk-sidebtn is-rail" && walk(railBtn, (n) => n.type === "span").length === 0,
-  );
 }
 
 // 4) 源哨兵：宿主半边搬进组件目录、主包与 client 摘干净、端点与配置齐备

@@ -113,7 +113,7 @@ const RETURN = "return module.exports;";
 const rootReturn = body.lastIndexOf(RETURN);
 if (rootReturn < 0) { console.log("FATAL: no root return"); process.exit(2); }
 const wrapper = body.slice(0, rootReturn) +
-  "return Object.assign({ KitSurfaces, TreeRowMenu, closeFeatureTab, sidebarViewPatch, kitGetJson, kitPostJson, kitJson, getKitUi, setKitUi, FilePaneBody, openFileAndDock, closeRightbarTab, openOfficialFile, openTreeFile }, kitBase, exports.vault, exports.phone);" +
+  "return Object.assign({ KitSurfaces, SideFormBar, SideFormSessions, TreeRowMenu, closeFeatureTab, sidebarViewPatch, kitGetJson, kitPostJson, kitJson, getKitUi, setKitUi, FilePaneBody, openFileAndDock, closeRightbarTab, openOfficialFile, openTreeFile }, kitBase, exports.vault, exports.phone);" +
   body.slice(rootReturn + RETURN.length);
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -167,6 +167,68 @@ let failed = 0;
 const check = (label, ok) => { console.log((ok ? "PASS  " : "FAIL  ") + label); if (!ok) failed++; };
 let out;
 let copiedRel = null;
+
+// 4a) 左栏底部形态切换条（SideFormBar）：四枚形态钮按 order 排开、「会话列表」在最左、
+//     只剩一枚不画、右栏不在场不画、铁轨态竖排；「会话列表」那枚点一下 = 把侧栏那一格
+//     交回官方列表（三枚 kit 形态全关）
+{
+  const sfWalk = (node, pred, acc = []) => {
+    if (!node || typeof node !== "object") return acc;
+    if (pred(node)) acc.push(node);
+    const kids = node.props ? node.props.children : undefined;
+    for (const ch of Array.isArray(kids) ? kids : kids === undefined || kids === null ? [] : [kids]) sfWalk(ch, pred, acc);
+    return acc;
+  };
+  const mk = (id, order) => ({ id, order, Component: () => jsxRuntimeStub.jsx("button", {}) });
+  const a = mk("a", 10);
+  const b = mk("b", 20);
+  const c = mk("c", 40);
+  const saved = comps.sideForms.slice();
+  comps.rightbarSeat.set(false);
+  comps.sideForms.push(a, b, c);
+  check("右栏不在场（没选会话 / 全局面板在前台）时整条不画", comps.SideFormBar({ wide: true }) === null);
+  comps.rightbarSeat.set(true);
+  // 只剩「会话列表」一枚时没有可切的形态，整条也不画
+  comps.sideForms.length = 0;
+  comps.sideForms.push(a);
+  check("只剩「会话列表」一枚时不画整条", comps.SideFormBar({ wide: true }) === null);
+  comps.sideForms.length = 0;
+  comps.sideForms.push(c, a, b); // 登记顺序故意乱：出条顺序看 order
+  const bar = comps.SideFormBar({ wide: true });
+  const kids = bar ? bar.props.children : [];
+  check(
+    "四枚按 order 排开（10 会话列表 → 20 文件树 → 30 源代码管理 → 40 知识库·日程）",
+    !!bar && kids.length === 3 && kids[0].type === a.Component && kids[1].type === b.Component && kids[2].type === c.Component,
+  );
+  check("整条是带名字的按钮组（role=group + aria-label）", !!bar && bar.props.role === "group" && typeof bar.props["aria-label"] === "string" && bar.props.className === "dshk-sideforms");
+  const railBar = comps.SideFormBar({ wide: false });
+  check("铁轨态竖排（is-rail）", !!railBar && railBar.props.className === "dshk-sideforms is-rail");
+  comps.sideForms.length = 0;
+  comps.sideForms.push(...saved);
+  // 「会话列表」那枚（根形态）：选中态 = 当前没占任何 kit 形态；点了交回官方列表
+  const sesBtnOf = (el) => sfWalk(el, (n) => n.type === "button")[0] ?? null;
+  comps.setKitUi({ treeOpen: false, gitOpen: false, vaultSideOpen: false });
+  let sesBtn = sesBtnOf(comps.SideFormSessions({}));
+  check(
+    "会话列表那枚：没占任何形态时按下去（图标钮 + 官方气泡）",
+    !!sesBtn && sesBtn.props.className === "dshk-sfbtn" && sesBtn.props["aria-pressed"] === true,
+  );
+  comps.setKitUi({ treeOpen: true, gitOpen: false, vaultSideOpen: false });
+  sesBtn = sesBtnOf(comps.SideFormSessions({}));
+  check("文件树占着时它不亮", !!sesBtn && sesBtn.props["aria-pressed"] === false);
+  comps.setKitUi({ treeOpen: true, gitOpen: true, vaultSideOpen: true, vaultSideTab: "schedule" });
+  sesBtnOf(comps.SideFormSessions({})).props.onClick();
+  check(
+    "点它 = 交回官方会话列表（三个形态全关）",
+    comps.getKitUi().treeOpen === false && comps.getKitUi().gitOpen === false && comps.getKitUi().vaultSideOpen === false,
+  );
+  // 接线哨兵：整条挂 sidebar.footer.action，根形态那枚在 apply 期登记
+  check(
+    "root apply 把整条挂上 sidebar.footer.action、并登记「会话列表」那枚",
+    src.includes('ctx.slots.register({ name: "sidebar.footer.action", id: "dsh-kit-sideforms", order: 10 }, SideFormBar)') &&
+      src.includes('dock.registerSideForm({ id: "dsh-kit-sessions", order: 10, Component: SideFormSessions })'),
+  );
+}
 
 // 4c) TreeRowMenu：文件行菜单项含复制相对路径/重命名/删除；目录行另有新建两项
 //（TreeRowMenu 在底座被文件树与知识库两边共用，直测留在这里）
