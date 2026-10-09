@@ -1674,9 +1674,11 @@ body[data-ds-dark-theme] .dshk-codebox .hljs-deletion{color:#ffdcd7;background:r
 .dshk-vault-slashmore{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)}
 .dshk-vault-slashback{padding:4px 10px 6px;font-size:11px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-bottom:1px dashed var(--dsw-alias-border-l1);margin-bottom:2px}
 .dshk-vault-slashback:hover{color:var(--dsw-alias-label-primary)}
-/* 泡泡菜单（选区非空时浮在选区上方，放不下换下方）：行内格式条 + 色板 */
-.dshk-vault-bubble{position:fixed;z-index:1200;display:flex;flex-direction:column;gap:4px;padding:4px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18));transform:translateX(-50%)}
-.dshk-vault-bubblebar{display:flex;align-items:center;gap:2px}
+/* 泡泡菜单（选区非空时浮在选区上方，放不下换下方）：行内格式条 + 色板。
+   落位按**实测**尺寸算（见 RteEditor 的落位 effect 与 bubbleBox）；max-width 与 max-height
+   是安全上限（窄屏上带表格浮条的菜单比视口还宽，条得能折行），改这里要同步那边 */
+.dshk-vault-bubble{position:fixed;z-index:1200;box-sizing:border-box;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;display:flex;flex-direction:column;gap:4px;padding:4px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18))}
+.dshk-vault-bubblebar{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:2px;max-width:100%}
 .dshk-vault-bbtn{appearance:none;border:1px solid transparent;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;min-width:22px;height:22px;padding:0 4px;border-radius:5px;cursor:pointer}
 .dshk-vault-bbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-vault-bbtn.is-active{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-brand-primary)}
@@ -6106,6 +6108,29 @@ ellipsis，窄列只截字不破版 */
       };
     }
 
+    /** 泡泡菜单落位（纯函数，render-check 直测）：anchor = 选区框
+     *  {left, right, top, bottom}，box = 菜单实测尺寸 {w, h}，view = 可视视口带
+     *  {top, bottom, left, right}。默认浮在选区上方 8px，上方放不下换下方，两边都不够
+     *  （窗口矮）取空间大的那侧并收到可用高度内。横向按**实测宽**居中再钳进带内——原来
+     *  按固定 180px 半宽估，带表格浮条时实测 370px，窄屏上两侧都会探出去 */
+    function bubbleBox(anchor, box, view) {
+      const cx = (anchor.left + anchor.right) / 2;
+      const aboveTop = anchor.top - 8 - box.h;
+      const belowTop = anchor.bottom + 8;
+      const roomAbove = anchor.top - 8 - (view.top + 8);
+      const roomBelow = view.bottom - 8 - (anchor.bottom + 8);
+      const above = roomAbove >= box.h || roomAbove > roomBelow;
+      const out = {
+        left: Math.round(Math.max(view.left + 8, Math.min(cx - box.w / 2, view.right - 8 - box.w))),
+        top: Math.round(Math.max(view.top + 8, Math.min(above ? aboveTop : belowTop, view.bottom - 8 - box.h))),
+      };
+      // 一整条可视带都放不下（窗口比菜单还矮）才收高度、由菜单自己滚；放得下就不设上限，
+      // 免得之后展开色板 / 表格条时被上一次的高度裁掉
+      const bandH = view.bottom - view.top - 16;
+      if (box.h > bandH) out.maxHeight = Math.round(bandH);
+      return out;
+    }
+
     // ─────────── RTE 编辑面（知识库页专用，所见即所得）───────────
     // TipTap 富文本编辑器挂载 + 斜杠菜单 + 泡泡菜单 + 自动保存（2s 防抖 +
     // Ctrl+S + 卸载保底 + 冲突暂停）全部收拢在这里；落盘由 onSave(md, mode)
@@ -6136,10 +6161,13 @@ ellipsis，窄列只截字不破版 */
       // 里面只有数字，与是哪一层菜单无关——一级分组是单行、二级条目两行带描述
       const [menuBox, setMenuBox] = react.useState(null);
       const menuElRef = react.useRef(null);
-      // 泡泡菜单：{x, y, above} | null（选区非空时浮在选区上/下方）；bubPanel =
-      // 展开的色板（"tc" 文字颜色 | "hc" 高亮）
+      // 泡泡菜单：{left, right, top, bottom} | null（选区框；落位按菜单实测尺寸算，
+      // 见 bubbleBox）；bubPanel = 展开的色板（"tc" 文字颜色 | "hc" 高亮）
       const [bub, setBub] = react.useState(null);
       const [bubPanel, setBubPanel] = react.useState(null);
+      // 落位（尺寸实测后才定）：{left, top, maxHeight?} | null，就是一份 style
+      const [bubBox, setBubBox] = react.useState(null);
+      const bubElRef = react.useRef(null);
       // ref 镜像 state：capture 监听读 ref，直接读 state 会停在旧渲染的闭包里
       const menuRef = react.useRef(menu);
       menuRef.current = menu;
@@ -6230,11 +6258,12 @@ ellipsis，窄列只截字不破版 */
           setBub(null);
           return;
         }
-        const above = Math.min(c1.top, c2.top) >= 44;
+        // 只记**选区框**：菜单尺寸得等它渲染出来才知道，落位交给 layout effect
         setBub({
-          x: Math.max(180, Math.min((c1.left + c2.right) / 2, window.innerWidth - 180)),
-          y: above ? Math.min(c1.top, c2.top) - 8 : Math.max(c1.bottom, c2.bottom) + 8,
-          above,
+          left: Math.min(c1.left, c2.left),
+          right: Math.max(c1.right, c2.right),
+          top: Math.min(c1.top, c2.top),
+          bottom: Math.max(c1.bottom, c2.bottom),
         });
       };
       // 当前层可见行：sub 空且无 query = 根级分组；有 query = 跨组扁平搜叶项；
@@ -6279,6 +6308,26 @@ ellipsis，窄列只截字不破版 */
         });
         setMenuBox((prev) => (prev !== null && prev.top === box.top && prev.left === box.left && prev.maxHeight === box.maxHeight ? prev : box));
       }, [menu]);
+      // 泡泡菜单落位：同样先预放一帧量尺寸再定终位（横向按**实测宽**居中——固定半宽
+      // 的估价在窄屏带表格浮条时会让两侧都探出去）。展开色板、选区进表格都会改尺寸，
+      // 一起进依赖，免得沿用上一次的落位
+      react.useLayoutEffect(() => {
+        if (bub === null) {
+          setBubBox((prev) => (prev === null ? prev : null));
+          return;
+        }
+        const el = bubElRef.current;
+        if (el === null) return;
+        const rect = el.getBoundingClientRect();
+        const vv = window.visualViewport;
+        const box = bubbleBox(bub, { w: rect.width, h: rect.height }, {
+          top: vv ? vv.offsetTop : 0,
+          bottom: vv ? vv.offsetTop + vv.height : window.innerHeight,
+          left: vv ? vv.offsetLeft : 0,
+          right: vv ? vv.offsetLeft + vv.width : window.innerWidth,
+        });
+        setBubBox((prev) => (prev !== null && prev.left === box.left && prev.top === box.top && prev.maxHeight === box.maxHeight ? prev : box));
+      }, [bub, bubPanel, inTableState]);
       // 双链选择框：贴光标弹，**只列库里已有的页**（碎链没入口，要连先建页）——
       // [[ 不做触发字符，那是要打得出来的字面文本，建链只走菜单
       const pickRowsOf = (query) => {
@@ -6924,7 +6973,10 @@ ellipsis，窄列只截字不破版 */
               "div",
               {
                 className: "dshk-vault-bubble",
-                style: { left: bub.x, top: bub.above ? undefined : bub.y, bottom: bub.above ? window.innerHeight - bub.y : undefined },
+                // 终位由上面那条 layout effect 量尺寸后写进 bubBox（它就是一份 style
+                // 对象）；这一帧只是量尺寸前的预放，量完在绘制前就换掉
+                ref: bubElRef,
+                style: bubBox ?? { left: Math.max(8, bub.left), top: Math.max(8, bub.top - 40) },
                 onMouseDown: (e) => e.preventDefault(),
                 children: [
                   jsxRuntime.jsxs("div", { className: "dshk-vault-bubblebar", children: [
@@ -9774,6 +9826,7 @@ ellipsis，窄列只截字不破版 */
     exports.VaultIcon = VaultIcon;
     exports.SchedIcon = SchedIcon;
     exports.slashMenuBox = slashMenuBox;
+    exports.bubbleBox = bubbleBox;
     exports.vaultSearchHits = vaultSearchHits;
     exports.vaultSplitFrontmatter = vaultSplitFrontmatter;
     exports.resolveVaultLink = resolveVaultLink;

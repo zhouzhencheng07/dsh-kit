@@ -158,7 +158,7 @@ if (!baseOk) process.exitCode = 1;
 }
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["KitSurfaces", "TreeRowMenu", "RteEditor", "slashMenuBox", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksPanel", "SidebarVaultIndex", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["KitSurfaces", "TreeRowMenu", "RteEditor", "slashMenuBox", "bubbleBox", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksPanel", "SidebarVaultIndex", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -1355,6 +1355,28 @@ let vaultFetchPrev = null;
   }
   check("斜杠菜单落位取**实测**高度（估算行高必偏一边），量完在绘制前写回 style", src.includes("const box = slashMenuBox(menu, { w: rect.width, h: rect.height }") && src.includes("ref: menuElRef") && src.includes("style: menuBox ??") && /react\.useLayoutEffect\(\(\) => \{\s*if \(menu === null\)/.test(src));
   check("菜单盒按 border-box 量（否则内联 maxHeight 还得再减 padding/border，会探出视口）", /\.dshk-vault-slashmenu\{[^}]*box-sizing:border-box/.test(src));
+  // 泡泡菜单落位（纯函数直测）：横向按**实测宽**居中再钳进视口（原来按固定 180px 半宽
+  // 估，带表格浮条时菜单 370px，窄屏两侧都探出去），上方放不下换下方，窗口太矮才收高度
+  {
+    const view = { top: 0, bottom: 800, left: 0, right: 1280 };
+    const mid = { left: 600, right: 640, top: 300, bottom: 317 };
+    const up = comps.bubbleBox(mid, { w: 294, h: 32 }, view);
+    check("泡泡落位：上方放得下就浮在选区上方 8px、按实测宽居中", up.top === 300 - 8 - 32 && up.left === Math.round(620 - 147) && up.maxHeight === undefined);
+    const low = { left: 600, right: 640, top: 30, bottom: 47 };
+    check("泡泡落位：上方放不下换下方（贴选区下沿 8px）", comps.bubbleBox(low, { w: 294, h: 32 }, view).top === 55);
+    const rightEdge = { left: 1200, right: 1260, top: 300, bottom: 317 };
+    const wide = comps.bubbleBox(rightEdge, { w: 370, h: 58 }, view);
+    check("泡泡落位：右沿钳住（带表格浮条的 370px 菜单不再探出去）", wide.left === 1280 - 8 - 370 && wide.left + 370 === 1272);
+    check("泡泡落位：左沿钳住", comps.bubbleBox({ left: 10, right: 40, top: 300, bottom: 317 }, { w: 294, h: 32 }, view).left === 8);
+    check("泡泡落位：菜单比视口还宽时钉在左沿 8px（宽度由 CSS max-width 收）", comps.bubbleBox({ left: 150, right: 170, top: 300, bottom: 317 }, { w: 370, h: 82 }, { top: 0, bottom: 640, left: 0, right: 320 }).left === 8);
+    const shortView = { top: 0, bottom: 100, left: 0, right: 640 };
+    const tall = comps.bubbleBox({ left: 300, right: 340, top: 50, bottom: 60 }, { w: 294, h: 90 }, shortView);
+    check("泡泡落位：窗口比菜单还矮时收高度、贴顶且底边压在带内", tall.top === 8 && tall.maxHeight === 84 && tall.top + tall.maxHeight === 92);
+    const kb = comps.bubbleBox({ left: 20, right: 44, top: 500, bottom: 517 }, { w: 344, h: 82 }, { top: 200, bottom: 600, left: 0, right: 360 });
+    check("泡泡落位：按可视视口带算（窄屏 + 手机键盘不把菜单挤到带外）", kb.top === 500 - 8 - 82 && kb.left === 8 && kb.top >= 208);
+  }
+  check("泡泡菜单落位也按**实测**尺寸（预放一帧量完在绘制前写回），色板/表格条展开时重算", src.includes("const box = bubbleBox(bub, { w: rect.width, h: rect.height }") && src.includes("ref: bubElRef") && src.includes("style: bubBox ??") && src.includes("}, [bub, bubPanel, inTableState]);"));
+  check("泡泡菜单封顶视口宽、条可折行（比视口还宽时不是被切掉）", /\.dshk-vault-bubble\{[^}]*max-width:calc\(100vw - 16px\)/.test(src) && /\.dshk-vault-bubblebar\{[^}]*flex-wrap:wrap/.test(src));
   check("斜杠菜单只在键入 / 时开（keydown 武装）：挪光标到已有 /xxx、粘贴不开", src.includes("const armed = slashArmed;") && src.includes('if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {') && src.includes("if (armed && menuRef.current === null) {"));
   check("斜杠菜单锚定那颗 /：光标挪出查询段即关、代码块不开，落地按锚删除（无前置边界集，多斜杠不误删）", src.includes("anchor !== menuRef.current.anchor") && src.includes(", anchor });") && /const armed = slashArmed;\s*slashArmed = false;\s*if \(ed\.isActive\("codeBlock"\)\)/.test(src) && src.includes("ed.view.state.tr.delete(anchor, $from.pos)") && (src.split("const m = /\\/(\\S*)$/.exec(textBefore);").length - 1) === 1 && !src.includes("\\u3000-\\u303F"));
   check("阅读位置重试可取消且宿主卸载即停", src.includes("const cancelRestore = restoreReadPos(") && src.includes("cancelRestore();") && src.includes("if (!el.isConnected) return;"));
