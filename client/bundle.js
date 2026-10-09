@@ -1874,6 +1874,10 @@ ellipsis，窄列只截字不破版 */
 .dshk-md blockquote{margin:.6em 0;padding:2px 12px;border-left:3px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
 .dshk-md table{border-collapse:collapse;margin:.6em 0;font-size:12px}
 .dshk-md th,.dshk-md td{border:1px solid var(--dsw-alias-border-l2);padding:4px 10px;text-align:left}
+/* 表格多格选中（CellSelection：vendor 给覆盖到的格子挂 .selectedCell 类）：宿主那套类名
+   原本没有任何样式，多选等于看不见——看不出选了几格，也就看不出「删除行/列会连带删几行」。
+   底色直接用宿主自己的文档选区色（深浅两套主题各自定义），描边勾出每格范围 */
+.dshk-vault-rtehost .selectedCell{background:var(--dsw-alias-bg-document-selection);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--dsw-static-blue-600) 45%,transparent)}
 .dshk-md img{max-width:100%}
 .dshk-md hr{border:none;border-top:1px solid var(--dsw-alias-border-l2);margin:1em 0}
 .dshk-md a{color:var(--dsw-alias-brand-primary)}

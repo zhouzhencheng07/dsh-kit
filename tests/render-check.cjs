@@ -1293,6 +1293,9 @@ let vaultFetchPrev = null;
   check("双链不监听 [[ 输入（字面文本要打得出来），建链只走菜单", !/__dshkWikiTrigger|wiki-link-trigger/.test(src));
   check("图片入口走系统文件选择器，与粘贴同一条入库管线", src.includes("input.accept = \"image/*\"") && src.includes("void attachAndInsert(files)") && src.includes("void attachAndInsert(files);"));
   check("表格命令在选区浮条：行/列增删 + 左中右对齐 + 表头列 + 删表", src.includes('children: "行↑"') && src.includes('children: "−列"') && src.includes('setCellAttribute("align", "center")') && src.includes("toggleHeaderColumn()") && src.includes('children: "✕表"'));
+  // 多格选中（CellSelection）本身有语义（删除行列按整片删），但宿主那套 .selectedCell 类
+  // 没有任何样式 → 多选等于看不见；补底色（宿主文档选区色，深浅主题各自定义）+ 内描边
+  check("表格多格选中看得见（.selectedCell 补底色与描边，色走宿主文档选区色）", /\.dshk-vault-rtehost \.selectedCell\{[^}]*background:var\(--dsw-alias-bg-document-selection\)/.test(src) && /\.dshk-vault-rtehost \.selectedCell\{[^}]*box-shadow:inset 0 0 0 1px/.test(src));
   check("页条不再挂表格按钮（浮条出条规则：选区落在表内）", !src.includes("vaultTableAddRow") && !src.includes("vaultTableDel"));
   check("Tab 手感：列表升降级、其余吃掉（不把焦点带出编辑器），Ctrl+Enter 跳出引用", src.includes('sinkListItem("listItem")') && src.includes('liftListItem("taskItem")') && src.includes('insertContentAt($from.after(d), { type: "paragraph" })'));
 }
