@@ -158,7 +158,7 @@ if (!baseOk) process.exitCode = 1;
 }
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["KitSurfaces", "TreeRowMenu", "RteEditor", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksPanel", "SidebarVaultIndex", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["KitSurfaces", "TreeRowMenu", "RteEditor", "slashMenuBox", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksPanel", "SidebarVaultIndex", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -1331,6 +1331,30 @@ let vaultFetchPrev = null;
   check("行内改名只有资料文件按扩展名切选区（笔记页名含点不被截半）", src.includes("const renameInput = (entry, label, keepExt, submit = submitRename, cancel =") && src.includes("ev.currentTarget.setSelectionRange(0, keepExt && i > 0 ? i : v.length);") && src.includes("renameInput(e, e.name, false)"));
   check("批量导入失败报前三条 + 余量（不是只报首条）", src.includes("fails.slice(0, 3).join(\"；\")"));
   check("斜杠菜单查询变化即重置高亮（下标越界会插入没高亮那条）", src.includes("if (q !== menuRef.current?.query) {"));
+  // 斜杠菜单落位（纯函数直测）：菜单贴光标、放不下翻上方、上下都不够收到可用高度、
+  // 横竖都不越出可视视口。高度是**实测**的（行高估不准：一级分组单行、二级条目两行）
+  {
+    const view = { top: 0, bottom: 800, right: 1280 };
+    const below = comps.slashMenuBox({ x: 400, y: 404, at: 382 }, { w: 168, h: 159 }, view);
+    check("落位：下方放得下就贴光标下方（不翻、不裁）", below.top === 404 && below.maxHeight === 300 && below.left === 400);
+    const low = { x: 400, y: 752, at: 730 };
+    const up = comps.slashMenuBox(low, { w: 168, h: 159 }, view);
+    check("落位：光标贴底时整块翻到光标行上方，缝隙就是 6px（不是估行高差出的几十像素）", up.top === 730 - 6 - 159 && up.maxHeight === 300);
+    const upTall = comps.slashMenuBox(low, { w: 168, h: 233 }, view);
+    check("落位：二级菜单更高也贴上去，顶边不越出视口", upTall.top === 730 - 6 - 233 && upTall.top >= 8);
+    const shortView = { top: 0, bottom: 320, right: 1000 };
+    const capped = comps.slashMenuBox({ x: 400, y: 168, at: 146 }, { w: 168, h: 233 }, shortView);
+    check("落位：窗口矮（上下都放不下）收到可用高度、底边压线不出视口（内部滚动）", capped.maxHeight === 320 - 8 - 168 && capped.top + capped.maxHeight === 320 - 8);
+    const pinned = comps.slashMenuBox({ x: 100, y: 250, at: 228 }, { w: 168, h: 233 }, shortView);
+    check("落位：上方也不够时贴可视视口顶、底边压在光标行上（不让它探到框外）", pinned.top === 8 && pinned.top + pinned.maxHeight === 222);
+    check("落位：横向钳进视口右沿（右边距 8px）", comps.slashMenuBox({ x: 1270, y: 100, at: 78 }, { w: 168, h: 159 }, view).left === 1280 - 168 - 8);
+    check("落位：视口再高 maxHeight 也不超过 CSS 的 300px 上限", comps.slashMenuBox({ x: 10, y: 10, at: 0 }, { w: 168, h: 159 }, { top: 0, bottom: 4000, right: 4000 }).maxHeight === 300);
+    // 手机键盘：可视视口缩到 [200,600]，光标在 540（这时的可见带才是判据，innerHeight 是 800）
+    const kb = comps.slashMenuBox({ x: 400, y: 567, at: 545 }, { w: 168, h: 159 }, { top: 200, bottom: 600, right: 1280 });
+    check("落位：按可视视口带算（手机键盘弹起时菜单不被键盘盖住）", kb.top === 545 - 6 - 159 && kb.top >= 208 && kb.top + Math.min(159, kb.maxHeight) <= 600);
+  }
+  check("斜杠菜单落位取**实测**高度（估算行高必偏一边），量完在绘制前写回 style", src.includes("const box = slashMenuBox(menu, { w: rect.width, h: rect.height }") && src.includes("ref: menuElRef") && src.includes("style: menuBox ??") && /react\.useLayoutEffect\(\(\) => \{\s*if \(menu === null\)/.test(src));
+  check("菜单盒按 border-box 量（否则内联 maxHeight 还得再减 padding/border，会探出视口）", /\.dshk-vault-slashmenu\{[^}]*box-sizing:border-box/.test(src));
   check("斜杠菜单只在键入 / 时开（keydown 武装）：挪光标到已有 /xxx、粘贴不开", src.includes("const armed = slashArmed;") && src.includes('if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {') && src.includes("if (armed && menuRef.current === null) {"));
   check("斜杠菜单锚定那颗 /：光标挪出查询段即关、代码块不开，落地按锚删除（无前置边界集，多斜杠不误删）", src.includes("anchor !== menuRef.current.anchor") && src.includes(", anchor });") && /const armed = slashArmed;\s*slashArmed = false;\s*if \(ed\.isActive\("codeBlock"\)\)/.test(src) && src.includes("ed.view.state.tr.delete(anchor, $from.pos)") && (src.split("const m = /\\/(\\S*)$/.exec(textBefore);").length - 1) === 1 && !src.includes("\\u3000-\\u303F"));
   check("阅读位置重试可取消且宿主卸载即停", src.includes("const cancelRestore = restoreReadPos(") && src.includes("cancelRestore();") && src.includes("if (!el.isConnected) return;"));

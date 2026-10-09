@@ -1660,8 +1660,10 @@ body[data-ds-dark-theme] .dshk-codebox .hljs-deletion{color:#ffdcd7;background:r
 .dshk-vault-dirtydot{flex:none;font-size:10px;line-height:1;color:var(--dsw-alias-warning,#e8a13c)}
 /* CAS 冲突条：盘上被改而自动保存已暂停（不静默覆盖、不存档——由人裁决） */
 .dshk-vault-conflict{flex:none;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dsw-alias-warning,#e8a13c);padding:0 0 8px}
-/* 斜杠菜单（/ 唤出，两级）：定位在光标旁，放不下翻到光标上方，横向钳在视口内 */
-.dshk-vault-slashmenu{position:fixed;z-index:1200;width:168px;max-height:300px;overflow:auto;padding:4px 0;display:flex;flex-direction:column;gap:1px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18))}
+/* 斜杠菜单（/ 唤出，两级）：定位在光标旁，放不下翻到光标上方，横竖钳在可视视口内。
+   高度实测后才定（见 RteEditor 的落位 effect）；max-height 是上限，落位逻辑里的内联
+   cap 只允许更小——改这里要同步那边 */
+.dshk-vault-slashmenu{position:fixed;z-index:1200;box-sizing:border-box;width:168px;max-height:300px;overflow:auto;padding:4px 0;display:flex;flex-direction:column;gap:1px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18))}
 .dshk-vault-slashitem{display:flex;align-items:center;gap:7px;padding:4px 10px;margin:0 3px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer}
 .dshk-vault-slashitem:hover,.dshk-vault-slashitem.is-active{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-vault-slashnum{flex:none;width:16px;text-align:center;font-size:10px;font-weight:600;color:var(--dsw-alias-label-tertiary)}
@@ -6084,6 +6086,26 @@ ellipsis，窄列只截字不破版 */
       },
     ];
 
+    // 斜杠菜单高度上限：与 .dshk-vault-slashmenu 的 max-height 一致（落位算出的
+    // 内联 maxHeight 只允许更小，别把上限放大——改那边要同步这里）
+    const SLASH_MENU_MAX_H = 300;
+    /** 斜杠菜单落位（纯函数，render-check 直测）：menu = 开菜单时记下的光标坐标
+     *  {x, y, at}，box = 菜单元素实测尺寸 {w, h}，view = 可视视口带 {top, bottom, right}。
+     *  下方放得下就贴光标下方；放不下翻到光标行上方 6px；上下都放不下（窗口矮，或手机
+     *  键盘占了下半屏）取空间大的那侧，并收到可用高度内由菜单自己滚动。返回一份 style */
+    function slashMenuBox(menu, box, view) {
+      const aboveBottom = (menu.at ?? menu.y) - 6;
+      const belowSpace = view.bottom - 8 - menu.y;
+      const aboveSpace = aboveBottom - 8 - view.top;
+      const above = box.h > belowSpace && (box.h <= aboveSpace || aboveSpace > belowSpace);
+      const cap = Math.min(Math.max(above ? aboveSpace : belowSpace, 0), SLASH_MENU_MAX_H);
+      return {
+        top: Math.round(above ? Math.max(view.top + 8, aboveBottom - Math.min(box.h, cap)) : menu.y),
+        left: Math.round(Math.max(8, Math.min(menu.x, view.right - box.w - 8))),
+        maxHeight: Math.round(cap),
+      };
+    }
+
     // ─────────── RTE 编辑面（知识库页专用，所见即所得）───────────
     // TipTap 富文本编辑器挂载 + 斜杠菜单 + 泡泡菜单 + 自动保存（2s 防抖 +
     // Ctrl+S + 卸载保底 + 冲突暂停）全部收拢在这里；落盘由 onSave(md, mode)
@@ -6110,6 +6132,10 @@ ellipsis，窄列只截字不破版 */
       // 斜杠菜单：{query, sub, x, y, at, anchor} | null（键入 "/" 唤出并锚定那颗 /，键入过滤，Esc/挪出即关）
       const [menu, setMenu] = react.useState(null);
       const [menuIdx, setMenuIdx] = react.useState(0);
+      // 菜单落位（高度实测后才定）：{top, left, maxHeight} | null，就是一份 style。
+      // 里面只有数字，与是哪一层菜单无关——一级分组是单行、二级条目两行带描述
+      const [menuBox, setMenuBox] = react.useState(null);
+      const menuElRef = react.useRef(null);
       // 泡泡菜单：{x, y, above} | null（选区非空时浮在选区上/下方）；bubPanel =
       // 展开的色板（"tc" 文字颜色 | "hc" 高亮）
       const [bub, setBub] = react.useState(null);
@@ -6232,6 +6258,27 @@ ellipsis，窄列只截字不破版 */
         }
         return VAULT_MENU;
       };
+      // 斜杠菜单落位：菜单先按光标下方预放一帧，量出**真实高度**再定终位（行高估不
+      // 准——一级分组是单行、二级条目两行带描述，估算必偏一边，就是「离光标一截」
+      // 与「二级出视口」的成因）。落位规则见 slashMenuBox。手机键盘弹起缩的是**可视
+      // 视口**（innerHeight 不缩），按它算才不会被键盘盖住；桌面两者同值
+      react.useLayoutEffect(() => {
+        if (menu === null) {
+          setMenuBox((prev) => (prev === null ? prev : null));
+          return;
+        }
+        const el = menuElRef.current;
+        if (el === null) return;
+        const rect = el.getBoundingClientRect();
+        const vv = window.visualViewport;
+        // box 直接当 style 用：键名就是 CSS 属性名
+        const box = slashMenuBox(menu, { w: rect.width, h: rect.height }, {
+          top: vv ? vv.offsetTop : 0,
+          bottom: vv ? vv.offsetTop + vv.height : window.innerHeight,
+          right: vv ? vv.offsetLeft + vv.width : window.innerWidth,
+        });
+        setMenuBox((prev) => (prev !== null && prev.top === box.top && prev.left === box.left && prev.maxHeight === box.maxHeight ? prev : box));
+      }, [menu]);
       // 双链选择框：贴光标弹，**只列库里已有的页**（碎链没入口，要连先建页）——
       // [[ 不做触发字符，那是要打得出来的字面文本，建链只走菜单
       const pickRowsOf = (query) => {
@@ -6812,18 +6859,10 @@ ellipsis，窄列只截字不破版 */
               "div",
               {
                 className: "dshk-vault-slashmenu",
-                // 位置自适应：默认光标下方；下方放不下翻到光标上方
-                // （再不够就贴顶滚动），横向钳在视口内。行高按当前
-                // 样式估算（叶子 30px，含容器纵向 padding）
-                style: (() => {
-                  const rowCount = menuRows({ query: menu.query ?? "", sub: menu.sub ?? null }).length;
-                  const h = Math.min(rowCount * 30 + 8, 300);
-                  const top = menu.y + h > window.innerHeight - 8
-                    ? Math.max(8, (menu.at ?? menu.y) - h - 6)
-                    : menu.y;
-                  const left = Math.max(8, Math.min(menu.x, window.innerWidth - 176));
-                  return { left, top };
-                })(),
+                // 终位由上面那条 layout effect 量高后写进 menuBox（它就是一份 style
+                // 对象）；这一帧只是量高前的预放，量完在绘制前就换掉
+                ref: menuElRef,
+                style: menuBox ?? { left: Math.max(8, Math.min(menu.x, window.innerWidth - 176)), top: menu.y },
                 children: (() => {
                   const rows = menuRows();
                   const group = menu.sub ? VAULT_MENU.find((g) => g.key === menu.sub) : null;
@@ -9734,6 +9773,7 @@ ellipsis，窄列只截字不破版 */
     exports.registerShortcuts = registerShortcuts;
     exports.VaultIcon = VaultIcon;
     exports.SchedIcon = SchedIcon;
+    exports.slashMenuBox = slashMenuBox;
     exports.vaultSearchHits = vaultSearchHits;
     exports.vaultSplitFrontmatter = vaultSplitFrontmatter;
     exports.resolveVaultLink = resolveVaultLink;
