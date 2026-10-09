@@ -8814,13 +8814,19 @@ ellipsis，窄列只截字不破版 */
     const PDF_POS_KEY = "dshk.pdf.pos";
 
     let pdfLibTask = null;
-    /** pdf.js 懒加载：只有库里真开了 PDF 签才下这 1.7MB */
+    /** pdf.js 懒加载：只有库里真开了 PDF 签才下这 1.7MB。
+     *  Worker 走 Blob URL 而不是直接给文件地址：手机端旧引擎缺 Map upsert 这类新 API，
+     *  网关的兼容兜底只能覆盖页面与 Blob 起的 Worker（官方预览的 Worker 本来就住 Blob），
+     *  按 URL 起的 Worker 是另一个 realm、兜底进不去。桌面引擎自带这些 API，取源码只是
+     *  让同一份字节换个入口。 */
     function ensurePdfLib() {
       if (pdfLibTask === null) {
-        pdfLibTask = import(PDF_LIB_URL).then((mod) => {
-          mod.GlobalWorkerOptions.workerSrc = PDF_WORKER_URL;
+        pdfLibTask = (async () => {
+          const mod = await import(PDF_LIB_URL);
+          const source = await (await fetch(PDF_WORKER_URL)).text();
+          mod.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
           return mod;
-        });
+        })();
       }
       return pdfLibTask;
     }

@@ -19,6 +19,16 @@ export declare function pickEncoding(acceptEncoding: unknown): 'br' | 'gzip' | '
  *  两个 br 入口（流式 / 一次性）共用这一份，避免只改一处。 */
 export declare const BROTLI_QUALITY = 5;
 export declare function brotliOptions(): zlib.BrotliOptions;
+/**
+ * 注入代理 HTML 的 <head>（早于宿主前端任何脚本）。三件事：
+ * ① crypto.randomUUID 同形兜底：该 API 仅在安全上下文（HTTPS / localhost）存在，
+ *    局域网明文 HTTP 访问会全站抛 "crypto.randomUUID is not a function"——官方 RPC
+ *    全灭而 kit 端点幸存；用不要求安全上下文的 getRandomValues 实现。
+ * ② upsert 兜底（本体见上）。
+ * ③ 把 ② 前置进 pdf.js 的 Worker Blob：只认「够大的 JS Blob 且源码里带该 API 名」
+ *    的那一个，其余 Blob 与参数原样透传。
+ */
+export declare function phoneCompatScript(): string;
 export interface PhoneAssistOptions {
     /**
      * 是否远程视图：由调用方判定（**网关本身就是远程口**——走网关监听的那个端口（可配置，

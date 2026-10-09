@@ -218,6 +218,10 @@ try {
   // ── HTML 注入 randomUUID 兜底（insecure context）──
   const page = await request(gwPort, { path: '/page', headers: { cookie: cookieHeader } })
   check('HTML 页注入了兜底脚本', page.status === 200 && page.body.includes('randomUUID'))
+  check(
+    'HTML 页注入 upsert 兜底与 Worker Blob 前置（官方 PDF 预览在旧引擎上要用）',
+    page.body.includes('getOrInsertComputed') && page.body.includes('getOrInsert') && page.body.includes('__dshkBlobCompat'),
+  )
   check('注入位置在 <head> 开标签后', page.body.indexOf('randomUUID') > page.body.indexOf('<head>') && page.body.includes('<title>'))
   // 远程视图辅助脚本：自动关内测声明弹窗 + 锁住宿主专属入口（置灰 + 点击同一句提示，不隐藏）
   // 「在应用中打开」与设置页「打开配置文件」一律锁；宿主 picker 非 browse 时连挑选入口一起锁

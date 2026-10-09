@@ -99,17 +99,51 @@ function compressBuffer(enc: 'br' | 'gzip' | 'deflate', buf: Buffer): Promise<Bu
 }
 
 /**
- * insecure-context 兜底：前端用 crypto.randomUUID 生成 rpcId，该 API 仅在
- * 安全上下文（HTTPS / localhost）存在，局域网明文 HTTP 访问会全站抛
- * "crypto.randomUUID is not a function"，官方 RPC 全灭而 kit 端点幸存。
- * 用不要求安全上下文的 getRandomValues 实现同形兜底，注入进代理的 HTML。
+ * 旧引擎缺失 API 的兜底本体：同一份文本要进两个 realm —— 代理的 HTML（主页面），
+ * 以及从 Blob 起的模块 Worker。官方 PDF 预览的 pdf.js Worker 就是 Blob 模块，页面里
+ * 补的东西进不去它自己的 realm，所以下面把这份文本前置进那个 Blob。
+ *
+ * `Map.prototype.getOrInsertComputed` / `getOrInsert`（TC39 upsert）是这批前端依赖
+ * 用到的最新 API：pdf.js 现代构建在页面与 Worker 两侧都调它，新版 Chromium 有、
+ * 鸿蒙等旧引擎没有；缺了的表现是官方 PDF 预览报
+ * "this[#methodPromises].getOrInsertComputed is not a function"（无法显示 PDF）。
+ * 只补引擎没有的，原生存在时零副作用。
  */
-const POLYFILL_SCRIPT =
-  '<script>(function(){var c=window.crypto;if(!c||typeof c.randomUUID==="function")return;' +
-  'try{Object.defineProperty(c,"randomUUID",{configurable:true,value:function(){' +
-  'var b=c.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;' +
-  'var h=[];for(var i=0;i<16;i++){h.push((b[i]+256).toString(16).slice(1));}' +
-  'return h.join("").replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/,"$1-$2-$3-$4-$5");}})}catch(e){}})();</script>'
+const UPSERT_POLYFILL =
+  'var up=function(C){if(typeof C!=="function"||!C.prototype)return;' +
+  'if(typeof C.prototype.getOrInsertComputed!=="function")Object.defineProperty(C.prototype,"getOrInsertComputed",' +
+  '{configurable:true,writable:true,value:function(k,fn){if(this.has(k))return this.get(k);var v=fn(k);this.set(k,v);return v;}});' +
+  'if(typeof C.prototype.getOrInsert!=="function")Object.defineProperty(C.prototype,"getOrInsert",' +
+  '{configurable:true,writable:true,value:function(k,v){if(this.has(k))return this.get(k);this.set(k,v);return v;}});};' +
+  'up(Map);if(typeof WeakMap!=="undefined")up(WeakMap);'
+
+/**
+ * 注入代理 HTML 的 <head>（早于宿主前端任何脚本）。三件事：
+ * ① crypto.randomUUID 同形兜底：该 API 仅在安全上下文（HTTPS / localhost）存在，
+ *    局域网明文 HTTP 访问会全站抛 "crypto.randomUUID is not a function"——官方 RPC
+ *    全灭而 kit 端点幸存；用不要求安全上下文的 getRandomValues 实现。
+ * ② upsert 兜底（本体见上）。
+ * ③ 把 ② 前置进 pdf.js 的 Worker Blob：只认「够大的 JS Blob 且源码里带该 API 名」
+ *    的那一个，其余 Blob 与参数原样透传。
+ */
+export function phoneCompatScript(): string {
+  return '<script>(function(){' +
+    'var c=globalThis.crypto;' +
+    'if(c&&typeof c.randomUUID!=="function"){try{Object.defineProperty(c,"randomUUID",{configurable:true,value:function(){' +
+    'var b=c.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;' +
+    'var h=[];for(var i=0;i<16;i++){h.push((b[i]+256).toString(16).slice(1));}' +
+    'return h.join("").replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/,"$1-$2-$3-$4-$5");}})}catch(e){}}' +
+    UPSERT_POLYFILL +
+    'var U=' + JSON.stringify(UPSERT_POLYFILL) + ';' +
+    'var B=globalThis.Blob;' +
+    'if(typeof B==="function"&&globalThis.__dshkBlobCompat!==1){globalThis.__dshkBlobCompat=1;' +
+    'var W=function(parts,opts){' +
+    'if(parts&&parts.length>0&&typeof parts[0]==="string"&&parts[0].length>1e5&&parts[0].indexOf("getOrInsertComputed")!==-1&&(!opts||/javascript/i.test(String(opts.type)))){' +
+    'var q=Array.prototype.slice.call(parts);q[0]=U+q[0];parts=q;}' +
+    'return new B(parts,opts);};' +
+    'W.prototype=B.prototype;globalThis.Blob=W;}' +
+    '})();</script>'
+}
 
 /**
  * 「远端点了也只会落到电脑上」的宿主专属入口：这些入口的作用对象是运行 dsh 的那台机器，
@@ -588,7 +622,7 @@ export function startPhoneGateway({ port, upstreamPort, stateFile = defaultState
           const chunks: Buffer[] = []
           upRes.on('data', (c) => chunks.push(c))
           upRes.on('end', () => {
-            const injected = Buffer.from(injectHeadScript(Buffer.concat(chunks).toString('utf8'), POLYFILL_SCRIPT + phoneAssistScript({ remoteView, pickerLocked: pickerLocked() })), 'utf8')
+            const injected = Buffer.from(injectHeadScript(Buffer.concat(chunks).toString('utf8'), phoneCompatScript() + phoneAssistScript({ remoteView, pickerLocked: pickerLocked() })), 'utf8')
             delete out.etag
             if (enc !== null && !alreadyEncoded && injected.length >= COMPRESS_MIN_BYTES) {
               compressBuffer(enc, injected).then(
