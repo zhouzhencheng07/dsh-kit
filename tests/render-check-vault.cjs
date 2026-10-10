@@ -278,13 +278,22 @@ async function checkApply() {
       ["/dsh-kit/vendor/pdf.min.mjs", "/dsh-kit/vendor/pdf.worker.min.mjs", "/dsh-kit/vendor/richeditor.bundle.js", "/dsh-kit/vendor/mermaid.min.js", "/dsh-kit/vendor/katex.min.js", "/dsh-kit/vendor/katex.min.css"].every((u) => compSrc.includes("['" + u + "',")) &&
       compSrc.includes("'/dsh-kit/vendor/fonts'") && !/xterm[.]js|qrcode[.]js/.test(compSrc),
   );
-  // 代码盒正文可编辑的命门：node view 的 ignoreMutation 只许挡语言条/复制钮自己的改动，
-  // 全量忽略会让打字/退格只改 DOM 不进文档——空块判定读到旧文档，一次退格整块被清掉
+  // 代码盒正文可编辑的命门：node view 的 ignoreMutation 判据必须收在「控件区」——
+  // 写成「contentDOM 之外的都忽略」会把浏览器删空代码块时摘 <code> 的结构改动一起吞掉，
+  // 文档停在旧内容、此后打字只改 DOM 不进文档（重开回到旧内容）
   const vendorSrc = read("client/vendor/richeditor.bundle.js");
+  const barVar = (vendorSrc.match(/(\w+)\.className="dshk-codebar"/) || [])[1];
   check(
-    "代码盒 node view 放行正文编辑（ignoreMutation 只挡控件，不全量忽略）",
-    /ignoreMutation\(\w+\)\{return!\w+\.contains\(\w+\.target\)\},update\(\w+\)\{return \w+\.type\.name!=="codeBlock"/.test(vendorSrc) &&
+    "代码盒 node view 只挡控件（ignoreMutation 判据 = 语言条/复制钮，正文与结构改动全放行）",
+    !!barVar &&
+      new RegExp(`ignoreMutation\\(\\w+\\)\\{return ${barVar}\\.contains\\(\\w+\\.target\\)\\}`).test(vendorSrc) &&
       !/ignoreMutation:\(\)=>!0,update\(\w+\)\{return \w+\.type\.name!=="codeBlock"/.test(vendorSrc),
+  );
+  // code 是 contentDOM，多行文本必须块级：行内排版时 Chromium 删空代码块会摘掉空的 <code>，
+  // node view 与文档失步。这条 CSS 关掉的是触发点，上面的判据是失步后的兜底
+  check(
+    "代码盒正文块级排版（pre code{display:block}）",
+    /\.dshk-codebox pre code\{display:block\}/.test(bundleSrc),
   );
   // 语法高亮装饰只落 .hljs-* 类名：色板归面板层（浅色 + 宿主深色主题两套）
   check(

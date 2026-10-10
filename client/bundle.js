@@ -1601,6 +1601,9 @@ window.__ModuleLoader__.load({
 /* 代码盒：语言条 + 复制钮；pre 自身边距归零由盒子接管 */
 .dshk-codebox{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;overflow:hidden;margin:10px 0}
 .dshk-codebox pre{margin:0;border:0;border-radius:0}
+/* code 是 PM 的 contentDOM，多行文本必须块级：行内元素装多行时 Chrome 的光标
+   落点/方向键会产出元素级偏移，与 PM 选区差出一整行，打字退格全落在看不见的位置 */
+.dshk-codebox pre code{display:block}
 .dshk-codebar{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:rgba(135,131,120,.12);font-size:11px}
 .dshk-codecopy{appearance:none;border:0;background:none;color:var(--dsw-alias-label-secondary);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:5px}
 .dshk-codecopy:hover{background:rgba(135,131,120,.2);color:var(--dsw-alias-label-primary)}

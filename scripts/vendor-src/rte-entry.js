@@ -1200,16 +1200,20 @@ const VaultCodeBlock = CodeBlockLowlight.extend({
       pre.appendChild(code);
       box.appendChild(bar);
       box.appendChild(pre);
+      syncLangInput(); // 建块即显示语言：update 只在节点更新时跑，新建的块不会经过
       return {
         dom: box,
         contentDOM: code,
         stopEvent(event) {
           return bar.contains(event.target);
         },
-        // 语言条/复制钮自己的 DOM 改动不许被当成正文改动；正文（code）里的编辑必须放行——
-        // 全忽略会让打字/退格只改 DOM 不进文档，空块判定读到旧文档，一次退格整块被清掉
+        // 只忽略语言条/复制钮（控件）自己的 DOM 改动，别写成「contentDOM 之外的都忽略」：
+        // Chromium 把代码块删空时会摘掉空的 <code>（contentDOM 本体）并在 <pre> 下补 <br>，
+        // 这条 mutation 的 target 在 code 之外——忽略掉 PM 就永远收不到这次编辑，文档停在旧
+        // 内容、此后打字只改 DOM 不进文档。CSS 的 code{display:block} 关掉了这个触发点，
+        // 判据仍按 PM 的口径只挡控件，正文区的结构改动一律交还它重画。
         ignoreMutation(mutation) {
-          return !code.contains(mutation.target);
+          return bar.contains(mutation.target);
         },
         update(node) {
           if (node.type.name !== "codeBlock") return false;
