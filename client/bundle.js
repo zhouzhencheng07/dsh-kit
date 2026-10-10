@@ -6256,19 +6256,35 @@ ellipsis，窄列只截字不破版 */
           setBub(null);
           return;
         }
-        const c1 = ed.view.coordsAtPos(sel.from);
-        const c2 = ed.view.coordsAtPos(sel.to);
-        if (!c1 || !c2) {
-          setBub(null);
-          return;
-        }
-        // 只记**选区框**：菜单尺寸得等它渲染出来才知道，落位交给 layout effect
-        setBub({
-          left: Math.min(c1.left, c2.left),
-          right: Math.max(c1.right, c2.right),
-          top: Math.min(c1.top, c2.top),
-          bottom: Math.max(c1.bottom, c2.bottom),
-        });
+        // 选区框取 **DOM 选区的逐行 rects 并集**，不用 coordsAtPos 的两端点：
+        // 终点恰在行尾时它给下一行行首、起点恰在行首时给上一行行尾，min/max 合并
+        // 出来是假选区——菜单朝假选区居中，离真选区一大截或探出另一侧
+        const domSel = window.getSelection();
+        const rects = domSel !== null && domSel.rangeCount > 0
+          ? [...domSel.getRangeAt(0).getClientRects()].filter((r) => r.width > 0 || r.height > 0)
+          : [];
+        // 只记**选区框**：菜单尺寸得等它渲染出来才知道，落位交给 layout effect。
+        // 不映射成 DOM 选区的（表格多格 CellSelection 的 rangeCount 是 0）退回端点
+        // 坐标——单元格里不折行，行边界歧义踩不到
+        setBub((() => {
+          if (rects.length > 0) {
+            return {
+              left: Math.min(...rects.map((r) => r.left)),
+              right: Math.max(...rects.map((r) => r.right)),
+              top: Math.min(...rects.map((r) => r.top)),
+              bottom: Math.max(...rects.map((r) => r.bottom)),
+            };
+          }
+          const c1 = ed.view.coordsAtPos(sel.from);
+          const c2 = ed.view.coordsAtPos(sel.to);
+          if (!c1 || !c2) return null;
+          return {
+            left: Math.min(c1.left, c2.left),
+            right: Math.max(c1.right, c2.right),
+            top: Math.min(c1.top, c2.top),
+            bottom: Math.max(c1.bottom, c2.bottom),
+          };
+        })());
       };
       // 当前层可见行：sub 空且无 query = 根级分组；有 query = 跨组扁平搜叶项；
       // sub 指向分组 = 该组子级。可传 mnArg 按暂态计算（syncSlashMenu 预判零匹配）
@@ -6322,7 +6338,12 @@ ellipsis，窄列只截字不破版 */
         }
         const el = bubElRef.current;
         if (el === null) return;
+        // 量尺寸前把 left 复位：fixed 无宽度约束的元素可用宽 = 视口宽 - left，
+        // 菜单停在贴右缘的位置会被当场挤折行，量到的是折行假尺寸
+        const prevLeft = el.style.left;
+        el.style.left = "0px";
         const rect = el.getBoundingClientRect();
+        el.style.left = prevLeft;
         const vv = window.visualViewport;
         const box = bubbleBox(bub, { w: rect.width, h: rect.height }, {
           top: vv ? vv.offsetTop : 0,
@@ -6980,7 +7001,9 @@ ellipsis，窄列只截字不破版 */
                 // 终位由上面那条 layout effect 量尺寸后写进 bubBox（它就是一份 style
                 // 对象）；这一帧只是量尺寸前的预放，量完在绘制前就换掉
                 ref: bubElRef,
-                style: bubBox ?? { left: Math.max(8, bub.left), top: Math.max(8, bub.top - 40) },
+                // 预放位置钉在视口左上：跟选区走的话，选区贴右缘时预放帧就被
+                // 挤折行（可用宽 = 视口宽 - left），量出的尺寸是假的
+                style: bubBox ?? { left: 8, top: 8 },
                 onMouseDown: (e) => e.preventDefault(),
                 children: [
                   jsxRuntime.jsxs("div", { className: "dshk-vault-bubblebar", children: [
