@@ -308,6 +308,14 @@ async function checkApply() {
     "树行图标 flex:none（窄面板不压小图标，收缩全走名字省略号）",
     /\.dshk-vault-treerow>svg\{flex:none\}/.test(bundleSrc),
   );
+  // 斜杠命令落地后的还焦点必须同步（PM 原生 view.focus）：TipTap focus 命令把真聚焦
+  // 排到下一帧，点菜单项时焦点已落回面板容器、编辑器处于失焦态，那一帧聚焦会抢走
+  // wiki 选择框搜索框 / 公式输入框刚拿到的焦点——框弹了也等于没输入口
+  const menuBody = sliceBetween("const applyMenuTemplate", "const rteCmd");
+  check(
+    "斜杠命令落地同步还焦点（ed.view.focus，不走下一帧才聚焦的 TipTap 命令）",
+    /ed\.view\.focus\(\)/.test(menuBody) && !/\bh\.focus\(\)/.test(menuBody),
+  );
   check(
     "组件入口自持端点与配置（日程不注册 agent 工具）",
     compSrc.includes("name = 'dsh-kit/vault'") && compSrc.includes("syncScheduleStore()") &&

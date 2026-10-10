@@ -6446,7 +6446,10 @@ ellipsis，窄列只截字不破版 */
         const { $from } = ed.state.selection;
         if (typeof anchor !== "number" || anchor < 0 || anchor >= $from.pos) return;
         ed.view.dispatch(ed.view.state.tr.delete(anchor, $from.pos));
-        h.focus();
+        // 焦点同步还给编辑器（PM 原生直调）。走 TipTap focus 命令时真聚焦排在
+        // 下一帧：点菜单项焦点已落回面板容器，编辑器处于失焦态，那一帧聚焦会
+        // 抢走 wiki 选择框搜索框 / 公式输入框刚拿到的焦点，框等于没输入口
+        ed.view.focus();
         const key = item.key ?? "";
         if (key === "table") setTDlg({ rows: 3, cols: 3 });
         else if (key === "mermaid") {
