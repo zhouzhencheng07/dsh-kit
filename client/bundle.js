@@ -3822,6 +3822,7 @@ ellipsis，窄列只截字不破版 */
       vtbLinkEditPrompt: "输入新地址修改链接，留空并确定删除链接：",
       vtbClear: "清除格式",
       vtbClearColor: "清除",
+      vtbCite: "引用到对话",
     };
     const en = {
       kcfgGroupVault: "Vault",
@@ -4050,6 +4051,7 @@ ellipsis，窄列只截字不破版 */
       vtbLinkEditPrompt: "Enter a new URL to edit the link; leave empty and confirm to remove it:",
       vtbClear: "Clear formatting",
       vtbClearColor: "Clear",
+      vtbCite: "Quote to chat",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? rootT(key);
@@ -6496,6 +6498,18 @@ ellipsis，窄列只截字不破版 */
             if (url) h.setLink(url.trim());
           }
         });
+      /** 引用到对话：当前页 + 编辑器当下的选区文本走引用管线（@ 芯片 + 引用块续
+       *  草稿）。泡泡只在非空选区时出现，且容器 preventDefault 保住了选区——
+       *  现读选区比树行那条的镜像准；成功即收泡泡（落点已到对话） */
+      const bubCite = () => {
+        const h = rteRef.current;
+        if (!h) return;
+        const sel = h.editor.state.selection;
+        const selText = sel.empty ? "" : h.editor.state.doc.textBetween(sel.from, sel.to, "\n", " ");
+        citeVaultPageToChat(docKey, selText, (key) => flashToast(t(key)));
+        setBubPanel(null);
+        setBub(null);
+      };
       const BUB_COLORS = ["#000000", "#333333", "#666666", "#999999", "#e03131", "#e8590c", "#f08c00", "#2f9e44", "#099268", "#1971c2", "#7048e8", "#d6336c"];
       const BUB_HIGHLIGHTS = ["#fff3bf", "#ffec99", "#ffe066", "#b2f2bb", "#99e9f2", "#bac8ff", "#d0bfff", "#ffc9c9", "#ffd8a8", "#fcc2d7"];
 
@@ -7026,6 +7040,8 @@ ellipsis，窄列只截字不破版 */
                     jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
                     jsxRuntime.jsx("button", { type: "button", className: `dshk-vault-bbtn${bubActive("link") ? " is-active" : ""}`, title: t("vtbLink"), onClick: bubLink, children: "🔗" }),
                     jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtbClear"), onClick: () => rteCmd((h) => h.clearFormat()), children: "⌫" }),
+                    jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtbCite"), onClick: bubCite, children: "❞" }),
                   ] }),
                   // 表格浮条（选区落在表内才出）：文字键同一条 tablebar 规格，
                   // 命令作用在选区覆盖到的行列上。不做合并/拆分（md 管道表没有 colspan 载体）
@@ -8021,18 +8037,23 @@ ellipsis，窄列只截字不破版 */
                   },
                 )
               : jsxRuntime.jsx("span", { className: `dshk-vault-treename${missing ? " is-missing" : ""}`, children: label }),
-            jsxRuntime.jsx("span", { className: "dshk-rowact", children: jsxRuntime.jsx(KitTip, {
-              label: t("treeMenu"),
-              align: "end",
-              children: jsxRuntime.jsx("button", {
-                type: "button",
-                onClick: (ev) => {
-                  ev.stopPropagation();
-                  openRefMenu(ev.currentTarget, rel, dirPath);
-                },
-                children: "⋯",
-              }),
-            }) }),
+            jsxRuntime.jsx("span", { className: "dshk-rowact", children: [
+              // 资料（PDF 等实物在库的挂载项）也能 @ 进对话：绝对路径引用芯片；
+              // 悬挂条目没有真实路径可引，不给 @（条件展开，不留空位）
+              ...(!missing ? [jsxRuntime.jsx(KitTip, { label: t("treeAt"), align: "end", children: jsxRuntime.jsx("button", { type: "button", onMouseDown: (ev) => ev.preventDefault(), onClick: (ev) => { ev.stopPropagation(); citeFromTree(item.path); }, children: "@" }) }, "at")] : []),
+              jsxRuntime.jsx(KitTip, {
+                label: t("treeMenu"),
+                align: "end",
+                children: jsxRuntime.jsx("button", {
+                  type: "button",
+                  onClick: (ev) => {
+                    ev.stopPropagation();
+                    openRefMenu(ev.currentTarget, rel, dirPath);
+                  },
+                  children: "⋯",
+                }),
+              }, "menu"),
+            ] }),
           ],
         }, `ks:${dirPath}:${rel}`);
       };

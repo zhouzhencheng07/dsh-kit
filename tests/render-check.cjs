@@ -607,7 +607,7 @@ let vaultFetchPrev = null;
     "资料库文件点击走 openVaultAsset（PDF 且自带阅读器开 → 知识库签，其余官方文件右栏）",
     src.includes("if (lib) openVaultAsset(e.path);") && src.includes("else if (hit.kind === \"libfile\") openVaultAsset(hit.path);"),
   );
-  // 树上行操作：目录行/页行 = `@` + `⋯`（资料行的 ⋯ 在展开资料子组时才出现）
+  // 树上行操作：目录行/页行/资料行 = `@` + `⋯`（悬挂资料没有可引路径，只有 ⋯）
   const actSpans = callLog.filter((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[2] && c[2].className === "dshk-rowact");
   const actsOf = (sp) => (Array.isArray(sp[2].children) ? sp[2].children : [sp[2].children]);
   const twoBtnSpans = actSpans.filter((sp) => actsOf(sp).length === 2);

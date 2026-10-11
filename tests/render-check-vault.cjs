@@ -316,6 +316,26 @@ async function checkApply() {
     "斜杠命令落地同步还焦点（ed.view.focus，不走下一帧才聚焦的 TipTap 命令）",
     /ed\.view\.focus\(\)/.test(menuBody) && !/\bh\.focus\(\)/.test(menuBody),
   );
+  // 泡泡菜单的「引用到对话」走树行 @ 同一条管线（citeVaultPageToChat），选区现读
+  // 编辑器状态而不是选区镜像（镜像为树行跨组件引用而生，编辑面里点按钮那一刻
+  // 选区就攥在手里）；空选区兜底给空串
+  const bubCiteBody = sliceBetween("const bubCite = () => {", "const BUB_COLORS");
+  check(
+    "泡泡菜单挂「引用到对话」（现读选区走引用管线，成功收泡泡）",
+    bundleSrc.includes('title: t("vtbCite"), onClick: bubCite') &&
+      /citeVaultPageToChat\(docKey, selText,/.test(bubCiteBody) &&
+      /textBetween\(sel\.from, sel\.to/.test(bubCiteBody) &&
+      /setBub\(null\)/.test(bubCiteBody),
+  );
+  // 资料行（实物在库的挂载项）与页行同形：hover = @ + ⋯；悬挂条目没有真实路径
+  // 可引，条件展开不给 @（渲染桩会把 null 记进 children 数组，别留空位）
+  const refRowBody = sliceBetween("const refRow = (rel, dirPath, depth) => {", "const dirRow =");
+  check(
+    "资料行 hover = @ + ⋯（复用 citeFromTree；悬挂条目不给 @）",
+    /citeFromTree\(item\.path\)/.test(refRowBody) &&
+      refRowBody.includes("...(!missing ? [") &&
+      refRowBody.indexOf("citeFromTree") < refRowBody.indexOf('label: t("treeMenu")'),
+  );
   check(
     "组件入口自持端点与配置（日程不注册 agent 工具）",
     compSrc.includes("name = 'dsh-kit/vault'") && compSrc.includes("syncScheduleStore()") &&
