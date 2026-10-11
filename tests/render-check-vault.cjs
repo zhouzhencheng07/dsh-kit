@@ -124,6 +124,60 @@ check(
   check("summary 视图返回 null（行详情收起态）", comps.VaultConfigPage({ view: "summary", form: fakeForm }) === null);
   check("vCfgFromSnapshot：无快照回默认空串、ready 快照取受理值", comps.vCfgFromSnapshot(null).vaultRoot === "" && comps.vCfgFromSnapshot({ status: "ready", value: { vaultRoot: "D:/v" } }).vaultRoot === "D:/v");
 }
+  // ── 测验：纯逻辑与浮层的渲染桩检查 ──
+  {
+    stateSeq = 0;
+    stateStore.clear();
+    const single = { type: "single", stem: "1+1=?", options: ["一", "二"], answer: "B", explain: "" };
+    const item = comps.qzMakeItem(single, "数学/1.1", false);
+    check("qzMakeItem：不打乱时展示序即存储序，答案字母映射、来源页随行", item.displayOrder.join("") === "01" && item.displayAnswer === "B" && item.rel === "数学/1.1");
+    const judge = { q: { type: "judge", stem: "x", options: [], answer: true }, rel: "", displayOrder: [], displayAnswer: "" };
+    const blank = { q: { type: "blank", stem: "y", options: [], answer: [["北京", "帝都"]] }, rel: "", displayOrder: [], displayAnswer: "" };
+    check(
+      "qzJudge：选择集合全等（部分对算错）、判断布尔、填空命中任一别名",
+      comps.qzJudge(item, { choice: "B", judge: null, blanks: [] }) === true &&
+        comps.qzJudge(item, { choice: "AB", judge: null, blanks: [] }) === false &&
+        comps.qzJudge(judge, { choice: "", judge: true, blanks: [] }) === true &&
+        comps.qzJudge(blank, { choice: "", judge: null, blanks: [" 北　京 "] }) === true &&
+        comps.qzJudge(blank, { choice: "", judge: null, blanks: ["上海"] }) === false,
+    );
+    check("qzNorm：全角转半角 + 去空白 + 小写（判题跨端口径）", comps.qzNorm("Ａ Bｃ１") === "abc1");
+    check("qzAnswerText/qzStoredAnswerText：展示串按打乱序、存储串按原序", comps.qzAnswerText(item) === "B. 二" && comps.qzStoredAnswerText(single) === "B");
+    const pages = [{ rel: "a", questions: [{ id: "1", type: "judge", stem: "x", options: [], answer: true }, { id: "2", type: "single", stem: "y", options: ["p", "q"], answer: "A" }, { id: "3", type: "single", stem: "z", options: [], answer: null }] }];
+    const prog = { "1": { streak: 3, mastered: true, updatedMs: 0 } };
+    check(
+      "qzAnswerable：能答的题 = 有选项有答案的选择 / 有布尔答案的判断 / 至少一空的填空",
+      comps.qzAnswerable({ type: "single", options: ["p", "q"], answer: "A" }) === true &&
+        comps.qzAnswerable({ type: "single", options: ["p", "q"], answer: "" }) === false &&
+        comps.qzAnswerable({ type: "single", options: [], answer: null }) === false &&
+        comps.qzAnswerable({ type: "judge", answer: true }) === true &&
+        comps.qzAnswerable({ type: "judge", answer: null }) === false &&
+        comps.qzAnswerable({ type: "blank", answer: [["北京", "帝都"]] }) === true &&
+        comps.qzAnswerable({ type: "blank", answer: null }) === false,
+    );
+    check(
+      "qzQuestionsOf/qzStatOf/qzFilterStatus/qzFilterKinds：范围入口的池子口径（答不了的题不进池不计数）",
+      comps.qzQuestionsOf(pages).length === 2 &&
+        comps.qzStatOf(comps.qzQuestionsOf(pages), prog).mastered === 1 &&
+        comps.qzFilterStatus(comps.qzQuestionsOf(pages), "unmastered", prog).length === 1 &&
+        comps.qzFilterKinds(comps.qzQuestionsOf(pages), ["judge"]).length === 1,
+    );
+    check("qzIsAnswered/qzEmptyAnswer：提交钮的可用判据", comps.qzIsAnswered(single, comps.qzEmptyAnswer(single)) === false && comps.qzIsAnswered(single, { choice: "A", judge: null, blanks: [] }) === true);
+    callLog = [];
+    check("VaultQuizOverlay：无请求回 null", comps.VaultQuizOverlay() === null);
+    comps.qzOpen({ kind: "page", path: "D:/v/数学/1.1.md", title: "1.1" });
+    const portal = comps.VaultQuizOverlay();
+    check("VaultQuizOverlay：有请求 portal 到 body（key 随请求换）", !!portal && portal.$$dshk === "portal" && portal.props.container === global.document.body);
+    comps.qzClose();
+    check("qzClose 后浮层回 null", comps.VaultQuizOverlay() === null);
+    callLog = [];
+    // 渲染桩下 root 未发布：浮层走「载入中」壳（bar + body）不炸
+    const shellNode = comps.VaultQuizModal({ req: { kind: "page", path: "D:/v/数学/1.1.md", title: "1.1" } });
+    check(
+      "VaultQuizModal：渲染桩下出全屏壳（dshk-quiz + body），不因缺数据炸",
+      !!shellNode && shellNode.type === "div" && shellNode.props.className === "dshk-quiz" && callLog.some((c) => c[2] && c[2].className === "dshk-quiz-body"),
+    );
+  }
 
 // 3) apply 装配门控：行关闭（探针 404）= 一个槽都不注册；可用 = 壳 + 右栏两签 +
 //    两个配置页 key + 两个座 + 快捷键
@@ -385,6 +439,40 @@ async function checkApply() {
   check(
     "配置页字段表与宿主 schema 同源（" + schemaKeys.length + " 项）",
     schemaKeys.length === fieldKeys.length && schemaKeys.every((k) => fieldKeys.includes(k)),
+  );
+  // ── 测验：契约钉在宿主半边，入口与浮层钉在 client 半边 ──
+  const quizSrc = read("src/vault/quiz.ts");
+  const quizFsSrc = read("src/vault/fs.ts");
+  const quizModalBody = sliceBetween("function VaultQuizModal({ req }) {", "      const start = (pool, limit) => {");
+  check(
+    "宿主测验端点九件套 + 伴生文件跟随（改名/移动/删除/覆盖带走 .quiz）",
+    compSrc.includes("/dsh-kit/vault/quiz-scope") && compSrc.includes("/dsh-kit/vault/quiz-progress") &&
+      compSrc.includes("/dsh-kit/vault/quiz-revision") && compSrc.includes("/dsh-kit/vault/quiz-save") &&
+      compSrc.includes("/dsh-kit/vault/quiz-record") && compSrc.includes("/dsh-kit/vault/quiz-mark") &&
+      compSrc.includes("/dsh-kit/vault/quiz-forget") && compSrc.includes("/dsh-kit/vault/quiz-threshold") &&
+      quizFsSrc.includes("followPage") && quizFsSrc.includes("siblingsForDelete") && quizFsSrc.includes("discard(root, "),
+  );
+  check(
+    "测验跨端契约哨兵：.quiz 布局、内容哈希 id（sha256 前 16 位）、归一化空白表、掌握度键序确定",
+    quizSrc.includes("QUIZ_DIR = '.quiz'") && quizSrc.includes("STATE_DIR = '.quiz-state'") &&
+      quizSrc.includes("PROGRESS_SUFFIX = '.progress.json'") && quizSrc.includes("CONFLICT_MARK") &&
+      quizSrc.includes("createHash('sha256')") && quizSrc.includes("slice(0, 16)") &&
+      quizSrc.includes("WS_RE") && quizSrc.includes("sortedProgress"),
+  );
+  check(
+    "测验浮层挂常驻壳 + 页条/树菜单两个入口 + Esc 让路按计数持有",
+    bundleSrc.includes("jsxRuntime.jsx(VaultQuizOverlay, {})") &&
+      bundleSrc.includes("jsxRuntime.jsx(VaultQuizEntry, { path, root, active })") &&
+      /key: "qz", label: t\("qzEntry"\)/.test(bundleSrc) &&
+      /holdEsc\(\);/.test(quizModalBody) && /releaseEsc\(\);/.test(quizModalBody) &&
+      bundleSrc.includes('"/dsh-kit/vault/quiz-record"') && bundleSrc.includes('"/dsh-kit/vault/quiz-save"'),
+  );
+  const quizEntryBody = sliceBetween("function VaultQuizEntry({ path, root, active }) {", "function VaultQuizOverlay() {");
+  check(
+    "页条测验入口：徽标 = 已掌握/能答题数（fetch 题目与掌握度、全掌握标绿）",
+    quizEntryBody.includes("quiz-progress?") && quizEntryBody.includes("filter(qzAnswerable)") &&
+      quizEntryBody.includes("qzIsMastered(prog, x.id)") && quizEntryBody.includes("dshk-quiz-done") &&
+      bundleSrc.includes("exports.qzAnswerable = qzAnswerable;"),
   );
 }
 

@@ -65,7 +65,7 @@ export interface VaultIndex {
 
 const MD_EXTS = new Set(['.md', '.markdown'])
 /** 不进索引与树的目录名（attachments 约定放二进制，由外部工具维护；点前缀一律隐藏） */
-const SKIP_DIRS = new Set(['attachments', '.git', '.trash', 'node_modules'])
+export const SKIP_DIRS = new Set(['attachments', '.git', '.trash', 'node_modules'])
 const SCAN_FILE_LIMIT = 5000
 /** 资料库目录名（根下这一层是约定：library/ 即资料库）；清单上限独立于页数上限 */
 const LIBRARY_DIR = 'library'

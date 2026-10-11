@@ -21,6 +21,10 @@
 //   GET  /dsh-kit/vault/file?path=  —— 库内 PDF 原始字节（自带阅读器取数）
 //   POST /dsh-kit/vault/create|rename|move|import|delete —— 目录级文件管理
 //   POST /dsh-kit/vault/refs    —— 知识集标记与挂载清单（op=set|unmark）
+//   GET  /dsh-kit/vault/quiz|quiz-scope|quiz-progress|quiz-revision —— 测验：一页的
+//                                     题目 / 范围汇总 / 掌握度 / 外部改动指纹
+//   POST /dsh-kit/vault/quiz-save|quiz-record|quiz-mark|quiz-forget|quiz-threshold
+//                              —— 出题写回 / 记作答 / 标掌握 / 遗忘 / 改阈值
 //   POST /dsh-kit/vault/write  —— 正文写回（mtime CAS，不符回 modified）
 //   POST /dsh-kit/vault/attach —— 编辑面粘贴的图片进 attachments/（内容寻址）
 //   GET  /dsh-kit/schedule/data     —— 事件 + 区间展开 + 独立计时段 + 进行中的计时
@@ -54,6 +58,19 @@ import {
   resolveInside,
 } from './fs.ts'
 import { syncScheduleStore, isRealDateStr, todayStr } from './schedule.ts'
+import { kitLogger } from '../core/log.ts'
+import {
+  forget,
+  markMastered,
+  readPage,
+  readProgress,
+  readScope,
+  record,
+  revision,
+  savePage,
+  setQuizWarn,
+  setThreshold,
+} from './quiz.ts'
 
 /** 插件设置的运行时形状（loader 按 Config schema 解析后传入 apply 第二参） */
 type KitSettings = Record<string, unknown>
@@ -529,6 +546,42 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
         },
         32 * 1024 * 1024,
       )
+
+      // ── 测验端点（./quiz.ts）──
+      //   题目在页面所在目录的 .quiz/<页名>.md、掌握度在 .quiz/<页名>.progress.json、
+      //   阈值在库根 .quiz-state/settings.json——点前缀目录不进索引与树，数据与
+      //   桌面端同一份；页面改名/移动/删除的伴生文件跟随在 fs.ts。
+      setQuizWarn(kitLogger('vault').warn)
+      // GET 四个：rel 非法或文件读不了都回 400（坏一份题目文件不能炸面板）
+      const quizRead =
+        (code: (url: URL, root: string) => unknown) =>
+        (req: http.IncomingMessage, res: http.ServerResponse, url: URL): void => {
+          if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' })
+          const root = vaultGuard(res)
+          if (root === null) return
+          try {
+            json(res, 200, code(url, root))
+          } catch (error) {
+            json(res, 400, { error: error instanceof Error ? error.message : String(error) })
+          }
+        }
+      vaultRoute('/dsh-kit/vault/quiz', quizRead((url, root) => readPage(root, url.searchParams.get('rel') ?? '')))
+      vaultRoute('/dsh-kit/vault/quiz-scope', quizRead((url, root) => readScope(root, url.searchParams.get('dir') ?? '')))
+      vaultRoute(
+        '/dsh-kit/vault/quiz-progress',
+        quizRead((url, root) => readProgress(root, url.searchParams.get('rel'), url.searchParams.get('dir'))),
+      )
+      vaultRoute(
+        '/dsh-kit/vault/quiz-revision',
+        quizRead((url, root) => revision(root, url.searchParams.get('rel'), url.searchParams.get('dir'))),
+      )
+      vaultPost('/dsh-kit/vault/quiz-save', (body, root) => savePage(root, String(body.rel ?? ''), body.questions, body.edit ?? null))
+      vaultPost('/dsh-kit/vault/quiz-record', (body, root) =>
+        record(root, String(body.rel ?? ''), String(body.id ?? ''), body.correct === true),
+      )
+      vaultPost('/dsh-kit/vault/quiz-mark', (body, root) => markMastered(root, String(body.rel ?? ''), String(body.id ?? '')))
+      vaultPost('/dsh-kit/vault/quiz-forget', (body, root) => forget(root, String(body.rel ?? ''), String(body.id ?? '')))
+      vaultPost('/dsh-kit/vault/quiz-threshold', (body, root) => ({ threshold: setThreshold(root, Number(body.value ?? 0)) }))
 
       return () => {
         disposeVendor()

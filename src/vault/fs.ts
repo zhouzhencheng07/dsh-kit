@@ -10,6 +10,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { recycleDeleteBatch } from '../core/index.ts'
+import { followPage, siblingsForDelete } from './quiz.ts'
 
 /** 撞名策略（未知取值按 skip 处理，与前端选项一一对应） */
 export type Conflict = 'skip' | 'overwrite' | 'rename'
@@ -487,11 +488,11 @@ export function rewriteWikiLinks(
 
 /** 目录内的落点撞名按策略处理，返回最终 name。覆盖 = 目标先送回收站
  *  （回收站不可用才直删）；跳过 = 什么都不做（调用方据 skipped 回执） */
-async function settleConflict(dir: string, name: string, conflict: Conflict): Promise<{ name: string; skipped: boolean }> {
+async function settleConflict(root: string, dir: string, name: string, conflict: Conflict): Promise<{ name: string; skipped: boolean }> {
   if (!existsSync(path.join(dir, name))) return { name, skipped: false }
   if (conflict === 'skip') return { name, skipped: true }
   if (conflict === 'overwrite') {
-    await discard(path.join(dir, name))
+    await discard(root, path.join(dir, name))
     return { name, skipped: false }
   }
   const next = dedupeName(dir, name)
@@ -499,11 +500,15 @@ async function settleConflict(dir: string, name: string, conflict: Conflict): Pr
   return { name: next, skipped: false }
 }
 
-/** 覆盖前丢掉目标：优先回收站，失败退回直删 */
-async function discard(target: string): Promise<void> {
-  const [gone] = await recycleDeleteBatch([target])
-  if (gone === true) return
-  await fs.promises.rm(target, { recursive: true, force: true })
+/** 覆盖前丢掉目标：优先回收站，失败退回直删。被覆盖的笔记页把同目录 .quiz/ 里的
+ *  题目与掌握度一并带走——那是那一页的东西，留下会冒充（或顶掉）新页的题目 */
+async function discard(root: string, target: string): Promise<void> {
+  const extras = /\.(md|markdown)$/i.test(target) && !inLibrary(root, target) ? siblingsForDelete(target) : []
+  const all = [target, ...extras]
+  const results = await recycleDeleteBatch(all)
+  const left = all.filter((_, i) => results[i] !== true)
+  if (left.length === 0) return
+  for (const p of left) await fs.promises.rm(p, { recursive: true, force: true })
 }
 
 /** 新建：kind='dir' 建目录（已存在=幂等成功），否则建空 md 页（已存在回 exists，
@@ -585,6 +590,8 @@ export function renameEntry(
     if (libNew !== null) rewriteLibraryRefs(root, libOld, libNew)
     return { path: next, links: 0 }
   }
+  // 页面改名：题目与掌握度跟着走（同目录 .quiz/ 下换的是文件名）
+  followPage(target, next)
   if (oldRel === null) return { path: next, links: 0 }
   return { path: next, links: rewriteRefs(pages, stripMd(oldRel), { kind: 'name', name: stripMd(finalLeaf) }, next) }
 }
@@ -611,7 +618,7 @@ export async function moveEntry(
     const rel = relUnderRoot(root, target) ?? name
     return { path: target, rel: stripMd(rel), name, links: 0, skipped: true }
   }
-  const settled = await settleConflict(dest, name, conflict)
+  const settled = await settleConflict(root, dest, name, conflict)
   if (settled.skipped) {
     const rel = relUnderRoot(root, target) ?? name
     return { path: target, rel: stripMd(rel), name, links: 0, skipped: true }
@@ -625,6 +632,8 @@ export async function moveEntry(
     const libNew = libraryRel(root, next)
     if (libNew !== null) rewriteLibraryRefs(root, libOld, libNew)
   }
+  // 页面移动：题目与掌握度跟着走（目录里的 .quiz/ 随目录整体搬，不用处理）
+  if (!stat.isDirectory() && !inLibrary(root, next)) followPage(target, next)
   const newRel = relUnderRoot(root, next)
   const skipLinks = stat.isDirectory() || oldRel === null || newRel === null || inLibrary(root, next)
   const links = skipLinks ? 0 : rewriteRefs(pages, stripMd(oldRel), { kind: 'move', rel: stripMd(newRel) }, next)
@@ -873,7 +882,7 @@ export async function importEntry(
         const target = path.join(dest, want)
         return { path: target, rel: stripMd(relUnderRoot(root, target) ?? want), name: want, images: 0, skipped: true, renamed: false }
       }
-      if (opts.conflict === 'overwrite') await discard(path.join(dest, want))
+      if (opts.conflict === 'overwrite') await discard(root, path.join(dest, want))
       else {
         const deduped = dedupeName(dest, want)
         if (deduped === null) throw new Error('同名文件太多，无法自动编号')
@@ -927,6 +936,12 @@ export async function deleteEntries(root: string, paths: unknown[]): Promise<{ d
     seen.add(target)
     targets.push(target)
   }
+  // 页面删除连带它的题目与掌握度一起进回收站（同目录 .quiz/ 下的两份伴生文件；
+  // 目录删除不用管：.quiz/ 在目录体内，跟着整棵走）
+  const extras: string[] = []
+  for (const p of targets) {
+    if (!fs.statSync(p).isDirectory() && !inLibrary(root, p)) extras.push(...siblingsForDelete(p))
+  }
   let deleted = 0
   const failed: string[] = []
   if (process.platform === 'win32') {
@@ -942,6 +957,19 @@ export async function deleteEntries(root: string, paths: unknown[]): Promise<{ d
         deleted += 1
       } catch {
         failed.push(path.basename(p))
+      }
+    }
+  }
+  if (extras.length > 0) {
+    if (process.platform === 'win32') {
+      await recycleDeleteBatch(extras)
+    } else {
+      for (const q of extras) {
+        try {
+          await fs.promises.rm(q, { force: true })
+        } catch {
+          /* 伴生文件删不掉不挡删除本身 */
+        }
       }
     }
   }

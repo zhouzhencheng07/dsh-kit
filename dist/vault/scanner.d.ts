@@ -43,6 +43,8 @@ export interface VaultIndex {
     /** 超过单次扫描上限被截断 */
     truncated?: boolean;
 }
+/** 不进索引与树的目录名（attachments 约定放二进制，由外部工具维护；点前缀一律隐藏） */
+export declare const SKIP_DIRS: Set<string>;
 /** vault 默认根（vaultRoot 留空时即开即用）：数据目录下的 vault 子树（与模块同名），与
  *  browser-profile/screenshots 等运行产物不混居 */
 export declare function defaultVaultRoot(): string;

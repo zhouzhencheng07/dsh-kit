@@ -1904,6 +1904,67 @@ ellipsis，窄列只截字不破版 */
 /* ⋯ 菜单禁用项 */
 .dshk-menu > button[disabled]{opacity:.5;cursor:default}
 .dshk-menu > button[disabled]:hover{background:none}
+/* 测验浮层（全屏）：范围设置 → 逐题作答 → 小结；出题编辑共用这层 */
+/* 页条测验入口：整页掌握后标绿 */
+.dshk-vault-tbtn.dshk-quiz-done{color:#2f9e44}
+.dshk-quiz{position:fixed;inset:0;z-index:1400;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-size:13px}
+.dshk-quiz-bar{flex:none;display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 14px;border-bottom:1px solid var(--dsw-alias-border-l2)}
+.dshk-quiz-title{flex:none;max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.dshk-quiz-gap{flex:1}
+.dshk-quiz-body{flex:1;overflow:auto;padding:16px 16px 32px}
+.dshk-quiz-inner{max-width:760px;margin:0 auto}
+.dshk-quiz-hint{color:var(--dsw-alias-label-secondary);font-size:12px;padding:8px 0}
+.dshk-quiz-h2{font-size:13px;font-weight:600;margin:10px 0 8px}
+.dshk-quiz-label{font-size:12px;font-weight:600;margin:14px 0 6px}
+.dshk-quiz-row{display:flex;align-items:center;gap:8px;margin:6px 0}
+.dshk-quiz-grow{flex:1;min-width:0}
+.dshk-quiz-sub{color:var(--dsw-alias-label-tertiary);font-size:11px}
+.dshk-quiz-seg{display:inline-flex;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;overflow:hidden;vertical-align:middle}
+.dshk-quiz-segbtn{appearance:none;border:0;border-left:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;padding:7px 12px;cursor:pointer}
+.dshk-quiz-segbtn:first-child{border-left:0}
+.dshk-quiz-segbtn.is-on{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-brand-primary);font-weight:600}
+.dshk-quiz-segbtn:hover:not(.is-on){background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-quiz-chk{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dsw-alias-label-primary);padding:3px 0;cursor:pointer}
+.dshk-quiz-chk input,.dshk-quiz-opt input{accent-color:var(--dsw-alias-brand-primary);margin:0}
+.dshk-quiz-pages{max-height:220px;overflow:auto;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:4px 10px;margin-top:6px}
+.dshk-quiz-prow{display:flex;align-items:center;gap:8px;padding:3px 0}
+.dshk-quiz-input{width:100%;box-sizing:border-box;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:6px 8px;border-radius:6px}
+.dshk-quiz-num{width:72px;text-align:center}
+.dshk-quiz-kind{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;padding:2px 9px}
+.dshk-quiz-mst{flex:none;font-size:11px;color:#2f9e44;border:1px solid color-mix(in srgb,#2f9e44 45%,transparent);border-radius:999px;padding:2px 9px}
+.dshk-quiz-prog{height:3px;border-radius:2px;background:var(--dsw-alias-border-l1);overflow:hidden;margin:8px 0 16px}
+.dshk-quiz-prog>i{display:block;height:100%;background:var(--dsw-alias-brand-primary)}
+.dshk-quiz-stem{font-size:14px;line-height:1.7;margin-bottom:12px;overflow-wrap:anywhere}
+.dshk-quiz-opt{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;margin:6px 0;cursor:pointer;font-size:13px}
+.dshk-quiz-opt:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-quiz-opt.is-on{border-color:var(--dsw-alias-brand-primary)}
+.dshk-quiz-optletter{flex:none;font-weight:700;margin-top:1px}
+.dshk-quiz-opttext{min-width:0;overflow-wrap:anywhere}
+.dshk-quiz-verdict{border:1px solid var(--dsw-alias-border-l2);border-left-width:3px;border-radius:8px;padding:10px 12px;margin:14px 0 8px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.dshk-quiz-verdict.is-ok{border-left-color:#2f9e44;background:color-mix(in srgb,#2f9e44 8%,transparent)}
+.dshk-quiz-verdict.is-bad{border-left-color:var(--dsw-alias-danger,#cd3131);background:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 8%,transparent)}
+.dshk-quiz-verdicttop{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:600}
+.dshk-quiz-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:16px}
+.dshk-quiz-foctr{display:flex;justify-content:flex-end;align-items:center;gap:8px}
+.dshk-quiz-act{display:flex;gap:8px;margin-top:8px}
+.dshk-quiz-stat{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.dshk-quiz-statnum{font-size:22px;font-weight:700;color:var(--dsw-alias-label-primary)}
+.dshk-quiz-result{display:flex;flex-direction:column;align-items:center;gap:16px;padding:32px 0}
+.dshk-quiz-resulttitle{font-size:16px;font-weight:600}
+.dshk-quiz-statnums{display:flex;gap:32px}
+.dshk-quiz-qitem{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:8px 10px;margin:6px 0}
+.dshk-quiz-qmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.dshk-quiz-qhead{display:flex;align-items:center;gap:6px}
+.dshk-quiz-qnum{font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dshk-quiz-qstem{white-space:pre-wrap;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.dshk-quiz-qans{font-size:11px;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}
+.dshk-quiz-qacts{display:flex;gap:2px;flex:none}
+.dshk-quiz-mini{appearance:none;border:0;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;padding:5px 7px;border-radius:6px;cursor:pointer}
+.dshk-quiz-mini:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-quiz-mini[disabled]{opacity:.45;cursor:default}
+.dshk-quiz-mini.is-danger:hover{color:var(--dsw-alias-danger,#cd3131)}
+.dshk-quiz-box{border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:6px 10px;margin-top:4px;background:var(--dsw-alias-bg-layer-1)}
+.dshk-quiz-math .katex{font-size:1.05em}
 `;
 
     /** 注入本插件样式（style），幂等 */
@@ -3823,6 +3884,84 @@ ellipsis，窄列只截字不破版 */
       vtbClear: "清除格式",
       vtbClearColor: "清除",
       vtbCite: "引用到对话",
+      qzEntry: "测验",
+      qzEntryTip: "测验——还没有题目时进去就是出题",
+      qzEdit: "编辑题目",
+      qzClose: "关闭",
+      qzTrue: "对",
+      qzFalse: "错",
+      qzKind_single: "单选",
+      qzKind_multi: "多选",
+      qzKind_judge: "判断",
+      qzKind_blank: "填空",
+      qzStatusUnmastered: "未掌握",
+      qzStatusMastered: "只已掌握",
+      qzStatusAll: "全部",
+      qzPages: "页面",
+      qzAll: "全选",
+      qzNone: "全不选",
+      qzPageStat: "　共 {t} 题 · 已掌握 {m}",
+      qzEditPageTip: "编辑这一页的题目",
+      qzMasteryState: "掌握状态",
+      qzKinds: "题型",
+      qzCount: "数量",
+      qzCount20: "20 题",
+      qzCount50: "50 题",
+      qzCountAll: "全部",
+      qzThisMany: "本次 {n} 题",
+      qzThreshold: "掌握阈值",
+      qzCancel: "取消",
+      qzStart: "开始",
+      qzEmptyPage: "这页还没有题目——点「编辑题目」出题",
+      qzEmptyScope: "这个范围里还没有题目",
+      qzNofN: "第 {i} / {n} 题",
+      qzSubmit: "提交",
+      qzNext: "下一题",
+      qzSeeResult: "看小结",
+      qzEnd: "结束",
+      qzRight: "答对了",
+      qzWrong: "答错了",
+      qzAnswerIs: "答案：{a}",
+      qzCorrectAnswerIs: "正确答案：{a}",
+      qzMastery: "掌握度 {s} / {t}",
+      qzMastered: "已掌握",
+      qzShowExplain: "看解析",
+      qzHideExplain: "收起解析",
+      qzMark: "标记掌握",
+      qzForget: "遗忘",
+      qzBlankN: "第 {i} 空",
+      qzResultN: "本次 {n} 题",
+      qzStatRight: "对",
+      qzStatWrong: "错",
+      qzStatNew: "新掌握",
+      qzAccuracy: "正确率 {p}%",
+      qzAgain: "再来一组",
+      qzDone: "完成",
+      qzNew: "新增题目",
+      qzEditN: "编辑第 {i} 题",
+      qzStem: "题干",
+      qzOptions: "选项",
+      qzExplain: "解析",
+      qzOptionPh: "选项 {L}",
+      qzAddOption: "加选项",
+      qzCorrectHint: "勾选左侧 = 正确答案（多选可多个）",
+      qzBlankPh: "多个可接受答案用 | 分隔",
+      qzAddBlank: "加一个空",
+      qzKeepProgress: "保留掌握进度",
+      qzSave: "保存",
+      qzBack: "返回",
+      qzTotal: "共 {n} 题",
+      qzNoQuestions: "还没有题目",
+      qzDeleteAsk: "删除第 {i} 题？",
+      qzDeleteGo: "删除",
+      qzSavedTip: "题目已保存",
+      qzStemEmpty: "题干不能为空",
+      qzOptsBad: "选择题至少要两个非空选项",
+      qzCorrectEmpty: "勾选正确答案",
+      qzSingleOnly: "单选题只能有一个答案",
+      qzMultiNeed: "多选题至少两个答案",
+      qzBlankEmpty: "每个空至少给一个答案",
+      qzLoadFail: "测验数据读取失败",
     };
     const en = {
       kcfgGroupVault: "Vault",
@@ -4052,6 +4191,84 @@ ellipsis，窄列只截字不破版 */
       vtbClear: "Clear formatting",
       vtbClearColor: "Clear",
       vtbCite: "Quote to chat",
+      qzEntry: "Quiz",
+      qzEntryTip: "Quiz — opens the authoring view when a page has no questions yet",
+      qzEdit: "Edit questions",
+      qzClose: "Close",
+      qzTrue: "True",
+      qzFalse: "False",
+      qzKind_single: "Single",
+      qzKind_multi: "Multiple",
+      qzKind_judge: "True/False",
+      qzKind_blank: "Fill in",
+      qzStatusUnmastered: "Unmastered",
+      qzStatusMastered: "Mastered only",
+      qzStatusAll: "All",
+      qzPages: "Pages",
+      qzAll: "Select all",
+      qzNone: "Select none",
+      qzPageStat: "　{t} questions · {m} mastered",
+      qzEditPageTip: "Edit this page's questions",
+      qzMasteryState: "Mastery",
+      qzKinds: "Types",
+      qzCount: "Count",
+      qzCount20: "20",
+      qzCount50: "50",
+      qzCountAll: "All",
+      qzThisMany: "{n} this round",
+      qzThreshold: "Mastery streak",
+      qzCancel: "Cancel",
+      qzStart: "Start",
+      qzEmptyPage: "No questions here yet — use “Edit questions” to add some",
+      qzEmptyScope: "No questions in this scope yet",
+      qzNofN: "{i} / {n}",
+      qzSubmit: "Submit",
+      qzNext: "Next",
+      qzSeeResult: "Summary",
+      qzEnd: "End",
+      qzRight: "Correct",
+      qzWrong: "Incorrect",
+      qzAnswerIs: "Answer: {a}",
+      qzCorrectAnswerIs: "Correct answer: {a}",
+      qzMastery: "Streak {s} / {t}",
+      qzMastered: "Mastered",
+      qzShowExplain: "Explanation",
+      qzHideExplain: "Hide explanation",
+      qzMark: "Mark mastered",
+      qzForget: "Reset",
+      qzBlankN: "Blank {i}",
+      qzResultN: "{n} questions this round",
+      qzStatRight: "Right",
+      qzStatWrong: "Wrong",
+      qzStatNew: "Newly mastered",
+      qzAccuracy: "Accuracy {p}%",
+      qzAgain: "Another round",
+      qzDone: "Done",
+      qzNew: "New question",
+      qzEditN: "Edit question {i}",
+      qzStem: "Stem",
+      qzOptions: "Options",
+      qzExplain: "Explanation",
+      qzOptionPh: "Option {L}",
+      qzAddOption: "Add option",
+      qzCorrectHint: "Check = correct answer (multiple allowed for multiple choice)",
+      qzBlankPh: "Separate accepted answers with |",
+      qzAddBlank: "Add blank",
+      qzKeepProgress: "Keep mastery progress",
+      qzSave: "Save",
+      qzBack: "Back",
+      qzTotal: "{n} questions",
+      qzNoQuestions: "No questions yet",
+      qzDeleteAsk: "Delete question {i}?",
+      qzDeleteGo: "Delete",
+      qzSavedTip: "Questions saved",
+      qzStemEmpty: "Stem cannot be empty",
+      qzOptsBad: "Choice questions need at least two non-empty options",
+      qzCorrectEmpty: "Check the correct answer",
+      qzSingleOnly: "Single choice takes exactly one answer",
+      qzMultiNeed: "Multiple choice needs two or more answers",
+      qzBlankEmpty: "Each blank needs at least one accepted answer",
+      qzLoadFail: "Failed to load quiz data",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? rootT(key);
@@ -7909,6 +8126,8 @@ ellipsis，窄列只截字不破版 */
             extraItems.push({ key: "ksset", label: t("vaultKsSet"), disabled: dirHasChildren(entry.path) !== true, title: t("vaultKsEmptyDir"), run: () => markFolderKs(entry.path) });
           }
         }
+        // 测验：目录 = 整个范围（递归），页 = 单页
+        if (!lib) extraItems.push({ key: "qz", label: t("qzEntry"), run: () => qzMenuOpen(entry) });
         if (!atLibRoot) extraItems.push({ key: "mv", label: t("vaultMoveTo"), run: () => openMove(entry) });
         if (entry.dir === true) extraItems.push(importItem(entry, lib));
         return {
@@ -8880,6 +9099,8 @@ ellipsis，窄列只截字不破版 */
                         children: `${t("vaultBacklinks")}${backlinks.length > 0 ? ` ${backlinks.length}` : ""}`,
                       }),
                     }),
+                    // 测验入口：带题数徽标（0 题也进得去——进去就是出题）
+                    jsxRuntime.jsx(VaultQuizEntry, { path, root, active }),
                   ] }),
                   // CAS 冲突条：盘上被改而自动保存已暂停，由人裁决（覆盖 / 读盘上）
                   conflict !== null
@@ -9844,8 +10065,1103 @@ ellipsis，窄列只截字不破版 */
       shortcutRun.vault = () => setKitUi(toggleVaultEntry(getKitUi()));
       react.useEffect(() => () => { chatPreviewHook = null; }, []);
       if (!(ui.vaultOpen || ui.vaultSideOpen)) return null;
-      return jsxRuntime.jsx("div", { style: { display: "none" }, children: jsxRuntime.jsx(VaultView, {}) });
+      // 测验浮层跟着壳走：入口只可能从知识库面板里按出来，壳在浮层才在
+      return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+        jsxRuntime.jsx("div", { style: { display: "none" }, children: jsxRuntime.jsx(VaultView, {}) }),
+        jsxRuntime.jsx(VaultQuizOverlay, {}),
+      ] });
     }
+
+    // ─────────── 测验（与桌面端同一份 .quiz 数据）───────────
+    // 题目在页面所在目录的 .quiz/<页名>.md、掌握度在 .quiz/<页名>.progress.json
+    // （按题目内容哈希记，页面改名/移动不丢）、阈值在库根 .quiz-state/settings.json，
+    // 读写全走宿主半边 /dsh-kit/vault/quiz*。入口：页条「测验」钮 + 树行 ⋯ 菜单
+    // 「测验」（目录 = 范围、页 = 单页）；浮层只在 VaultShell 挂一份，模块级请求状态。
+    // 会话不落盘：范围设置 → 逐题作答（即时判题）→ 小结；页面入口再给「编辑题目」。
+
+    const QZ_KINDS = ["single", "multi", "judge", "blank"];
+    const QZ_LETTERS = "ABCDEFGHIJ";
+    // 页面入口不抽题（一页的题本来就不多）：限题数只对范围入口有效
+    const QZ_ALL = Number.MAX_SAFE_INTEGER;
+    const qzLetterAt = (i) => QZ_LETTERS[i] ?? "?";
+    const qzKindLabel = (kind) =>
+      kind === "single" ? t("qzKind_single") : kind === "multi" ? t("qzKind_multi") : kind === "judge" ? t("qzKind_judge") : t("qzKind_blank");
+
+    let qzReqState = null;
+    const qzSubs = new Set();
+    /** 打开测验：kind:"page" = 单页，kind:"set" = 目录范围；path 都是绝对路径 */
+    function qzOpen(request) {
+      qzReqState = request;
+      for (const fn of qzSubs) fn();
+    }
+    function qzClose() {
+      qzReqState = null;
+      for (const fn of qzSubs) fn();
+    }
+    const useQzReq = () =>
+      react.useSyncExternalStore(
+        (fn) => {
+          qzSubs.add(fn);
+          return () => qzSubs.delete(fn);
+        },
+        () => qzReqState,
+      );
+    // 换一页 / 换一个范围就是重开一份新的会话状态（overlay 按 key 重挂）
+    const qzKeyOf = (req) => (req.kind === "page" ? "p:" + req.path : "s:" + req.path);
+    /** 页面绝对路径 → 题目用的 rel（去 .md；不在库内回 null） */
+    const qzPageRel = (root, path) => {
+      if (typeof root !== "string" || root === "") return null;
+      const rel = relUnder(root, path);
+      if (rel === null || rel === "") return null;
+      const stripped = rel.replace(/\.(md|markdown)$/i, "");
+      return stripped === "" ? null : stripped;
+    };
+    /** 树行 ⋯ 菜单的测验入口：目录 = 范围（递归），页 = 单页 */
+    const qzMenuOpen = (entry) =>
+      qzOpen({ kind: entry.dir === true ? "set" : "page", path: entry.path, title: entry.name });
+
+    // ── 出题/判题的纯逻辑（与桌面端同一套语义；render-check 直测）──
+    function qzShuffle(input) {
+      const out = input.slice();
+      for (let i = out.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = out[i];
+        out[i] = out[j];
+        out[j] = tmp;
+      }
+      return out;
+    }
+    /** 从池子里随机取 n 道（n >= 池子大小 = 全取，顺序照样打乱） */
+    const qzPick = (pool, n) => {
+      const all = qzShuffle(pool);
+      return n >= all.length ? all : all.slice(0, n);
+    };
+    /** 一道准备好展示的题：选项顺序 + 正确答案在展示顺序下的字母 */
+    function qzMakeItem(q, rel, shuffleOptions) {
+      const opts = q.options ?? [];
+      const order = [];
+      for (let i = 0; i < opts.length; i += 1) order.push(i);
+      const mixed = shuffleOptions === false || order.length < 2 ? order : qzShuffle(order);
+      const stored = typeof q.answer === "string" ? q.answer : "";
+      const toDisplay = new Map();
+      mixed.forEach((orig, pos) => toDisplay.set(orig, pos));
+      const displayAnswer = stored
+        .split("")
+        .map((ch) => {
+          const pos = toDisplay.get(ch.toUpperCase().charCodeAt(0) - 65);
+          return pos === undefined ? -1 : pos;
+        })
+        .filter((i) => i >= 0)
+        .map((i) => qzLetterAt(i))
+        .sort()
+        .join("");
+      return { q, rel: rel ?? "", displayOrder: mixed, displayAnswer };
+    }
+    const qzDisplayOptions = (item) => {
+      const opts = item.q.options ?? [];
+      return item.displayOrder.map((orig) => opts[orig] ?? "");
+    };
+    const qzBlankCount = (q) => (Array.isArray(q.answer) ? q.answer.length : 0);
+    const qzEmptyAnswer = (q) => ({ choice: "", judge: null, blanks: qzBlankCount(q) > 0 ? new Array(qzBlankCount(q)).fill("") : [] });
+    /** 作答完整了没有（决定「提交」能不能点） */
+    const qzIsAnswered = (q, a) => {
+      if (q.type === "single" || q.type === "multi") return a.choice.length > 0;
+      if (q.type === "judge") return a.judge !== null;
+      return a.blanks.length > 0 && a.blanks.every((b) => b.trim() !== "");
+    };
+    /** 判题归一化：去全部空白 + 全角转半角 + 小写（跨端必须一致） */
+    function qzNorm(text) {
+      return String(text ?? "")
+        .replace(/[\uff01-\uff5e]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+        .replace(/\u3000/g, " ")
+        .replace(/\s+/g, "")
+        .toLowerCase();
+    }
+    /** 判题：选择 = 字母集合全等（部分对算错）；判断 = 布尔；填空 = 每空命中一个可接受答案 */
+    function qzJudge(item, user) {
+      const q = item.q;
+      if (q.type === "single" || q.type === "multi") {
+        const picked = user.choice.split("").sort().join("");
+        return picked !== "" && picked === item.displayAnswer;
+      }
+      if (q.type === "judge") return user.judge !== null && user.judge === (q.answer === true);
+      const accepted = Array.isArray(q.answer) ? q.answer : [];
+      if (accepted.length === 0) return false;
+      return accepted.every((variants, i) => {
+        const got = qzNorm(user.blanks[i] ?? "");
+        return got !== "" && variants.some((v) => qzNorm(v) === got);
+      });
+    }
+    /** 正确答案的展示串（选择 = 展示字母 + 选项文本，打乱后的） */
+    function qzAnswerText(item) {
+      const q = item.q;
+      if (q.type === "single" || q.type === "multi") {
+        const opts = q.options ?? [];
+        return item.displayAnswer
+          .split("")
+          .map((L) => {
+            const orig = item.displayOrder[L.charCodeAt(0) - 65] ?? 0;
+            return L + ". " + (opts[orig] ?? "");
+          })
+          .join("；");
+      }
+      if (q.type === "judge") return q.answer === true ? t("qzTrue") : t("qzFalse");
+      const accepted = Array.isArray(q.answer) ? q.answer : [];
+      return accepted.map((vs, i) => t("qzBlankN").replace("{i}", String(i + 1)) + "：" + vs.join(" / ")).join("；");
+    }
+    /** 题目的原始答案串（题目列表里显示用） */
+    const qzStoredAnswerText = (q) => {
+      if (q.type === "single" || q.type === "multi") return typeof q.answer === "string" ? q.answer : "";
+      if (q.type === "judge") return q.answer === true ? t("qzTrue") : t("qzFalse");
+      const accepted = Array.isArray(q.answer) ? q.answer : [];
+      return accepted.map((vs) => vs.join(" / ")).join("；");
+    };
+    const qzIsMastered = (progress, id) => progress[id]?.mastered === true;
+    /** 能答的题：选择要选项和答案、判断要布尔答案、填空要至少一空（答不了的题不进池、不计数） */
+    const qzAnswerable = (q) => {
+      if (q.type === "single" || q.type === "multi") return (q.options?.length ?? 0) > 0 && typeof q.answer === "string" && q.answer.trim() !== "";
+      if (q.type === "judge") return typeof q.answer === "boolean";
+      return qzBlankCount(q) > 0;
+    };
+    /** 池子来源：各页题目摊平并带上来源页；口径 = 能答的题（入口徽标、范围统计同此） */
+    const qzQuestionsOf = (pages) => {
+      const out = [];
+      for (const p of pages) {
+        for (const q of p.questions ?? []) {
+          if (qzAnswerable(q)) out.push({ ...q, rel: p.rel });
+        }
+      }
+      return out;
+    };
+    function qzStatOf(questions, progress) {
+      let mastered = 0;
+      for (const q of questions) {
+        if (qzIsMastered(progress, q.id)) mastered += 1;
+      }
+      return { total: questions.length, mastered, unmastered: questions.length - mastered };
+    }
+    const qzFilterStatus = (questions, status, progress) => {
+      if (status === "all") return questions;
+      const want = status === "mastered";
+      return questions.filter((q) => qzIsMastered(progress, q.id) === want);
+    };
+    const qzFilterKinds = (questions, kinds) =>
+      kinds.length === 0 ? questions : questions.filter((q) => kinds.includes(q.type));
+
+    // ── 行内公式（选项/答案行用）：定界规则与桌面端同一份（"$5 和 $6" 不误配）──
+    const QZ_MATH_RE = /^\$(?!\s)((?:\\.|[^$\n])+?)(?<!\s)\$(?!\$|\w)/;
+    const qzEscapeHtml = (s) =>
+      String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] ?? c));
+    const qzKatexHtml = (tex) => {
+      try {
+        return window.katex.renderToString(tex, { throwOnError: false });
+      } catch {
+        return qzEscapeHtml("$" + tex + "$");
+      }
+    };
+    function QuizInline({ text }) {
+      const parts = react.useMemo(() => {
+        const out = [];
+        let rest = String(text ?? "");
+        while (rest !== "") {
+          const at = rest.indexOf("$");
+          if (at === -1) {
+            out.push({ math: false, text: rest });
+            break;
+          }
+          const m = QZ_MATH_RE.exec(rest.slice(at));
+          if (m === null) {
+            out.push({ math: false, text: rest.slice(0, at + 1) });
+            rest = rest.slice(at + 1);
+            continue;
+          }
+          if (at > 0) out.push({ math: false, text: rest.slice(0, at) });
+          out.push({ math: true, text: m[1] ?? "" });
+          rest = rest.slice(at + m[0].length);
+        }
+        return out;
+      }, [text]);
+      return jsxRuntime.jsx(
+        "span",
+        {
+          children: parts.map((p, i) =>
+            p.math === true
+              ? jsxRuntime.jsx("span", { className: "dshk-quiz-math", dangerouslySetInnerHTML: { __html: qzKatexHtml(p.text) } }, i)
+              : jsxRuntime.jsx("span", { children: p.text }, i),
+          ),
+        },
+      );
+    }
+
+    // ── 题干/解析的 md 渲染：vendor RTE 轻量挂载（只读随 md 重挂，编辑挂一次）──
+    function QuizMdView({ md, editable, onChange, resolveSrc }) {
+      const hostRef = react.useRef(null);
+      const [ready, setReady] = react.useState(false);
+      const [failed, setFailed] = react.useState(false);
+      react.useEffect(() => {
+        let alive = true;
+        Promise.all([ensureRteLib(), ensureKatex()])
+          .then(() => {
+            if (alive) setReady(true);
+          })
+          .catch(() => {
+            if (alive) setFailed(true);
+          });
+        return () => {
+          alive = false;
+        };
+      }, []);
+      // 可编辑：挂一次（内容变化走 onUpdate 回传，重挂会丢光标）；只读：md 变了才重挂
+      const mountKey = editable === true ? 0 : md;
+      react.useEffect(() => {
+        const host = hostRef.current;
+        if (!ready || failed || !host) return undefined;
+        const opts = { md: md ?? "", editable: editable === true };
+        if (typeof resolveSrc === "function") opts.resolveSrc = resolveSrc;
+        const h = window.DshRTE.create(host, opts);
+        const off = editable === true && typeof onChange === "function" ? h.onUpdate(() => onChange(h.getMd())) : null;
+        return () => {
+          if (off !== null) off();
+          try {
+            h.destroy();
+          } catch {
+            host.innerHTML = "";
+          }
+        };
+      }, [ready, failed, mountKey]);
+      if (failed === true) return jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: md });
+      return jsxRuntime.jsx("div", { className: "dshk-vault-rtehost dshk-quiz-box", ref: hostRef });
+    }
+
+    // ── 页条「测验」钮：徽标 = 已掌握/能答题数，全掌握标绿；5s 轮询指纹（agent 改题也看得见）──
+    function VaultQuizEntry({ path, root, active }) {
+      const rel = qzPageRel(root, path);
+      // null = 还没读到；{ count, mastered } = 能答题数与其中已掌握数（全部掌握时入口标绿）
+      const [stat, setStat] = react.useState(null);
+      react.useEffect(() => {
+        if (rel === null || active !== true) return undefined;
+        let alive = true;
+        let revKey = "";
+        const load = async () => {
+          try {
+            const query = `rel=${encodeURIComponent(rel)}`;
+            const [body, pg] = await Promise.all([
+              kitJson(`/dsh-kit/vault/quiz?${query}`, undefined, (b) => !!b),
+              kitJson(`/dsh-kit/vault/quiz-progress?${query}`, undefined, (b) => !!b),
+            ]);
+            const qs = Array.isArray(body.questions) ? body.questions.filter(qzAnswerable) : [];
+            const prog = pg?.progress ?? {};
+            if (alive) setStat({ count: qs.length, mastered: qs.filter((x) => qzIsMastered(prog, x.id)).length });
+          } catch {
+            if (alive) setStat(null);
+          }
+        };
+        const tick = async () => {
+          try {
+            const rev = await kitJson(`/dsh-kit/vault/quiz-revision?rel=${encodeURIComponent(rel)}`, undefined, (b) => !!b);
+            const key = `${rev.files}:${rev.mtimeMs}`;
+            if (key !== revKey) {
+              revKey = key;
+              await load();
+            }
+          } catch {
+            /* 根刚没了 / 行刚关：静默 */
+          }
+        };
+        void tick();
+        const timer = setInterval(tick, 5000);
+        return () => {
+          alive = false;
+          clearInterval(timer);
+        };
+      }, [rel, active]);
+      if (rel === null) return null;
+      const done = stat !== null && stat.count > 0 && stat.mastered === stat.count;
+      return jsxRuntime.jsx(KitTip, {
+        label: stat !== null && stat.count > 0 ? `${t("qzEntry")} · ${t("qzMastered")} ${stat.mastered}/${stat.count}` : t("qzEntryTip"),
+        children: jsxRuntime.jsx("button", {
+          type: "button",
+          className: "dshk-vault-tbtn" + (done ? " dshk-quiz-done" : ""),
+          onClick: () => qzOpen({ kind: "page", path, title: pageBasename(path) }),
+          children: stat !== null && stat.count > 0 ? `${t("qzEntry")} ${stat.mastered}/${stat.count}` : t("qzEntry"),
+        }),
+      });
+    }
+
+    // ── 浮层壳：请求状态非空才挂，portal 到 body（key 按请求变 = 重开会话）──
+    function VaultQuizOverlay() {
+      const req = useQzReq();
+      if (req === null) return null;
+      if (typeof reactDom.createPortal !== "function" || typeof document === "undefined" || document.body === null) return null;
+      return reactDom.createPortal(jsxRuntime.jsx(VaultQuizModal, { req }, qzKeyOf(req)), document.body, "dshk-quiz");
+    }
+
+    // 题干/解析里图片的 src 解析：相对引用按**来源页**目录解（attachments/ 直挂库根），
+    // 越界不接管回空串——与页面编辑面同一条规则
+    const qzSrcResolver = (root, relRef) => (src) => {
+      const raw = String(src ?? "");
+      if (/^(https?:|data:|blob:)/i.test(raw)) return raw;
+      if (root === null || root === "") return "";
+      const rel = relRef.current ?? "";
+      const dirRel = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+      const base = /^attachments[\\/]/i.test(raw) || dirRel === "" ? String(root) : joinRelPath(root, dirRel);
+      const abs = absJoinUnder(base, raw);
+      if (isPathInsideVaultRoot(root, abs) === false) return "";
+      return `/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
+    };
+    // ── 浮层主体：范围设置 → 逐题作答 → 小结；页面入口再给「编辑题目」──
+    function VaultQuizModal({ req }) {
+      const reader = useVaultReader();
+      // 索引侧不在（右栏签直开 / 刷新后直进）时自己兜一次库根
+      const [ownRoot, setOwnRoot] = react.useState(null);
+      const [pages, setPages] = react.useState(null);
+      const [progress, setProgress] = react.useState(null);
+      const [stage, setStage] = react.useState("scope");
+      const [session, setSession] = react.useState([]);
+      const [cursor, setCursor] = react.useState(0);
+      const [answer, setAnswer] = react.useState(() => ({ choice: "", judge: null, blanks: [] }));
+      const [checked, setChecked] = react.useState(null);
+      const [tally, setTally] = react.useState(() => ({ right: 0, wrong: 0, mastered: 0 }));
+      const [explainOn, setExplainOn] = react.useState(false);
+      // 开卷时已掌握的题：小结「新掌握」只认「开卷未掌握 → 此刻已掌握」（本轮内遗忘会退回，
+      // 手动标记掌握同样记账——只累加作答的 newlyMastered 会虚报）
+      const startMasteredRef = react.useRef(new Set());
+      const newMasteredRef = react.useRef(new Set());
+      const root = reader.root ?? ownRoot;
+      const isPage = req.kind === "page";
+      const rel = root === null || root === "" ? null : isPage ? qzPageRel(root, req.path) : relUnder(root, req.path);
+      // 题干/解析里的图片按**来源页**解析：rel 随题走，走 ref（resolver 闭包只造一次）
+      const srcRelRef = react.useRef("");
+      const item = session[cursor];
+      srcRelRef.current = item !== undefined ? item.rel : isPage === true ? rel ?? "" : "";
+      const resolveSrc = react.useMemo(() => qzSrcResolver(root ?? "", srcRelRef), [root]);
+      const loaderRef = react.useRef(null);
+
+      react.useEffect(() => {
+        if (reader.root !== null || ownRoot !== null) return undefined;
+        let alive = true;
+        kitJson("/dsh-kit/vault/index", undefined, (b) => !!b)
+          .then((body) => {
+            if (alive) setOwnRoot(typeof body?.root === "string" ? body.root : "");
+          })
+          .catch(() => {
+            if (alive) setOwnRoot("");
+          });
+        return () => {
+          alive = false;
+        };
+      }, [reader.root, ownRoot]);
+
+      // 浮层开着期间 Esc 归它（先关浮层，不让宿主收走下面的界面）
+      react.useEffect(() => {
+        holdEsc();
+        return () => releaseEsc();
+      }, []);
+
+      // 拉范围数据 + 5s 指纹轮询：agent 改了题 / 另一端改了阈值都跟着重读
+      react.useEffect(() => {
+        if (rel === null) return undefined;
+        let alive = true;
+        let revKey = "";
+        const query = isPage === true ? `rel=${encodeURIComponent(rel)}` : `dir=${encodeURIComponent(rel)}`;
+        const loadAll = async () => {
+          try {
+            const [data, prog] = await Promise.all([
+              kitJson(`/dsh-kit/vault/${isPage === true ? "quiz" : "quiz-scope"}?${query}`, undefined, (b) => !!b),
+              kitJson(`/dsh-kit/vault/quiz-progress?${query}`, undefined, (b) => !!b),
+            ]);
+            if (!alive) return;
+            setPages(isPage === true ? [data] : Array.isArray(data.pages) ? data.pages : []);
+            setProgress(prog);
+          } catch (error) {
+            if (!alive) return;
+            setPages([]);
+            setProgress({ version: 1, threshold: 3, progress: {} });
+            flashToast(`${t("qzLoadFail")}：${error?.message ?? error}`);
+          }
+        };
+        loaderRef.current = loadAll;
+        const tick = async () => {
+          try {
+            const rev = await kitJson(`/dsh-kit/vault/quiz-revision?${query}`, undefined, (b) => !!b);
+            const key = `${rev.files}:${rev.mtimeMs}`;
+            if (key !== revKey) {
+              revKey = key;
+              await loadAll();
+            }
+          } catch {
+            /* 静默 */
+          }
+        };
+        void tick();
+        const timer = setInterval(tick, 5000);
+        return () => {
+          alive = false;
+          clearInterval(timer);
+          loaderRef.current = null;
+        };
+      }, [rel, isPage]);
+
+      const start = (pool, limit) => {
+        const pickedQs = qzPick(pool, limit);
+        if (pickedQs.length === 0) return;
+        // 先定会话再取第一题：打乱一遍后 picked[0] 会与展示的题错位
+        const items = qzShuffle(pickedQs).map((q) => qzMakeItem(q, q.rel ?? "", true));
+        setSession(items);
+        setCursor(0);
+        setAnswer(qzEmptyAnswer(items[0].q));
+        setChecked(null);
+        setExplainOn(false);
+        setTally({ right: 0, wrong: 0, mastered: 0 });
+        const prog = progress?.progress ?? {};
+        startMasteredRef.current = new Set(pickedQs.filter((q) => qzIsMastered(prog, q.id)).map((q) => q.id));
+        newMasteredRef.current = new Set();
+        setStage("session");
+      };
+      /** 记一笔「新掌握」：作答、标记掌握、遗忘都走这里（同一题标记后又遗忘会退回） */
+      const qzAccount = (id, mastered) => {
+        if (mastered === true && startMasteredRef.current.has(id) === false) newMasteredRef.current.add(id);
+        else newMasteredRef.current.delete(id);
+        setTally((t) => ({ ...t, mastered: newMasteredRef.current.size }));
+      };
+      const submit = () => {
+        if (item === undefined || checked !== null || qzIsAnswered(item.q, answer) === false) return;
+        const correct = qzJudge(item, answer);
+        setChecked({ correct, outcome: null });
+        setTally((tl) => ({ right: tl.right + (correct ? 1 : 0), wrong: tl.wrong + (correct ? 0 : 1), mastered: tl.mastered }));
+        void vaultOp("/dsh-kit/vault/quiz-record", { rel: item.rel, id: item.q.id, correct })
+          .then((outcome) => {
+            setChecked((c) => (c !== null ? { ...c, outcome } : c));
+            qzAccount(item.q.id, outcome.mastered === true);
+          })
+          .catch(() => {});
+      };
+      const next = () => {
+        const at = cursor + 1;
+        if (at >= session.length) {
+          setStage("result");
+          return;
+        }
+        setCursor(at);
+        setChecked(null);
+        setExplainOn(false);
+        const q = session[at].q;
+        setAnswer(qzEmptyAnswer(q));
+      };
+      const markMastered = () => {
+        if (item === undefined) return;
+        void vaultOp("/dsh-kit/vault/quiz-mark", { rel: item.rel, id: item.q.id })
+          .then((outcome) => {
+            setChecked((c) => (c !== null ? { ...c, outcome } : c));
+            qzAccount(item.q.id, outcome.mastered === true);
+          })
+          .catch(() => {});
+      };
+      const forget = () => {
+        if (item === undefined) return;
+        void vaultOp("/dsh-kit/vault/quiz-forget", { rel: item.rel, id: item.q.id })
+          .then((outcome) => {
+            setChecked((c) => (c !== null ? { ...c, outcome } : c));
+            qzAccount(item.q.id, outcome.mastered === true);
+          })
+          .catch(() => {});
+      };
+
+      // 键盘：回车 = 提交/下一题，数字键 = 勾选项，Esc = 关浮层。不写依赖表 =
+      // 每渲染重挂，读的永远是本次渲染的题与作答
+      react.useEffect(() => {
+        if (stage !== "session") return undefined;
+        const onKey = (e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            qzClose();
+            return;
+          }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            if (checked !== null) next();
+            else submit();
+            return;
+          }
+          if (checked !== null || item === undefined) return;
+          if (item.q.type !== "single" && item.q.type !== "multi") return;
+          const n = Number(e.key);
+          if (!Number.isInteger(n) || n < 1 || n > (item.q.options?.length ?? 0)) return;
+          const letter = qzLetterAt(n - 1);
+          setAnswer((a) => {
+            if (item.q.type === "single") return { ...a, choice: letter };
+            const set = new Set(a.choice.split(""));
+            if (set.has(letter)) set.delete(letter);
+            else set.add(letter);
+            return { ...a, choice: Array.from(set).sort().join("") };
+          });
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      });
+
+      if (root === null) return jsxRuntime.jsx("div", { className: "dshk-quiz", children: jsxRuntime.jsx("div", { className: "dshk-quiz-body", children: jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: t("contentLoading") }) }) });
+      if (root === "" || rel === null) {
+        return jsxRuntime.jsx("div", { className: "dshk-quiz", children: jsxRuntime.jsx("div", { className: "dshk-quiz-body", children: jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: t("vaultNotConfigured") }) }) });
+      }
+      const list = pages ?? [];
+      const progressMap = progress?.progress ?? {};
+      const threshold = progress?.threshold ?? 3;
+      let node = null;
+      if (pages === null || progress === null) {
+        node = jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: t("contentLoading") });
+      } else if (stage === "scope") {
+        node = jsxRuntime.jsx(VaultQuizScope, {
+          isPage,
+          pages: list,
+          progress,
+          onStart: start,
+          onEdit: (pageRel) => qzOpen({ kind: "page", path: joinRelPath(root, pageRel), title: pageRel.split("/").pop() ?? pageRel }),
+          onClose: qzClose,
+          onThreshold: (value) => {
+            void vaultOp("/dsh-kit/vault/quiz-threshold", { value })
+              .then(() => loaderRef.current?.())
+              .catch(() => {});
+          },
+        });
+      } else if (stage === "edit" && isPage === true) {
+        node = jsxRuntime.jsx(VaultQuizQuestions, {
+          rel,
+          questions: list.length > 0 ? list[0].questions : [],
+          progress: progressMap,
+          resolveSrc,
+          reload: () => loaderRef.current?.(),
+          onBack: () => setStage("scope"),
+        });
+      } else if (stage === "session" && item !== undefined) {
+        const q = item.q;
+        const opts = qzDisplayOptions(item);
+        const letterOn = (L) => answer.choice.includes(L);
+        node = jsxRuntime.jsxs("div", { children: [
+          jsxRuntime.jsxs("div", { className: "dshk-quiz-row", children: [
+            jsxRuntime.jsx("span", { className: "dshk-quiz-sub", children: t("qzNofN").replace("{i}", String(cursor + 1)).replace("{n}", String(session.length)) }),
+            jsxRuntime.jsx("span", { className: "dshk-quiz-gap" }),
+            jsxRuntime.jsx("span", { className: "dshk-quiz-kind", children: qzKindLabel(q.type) }),
+          ] }),
+          jsxRuntime.jsx("div", { className: "dshk-quiz-prog", children: jsxRuntime.jsx("i", { style: { width: `${Math.round(((cursor + (checked !== null ? 1 : 0)) / session.length) * 100)}%` } }) }),
+          jsxRuntime.jsx("div", { className: "dshk-quiz-stem", children: jsxRuntime.jsx(QuizMdView, { md: q.stem, resolveSrc }) }),
+          q.type === "single" || q.type === "multi"
+            ? opts.map((opt, i) => {
+                const L = qzLetterAt(i);
+                const on = letterOn(L);
+                return jsxRuntime.jsxs("div", {
+                  className: `dshk-quiz-opt${on ? " is-on" : ""}`,
+                  onClick: () => {
+                    if (checked !== null) return;
+                    if (q.type === "single") setAnswer((a) => ({ ...a, choice: L }));
+                    else
+                      setAnswer((a) => {
+                        const set = new Set(a.choice.split(""));
+                        if (set.has(L)) set.delete(L);
+                        else set.add(L);
+                        return { ...a, choice: Array.from(set).sort().join("") };
+                      });
+                  },
+                  children: [
+                    jsxRuntime.jsx("span", { className: "dshk-quiz-optletter", children: L }),
+                    jsxRuntime.jsx("span", { className: "dshk-quiz-opttext", children: jsxRuntime.jsx(QuizInline, { text: opt }) }),
+                  ],
+                }, L);
+              })
+            : null,
+          q.type === "judge"
+            ? jsxRuntime.jsx("div", { className: "dshk-quiz-row", children: ["true", "false"].map((v) =>
+                jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: `dshk-quiz-segbtn${answer.judge === (v === "true") ? " is-on" : ""}`,
+                  style: { border: "1px solid var(--dsw-alias-border-l2)", borderRadius: 8 },
+                  disabled: checked !== null,
+                  onClick: () => setAnswer((a) => ({ ...a, judge: v === "true" })),
+                  children: v === "true" ? t("qzTrue") : t("qzFalse"),
+                }, v),
+              ) })
+            : null,
+          q.type === "blank"
+            ? answer.blanks.map((value, i) =>
+                jsxRuntime.jsxs("div", { className: "dshk-quiz-row", children: [
+                  jsxRuntime.jsx("span", { className: "dshk-quiz-sub", style: { flex: "none" }, children: t("qzBlankN").replace("{i}", String(i + 1)) }),
+                  jsxRuntime.jsx("input", {
+                    className: "dshk-quiz-input dshk-quiz-grow",
+                    value,
+                    disabled: checked !== null,
+                    onChange: (e) => {
+                      const text = e.target.value;
+                      setAnswer((a) => {
+                        const blanks = a.blanks.slice();
+                        blanks[i] = text;
+                        return { ...a, blanks };
+                      });
+                    },
+                  }),
+                ] }, i),
+              )
+            : null,
+          checked !== null
+            ? jsxRuntime.jsxs("div", { className: `dshk-quiz-verdict ${checked.correct ? "is-ok" : "is-bad"}`, children: [
+                jsxRuntime.jsxs("div", { className: "dshk-quiz-verdicttop", children: [
+                  jsxRuntime.jsx("span", { children: checked.correct ? t("qzRight") : t("qzWrong") }),
+                  jsxRuntime.jsxs("span", { className: "dshk-quiz-row", style: { margin: 0 }, children: [
+                    checked.outcome !== null && checked.outcome !== undefined
+                      ? jsxRuntime.jsx("span", { className: "dshk-quiz-sub", children: checked.outcome.mastered === true ? t("qzMastered") : t("qzMastery").replace("{s}", String(checked.outcome.streak)).replace("{t}", String(threshold)) })
+                      : null,
+                    q.explain ? jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini", onClick: () => setExplainOn((v) => !v), children: explainOn ? t("qzHideExplain") : t("qzShowExplain") }) : null,
+                  ] }),
+                ] }),
+                jsxRuntime.jsx("div", { children: (checked.correct ? t("qzAnswerIs") : t("qzCorrectAnswerIs")).replace("{a}", qzAnswerText(item)) }),
+                explainOn === true && q.explain
+                  ? jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: jsxRuntime.jsx(QuizMdView, { md: q.explain, resolveSrc }) })
+                  : null,
+              ] })
+            : null,
+          checked !== null
+            ? jsxRuntime.jsxs("div", { className: "dshk-quiz-act", children: [
+                jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", disabled: qzIsMastered(progressMap, q.id) === true, onClick: markMastered, children: t("qzMark") }),
+                jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: forget, children: t("qzForget") }),
+              ] })
+            : null,
+          jsxRuntime.jsxs("div", { className: "dshk-quiz-foot", children: [
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setStage("scope"), children: t("qzEnd") }),
+            checked !== null
+              ? jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", onClick: next, children: cursor + 1 >= session.length ? t("qzSeeResult") : t("qzNext") })
+              : jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", disabled: qzIsAnswered(q, answer) === false, onClick: submit, children: t("qzSubmit") }),
+          ] }),
+        ] });
+      } else if (stage === "result") {
+        const pct = session.length > 0 ? Math.round((tally.right / session.length) * 100) : 0;
+        node = jsxRuntime.jsxs("div", { className: "dshk-quiz-result", children: [
+          jsxRuntime.jsx("div", { className: "dshk-quiz-resulttitle", children: t("qzResultN").replace("{n}", String(session.length)) }),
+          jsxRuntime.jsxs("div", { className: "dshk-quiz-statnums", children: [
+            jsxRuntime.jsxs("div", { className: "dshk-quiz-stat", children: [jsxRuntime.jsx("span", { className: "dshk-quiz-statnum", style: { color: "#2f9e44" }, children: tally.right }), t("qzStatRight")] }),
+            jsxRuntime.jsxs("div", { className: "dshk-quiz-stat", children: [jsxRuntime.jsx("span", { className: "dshk-quiz-statnum", style: { color: "var(--dsw-alias-danger,#cd3131)" }, children: tally.wrong }), t("qzStatWrong")] }),
+            jsxRuntime.jsxs("div", { className: "dshk-quiz-stat", children: [jsxRuntime.jsx("span", { className: "dshk-quiz-statnum", children: tally.mastered }), t("qzStatNew")] }),
+          ] }),
+          jsxRuntime.jsx("div", { className: "dshk-quiz-sub", children: t("qzAccuracy").replace("{p}", String(pct)) }),
+          jsxRuntime.jsxs("div", { className: "dshk-quiz-row", children: [
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setStage("scope"), children: t("qzAgain") }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", onClick: qzClose, children: t("qzDone") }),
+          ] }),
+        ] });
+      }
+      return jsxRuntime.jsxs("div", { className: "dshk-quiz", children: [
+        jsxRuntime.jsxs("div", { className: "dshk-quiz-bar", children: [
+          jsxRuntime.jsx("span", { className: "dshk-quiz-title", children: req.title }),
+          isPage === true && stage !== "edit"
+            ? jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setStage("edit"), children: t("qzEdit") })
+            : null,
+          jsxRuntime.jsx("span", { className: "dshk-quiz-gap" }),
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: qzClose, children: "✕ " + t("qzClose") }),
+        ] }),
+        jsxRuntime.jsx("div", { className: "dshk-quiz-body", children: jsxRuntime.jsx("div", { className: "dshk-quiz-inner", children: node }) }),
+      ] });
+    }
+    // ── 范围设置：页面入口锁一页、题型 + 掌握状态、数量；范围入口多一层页面勾选 ──
+    function VaultQuizScope({ isPage, pages, progress, onStart, onEdit, onClose, onThreshold }) {
+      const [status, setStatus] = react.useState("unmastered");
+      const [kinds, setKinds] = react.useState(QZ_KINDS.slice());
+      // null = 跟着页面清单走（新页立刻参与出题）；动过就以此为准
+      const [picked, setPicked] = react.useState(null);
+      const [limit, setLimit] = react.useState(20);
+      const [thrDraft, setThrDraft] = react.useState(null);
+      const list = pages ?? [];
+      const progressMap = progress?.progress ?? {};
+      const threshold = progress?.threshold ?? 3;
+      const chosen = isPage === true || picked === null ? list : list.filter((p) => picked.includes(p.rel));
+      const pool = qzFilterKinds(qzFilterStatus(qzQuestionsOf(chosen), status, progressMap), kinds);
+      const total = qzStatOf(qzQuestionsOf(list), progressMap);
+      const effectiveLimit = isPage === true ? QZ_ALL : limit;
+      const thr = thrDraft ?? threshold;
+      const allPicked = picked !== null && picked.length === list.length;
+      const seg = (options, value, onChange) =>
+        jsxRuntime.jsx("span", { className: "dshk-quiz-seg", children: options.map((o) =>
+          jsxRuntime.jsx("button", {
+            type: "button",
+            className: `dshk-quiz-segbtn${value === o.value ? " is-on" : ""}`,
+            onClick: () => onChange(o.value),
+            children: o.label,
+          }, o.value),
+        ) });
+      const chk = (on, onChange, children) =>
+        jsxRuntime.jsxs("label", { className: "dshk-quiz-chk", children: [
+          jsxRuntime.jsx("input", { type: "checkbox", checked: on === true, onChange: (e) => onChange(e.target.checked) }),
+          jsxRuntime.jsx("span", { children }),
+        ] });
+      return jsxRuntime.jsxs("div", { children: [
+        isPage === false && list.length > 0
+          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+              jsxRuntime.jsxs("div", { className: "dshk-quiz-row", children: [
+                jsxRuntime.jsx("span", { className: "dshk-quiz-label", style: { margin: 0 }, children: t("qzPages") }),
+                jsxRuntime.jsx("span", { className: "dshk-quiz-gap" }),
+                jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini", onClick: () => setPicked(allPicked ? [] : list.map((p) => p.rel)), children: allPicked ? t("qzNone") : t("qzAll") }),
+              ] }),
+              jsxRuntime.jsx("div", { className: "dshk-quiz-pages", children: list.map((p) => {
+                const s = qzStatOf((p.questions ?? []).filter(qzAnswerable), progressMap);
+                return jsxRuntime.jsxs("div", { className: "dshk-quiz-prow", children: [
+                  chk(picked === null || picked.includes(p.rel), (on) => {
+                    const cur = picked === null ? list.map((x) => x.rel) : picked.slice();
+                    const nextPick = on === true ? cur.concat([p.rel]) : cur.filter((r) => r !== p.rel);
+                    setPicked(Array.from(new Set(nextPick)));
+                  }, jsxRuntime.jsx("span", { className: "dshk-quiz-grow", style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: p.rel.split("/").pop() ?? p.rel })),
+                  jsxRuntime.jsx("span", { className: "dshk-quiz-sub", style: { flex: "none" }, children: t("qzPageStat").replace("{t}", String(s.total)).replace("{m}", String(s.mastered)) }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini", title: t("qzEditPageTip"), onClick: () => onEdit(p.rel), children: "✎" }),
+                ] }, p.rel);
+              }) }),
+            ] })
+          : null,
+        jsxRuntime.jsx("div", { className: "dshk-quiz-label", children: t("qzMasteryState") }),
+        seg(
+          (isPage === true ? ["unmastered", "all"] : ["unmastered", "mastered", "all"]).map((v) => ({
+            value: v,
+            label: t(v === "unmastered" ? "qzStatusUnmastered" : v === "mastered" ? "qzStatusMastered" : "qzStatusAll"),
+          })),
+          status,
+          setStatus,
+        ),
+        jsxRuntime.jsx("div", { className: "dshk-quiz-label", children: t("qzKinds") }),
+        jsxRuntime.jsx("div", { className: "dshk-quiz-row", children: QZ_KINDS.map((k) =>
+          chk(kinds.includes(k), (on) => setKinds((ks) => (on === true ? (ks.includes(k) ? ks : ks.concat([k])) : ks.filter((x) => x !== k))), qzKindLabel(k)),
+        ) }),
+        isPage === false
+          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+              jsxRuntime.jsx("div", { className: "dshk-quiz-label", children: t("qzCount") }),
+              seg([
+                { value: "20", label: t("qzCount20") },
+                { value: "50", label: t("qzCount50") },
+                { value: "all", label: t("qzCountAll") },
+              ], limit === QZ_ALL ? "all" : String(limit), (v) => setLimit(v === "all" ? QZ_ALL : Number(v))),
+            ] })
+          : null,
+        total.total === 0 ? jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: isPage === true ? t("qzEmptyPage") : t("qzEmptyScope") }) : null,
+        jsxRuntime.jsxs("div", { className: "dshk-quiz-foot", children: [
+          jsxRuntime.jsx("span", { className: "dshk-quiz-sub", children: t("qzThisMany").replace("{n}", String(Math.min(pool.length, effectiveLimit))) }),
+          jsxRuntime.jsxs("div", { className: "dshk-quiz-foctr", children: [
+            jsxRuntime.jsxs("label", { className: "dshk-quiz-row", style: { margin: 0 }, children: [
+              jsxRuntime.jsx("span", { className: "dshk-quiz-sub", children: t("qzThreshold") }),
+              jsxRuntime.jsx("input", {
+                className: "dshk-quiz-input dshk-quiz-num",
+                type: "number",
+                min: 1,
+                max: 20,
+                value: thr,
+                onChange: (e) => setThrDraft(e.target.value === "" ? null : Number(e.target.value)),
+                onBlur: () => {
+                  const v = Math.min(Math.max(Math.round(Number(thr) || 1), 1), 20);
+                  if (v !== threshold) onThreshold(v);
+                  else setThrDraft(null);
+                },
+              }),
+            ] }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: onClose, children: t("qzCancel") }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", disabled: pool.length === 0, onClick: () => onStart(pool, effectiveLimit), children: t("qzStart") }),
+          ] }),
+        ] }),
+      ] });
+    }
+
+    // ── 出题：题目列表 + 表单。增删改都是**全量写回**这一页的题目文件（宿主按内容
+    // 哈希重算 id，改过的题进度重算）。标记掌握/遗忘也在这里——不必非得答一遍才能改
+    function VaultQuizQuestions({ rel, questions, progress, resolveSrc, reload, onBack }) {
+      const [editing, setEditing] = react.useState(null); // null | "new" | 下标
+      const [askDel, setAskDel] = react.useState(null);
+      const write = async (drafts, edit) => {
+        try {
+          await vaultOp("/dsh-kit/vault/quiz-save", { rel, questions: drafts, edit: edit ?? null });
+          setEditing(null);
+          setAskDel(null);
+          reload();
+          flashToast(t("qzSavedTip"));
+        } catch (error) {
+          // 校验不过（题干太长、选项为空…）直接把宿主的错误串端出来
+          flashToast(String(error?.message ?? error));
+        }
+      };
+      const toDraft = (q) => ({ type: q.type, stem: q.stem, options: q.options ?? [], answer: q.answer, explain: q.explain ?? "" });
+      const markOrForget = (id, path) => {
+        void vaultOp(path, { rel, id }).then(() => reload()).catch(() => {});
+      };
+      if (editing !== null) {
+        const initial = typeof editing === "number" ? questions[editing] ?? null : null;
+        return jsxRuntime.jsxs("div", { children: [
+          jsxRuntime.jsx("div", { className: "dshk-quiz-h2", children: editing === "new" ? t("qzNew") : t("qzEditN").replace("{i}", String(editing + 1)) }),
+          jsxRuntime.jsx(VaultQuizForm, {
+            key: String(editing),
+            initial,
+            resolveSrc,
+            onSave: (draft, keep) => {
+              const drafts = questions.map(toDraft);
+              if (editing === "new") {
+                void write(drafts.concat([draft]), null);
+                return;
+              }
+              const target = questions[editing];
+              drafts[editing] = draft;
+              // 这一题的掌握记录怎么办交给宿主：勾了搬、没勾清零（其余题一律不动）
+              void write(drafts, target !== undefined ? { index: editing, oldId: target.id, keep } : null);
+            },
+            onCancel: () => setEditing(null),
+          }),
+        ] });
+      }
+      return jsxRuntime.jsxs("div", { children: [
+        jsxRuntime.jsxs("div", { className: "dshk-quiz-row", children: [
+          jsxRuntime.jsx("span", { className: "dshk-quiz-sub", children: t("qzTotal").replace("{n}", String(questions.length)) }),
+          jsxRuntime.jsx("span", { className: "dshk-quiz-gap" }),
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setEditing("new"), children: t("qzNew") }),
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: onBack, children: t("qzBack") }),
+        ] }),
+        questions.length === 0 ? jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: t("qzNoQuestions") }) : null,
+        questions.map((q, i) =>
+          jsxRuntime.jsxs("div", { className: "dshk-quiz-qitem", children: [
+            jsxRuntime.jsxs("div", { className: "dshk-quiz-qmain", children: [
+              jsxRuntime.jsxs("div", { className: "dshk-quiz-qhead", children: [
+                jsxRuntime.jsx("span", { className: "dshk-quiz-qnum", children: String(i + 1) }),
+                jsxRuntime.jsx("span", { className: "dshk-quiz-kind", children: qzKindLabel(q.type) }),
+                qzIsMastered(progress, q.id) === true ? jsxRuntime.jsx("span", { className: "dshk-quiz-mst", children: t("qzMastered") }) : null,
+              ] }),
+              jsxRuntime.jsx("div", { className: "dshk-quiz-qstem", children: jsxRuntime.jsx(QuizInline, { text: q.stem }) }),
+              jsxRuntime.jsx("div", { className: "dshk-quiz-qans", children: t("qzAnswerIs").replace("{a}", qzStoredAnswerText(q)) }),
+            ] }),
+            jsxRuntime.jsxs("div", { className: "dshk-quiz-qacts", children: [
+              askDel === i
+                ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                    jsxRuntime.jsx("span", { className: "dshk-quiz-sub", style: { alignSelf: "center" }, children: t("qzDeleteAsk").replace("{i}", String(i + 1)) }),
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini is-danger", onClick: () => void write(questions.map(toDraft).filter((_, k) => k !== i), null), children: t("qzDeleteGo") }),
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini", onClick: () => setAskDel(null), children: t("qzCancel") }),
+                  ] })
+                : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini", title: t("qzMark"), disabled: qzIsMastered(progress, q.id) === true, onClick: () => markOrForget(q.id, "/dsh-kit/vault/quiz-mark"), children: "✓" }),
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini", title: t("qzForget"), onClick: () => markOrForget(q.id, "/dsh-kit/vault/quiz-forget"), children: "↻" }),
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini", title: t("qzEdit"), onClick: () => setEditing(i), children: "✎" }),
+                    jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini is-danger", title: t("qzDeleteGo"), onClick: () => setAskDel(i), children: "✕" }),
+                  ] }),
+            ] }),
+          ] }, q.id),
+        ),
+      ] });
+    }
+    // ── 出题表单：四种题型共用一份（切题型时题干与解析保留）。填空的多个可接受
+    // 答案用 | 分隔；编辑器动过才交新串——没动过原样写回，题干一变内容哈希就变、
+    // 进度白丢一次（见宿主 quiz.ts 的 questionId）
+    function VaultQuizForm({ initial, resolveSrc, onSave, onCancel }) {
+      const [kind, setKind] = react.useState(initial?.type ?? "single");
+      const [stem, setStem] = react.useState(initial?.stem ?? "");
+      const [stemTouched, setStemTouched] = react.useState(false);
+      const [options, setOptions] = react.useState(() =>
+        initial?.options !== undefined && initial.options.length > 0 ? initial.options.slice() : ["", ""],
+      );
+      const [correct, setCorrect] = react.useState(() => {
+        if (initial !== null && typeof initial?.answer === "string") {
+          return initial.answer
+            .split("")
+            .map((ch) => ch.charCodeAt(0) - 65)
+            .filter((i) => i >= 0);
+        }
+        return [];
+      });
+      const [judge, setJudge] = react.useState(initial?.type === "judge" ? initial.answer === true : true);
+      const [blanks, setBlanks] = react.useState(() =>
+        initial !== null && Array.isArray(initial?.answer) ? initial.answer.map((vs) => vs.join(" | ")) : [""],
+      );
+      const [explain, setExplain] = react.useState(initial?.explain ?? "");
+      const [explainTouched, setExplainTouched] = react.useState(false);
+      // 默认保留：手动编辑多是改错字/调措辞，不该顺手把掌握度清零（要重置就取消勾选，
+      // 或在题目列表点「遗忘」）
+      const [keep, setKeep] = react.useState(true);
+      const warn = (msg) => flashToast(msg);
+      const submit = () => {
+        const stemOut = stemTouched ? stem : initial?.stem ?? "";
+        const explainOut = explainTouched ? explain : initial?.explain ?? "";
+        if (stemOut.trim() === "") {
+          warn(t("qzStemEmpty"));
+          return;
+        }
+        if (kind === "single" || kind === "multi") {
+          const opts = options.map((o) => o.trim());
+          if (opts.length < 2 || opts.some((o) => o === "")) {
+            warn(t("qzOptsBad"));
+            return;
+          }
+          if (correct.length === 0) {
+            warn(t("qzCorrectEmpty"));
+            return;
+          }
+          if (kind === "single" && correct.length !== 1) {
+            warn(t("qzSingleOnly"));
+            return;
+          }
+          if (kind === "multi" && correct.length < 2) {
+            warn(t("qzMultiNeed"));
+            return;
+          }
+          const answerStr = correct
+            .slice()
+            .sort((a, b) => a - b)
+            .map((i) => qzLetterAt(i))
+            .join("");
+          onSave({ type: kind, stem: stemOut, options: opts, answer: answerStr, explain: explainOut }, keep === true);
+          return;
+        }
+        if (kind === "judge") {
+          onSave({ type: kind, stem: stemOut, options: [], answer: judge === true, explain: explainOut }, keep === true);
+          return;
+        }
+        const accepted = blanks
+          .map((b) => b
+            .split("|")
+            .map((t2) => t2.trim())
+            .filter((t2) => t2 !== ""))
+          .filter((vs) => vs.length > 0);
+        if (accepted.length === 0) {
+          warn(t("qzBlankEmpty"));
+          return;
+        }
+        onSave({ type: kind, stem: stemOut, options: [], answer: accepted, explain: explainOut }, keep === true);
+      };
+      const seg = (options2, value, onChange) =>
+        jsxRuntime.jsx("span", { className: "dshk-quiz-seg", children: options2.map((o) =>
+          jsxRuntime.jsx("button", {
+            type: "button",
+            className: `dshk-quiz-segbtn${value === o.value ? " is-on" : ""}`,
+            onClick: () => onChange(o.value),
+            children: o.label,
+          }, o.value),
+        ) });
+      return jsxRuntime.jsxs("div", { children: [
+        seg(QZ_KINDS.map((k) => ({ value: k, label: qzKindLabel(k) })), kind, (v) => {
+          setKind(v);
+          if (v === "single" && correct.length > 1) setCorrect(correct.slice(0, 1));
+        }),
+        jsxRuntime.jsx("div", { className: "dshk-quiz-label", children: t("qzStem") }),
+        jsxRuntime.jsx(QuizMdView, {
+          md: initial?.stem ?? "",
+          editable: true,
+          resolveSrc,
+          onChange: (v) => {
+            setStem(v);
+            setStemTouched(true);
+          },
+        }),
+        kind === "single" || kind === "multi"
+          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+              jsxRuntime.jsx("div", { className: "dshk-quiz-label", children: t("qzOptions") }),
+              options.map((opt, i) =>
+                jsxRuntime.jsxs("div", { className: "dshk-quiz-row", children: [
+                  jsxRuntime.jsx("input", {
+                    type: kind === "single" ? "radio" : "checkbox",
+                    checked: kind === "single" ? correct[0] === i : correct.includes(i),
+                    onChange: () => setCorrect((prev) => (kind === "single" ? [i] : prev.includes(i) ? prev.filter((x) => x !== i) : prev.concat([i]))),
+                  }),
+                  jsxRuntime.jsx("input", {
+                    className: "dshk-quiz-input dshk-quiz-grow",
+                    value: opt,
+                    placeholder: t("qzOptionPh").replace("{L}", qzLetterAt(i)),
+                    onChange: (e) => {
+                      const text = e.target.value;
+                      setOptions((prev) => prev.map((o, k) => (k === i ? text : o)));
+                    },
+                  }),
+                  jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-quiz-mini",
+                    disabled: options.length <= 2,
+                    onClick: () => {
+                      setOptions((prev) => prev.filter((_, k) => k !== i));
+                      setCorrect([]);
+                    },
+                    children: "✕",
+                  }),
+                ] }, i),
+              ),
+              jsxRuntime.jsxs("div", { className: "dshk-quiz-row", children: [
+                jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini", disabled: options.length >= 10, onClick: () => setOptions((prev) => prev.concat([""])), children: "+ " + t("qzAddOption") }),
+                jsxRuntime.jsx("span", { className: "dshk-quiz-sub", children: t("qzCorrectHint") }),
+              ] }),
+            ] })
+          : null,
+        kind === "judge"
+          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+              jsxRuntime.jsx("div", { className: "dshk-quiz-label", children: t("qzKind_judge") }),
+              seg([{ value: "true", label: t("qzTrue") }, { value: "false", label: t("qzFalse") }], judge === true ? "true" : "false", (v) => setJudge(v === "true")),
+            ] })
+          : null,
+        kind === "blank"
+          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+              jsxRuntime.jsx("div", { className: "dshk-quiz-label", children: t("qzKind_blank") }),
+              blanks.map((value, i) =>
+                jsxRuntime.jsxs("div", { className: "dshk-quiz-row", children: [
+                  jsxRuntime.jsx("span", { className: "dshk-quiz-sub", style: { flex: "none" }, children: t("qzBlankN").replace("{i}", String(i + 1)) }),
+                  jsxRuntime.jsx("input", {
+                    className: "dshk-quiz-input dshk-quiz-grow",
+                    value,
+                    placeholder: t("qzBlankPh"),
+                    onChange: (e) => {
+                      const text = e.target.value;
+                      setBlanks((prev) => prev.map((b, k) => (k === i ? text : b)));
+                    },
+                  }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini", disabled: blanks.length <= 1, onClick: () => setBlanks((prev) => prev.filter((_, k) => k !== i)), children: "✕" }),
+                ] }, i),
+              ),
+              jsxRuntime.jsx("div", { className: "dshk-quiz-row", children: jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini", disabled: blanks.length >= 10, onClick: () => setBlanks((prev) => prev.concat([""])), children: "+ " + t("qzAddBlank") }) }),
+            ] })
+          : null,
+        jsxRuntime.jsx("div", { className: "dshk-quiz-label", children: t("qzExplain") }),
+        jsxRuntime.jsx(QuizMdView, {
+          md: initial?.explain ?? "",
+          editable: true,
+          resolveSrc,
+          onChange: (v) => {
+            setExplain(v);
+            setExplainTouched(true);
+          },
+        }),
+        initial !== null && initial?.id
+          ? jsxRuntime.jsx("div", { className: "dshk-quiz-row", children: jsxRuntime.jsxs("label", { className: "dshk-quiz-chk", children: [
+              jsxRuntime.jsx("input", { type: "checkbox", checked: keep === true, onChange: (e) => setKeep(e.target.checked) }),
+              jsxRuntime.jsx("span", { children: t("qzKeepProgress") }),
+            ] }) })
+          : null,
+        jsxRuntime.jsxs("div", { className: "dshk-quiz-foot", children: [
+          jsxRuntime.jsx("span", { className: "dshk-quiz-gap" }),
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: onCancel, children: t("qzCancel") }),
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", onClick: submit, children: t("qzSave") }),
+        ] }),
+      ] });
+    }
+
+    // 测验：纯逻辑与浮层面（render-check 直测）
+    exports.qzShuffle = qzShuffle;
+    exports.qzPick = qzPick;
+    exports.qzMakeItem = qzMakeItem;
+    exports.qzNorm = qzNorm;
+    exports.qzLetterAt = qzLetterAt;
+    exports.qzJudge = qzJudge;
+    exports.qzAnswerText = qzAnswerText;
+    exports.qzStoredAnswerText = qzStoredAnswerText;
+    exports.qzIsAnswered = qzIsAnswered;
+    exports.qzEmptyAnswer = qzEmptyAnswer;
+    exports.qzStatOf = qzStatOf;
+    exports.qzFilterKinds = qzFilterKinds;
+    exports.qzFilterStatus = qzFilterStatus;
+    exports.qzQuestionsOf = qzQuestionsOf;
+    exports.qzAnswerable = qzAnswerable;
+    exports.qzOpen = qzOpen;
+    exports.qzClose = qzClose;
+    exports.qzReqGet = () => qzReqState;
+    exports.qzKindLabel = qzKindLabel;
+    exports.VaultQuizOverlay = VaultQuizOverlay;
+    exports.VaultQuizModal = VaultQuizModal;
+    exports.VaultQuizEntry = VaultQuizEntry;
+    exports.VaultQuizScope = VaultQuizScope;
+    exports.VaultQuizQuestions = VaultQuizQuestions;
+    exports.VaultQuizForm = VaultQuizForm;
+    exports.QuizMdView = QuizMdView;
+    exports.QuizInline = QuizInline;
 
     exports.inject = ["slots"];
     // 行开关即总开关：宿主半边不物化时 /dsh-kit-vault/config 404，这里整体不注册

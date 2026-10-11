@@ -647,18 +647,19 @@ let vaultFetchPrev = null;
   const rowMenuActs = rowMenuEl ? rowMenuEl[2].actions : null;
   const rowExtraLabels = rowMenuActs && Array.isArray(rowMenuActs.extraItems) ? rowMenuActs.extraItems.map((it) => it.label) : [];
   check(
-    "已标记知识集的目录行 ⋯：添加资料… + 取消知识集 + 移动到… + 导入 md（+ 复制/改名/删除）",
+    "已标记知识集的目录行 ⋯：添加资料… + 取消知识集 + 测验 + 移动到… + 导入 md（+ 复制/改名/删除）",
     !!rowMenuActs &&
       rowMenuActs.copyMode === "abs" &&
       typeof rowMenuActs.onCopyPath === "function" &&
       typeof rowMenuActs.onRename === "function" &&
       typeof rowMenuActs.onDelete === "function" &&
       rowMenuActs.onOpenHere === undefined &&
-      rowExtraLabels.length === 4 &&
+      rowExtraLabels.length === 5 &&
       ["添加资料…", "Add material…"].includes(rowExtraLabels[0]) &&
       ["取消知识集", "Remove knowledge set"].includes(rowExtraLabels[1]) &&
-      ["移动到…", "Move to…"].includes(rowExtraLabels[2]) &&
-      ["导入 md 文件…", "Import markdown…"].includes(rowExtraLabels[3]),
+      ["测验", "Quiz"].includes(rowExtraLabels[2]) &&
+      ["移动到…", "Move to…"].includes(rowExtraLabels[3]) &&
+      ["导入 md 文件…", "Import markdown…"].includes(rowExtraLabels[4]),
   );
   // 复制绝对路径直接发 entry.path（clipboard 在 Node 桩里没有可信通道，见 writeClipboard 降级链）
   check("行 ⋯ 复制绝对路径取 entry.path（源码哨兵）", src.includes("void writeClipboard(entry.path).then"));
@@ -779,8 +780,9 @@ let vaultFetchPrev = null;
   const unmarkedMenu = callLog.find((c) => c[1] === comps.TreeRowMenu);
   const unmarkedItems = unmarkedMenu ? unmarkedMenu[2].actions.extraItems : [];
   check(
-    "未标记的目录行 ⋯ 给「设为知识集」（有内容才给；空目录置灰）",
-    unmarkedErr === null && unmarkedItems.length === 3 && ["设为知识集", "Make knowledge set"].includes(unmarkedItems[0].label) && unmarkedItems[0].disabled === false &&
+    "未标记的目录行 ⋯ 给「设为知识集」（有内容才给；空目录置灰），测验跟着给",
+    unmarkedErr === null && unmarkedItems.length === 4 && ["设为知识集", "Make knowledge set"].includes(unmarkedItems[0].label) && unmarkedItems[0].disabled === false &&
+      ["测验", "Quiz"].includes(unmarkedItems[1].label) &&
       src.includes("disabled: dirHasChildren(entry.path) !== true"),
   );
   // ── 文件管理（建 / 改名 / 移动 / 导入 / 删除）：行内输入 + 三个对话框 ──
@@ -1327,7 +1329,7 @@ let vaultFetchPrev = null;
   check("索引兜底形状与 VaultIndex 一致（folders，不是 spaces）", hostVault2.includes("{ root: null, folders: [], pages: [] }"));
   check("保存串行：控制面与自动保存共用一条队列（并发写必撞 CAS）", src.includes("let saving = false;") && src.includes("let queuedMode = null;") && src.includes("saveQueueRef.current = enqueueSave;") && src.includes("flush: enqueued(\"auto\")"));
   check("卸载保底用挂载那一刻的保存函数（ref 镜像此时已指向新页）", src.includes("const mountedSave = onSaveRef.current;") && src.includes("void mountedSave(rteRef.current.getMd(), \"auto\");"));
-  check("Esc 让路按计数持有（两个浮层同开，先关的不撤销让路）", src.includes("const holdEsc = () =>") && src.includes("const releaseEsc = () =>") && (src.match(/holdEsc\(\);/g) ?? []).length === 3 && (src.match(/releaseEsc\(\);/g) ?? []).length === 4 && (src.match(/dock\.vaultSearch\.open = true;/g) ?? []).length === 1 && (src.match(/dock\.vaultSearch\.open = false;/g) ?? []).length === 0);
+  check("Esc 让路按计数持有（浮层同开，先关的不撤销让路）", src.includes("const holdEsc = () =>") && src.includes("const releaseEsc = () =>") && (src.match(/holdEsc\(\);/g) ?? []).length === 4 && (src.match(/releaseEsc\(\);/g) ?? []).length === 5 && (src.match(/dock\.vaultSearch\.open = true;/g) ?? []).length === 1 && (src.match(/dock\.vaultSearch\.open = false;/g) ?? []).length === 0);
   check("读页上下文提交后发布（渲染期通知订阅者）+ 空页表用常量", src.includes("react.useEffect(() => {\n        const refreshIndex = () => void loadIndex();") && src.includes("?? VAULT_EMPTY_PAGES"));
   check("反链 memo 依赖稳定（每次渲染现造 [] 会让 useMemo 恒不命中）", src.includes("const backlinks = react.useMemo(() => vaultBacklinks(indexPages ?? [], path), [indexPages, path]);"));
   check("树路径按 root 的分隔符拼（缓存键/展开态/知识集目录换算同一口径）", src.includes("return rel === \"\" ? base : absJoinUnder(base, rel);") && src.includes("const ksCurrentAbs = ksCurrentDirRel === null || root === null ? null : joinRelPath(root, ksCurrentDirRel);"));

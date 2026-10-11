@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { recycleDeleteBatch } from "../core/index.js";
+import { followPage, siblingsForDelete } from "./quiz.js";
 export function parseConflict(raw) {
     return raw === 'overwrite' || raw === 'rename' ? raw : 'skip';
 }
@@ -489,13 +490,13 @@ export function rewriteWikiLinks(content, pages, oldRel, mode, hostSpace = '') {
 // ── 文件操作 ────────────────────────────────────────────────────────────────
 /** 目录内的落点撞名按策略处理，返回最终 name。覆盖 = 目标先送回收站
  *  （回收站不可用才直删）；跳过 = 什么都不做（调用方据 skipped 回执） */
-async function settleConflict(dir, name, conflict) {
+async function settleConflict(root, dir, name, conflict) {
     if (!existsSync(path.join(dir, name)))
         return { name, skipped: false };
     if (conflict === 'skip')
         return { name, skipped: true };
     if (conflict === 'overwrite') {
-        await discard(path.join(dir, name));
+        await discard(root, path.join(dir, name));
         return { name, skipped: false };
     }
     const next = dedupeName(dir, name);
@@ -503,12 +504,17 @@ async function settleConflict(dir, name, conflict) {
         throw new Error('同名文件太多，无法自动编号');
     return { name: next, skipped: false };
 }
-/** 覆盖前丢掉目标：优先回收站，失败退回直删 */
-async function discard(target) {
-    const [gone] = await recycleDeleteBatch([target]);
-    if (gone === true)
+/** 覆盖前丢掉目标：优先回收站，失败退回直删。被覆盖的笔记页把同目录 .quiz/ 里的
+ *  题目与掌握度一并带走——那是那一页的东西，留下会冒充（或顶掉）新页的题目 */
+async function discard(root, target) {
+    const extras = /\.(md|markdown)$/i.test(target) && !inLibrary(root, target) ? siblingsForDelete(target) : [];
+    const all = [target, ...extras];
+    const results = await recycleDeleteBatch(all);
+    const left = all.filter((_, i) => results[i] !== true);
+    if (left.length === 0)
         return;
-    await fs.promises.rm(target, { recursive: true, force: true });
+    for (const p of left)
+        await fs.promises.rm(p, { recursive: true, force: true });
 }
 /** 新建：kind='dir' 建目录（已存在=幂等成功），否则建空 md 页（已存在回 exists，
  *  不覆盖——名字重了要看得见）。rawName 可带 `/` 多级（中间目录递归建）。 */
@@ -589,6 +595,8 @@ export function renameEntry(root, targetAbs, rawName, pages = []) {
             rewriteLibraryRefs(root, libOld, libNew);
         return { path: next, links: 0 };
     }
+    // 页面改名：题目与掌握度跟着走（同目录 .quiz/ 下换的是文件名）
+    followPage(target, next);
     if (oldRel === null)
         return { path: next, links: 0 };
     return { path: next, links: rewriteRefs(pages, stripMd(oldRel), { kind: 'name', name: stripMd(finalLeaf) }, next) };
@@ -611,7 +619,7 @@ export async function moveEntry(root, targetAbs, destAbs, conflict, pages = []) 
         const rel = relUnderRoot(root, target) ?? name;
         return { path: target, rel: stripMd(rel), name, links: 0, skipped: true };
     }
-    const settled = await settleConflict(dest, name, conflict);
+    const settled = await settleConflict(root, dest, name, conflict);
     if (settled.skipped) {
         const rel = relUnderRoot(root, target) ?? name;
         return { path: target, rel: stripMd(rel), name, links: 0, skipped: true };
@@ -626,6 +634,9 @@ export async function moveEntry(root, targetAbs, destAbs, conflict, pages = []) 
         if (libNew !== null)
             rewriteLibraryRefs(root, libOld, libNew);
     }
+    // 页面移动：题目与掌握度跟着走（目录里的 .quiz/ 随目录整体搬，不用处理）
+    if (!stat.isDirectory() && !inLibrary(root, next))
+        followPage(target, next);
     const newRel = relUnderRoot(root, next);
     const skipLinks = stat.isDirectory() || oldRel === null || newRel === null || inLibrary(root, next);
     const links = skipLinks ? 0 : rewriteRefs(pages, stripMd(oldRel), { kind: 'move', rel: stripMd(newRel) }, next);
@@ -871,7 +882,7 @@ export async function importEntry(root, opts) {
                 return { path: target, rel: stripMd(relUnderRoot(root, target) ?? want), name: want, images: 0, skipped: true, renamed: false };
             }
             if (opts.conflict === 'overwrite')
-                await discard(path.join(dest, want));
+                await discard(root, path.join(dest, want));
             else {
                 const deduped = dedupeName(dest, want);
                 if (deduped === null)
@@ -930,6 +941,13 @@ export async function deleteEntries(root, paths) {
         seen.add(target);
         targets.push(target);
     }
+    // 页面删除连带它的题目与掌握度一起进回收站（同目录 .quiz/ 下的两份伴生文件；
+    // 目录删除不用管：.quiz/ 在目录体内，跟着整棵走）
+    const extras = [];
+    for (const p of targets) {
+        if (!fs.statSync(p).isDirectory() && !inLibrary(root, p))
+            extras.push(...siblingsForDelete(p));
+    }
     let deleted = 0;
     const failed = [];
     if (process.platform === 'win32') {
@@ -949,6 +967,21 @@ export async function deleteEntries(root, paths) {
             }
             catch {
                 failed.push(path.basename(p));
+            }
+        }
+    }
+    if (extras.length > 0) {
+        if (process.platform === 'win32') {
+            await recycleDeleteBatch(extras);
+        }
+        else {
+            for (const q of extras) {
+                try {
+                    await fs.promises.rm(q, { force: true });
+                }
+                catch {
+                    /* 伴生文件删不掉不挡删除本身 */
+                }
             }
         }
     }
