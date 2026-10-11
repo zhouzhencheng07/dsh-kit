@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { extractWikiLinks, VaultScanner } from '../dist/vault/scanner.js'
+import { extractHeadings, extractWikiLinks, VaultScanner } from '../dist/vault/scanner.js'
 
 const test = (name, fn) =>
   Promise.resolve()
@@ -20,6 +20,35 @@ const test = (name, fn) =>
 await test('extractWikiLinks 提取目标/剥锚与别名/去重不分大小写', () => {
   const links = extractWikiLinks('[[A]] [[B|别名]] [[C#锚]] [[a]] [[D')
   assert.deepEqual(links, ['A', 'B', 'C'])
+})
+
+await test('extractHeadings：frontmatter/围栏/#标签/缩进行/七个# 都不算，闭合#剥除，去重不分大小写保序', () => {
+  const md = [
+    '---',
+    '# 不是标题',
+    '---',
+    '',
+    '# 一级 ##',
+    '',
+    '```',
+    '## 代码里的',
+    '```',
+    '',
+    '~~~',
+    '### 波浪围栏里的',
+    '~~~',
+    '',
+    '#标签',
+    '',
+    '    # 缩进行',
+    '',
+    '####### 七个井号',
+    '',
+    '### 三级',
+    '# 重复',
+    '# 重复',
+  ].join('\n')
+  assert.deepEqual(extractHeadings(md), ['一级', '三级', '重复'])
 })
 
 // VaultScanner：临时目录夹具（根即 wiki 本体，目录只是普通组织）
@@ -53,6 +82,13 @@ await test('scan：md 建页、跳过 attachments/点前缀、space 归属正确
   assert.equal(base.space, 'Python')
   assert.equal(base.title, undefined)
   assert.deepEqual(base.links, ['工具链', 'AGENTS 常见问题'])
+})
+
+await test('scan：页面带正文标题原文（[[页#标题]] 的锚点源；mtime 缓存命中后仍在）', async () => {
+  const headsOf = (idx) => idx.pages.find((p) => p.rel === 'Python/基础').heads
+  assert.deepEqual(headsOf(index), ['Python 基础'])
+  const again = await scanner.scan()
+  assert.deepEqual(headsOf(again), ['Python 基础'])
 })
 
 await test('scan：根下 library/ 归资料库（目录 + 任意格式文件都进清单）', async () => {

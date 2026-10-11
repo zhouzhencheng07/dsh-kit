@@ -1,4 +1,4 @@
-// dsh-kit/vault 组件的知识库半边 —— 扫描索引 / wikilink 解析 / 内容搜索。**只读**：
+// dsh-kit/vault 组件的知识库半边 —— 扫描索引 / wikilink 解析 / 标题提取 / 内容搜索。**只读**：
 // 页面由 agent 的文件工具或外部编辑器写——「文件即接口」，插件只管把这棵目录读出来。
 // 数据契约：vault 是配置页配置的一个绝对目录（vaultRoot，留空用默认根
 // defaultVaultRoot()），其内 md 文件是页面（attachments/ 与点前缀目录除外），
@@ -24,6 +24,8 @@ export interface VaultPage {
   space: string
   /** 正文 wikilink 原始目标（未解析） */
   links: string[]
+  /** 正文标题原文（ATX 提取，双链选择框「连到某一节」用；`[[页#标题]]` 的锚点就是它） */
+  heads: string[]
   mtimeMs: number
   size: number
 }
@@ -96,6 +98,59 @@ export function extractWikiLinks(content: string): string[] {
     if (seen.has(key)) continue
     seen.add(key)
     out.push(target)
+  }
+  return out
+}
+
+/** 正文标题提取（ATX，1~6 个 #，缩进 ≤3 空格）：跳过 frontmatter 与围栏代码块
+ *  （``` 或 ~~~，闭合要求同字符且连数不短于开栏）；`#` 后必须跟空白（#标签 不是
+ *  标题），闭合的 # 序列按 CommonMark 剥掉——编辑器解析标题同口径，`[[页#标题]]`
+ *  的锚点靠标题文本比对，两处必须一致。去重（不分大小写）保序。 */
+export function extractHeadings(content: string): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  let fence: { ch: string; run: number } | null = null
+  let frontmatter = false
+  const lines = content.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.replace(/\r$/, '')
+    // 首行 --- 起 frontmatter：到闭合为止都不算正文
+    if (i === 0 && line.trimEnd() === '---') {
+      frontmatter = true
+      continue
+    }
+    if (frontmatter) {
+      if (line.trimEnd() === '---') frontmatter = false
+      continue
+    }
+    // 围栏：开着的时候整段跳过（代码里的 # 不是标题）
+    const fenceAt = /^ {0,3}(`{3,}|~{3,})/.exec(line)
+    if (fenceAt !== null) {
+      const ch = fenceAt[1]![0]!
+      const run = fenceAt[1]!.length
+      if (fence === null) fence = { ch, run }
+      else if (fence.ch === ch && run >= fence.run) fence = null
+      continue
+    }
+    if (fence !== null) continue
+    // 缩进 >3 空格是缩进代码块
+    const indent = line.length - line.replace(/^ +/, '').length
+    if (indent > 3) continue
+    const rest = line.slice(indent)
+    const hashes = /^#+/.exec(rest)?.[0]?.length ?? 0
+    if (hashes === 0 || hashes > 6) continue
+    const after = rest.slice(hashes)
+    if (!after.startsWith(' ') && !after.startsWith('\t')) continue
+    let text = after.trim()
+    while (text.endsWith('#')) {
+      const trimmed = text.replace(/#+$/, '')
+      if (trimmed === '' || trimmed.endsWith(' ') || trimmed.endsWith('\t')) text = trimmed.trimEnd()
+      else break
+    }
+    if (text !== '' && !seen.has(text.toLowerCase())) {
+      seen.add(text.toLowerCase())
+      out.push(text)
+    }
   }
   return out
 }
@@ -237,6 +292,7 @@ export class VaultScanner {
             rel,
             space,
             links: extractWikiLinks(content),
+            heads: extractHeadings(content),
           }
           this.cache.set(full, {
             mtimeMs: stat.mtimeMs,

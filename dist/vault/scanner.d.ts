@@ -8,6 +8,8 @@ export interface VaultPage {
     space: string;
     /** 正文 wikilink 原始目标（未解析） */
     links: string[];
+    /** 正文标题原文（ATX 提取，双链选择框「连到某一节」用；`[[页#标题]]` 的锚点就是它） */
+    heads: string[];
     mtimeMs: number;
     size: number;
 }
@@ -46,6 +48,11 @@ export interface VaultIndex {
 export declare function defaultVaultRoot(): string;
 /** 正文 wikilink 提取：[[目标]] / [[目标|别名]]，目标剥 #锚点；去重保序 */
 export declare function extractWikiLinks(content: string): string[];
+/** 正文标题提取（ATX，1~6 个 #，缩进 ≤3 空格）：跳过 frontmatter 与围栏代码块
+ *  （``` 或 ~~~，闭合要求同字符且连数不短于开栏）；`#` 后必须跟空白（#标签 不是
+ *  标题），闭合的 # 序列按 CommonMark 剥掉——编辑器解析标题同口径，`[[页#标题]]`
+ *  的锚点靠标题文本比对，两处必须一致。去重（不分大小写）保序。 */
+export declare function extractHeadings(content: string): string[];
 export declare class VaultScanner {
     private rootProvider;
     /** mtime 增量缓存：重扫只重读变化文件，walk 本身每次全量（readdir 便宜） */

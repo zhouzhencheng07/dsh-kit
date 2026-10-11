@@ -1690,7 +1690,7 @@ body[data-ds-dark-theme] .dshk-codebox .hljs-deletion{color:#ffdcd7;background:r
 .dshk-vault-bswatch{flex:none;width:16px;height:16px;border-radius:4px;border:1px solid var(--dsw-alias-border-l2);cursor:pointer;padding:0}
 .dshk-vault-bswatch-clear{width:100%;appearance:none;border:0;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:10px;line-height:1;padding:2px 0;cursor:pointer}
 .dshk-vault-bswatch-clear:hover{color:var(--dsw-alias-label-primary)}
-/* 双链选择框：只列库里已有的页（碎链没入口），贴光标弹、键盘上下选 */
+/* 双链选择框：页面与标题一次搜出（§ = 某一节），碎链没入口，贴光标弹、键盘上下选 */
 .dshk-vault-pick{position:fixed;z-index:1300;width:300px;max-height:320px;display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18));overflow:hidden}
 .dshk-vault-pickinput{flex:none;width:100%;box-sizing:border-box;border:0;border-bottom:1px solid var(--dsw-alias-border-l1);background:none;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;padding:7px 10px;outline:none}
 .dshk-vault-picklist{flex:1;min-height:0;overflow-y:auto;padding:4px}
@@ -3787,8 +3787,8 @@ ellipsis，窄列只截字不破版 */
       vmenuGAttach: "附件",
       vmenuImage: "图片",
       vmenuImageDesc: "本地图片（大图自动压缩）",
-      vlinkSearch: "搜索页面…",
-      vlinkEmpty: "未找到匹配页面（这里只列已有页面）",
+      vlinkSearch: "搜索页面或标题（| 后写别名）",
+      vlinkEmpty: "未找到匹配的页面或标题（这里只列已有页）",
       vtableRows: "行",
       vtableCols: "列",
       vtableHint: "首行固定为表头",
@@ -4016,8 +4016,8 @@ ellipsis，窄列只截字不破版 */
       vmenuGAttach: "Attachment",
       vmenuImage: "Image",
       vmenuImageDesc: "Local image (large ones compressed)",
-      vlinkSearch: "Search pages…",
-      vlinkEmpty: "No matching page (only existing pages are listed)",
+      vlinkSearch: "Search pages or headings (alias after |)",
+      vlinkEmpty: "No matching page or heading (only existing pages are listed)",
       vtableRows: "Rows",
       vtableCols: "Columns",
       vtableHint: "The first row is always the header",
@@ -6158,7 +6158,7 @@ ellipsis，窄列只截字不破版 */
       const [libsReady, setLibsReady] = react.useState(false);
       const [libsFailed, setLibsFailed] = react.useState(false);
       const [inTableState, setInTableState] = react.useState(false);
-      // 双链选择框：{x, y, above, query, sel} | null（只列库里已有的页，碎链没入口）
+      // 双链选择框：{x, y, above, query, sel} | null（页面与标题一次搜出，碎链没入口）
       const [pick, setPick] = react.useState(null);
       // 插入表格弹窗：{rows, cols} | null（斜杠菜单「图表 → 表格」点开自己填行列）
       const [tDlg, setTDlg] = react.useState(null);
@@ -6358,12 +6358,43 @@ ellipsis，窄列只截字不破版 */
         });
         setBubBox((prev) => (prev !== null && prev.left === box.left && prev.top === box.top && prev.maxHeight === box.maxHeight ? prev : box));
       }, [bub, bubPanel, inTableState]);
-      // 双链选择框：贴光标弹，**只列库里已有的页**（碎链没入口，要连先建页）——
-      // [[ 不做触发字符，那是要打得出来的字面文本，建链只走菜单
+      // 双链选择框：贴光标弹，**一次搜出页面与全库标题**（标题行插 [[页#标题]] 直连
+      // 某一节；碎链没入口，要连先建页）——[[ 不做触发字符，那是要打得出来的字面
+      // 文本，建链只走菜单。查询串第一个 | 之后是别名：不进搜索，插链时带进目标
+      const pickSplit = (query) => {
+        const text = String(query ?? "");
+        const bar = text.indexOf("|");
+        if (bar < 0) return { terms: text, alias: "" };
+        return { terms: text.slice(0, bar), alias: text.slice(bar + 1).trim() };
+      };
+      // 页行与标题行并成一列（纯客户端，索引已在手上）：页 = rel 命中全部词
+      // （rel +8 / 文件名 +5，与宿主搜索同权）；标题 = 标题命中全部词，分数取所在
+      // 页的 rel 分 +6——同一页的「某一节」排在该页整页命中之前
       const pickRowsOf = (query) => {
-        const q = String(query ?? "").trim().toLowerCase();
+        const words = pickSplit(query).terms.trim().toLowerCase().split(/\s+/).filter(Boolean);
         const list = pagesRef.current ?? [];
-        return q === "" ? list : list.filter((p) => String(p.rel).toLowerCase().includes(q));
+        if (words.length === 0) return list.map((p) => ({ kind: "page", path: p.path, rel: p.rel }));
+        const rows = [];
+        for (const p of list) {
+          const relLower = String(p.rel).toLowerCase();
+          const baseLower = relLower.split("/").pop() ?? relLower;
+          let score = 0;
+          let pageHit = true;
+          for (const w of words) {
+            const inRel = relLower.includes(w);
+            if (inRel) score += 8;
+            if (baseLower.includes(w)) score += 5;
+            else if (!inRel) pageHit = false;
+          }
+          if (pageHit) rows.push({ kind: "page", path: p.path, rel: p.rel, score });
+          for (const head of p.heads ?? []) {
+            if (words.every((w) => head.toLowerCase().includes(w))) {
+              rows.push({ kind: "head", path: p.path, rel: p.rel, heading: head, score: score + 6 });
+            }
+          }
+        }
+        rows.sort((a, b) => b.score - a.score || a.rel.localeCompare(b.rel) || String(a.heading ?? "").localeCompare(String(b.heading ?? "")));
+        return rows.slice(0, 40);
       };
       const openPick = () => {
         const ed = rteRef.current?.editor;
@@ -6389,8 +6420,10 @@ ellipsis，窄列只截字不破版 */
         // 目标写 rel 还是页名：全库唯一时写页名（短、可读）；有重名就写 rel——
         // 解析同名优先，跨目录重名页照短名插会静默指向另一个页
         const base = pageBasename(p.rel);
-        const dup = (pagesRef.current ?? []).some((q) => q !== p && pageBasename(q.rel).toLowerCase() === base.toLowerCase());
-        h.insertWikiLink({ target: dup ? p.rel.replace(/\.md$/i, "") : base });
+        const dup = (pagesRef.current ?? []).some((q) => q.path !== p.path && pageBasename(q.rel).toLowerCase() === base.toLowerCase());
+        // 标题行带锚点（[[页#标题]] 直连某一节）；查询串写了 |别名 就带上
+        const alias = pickSplit(pick?.query).alias;
+        h.insertWikiLink({ target: dup ? p.rel.replace(/\.md$/i, "") : base, anchor: p.heading ?? null, alias: alias === "" ? null : alias });
         h.editor.commands.insertContent(" ");
         h.focus();
       };
@@ -7093,7 +7126,7 @@ ellipsis，窄列只截字不破版 */
               "bubble",
             )
           : null,
-        // 双链选择框：贴光标弹（下方放不下翻到上方），只列库里已有的页
+        // 双链选择框：贴光标弹（下方放不下翻到上方），页面与标题一次搜出
         pick !== null
           ? jsxRuntime.jsx(
               "div",
@@ -7126,11 +7159,12 @@ ellipsis，窄列只截字不破版 */
                             pickInsert(p);
                           },
                           children: [
-                            jsxRuntime.jsx("span", { className: "dshk-vault-pickname", children: pageBasename(p.rel) }),
+                            // 标题行名 = § + 标题（页行 = 页名）；副行都是 rel
+                            jsxRuntime.jsx("span", { className: "dshk-vault-pickname", children: p.kind === "head" ? `§ ${p.heading}` : pageBasename(p.rel) }),
                             jsxRuntime.jsx("span", { className: "dshk-vault-pickrel", children: p.rel }),
                           ],
                         },
-                        p.path,
+                        p.kind === "head" ? `${p.path}#${p.heading}` : p.path,
                       ),
                     );
                   })() }),

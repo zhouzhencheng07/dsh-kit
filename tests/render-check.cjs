@@ -1283,13 +1283,13 @@ let vaultFetchPrev = null;
   check("编辑面不静默覆盖也不碰 git（写端点只回 modified，由人裁决）", !/stash|commitVault/.test(src));
 }
 // 6.9d) 编辑能力面：斜杠菜单含双链/流程图/图片、表格自定义行列、
-// 流程图真出图（自带 mermaid）、双链只列已有页、表格命令搬上选区浮条
+// 流程图真出图（自带 mermaid）、双链一次搜出页面与标题、表格命令搬上选区浮条
 {
   check("斜杠菜单分组：图表（表格/流程图）+ 附件（图片），特殊块末尾双链", src.includes('labelKey: "vmenuGChart"') && src.includes('labelKey: "vmenuGAttach"') && src.includes('key: "wiki"') && src.includes('key: "mermaid"') && src.includes('key: "image"'));
   check("表格不再列 1×2~5×5 固定档（点开自己填行列，默认 3×3 带表头）", !src.includes("vmenuTable1") && !src.includes("vmenuTable5") && src.includes("setTDlg({ rows: 3, cols: 3 })") && src.includes("insertTable(rows, cols)"));
   check("H5/H6 不进菜单（正文里已有的照常渲染）", !src.includes('key: "h5"') && !src.includes('key: "h6"') && src.includes("/^h[1-6]$/.test(key)"));
   check("流程图真出图：编辑器懒加载钩子 + 知识库行的白名单放行 mermaid", src.includes("/dsh-kit/vendor/mermaid.min.js") && src.includes("window.__dshkMermaidLoad") && src.includes("window.DshRTE.mermaidReady()") && fs.readFileSync(__dirname + "/../src/vault/index.ts", "utf8").includes("['/dsh-kit/vendor/mermaid.min.js', 'mermaid.min.js']") && fs.existsSync(__dirname + "/../client/vendor/mermaid.min.js"));
-  check("双链选择框：只列库里已有的页、键盘选、重名时插 rel（不静默指向别的页）", src.includes("const pickRowsOf") && src.includes("pickInsert") && src.includes("const dup = (pagesRef.current ?? []).some") && src.includes('h.insertWikiLink({ target: dup ? p.rel.replace(/\\.md$/i, "") : base })') && /insertContent\(" "\)/.test(src));
+  check("双链选择框：一次搜出页面与标题（| 后写别名不进搜索）、键盘选、重名时插 rel（不静默指向别的页）", src.includes("const pickSplit") && src.includes("const pickRowsOf") && src.includes("pickInsert") && src.includes('pickSplit(pick?.query).alias') && src.includes('p.kind === "head" ? `§ ${p.heading}` : pageBasename(p.rel)') && src.includes("const dup = (pagesRef.current ?? []).some") && src.includes('h.insertWikiLink({ target: dup ? p.rel.replace(/\\.md$/i, "") : base, anchor: p.heading ?? null, alias: alias === "" ? null : alias })') && /insertContent\(" "\)/.test(src));
   check("双链不监听 [[ 输入（字面文本要打得出来），建链只走菜单", !/__dshkWikiTrigger|wiki-link-trigger/.test(src));
   check("图片入口走系统文件选择器，与粘贴同一条入库管线", src.includes("input.accept = \"image/*\"") && src.includes("void attachAndInsert(files)") && src.includes("void attachAndInsert(files);"));
   check("表格命令在选区浮条：行/列增删 + 左中右对齐 + 表头列 + 删表", src.includes('children: "行↑"') && src.includes('children: "−列"') && src.includes('setCellAttribute("align", "center")') && src.includes("toggleHeaderColumn()") && src.includes('children: "✕表"'));

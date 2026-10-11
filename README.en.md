@@ -69,7 +69,8 @@ from the page). It stays in the list: **do not turn it off**.
   special blocks / lists / math & code / charts / attachments),
   a selection floats an inline format bar (colour swatches and links included) and, inside a
   table, a second bar with row/column insert & delete, left/center/right alignment, header
-  column and delete-table; the menu opens a page picker for wiki links (existing pages only),
+  column and delete-table; the menu opens a picker for wiki links that searches pages and all
+  vault headings at once (a heading row inserts `[[page#heading]]`; type an alias after `|`),
   a rows/columns dialog for tables (3x3 with header by default), inserts mermaid blocks
   (bundled renderer, click to edit the source) and opens the system file picker for images —
   pasted screenshots and picked files alike are compressed then stored content-addressed under

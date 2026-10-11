@@ -327,6 +327,20 @@ async function checkApply() {
       /textBetween\(sel\.from, sel\.to/.test(bubCiteBody) &&
       /setBub\(null\)/.test(bubCiteBody),
   );
+  // 双链选择框一次搜出页面与标题：标题随索引走（宿主提取 ATX，frontmatter/围栏/
+  // #标签 都不算），客户端页行/标题行并成一列混排；| 后写别名不进搜索，
+  // 标题行插 [[页#标题|别名]]（锚点 = 标题原文，与编辑器解析同口径才能滚到位）
+  const scannerSrc = read("src/vault/scanner.ts");
+  const pickBody = sliceBetween("const pickRowsOf = (query) => {", "const openPick = () => {");
+  check(
+    "双链选择框搜页面+标题：宿主索引带标题（extractHeadings），客户端页行/标题行混排与 | 别名",
+    scannerSrc.includes("export function extractHeadings") &&
+      scannerSrc.includes("heads: extractHeadings(content)") &&
+      /p\.heads \?\? \[\]/.test(pickBody) &&
+      /kind: "head"/.test(pickBody) &&
+      /score: score \+ 6/.test(pickBody) &&
+      bundleSrc.includes("pickSplit(pick?.query).alias"),
+  );
   // 资料行（实物在库的挂载项）与页行同形：hover = @ + ⋯；悬挂条目没有真实路径
   // 可引，条件展开不给 @（渲染桩会把 null 记进 children 数组，别留空位）
   const refRowBody = sliceBetween("const refRow = (rel, dirPath, depth) => {", "const dirRow =");
