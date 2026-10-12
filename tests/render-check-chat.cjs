@@ -359,6 +359,10 @@ async function checkApply() {
     "引用落点记住最近一次有光标的输入面（工具条 / 树行入口先夺焦点）",
     bundleSrc.includes("const face = composerFocus() ?? lastComposerFace;"),
   );
+  check(
+    "小窗藏掉官方 hero 的「选择工作区」行（主面全局选择器，与小窗自己的选择钮重复且越权）",
+    bundleSrc.includes('.dshk-chat-panel [class*="heroWorkspaceRow"]{display:none}'),
+  );
 }
 checkApply().then(() => {
   console.log(failed === 0 ? "\nALL PASS" : "\nFAILED " + failed);

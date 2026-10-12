@@ -18456,6 +18456,10 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       // :has 一并收掉。
       '.dshk-chat-panel .dshk-enbtn{display:none}',
       '.dshk-chat-panel :has(> .dshk-enbtn){display:none}',
+      // 官方 hero 里的「选择工作区」行是主面的全局选择器（在浮窗里点它换的是主面
+      // 选中），小窗有自己的工作区/对话选择钮——这行在小窗里整个不出现。
+      // 类名是宿主 CSS Modules 哈希，按语义后缀匹配
+      '.dshk-chat-panel [class*="heroWorkspaceRow"]{display:none}',
       '.dshk-chat-note{padding:16px;color:var(--dsw-alias-label-tertiary,#777);font-size:12px;text-align:center}',
       '.dshk-chat-grip{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize}',
       '.dshk-chat-grip:after{content:"";position:absolute;right:3px;bottom:3px;width:7px;height:7px;border-right:1.2px solid var(--dsw-alias-label-tertiary,#777);border-bottom:1.2px solid var(--dsw-alias-label-tertiary,#777);border-radius:0 0 3px 0}',
