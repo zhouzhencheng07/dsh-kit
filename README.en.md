@@ -49,20 +49,24 @@ from the page). It stays in the list: **do not turn it off**.
   plus a tree on the left, each page reads in its own right-dock **Knowledge base** tab
   (title = page name, ✕ per tab); `[[wikilinks]]` jumping to sections
   (`[[page#heading]]`), a sticky reading bar with outline & backlinks menus; one search
-  covers both sides (full-text notes + note folders + files/folders under the root
-  `library/` matched by name), and library files open in the official right-dock file tab
-  (PDFs are not rendered inside the panel); the library row is always visible and never
-  re-roots the tree; Ctrl+click on a **note folder** row (or clicking a folder in search
-  results) re-roots the tree, with ← at the tree head back to the vault root (display only,
+  covers both sides (full-text notes + note folders + files under the root `library/`
+  matched by name), and library files open in the official right-dock file tab (PDFs are
+  not rendered inside the panel); a **knowledge set** mounts library documents onto any note
+  folder (row `⋯` → set as knowledge set / add material; the manifest lives in
+  `.refs.json` inside the folder), shown as a "Materials (N)" sub-row and a "Materials"
+  section up top that follows the page you are reading; Ctrl+click on a **note folder**
+  row (or clicking a folder in search results) re-roots the tree, with ← at the tree head
+  back to the vault root (display only,
   settings untouched); **the tree is also a file manager**: `＋` on the tree head or a folder
   row creates a page or folder (`\` prefix makes a folder, `/` allows nesting), and a row's
   `⋯` menu offers rename (renaming a page rewrites every wikilink that resolves to it, with
   the page count reported), move-to… (skip / overwrite / auto-number on name clash), import
   (pick files in the browser, or paste an absolute local path — md pages pull their locally
   referenced images into `attachments/` and rewrite the references), copy absolute path and
-  delete (Recycle Bin on Windows); the library side uses the same menu but imports arbitrary
-  documents and always auto-numbers on clashes; open page tabs follow renames/moves (the tab
-  is reopened at the new address) and close
+  delete (Recycle Bin on Windows); library documents are imported through a knowledge set's
+  "Add material…" (arbitrary formats stored content-deduplicated under `library/`, always
+  auto-numbered on clashes, and each material row's `⋯` can rename / unmount / delete it);
+  open page tabs follow renames/moves (the tab is reopened at the new address) and close
   on delete; chat integration (vault paths in chat open the page, "@" on a tree row cites
   page/selection); **page bodies are what-you-see-is-what-you-get editors** (TipTap rich
   text, no source/preview duality): `/` opens a two-level command menu (headings & text /
@@ -83,6 +87,13 @@ from the page). It stays in the list: **do not turn it off**.
   pauses and a conflict bar asks you to choose overwrite-disk or load-disk (the plugin never
   overwrites silently and never touches git); external changes while the page is clean are
   still re-read silently; the plugin creates no skeleton directories and never touches git
+  - **Quiz** (shares one `.quiz` dataset with the desktop end): the page-bar "Quiz" button
+    (badge = mastered / answerable) and a tree row's `⋯` → "Quiz" (a folder = recursive scope,
+    a page = single page); the overlay picks pages / mastery state / question types / count,
+    then runs question by question with instant marking and a summary; a page entry also has
+    "Edit questions" (add/change/delete written back wholesale, optionally keeping mastery).
+    Mastery is consecutive correct answers ≥ a threshold stored in `.quiz-state/settings.json`
+    at the vault root (editable in the panel)
   - **Schedule** (one shared entry — the bottom-left Knowledge base form toggle and **Ctrl+Alt+/** open the
   left sidebar cell, whose top tab strip switches between the two): the task
    list (3-day / week / all scopes) fills that cell and
