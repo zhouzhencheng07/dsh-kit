@@ -36,7 +36,7 @@ import Image from "@tiptap/extension-image";
 import LinkExtension from "@tiptap/extension-link";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
-import { Table } from "@tiptap/extension-table";
+import { Table, renderTableToMarkdown } from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
@@ -1240,6 +1240,16 @@ class VaultMarkdownManager extends MarkdownManager {
   escapeMarkdownSyntax(text) {
     return String(text ?? "").replace(/([\\`*_\[\]$~])/g, "\\$1");
   }
+
+  /** 收口尾部空行：结果一律以**恰好一个**换行结尾（空文档仍是空串）。
+   *  官方序列化按块拼接，文档以表格 / 列表这类块结尾时会多吐一两个空行。望舒桌面端
+   *  （apps/desktop 的 vault-markdown.ts，同一条）已经收成单个换行——两端写同一个文件
+   *  必须一个口径，否则同一页在两端轮流保存，文件尾部的空行会反复增删。 */
+  serialize(docOrContent) {
+    const md = super.serialize(docOrContent);
+    if (md === "") return "";
+    return md.replace(/\n+$/, "") + "\n";
+  }
 }
 
 // ─── 扩展组装（node 测试与工厂共用同一份列表） ──────────────────────────────
@@ -1309,6 +1319,19 @@ const VaultImage = Image.extend({
   },
 });
 
+/** 表格：格内文字里的竖线要转义成 \\|。上游 renderTableToMarkdown 不转义——格子里写 "a|b"
+ *  存成 `| a|b |`，再解析那一行就被拆断、只剩半格（md 用 \\| 表示字面竖线，解析侧本来就认）。
+ *  其余（表头行、列对齐、宽度补空格、多块格用 <br> 连接）全走上游，只把每格文字包一层转义。
+ *  望舒鸿蒙端用的就是这份 bundle（apps/harmony/.../rawfile/editor/vendor），所以两端写盘口径一致 */
+const VaultTable = Table.extend({
+  renderMarkdown(node, helpers) {
+    return renderTableToMarkdown(node, {
+      ...helpers,
+      renderChildren: (n) => String(helpers.renderChildren(n) ?? "").replace(/(^|[^\\])\|/g, "$1\\|"),
+    });
+  },
+});
+
 function buildExtensions(ctx = {}) {
   return [
     Markdown.configure({ markedOptions: { breaks: true, gfm: true } }),
@@ -1327,7 +1350,7 @@ function buildExtensions(ctx = {}) {
     TaskList, TaskItem.configure({ nested: true }),
     Blockquote, HorizontalRule,
     VaultCodeBlock.configure({ lowlight, ctx }),
-    Table.configure({ resizable: false }),
+    VaultTable.configure({ resizable: false }),
     TableRow, TableCell, TableHeader,
     VaultImage.configure({ inline: true, allowBase64: false, ctx }),
     HardBreakPonyfill,

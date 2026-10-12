@@ -49,27 +49,27 @@ const structEq = (a, b) => JSON.stringify(rig.parse(a)) === JSON.stringify(rig.p
 console.log("== 基础块级 ==");
 {
   const [out, err] = rt("# 一级\n\n段落文字。\n\n## 二级\n\n正文");
-  check("标题/段落", err === null && out === "# 一级\n\n段落文字。\n\n## 二级\n\n正文", `err=${err} out=${JSON.stringify(out)}`);
+  check("标题/段落", err === null && out === "# 一级\n\n段落文字。\n\n## 二级\n\n正文\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("上\n\n---\n\n下");
-  check("分割线", err === null && out === "上\n\n---\n\n下", `err=${err} out=${JSON.stringify(out)}`);
+  check("分割线", err === null && out === "上\n\n---\n\n下\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("- a\n- b\n\n1. x\n2. y");
-  check("无序/有序列表", err === null && out === "- a\n- b\n\n1. x\n2. y", `err=${err} out=${JSON.stringify(out)}`);
+  check("无序/有序列表", err === null && out === "- a\n- b\n\n1. x\n2. y\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("- [ ] 待办\n- [x] 完成");
-  check("任务列表", err === null && out === "- [ ] 待办\n- [x] 完成", `err=${err} out=${JSON.stringify(out)}`);
+  check("任务列表", err === null && out === "- [ ] 待办\n- [x] 完成\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("> 引用一行\n>\n> 引用二行");
-  check("引用块", err === null && out === "> 引用一行\n>\n> 引用二行", `err=${err} out=${JSON.stringify(out)}`);
+  check("引用块", err === null && out === "> 引用一行\n>\n> 引用二行\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("```js\nconst a = 1;\n```\n\n```\n无语言\n```");
-  check("代码块（带语言/无语言）", err === null && out === "```js\nconst a = 1;\n```\n\n```\n无语言\n```", `err=${err} out=${JSON.stringify(out)}`);
+  check("代码块（带语言/无语言）", err === null && out === "```js\nconst a = 1;\n```\n\n```\n无语言\n```\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const src = "| A | B |\n| --- | :---: |\n| 1 | 2 |";
@@ -78,13 +78,22 @@ console.log("== 基础块级 ==");
 }
 {
   const [out, err] = rt("前 ![描述](attachments/截图.png) 后");
-  check("行内图片", err === null && out === "前 ![描述](attachments/截图.png) 后", `err=${err} out=${JSON.stringify(out)}`);
+  check("行内图片", err === null && out === "前 ![描述](attachments/截图.png) 后\n", `err=${err} out=${JSON.stringify(out)}`);
+}
+
+{
+  // 尾部收口：不管文档以什么块结尾，正文一律"恰好一个换行"（与望舒桌面端同一口径）——
+  // 从前表格结尾会多留两个空行，同一页在两端轮流保存，文件尾部就反复增删
+  const [tail1] = rt("| A | B |\n| --- | --- |\n| 1 | 2 |");
+  const [tail2] = rt("# 标题\n\n段落");
+  check("尾部恰好一个换行（表格结尾）", tail1.endsWith("|\n") && !tail1.endsWith("\n\n"), JSON.stringify(tail1));
+  check("尾部恰好一个换行（段落结尾）", tail2.endsWith("段落\n") && !tail2.endsWith("\n\n"), JSON.stringify(tail2));
 }
 
 console.log("== 行内样式 ==");
 {
   const [out, err] = rt("**粗** 与 *斜* 与 ~~删~~ 与 `码` 与 [链](https://x.y)");
-  check("粗斜删码链", err === null && out === "**粗** 与 *斜* 与 ~~删~~ 与 `码` 与 [链](https://x.y)", `err=${err} out=${JSON.stringify(out)}`);
+  check("粗斜删码链", err === null && out === "**粗** 与 *斜* 与 ~~删~~ 与 `码` 与 [链](https://x.y)\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   // node 无 DOMParser，行内 HTML token 回退字面文本（浏览器端走 generateJSON
@@ -99,11 +108,11 @@ console.log("== 行内样式 ==");
 }
 {
   const [out, err] = rt("==素高亮==");
-  check("高亮 == 无色", err === null && out === "==素高亮==", `err=${err} out=${JSON.stringify(out)}`);
+  check("高亮 == 无色", err === null && out === "==素高亮==\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("行一\n行二");
-  check("软换行→硬换行（breaks:true）", err === null && out === "行一  \n行二", `err=${err} out=${JSON.stringify(out)}`);
+  check("软换行→硬换行（breaks:true）", err === null && out === "行一  \n行二\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("**粗中*斜*字** 嵌套");
@@ -113,29 +122,29 @@ console.log("== 行内样式 ==");
 console.log("== vault 自定义语法 ==");
 {
   const [out, err] = rt("见 [[Python 基础]] 与 [[git|版本控制]] 与 [[页#小节]]");
-  check("wikilink 三形态", err === null && out === "见 [[Python 基础]] 与 [[git|版本控制]] 与 [[页#小节]]", `err=${err} out=${JSON.stringify(out)}`);
+  check("wikilink 三形态", err === null && out === "见 [[Python 基础]] 与 [[git|版本控制]] 与 [[页#小节]]\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("行内 $x^2+1$ 公式");
-  check("行内公式", err === null && out === "行内 $x^2+1$ 公式", `err=${err} out=${JSON.stringify(out)}`);
+  check("行内公式", err === null && out === "行内 $x^2+1$ 公式\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("前\n\n$$\na_1 + b^2\n$$\n\n后");
-  check("行间公式", err === null && out === "前\n\n$$\na_1 + b^2\n$$\n\n后", `err=${err} out=${JSON.stringify(out)}`);
+  check("行间公式", err === null && out === "前\n\n$$\na_1 + b^2\n$$\n\n后\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const src = "```mermaid\ngraph TD\n  A[开始] --> B{判断}\n```";
   const first = rig.parse(src).content?.[0];
   check("mermaid 围栏 → 独立图块节点", first?.type === "mermaidBlock" && first?.attrs?.src === "graph TD\n  A[开始] --> B{判断}", JSON.stringify(first));
   const [out, err] = rt(src);
-  check("mermaid 图块往返", err === null && out === src && stable(src), `err=${err} out=${JSON.stringify(out)}`);
+  check("mermaid 图块往返", err === null && out === src + "\n" && stable(src), `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("```js\ngraph TD\n  A --> B\n```\n\n```mermaid\ngraph LR\n  A --> B\n```");
   // mermaid 只认领 ```mermaid 围栏；相邻的 js 围栏照旧是代码块
   check(
     "非 mermaid 围栏不受影响",
-    err === null && out === "```js\ngraph TD\n  A --> B\n```\n\n```mermaid\ngraph LR\n  A --> B\n```",
+    err === null && out === "```js\ngraph TD\n  A --> B\n```\n\n```mermaid\ngraph LR\n  A --> B\n```\n",
     `err=${err} out=${JSON.stringify(out)}`,
   );
 }
@@ -147,7 +156,7 @@ console.log("== vault 自定义语法 ==");
 {
   const [out, err] = rt("$5 美元和 $6 元");
   // 文本里的字面 $ 转义成 \$（防二次 parse 误判成公式），是预期行为
-  check("价签不算公式", err === null && out === "\\$5 美元和 \\$6 元" && stable(out), `err=${err} out=${JSON.stringify(out)}`);
+  check("价签不算公式", err === null && out === "\\$5 美元和 \\$6 元\n" && stable(out), `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const [out, err] = rt("围栏里 $x$ 不是公式：\n\n```js\nconst s = `$x$`;\n```\n\n行内码 `$y$` 也一样");
@@ -161,42 +170,42 @@ console.log("== vault 自定义语法 ==");
 }
 {
   const [out, err] = rt("> 普通引用保持");
-  check("普通引用保持", err === null && out === "> 普通引用保持", `err=${err} out=${JSON.stringify(out)}`);
+  check("普通引用保持", err === null && out === "> 普通引用保持\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const src = "<details>\n<summary>\n折叠的 HTML\n</summary>\n\n内容\n</details>";
   const [out, err] = rt(src);
-  check("details 富折叠块往返", err === null && out === src && stable(src), `err=${err} out=${JSON.stringify(out)}`);
+  check("details 富折叠块往返", err === null && out === src + "\n" && stable(src), `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   // 标题槽是 block*：多段 + 行内格式照常（存 summary 里）；空行分段
   const src = "<details open>\n<summary>\n**加粗** 与 $x^2$\n\n第二行\n</summary>\n\n正文第一段\n\n- 列表\n</details>";
   const [out, err] = rt(src);
-  check("details 标题槽多段+格式", err === null && out === src && stable(src), `err=${err} out=${JSON.stringify(out)}`);
+  check("details 标题槽多段+格式", err === null && out === src + "\n" && stable(src), `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   // 单换行按全文 breaks 语义是硬换行（"  \n"），与正文一致
   const src = "<details open>\n<summary>\n标题甲  \n标题乙\n</summary>\n\n正文\n</details>";
   const [out, err] = rt(src);
-  check("details 标题槽硬换行", err === null && out === src && stable(src), `err=${err} out=${JSON.stringify(out)}`);
+  check("details 标题槽硬换行", err === null && out === src + "\n" && stable(src), `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   // 收起态：无 open 属性；正文里的围栏/公式/双链照常
   const src = "<details>\n<summary>\n收起标题\n</summary>\n\n```js\nconst a = 1;\n```\n\n见 [[索引]] 与 $E=mc^2$\n</details>";
   const [out, err] = rt(src);
-  check("details 收起态+代码/双链/公式", err === null && out === src && stable(src), `err=${err} out=${JSON.stringify(out)}`);
+  check("details 收起态+代码/双链/公式", err === null && out === src + "\n" && stable(src), `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   const src = "<details class=\"extra\">\n<summary>纯单行 summary</summary>\n\n正文\n</details>";
   const [out, err] = rt(src);
   // 非规范形态（attrs/单行 summary）照样认领，序列化落规范形态；二次稳定
-  check("details 非规范形态规范落盘", err === null && out === "<details>\n<summary>\n纯单行 summary\n</summary>\n\n正文\n</details>" && stable(src), `err=${err} out=${JSON.stringify(out)}`);
+  check("details 非规范形态规范落盘", err === null && out === "<details>\n<summary>\n纯单行 summary\n</summary>\n\n正文\n</details>\n" && stable(src), `err=${err} out=${JSON.stringify(out)}`);
 }
 {
   // 闭合不全/无 summary 的 <details> 不认领，走 RawBlock 原样保留
   const broken = "<details>\n没有闭合标签的残留";
   const [out, err] = rt(broken);
-  check("闭合不全的 details 原样保留", err === null && out === broken, `err=${err} out=${JSON.stringify(out)}`);
+  check("闭合不全的 details 原样保留", err === null && out === broken + "\n", `err=${err} out=${JSON.stringify(out)}`);
 }
 
 console.log("== 整页样例 + 稳定性 ==");
