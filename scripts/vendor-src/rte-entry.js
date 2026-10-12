@@ -206,6 +206,15 @@ function mathNodeView(props, display) {
     }
     wrap.textContent = tex;
   };
+  // 空公式不留在 doc 里：tex 空时渲染成空 span，看不见也点不到，md 里却留下 $$
+  const dropNode = () => {
+    const pos = props.getPos();
+    if (typeof pos !== "number") return;
+    props.editor.view.dispatch(
+      props.editor.view.state.tr.delete(pos, pos + props.node.nodeSize),
+    );
+    props.editor.view.focus();
+  };
   const openEditor = () => {
     if (wrap.classList.contains("is-editing")) return;
     wrap.classList.add("is-editing");
@@ -215,18 +224,34 @@ function mathNodeView(props, display) {
     input.type = "text";
     input.value = props.node.attrs.tex ?? "";
     input.placeholder = display ? "\\frac{a}{b}" : "E=mc^2";
-    const commit = () => {
-      if (!wrap.contains(input)) return;
-      const tex = input.value;
+    // 收尾只走一次：删节点会让节点视图销毁、wrap 带着 input 一起脱离文档，此时
+    // wrap.contains(input) 仍为真，晚到的 blur 会拿过期的 pos 再删一次、吃掉邻居字符
+    let done = false;
+    const finish = (tex) => {
       // 先摘输入框退编辑态、本地先渲一次再提交：同值提交不会产生 doc 变化、
       // update() 不来，不本地渲的话节点视图会停留在摘掉输入框的空白态
       wrap.classList.remove("is-editing");
       input.remove();
+      if (tex === "") {
+        dropNode();
+        return;
+      }
       render(tex);
       props.editor.view.dispatch(
         props.editor.view.state.tr.setNodeMarkup(props.getPos(), undefined, { tex }),
       );
       props.editor.view.focus();
+    };
+    const commit = () => {
+      if (done) return;
+      done = true;
+      finish(input.value);
+    };
+    const cancel = () => {
+      if (done) return;
+      done = true;
+      // 取消：还原原 tex；新建的空公式（原 tex 本就为空）连节点一起收掉
+      finish(props.node.attrs.tex ?? "");
     };
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -234,8 +259,11 @@ function mathNodeView(props, display) {
         commit();
       } else if (e.key === "Escape") {
         e.stopPropagation();
-        render(props.node.attrs.tex ?? "");
-        props.editor.view.focus();
+        cancel();
+      } else if (e.key === "Backspace" && input.value === "") {
+        // 空输入框里的退格：收掉整个公式，不顺带去吃前一个字符
+        e.preventDefault();
+        commit();
       }
     });
     input.addEventListener("blur", commit);
