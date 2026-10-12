@@ -7873,9 +7873,11 @@ ellipsis，窄列只截字不破版 */
         setAddingDir(dirPath);
         setRefQuery("");
       };
-      /** 添加资料弹层里导入盘上的新文件并挂载：库扁平，一律落库根（同内容后端去重） */
+      /** 添加资料弹层里导入盘上的新文件并挂载：库扁平，一律落库根；library/ 还没建时
+       *  也拿它当落点（宿主按需建目录），别把 null 发出去。同内容后端按哈希复用同一份。 */
       const addRefFiles = async (dirPath, files) => {
         if (files.length === 0) return;
+        const libDest = libRoot ?? joinRelPath(root, "library");
         const refs = [...(ksRefsOf(dirPath) ?? [])];
         let ok = 0;
         let fail = "";
@@ -7884,13 +7886,13 @@ ellipsis，窄列只截字不破版 */
           for (const file of files) {
             try {
               const r = await vaultOp("/dsh-kit/vault/import", {
-                dest: libRoot,
+                dest: libDest,
                 name: file.name,
                 fileName: file.name,
                 dataBase64: await fileToBase64(file),
                 conflict: "rename",
               });
-              const rel = libRoot !== null && typeof r.path === "string" ? relUnder(libRoot, r.path) : null;
+              const rel = typeof r.path === "string" ? relUnder(libDest, r.path) : null;
               if (rel !== null && rel !== "" && !refs.includes(rel)) refs.push(rel);
               ok += 1;
             } catch (error) {
@@ -10876,7 +10878,7 @@ ellipsis，窄列只截字不破版 */
     }
 
     // ── 出题：题目列表 + 表单。增删改都是**全量写回**这一页的题目文件（宿主按内容
-    // 哈希重算 id，改过的题进度重算）。标记掌握/遗忘也在这里——不必非得答一遍才能改
+    // 哈希现算 id；改题默认把旧掌握记录搬到新 id，取消勾选才清零）。标记掌握/遗忘也在这里——不必非得答一遍才能改
     function VaultQuizQuestions({ rel, questions, progress, resolveSrc, reload, onBack }) {
       const [editing, setEditing] = react.useState(null); // null | "new" | 下标
       const [askDel, setAskDel] = react.useState(null);
@@ -11024,13 +11026,13 @@ ellipsis，窄列只截字不破版 */
           onSave({ type: kind, stem: stemOut, options: [], answer: judge === true, explain: explainOut }, keep === true);
           return;
         }
-        const accepted = blanks
-          .map((b) => b
+        const accepted = blanks.map((b) =>
+          b
             .split("|")
             .map((t2) => t2.trim())
-            .filter((t2) => t2 !== ""))
-          .filter((vs) => vs.length > 0);
-        if (accepted.length === 0) {
+            .filter((t2) => t2 !== ""),
+        );
+        if (accepted.length === 0 || accepted.some((vs) => vs.length === 0)) {
           warn(t("qzBlankEmpty"));
           return;
         }

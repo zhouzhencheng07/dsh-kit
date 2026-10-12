@@ -29,6 +29,16 @@ const MAX_REL_SEGS = 16
 const MAX_REL_SEG_LEN = 200
 /** id 归一化的空白集合：与桌面端同一份 White_Space 表，一字不差（差一个字符 id 就分家） */
 const WS_RE = /[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/gu
+const WS_CLASS = '\\u0009-\\u000d\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000'
+const WS_LEAD_RE = new RegExp(`^[${WS_CLASS}]+`)
+const WS_TRAIL_RE = new RegExp(`[${WS_CLASS}]+$`)
+const WS_RUN_RE = new RegExp(`[${WS_CLASS}]+`, 'g')
+/** 两端裁 White_Space（= Rust `str::trim`）。**不能用 JS 的 trim/\s**——它们把 U+FEFF
+ *  当空白，而 White_Space 不含它：题干末尾一个 FEFF 会让写出去的形状读回来对不上
+ *  （保存时误报"与标记同形"），判断题答案行也会把 `\uFEFFtrue` 误判成 true。 */
+const wsTrim = (s: string): string => s.replace(WS_LEAD_RE, '').replace(WS_TRAIL_RE, '')
+const wsTrimStart = (s: string): string => s.replace(WS_LEAD_RE, '')
+const wsTrimEnd = (s: string): string => s.replace(WS_TRAIL_RE, '')
 
 // ── 题目与回前端的形状 ──────────────────────────────────────────────────────
 
@@ -232,24 +242,37 @@ function isProgressFile(name: string): boolean {
   return name.endsWith(PROGRESS_SUFFIX) && !name.includes(CONFLICT_MARK)
 }
 
-/** 范围走查要跳过的目录：约定目录（scanner 同款）+ 根下资料库（文献不是页面） */
-function skipDir(name: string, atRoot: boolean): boolean {
-  return name.startsWith('.') || SKIP_DIRS.has(name) || (atRoot && name === 'library')
+/** 范围走查要跳过的目录：约定目录（scanner 同款）+ 任意深度的 `library`（资料库子树里
+ *  的 md 是文献不是页面；与桌面端 SKIP_DIRS 同口径） */
+function skipDir(name: string): boolean {
+  return name.startsWith('.') || SKIP_DIRS.has(name) || name === 'library'
 }
 
 // ── id（跨端契约）───────────────────────────────────────────────────────────
 
-/** 归一化：去掉全部 Unicode 空白 + ASCII 小写（不上 Unicode NFKC——免得两端引不同的
- *  规范化库；全角/半角差异在 id 上算两道题，判题时另有自己的等值口径） */
+/** 归一化：去掉全部 Unicode 空白 + **只降 ASCII A-Z**（与桌面端 `to_ascii_lowercase`
+ *  同口径——`Ä`、`K`(U+212A) 这类非 ASCII 大写必须原样留着，JS 的 `toLowerCase()` 会降它们，
+ *  同一道题就算出两个 id）。不上 Unicode NFKC；全角/半角差异在 id 上算两道题，判题另有口径。 */
 function norm(s: string): string {
-  return s.replace(WS_RE, '').toLowerCase()
+  return s.replace(WS_RE, '').replace(/[A-Z]/g, (c) => c.toLowerCase())
 }
 
-/** 答案里的字母集合：只认 A-Z，去重升序；一个都没有回空串 */
+/** 只升 ASCII a-z（对应桌面端 `to_ascii_uppercase`），其余字符不动 */
+function asciiUpper(s: string): string {
+  return s.replace(/[a-z]/g, (c) => c.toUpperCase())
+}
+
+/** 只降 ASCII A-Z（对应桌面端 `to_ascii_lowercase`），其余字符不动 */
+function asciiLower(s: string): string {
+  return s.replace(/[A-Z]/g, (c) => c.toLowerCase())
+}
+
+/** 答案里的字母集合：只认 A-Z，去重升序；一个都没有回空串。
+ *  升大写走 ASCII-only（`ß` 在 JS `toUpperCase` 下会变 `SS`，桌面端只认 ASCII 后为空） */
 function lettersOf(v: QuizAnswer): string {
   if (typeof v !== 'string') return ''
   const out: string[] = []
-  for (const ch of v.toUpperCase()) {
+  for (const ch of asciiUpper(v)) {
     if (ch >= 'A' && ch <= 'Z' && !out.includes(ch)) out.push(ch)
   }
   return out.sort().join('')
@@ -276,15 +299,15 @@ export function questionId(q: QuizQuestion): string {
 
 /** 非法回错误串（指出第几题由调用方拼）——作者写的东西不能被静默丢掉 */
 export function validate(q: QuizQuestion): string | null {
-  if (q.type.trim() === '') return '缺少题型（<!--q type=single-->）'
-  if (q.stem.trim() === '') return '题干不能为空'
+  if (wsTrim(q.type) === '') return '缺少题型（<!--q type=single-->）'
+  if (wsTrim(q.stem) === '') return '题干不能为空'
   if ([...q.stem].length > MAX_STEM) return `题干太长（上限 ${MAX_STEM} 字）`
   if ([...q.explain].length > MAX_EXPLAIN) return `解析太长（上限 ${MAX_EXPLAIN} 字）`
   if (q.type === 'single' || q.type === 'multi') {
     if (q.options.length < 2) return '选择题至少两个选项'
     if (q.options.length > MAX_OPTIONS) return `选项最多 ${MAX_OPTIONS} 个`
     for (const o of q.options) {
-      if (o.trim() === '') return '选项不能为空'
+      if (wsTrim(o) === '') return '选项不能为空'
       if ([...o].length > MAX_OPTION) return `单个选项太长（上限 ${MAX_OPTION} 字）`
     }
     const letters = lettersOf(q.answer)
@@ -304,7 +327,7 @@ export function validate(q: QuizQuestion): string | null {
     if (q.answer.length === 0) return '填空题至少要有一个空的答案'
     if (q.answer.length > MAX_BLANKS) return `填空题最多 ${MAX_BLANKS} 个空`
     for (const vs of q.answer) {
-      if (!Array.isArray(vs) || !vs.some((v) => typeof v === 'string' && v.trim() !== '')) {
+      if (!Array.isArray(vs) || !vs.some((v) => typeof v === 'string' && wsTrim(v) !== '')) {
         return '填空题每空的答案要是字符串数组'
       }
     }
@@ -325,14 +348,14 @@ type Section = 'q' | 'stem' | 'opt' | 'answer' | 'explain'
  *  也有一条出路（缩进一格）。`<!--q single-->` 与 `<!--q type=single-->` 都收 */
 function markerOf(line: string): [Section, string] | null {
   if (!line.startsWith('<!--')) return null
-  const t = line.trimEnd()
+  const t = wsTrimEnd(line)
   if (t.startsWith('<!--q')) {
     const end = t.indexOf('-->')
     if (end < 0) return null
-    for (const tok of t.slice(5, end).split(/\s+/)) {
+    for (const tok of t.slice(5, end).split(WS_RUN_RE)) {
       if (tok === '') continue
       const v = tok.startsWith('type=') ? tok.slice(5) : tok
-      if (v !== '') return ['q', v.toLowerCase()]
+      if (v !== '') return ['q', asciiLower(v)]
     }
     return ['q', '']
   }
@@ -344,7 +367,7 @@ function markerOf(line: string): [Section, string] | null {
 
 /** 开栏：三个以上反引号或波浪线（可带语言） */
 function openFence(line: string): [string, number] | null {
-  const t = line.trimStart()
+  const t = wsTrimStart(line)
   for (const ch of ['`', '~']) {
     let n = 0
     while (n < t.length && t[n] === ch) n += 1
@@ -355,7 +378,7 @@ function openFence(line: string): [string, number] | null {
 
 /** 闭栏：同字符、不少于开栏长度、行内没有别的东西 */
 function isCloseFence(line: string, ch: string, n: number): boolean {
-  const t = line.trim()
+  const t = wsTrim(line)
   for (const c of t) if (c !== ch) return false
   return t.length >= n
 }
@@ -387,10 +410,11 @@ export function parseMd(text: string): [QuizQuestion[], boolean] {
 
   const pushLine = (line: string): void => {
     if (cur !== null) draftPush(cur, sec, line)
-    else if (line.trim() !== '') junk = true
+    else if (wsTrim(line) !== '') junk = true
   }
 
-  for (const line of text.split('\n')) {
+  // 行切分对齐 Rust `str::lines()`：CRLF 的 `\r` 不算内容（孤立 `\r` 保留原样）
+  for (const line of text.replace(/\r\n/g, '\n').split('\n')) {
     if (fence !== null) {
       if (isCloseFence(line, fence[0], fence[1])) fence = null
       pushLine(line)
@@ -436,8 +460,8 @@ function draftInto(d: Draft): QuizQuestion {
 function joinBlock(lines: string[]): string {
   let a = 0
   let b = lines.length
-  while (a < b && lines[a]?.trim() === '') a += 1
-  while (b > a && lines[b - 1]?.trim() === '') b -= 1
+  while (a < b && wsTrim(lines[a] ?? '') === '') a += 1
+  while (b > a && wsTrim(lines[b - 1] ?? '') === '') b -= 1
   let out = lines.slice(a, b).join('\n')
   while (out.endsWith(' ') || out.endsWith('\t')) out = out.slice(0, -1)
   return out
@@ -447,12 +471,12 @@ function joinBlock(lines: string[]): string {
 function parseOptions(lines: string[]): string[] {
   const out: string[] = []
   for (const line of lines) {
-    const t = line.trimStart()
+    const t = wsTrimStart(line)
     const item = t.startsWith('- ') || t.startsWith('* ') || t.startsWith('+ ') ? t.slice(2) : null
     if (item !== null) {
-      out.push(item.trim())
+      out.push(wsTrim(item))
     } else {
-      const t2 = line.trim()
+      const t2 = wsTrim(line)
       if (t2 !== '' && out.length > 0) out[out.length - 1] = `${out[out.length - 1]} ${t2}`
     }
   }
@@ -476,13 +500,13 @@ function splitAlternatives(line: string): string[] {
       continue
     }
     if (c === '|') {
-      out.push(cur.trim())
+      out.push(wsTrim(cur))
       cur = ''
       continue
     }
     cur += c
   }
-  out.push(cur.trim())
+  out.push(wsTrim(cur))
   return out.filter((s) => s !== '')
 }
 
@@ -493,7 +517,7 @@ function escapePipe(s: string): string {
 function parseAnswer(kind: string, lines: string[]): QuizAnswer {
   if (kind === 'single' || kind === 'multi') {
     const letters: string[] = []
-    for (const ch of lines.join('').toUpperCase()) {
+    for (const ch of asciiUpper(lines.join(''))) {
       if (ch >= 'A' && ch <= 'Z' && !letters.includes(ch)) letters.push(ch)
     }
     return letters.sort().join('')
@@ -501,7 +525,7 @@ function parseAnswer(kind: string, lines: string[]): QuizAnswer {
   if (kind === 'judge') {
     for (const line of lines) {
       // 只降 ASCII 大写（与桌面端同口径：全角字母不参与判定）
-      const t = line.trim().replace(/[A-Z]/g, (c) => c.toLowerCase())
+      const t = wsTrim(line).replace(/[A-Z]/g, (c) => c.toLowerCase())
       if (t === '') continue
       if (t === 'true' || t === 't' || t === 'yes' || t === 'y' || t === '对' || t === '是') return true
       if (t === 'false' || t === 'f' || t === 'no' || t === 'n' || t === '错' || t === '否') return false
@@ -510,7 +534,7 @@ function parseAnswer(kind: string, lines: string[]): QuizAnswer {
     return null
   }
   if (kind === 'blank') {
-    return lines.filter((l) => l.trim() !== '').map((l) => splitAlternatives(l))
+    return lines.filter((l) => wsTrim(l) !== '').map((l) => splitAlternatives(l))
   }
   return null
 }
@@ -533,16 +557,16 @@ export function toMd(questions: QuizQuestion[]): string {
     if (first) first = false
     else out += '\n'
     out += `<!--q type=${q.type}-->\n`
-    out += `${q.stem.replace(/\s+$/, '')}\n`
+    out += `${wsTrimEnd(q.stem)}\n`
     if (q.options.length > 0) {
       out += '\n<!--opt-->\n'
       for (const o of q.options) out += `- ${o.replace(/\n/g, ' ')}\n`
     }
     out += '\n<!--answer-->\n'
     out += `${answerMd(q)}\n`
-    if (q.explain.trim() !== '') {
+    if (wsTrim(q.explain) !== '') {
       out += '\n<!--explain-->\n'
-      out += `${q.explain.replace(/\s+$/, '')}\n`
+      out += `${wsTrimEnd(q.explain)}\n`
     }
   }
   return out
@@ -550,14 +574,14 @@ export function toMd(questions: QuizQuestion[]): string {
 
 const normalizeBlock = (s: string): string => joinBlock(s.split('\n'))
 
-const oneLine = (s: string): string => s.split('\n').map((l) => l.trim()).join(' ').trim()
+const oneLine = (s: string): string => wsTrim(s.split('\n').map((l) => wsTrim(l)).join(' '))
 
 /** 归一化：把内容整理成 md 能无损承载的形状（首尾空行、选项换行、答案空白） */
 function normalizeQuestion(q: QuizQuestion): QuizQuestion {
   let answer: QuizAnswer = q.answer
   if (q.type === 'single' || q.type === 'multi') answer = lettersOf(q.answer)
   else if (q.type === 'blank' && Array.isArray(q.answer)) {
-    answer = q.answer.map((b) => (Array.isArray(b) ? b.map((v) => String(v).trim()).filter((v) => v !== '') : []))
+    answer = q.answer.map((b) => (Array.isArray(b) ? b.map((v) => wsTrim(String(v))).filter((v) => v !== '') : []))
   }
   return {
     type: q.type,
@@ -626,7 +650,7 @@ function readAt(file: string, rel: string): QuizPageDto {
     return { rel, questions: [] }
   }
   const [questions, junk] = parseMd(text)
-  if (junk || (questions.length === 0 && text.trim() !== '')) {
+  if (junk || (questions.length === 0 && wsTrim(text) !== '')) {
     // 坏一份只当这页没题，绝不挡住页面树（多半是漏了 <!--q type=…-->）
     kitWarn(`题目文件按 0 题处理（${junk ? '有标记外的内容' : '没解析出题目'}）：${file}`)
   }
@@ -759,10 +783,9 @@ function walkScope(dir: string, relDir: string, root: string, out: QuizPageDto[]
   } catch {
     return
   }
-  const atRoot = path.resolve(dir) === path.resolve(root)
   for (const e of entries) {
     if (!e.isDirectory()) continue
-    if (skipDir(e.name, atRoot)) continue
+    if (skipDir(e.name)) continue
     walkScope(path.join(dir, e.name), relDir === '' ? e.name : `${relDir}/${e.name}`, root, out)
   }
 }
@@ -775,7 +798,7 @@ function walkScope(dir: string, relDir: string, root: string, out: QuizPageDto[]
 export function revision(root: string, rel: string | null, dir: string | null): QuizRevision {
   const rev: QuizRevision = { files: 0, mtimeMs: 0 }
   addRev(settingsPath(root), rev)
-  if (rel !== null && rel.trim() !== '') {
+  if (rel !== null && wsTrim(rel) !== '') {
     const r = trySafeQuizRel(rel)
     if (r === null) return rev
     addRev(quizPath(root, r), rev)
@@ -816,10 +839,9 @@ function walkRevision(dir: string, root: string, out: QuizRevision): void {
   } catch {
     return
   }
-  const atRoot = path.resolve(dir) === path.resolve(root)
   for (const e of entries) {
     if (!e.isDirectory()) continue
-    if (skipDir(e.name, atRoot)) continue
+    if (skipDir(e.name)) continue
     walkRevision(path.join(dir, e.name), root, out)
   }
 }
@@ -894,18 +916,28 @@ function writeProgressFile(root: string, rel: string, p: QuizProgress): void {
   writeAtomic(file, JSON.stringify(sortedProgress(p)))
 }
 
-/** 读全局答题设置（文件不在 / 坏了回默认；阈值非法兜回默认） */
+/** 读全局答题设置。解析口径与桌面端 serde 一致：整份是对象、出现的字段类型对
+ *  （version/threshold = u32、updatedMs = u64 整数）才认，任一处不合类型整份回默认；缺字段给
+ *  默认、threshold=0 也回默认。**不在读取时夹 1..20**——非法大值照收，改了才夹（同桌面端）。 */
 export function readSettings(root: string): QuizSettings {
-  let raw: { threshold?: unknown; updatedMs?: unknown } = {}
+  const fallback: QuizSettings = { version: 1, threshold: DEFAULT_THRESHOLD, updatedMs: 0 }
+  let raw: unknown
   try {
-    raw = JSON.parse(fs.readFileSync(settingsPath(root), 'utf8')) as typeof raw
+    raw = JSON.parse(fs.readFileSync(settingsPath(root), 'utf8'))
   } catch {
-    raw = {}
+    return fallback
   }
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return fallback
+  const obj = raw as { version?: unknown; threshold?: unknown; updatedMs?: unknown }
+  const u32 = (v: unknown): boolean =>
+    v === undefined || (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 0xffffffff)
+  const u64 = (v: unknown): boolean =>
+    v === undefined || (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= Number.MAX_SAFE_INTEGER)
+  if (!u32(obj.version) || !u32(obj.threshold) || !u64(obj.updatedMs)) return fallback
   return {
     version: 1,
-    threshold: typeof raw.threshold === 'number' && raw.threshold > 0 ? Math.floor(raw.threshold) : DEFAULT_THRESHOLD,
-    updatedMs: typeof raw.updatedMs === 'number' && raw.updatedMs > 0 ? Math.floor(raw.updatedMs) : 0,
+    threshold: typeof obj.threshold === 'number' && obj.threshold > 0 ? obj.threshold : DEFAULT_THRESHOLD,
+    updatedMs: typeof obj.updatedMs === 'number' ? obj.updatedMs : 0,
   }
 }
 
@@ -913,7 +945,7 @@ export function readSettings(root: string): QuizSettings {
 export function readProgress(root: string, rel: string | null, dir: string | null): QuizProgressDto {
   const threshold = readSettings(root).threshold
   const progress: Record<string, QuizRecord> = {}
-  if (rel !== null && rel.trim() !== '') {
+  if (rel !== null && wsTrim(rel) !== '') {
     const r = trySafeQuizRel(rel)
     if (r === null) return { version: 1, threshold, progress }
     Object.assign(progress, readProgressFile(root, r).progress)
@@ -945,10 +977,9 @@ function walkProgress(dir: string, root: string, out: Record<string, QuizRecord>
   } catch {
     return
   }
-  const atRoot = path.resolve(dir) === path.resolve(root)
   for (const e of entries) {
     if (!e.isDirectory()) continue
-    if (skipDir(e.name, atRoot)) continue
+    if (skipDir(e.name)) continue
     walkProgress(path.join(dir, e.name), root, out)
   }
 }
@@ -974,10 +1005,9 @@ function allProgress(root: string): [string, QuizProgress][] {
     } catch {
       return
     }
-    const atRoot = path.resolve(dir) === path.resolve(root)
-    for (const e of entries) {
+      for (const e of entries) {
       if (!e.isDirectory()) continue
-      if (skipDir(e.name, atRoot)) continue
+      if (skipDir(e.name)) continue
       walk(path.join(dir, e.name), relDir === '' ? e.name : `${relDir}/${e.name}`)
     }
   }

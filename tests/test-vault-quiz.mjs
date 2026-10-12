@@ -91,6 +91,32 @@ await test('questionId：内容哈希钉住跨端向量；空白不敏感、字�
   assert.equal(questionId({ ...SINGLE, answer: 'AB' === 'AB' ? 'BA' : 'AB' }), questionId({ ...SINGLE, answer: 'AB' }))
 })
 
+await test('questionId：桌面端定值向量（含非 ASCII 大小写只降 ASCII）', () => {
+  // 与桌面端 quiz.rs 的 test_id_contract_fixtures / test_id_contract_edge_cases 同一组定值：
+  // 改归一化口径会让这几条立刻红
+  assert.equal(questionId({ type: 'single', stem: '极限的定义 Define', options: ['甲', '乙', '丙'], answer: 'C', explain: '' }), 'c685fe9997d63509')
+  assert.equal(questionId({ type: 'multi', stem: '设 $f(x)=\\frac{1}{x}$，下列正确的是：', options: ['甲 $a^2$', '乙', '丙'], answer: 'AC', explain: '' }), 'a4f610c3dd656da4')
+  assert.equal(questionId({ type: 'judge', stem: '$0$ 是自然数。', options: [], answer: true, explain: '' }), '1e20314bdddf3cdb')
+  assert.equal(questionId({ type: 'blank', stem: '向上取整（），向下取整（），去小数（）。', options: [], answer: [['ceiling'], ['floor'], ['trunc', '哈哈哈']], explain: '' }), '9945ac0dc57c6847')
+  // 非 ASCII 大写只当原样：Ä 与 ä 是不同的题（JS toLowerCase 会把它们折成同一 id）
+  assert.equal(questionId({ type: 'single', stem: 'Ärger', options: ['一', '二'], answer: 'A', explain: '' }), 'e5f66739c0b3303c')
+  assert.notEqual(questionId({ ...SINGLE, stem: 'Ä' }), questionId({ ...SINGLE, stem: 'ä' }))
+  // 答案字母也只认 ASCII：ß 在桌面端不算字母（JS toUpperCase 会变 SS）
+  assert.equal(questionId({ ...SINGLE, answer: 'ß' }), questionId({ ...SINGLE, answer: '' }))
+})
+
+await test('parseMd/toMd：FEFF 不是空白、CRLF 行尾归一（与桌面端 str::trim / lines 同口径）', () => {
+  // U+FEFF 不是 White_Space：不能像 JS trim/\\s 那样被裁掉或当空行
+  const [feff] = parseMd('<!--q type=judge-->\n题\n\n<!--answer-->\n\uFEFFtrue\n')
+  assert.equal(feff[0].answer, null)
+  // 题干末尾的 FEFF 必须原样往返：JS 的 /\\s+$/ 会截掉它，读回就对不上而误报「标记同形」
+  const [fq] = parseMd(toMd([{ type: 'judge', stem: '题\uFEFF', options: [], answer: true, explain: '' }]))
+  assert.equal(fq[0].stem, '题\uFEFF')
+  // CRLF 的 \\r 不是内容（Rust str::lines 会去掉）
+  const [crlf] = parseMd('<!--q type=judge-->\r\n题\r\n<!--answer-->\r\ntrue\r\n')
+  assert.equal(crlf[0].stem, '题')
+})
+
 await test('validate：非法题目逐条指出，合法回 null', () => {
   assert.equal(validate(SINGLE), null)
   assert.equal(validate({ ...SINGLE, stem: ' ' }), '题干不能为空')
@@ -203,10 +229,14 @@ await test('readScope：递归收题，跳过点前缀 / 约定目录 / 资料�
   fs.writeFileSync(path.join(root, 'library', '.quiz'), '', 'utf8')
   fs.rmSync(path.join(root, 'library', '.quiz'), { force: true })
   fs.writeFileSync(page('别的/9.9.conflict-手机-2026') , '', 'utf8')
+  // 嵌套的 library/ 不算页面来源（任意深度都跳，与桌面端 SKIP_DIRS 同口径）
+  mkpage('别的/library/藏')
+  savePage(root, '别的/library/藏', [JUDGE], null)
   const scope = readScope(root, '数学')
   assert.deepEqual(scope.pages.map((p) => p.rel).sort(), ['数学/1.1', '数学/2.1', '数学/4.1', '数学/5.1', '数学/第一章/1.2'])
   const all = readScope(root, '')
   assert.ok(all.pages.some((p) => p.rel === '别的/9.9'))
+  assert.equal(all.pages.some((p) => p.rel.startsWith('别的/library/')), false)
   assert.equal(all.pages.filter((p) => p.rel.includes('conflict')).length, 0)
 })
 

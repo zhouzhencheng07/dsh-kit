@@ -105,7 +105,7 @@ function compressBuffer(enc: 'br' | 'gzip' | 'deflate', buf: Buffer): Promise<Bu
  *
  * `Map.prototype.getOrInsertComputed` / `getOrInsert`（TC39 upsert）是这批前端依赖
  * 用到的最新 API：pdf.js 现代构建在页面与 Worker 两侧都调它，新版 Chromium 有、
- * 鸿蒙等旧引擎没有；缺了的表现是官方 PDF 预览报
+ * 部分旧移动端引擎没有；缺了的表现是官方 PDF 预览报
  * "this[#methodPromises].getOrInsertComputed is not a function"（无法显示 PDF）。
  * 只补引擎没有的，原生存在时零副作用。
  */

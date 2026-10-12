@@ -205,7 +205,7 @@ await test('importEntry：本机路径直拷 md 页，页内引用的图片进 a
   fs.rmSync(path.join(root, 'wiki', '外部 (2).md'))
 })
 
-await test('importEntry：上传字节落资料库原样保留扩展名，撞名加序号；笔记区拒非 md', async () => {
+await test('importEntry：上传字节落资料库原样保留扩展名；同内容按哈希复用，不落第二份', async () => {
   const up = await importEntry(root, {
     destAbs: path.join(root, 'library'),
     name: '统计.pdf',
@@ -215,6 +215,7 @@ await test('importEntry：上传字节落资料库原样保留扩展名，撞名
   })
   assert.equal(up.name, '统计.pdf')
   assert.equal(read('library/统计.pdf'), '%PDF-1.4 up')
+  // 同一份字节再导：按内容复用第一份（与桌面端同口径），不再落 统计 (2).pdf
   const up2 = await importEntry(root, {
     destAbs: path.join(root, 'library'),
     name: '统计.pdf',
@@ -222,12 +223,44 @@ await test('importEntry：上传字节落资料库原样保留扩展名，撞名
     data: Buffer.from('%PDF-1.4 up'),
     conflict: 'skip',
   })
-  assert.equal(up2.name, '统计 (2).pdf')
+  assert.equal(up2.already, true)
+  assert.equal(up2.path, up.path)
+  assert.equal(exists('library/统计 (2).pdf'), false)
+  // 不同内容仍按名字加序号
+  const other = await importEntry(root, {
+    destAbs: path.join(root, 'library'),
+    name: '统计.pdf',
+    fileName: '统计.pdf',
+    data: Buffer.from('%PDF-1.4 other'),
+    conflict: 'skip',
+  })
+  assert.equal(other.name, '统计 (2).pdf')
   await assert.rejects(
     importEntry(root, { destAbs: path.join(root, 'wiki'), name: 'x.pdf', fileName: 'x.pdf', data: Buffer.from('x'), conflict: 'skip' }),
     /笔记区只收 md/,
   )
   await assert.rejects(importEntry(root, { destAbs: path.join(root, 'wiki'), name: '外', srcPath: path.join(root, 'wiki', '基础.md'), conflict: 'skip' }), /源文件已在知识库内/)
+})
+
+await test('importEntry：library/ 不存在时按需建并落库（资料导入链路不因目录缺席而断）', async () => {
+  const fresh = fs.mkdtempSync(path.join(os.tmpdir(), 'dshk-lib-'))
+  try {
+    const r = await importEntry(fresh, { destAbs: path.join(fresh, 'library'), name: '首份.pdf', fileName: '首份.pdf', data: Buffer.from('%PDF first'), conflict: 'rename' })
+    assert.equal(fs.existsSync(path.join(fresh, 'library')), true)
+    assert.equal(fs.readFileSync(r.path, 'utf8'), '%PDF first')
+  } finally {
+    fs.rmSync(fresh, { recursive: true, force: true })
+  }
+})
+
+await test('renameEntry：资料库改名撞名自动加序号；笔记页仍报错', () => {
+  write('library/论文.pdf', '%PDF a')
+  write('library/另一篇.pdf', '%PDF b')
+  const renamed = renameEntry(root, path.join(root, 'library', '另一篇.pdf'), '论文')
+  assert.equal(path.basename(renamed.path), '论文 (2).pdf')
+  write('笔记甲.md', '# 甲')
+  write('笔记乙.md', '# 乙')
+  assert.throws(() => renameEntry(root, path.join(root, '笔记乙.md'), '笔记甲'), /同名文件已存在/)
 })
 
 await test('deleteEntries：删页与目录；库外非 md 拒删、资料库根拒删', async () => {  write('deleteme.md', '# x')
@@ -321,18 +354,19 @@ await test('storeAttachment：内容寻址落 attachments/，同内容复用不�
   assert.throws(() => storeAttachment(root, Buffer.alloc(0), 'x.png'), /空的/)
 })
 
-await test('知识集：cleanRefs 归一 + 标记写 .refs.json + 索引上报', async () => {
-  assert.deepEqual(cleanRefs([' 书.pdf ', '书.pdf', '../外.pdf', 'a\\b.pdf', '', 3]), ['书.pdf', '外.pdf', 'a/b.pdf'])
+await test('知识集：cleanRefs 与桌面端同口径 + 标记写 .refs.json + 索引上报', async () => {
+  // 与桌面端 clean_refs 一字不差：只裁空白 + 反斜杠归一 + 去空去重；不解 .. / 不折内部空段
+  assert.deepEqual(cleanRefs([' 书.pdf ', '书.pdf', '../外.pdf', 'a\\b.pdf', '', 3]), ['书.pdf', '../外.pdf', 'a/b.pdf'])
   write('课/笔记.md', '# 课')
   write('library/书.pdf', '%PDF')
   const ke = path.join(root, '课')
   setFolderRefs(root, ke, ['书.pdf', ' 书.pdf ', '../外.pdf'])
   assert.equal(isKnowledgeSet(ke), true)
-  assert.deepEqual(readFolderRefs(ke), ['书.pdf', '外.pdf'])
+  assert.deepEqual(readFolderRefs(ke), ['书.pdf', '../外.pdf'])
   assert.equal(exists('课/.refs.json'), true)
   const index = await new VaultScanner(() => root).scan()
   const set = (index.knowledgeSets ?? []).find((s) => s.dir === '课')
-  assert.deepEqual(set?.refs, ['书.pdf', '外.pdf'])
+  assert.deepEqual(set?.refs, ['书.pdf', '../外.pdf'])
   assert.equal(listKnowledgeSets(root).some((s) => s.dir === '课'), true)
 })
 

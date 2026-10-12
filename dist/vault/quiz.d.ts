@@ -96,7 +96,9 @@ export declare function readScope(root: string, dir: string): QuizScopeDto;
  *  进度）改了才会变**——界面轮询它决定要不要重读，比每几秒把范围重读一遍便宜得多。
  *  全局阈值文件也算在内——另一端改了阈值，这边要跟着重读。 */
 export declare function revision(root: string, rel: string | null, dir: string | null): QuizRevision;
-/** 读全局答题设置（文件不在 / 坏了回默认；阈值非法兜回默认） */
+/** 读全局答题设置。解析口径与桌面端 serde 一致：整份是对象、出现的字段类型对
+ *  （version/threshold = u32、updatedMs = u64 整数）才认，任一处不合类型整份回默认；缺字段给
+ *  默认、threshold=0 也回默认。**不在读取时夹 1..20**——非法大值照收，改了才夹（同桌面端）。 */
 export declare function readSettings(root: string): QuizSettings;
 /** 回前端的掌握度：rel 给一页，否则 dir（"" = 整库）递归汇总 + 全局阈值 */
 export declare function readProgress(root: string, rel: string | null, dir: string | null): QuizProgressDto;

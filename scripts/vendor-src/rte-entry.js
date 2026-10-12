@@ -1270,9 +1270,9 @@ class VaultMarkdownManager extends MarkdownManager {
   }
 
   /** 收口尾部空行：结果一律以**恰好一个**换行结尾（空文档仍是空串）。
-   *  官方序列化按块拼接，文档以表格 / 列表这类块结尾时会多吐一两个空行。望舒桌面端
-   *  （apps/desktop 的 vault-markdown.ts，同一条）已经收成单个换行——两端写同一个文件
-   *  必须一个口径，否则同一页在两端轮流保存，文件尾部的空行会反复增删。 */
+   *  官方序列化按块拼接，文档以表格 / 列表这类块结尾时会多吐一两个空行。另一端也按
+   *  单个换行收口（同一条入口）——两端写同一个文件必须一个口径，否则同一页轮流保存时
+   *  文件尾部的空行会反复增删。 */
   serialize(docOrContent) {
     const md = super.serialize(docOrContent);
     if (md === "") return "";
@@ -1350,7 +1350,7 @@ const VaultImage = Image.extend({
 /** 表格：格内文字里的竖线要转义成 \\|。上游 renderTableToMarkdown 不转义——格子里写 "a|b"
  *  存成 `| a|b |`，再解析那一行就被拆断、只剩半格（md 用 \\| 表示字面竖线，解析侧本来就认）。
  *  其余（表头行、列对齐、宽度补空格、多块格用 <br> 连接）全走上游，只把每格文字包一层转义。
- *  望舒鸿蒙端用的就是这份 bundle（apps/harmony/.../rawfile/editor/vendor），所以两端写盘口径一致 */
+ *  另一端复用同一份写盘实现，所以两端写同一个文件口径一致 */
 const VaultTable = Table.extend({
   renderMarkdown(node, helpers) {
     return renderTableToMarkdown(node, {

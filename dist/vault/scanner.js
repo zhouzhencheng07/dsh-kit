@@ -213,9 +213,13 @@ export class VaultScanner {
                 if (dirent.isDirectory()) {
                     if (dirent.name.startsWith('.') || SKIP_DIRS.has(dirent.name))
                         continue;
-                    if (depth === 0 && dirent.name === LIBRARY_DIR) {
-                        lib.root = full;
-                        await walkLibrary(full, '');
+                    if (dirent.name === LIBRARY_DIR) {
+                        // 根层 = 资料库（走资料池清单）；更深的同名目录一律跳过：资料库子树里的 md 是
+                        // 文献不是页面（与 fs 的 REFS_SKIP_DIRS、quiz 的范围口径、桌面端 SKIP_DIRS 一致）
+                        if (depth === 0) {
+                            lib.root = full;
+                            await walkLibrary(full, '');
+                        }
                         continue;
                     }
                     folders.add(path.relative(root, full).split(path.sep).join('/'));

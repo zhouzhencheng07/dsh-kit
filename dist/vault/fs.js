@@ -82,8 +82,8 @@ export function dedupeName(dir, name, exists = existsSync) {
 }
 /** 绝对路径归一：拒空与任何 `..` 段（只做前缀比较的话 `root\..\x` 能蒙混过关），
  *  再把两端 realpath 后比包含关系——软链与 Windows 8.3 短名会让单头比较落空。
- *  支持「多级下钻」的路径必须从**已存在**的目录里 join（create/move 的落点），
- *  因此父目录 realpath 后拼叶子即可。 */
+ *  路径不存在时按**最近存在的祖先** realpath 归一、尾巴逐段按字面回拼（父链整段都不在
+ *  的多级创建、8.3 短名、软链前缀都走得通）；`..` 段在上面就已经挡下。 */
 export function resolveInside(root, raw, opts = {}) {
     const trimmed = String(raw ?? '').trim();
     if (trimmed === '')
@@ -160,11 +160,12 @@ export function isLibraryRoot(root, target) {
 // 多个知识集挂同一本书就是多条 ref 指向同一个 rel。嵌套知识集没有语义（下面拦）。
 /** 知识集标记文件名 */
 export const REFS_FILE = '.refs.json';
-/** 知识集子树遍历要跳过的目录（与 scanner.ts 的 SKIP_DIRS 同口径；此处独立一份
- *  免得 fs.ts 反过来 import scanner.ts 成环） */
+/** 知识集遍历要跳过的目录：scanner 的 SKIP_DIRS 再加 `library`（scanner 里根层 library 归
+ *  资料池、更深的同名目录直接跳过）；本文件独立一份，免得反过来 import scanner.ts 成环 */
 const REFS_SKIP_DIRS = new Set(['attachments', 'library', '.git', '.trash', 'node_modules']);
-/** 挂载项清洗：统一正斜杠、解 `.`/`..`、去空段、去重保序。**不校验存在**——
- *  库里那一份被删 / 改名后清单可以悬挂（前端显示「不在库里」），这里只保证不越界。 */
+/** 挂载项清洗：两端裁空白、反斜杠归一成正斜杠、去空、去重保序。**与桌面端 clean_refs
+ *  一字不差**——不解 `..`/`.`、不折内部空段：refs 只当名字查库内清单、不拼文件路径，
+ *  写回时不该把另一端留下的字面 rel 改写掉。不校验存在（删 / 改名后允许悬挂）。 */
 export function cleanRefs(raw) {
     if (!Array.isArray(raw))
         return [];
@@ -172,17 +173,7 @@ export function cleanRefs(raw) {
     for (const value of raw) {
         if (typeof value !== 'string')
             continue;
-        const segs = [];
-        for (const seg of value.trim().replace(/\\/g, '/').split('/')) {
-            if (seg === '' || seg === '.')
-                continue;
-            if (seg === '..') {
-                segs.pop();
-                continue;
-            }
-            segs.push(seg);
-        }
-        const rel = segs.join('/');
+        const rel = value.trim().replace(/\\/g, '/');
         if (rel !== '' && !out.includes(rel))
             out.push(rel);
     }
@@ -325,6 +316,51 @@ export function listKnowledgeSets(root) {
     }
     out.sort((a, b) => a.dir.toLowerCase().localeCompare(b.dir.toLowerCase()));
     return out;
+}
+/** 库里按内容（sha256 前 16 位）找同哈希文献：命中回绝对路径，没有回 null。
+ *  资料导入按内容去重——同一本书被多个知识集挂载时物理文件只存一份（与桌面端同口径）。
+ *  先按大小筛再逐份读；导入是低频动作，这趟读盘可以接受。 */
+function findLibraryByHash(root, bytes) {
+    const lib = libraryRoot(root);
+    if (lib === null)
+        return null;
+    const want = crypto.createHash('sha256').update(bytes).digest('hex').slice(0, 16);
+    const stack = [lib];
+    while (stack.length > 0) {
+        const dir = stack.pop();
+        if (dir === undefined)
+            continue;
+        let entries;
+        try {
+            entries = fs.readdirSync(dir, { withFileTypes: true });
+        }
+        catch {
+            continue;
+        }
+        for (const ent of entries) {
+            if (ent.name.startsWith('.'))
+                continue;
+            const full = path.join(dir, ent.name);
+            if (ent.isDirectory()) {
+                stack.push(full);
+                continue;
+            }
+            if (!ent.isFile())
+                continue;
+            let buf;
+            try {
+                buf = fs.readFileSync(full);
+            }
+            catch {
+                continue;
+            }
+            if (buf.length !== bytes.length)
+                continue;
+            if (crypto.createHash('sha256').update(buf).digest('hex').slice(0, 16) === want)
+                return full;
+        }
+    }
+    return null;
 }
 /** target 在库内的 rel（相对 library/）；不在库里返 null */
 export function libraryRel(root, target) {
@@ -560,8 +596,9 @@ export function createEntry(root, dirAbs, rawName, kind) {
     fs.writeFileSync(target, '', { encoding: 'utf8', flag: 'wx' });
     return { path: target };
 }
-/** 重命名（只换名字、留原位置）。页统一收成 .md；资料库文件保留原扩展名
- *  （新名自带扩展名则按新名走）。撞名报错（纯大小写改名不算撞名）。
+/** 重命名（只换名字、留原位置）。笔记页沿用盘上扩展名（md / markdown 都保）；资料库
+ *  文件保留原扩展名（新名自带扩展名则按新名走）。撞名：笔记报错让人看见，**资料库自动
+ *  加序号**（文献没有覆盖语义）；纯大小写改名不算撞名。
  *  pages = 改名**前**的页面集合：笔记页改名要改写指向它的双链。 */
 export function renameEntry(root, targetAbs, rawName, pages = []) {
     const target = resolveInside(root, targetAbs);
@@ -572,13 +609,19 @@ export function renameEntry(root, targetAbs, rawName, pages = []) {
         throw new Error('名称非法或为空');
     const stat = fs.statSync(target);
     const dir = path.dirname(target);
-    const before = path.basename(target);
     if (stat.isDirectory()) {
-        const next = path.join(dir, leaf);
+        let next = path.join(dir, leaf);
         if (next === target)
             return { path: target, links: 0 };
-        if (existsSync(next) && next.toLowerCase() !== target.toLowerCase())
-            throw new Error(`同名文件夹已存在：${leaf}`);
+        if (existsSync(next) && next.toLowerCase() !== target.toLowerCase()) {
+            // 资料库目录改名撞名自动加序号（文献没有覆盖语义）；笔记目录仍报错让人看见
+            if (!inLibrary(root, target))
+                throw new Error(`同名文件夹已存在：${leaf}`);
+            const deduped = dedupeName(dir, leaf);
+            if (deduped === null)
+                throw new Error('同名文件夹太多，无法自动编号');
+            next = path.join(dir, deduped);
+        }
         const libOld = inLibrary(root, target) ? libraryRel(root, target) : null;
         fs.renameSync(target, next);
         // 库内目录改名：挂载清单里的旧前缀整段换新（笔记目录不涉及）
@@ -598,11 +641,17 @@ export function renameEntry(root, targetAbs, rawName, pages = []) {
             ? leaf
             : `${leaf}${path.extname(target)}`
         : `${stripMd(leaf)}${path.extname(target) || '.md'}`;
-    const next = path.join(dir, finalLeaf);
+    let next = path.join(dir, finalLeaf);
     if (next === target)
         return { path: target, links: 0 };
-    if (existsSync(next) && next.toLowerCase() !== target.toLowerCase())
-        throw new Error(`同名文件已存在：${finalLeaf}`);
+    if (existsSync(next) && next.toLowerCase() !== target.toLowerCase()) {
+        if (!inLibrary(root, target))
+            throw new Error(`同名文件已存在：${finalLeaf}`);
+        const deduped = dedupeName(dir, finalLeaf);
+        if (deduped === null)
+            throw new Error('同名文件太多，无法自动编号');
+        next = path.join(dir, deduped);
+    }
     const oldRel = relUnderRoot(root, target);
     const libOld = inLibrary(root, target) ? libraryRel(root, target) : null;
     fs.renameSync(target, next);
@@ -877,7 +926,12 @@ const IMPORT_SRC_MAX_BYTES = 32 * 1024 * 1024;
 /** 导入一个文件到库内目录。资料（资料库那一支、或上传的任意文件）按字节原样落盘，
  *  一律自动加序号不覆盖；笔记页收正文并把页内引用的本地图片收进 attachments/。 */
 export async function importEntry(root, opts) {
+    const rootReal = fs.realpathSync(root);
     const dest = resolveInside(root, opts.destAbs, { allowRoot: true });
+    // 资料库根不存在时按需建：桌面端导入资料会顺手建 library/，导入链路不该因为目录还没建
+    // 就死在「目标不是文件夹」（前端在 library/ 缺席时就是把这个路径当落点发上来）
+    if (!existsSync(dest) && dest === path.join(rootReal, 'library'))
+        fs.mkdirSync(dest, { recursive: true });
     if (!fs.statSync(dest).isDirectory())
         throw new Error('目标不是文件夹');
     const library = inLibrary(root, dest);
@@ -912,6 +966,22 @@ export async function importEntry(root, opts) {
         throw new Error('缺少导入内容');
     if (bytes.length === 0)
         throw new Error('文件是空的');
+    // 资料按内容去重（与桌面端同口径）：库里已有同哈希就复用那一份，不落第二份——
+    // 同一本书被多个知识集挂载时物理文件只存一份
+    if (library) {
+        const existing = findLibraryByHash(root, bytes);
+        if (existing !== null) {
+            return {
+                path: existing,
+                rel: relUnderRoot(rootReal, existing) ?? path.basename(existing),
+                name: path.basename(existing),
+                images: 0,
+                skipped: false,
+                renamed: false,
+                already: true,
+            };
+        }
+    }
     const asPage = !library && /\.(md|markdown)$/i.test(sourceName);
     const rawName = typeof opts.name === 'string' && opts.name.trim() !== '' ? opts.name.trim() : stripMd(sourceName);
     const leaf = safeLeaf(rawName);
@@ -988,19 +1058,23 @@ export async function deleteEntries(root, paths) {
         targets.push(target);
     }
     // 页面删除连带它的题目与掌握度一起进回收站（同目录 .quiz/ 下的两份伴生文件；
-    // 目录删除不用管：.quiz/ 在目录体内，跟着整棵走）
-    const extras = [];
+    // 目录删除不用管：.quiz/ 在目录体内，跟着整棵走）。**只随删除成功的页走**——
+    // 页面本身没删掉时先清它的题，会留下「页还在、题没了」的半截状态
+    const extrasOf = new Map();
     for (const p of targets) {
         if (!fs.statSync(p).isDirectory() && !inLibrary(root, p))
-            extras.push(...siblingsForDelete(p));
+            extrasOf.set(p, siblingsForDelete(p));
     }
     let deleted = 0;
     const failed = [];
+    const gone = [];
     if (process.platform === 'win32') {
         const results = await recycleDeleteBatch(targets);
         targets.forEach((p, i) => {
-            if (results[i] === true)
+            if (results[i] === true) {
                 deleted += 1;
+                gone.push(p);
+            }
             else
                 failed.push(path.basename(p));
         });
@@ -1010,12 +1084,14 @@ export async function deleteEntries(root, paths) {
             try {
                 await fs.promises.rm(p, { recursive: true, force: true });
                 deleted += 1;
+                gone.push(p);
             }
             catch {
                 failed.push(path.basename(p));
             }
         }
     }
+    const extras = gone.flatMap((p) => extrasOf.get(p) ?? []);
     if (extras.length > 0) {
         if (process.platform === 'win32') {
             await recycleDeleteBatch(extras);

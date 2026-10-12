@@ -12,8 +12,8 @@ export declare function stripMd(name: string): string;
 export declare function dedupeName(dir: string, name: string, exists?: (p: string) => boolean): string | null;
 /** 绝对路径归一：拒空与任何 `..` 段（只做前缀比较的话 `root\..\x` 能蒙混过关），
  *  再把两端 realpath 后比包含关系——软链与 Windows 8.3 短名会让单头比较落空。
- *  支持「多级下钻」的路径必须从**已存在**的目录里 join（create/move 的落点），
- *  因此父目录 realpath 后拼叶子即可。 */
+ *  路径不存在时按**最近存在的祖先** realpath 归一、尾巴逐段按字面回拼（父链整段都不在
+ *  的多级创建、8.3 短名、软链前缀都走得通）；`..` 段在上面就已经挡下。 */
 export declare function resolveInside(root: string, raw: string, opts?: {
     allowRoot?: boolean;
 }): string;
@@ -33,8 +33,9 @@ export interface KnowledgeSetRefs {
     /** 挂载的库内 rel 列表 */
     refs: string[];
 }
-/** 挂载项清洗：统一正斜杠、解 `.`/`..`、去空段、去重保序。**不校验存在**——
- *  库里那一份被删 / 改名后清单可以悬挂（前端显示「不在库里」），这里只保证不越界。 */
+/** 挂载项清洗：两端裁空白、反斜杠归一成正斜杠、去空、去重保序。**与桌面端 clean_refs
+ *  一字不差**——不解 `..`/`.`、不折内部空段：refs 只当名字查库内清单、不拼文件路径，
+ *  写回时不该把另一端留下的字面 rel 改写掉。不校验存在（删 / 改名后允许悬挂）。 */
 export declare function cleanRefs(raw: unknown): string[];
 /** 读一个知识集的挂载清单（没标记 / 清单坏了都当空——坏清单不该挡住整个功能） */
 export declare function readFolderRefs(dirAbs: string): string[];
@@ -82,8 +83,9 @@ export declare function createEntry(root: string, dirAbs: string, rawName: unkno
     path: string;
     exists?: boolean;
 };
-/** 重命名（只换名字、留原位置）。页统一收成 .md；资料库文件保留原扩展名
- *  （新名自带扩展名则按新名走）。撞名报错（纯大小写改名不算撞名）。
+/** 重命名（只换名字、留原位置）。笔记页沿用盘上扩展名（md / markdown 都保）；资料库
+ *  文件保留原扩展名（新名自带扩展名则按新名走）。撞名：笔记报错让人看见，**资料库自动
+ *  加序号**（文献没有覆盖语义）；纯大小写改名不算撞名。
  *  pages = 改名**前**的页面集合：笔记页改名要改写指向它的双链。 */
 export declare function renameEntry(root: string, targetAbs: string, rawName: unknown, pages?: WikiRef[]): {
     path: string;
@@ -139,6 +141,7 @@ export declare function importEntry(root: string, opts: ImportOptions): Promise<
     images: number;
     skipped: boolean;
     renamed: boolean;
+    already?: boolean;
 }>;
 /** 删除（整单批量）：Windows 走回收站，非 Windows 直删；返回成功数与失败项名字 */
 export declare function deleteEntries(root: string, paths: unknown[]): Promise<{

@@ -479,7 +479,8 @@ export async function apply(ctx, config = {}) {
             //   阈值在库根 .quiz-state/settings.json——点前缀目录不进索引与树，数据与
             //   桌面端同一份；页面改名/移动/删除的伴生文件跟随在 fs.ts。
             setQuizWarn(kitLogger('vault').warn);
-            // GET 四个：rel 非法或文件读不了都回 400（坏一份题目文件不能炸面板）
+            // GET 四个：坏入参一律按「没有」回 200 空结果（读路径不抛错、坏文件不能炸面板）；
+            // 意外异常兜底回 400
             const quizRead = (code) => (req, res, url) => {
                 if (req.method !== 'GET')
                     return json(res, 405, { error: 'method not allowed' });
@@ -498,10 +499,18 @@ export async function apply(ctx, config = {}) {
             vaultRoute('/dsh-kit/vault/quiz-progress', quizRead((url, root) => readProgress(root, url.searchParams.get('rel'), url.searchParams.get('dir'))));
             vaultRoute('/dsh-kit/vault/quiz-revision', quizRead((url, root) => revision(root, url.searchParams.get('rel'), url.searchParams.get('dir'))));
             vaultPost('/dsh-kit/vault/quiz-save', (body, root) => savePage(root, String(body.rel ?? ''), body.questions, body.edit ?? null));
-            vaultPost('/dsh-kit/vault/quiz-record', (body, root) => record(root, String(body.rel ?? ''), String(body.id ?? ''), body.correct === true));
+            vaultPost('/dsh-kit/vault/quiz-record', (body, root) => {
+                if (typeof body.correct !== 'boolean')
+                    throw new Error('correct 必须是布尔');
+                return record(root, String(body.rel ?? ''), String(body.id ?? ''), body.correct);
+            });
             vaultPost('/dsh-kit/vault/quiz-mark', (body, root) => markMastered(root, String(body.rel ?? ''), String(body.id ?? '')));
             vaultPost('/dsh-kit/vault/quiz-forget', (body, root) => forget(root, String(body.rel ?? ''), String(body.id ?? '')));
-            vaultPost('/dsh-kit/vault/quiz-threshold', (body, root) => ({ threshold: setThreshold(root, Number(body.value ?? 0)) }));
+            vaultPost('/dsh-kit/vault/quiz-threshold', (body, root) => {
+                if (typeof body.value !== 'number' || !Number.isFinite(body.value))
+                    throw new Error('阈值必须是数字');
+                return { threshold: setThreshold(root, body.value) };
+            });
             return () => {
                 disposeVendor();
                 disposeVendorFonts();
