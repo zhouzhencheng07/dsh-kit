@@ -24,9 +24,6 @@ const MAX_OPTION = 500
 const MAX_EXPLAIN = 2000
 const MAX_OPTIONS = 10
 const MAX_BLANKS = 10
-/** 页面 rel 的清洗口径：段数与单段长度上限 */
-const MAX_REL_SEGS = 16
-const MAX_REL_SEG_LEN = 200
 /** id 归一化的空白集合：与桌面端同一份 White_Space 表，一字不差（差一个字符 id 就分家） */
 const WS_RE = /[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/gu
 const WS_CLASS = '\\u0009-\\u000d\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000'
@@ -125,19 +122,18 @@ const emptyProgress = (): QuizProgress => ({ version: 1, progress: {} })
 
 // ── 页面 rel 清洗 ───────────────────────────────────────────────────────────
 
-/** rel → 逐段（拒空段、`.`/`..`、控制字符与超长；不含分隔符因此拼不出库外路径） */
+/** rel → 逐段。口径与桌面端 `safe_rel` 对齐：只裁两端 `/` `\`、拒盘符、拒空段与
+ *  `.`/`..`（不含分隔符因此拼不出库外路径）；**不额外 trim 空白、不设段数 / 段长 / 控制字符
+ *  上限**——多一条限制就多一批「桌面端能测、这边不能」的页。 */
 function splitRel(raw: unknown): string[] | null {
   if (typeof raw !== 'string') return null
-  const rel = raw.trim().replace(/^[/\\]+|[/\\]+$/g, '')
+  const rel = raw.replace(/^[/\\]+|[/\\]+$/g, '')
   if (rel === '') return null
   // 盘符（C:）能拼出库根外的绝对路径，一律拒
   if (rel.includes(':')) return null
   const segs = rel.split(/[/\\]/)
-  if (segs.length > MAX_REL_SEGS) return null
   for (const seg of segs) {
     if (seg === '' || seg === '.' || seg === '..') return null
-    if (/[\u0000-\u001f]/.test(seg)) return null
-    if (seg.length > MAX_REL_SEG_LEN) return null
   }
   return segs
 }
@@ -581,7 +577,7 @@ function normalizeQuestion(q: QuizQuestion): QuizQuestion {
   let answer: QuizAnswer = q.answer
   if (q.type === 'single' || q.type === 'multi') answer = lettersOf(q.answer)
   else if (q.type === 'blank' && Array.isArray(q.answer)) {
-    answer = q.answer.map((b) => (Array.isArray(b) ? b.map((v) => wsTrim(String(v))).filter((v) => v !== '') : []))
+    answer = q.answer.map((b) => (Array.isArray(b) ? b.map((v) => (typeof v === 'string' ? wsTrim(v) : '')).filter((v) => v !== '') : []))
   }
   return {
     type: q.type,
@@ -663,17 +659,24 @@ export function readPage(root: string, rel: string): QuizPageDto {
   return r === null ? { rel: '', questions: [] } : readAt(quizPath(root, r), r)
 }
 
+/** 反序列化的严格度与桌面端 serde 对齐：type / stem 必填字符串，options 出现时必须是
+ *  字符串数组，explain 出现时必须是字符串——类型不对整份 400，不悄悄 String() 强制转换 */
 function parseQuestionDrafts(raw: unknown): QuizQuestion[] {
   if (!Array.isArray(raw)) throw new Error('缺少题目清单')
   return raw.map((item) => {
-    if (item === null || typeof item !== 'object') throw new Error('题目形状不对')
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) throw new Error('题目形状不对')
     const q = item as { type?: unknown; stem?: unknown; options?: unknown; answer?: unknown; explain?: unknown }
+    if (typeof q.type !== 'string' || typeof q.stem !== 'string') throw new Error('题目缺少题型或题干')
+    if (q.options !== undefined && (!Array.isArray(q.options) || q.options.some((o) => typeof o !== 'string'))) {
+      throw new Error('选项必须是字符串数组')
+    }
+    if (q.explain !== undefined && typeof q.explain !== 'string') throw new Error('解析必须是字符串')
     return {
-      type: typeof q.type === 'string' ? q.type : '',
-      stem: typeof q.stem === 'string' ? q.stem : '',
-      options: Array.isArray(q.options) ? q.options.map((o) => String(o ?? '')) : [],
+      type: q.type,
+      stem: q.stem,
+      options: q.options === undefined ? [] : (q.options as string[]),
       answer: (q.answer ?? null) as QuizAnswer,
-      explain: typeof q.explain === 'string' ? q.explain : '',
+      explain: q.explain === undefined ? '' : q.explain,
     }
   })
 }
@@ -814,8 +817,8 @@ export function revision(root: string, rel: string | null, dir: string | null): 
 
 function addRev(file: string, rev: QuizRevision): void {
   const st = fs.statSync(file, { throwIfNoEntry: false })
-  if (st === undefined || !st.isFile()) return
-  const ms = Math.round(st.mtimeMs)
+  if (st === undefined) return
+  const ms = Math.floor(st.mtimeMs)
   if (ms > 0) {
     rev.files += 1
     rev.mtimeMs = Math.max(rev.mtimeMs, ms)

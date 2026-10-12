@@ -171,6 +171,17 @@ await test('savePage：同内容去重；edit.keep 搬记录、不 keep 清零',
   assert.equal(kept.questions[0].id, id)
 })
 
+await test('savePage：入参严格（非字符串选项 / 题干整份拒），长路径不设额外上限', () => {
+  mkpage('数学/12.1')
+  assert.throws(() => savePage(root, '数学/12.1', [{ ...SINGLE, options: [1, 2] }], null), /选项必须是字符串数组/)
+  assert.throws(() => savePage(root, '数学/12.1', [{ ...SINGLE, stem: 3 }], null), /缺少题型或题干/)
+  // 桌面端 safe_rel 不设段数 / 段长上限，这边也不该多一道
+  const long = 'L'.repeat(201)
+  const saved = savePage(root, long, [SINGLE], null)
+  assert.equal(saved.rel, long)
+  assert.equal(readPage(root, long).questions.length, 1)
+})
+
 await test('savePage：与标记同形的题干拒绝落盘', () => {
   mkpage('数学/3.1')
   assert.throws(

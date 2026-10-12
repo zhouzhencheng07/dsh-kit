@@ -69,6 +69,10 @@ fs.writeFileSync(path.join(root, '.hidden', 'x.md'), '# 不进索引')
 fs.mkdirSync(path.join(root, 'library', '大学', '大三上'), { recursive: true })
 fs.writeFileSync(path.join(root, 'library', '大学', '讲义.pdf'), '%PDF-1.4 假内容')
 fs.writeFileSync(path.join(root, 'library', '笔记.md'), '# 库里的 md 也算文献')
+fs.writeFileSync(path.join(root, 'library', '中间.tmp'), '写盘中间文件不进池')
+// 嵌套的 library/ 不算资料库、也不算页面（任意深度跳过）
+fs.mkdirSync(path.join(root, 'Python', 'library'), { recursive: true })
+fs.writeFileSync(path.join(root, 'Python', 'library', '藏.md'), '# 不进索引')
 let scanner = new VaultScanner(() => root)
 let index
 
@@ -100,11 +104,12 @@ await test('scan：根下 library/ 归资料库（目录 + 任意格式文件都
     ['d:大学', 'd:大学/大三上', 'f:大学/讲义.pdf', 'f:笔记.md'],
   )
   assert.ok(lib.items.every((it) => path.isAbsolute(it.path)))
+  assert.ok(!lib.items.some((it) => it.rel.endsWith('.tmp')), '.tmp 不进资料池')
 })
 
 await test('scan：资料库不进页面索引与检索池（文献由面板按名字匹配）', async () => {
-  assert.ok(index.pages.every((p) => !p.rel.startsWith('library')))
-  assert.ok(!index.folders.includes('library'))
+  assert.ok(index.pages.every((p) => !p.rel.includes('library')))
+  assert.ok(!index.folders.some((f) => f.includes('library')))
   const hit = await scanner.search('讲义', 10)
   assert.equal(hit.results.length, 0)
 })

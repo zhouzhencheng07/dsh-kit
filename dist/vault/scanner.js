@@ -183,7 +183,8 @@ export class VaultScanner {
                     await walkLibrary(full, rel);
                     continue;
                 }
-                if (dirent.isFile())
+                // 写盘中间文件不进清单（与桌面端同口径）；目录名以 .tmp 结尾照收
+                if (dirent.isFile() && !dirent.name.toLowerCase().endsWith('.tmp'))
                     lib.items.push({ path: full, rel, dir: false });
             }
         };
