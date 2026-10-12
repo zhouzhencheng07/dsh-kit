@@ -21,6 +21,7 @@ import {
   markMastered,
   revision,
   savePage,
+  setQuizWarn,
   setThreshold,
   siblingsForDelete,
   toMd,
@@ -255,6 +256,72 @@ await test('discard（导入/移动覆盖）：被覆盖页的题目一并带走
   // 把 8.1 移动覆盖到 第二章（同目录已有同名页）：旧页的题目不能留下冒充
   await moveEntry(root, page('数学/8.1'), path.join(root, '数学', '第二章'), 'overwrite', [])
   assert.ok(fs.existsSync(quizPath(root, '数学/第二章/8.1')))
+})
+
+await test('id 契约边界：判断无答案段归 false、BOM 不算空白、NEL 算空白（与桌面端定值一字不差）', () => {
+  const judgeEmpty = { type: 'judge', stem: '地球是圆的', options: [], answer: null, explain: '' }
+  const feff = { type: 'single', stem: '极限\u{feff}存在', options: ['甲', '乙'], answer: 'A', explain: '' }
+  const nel = { type: 'single', stem: '极限\u{85}存在', options: ['甲', '乙'], answer: 'A', explain: '' }
+  assert.equal(questionId(judgeEmpty), '55f85e8a4e6ecc48')
+  assert.equal(questionId(feff), '9ae3258ceefc3761')
+  assert.equal(questionId(nel), 'fbab6723def5ab2f')
+})
+
+await test('路径守卫：盘符 / .. / 空段挡下，写抛错读当空；反斜杠当分隔符', () => {
+  mkpage('数学/9.1')
+  savePage(root, '数学/9.1', [SINGLE], null)
+  for (const bad of ['../x', 'a/../b', 'C:/x', 'a//b', 'a/./b', 'a\\..\\x', 'C:\\x']) {
+    assert.throws(() => savePage(root, bad, [SINGLE], null), /页面路径非法/, `savePage(${bad})`)
+    assert.throws(() => record(root, bad, 'id', true), /页面路径非法/, `record(${bad})`)
+    assert.deepEqual(readPage(root, bad), { rel: '', questions: [] }, `readPage(${bad})`)
+    assert.deepEqual(readScope(root, bad), { dir: '', pages: [] }, `readScope(${bad})`)
+    // 坏 rel 的指纹 = 只有阈值文件那一份（与「页面不存在」同形）
+    assert.deepEqual(
+      revision(root, bad, null),
+      revision(root, '不存在/不存在的页', null),
+      `revision(${bad})`,
+    )
+    assert.deepEqual(readProgress(root, bad, null).progress, {}, `readProgress(${bad})`)
+  }
+  // 正常 rel 与首尾斜杠、反斜杠分隔照旧
+  assert.equal(readPage(root, '数学\\9.1').questions.length, 1)
+  assert.equal(readPage(root, '/数学/9.1/').questions.length, 1)
+})
+
+await test('坏掌握度文件：整份挪 .bak 留证再当空表（半份好记录不留）', () => {
+  mkpage('数学/10.1')
+  savePage(root, '数学/10.1', [SINGLE], null)
+  const id = readPage(root, '数学/10.1').questions[0].id
+  record(root, '数学/10.1', id, true)
+  const file = progressPath(root, '数学/10.1')
+  const warns = []
+  setQuizWarn((m) => warns.push(m))
+  // 半好半坏：好记录也不能救回来（与桌面端 serde 同口径）
+  fs.writeFileSync(file, JSON.stringify({ version: 1, progress: { ok: { streak: 1, mastered: false, updatedMs: 1 }, bad: { streak: 'x' } } }), 'utf8')
+  assert.deepEqual(readProgress(root, '数学/10.1', null).progress, {})
+  assert.ok(!fs.existsSync(file))
+  assert.ok(fs.existsSync(`${file}.bak`))
+  assert.equal(warns.length, 1)
+  // 缺字段给默认（serde default），这类不算坏
+  fs.rmSync(`${file}.bak`, { force: true })
+  fs.writeFileSync(file, JSON.stringify({ progress: { x: { streak: 2 } } }), 'utf8')
+  const partial = readProgress(root, '数学/10.1', null).progress.x
+  assert.equal(partial.streak, 2)
+  assert.equal(partial.mastered, false)
+  assert.equal(partial.updatedMs, 0)
+  setQuizWarn(() => {})
+})
+
+await test('edit.index 按交上来的数组算：去重并掉中间项时不再错位', () => {
+  mkpage('数学/11.1')
+  const third = { ...SINGLE, stem: '第三题' }
+  const first = savePage(root, '数学/11.1', [SINGLE, third], null)
+  const idThird = first.questions[1].id
+  record(root, '数学/11.1', idThird, true)
+  // 交上来 [A, A(重复), 第三题]：index=2 指的是交上来数组里的第三题，
+  // 去重后的数组里它已错位——按去重后取就是 undefined，清记录会被跳过
+  savePage(root, '数学/11.1', [SINGLE, SINGLE, third], { index: 2, oldId: idThird, keep: false })
+  assert.equal(readProgress(root, '数学/11.1', null).progress[idThird], undefined)
 })
 
 console.log('done')

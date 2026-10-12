@@ -237,7 +237,7 @@ interface SanitizedFields {
   due?: string | null
   skip?: string[] | null
   completedAt?: string | null
-  parentId?: string
+  parentId?: string | null
 }
 
 /** 待办截止：纯日期或日期时刻都收（"今天18:00 交表"这类带时刻的写法），统一截到分钟 */
@@ -304,7 +304,12 @@ function sanitizeFields(input: Record<string, unknown>, patch: boolean): Sanitiz
     if (typeof v === 'string' && (DATE_RE.test(v) || DT_RE.test(v))) out.completedAt = v.slice(0, 16)
     else if (v === null && patch) out.completedAt = null
   }
-  if (has('parentId') && typeof input.parentId === 'string') out.parentId = input.parentId
+  // 所属：null = 清空（与地点/备注同款三态）
+  if (has('parentId')) {
+    const v = input.parentId
+    if (typeof v === 'string') out.parentId = v
+    else if (v === null && patch) out.parentId = null
+  }
   // patch 语义允许显式清空可选字段；create 语义只在给了合法值时带上
   if (patch) return out
   if (out.title === undefined) return {}
@@ -327,7 +332,7 @@ function applyFields(ev: ScheduleEvent, f: SanitizedFields): void {
   setOrClear('due', f.due)
   setOrClear('skip', f.skip)
   setOrClear('completedAt', f.completedAt)
-  if (f.parentId !== undefined) ev.parentId = f.parentId
+  setOrClear('parentId', f.parentId)
 }
 
 /**

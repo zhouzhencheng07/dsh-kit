@@ -121,6 +121,15 @@ await test('renameEntry：页改名按解析改写双链（锚/别名/路径形�
   renameEntry(root, path.join(root, 'wiki', '工具链2.md'), '工具链', await scanner.scan().then((i) => i.pages))
 })
 
+await test('renameEntry：.markdown 页改名沿用原扩展名（写死 .md 会造成同 rel 两份文件）', () => {
+  write('wiki/旧写法.markdown', '正文')
+  const res = renameEntry(root, path.join(root, 'wiki', '旧写法.markdown'), '新写法')
+  assert.equal(res.path, path.join(fs.realpathSync(root), 'wiki', '新写法.markdown'))
+  assert.equal(exists('wiki/新写法.markdown'), true)
+  assert.equal(exists('wiki/新写法.md'), false)
+  renameEntry(root, path.join(root, 'wiki', '新写法.markdown'), '旧写法')
+})
+
 await test('renameEntry：目录改名整棵搬走且不改双链；资料库文件保留扩展名', async () => {
   write('library/论文.pdf', '%PDF-1.4')
   const scanner = new VaultScanner(() => root)

@@ -216,8 +216,14 @@ function sanitizeFields(input, patch) {
         else if (v === null && patch)
             out.completedAt = null;
     }
-    if (has('parentId') && typeof input.parentId === 'string')
-        out.parentId = input.parentId;
+    // 所属：null = 清空（与地点/备注同款三态）
+    if (has('parentId')) {
+        const v = input.parentId;
+        if (typeof v === 'string')
+            out.parentId = v;
+        else if (v === null && patch)
+            out.parentId = null;
+    }
     // patch 语义允许显式清空可选字段；create 语义只在给了合法值时带上
     if (patch)
         return out;
@@ -246,8 +252,7 @@ function applyFields(ev, f) {
     setOrClear('due', f.due);
     setOrClear('skip', f.skip);
     setOrClear('completedAt', f.completedAt);
-    if (f.parentId !== undefined)
-        ev.parentId = f.parentId;
+    setOrClear('parentId', f.parentId);
 }
 /**
  * 合并结果的整体校验（create 与 update 都先推演成完整条目再校验，不做半截更新）：

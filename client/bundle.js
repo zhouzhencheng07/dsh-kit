@@ -3865,7 +3865,7 @@ ellipsis，窄列只截字不破版 */
       vtblAlignL: "左对齐",
       vtblAlignC: "居中",
       vtblAlignR: "右对齐",
-      vtblHeadCol: "切换表头列",
+
       vtblDelTable: "删除表格",
       vtbUndo: "撤销",
       vtbRedo: "重做",
@@ -4172,7 +4172,7 @@ ellipsis，窄列只截字不破版 */
       vtblAlignL: "Align left",
       vtblAlignC: "Align center",
       vtblAlignR: "Align right",
-      vtblHeadCol: "Toggle header column",
+
       vtblDelTable: "Delete table",
       vtbUndo: "Undo",
       vtbRedo: "Redo",
@@ -6513,6 +6513,18 @@ ellipsis，窄列只截字不破版 */
       const menuRows = (mnArg) => {
         const mn = mnArg ?? menuRef.current ?? { query: "", sub: null };
         const q = (mn.query ?? "").toLowerCase();
+        // 格内只收行内项且平铺成一层：块级结构进格子存不住（序列化按 <br> 摊平），
+        // 菜单就不给入口——行内公式 / 图片 / 双链三项，直接一层列出（桌面端同口径）
+        if (rteRef.current?.inTable() === true) {
+          const inlineKeys = new Set(["mathinline", "image", "wiki"]);
+          const flat = [];
+          for (const g of VAULT_MENU) {
+            for (const k of g.children ?? [g]) {
+              if (inlineKeys.has(k.key)) flat.push(k);
+            }
+          }
+          return q === "" ? flat : flat.filter((k) => (k.labelKey + k.match).toLowerCase().includes(q));
+        }
         if (mn.sub) {
           const group = VAULT_MENU.find((g) => g.key === mn.sub);
           const kids = group ? group.children : [];
@@ -7309,8 +7321,8 @@ ellipsis，窄列只截字不破版 */
                       jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblAlignC"), onClick: () => rteCmd((h) => h.editor.chain().setCellAttribute("align", "center").run()), children: "中" }),
                       jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblAlignR"), onClick: () => rteCmd((h) => h.editor.chain().setCellAttribute("align", "right").run()), children: "右" }),
                       jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
-                      jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblHeadCol"), onClick: () => rteCmd((h) => h.editor.chain().toggleHeaderColumn().run()), children: "头列" }),
-                      jsxRuntime.jsx("span", { className: "dshk-vault-bsep" }),
+                      // 「切换表头列」不进条：md 表格只认首行表头，列级表头存不下
+                      // （存一次读回来就丢，按钮是个假承诺）——与桌面端同口径删掉
                       jsxRuntime.jsx("button", { type: "button", className: "dshk-vault-bbtn", title: t("vtblDelTable"), onClick: () => rteCmd((h) => h.tableDelete()), children: "✕表" }),
                     ] })
                     : null,
@@ -10889,7 +10901,9 @@ ellipsis，窄列只截字不破版 */
         return jsxRuntime.jsxs("div", { children: [
           jsxRuntime.jsx("div", { className: "dshk-quiz-h2", children: editing === "new" ? t("qzNew") : t("qzEditN").replace("{i}", String(editing + 1)) }),
           jsxRuntime.jsx(VaultQuizForm, {
-            key: String(editing),
+            // key 跟着目标题的 id（内容哈希）走：表单开着时外部改了这道题，列表拿到新
+            // questions 就把表单重建一次——否则停在旧内容上，保存时把旧题干写回去
+            key: typeof editing === "number" ? questions[editing]?.id ?? "gone" : "new",
             initial,
             resolveSrc,
             onSave: (draft, keep) => {

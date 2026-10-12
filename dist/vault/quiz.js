@@ -34,10 +34,13 @@ const emptyProgress = () => ({ version: 1, progress: {} });
 function splitRel(raw) {
     if (typeof raw !== 'string')
         return null;
-    const rel = raw.trim().replace(/^\/+|\/+$/g, '');
+    const rel = raw.trim().replace(/^[/\\]+|[/\\]+$/g, '');
     if (rel === '')
         return null;
-    const segs = rel.split('/');
+    // 盘符（C:）能拼出库根外的绝对路径，一律拒
+    if (rel.includes(':'))
+        return null;
+    const segs = rel.split(/[/\\]/);
     if (segs.length > MAX_REL_SEGS)
         return null;
     for (const seg of segs) {
@@ -56,6 +59,13 @@ export function safeQuizRel(raw) {
     if (segs === null)
         throw new Error('页面路径非法');
     return segs.join('/');
+}
+/** 读路径的守卫：非法回 null——读端点把坏入参当「没有」处理，写路径仍走 safeQuizRel 抛错 */
+function trySafeQuizRel(raw) {
+    if (raw === '')
+        return '';
+    const segs = splitRel(raw);
+    return segs === null ? null : segs.join('/');
 }
 // ── 路径映射 ────────────────────────────────────────────────────────────────
 function dirAbsOf(root, rel) {
@@ -561,8 +571,8 @@ function readAt(file, rel) {
 }
 /** 读一页的题目（文件不在 / 坏了 = 0 题） */
 export function readPage(root, rel) {
-    const r = safeQuizRel(rel);
-    return readAt(quizPath(root, r), r);
+    const r = trySafeQuizRel(rel);
+    return r === null ? { rel: '', questions: [] } : readAt(quizPath(root, r), r);
 }
 function parseQuestionDrafts(raw) {
     if (!Array.isArray(raw))
@@ -624,15 +634,17 @@ export function savePage(root, rel, raw, edit) {
         kept.push(q);
     }
     const finalQuestions = dedupe(kept);
-    // 编辑目标的旧 / 新 id：新 id 按**交上来的内容**现算（去重把它并掉了也照样算得出来）
+    // 编辑目标的旧 / 新 id：`index` 是**交上来的数组**下标（不是去重后的下标——去重会并掉
+    // 重复项，按下标索引去重结果会整体错位）。去重把它并掉了也没关系：id 是内容哈希，
+    // 被并到的正是同一道题，算出来同一个 id
     let target = null;
     if (edit !== null && typeof edit === 'object') {
         const e = edit;
         const idx = typeof e.index === 'number' && Number.isInteger(e.index) ? e.index : -1;
         const oldId = typeof e.oldId === 'string' ? e.oldId : '';
-        const targetQ = idx >= 0 && idx < finalQuestions.length ? finalQuestions[idx] : undefined;
-        if (targetQ !== undefined && oldId !== '') {
-            target = [oldId, questionId(targetQ), e.keep === true];
+        const submitted = idx >= 0 && idx < questions.length ? questions[idx] : undefined;
+        if (submitted !== undefined && oldId !== '') {
+            target = [oldId, questionId(normalizeQuestion(submitted)), e.keep === true];
         }
     }
     const text = toMd(finalQuestions);
@@ -657,7 +669,9 @@ export function savePage(root, rel, raw, edit) {
 }
 // ── 范围汇总（递归收一个目录下所有有题的页面）──────────────────────────────
 export function readScope(root, dir) {
-    const d = dir === '' ? '' : safeQuizRel(dir);
+    const d = trySafeQuizRel(dir);
+    if (d === null)
+        return { dir: '', pages: [] };
     const base = d === '' ? root : path.join(root, ...d.split('/'));
     const pages = [];
     walkScope(base, d, root, pages);
@@ -704,12 +718,16 @@ export function revision(root, rel, dir) {
     const rev = { files: 0, mtimeMs: 0 };
     addRev(settingsPath(root), rev);
     if (rel !== null && rel.trim() !== '') {
-        const r = safeQuizRel(rel);
+        const r = trySafeQuizRel(rel);
+        if (r === null)
+            return rev;
         addRev(quizPath(root, r), rev);
         addRev(progressPath(root, r), rev);
         return rev;
     }
-    const d = dir === null || dir === '' ? '' : safeQuizRel(dir);
+    const d = dir === null ? '' : trySafeQuizRel(dir);
+    if (d === null)
+        return rev;
     const base = d === '' ? root : path.join(root, ...d.split('/'));
     walkRevision(base, root, rev);
     return rev;
@@ -757,33 +775,65 @@ function walkRevision(dir, root, out) {
 // ── 掌握度：跟页面走 ────────────────────────────────────────────────────────
 /** 读一页的掌握度（文件不在 / 坏了都当空表：记不住掌握度不是错） */
 function readProgressFile(root, rel) {
+    const file = progressPath(root, rel);
     let text;
     try {
-        text = fs.readFileSync(progressPath(root, rel), 'utf8');
+        text = fs.readFileSync(file, 'utf8');
     }
     catch {
         return emptyProgress();
     }
-    try {
-        const raw = JSON.parse(text);
-        const out = emptyProgress();
-        if (raw.progress !== null && typeof raw.progress === 'object') {
-            for (const [id, rec] of Object.entries(raw.progress)) {
-                if (rec === null || typeof rec !== 'object')
-                    continue;
-                const r = rec;
-                out.progress[id] = {
-                    streak: typeof r.streak === 'number' && r.streak > 0 ? Math.floor(r.streak) : 0,
-                    mastered: r.mastered === true,
-                    updatedMs: typeof r.updatedMs === 'number' && r.updatedMs > 0 ? Math.floor(r.updatedMs) : 0,
-                };
-            }
+    // 解析不动 = 整份挪 .bak 留证再当空表——直接当空表的话，下一次作答就把整页记录
+    // 覆盖掉，坏在哪、丢了什么全查不出来
+    const parsed = parseProgress(text);
+    if (parsed === null) {
+        try {
+            fs.renameSync(file, `${file}.bak`);
         }
-        return out;
-    }
-    catch {
+        catch {
+            /* 收不走就留着原文件 */
+        }
+        kitWarn(`掌握度文件解析失败，已挪到 ${file}.bak`);
         return emptyProgress();
     }
+    return parsed;
+}
+/** 严格解析：缺字段给默认，类型不对整份算坏（与桌面端 serde 同口径，半份好记录不留） */
+function parseProgress(text) {
+    let raw;
+    try {
+        raw = JSON.parse(text);
+    }
+    catch {
+        return null;
+    }
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw))
+        return null;
+    const obj = raw;
+    if (obj.version !== undefined && (typeof obj.version !== 'number' || !Number.isInteger(obj.version) || obj.version < 0))
+        return null;
+    const out = emptyProgress();
+    if (obj.progress === undefined)
+        return out;
+    if (obj.progress === null || typeof obj.progress !== 'object' || Array.isArray(obj.progress))
+        return null;
+    for (const [id, rec] of Object.entries(obj.progress)) {
+        if (rec === null || typeof rec !== 'object' || Array.isArray(rec))
+            return null;
+        const r = rec;
+        if (r.streak !== undefined && (typeof r.streak !== 'number' || !Number.isInteger(r.streak) || r.streak < 0))
+            return null;
+        if (r.mastered !== undefined && typeof r.mastered !== 'boolean')
+            return null;
+        if (r.updatedMs !== undefined && (typeof r.updatedMs !== 'number' || !Number.isInteger(r.updatedMs) || r.updatedMs < 0))
+            return null;
+        out.progress[id] = {
+            streak: typeof r.streak === 'number' ? r.streak : 0,
+            mastered: r.mastered === true,
+            updatedMs: typeof r.updatedMs === 'number' ? r.updatedMs : 0,
+        };
+    }
+    return out;
 }
 /** 写一页的掌握度；空表 = 把文件删掉（不留空壳） */
 function writeProgressFile(root, rel, p) {
@@ -820,10 +870,15 @@ export function readProgress(root, rel, dir) {
     const threshold = readSettings(root).threshold;
     const progress = {};
     if (rel !== null && rel.trim() !== '') {
-        Object.assign(progress, readProgressFile(root, safeQuizRel(rel)).progress);
+        const r = trySafeQuizRel(rel);
+        if (r === null)
+            return { version: 1, threshold, progress };
+        Object.assign(progress, readProgressFile(root, r).progress);
     }
     else {
-        const d = dir === null || dir === '' ? '' : safeQuizRel(dir);
+        const d = dir === null ? '' : trySafeQuizRel(dir);
+        if (d === null)
+            return { version: 1, threshold, progress };
         walkProgress(d === '' ? root : path.join(root, ...d.split('/')), root, progress);
     }
     return { version: 1, threshold, progress };
@@ -918,8 +973,9 @@ function applyEdit(p, oldId, newId, keep) {
 }
 /** 记一次作答：答对连击 +1（达阈值即掌握），答错连击归零并撤销掌握 */
 export function record(root, rel, id, correct) {
+    const r = safeQuizRel(rel);
     const threshold = readSettings(root).threshold;
-    const p = readProgressFile(root, rel);
+    const p = readProgressFile(root, r);
     let newly = false;
     const entry = p.progress[id] ?? { streak: 0, mastered: false, updatedMs: 0 };
     if (correct) {
@@ -935,31 +991,33 @@ export function record(root, rel, id, correct) {
     }
     entry.updatedMs = nowMs();
     p.progress[id] = entry;
-    writeProgressFile(root, rel, p);
+    writeProgressFile(root, r, p);
     return { streak: entry.streak, mastered: entry.mastered, newlyMastered: newly };
 }
 /** 手动标记掌握：连击直接设成阈值（一步跳满） */
 export function markMastered(root, rel, id) {
+    const r = safeQuizRel(rel);
     const threshold = readSettings(root).threshold;
-    const p = readProgressFile(root, rel);
+    const p = readProgressFile(root, r);
     const entry = p.progress[id] ?? { streak: 0, mastered: false, updatedMs: 0 };
     const was = entry.mastered;
     entry.streak = threshold;
     entry.mastered = true;
     entry.updatedMs = nowMs();
     p.progress[id] = entry;
-    writeProgressFile(root, rel, p);
+    writeProgressFile(root, r, p);
     return { streak: threshold, mastered: true, newlyMastered: !was };
 }
 /** 遗忘（答对后自觉没底也可用）：连击归零并撤销掌握 */
 export function forget(root, rel, id) {
-    const p = readProgressFile(root, rel);
+    const r = safeQuizRel(rel);
+    const p = readProgressFile(root, r);
     const entry = p.progress[id] ?? { streak: 0, mastered: false, updatedMs: 0 };
     entry.streak = 0;
     entry.mastered = false;
     entry.updatedMs = nowMs();
     p.progress[id] = entry;
-    writeProgressFile(root, rel, p);
+    writeProgressFile(root, r, p);
     return { streak: 0, mastered: false, newlyMastered: false };
 }
 /** 改阈值（1..20）：已经掌握但连击数低于新阈值的题刷回未掌握 */

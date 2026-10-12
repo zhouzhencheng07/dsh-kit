@@ -17,6 +17,8 @@ const MD_EXTS = new Set(['.md', '.markdown']);
 /** 不进索引与树的目录名（attachments 约定放二进制，由外部工具维护；点前缀一律隐藏） */
 export const SKIP_DIRS = new Set(['attachments', '.git', '.trash', 'node_modules']);
 const SCAN_FILE_LIMIT = 5000;
+/** 目录递归深度上限：人为的超深目录树不打爆栈，到限的子树当截断（与文件数到限同语义） */
+const SCAN_MAX_DEPTH = 32;
 /** 资料库目录名（根下这一层是约定：library/ 即资料库）；清单上限独立于页数上限 */
 const LIBRARY_DIR = 'library';
 const LIBRARY_LIMIT = 2000;
@@ -186,7 +188,7 @@ export class VaultScanner {
             }
         };
         const walk = async (dir, depth) => {
-            if (pages.length >= SCAN_FILE_LIMIT) {
+            if (pages.length >= SCAN_FILE_LIMIT || depth >= SCAN_MAX_DEPTH) {
                 truncated = true;
                 return;
             }

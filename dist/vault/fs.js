@@ -100,9 +100,25 @@ export function resolveInside(root, raw, opts = {}) {
         targetReal = fs.realpathSync(resolved);
     }
     catch {
-        // 不存在：父目录必须存在（创建/移动的落点都要求父目录已在），用 realpath(父) 拼名
-        const parentReal = fs.realpathSync(path.dirname(resolved));
-        targetReal = path.join(parentReal, path.basename(resolved));
+        // 不存在：按**最近存在的祖先** realpath 归一，尾巴逐段按字面拼回去——
+        // 只看直接父目录的话，父目录也不在（新建多级 / 8.3 短名 / 软链前缀）就误判越界
+        let ancestor = path.dirname(resolved);
+        const tails = [path.basename(resolved)];
+        for (;;) {
+            try {
+                targetReal = path.join(fs.realpathSync(ancestor), ...tails);
+                break;
+            }
+            catch {
+                if (tails.length > 64)
+                    throw new Error(`路径不可达：${trimmed}`);
+                tails.unshift(path.basename(ancestor));
+                const parent = path.dirname(ancestor);
+                if (parent === ancestor)
+                    throw new Error(`路径不可达：${trimmed}`);
+                ancestor = parent;
+            }
+        }
     }
     const rel = path.relative(rootReal, targetReal);
     if (rel === '') {
@@ -575,11 +591,13 @@ export function renameEntry(root, targetAbs, rawName, pages = []) {
     }
     if (!inLibrary(root, target) && !/\.(md|markdown)$/i.test(target))
         throw new Error('只允许重命名笔记页、资料或文件夹');
+    // 页面扩展名沿用盘上那一个（md / markdown 都是页面）：写死 .md 的话，.markdown 页
+    // 一改名就换了扩展名——两端各改一次名就是同一个 rel 两份文件
     const finalLeaf = inLibrary(root, target)
         ? leaf.includes('.')
             ? leaf
             : `${leaf}${path.extname(target)}`
-        : `${stripMd(leaf)}.md`;
+        : `${stripMd(leaf)}${path.extname(target) || '.md'}`;
     const next = path.join(dir, finalLeaf);
     if (next === target)
         return { path: target, links: 0 };
@@ -611,11 +629,14 @@ export async function moveEntry(root, targetAbs, destAbs, conflict, pages = []) 
     if (!fs.statSync(dest).isDirectory())
         throw new Error('目标不是文件夹');
     const stat = fs.statSync(target);
-    if (stat.isDirectory() && (dest === target || relUnderRoot(target, dest) !== null)) {
+    // 判自移按大小写不敏感：Windows 的文件系统不分大小写，`A` 移到 `a` 走到下面
+    // 同名冲突分支时命中就是它自己，Overwrite 会先把源送进回收站
+    const samePath = (a, b) => a.toLowerCase() === b.toLowerCase();
+    if (stat.isDirectory() && (samePath(dest, target) || relUnderRoot(target, dest) !== null)) {
         throw new Error('不能移动到自己的子目录里');
     }
     const name = path.basename(target);
-    if (path.dirname(target) === dest) {
+    if (samePath(path.dirname(target), dest)) {
         const rel = relUnderRoot(root, target) ?? name;
         return { path: target, rel: stripMd(rel), name, links: 0, skipped: true };
     }
@@ -642,6 +663,24 @@ export async function moveEntry(root, targetAbs, destAbs, conflict, pages = []) 
     const links = skipLinks ? 0 : rewriteRefs(pages, stripMd(oldRel), { kind: 'move', rel: stripMd(newRel) }, next);
     return { path: next, rel: stripMd(newRel ?? settled.name), name: settled.name, links, skipped: false };
 }
+/** tmp+rename 原子写整文件：双链改写这类批量覆写与正文写回共用一条底线——写一半崩溃
+ *  不留截断页。tmp 名带 pid+随机尾巴：并发写同一页时固定名会互相踩；失败收走中间文件 */
+function writeFileAtomic(target, content) {
+    const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+    try {
+        fs.writeFileSync(tmp, content, 'utf8');
+        fs.renameSync(tmp, target);
+    }
+    catch (error) {
+        try {
+            fs.rmSync(tmp, { force: true });
+        }
+        catch {
+            /* 尽力清理 */
+        }
+        throw error;
+    }
+}
 /** 逐页改写指向 oldRel 的引用（跳过这一页自己、跳过纯判定用无 path 的条目）；
  *  单页读/写失败只跳过——改名/移动本身已成立。返回改写成功的页数 */
 function rewriteRefs(pages, oldRel, mode, selfPath) {
@@ -663,7 +702,7 @@ function rewriteRefs(pages, oldRel, mode, selfPath) {
         if (next === text)
             continue;
         try {
-            fs.writeFileSync(abs, next, 'utf8');
+            writeFileAtomic(abs, next);
             changed += 1;
         }
         catch {
@@ -786,6 +825,10 @@ function isLocalImageRef(src) {
         return false;
     if (/^attachments[\\/]/i.test(s))
         return false;
+    // 越出导入源目录的写法（..\..\x.png）拒收：这是导入别人做的 md 包的入口，
+    // 页内引用不该有本事把源目录之外的文件读进 attachments/
+    if (s.split(/[/\\]/).some((seg) => seg === '..'))
+        return false;
     return true;
 }
 /** 收页面引用的本地图片进 attachments/ 并改写引用；返回 [新正文, 新落盘张数] */
@@ -805,7 +848,10 @@ export function pullImages(text, srcDir, root) {
         catch {
             /* 百分号编码坏掉就按原样找 */
         }
-        const abs = path.resolve(srcDir, decoded.replace(/\\/g, '/'));
+        const rel0 = decoded.replace(/\\/g, '/');
+        if (rel0.split('/').some((seg) => seg === '..'))
+            continue;
+        const abs = path.resolve(srcDir, rel0);
         let bytes;
         try {
             bytes = fs.readFileSync(abs);

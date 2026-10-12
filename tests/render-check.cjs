@@ -1294,7 +1294,7 @@ let vaultFetchPrev = null;
   check("双链选择框：一次搜出页面与标题（| 后写别名不进搜索）、键盘选、重名时插 rel（不静默指向别的页）", src.includes("const pickSplit") && src.includes("const pickRowsOf") && src.includes("pickInsert") && src.includes('pickSplit(pick?.query).alias') && src.includes('p.kind === "head" ? `§ ${p.heading}` : pageBasename(p.rel)') && src.includes("const dup = (pagesRef.current ?? []).some") && src.includes('h.insertWikiLink({ target: dup ? p.rel.replace(/\\.md$/i, "") : base, anchor: p.heading ?? null, alias: alias === "" ? null : alias })') && /insertContent\(" "\)/.test(src));
   check("双链不监听 [[ 输入（字面文本要打得出来），建链只走菜单", !/__dshkWikiTrigger|wiki-link-trigger/.test(src));
   check("图片入口走系统文件选择器，与粘贴同一条入库管线", src.includes("input.accept = \"image/*\"") && src.includes("void attachAndInsert(files)") && src.includes("void attachAndInsert(files);"));
-  check("表格命令在选区浮条：行/列增删 + 左中右对齐 + 表头列 + 删表", src.includes('children: "行↑"') && src.includes('children: "−列"') && src.includes('setCellAttribute("align", "center")') && src.includes("toggleHeaderColumn()") && src.includes('children: "✕表"'));
+  check("表格命令在选区浮条：行/列增删 + 左中右对齐 + 删表；「切换表头列」不挂（md 表格只认首行表头，列级表头存不下）", src.includes('children: "行↑"') && src.includes('children: "−列"') && src.includes('setCellAttribute("align", "center")') && !src.includes("toggleHeaderColumn()") && !src.includes("vtblHeadCol") && src.includes('children: "✕表"'));
   // 多格选中（CellSelection）本身有语义（删除行列按整片删），但宿主那套 .selectedCell 类
   // 没有任何样式 → 多选等于看不见；补底色（宿主文档选区色，深浅主题各自定义）+ 内描边
   check("表格多格选中看得见（.selectedCell 补底色与描边，色走宿主文档选区色）", /\.dshk-vault-rtehost \.selectedCell\{[^}]*background:var\(--dsw-alias-bg-document-selection\)/.test(src) && /\.dshk-vault-rtehost \.selectedCell\{[^}]*box-shadow:inset 0 0 0 1px/.test(src));
