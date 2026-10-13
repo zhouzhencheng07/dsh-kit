@@ -53,16 +53,20 @@ from the page). It stays in the list: **do not turn it off**.
   matched by name), and library files open in the official right-dock file tab (PDFs are
   not rendered inside the panel); a **knowledge set** mounts library documents onto any note
   folder (row `⋯` → set as knowledge set / add material; the manifest lives in
-  `.refs.json` inside the folder), shown as a "Materials (N)" sub-row and a "Materials"
-  section up top that follows the page you are reading; Ctrl+click on a **note folder**
+  `.refs.json` inside the folder), shown as a "Materials (N)" sub-row; the "Materials"
+  section up top shares one owner with the tree head's "Add material" — the **current tree
+  root** (the root itself if it is a knowledge set, otherwise the nearest ancestor; nothing
+  at all at the vault root); Ctrl+click on a **note folder**
   row (or clicking a folder in search results) re-roots the tree, with ← at the tree head
   back to the vault root (display only,
-  settings untouched); **the tree is also a file manager**: `＋` on the tree head or a folder
-  row creates a page or folder (`\` prefix makes a folder, `/` allows nesting), and a row's
+  settings untouched); **the tree is also a file manager**: the tree head has three buttons
+  (`＋` new / "Add material" when the root belongs to a knowledge set / `⤓` import), a folder
+  row's `＋` creates a page or folder (`\` prefix makes a folder, `/` allows nesting), and a row's
   `⋯` menu offers rename (renaming a page rewrites every wikilink that resolves to it, with
   the page count reported), move-to… (skip / overwrite / auto-number on name clash), import
   (pick files in the browser, or paste an absolute local path — md pages pull their locally
-  referenced images into `attachments/` and rewrite the references), copy absolute path and
+  referenced images into `attachments/` and rewrite the references; references pointing
+  outside the source folder are left untouched), copy absolute path and
   delete (Recycle Bin on Windows); library documents are imported through a knowledge set's
   "Add material…" (arbitrary formats stored content-deduplicated under `library/`, always
   auto-numbered on clashes, and each material row's `⋯` can rename / unmount / delete it);
@@ -87,9 +91,16 @@ from the page). It stays in the list: **do not turn it off**.
   pauses and a conflict bar asks you to choose overwrite-disk or load-disk (the plugin never
   overwrites silently and never touches git); external changes while the page is clean are
   still re-read silently; the plugin creates no skeleton directories and never touches git
+  - **Home** (the third right-dock tab, opened by `⌂` in the panel toolbar): a knowledge-sets
+    section (first 8: book icon + name + "Materials N · Quiz mastered/total" + an inline
+    "Quiz" button; more than 8 offers "All knowledge sets ›", an in-tab full view) and a
+    recently-updated section (the whole vault by mtime, first 8, folder shown on the right).
+    Clicking a set re-roots the left tree to it (with a hint when the vault tree is not the
+    active form); clicking a page row opens it
   - **Quiz** (shares one `.quiz` dataset with the desktop end): the page-bar "Quiz" button
-    (badge = mastered / answerable) and a tree row's `⋯` → "Quiz" (a folder = recursive scope,
-    a page = single page); the overlay picks pages / mastery state / question types / count,
+    (badge = mastered / answerable) and a tree row's `⋯` → "Quiz" (a page = single page, a
+    knowledge-set row = recursive scope, plain folders get no entry); the overlay picks
+    pages / mastery state / question types / count,
     then runs question by question with instant marking and a summary; a page entry also has
     "Edit questions" (add/change/delete written back wholesale, optionally keeping mastery).
     Mastery is consecutive correct answers ≥ a threshold stored in `.quiz-state/settings.json`
