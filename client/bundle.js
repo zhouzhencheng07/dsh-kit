@@ -2080,6 +2080,33 @@ ellipsis，窄列只截字不破版 */
         },
       );
     }
+    /** 知识集图标（摊开的书）：官方图标集没有书类成员——自绘一本，与树目录文件夹
+     *  同一描边语言（16 视窗、1.2 描边、随 currentColor）；树行/资料段/树头/首页同款 */
+    function KsIcon({ className }) {
+      return jsxRuntime.jsxs("svg", {
+        className,
+        width: 13,
+        height: 13,
+        viewBox: "0 0 16 16",
+        "aria-hidden": true,
+        children: [
+          jsxRuntime.jsx("path", {
+            d: "M8 4.4C6.9 3.4 5 3.2 3 3.6v9c2-.4 3.9-.2 5 .8 1.1-1 3-1.2 5-.8v-9c-2-.4-3.9-.2-5 .8z",
+            fill: "none",
+            stroke: "currentColor",
+            strokeWidth: 1.2,
+            strokeLinejoin: "round",
+          }),
+          jsxRuntime.jsx("path", {
+            d: "M8 4.4v9",
+            fill: "none",
+            stroke: "currentColor",
+            strokeWidth: 1.2,
+            strokeLinecap: "round",
+          }),
+        ],
+      });
+    }
     /** 官方文件类型图标（primitives FileTypeIcon + classifyFileType，官方 files
      *  分类器按扩展名出图形；
      *  primitives 不可用时回退空位（行内不留自绘图形） */
@@ -3663,7 +3690,7 @@ ellipsis，窄列只截字不破版 */
       rightbarItem, openRightbarItem, rightbarItems, closeRightbarItem, useActiveRightbarItem, tabAddress, tabVisible,
       rightbarSeat, useRightbarSeat,
       useCurrentRow, currentComposerShell, chatMentionText,
-      openOfficialFile, TreeRowMenu, TreeFolderIcon, FileTypeIcon16, ChevronIcon, OfficialIcon, dswIcon,
+      openOfficialFile, TreeRowMenu, TreeFolderIcon, KsIcon, FileTypeIcon16, ChevronIcon, OfficialIcon, dswIcon,
       expandSidebarNow, attachShortcutCatalog, t: rootT,
     } = dock;
 
@@ -8288,7 +8315,7 @@ ellipsis，窄列只截字不破版 */
           onClick: () => setOpenRefGroups((s) => ({ ...s, [dirPath]: s[dirPath] !== true })),
           children: [
             jsxRuntime.jsx("span", { className: "dshk-vault-twist", children: jsxRuntime.jsx(ChevronIcon, { open: openRefGroups[dirPath] === true }) }),
-            jsxRuntime.jsx(OfficialIcon, { names: ["BookOutline16", "IconBookOutline16"], glyph: "▤" }),
+            jsxRuntime.jsx(KsIcon, {}),
             jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: `${t("vaultKsGroup")} (${refs.length})` }),
           ],
         }, `${dirPath}#ksgroup`);
@@ -8365,7 +8392,7 @@ ellipsis，窄列只截字不破版 */
                   // 展开箭头与文件树同一枚（官方 IconTriangleRightFill14）
                   jsxRuntime.jsx("span", { className: "dshk-vault-twist", children: hasChildren ? jsxRuntime.jsx(ChevronIcon, { open: expanded[e.path] === true }) : null }),
                   ksRefs !== null
-                    ? jsxRuntime.jsx(OfficialIcon, { names: ["BookOutline16", "IconBookOutline16"], glyph: "▤" })
+                    ? jsxRuntime.jsx(KsIcon, {})
                     : jsxRuntime.jsx(TreeFolderIcon, {}),
                   renamingPath === e.path ? renameInput(e, e.name, false) : jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
                   // 行尾「新建」（悬停显形）：落点 = 这个目录
@@ -8580,7 +8607,7 @@ ellipsis，窄列只截字不破版 */
                     type: "button",
                     className: "dshk-vault-treeplus",
                     onClick: () => startAdding(headKs),
-                    children: "▤",
+                    children: jsxRuntime.jsx(KsIcon, {}),
                   }),
                 })
               : null,
@@ -8607,7 +8634,7 @@ ellipsis，窄列只截字不破版 */
                   onClick: () => toggleCtxRefs(),
                   children: [
                     jsxRuntime.jsx("span", { className: "dshk-vault-twist", children: jsxRuntime.jsx(ChevronIcon, { open: ctxRefsOpen === true }) }),
-                    jsxRuntime.jsx(OfficialIcon, { names: ["BookOutline16", "IconBookOutline16"], glyph: "▤" }),
+                    jsxRuntime.jsx(KsIcon, {}),
                     jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: `${t("vaultKsGroup")} (${ksCurrentRefs.length})` }),
                   ],
                 }),
@@ -10014,7 +10041,7 @@ ellipsis，窄列只截字不破版 */
           onClick: () => enterSet(f.dir),
           title: f.dir,
           children: [
-            jsxRuntime.jsx(OfficialIcon, { names: ["BookOutline16", "IconBookOutline16"], glyph: "▤" }),
+            jsxRuntime.jsx(KsIcon, {}),
             jsxRuntime.jsx("span", { className: "dshk-home-rowname", children: f.dir.split("/").pop() }),
             jsxRuntime.jsx("span", { className: "dshk-home-rowstat", children: statText(f.dir, f.refs.length) }),
             jsxRuntime.jsx("button", {
@@ -18826,6 +18853,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.expandSidebarNow = expandSidebarNow;
     exports.TreeRowMenu = TreeRowMenu;
     exports.TreeFolderIcon = TreeFolderIcon;
+exports.KsIcon = KsIcon;
     exports.FileTypeIcon16 = FileTypeIcon16;
     exports.ChevronIcon = ChevronIcon;
     exports.OfficialIcon = OfficialIcon;
