@@ -6407,7 +6407,7 @@ ellipsis，窄列只截字不破版 */
     // 内联 maxHeight 只允许更小，别把上限放大——改那边要同步这里）
     const SLASH_MENU_MAX_H = 300;
     /** 斜杠菜单落位（纯函数，render-check 直测）：menu = 开菜单时记下的光标坐标
-     *  {x, y, at}，box = 菜单元素实测尺寸 {w, h}，view = 可视视口带 {top, bottom, right}。
+     *  {x, y, at}，box = 菜单元素实测尺寸 {w, h}，view = 可视视口带 {top, bottom, left, right}。
      *  下方放得下就贴光标下方；放不下翻到光标行上方 6px；上下都放不下（窗口矮，或手机
      *  键盘占了下半屏）取空间大的那侧，并收到可用高度内由菜单自己滚动。返回一份 style */
     function slashMenuBox(menu, box, view) {
@@ -6418,7 +6418,7 @@ ellipsis，窄列只截字不破版 */
       const cap = Math.min(Math.max(above ? aboveSpace : belowSpace, 0), SLASH_MENU_MAX_H);
       return {
         top: Math.round(above ? Math.max(view.top + 8, aboveBottom - Math.min(box.h, cap)) : menu.y),
-        left: Math.round(Math.max(8, Math.min(menu.x, view.right - box.w - 8))),
+        left: Math.round(Math.max((view.left ?? 0) + 8, Math.min(menu.x, view.right - box.w - 8))),
         maxHeight: Math.round(cap),
       };
     }
@@ -6439,10 +6439,13 @@ ellipsis，窄列只截字不破版 */
         left: Math.round(Math.max(view.left + 8, Math.min(cx - box.w / 2, view.right - 8 - box.w))),
         top: Math.round(Math.max(view.top + 8, Math.min(above ? aboveTop : belowTop, view.bottom - 8 - box.h))),
       };
-      // 一整条可视带都放不下（窗口比菜单还矮）才收高度、由菜单自己滚；放得下就不设上限，
-      // 免得之后展开色板 / 表格条时被上一次的高度裁掉
+      // 一整条可视带都放不下（窗口比菜单还矮）才收高度、由菜单自己滚；所选那一侧
+      // 不够高时也收到那一侧（贴到带顶后菜单底边会压住刚选中的字）。放得下就不设
+      // 上限，免得之后展开色板 / 表格条时被上一次的高度裁掉
       const bandH = view.bottom - view.top - 16;
+      const room = above ? roomAbove : roomBelow;
       if (box.h > bandH) out.maxHeight = Math.round(bandH);
+      else if (room > 0 && box.h > room) out.maxHeight = Math.round(room);
       return out;
     }
 
@@ -6569,9 +6572,13 @@ ellipsis，窄列只截字不破版 */
         }
         // 选区框取 **DOM 选区的逐行 rects 并集**，不用 coordsAtPos 的两端点：
         // 终点恰在行尾时它给下一行行首、起点恰在行首时给上一行行尾，min/max 合并
-        // 出来是假选区——菜单朝假选区居中，离真选区一大截或探出另一侧
+        // 出来是假选区——菜单朝假选区居中，离真选区一大截或探出另一侧。
+        // **只认编辑器内的选区**：window.getSelection() 是全局的，别处（对话/侧栏/
+        // 普通文本节点）选中一段字也会被读成"当前选区"，菜单就被拉到别的界面上去了
         const domSel = window.getSelection();
-        const rects = domSel !== null && domSel.rangeCount > 0
+        const domInside = domSel !== null && domSel.rangeCount > 0 &&
+          ed.view.dom.contains(domSel.anchorNode) && ed.view.dom.contains(domSel.focusNode);
+        const rects = domInside
           ? [...domSel.getRangeAt(0).getClientRects()].filter((r) => r.width > 0 || r.height > 0)
           : [];
         // 只记**选区框**：菜单尺寸得等它渲染出来才知道，落位交给 layout effect。
@@ -6647,6 +6654,7 @@ ellipsis，窄列只截字不破版 */
         const box = slashMenuBox(menu, { w: rect.width, h: rect.height }, {
           top: vv ? vv.offsetTop : 0,
           bottom: vv ? vv.offsetTop + vv.height : window.innerHeight,
+          left: vv ? vv.offsetLeft : 0,
           right: vv ? vv.offsetLeft + vv.width : window.innerWidth,
         });
         setMenuBox((prev) => (prev !== null && prev.top === box.top && prev.left === box.left && prev.maxHeight === box.maxHeight ? prev : box));
@@ -6992,6 +7000,11 @@ ellipsis，窄列只截字不破版 */
           // 过滤从下一个字符才开始）
           if (armed && menuRef.current === null) {
             if (!textBefore.endsWith("/")) return;
+            // 词中间的 "/" 不开：URL（https://…）与路径（src/main.rs）里那一颗不是
+            // 要插块的位置，开出来下一拍锚点就变了、菜单闪一下又关；行首或空白 /
+            // 中文标点之后才是。前一字符是字母数字、冒号或目录分隔符就算在词中间
+            const prev = textBefore.length >= 2 ? textBefore[textBefore.length - 2] : "";
+            if (/[A-Za-z0-9:/\\]/.test(prev)) return;
             const coords = ed.view.coordsAtPos($from.pos);
             menuIdxRef.current = 0;
             setMenuIdx(0);
@@ -7637,8 +7650,10 @@ ellipsis，窄列只截字不破版 */
           const body = await kitJson(`/dsh-kit/tree?path=${encodeURIComponent(dir)}`);
           const usable = (body.entries ?? []).filter((e) => {
             if (e.name.startsWith(".")) return false;
-            // 库扁平后侧栏不铺资料库子树（资料入口收敛到知识集与搜索），这里跳过
-            if (!all && lib !== null && e.path === lib) return false;
+            // 库扁平后侧栏不铺资料库子树（资料入口收敛到知识集与搜索）；任意深度的
+            // 同名目录在索引侧同样跳过（scanner 的口径），树这侧跟着跳——不然它是一行
+            // 点不开的死行（里面的 md 不进索引，展开也没东西可看）
+            if (!all && e.name === "library") return false;
             if (e.dir) return all || !["attachments", "node_modules"].includes(e.name);
             return all || /\.md$/i.test(e.name);
           });
@@ -10797,16 +10812,20 @@ ellipsis，窄列只截字不破版 */
       };
 
       // 键盘：回车 = 提交/下一题，数字键 = 勾选项，Esc = 关浮层。不写依赖表 =
-      // 每渲染重挂，读的永远是本次渲染的题与作答
+      // 每渲染重挂，读的永远是本次渲染的题与作答。Esc 在**任何非编辑阶段**都关：
+      // 浮层一挂就 holdEsc 了，只在作答阶段认 Esc 的话，设置 / 小结阶段按下去毫无反应、
+      // 宿主那层的关手势也被吞掉（只剩 ✕ 一条路）；「编辑题目」是带未保存内容的输入面，
+      // Esc 不关整层（先改完或用 ✕）
       react.useEffect(() => {
-        if (stage !== "session") return undefined;
         const onKey = (e) => {
           if (e.key === "Escape") {
+            if (stage === "edit") return;
             e.preventDefault();
             e.stopPropagation();
             qzClose();
             return;
           }
+          if (stage !== "session") return;
           if (e.key === "Enter") {
             e.preventDefault();
             if (checked !== null) next();
@@ -16556,8 +16575,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
                 // 页不存在（已被回收/旧页号——宿主重启后页号从头数）：这张签永远空着，
                 // 静默收掉它，不弹「页不存在」打断人；其余错误照旧浮出
                 if (msg.message.includes("页不存在")) {
+                  // 条目形态必须是**签地址里那个字符串**：closeRightbarItem 按地址找签，
+                  // 传 number 会被 rightbarAddress 的字符串守卫挡成空串、永远找不到（旧实现
+                  // 因此一条也没收掉，还把这句 return 前的提示一起吞了）
                   const pid = pageIdRef.current;
-                  if (pid != null) closeRightbarItem("browser", pid);
+                  if (pid != null) closeRightbarItem("browser", String(pid));
                   return;
                 }
                 flashToast(msg.message);
@@ -18882,8 +18904,8 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.expandSidebarNow = expandSidebarNow;
     exports.TreeRowMenu = TreeRowMenu;
     exports.TreeFolderIcon = TreeFolderIcon;
-exports.KsIcon = KsIcon;
-exports.RefIcon = RefIcon;
+    exports.KsIcon = KsIcon;
+    exports.RefIcon = RefIcon;
     exports.FileTypeIcon16 = FileTypeIcon16;
     exports.ChevronIcon = ChevronIcon;
     exports.OfficialIcon = OfficialIcon;

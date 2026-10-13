@@ -467,6 +467,13 @@ async function checkApply() {
       /holdEsc\(\);/.test(quizModalBody) && /releaseEsc\(\);/.test(quizModalBody) &&
       bundleSrc.includes('"/dsh-kit/vault/quiz-record"') && bundleSrc.includes('"/dsh-kit/vault/quiz-save"'),
   );
+  // 浮层一挂就 holdEsc：只在作答阶段认 Esc 的话，设置 / 小结阶段按 Esc 毫无反应，
+  // 宿主那一层的关手势也被吞掉（剩 ✕ 一条路）；「编辑题目」是带未保存内容的输入面，不关
+  check(
+    "测验浮层 Esc：设置 / 作答 / 小结都关，编辑题目那层不整层关（浮层持有 Esc 时不能没反应）",
+    /if \(e\.key === "Escape"\) \{\s*\n\s*if \(stage === "edit"\) return;/.test(bundleSrc) &&
+      /if \(stage !== "session"\) return;/.test(bundleSrc),
+  );
   const quizEntryBody = sliceBetween("function VaultQuizEntry({ path, root, active }) {", "function VaultQuizOverlay() {");
   check(
     "页条测验入口：徽标 = 已掌握/能答题数（fetch 题目与掌握度、全掌握标绿）",

@@ -659,9 +659,13 @@ export class BrowserService {
             return ensureResult;
         if (!this._context)
             return { ok: false, error: '浏览器未运行' };
-        const s = this._s(scope);
+        let s = this._s(scope);
         if (s.activeId === null || !s.pages.has(s.activeId)) {
             await this._openPage(scope);
+            // newPage 这一下是 await：期间空闲 tick 可能把这个「空壳分区」收掉（0 页即刻可收），
+            // _adopt 又建了一条新记录、页挂在新记录上——读旧记录的话 activeId 还是 null，
+            // 会回「页面创建失败」而页其实建好了。await 之后重新取一次
+            s = this._s(scope);
             if (s.activeId === null)
                 return { ok: false, error: '页面创建失败' };
         }
@@ -752,7 +756,8 @@ export class BrowserService {
         }
         this._touch(scope);
         const title = await page.title().catch(() => '');
-        s.titles.set(tabId, title);
+        // 标题也写在**当前**记录上：上面几个 await 期间这条分区记录可能已被收掉重建
+        this._s(scope).titles.set(tabId, title);
         const result = { ok: true, tabId, url: page.url(), title };
         if (snapshot)
             result.snapshot = capText(await this._snapshotOf(page));

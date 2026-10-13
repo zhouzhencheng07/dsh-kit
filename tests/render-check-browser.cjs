@@ -399,11 +399,14 @@ async function checkAdopt() {
     "空签不发 watch（pageId 为 null 直接返回）",
     sliceBetween("const sendWatch", "\n      };").includes("if (pageIdRef.current == null) return;"),
   );
-  // 页已被回收/旧页号（宿主重启页号从头数）：签永远空着，静默收掉不打断人
+  // 页已被回收/旧页号（宿主重启页号从头数）：签永远空着，静默收掉不打断人。
+  // 条目必须按**签地址里那个字符串**传（String(pid)）：closeRightbarItem 走
+  // rightbarAddress，非字符串会被守卫挡成空串、找不到签——那就一条也没收掉，
+  // 还把这句 return 之前的提示一起吞了
   check(
-    "「页不存在」错误静默收签不弹提示（其余错误照旧浮出）",
+    "「页不存在」错误静默收签不弹提示（收签条目传字符串，其余错误照旧浮出）",
     bundleSrc.includes('msg.message.includes("页不存在")') &&
-      /页不存在"\)\) \{\s*\n\s*const pid = pageIdRef\.current;\s*\n\s*if \(pid != null\) closeRightbarItem\("browser", pid\);/.test(bundleSrc) &&
+      /页不存在"\)\) \{\s*\n\s*[\s\S]*?if \(pid != null\) closeRightbarItem\("browser", String\(pid\)\);/.test(bundleSrc) &&
       bundleSrc.includes("flashToast(msg.message)"),
   );
   check(

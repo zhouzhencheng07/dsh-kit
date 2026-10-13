@@ -588,7 +588,7 @@ let vaultFetchPrev = null;
     !titles.includes("后退") && !titles.includes("前进") && !src.includes("vaultHist") && !src.includes("dshk-vault-fpick"),
   );
   // 库已扁平：侧栏不再有资料库那一行（资料入口 = 知识集「添加资料…」与搜索）
-  check("侧栏不再有资料库那一行（库已扁平）", !findRow("D:/v/library") && src.includes("// 侧栏不再有「资料库」那一行"));
+  check("侧栏不再有资料库那一行（库已扁平；任意深度的 library 目录跟着索引跳，不留点不开的死行）", !findRow("D:/v/library") && src.includes("// 侧栏不再有「资料库」那一行") && src.includes('if (!all && e.name === "library") return false;'));
   check(
     "知识集目录行：展开后先出「资料 (N)」子行（默认收起，不直接铺开挂载项）",
     callLog.some((c) => c[2] && c[2].className === "dshk-vault-treerow" && ["资料", "Materials"].includes(c[2].title)) &&
@@ -1402,10 +1402,16 @@ let vaultFetchPrev = null;
     check("泡泡落位：窗口比菜单还矮时收高度、贴顶且底边压在带内", tall.top === 8 && tall.maxHeight === 84 && tall.top + tall.maxHeight === 92);
     const kb = comps.bubbleBox({ left: 20, right: 44, top: 500, bottom: 517 }, { w: 344, h: 82 }, { top: 200, bottom: 600, left: 0, right: 360 });
     check("泡泡落位：按可视视口带算（窄屏 + 手机键盘不把菜单挤到带外）", kb.top === 500 - 8 - 82 && kb.left === 8 && kb.top >= 208);
+    // 上下都放不下但比整条带矮：取空间大的那侧，并按**那一侧**的可用高度收——
+    // 只贴带顶不设上限的话，菜单底边会越过 anchor.top 压住刚选中的字
+    const sideCap = comps.bubbleBox({ left: 300, right: 340, top: 150, bottom: 160 }, { w: 294, h: 200 }, { top: 0, bottom: 300, left: 0, right: 640 });
+    check("泡泡落位：所选那侧不够高时按那侧可用高度收（底边压在选区之上）", sideCap.maxHeight === 134 && sideCap.top === 8 && sideCap.top + sideCap.maxHeight <= 150);
   }
   check("泡泡菜单落位也按**实测**尺寸（预放一帧量完在绘制前写回），色板/表格条展开时重算", src.includes("const box = bubbleBox(bub, { w: rect.width, h: rect.height }") && src.includes("ref: bubElRef") && src.includes("style: bubBox ??") && src.includes("}, [bub, bubPanel, inTableState]);"));
+  check("泡泡锚点只认编辑器内的 DOM 选区（别处选中一段字不会把格式条拉过去）", /const domInside = domSel !== null && domSel\.rangeCount > 0 &&\s*\n\s*ed\.view\.dom\.contains\(domSel\.anchorNode\) && ed\.view\.dom\.contains\(domSel\.focusNode\)/.test(src) && src.includes("const rects = domInside"));
   check("泡泡菜单封顶视口宽、条可折行（比视口还宽时不是被切掉）", /\.dshk-vault-bubble\{[^}]*max-width:calc\(100vw - 16px\)/.test(src) && /\.dshk-vault-bubblebar\{[^}]*flex-wrap:wrap/.test(src));
   check("斜杠菜单只在键入 / 时开（keydown 武装）：挪光标到已有 /xxx、粘贴不开", src.includes("const armed = slashArmed;") && src.includes('if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {') && src.includes("if (armed && menuRef.current === null) {"));
+  check("斜杠菜单不给 URL / 路径当入口（https://… 与 src/main.rs 里的 / 不开，词中间的判定看前一字符）", /const prev = textBefore\.length >= 2[\s\S]*?if \(\/\[A-Za-z0-9:\/\\\\\]\/\.test\(prev\)\) return;/.test(src));
   check("斜杠菜单锚定那颗 /：光标挪出查询段即关、代码块不开，落地按锚删除（无前置边界集，多斜杠不误删）", src.includes("anchor !== menuRef.current.anchor") && src.includes(", anchor });") && /const armed = slashArmed;\s*slashArmed = false;\s*if \(ed\.isActive\("codeBlock"\)\)/.test(src) && src.includes("ed.view.state.tr.delete(anchor, $from.pos)") && (src.split("const m = /\\/(\\S*)$/.exec(textBefore);").length - 1) === 1 && !src.includes("\\u3000-\\u303F"));
   check("阅读位置重试可取消且宿主卸载即停", src.includes("const cancelRestore = restoreReadPos(") && src.includes("cancelRestore();") && src.includes("if (!el.isConnected) return;"));
   check("粘贴图透明探测走缩略探针（PNG 源直接保 PNG）", src.includes("const PASTE_PROBE_EDGE = 256;") && src.includes("await decodeImage(file, file.type === \"image/png\")") && !src.includes("getImageData(0, 0, el.naturalWidth, el.naturalHeight)"));
