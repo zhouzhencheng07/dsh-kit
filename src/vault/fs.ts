@@ -301,7 +301,9 @@ export function listKnowledgeSets(root: string): KnowledgeSetRefs[] {
 
 /** 库里按内容（sha256 前 16 位）找同哈希文献：命中回绝对路径，没有回 null。
  *  资料导入按内容去重——同一本书被多个知识集挂载时物理文件只存一份（与桌面端同口径）。
- *  先按大小筛再逐份读；导入是低频动作，这趟读盘可以接受。 */
+ *  先按大小筛再逐份读；导入是低频动作，这趟读盘可以接受。
+ *  `*.tmp` 是写盘中间件（清单那边同样跳过）：拿它当命中的话，挂上去的条目等写入方
+ *  rename 收尾就成了永久悬挂。 */
 function findLibraryByHash(root: string, bytes: Buffer): string | null {
   const lib = libraryRoot(root)
   if (lib === null) return null
@@ -317,13 +319,18 @@ function findLibraryByHash(root: string, bytes: Buffer): string | null {
       continue
     }
     for (const ent of entries) {
-      if (ent.name.startsWith('.')) continue
+      if (ent.name.startsWith('.') || ent.name.toLowerCase().endsWith('.tmp')) continue
       const full = path.join(dir, ent.name)
       if (ent.isDirectory()) {
         stack.push(full)
         continue
       }
       if (!ent.isFile()) continue
+      try {
+        if (fs.statSync(full).size !== bytes.length) continue
+      } catch {
+        continue
+      }
       let buf: Buffer
       try {
         buf = fs.readFileSync(full)
@@ -584,6 +591,27 @@ export function createEntry(
   return { path: target }
 }
 
+/** 同目录下有没有**同一 rel** 的另一份页面（rel = 去扩展名的名字，不分大小写）：
+ *  返回那个文件的路径，没有回 null。`a.md` 与 `a.markdown` 是同一页的两份文件，改名
+ *  撞上它必须报错——悄悄落下第二份的话索引 / 双链 / 页签只能命中一个，`.quiz` 伴生
+ *  文件还会被两页共用（删除任一份都把另一份的题带走） */
+function pageClash(dir: string, target: string, stem: string): string | null {
+  let names: string[]
+  try {
+    names = fs.readdirSync(dir)
+  } catch {
+    return null
+  }
+  const want = stem.toLowerCase()
+  for (const name of names) {
+    if (!/\.(md|markdown)$/i.test(name)) continue
+    const full = path.join(dir, name)
+    if (full.toLowerCase() === target.toLowerCase()) continue
+    if (stripMd(name).toLowerCase() === want) return full
+  }
+  return null
+}
+
 /** 重命名（只换名字、留原位置）。笔记页沿用盘上扩展名（md / markdown 都保）；资料库
  *  文件保留原扩展名（新名自带扩展名则按新名走）。撞名：笔记报错让人看见，**资料库自动
  *  加序号**（文献没有覆盖语义）；纯大小写改名不算撞名。
@@ -624,18 +652,25 @@ export function renameEntry(
   if (!inLibrary(root, target) && !/\.(md|markdown)$/i.test(target)) throw new Error('只允许重命名笔记页、资料或文件夹')
   // 页面扩展名沿用盘上那一个（md / markdown 都是页面）：写死 .md 的话，.markdown 页
   // 一改名就换了扩展名——两端各改一次名就是同一个 rel 两份文件
-  const finalLeaf = inLibrary(root, target)
+  const isLib = inLibrary(root, target)
+  const finalLeaf = isLib
     ? leaf.includes('.')
       ? leaf
       : `${leaf}${path.extname(target)}`
     : `${stripMd(leaf)}${path.extname(target) || '.md'}`
   let next = path.join(dir, finalLeaf)
   if (next === target) return { path: target, links: 0 }
-  if (existsSync(next) && next.toLowerCase() !== target.toLowerCase()) {
-    if (!inLibrary(root, target)) throw new Error(`同名文件已存在：${finalLeaf}`)
-    const deduped = dedupeName(dir, finalLeaf)
-    if (deduped === null) throw new Error('同名文件太多，无法自动编号')
-    next = path.join(dir, deduped)
+  if (isLib) {
+    if (existsSync(next) && next.toLowerCase() !== target.toLowerCase()) {
+      const deduped = dedupeName(dir, finalLeaf)
+      if (deduped === null) throw new Error('同名文件太多，无法自动编号')
+      next = path.join(dir, deduped)
+    }
+  } else {
+    // 页的键是 **rel**（去扩展名）：另一种扩展名的同名文件也是同一个 rel，撞上的话索引、
+    // 双链与页签只能命中一个，.quiz 伴生文件还会被两页共用（删除任一份都把另一份的题带走）
+    const clash = pageClash(dir, target, stripMd(finalLeaf))
+    if (clash !== null) throw new Error(`同名文件已存在：${path.basename(clash)}`)
   }
   const oldRel = relUnderRoot(root, target)
   const libOld = inLibrary(root, target) ? libraryRel(root, target) : null
@@ -846,17 +881,31 @@ function scanImageSrcs(text: string): Array<{ start: number; end: number; src: s
   return out.sort((a, b) => a.start - b.start)
 }
 
-/** 只认库外的相对路径：绝对路径、`//`、`data:`、已在 attachments/ 下的一律不动 */
+/** 只认库外的相对路径：绝对路径、`//`、`data:`、已在 attachments/ 下的一律不动。
+ *  越界（源目录之外）不在这里判——引用可能带百分号编码，解码之后才看得出上跳或
+ *  绝对路径，真正的判据是 pullImages 里按落点做的包含检查 */
 function isLocalImageRef(src: string): boolean {
   const s = src.trim()
   if (s === '') return false
   if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return false
   if (s.startsWith('/') || s.startsWith('\\') || s.startsWith('//')) return false
   if (/^attachments[\\/]/i.test(s)) return false
-  // 越出导入源目录的写法（..\..\x.png）拒收：这是导入别人做的 md 包的入口，
-  // 页内引用不该有本事把源目录之外的文件读进 attachments/
-  if (s.split(/[/\\]/).some((seg) => seg === '..')) return false
   return true
+}
+
+/** target 是否落在 base 之内（两端 realpath 后比包含：软链前缀与 8.3 短名都不放行）。
+ *  读不到 target（不存在 / 不可达）也算不在——调用方随即就要读它，读不到本来也不收 */
+function insideDir(base: string, target: string): boolean {
+  let baseReal: string
+  let targetReal: string
+  try {
+    baseReal = fs.realpathSync(base)
+    targetReal = fs.realpathSync(target)
+  } catch {
+    return false
+  }
+  const rel = path.relative(baseReal, targetReal)
+  return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)
 }
 
 /** 收页面引用的本地图片进 attachments/ 并改写引用；返回 [新正文, 新落盘张数] */
@@ -873,9 +922,11 @@ export function pullImages(text: string, srcDir: string, root: string): [string,
     } catch {
       /* 百分号编码坏掉就按原样找 */
     }
-    const rel0 = decoded.replace(/\\/g, '/')
-    if (rel0.split('/').some((seg) => seg === '..')) continue
-    const abs = path.resolve(srcDir, rel0)
+    const abs = path.resolve(srcDir, decoded.replace(/\\/g, '/'))
+    // 判界看**解码并归一后的落点**：这里收的是别人做的 md 包，页内引用不该有本事把源
+    // 目录之外的文件读进 attachments/——字面拒 `..` 挡不住 `%2E%2E%2F` 与编码的绝对路径
+    // （`%5C%5C%3F%5CC%3A%5C…` 解出来是 `\\?\C:\…`），所以按 realpath 后的包含关系判
+    if (!insideDir(srcDir, abs)) continue
     let bytes: Buffer
     try {
       bytes = fs.readFileSync(abs)

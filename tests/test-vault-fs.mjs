@@ -14,6 +14,7 @@ import {
   isKnowledgeSet,
   listKnowledgeSets,
   moveEntry,
+  pullImages,
   readFolderRefs,
   renameEntry,
   resolveInside,
@@ -402,6 +403,56 @@ await test('知识集：库内文献 / 目录改名与移动改写挂载清单',
   write('wiki/页.md', '# 页')
   rewriteLibraryRefs(root, '不存在的.pdf', 'x.pdf')
   assert.deepEqual(readFolderRefs(ke), ['新书.pdf', '上.pdf', '别的.pdf'])
+})
+
+await test('pullImages：判界按解码后的落点——源目录之外（含编码过的绝对路径）一律不收', () => {
+  const src = fs.mkdtempSync(path.join(os.tmpdir(), 'dshk-pull-'))
+  const secret = path.join(src, '..', 'secret.txt')
+  fs.writeFileSync(secret, 'TOP-SECRET', 'utf8')
+  fs.mkdirSync(path.join(src, 'img'), { recursive: true })
+  fs.writeFileSync(path.join(src, 'img', 'a.png'), 'png-bytes', 'utf8')
+  const encoded = encodeURIComponent(path.resolve(secret))
+  const md = [
+    `![a](img/a.png)`,
+    `![b](../secret.txt)`,
+    `![c](${encoded})`,
+    `![d](https://x/y.png)`,
+  ].join('\n')
+  const [out, n] = pullImages(md, src, root)
+  assert.equal(n, 1, `只该收源目录内的那张：${out}`)
+  assert.match(out, /!\[a\]\(attachments\/[0-9a-f]{2}\/[0-9a-f]{16}\.png\)/)
+  // 越界的引用原样留着（由用户自己补），一个字节都没读进来
+  assert.match(out, /!\[b\]\(\.\.\/secret\.txt\)/)
+  assert.ok(out.includes(`![c](${encoded})`), `编码过的越界引用必须原样留着：${out}`)
+  assert.match(out, /!\[d\]\(https:\/\/x\/y\.png\)/)
+  fs.rmSync(src, { recursive: true, force: true })
+  fs.rmSync(secret, { force: true })
+})
+
+await test('renameEntry：跨 .md/.markdown 的同 rel 判撞名（不许悄悄落下第二份同 rel 页）', () => {
+  write('dup/b.md', '# b')
+  write('dup/a.markdown', '# a')
+  assert.throws(() => renameEntry(root, path.join(root, 'dup', 'a.markdown'), 'b'), /同名文件已存在：b\.md/)
+  // 反向：目标扩展名那份不存在、另一种存在，同样拦
+  write('dup/c.md', '# c')
+  write('dup/d.markdown', '# d')
+  assert.throws(() => renameEntry(root, path.join(root, 'dup', 'c.md'), 'd'), /同名文件已存在：d\.markdown/)
+  // 只有自己那一种扩展名时照常改名（纯大小写改名也不误判）
+  renameEntry(root, path.join(root, 'dup', 'c.md'), 'c2')
+  assert.equal(exists('dup/c2.md'), true)
+  renameEntry(root, path.join(root, 'dup', 'a.markdown'), 'b2')
+  assert.equal(exists('dup/b2.markdown'), true)
+  fs.rmSync(path.join(root, 'dup'), { recursive: true, force: true })
+})
+
+await test('importEntry：库里残留的 *.tmp 不当同内容复用（中间件冒充文献会挂成永久悬挂）', async () => {
+  const bytes = Buffer.from('%PDF tmp-dedupe')
+  write('library/半截.pdf.8812.deadbeef.tmp', bytes.toString('utf8'))
+  const res = await importEntry(root, { destAbs: path.join(root, 'library'), name: '正式.pdf', fileName: '正式.pdf', data: bytes, conflict: 'rename' })
+  assert.equal(res.name, '正式.pdf')
+  assert.equal(exists('library/正式.pdf'), true)
+  fs.rmSync(path.join(root, 'library', '正式.pdf'), { force: true })
+  fs.rmSync(path.join(root, 'library', '半截.pdf.8812.deadbeef.tmp'), { force: true })
 })
 
 fs.rmSync(root, { recursive: true, force: true })
