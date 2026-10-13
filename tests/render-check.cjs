@@ -623,11 +623,12 @@ let vaultFetchPrev = null;
   // 新建入口：目录行与树头都有悬停「+」（资料库那一行退役，少一处）
   const plusWraps = callLog.filter((c) => c[0] === "jsx" && c[2] && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-vault-treeplus");
   check(
-    "目录行与树头都挂了「新建」+ 钮（树头两枚：新建 + 更多操作）",
+    "目录行与树头都挂了「新建」+ 钮（树头另两枚：添加资料随集、导入直开，⋯ 不再上树头）",
     plusWraps.length >= 3 &&
       plusWraps.filter((w) => ["新建", "New"].includes(w[2].label)).length >= 2 &&
       plusWraps.some((w) => w[2].children.props.children === "+") &&
-      plusWraps.some((w) => w[2].children.props.children === "⋯"),
+      plusWraps.some((w) => /导入|Import/.test(w[2].label)) &&
+      !plusWraps.some((w) => w[2].children.props.children === "⋯"),
   );
   // 图标走文件树那套：自绘的页面/目录图标都不存在，行图标来自共用组件
   check(
@@ -1351,7 +1352,7 @@ let vaultFetchPrev = null;
   check("Esc 让路按计数持有（浮层同开，先关的不撤销让路）", src.includes("const holdEsc = () =>") && src.includes("const releaseEsc = () =>") && (src.match(/holdEsc\(\);/g) ?? []).length === 4 && (src.match(/releaseEsc\(\);/g) ?? []).length === 5 && (src.match(/dock\.vaultSearch\.open = true;/g) ?? []).length === 1 && (src.match(/dock\.vaultSearch\.open = false;/g) ?? []).length === 0);
   check("读页上下文提交后发布（渲染期通知订阅者）+ 空页表用常量", src.includes("react.useEffect(() => {\n        const refreshIndex = () => void loadIndex();") && src.includes("?? VAULT_EMPTY_PAGES"));
   check("反链 memo 依赖稳定（每次渲染现造 [] 会让 useMemo 恒不命中）", src.includes("const backlinks = react.useMemo(() => vaultBacklinks(indexPages ?? [], path), [indexPages, path]);"));
-  check("树路径按 root 的分隔符拼（缓存键/展开态/知识集目录换算同一口径）", src.includes("return rel === \"\" ? base : absJoinUnder(base, rel);") && src.includes("const ksCurrentAbs = ksCurrentDirRel === null || root === null ? null : joinRelPath(root, ksCurrentDirRel);"));
+  check("树路径按 root 的分隔符拼（缓存键/展开态/知识集目录换算同一口径）", src.includes("return rel === \"\" ? base : absJoinUnder(base, rel);") && src.includes("const ksCurrentAbs = headKs;"));
   check("行内改名只有资料文件按扩展名切选区（笔记页名含点不被截半）", src.includes("const renameInput = (entry, label, keepExt, submit = submitRename, cancel =") && src.includes("ev.currentTarget.setSelectionRange(0, keepExt && i > 0 ? i : v.length);") && src.includes("renameInput(e, e.name, false)"));
   check("批量导入失败报前三条 + 余量（不是只报首条）", src.includes("fails.slice(0, 3).join(\"；\")"));
   check("斜杠菜单查询变化即重置高亮（下标越界会插入没高亮那条）", src.includes("if (q !== menuRef.current?.query) {"));

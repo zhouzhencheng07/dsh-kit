@@ -1644,7 +1644,7 @@ body[data-ds-dark-theme] .dshk-codebox .hljs-deletion{color:#ffdcd7;background:r
 .dshk-vault-treeplus{display:none;flex:none;appearance:none;border:0;background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:1;width:18px;height:18px;border-radius:4px;cursor:pointer;padding:0}
 .dshk-vault-treeplus:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-vault-treerow:hover .dshk-vault-treeplus{display:inline-flex;align-items:center;justify-content:center}
-/* 树头那两枚（新建 / 更多操作）常驻可见：树头不是行，没有悬停显形的落点 */
+/* 树头那几枚（新建 / 添加资料 / 导入）常驻可见：树头不是行，没有悬停显形的落点 */
 .dshk-vault-railhead .dshk-vault-treeplus{display:inline-flex;align-items:center;justify-content:center}
 /* 面板对话框（移动到…/导入/删除确认共用）：fixed 遮罩 + 居中卡片；窄侧栏下也放得开 */
 .dshk-vault-modalwrap{position:fixed;inset:0;z-index:1300;background:rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center}
@@ -7540,6 +7540,9 @@ ellipsis，窄列只截字不破版 */
         }
         return null;
       };
+      /** 树头「添加资料」的归属：树根自己已是知识集就算它，否则往上找最近的——
+       *  头排按钮管的是正在看的这棵树，不跟当前打开的笔记走（那是树顶「资料」段） */
+      const headKs = ksRefsOf(treeRoot) !== null ? treeRoot : ksAncestorOf(treeRoot);
       /** 资料行：库内 rel → 文献条目（不在库里 = 悬挂） */
       const libItemsByRel = react.useMemo(() => {
         const map = new Map();
@@ -7801,9 +7804,9 @@ ellipsis，窄列只截字不破版 */
       // 就算依赖没真变也会重算（反链是 O(页数×链接数)）
       const indexPages = index?.pages ?? VAULT_EMPTY_PAGES;
       const indexDirs = index?.folders ?? VAULT_EMPTY_DIRS;
-      /** 行 ⋯ / 树头 ⋯ 开关：同一颗触发钮再点一次关掉（菜单的关闭手势会跳过落在它上面的点击） */
-      const openRowMenu = (anchor, entry, head) => {
-        setRowMenu((prev) => (prev && prev.anchor === anchor ? null : { entry, head: head === true, rect: anchor.getBoundingClientRect(), anchor }));
+      /** 行 ⋯ 开关：同一颗触发钮再点一次关掉（菜单的关闭手势会跳过落在它上面的点击） */
+      const openRowMenu = (anchor, entry) => {
+        setRowMenu((prev) => (prev && prev.anchor === anchor ? null : { entry, rect: anchor.getBoundingClientRect(), anchor }));
       };
       /** 进入目录（Ctrl（⌘）+点击目录行 / 搜索结果点笔记目录）：树根换成该目录，
        *  树头 ← 上一级 / ↑ 回库根。换根只影响面板显示，不动配置页的 vaultRoot。
@@ -7851,24 +7854,10 @@ ellipsis，窄列只截字不破版 */
         const i = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
         return i < 0 ? s : s.slice(i + 1);
       };
-      /** 树顶「资料」段归属：先看当前打开的笔记（沿祖先找最近的知识集），再看当前树根 */
-      const ksStartRels = [];
-      const activeRel = current !== null && root !== null ? relUnder(root, current) : null;
-      if (activeRel !== null && activeRel !== "") {
-        ksStartRels.push(activeRel.includes("/") ? activeRel.slice(0, activeRel.lastIndexOf("/")) : "");
-      }
-      if (rootHere !== null && root !== null) ksStartRels.push(relUnder(root, rootHere) ?? "");
-      let ksCurrentDirRel = null;
-      for (const start of ksStartRels) {
-        let dir = start;
-        while (dir !== "" && ksCurrentDirRel === null) {
-          if (ksByDir.has(dir.toLowerCase())) ksCurrentDirRel = dir;
-          else dir = dir.includes("/") ? dir.slice(0, dir.lastIndexOf("/")) : "";
-        }
-        if (ksCurrentDirRel !== null) break;
-      }
-      const ksCurrentRefs = ksCurrentDirRel === null ? null : ksByDir.get(ksCurrentDirRel.toLowerCase()) ?? [];
-      const ksCurrentAbs = ksCurrentDirRel === null || root === null ? null : joinRelPath(root, ksCurrentDirRel);
+      // 树顶「资料」段与树头「添加资料」同一归属（headKs，只看树根）：读笔记不再
+      // 把别处的资料浮上来，树根在知识库时整段不出现 */
+      const ksCurrentAbs = headKs;
+      const ksCurrentRefs = headKs === null ? null : ksRefsOf(headKs) ?? [];
       /** 添加资料弹层的候选：库里已有、本知识集还没挂、名字匹配的（最多 50 条） */
       const ksAddMounted = addingDir === null ? [] : ksRefsOf(addingDir) ?? [];
       const ksAddQuery = refQuery.trim().toLowerCase();
@@ -8156,8 +8145,6 @@ ellipsis，窄列只截字不破版 */
         run: () => openImport(entry.path, lib),
       });
       const menuActionsFor = (row) => {
-        // 树头 ⋯：落点 = 当前树根，只有导入（新建走旁边的 +）
-        if (row.head === true) return { extraItems: [importItem(row.entry, isLibPath(row.entry.path))] };
         const entry = row.entry;
         const lib = isLibPath(entry.path);
         const atLibRoot = libRoot !== null && entry.path === libRoot;
@@ -8186,12 +8173,6 @@ ellipsis，窄列只截字不破版 */
           copyMode: "abs",
           onDelete: atLibRoot ? undefined : (target) => openDelete(target),
         };
-      };
-      /** 树头 ⋯ 的锚点条目：当前树根（路径即落点；head 标记让菜单只出导入） */
-      const openHeadMenu = (anchor) => {
-        if (treeRoot === null) return;
-        const label = rootHere === null ? t("vaultTitle") : relUnder(root, rootHere) || rootHere;
-        openRowMenu(anchor, { dir: true, name: label, path: treeRoot, head: true }, true);
       };
       /** 移动的目标里是不是已有同名（原地不动不算）——有才把冲突策略摆出来给用户选 */
       const moveClash = (d) => {
@@ -8566,8 +8547,8 @@ ellipsis，窄列只截字不破版 */
           ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: indexErr === "vault-not-configured" ? t("vaultNotConfiguredHint") : `${t("vaultIndexFail")} ${indexErr}` })
           : null,
         // 树头：当前根（库根 = 知识库；进了子目录就显示库内相对路径）+ 层级导航
-        // （← 上一级 / ↑ 回库根）+ 新建 / 导入两个入口（树头没有自己的「行」，
-        // 根级的建与导就落在这里）
+        // （← 上一级 / ↑ 回库根）+ 新建 / 添加资料 / 导入三枚平铺入口（树头没有自己
+        // 的「行」，根级的建与导落在这里；添加资料只在树根属于知识集时出现）
         jsxRuntime.jsxs("div", { className: "dshk-vault-rail", ref: railRef, children: [
           jsxRuntime.jsxs("div", { className: "dshk-vault-railhead", children: [
             rootHere === null
@@ -8591,19 +8572,31 @@ ellipsis，窄列只截字不破版 */
                 children: "+",
               }),
             }),
+            headKs !== null
+              ? jsxRuntime.jsx(KitTip, {
+                  label: t("vaultKsAddTitle").replace("{name}", libLabel(headKs)),
+                  align: "end",
+                  children: jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-vault-treeplus",
+                    onClick: () => startAdding(headKs),
+                    children: "▤",
+                  }),
+                })
+              : null,
             jsxRuntime.jsx(KitTip, {
-              label: t("treeMenu"),
+              label: isLibPath(treeRoot) ? t("vaultImportFiles") : t("vaultImportMd"),
               align: "end",
               children: jsxRuntime.jsx("button", {
                 type: "button",
                 className: "dshk-vault-treeplus",
-                onClick: (ev) => openHeadMenu(ev.currentTarget),
-                children: "⋯",
+                onClick: () => openImport(treeRoot, isLibPath(treeRoot)),
+                children: "⤓",
               }),
             }),
           ] }),
           createAt === treeRoot ? createRow() : null,
-          // 树顶「资料」段：当前笔记所属知识集的挂载（沿祖先找最近的一个；没有则看树根），
+          // 树顶「资料」段：当前树根所属知识集的挂载（与树头「添加资料」同一归属），
           // 默认收起，点段头展开/收起（偏好记 localStorage，跟设备走）
           ksCurrentRefs !== null && ksCurrentRefs.length > 0
             ? jsxRuntime.jsxs("div", { children: [
@@ -8635,7 +8628,7 @@ ellipsis，窄列只截字不破版 */
               entry: rowMenu.entry,
               rect: rowMenu.rect,
               anchor: rowMenu.anchor,
-              // 行 ⋯ / 树头 ⋯：重命名 / 移动到… / 导入… / 复制绝对路径 / 删除
+              // 行 ⋯：重命名 / 移动到… / 导入… / 复制绝对路径 / 删除
               // （按行所属的那一支接线，资料库根只给导入）
               actions: menuActionsFor(rowMenu),
               onClose: () => setRowMenu(null),

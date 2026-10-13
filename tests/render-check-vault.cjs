@@ -497,6 +497,21 @@ async function checkApply() {
       homePaneSrc.includes("reader.enterDir") && homePaneSrc.includes("reader.openPath") &&
       bundleSrc.includes("HOME_SETS_LIMIT = 8") && bundleSrc.includes("HOME_RECENT_LIMIT = 8"),
   );
+
+  // ── 树头动作平铺 + 资料段／添加资料同归属（只看树根）──
+  check(
+    "树头三钮平铺（新建/添加资料/导入）：添加资料跟树根认集、导入直开，单项 ⋯ 菜单退役",
+    bundleSrc.includes("const headKs = ksRefsOf(treeRoot) !== null ? treeRoot : ksAncestorOf(treeRoot);") &&
+      bundleSrc.includes("startAdding(headKs)") &&
+      bundleSrc.includes("openImport(treeRoot, isLibPath(treeRoot))") &&
+      !bundleSrc.includes("openHeadMenu"),
+  );
+  check(
+    "树顶资料段与添加资料同一归属（headKs，只看树根；读笔记不再浮别处的资料）",
+    bundleSrc.includes("const ksCurrentAbs = headKs;") &&
+      bundleSrc.includes("const ksCurrentRefs = headKs === null ? null : ksRefsOf(headKs) ?? [];") &&
+      !bundleSrc.includes("ksStartRels"),
+  );
 }
 
 (async () => {
