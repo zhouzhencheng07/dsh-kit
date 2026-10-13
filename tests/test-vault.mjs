@@ -51,6 +51,11 @@ await test('extractHeadings：frontmatter/围栏/#标签/缩进行/七个# 都�
   assert.deepEqual(extractHeadings(md), ['一级', '三级', '重复'])
 })
 
+await test('extractHeadings：围栏块里的 ```js 这类行是正文，不当闭合围栏（后面的标题照收）', () => {
+  const md = ['# A', '', '```md', '写法：', '```js', '```', '', '# B', '', '内容', '', '# C'].join('\n')
+  assert.deepEqual(extractHeadings(md), ['A', 'B', 'C'])
+})
+
 // VaultScanner：临时目录夹具（根即 wiki 本体，目录只是普通组织）
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dshk-vault-'))
 fs.mkdirSync(path.join(root, 'Python'), { recursive: true })

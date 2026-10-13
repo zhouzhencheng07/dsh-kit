@@ -460,6 +460,9 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       const VAULT_BODY_LIMIT = 1024 * 1024
       /** 导入上限：base64 文本长度（≈32MB 原始字节），PDF 这类文献够用 */
       const VAULT_IMPORT_LIMIT = 48 * 1024 * 1024
+      /** 一页题目的写回上限：quiz.ts 那边的单页上限（300 题 × 题干/解析各 2000 字 +
+       *  10 个 500 字选项）算下来约 9MB，默认 1MB 会把合法的大页面挡在 413 上 */
+      const VAULT_QUIZ_LIMIT = 32 * 1024 * 1024
       const vaultPost = (
         path: string,
         action: (body: Record<string, unknown>, root: string) => unknown,
@@ -523,6 +526,9 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
           unmarkFolder(root, dir)
           return { unmarked: true }
         }
+        // 非数组（漏发 refs / 给成字符串）不能当空清单**全量回写**：那等于静默清空
+        // 整张挂载清单，还回 200 让人以为成功（delete 那条同样有 Array.isArray 兜底）
+        if (!Array.isArray(body.refs)) throw new Error('refs 必须是数组')
         setFolderRefs(root, dir, body.refs)
         return { ok: true }
       })
@@ -576,7 +582,7 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
         '/dsh-kit/vault/quiz-revision',
         quizRead((url, root) => revision(root, url.searchParams.get('rel'), url.searchParams.get('dir'))),
       )
-      vaultPost('/dsh-kit/vault/quiz-save', (body, root) => savePage(root, String(body.rel ?? ''), body.questions, body.edit ?? null))
+      vaultPost('/dsh-kit/vault/quiz-save', (body, root) => savePage(root, String(body.rel ?? ''), body.questions, body.edit ?? null), VAULT_QUIZ_LIMIT)
       vaultPost('/dsh-kit/vault/quiz-record', (body, root) => {
         if (typeof body.correct !== 'boolean') throw new Error('correct 必须是布尔')
         return record(root, String(body.rel ?? ''), String(body.id ?? ''), body.correct)

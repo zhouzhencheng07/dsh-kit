@@ -126,12 +126,16 @@ export function extractHeadings(content: string): string[] {
       continue
     }
     // 围栏：开着的时候整段跳过（代码里的 # 不是标题）
-    const fenceAt = /^ {0,3}(`{3,}|~{3,})/.exec(line)
+    const fenceAt = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line)
     if (fenceAt !== null) {
-      const ch = fenceAt[1]![0]!
-      const run = fenceAt[1]!.length
+      const marks = fenceAt[1]!
+      const rest = fenceAt[2]!
+      const ch = marks[0]!
+      const run = marks.length
       if (fence === null) fence = { ch, run }
-      else if (fence.ch === ch && run >= fence.run) fence = null
+      // 闭合围栏后面只能跟空白（CommonMark）：围栏块里出现 ```js 这类行是正文，
+      // 认成闭合的话后面整篇的真标题都会被当代码丢掉
+      else if (fence.ch === ch && run >= fence.run && /^[ \t]*$/.test(rest)) fence = null
       continue
     }
     if (fence !== null) continue
