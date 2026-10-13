@@ -768,7 +768,8 @@ let vaultFetchPrev = null;
     "添加资料弹层：列出库里还没挂的资料（已挂的不重复列）",
     addErr === null && cands.length === 1 && cands[0][2].title === "D:/v/library/未挂.pdf",
   );
-  // 未标记的目录行给出「设为知识集」（有内容才给；空目录置灰）
+  // 未标记的目录行给出「设为知识集」（有内容才给；空目录置灰）；测验不给——入口
+  // 只给页面与知识集，普通文件夹没有统计面
   const unmarkedErr = renderVault({
     0: { ...VAULT_INDEX, knowledgeSets: [] },
     1: "",
@@ -780,10 +781,27 @@ let vaultFetchPrev = null;
   const unmarkedMenu = callLog.find((c) => c[1] === comps.TreeRowMenu);
   const unmarkedItems = unmarkedMenu ? unmarkedMenu[2].actions.extraItems : [];
   check(
-    "未标记的目录行 ⋯ 给「设为知识集」（有内容才给；空目录置灰），测验跟着给",
-    unmarkedErr === null && unmarkedItems.length === 4 && ["设为知识集", "Make knowledge set"].includes(unmarkedItems[0].label) && unmarkedItems[0].disabled === false &&
-      ["测验", "Quiz"].includes(unmarkedItems[1].label) &&
+    "未标记的目录行 ⋯ 给「设为知识集」（有内容才给；空目录置灰），不给测验（普通目录没有统计面）",
+    unmarkedErr === null && unmarkedItems.length === 3 && ["设为知识集", "Make knowledge set"].includes(unmarkedItems[0].label) && unmarkedItems[0].disabled === false &&
+      unmarkedItems.every((it) => !["测验", "Quiz"].includes(it.label)) &&
       src.includes("disabled: dirHasChildren(entry.path) !== true"),
+  );
+  // 测验入口收成页面与知识集两处：页行 ⋯ 仍给「测验 + 移动到…」
+  const pageMenuErr = renderVault({
+    0: { ...VAULT_INDEX, knowledgeSets: [] },
+    1: "",
+    2: null,
+    3: TREE,
+    4: { "D:/v": true },
+    5: { entry: { dir: false, name: "a.md", path: "D:/v/wiki/a.md" }, rect: { left: 10, top: 100, bottom: 120, right: 30, width: 20, height: 20 } },
+  });
+  const pageRowMenu = callLog.find((c) => c[1] === comps.TreeRowMenu);
+  const pageRowItems = pageRowMenu ? pageRowMenu[2].actions.extraItems : [];
+  check(
+    "页行 ⋯ 仍给「测验 + 移动到…」（页面入口不随知识集收窄；收口条件钉在源码哨兵上）",
+    pageMenuErr === null && pageRowItems.length === 2 && ["测验", "Quiz"].includes(pageRowItems[0].label) &&
+      ["移动到…", "Move to…"].includes(pageRowItems[1].label) &&
+      src.includes("entry.dir !== true || ksRefsOf(entry.path) !== null"),
   );
   // ── 文件管理（建 / 改名 / 移动 / 导入 / 删除）：行内输入 + 三个对话框 ──
   // 预置 state（按 VaultRootView 的 useState 顺序，槽位随钩子增删整体位移）：

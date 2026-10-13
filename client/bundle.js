@@ -8140,8 +8140,10 @@ ellipsis，窄列只截字不破版 */
             extraItems.push({ key: "ksset", label: t("vaultKsSet"), disabled: dirHasChildren(entry.path) !== true, title: t("vaultKsEmptyDir"), run: () => markFolderKs(entry.path) });
           }
         }
-        // 测验：目录 = 整个范围（递归），页 = 单页
-        if (!lib) extraItems.push({ key: "qz", label: t("qzEntry"), run: () => qzMenuOpen(entry) });
+        // 测验入口只给页面与知识集（测验属于页面，从而属于其知识集）：普通文件夹没有
+        // 统计面（徽标与「已掌握/题数」汇总都挂在页条与知识集行上），目录一多就是一堆
+        // 没有意义的入口；知识集行 = 范围递归，页行 = 单页
+        if (!lib && (entry.dir !== true || ksRefsOf(entry.path) !== null)) extraItems.push({ key: "qz", label: t("qzEntry"), run: () => qzMenuOpen(entry) });
         if (!atLibRoot) extraItems.push({ key: "mv", label: t("vaultMoveTo"), run: () => openMove(entry) });
         if (entry.dir === true) extraItems.push(importItem(entry, lib));
         return {
