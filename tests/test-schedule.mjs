@@ -583,6 +583,18 @@ test('计时段编辑：改时刻与备注、非法时刻与进行中段一律�
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
+test('可清空字段三态：parentId 空串与 null 都清空（空串落盘两端都不当它是 None）', () => {
+  const dir = tmp()
+  const store = new ScheduleStore(path.join(dir, 'sched'))
+  const parent = store.create({ title: '父' })
+  const child = store.create({ title: '子', parentId: parent.id })
+  assert.equal(store.update(child.id, {}).parentId, parent.id)
+  assert.equal(store.update(child.id, { parentId: '' }).parentId, undefined)
+  assert.equal(store.update(child.id, { parentId: parent.id }).parentId, parent.id)
+  assert.equal(store.update(child.id, { parentId: null }).parentId, undefined)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
 test('存储位置：固定 $DSH_HOME/dsh-kit/schedule/（一条一文件目录），与知识库无关', () => {
   const dir = tmp()
   const home = path.join(dir, 'home')

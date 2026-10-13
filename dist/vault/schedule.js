@@ -216,11 +216,12 @@ function sanitizeFields(input, patch) {
         else if (v === null && patch)
             out.completedAt = null;
     }
-    // 所属：null = 清空（与地点/备注同款三态）
+    // 所属：null / 空串 = 清空（与地点/备注同一套三态）。空串必须折成清空——真把 "" 落盘
+    // 的话两端都不当它是 None：这条既不在顶层、也挂不到任何父上
     if (has('parentId')) {
         const v = input.parentId;
         if (typeof v === 'string')
-            out.parentId = v;
+            out.parentId = v === '' ? null : v;
         else if (v === null && patch)
             out.parentId = null;
     }

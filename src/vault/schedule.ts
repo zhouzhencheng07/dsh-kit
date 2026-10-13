@@ -304,10 +304,11 @@ function sanitizeFields(input: Record<string, unknown>, patch: boolean): Sanitiz
     if (typeof v === 'string' && (DATE_RE.test(v) || DT_RE.test(v))) out.completedAt = v.slice(0, 16)
     else if (v === null && patch) out.completedAt = null
   }
-  // 所属：null = 清空（与地点/备注同款三态）
+  // 所属：null / 空串 = 清空（与地点/备注同一套三态）。空串必须折成清空——真把 "" 落盘
+  // 的话两端都不当它是 None：这条既不在顶层、也挂不到任何父上
   if (has('parentId')) {
     const v = input.parentId
-    if (typeof v === 'string') out.parentId = v
+    if (typeof v === 'string') out.parentId = v === '' ? null : v
     else if (v === null && patch) out.parentId = null
   }
   // patch 语义允许显式清空可选字段；create 语义只在给了合法值时带上
