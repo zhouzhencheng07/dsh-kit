@@ -77,6 +77,17 @@ console.log("== 基础块级 ==");
   check("表格（含居中对齐，结构等价）", err === null && structEq(out, src), `err=${err} out=${JSON.stringify(out)}`);
 }
 {
+  // 格内竖线：一律转义成一个 `\|`（解析侧按「竖线前反斜杠个数是奇数」认转义）。
+  // 守卫写错成「看着已经转义就跳过」的话，格内 `a\|b` 会落盘成 `a\\|b`（偶数）——
+  // 竖线被当分隔符，整张表塌掉、后面的格被吞
+  const pipeCell = "| a\\|b | 说明 |\n| --- | --- |\n| 1 | 2 |";
+  const [out1, err1] = rt(pipeCell);
+  check("表格格内字面竖线：转义成 \\| 且往返稳定（结构等价）", err1 === null && structEq(out1, pipeCell), `err=${err1} out=${JSON.stringify(out1)}`);
+  const escCell = "| a\\\\\\|b | 说明 |\n| --- | --- |\n| 1 | 2 |";
+  const [out2, err2] = rt(escCell);
+  check("表格格内「反斜杠+竖线」：往返仍是同一张表、格内文字不丢", err2 === null && structEq(out2, escCell), `err=${err2} out=${JSON.stringify(out2)}`);
+}
+{
   const [out, err] = rt("前 ![描述](attachments/截图.png) 后");
   check("行内图片", err === null && out === "前 ![描述](attachments/截图.png) 后\n", `err=${err} out=${JSON.stringify(out)}`);
 }

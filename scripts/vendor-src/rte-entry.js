@@ -1347,15 +1347,18 @@ const VaultImage = Image.extend({
   },
 });
 
-/** 表格：格内文字里的竖线要转义成 \\|。上游 renderTableToMarkdown 不转义——格子里写 "a|b"
- *  存成 `| a|b |`，再解析那一行就被拆断、只剩半格（md 用 \\| 表示字面竖线，解析侧本来就认）。
- *  其余（表头行、列对齐、宽度补空格、多块格用 <br> 连接）全走上游，只把每格文字包一层转义。
+/** 表格：格内文字里的竖线一律转义成 \\|。上游 renderTableToMarkdown 不转义——格子里写 "a|b"
+ *  存成 `| a|b |`，再解析那一行就被拆断、只剩半格（md 用 \\| 表示字面竖线，解析侧按「竖线前
+ *  反斜杠个数是奇数」认转义）。这里**不能**跳过「看着已经转义过」的竖线：正文在这一层之前已经
+ *  先把 `\` 转成了 `\\`（escapeMarkdownSyntax 先内后外），格内原本的 `a\|b` 到这儿是 `a\\|b`，
+ *  照旧转义才凑出奇数个（`a\\\|b`）读回 `a\|b`；跳过则落盘 `a\\|b`（偶数）→ 竖线被当分隔符，
+ *  表格塌掉、格被吞。其余（表头行、列对齐、宽度补空格、多块格用 <br> 连接）全走上游。
  *  另一端复用同一份写盘实现，所以两端写同一个文件口径一致 */
 const VaultTable = Table.extend({
   renderMarkdown(node, helpers) {
     return renderTableToMarkdown(node, {
       ...helpers,
-      renderChildren: (n) => String(helpers.renderChildren(n) ?? "").replace(/(^|[^\\])\|/g, "$1\\|"),
+      renderChildren: (n) => String(helpers.renderChildren(n) ?? "").replace(/\|/g, "\\|"),
     });
   },
 });
