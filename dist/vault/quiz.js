@@ -35,6 +35,10 @@ const WS_RUN_RE = new RegExp(`[${WS_CLASS}]+`, 'g');
 const wsTrim = (s) => s.replace(WS_LEAD_RE, '').replace(WS_TRAIL_RE, '');
 const wsTrimStart = (s) => s.replace(WS_LEAD_RE, '');
 const wsTrimEnd = (s) => s.replace(WS_TRAIL_RE, '');
+/** 整数上界（桌面端 serde 的 u32 / u64）：越界一律当坏文件，两端判据要一致——
+ *  这边放宽的话，同一份坏掌握度两端一个照收一个整份挪 .bak，显示与合并都对不上 */
+const isU32 = (v) => v === undefined || (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 0xffffffff);
+const isU64 = (v) => v === undefined || (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= Number.MAX_SAFE_INTEGER);
 const emptyProgress = () => ({ version: 1, progress: {} });
 // ── 页面 rel 清洗 ───────────────────────────────────────────────────────────
 /** rel → 逐段。口径与桌面端 `safe_rel` 对齐：只裁两端 `/` `\`、拒盘符、拒空段与
@@ -501,7 +505,10 @@ export function toMd(questions) {
     }
     return out;
 }
-const normalizeBlock = (s) => joinBlock(s.split('\n'));
+/** 段落块归一：形状与写盘口径一致（toMd 用 wsTrimEnd 收尾）。不一致的话「写出去再读回来」
+ *  的自检会把题干的**非半角**尾部空白（全角空格 / NBSP——中文输入法顺手打出来的）
+ *  误报成「和格式标记同形的行」，保存直接失败且诊断指错方向 */
+const normalizeBlock = (s) => wsTrimEnd(joinBlock(s.split('\n')));
 const oneLine = (s) => wsTrim(s.split('\n').map((l) => wsTrim(l)).join(' '));
 /** 归一化：把内容整理成 md 能无损承载的形状（首尾空行、选项换行、答案空白） */
 function normalizeQuestion(q) {
@@ -526,12 +533,14 @@ const sameQuestion = (a, b) => a.type === b.type &&
     a.options.every((o, i) => o === b.options[i]) &&
     JSON.stringify(a.answer) === JSON.stringify(b.answer);
 // ── 落盘 ────────────────────────────────────────────────────────────────────
-/** 原子写（tmp + rename）：同步与界面可能同时读到，别留半截文件 */
+/** 原子写（tmp + rename）：同步与界面可能同时读到，别留半截文件。
+ *  tmp 名带 pid + 随机尾巴：固定名在两端（或同步客户端）同时读写同一份文件时会互踩——
+ *  A 写的 tmp 被 B 覆盖，A rename 走的是 B 的内容、B 再 rename 就是 ENOENT */
 function writeAtomic(target, text) {
     const dir = path.dirname(target);
     if (!fs.existsSync(dir))
         fs.mkdirSync(dir, { recursive: true });
-    const tmp = `${target}.tmp`;
+    const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
     fs.writeFileSync(tmp, text, 'utf8');
     try {
         fs.renameSync(tmp, target);
@@ -714,6 +723,10 @@ function walkScope(dir, relDir, root, out) {
         if (!e.isFile() || !isQuestionFile(e.name))
             continue;
         const stem = e.name.replace(/\.md$/i, '');
+        // 空 stem（`.quiz/.md`）的 rel 会带尾斜杠，而写路径的守卫把尾斜杠裁掉——同一道题的
+        // 掌握度落到两个文件，范围视图按 dir 读永远显示未掌握。异常产物，不收
+        if (stem === '')
+            continue;
         const rel = relDir === '' ? stem : `${relDir}/${stem}`;
         const page = readAt(path.join(quizDir, e.name), rel);
         if (page.questions.length > 0)
@@ -832,7 +845,7 @@ function parseProgress(text) {
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw))
         return null;
     const obj = raw;
-    if (obj.version !== undefined && (typeof obj.version !== 'number' || !Number.isInteger(obj.version) || obj.version < 0))
+    if (!isU32(obj.version))
         return null;
     const out = emptyProgress();
     if (obj.progress === undefined)
@@ -843,11 +856,11 @@ function parseProgress(text) {
         if (rec === null || typeof rec !== 'object' || Array.isArray(rec))
             return null;
         const r = rec;
-        if (r.streak !== undefined && (typeof r.streak !== 'number' || !Number.isInteger(r.streak) || r.streak < 0))
+        if (!isU32(r.streak))
             return null;
         if (r.mastered !== undefined && typeof r.mastered !== 'boolean')
             return null;
-        if (r.updatedMs !== undefined && (typeof r.updatedMs !== 'number' || !Number.isInteger(r.updatedMs) || r.updatedMs < 0))
+        if (!isU64(r.updatedMs))
             return null;
         out.progress[id] = {
             streak: typeof r.streak === 'number' ? r.streak : 0,
@@ -887,9 +900,7 @@ export function readSettings(root) {
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw))
         return fallback;
     const obj = raw;
-    const u32 = (v) => v === undefined || (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 0xffffffff);
-    const u64 = (v) => v === undefined || (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= Number.MAX_SAFE_INTEGER);
-    if (!u32(obj.version) || !u32(obj.threshold) || !u64(obj.updatedMs))
+    if (!isU32(obj.version) || !isU32(obj.threshold) || !isU64(obj.updatedMs))
         return fallback;
     return {
         version: 1,
@@ -1061,8 +1072,16 @@ export function setThreshold(root, value) {
                 changed = true;
             }
         }
-        if (changed)
-            writeProgressFile(root, rel, p);
+        if (changed) {
+            // 逐页 best-effort（与桌面端同）：某一页写不进去（被占用 / 只读）不能中断整趟——
+            // 中断在这里的话阈值没落盘，而前面已经按新阈值清掉掌握度的页留下半截状态
+            try {
+                writeProgressFile(root, rel, p);
+            }
+            catch (error) {
+                kitWarn(`掌握度写回失败：${rel}（${error instanceof Error ? error.message : String(error)}）`);
+            }
+        }
     }
     writeAtomic(settingsPath(root), JSON.stringify({ version: 1, threshold: v, updatedMs: nowMs() }, null, 2));
     return v;

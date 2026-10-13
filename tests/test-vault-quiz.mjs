@@ -365,4 +365,81 @@ await test('edit.index 按交上来的数组算：去重并掉中间项时不再
   assert.equal(readProgress(root, '数学/11.1', null).progress[idThird], undefined)
 })
 
+await test('题干/解析尾部非半角空白（全角空格 / NBSP）不再误报「与标记同形」，落盘即归一', () => {
+  mkpage('数学/13.1')
+  const full = { ...SINGLE, stem: '题干\u3000', explain: '解析\u00a0' }
+  const saved = savePage(root, '数学/13.1', [full], null)
+  assert.equal(saved.questions[0].stem, '题干')
+  assert.equal(saved.questions[0].explain, '解析')
+  // 读回来与交上去的归一形状一致（二次保存不再抛错）
+  const again = savePage(root, '数学/13.1', saved.questions, null)
+  assert.equal(again.questions[0].stem, '题干')
+  // 内部行尾空白照旧保留（只收整块尾部）
+  const inner = { ...SINGLE, stem: '第一行 \n第二行' }
+  assert.equal(savePage(root, '数学/13.1', [inner], null).questions[0].stem, '第一行 \n第二行')
+})
+
+await test('坏掌握度上界：version/streak 超 u32、updatedMs 超 u64 与桌面端同判据（挪 .bak 当空表）', () => {
+  mkpage('数学/14.1')
+  savePage(root, '数学/14.1', [SINGLE], null)
+  const id = readPage(root, '数学/14.1').questions[0].id
+  record(root, '数学/14.1', id, true)
+  const file = progressPath(root, '数学/14.1')
+  setQuizWarn(() => {})
+  for (const bad of [
+    { version: 4294967296, progress: {} },
+    { version: 1, progress: { [id]: { streak: 4294967296, mastered: true, updatedMs: 1 } } },
+    { version: 1, progress: { [id]: { streak: 1, mastered: true, updatedMs: 1e30 } } },
+  ]) {
+    fs.writeFileSync(file, JSON.stringify(bad), 'utf8')
+    assert.deepEqual(readProgress(root, '数学/14.1', null).progress, {}, JSON.stringify(bad))
+    assert.ok(fs.existsSync(`${file}.bak`))
+    fs.rmSync(`${file}.bak`, { force: true })
+  }
+  setQuizWarn(() => {})
+})
+
+await test('范围汇总：.quiz/.md（空 stem）不收——它的 rel 带尾斜杠，掌握度会落到两个文件', () => {
+  mkpage('数学/15.1')
+  savePage(root, '数学/15.1', [SINGLE], null)
+  const dir = path.join(root, '数学', '.quiz')
+  fs.writeFileSync(path.join(dir, '.md'), toMd([SINGLE]), 'utf8')
+  const rels = readScope(root, '数学').pages.map((p) => p.rel)
+  assert.ok(rels.includes('数学/15.1'))
+  assert.equal(rels.some((r) => r.endsWith('/')), false, `空 stem 的 rel 必须不收：${rels.join(' ')}`)
+  fs.rmSync(path.join(dir, '.md'), { force: true })
+})
+
+await test('改阈值：某一页掌握度写不回去也不中断，阈值照落盘（逐页 best-effort）', () => {
+  mkpage('数学/16.1')
+  mkpage('数学/16.2')
+  savePage(root, '数学/16.1', [SINGLE], null)
+  savePage(root, '数学/16.2', [{ ...SINGLE, stem: '另一题' }], null)
+  const id1 = readPage(root, '数学/16.1').questions[0].id
+  record(root, '数学/16.1', id1, true)
+  record(root, '数学/16.1', id1, true)
+  record(root, '数学/16.1', id1, true)
+  const id2 = readPage(root, '数学/16.2').questions[0].id
+  record(root, '数学/16.2', id2, true)
+  record(root, '数学/16.2', id2, true)
+  record(root, '数学/16.2', id2, true)
+  assert.equal(readProgress(root, '数学/16.1', null).progress[id1].mastered, true)
+  // 让 16.1 的掌握度写不回去：把目标文件锁成只读（rename 覆盖只读文件在 Windows 上失败）
+  const locked = progressPath(root, '数学/16.1')
+  fs.chmodSync(locked, 0o444)
+  const warns = []
+  setQuizWarn((m) => warns.push(m))
+  try {
+    const v = setThreshold(root, 5)
+    assert.equal(v, 5)
+    assert.equal(readSettings(root).threshold, 5, '阈值必须落盘（中断在这里就是「阈值弹回旧值」）')
+    assert.equal(readProgress(root, '数学/16.2', null).progress[id2].mastered, false)
+    // 注入的失败必须真的发生，否则这条用例是空转（warn 由 kitWarn 收走）
+    assert.ok(warns.length >= 1, '那一页的写失败没有发生，用例空转')
+  } finally {
+    fs.chmodSync(locked, 0o666)
+    setQuizWarn(() => {})
+  }
+})
+
 console.log('done')
