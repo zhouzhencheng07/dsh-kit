@@ -1905,6 +1905,19 @@ ellipsis，窄列只截字不破版 */
 .dshk-menu > button[disabled]{opacity:.5;cursor:default}
 .dshk-menu > button[disabled]:hover{background:none}
 /* 测验浮层（全屏）：范围设置 → 逐题作答 → 小结；出题编辑共用这层 */
+/* 首页签（右栏）：知识集段 + 最近更新段——行式列表，段头小字 + 「全部 ›」切换 */
+.dshk-home{flex:1;overflow:auto;padding:10px 12px 24px}
+.dshk-home-sechead{display:flex;align-items:center;gap:8px;margin:12px 2px 6px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary)}
+.dshk-home-sechead:first-child{margin-top:2px}
+.dshk-home-more{appearance:none;border:0;background:none;color:var(--dsw-alias-brand-primary);font-size:12px;cursor:pointer;padding:2px 6px;border-radius:6px;margin-left:auto}
+.dshk-home-more:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-home-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer;color:var(--dsw-alias-label-primary)}
+.dshk-home-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-home-rowname{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.dshk-home-rowstat{flex:none;color:var(--dsw-alias-label-tertiary);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-home-quiz{flex:none;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);border-radius:6px;font-size:11px;line-height:1;padding:4px 9px;cursor:pointer}
+.dshk-home-quiz:hover{color:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary)}
+.dshk-home-hint{color:var(--dsw-alias-label-tertiary);font-size:12px;padding:6px 2px}
 /* 页条测验入口：整页掌握后标绿 */
 .dshk-vault-tbtn.dshk-quiz-done{color:#2f9e44}
 .dshk-quiz{position:fixed;inset:0;z-index:1400;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-size:13px}
@@ -3884,6 +3897,16 @@ ellipsis，窄列只截字不破版 */
       vtbClear: "清除格式",
       vtbClearColor: "清除",
       vtbCite: "引用到对话",
+      homeTab: "首页",
+      homeKsSection: "知识集",
+      homeRecentSection: "最近更新",
+      homeAllSets: "全部知识集",
+      homeSetsCount: "共 {n} 个",
+      homeBack: "返回首页",
+      homeRefs: "资料",
+      homeQuiz: "题目",
+      homeSetsEmpty: "还没有知识集——在左侧目录树的目录行 ⋯ 里「设为知识集」",
+      homeOpenVaultFirst: "先打开左侧知识库才能进入",
       qzEntry: "测验",
       qzEntryTip: "测验——还没有题目时进去就是出题",
       qzEdit: "编辑题目",
@@ -4191,6 +4214,16 @@ ellipsis，窄列只截字不破版 */
       vtbClear: "Clear formatting",
       vtbClearColor: "Clear",
       vtbCite: "Quote to chat",
+      homeTab: "Home",
+      homeKsSection: "Knowledge sets",
+      homeRecentSection: "Recently updated",
+      homeAllSets: "All knowledge sets",
+      homeSetsCount: "{n} in total",
+      homeBack: "Back to home",
+      homeRefs: "Refs",
+      homeQuiz: "Quiz",
+      homeSetsEmpty: "No knowledge sets yet — mark a folder via ⋯ → Make knowledge set in the sidebar",
+      homeOpenVaultFirst: "Open the vault panel first to enter a set",
       qzEntry: "Quiz",
       qzEntryTip: "Quiz — opens the authoring view when a page has no questions yet",
       qzEdit: "Edit questions",
@@ -4331,7 +4364,7 @@ ellipsis，窄列只截字不破版 */
     // 页签正文渲染 VaultPagePane 需要库根 / 索引页表 / 开页入口 / 刷新 / toast，
     // 这些都住在常驻的索引视图里。发布走最小 store：索引侧**提交后** publish，
     // 页签侧订阅（索引刷新才会带着新对象过来）。
-    const vaultReader = { root: null, earlyBody: null, indexPages: null, openPath: null, refreshIndex: null, setToast: null };
+    const vaultReader = { root: null, earlyBody: null, indexPages: null, openPath: null, refreshIndex: null, setToast: null, enterDir: null };
     let vaultReaderVersion = 0;
     const vaultReaderSubs = new Set();
     function publishVaultReader(patch) {
@@ -8425,7 +8458,7 @@ ellipsis，窄列只截字不破版 */
       react.useEffect(() => {
         const refreshIndex = () => void loadIndex();
         if (root !== null) {
-          publishVaultReader({ root, earlyBody: null, indexPages, openPath, refreshIndex, setToast });
+          publishVaultReader({ root, earlyBody: null, indexPages, openPath, refreshIndex, setToast, enterDir: openHere });
           return;
         }
         let earlyBody;
@@ -8436,7 +8469,7 @@ ellipsis，窄列只截字不破版 */
             jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultNotConfiguredHint") }),
           ] });
         } else earlyBody = jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: `${t("vaultIndexFail")} ${indexErr}` });
-        publishVaultReader({ root: null, earlyBody, indexPages: null, openPath, refreshIndex, setToast });
+        publishVaultReader({ root: null, earlyBody, indexPages: null, openPath, refreshIndex, setToast, enterDir: openHere });
       }, [root, indexErr, indexPages, openPath, setToast, loadIndex]);
 
       // root 未就绪的整页态：加载中 / 未配置 / 索引失败（root 就绪后的瞬时错误
@@ -8498,6 +8531,7 @@ ellipsis，窄列只截字不破版 */
                 }
               },
             }),
+            jsxRuntime.jsx(KitTip, { label: t("homeTab"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("homeTab"), onClick: () => openRightbarTab("home"), children: jsxRuntime.jsx(OfficialIcon, { names: ["HomeOutline16", "IconHomeOutline16"], glyph: "⌂" }) }) }),
             jsxRuntime.jsx(KitTip, { label: t("vaultRefresh"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultRefresh"), disabled: refreshing, onClick: () => void manualRefresh(), children: jsxRuntime.jsx(OfficialIcon, { names: ["IconRefreshOutline16", "IconRefreshOutline14"], glyph: "↻" }) }) }),
           ] }),
         ] }),
@@ -9908,6 +9942,135 @@ ellipsis，窄列只截字不破版 */
       return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx(ScheduleView, { active: true }) });
     }
 
+    /** 首页 pane：知识集段（只展示前几条，「全部」视图收全量）+ 最近更新段——与桌面端
+     *  首页同构。数据自取（索引 + 每集 quiz 汇总；测验浮层关掉 = 答完一轮，重拉统计，
+     *  不挂轮询）；行点击经 vaultReader 联动左栏：知识集行 = 换树根，页行 = 开页 */
+    const HOME_SETS_LIMIT = 8;
+    const HOME_RECENT_LIMIT = 8;
+    function HomePagePane() {
+      useFeaturePresence("home");
+      const reader = useVaultReader();
+      const req = useQzReq();
+      const [idx, setIdx] = react.useState(null); // { root, pages, knowledgeSets }
+      const [stats, setStats] = react.useState(null); // Map<dir, {total, mastered}>
+      const [showAll, setShowAll] = react.useState(false);
+      const [nonce, setNonce] = react.useState(0);
+      react.useEffect(() => {
+        if (req === null) setNonce((n) => n + 1);
+      }, [req]);
+      react.useEffect(() => {
+        let alive = true;
+        kitJson("/dsh-kit/vault/index", undefined, (b) => !!b)
+          .then((body) => {
+            if (!alive) return;
+            setIdx({
+              root: typeof body?.root === "string" ? body.root : "",
+              pages: Array.isArray(body?.pages) ? body.pages : [],
+              knowledgeSets: Array.isArray(body?.knowledgeSets) ? body.knowledgeSets : [],
+            });
+          })
+          .catch(() => {
+            if (alive) setIdx(null);
+          });
+        return () => {
+          alive = false;
+        };
+      }, [nonce]);
+      const sets = idx?.knowledgeSets ?? [];
+      const setsKey = sets.map((f) => f.dir).join("|");
+      react.useEffect(() => {
+        const list = setsKey === "" ? [] : setsKey.split("|");
+        if (list.length === 0) {
+          setStats(new Map());
+          return undefined;
+        }
+        let alive = true;
+        void Promise.all(
+          list.map(async (dir) => {
+            const query = "dir=" + encodeURIComponent(dir);
+            try {
+              const [scope, pg] = await Promise.all([
+                kitJson("/dsh-kit/vault/quiz-scope?" + query, undefined, (b) => !!b),
+                kitJson("/dsh-kit/vault/quiz-progress?" + query, undefined, (b) => !!b),
+              ]);
+              return [dir, qzStatOf(qzQuestionsOf(Array.isArray(scope?.pages) ? scope.pages : []), pg?.progress ?? {})];
+            } catch {
+              return [dir, null];
+            }
+          }),
+        ).then((entries) => {
+          if (alive) setStats(new Map(entries));
+        });
+        return () => {
+          alive = false;
+        };
+      }, [nonce, setsKey]);
+      const statText = (dir, refs) => {
+        const s = stats === null ? null : stats.get(dir) ?? null;
+        const quiz = s === null ? "…" : t("homeQuiz") + " " + (s.total > 0 ? s.mastered + "/" + s.total : "0");
+        return t("homeRefs") + " " + refs + " · " + quiz;
+      };
+      const enterSet = (dir) => {
+        const abs = idx !== null && idx.root !== "" ? absJoinUnder(idx.root, dir) : "";
+        if (abs !== "" && typeof reader.enterDir === "function") reader.enterDir(abs);
+        else if (typeof reader.setToast === "function") reader.setToast(t("homeOpenVaultFirst"));
+      };
+      const ksRow = (f) =>
+        jsxRuntime.jsxs("div", {
+          className: "dshk-home-row",
+          onClick: () => enterSet(f.dir),
+          title: f.dir,
+          children: [
+            jsxRuntime.jsx(OfficialIcon, { names: ["BookOutline16", "IconBookOutline16"], glyph: "▤" }),
+            jsxRuntime.jsx("span", { className: "dshk-home-rowname", children: f.dir.split("/").pop() }),
+            jsxRuntime.jsx("span", { className: "dshk-home-rowstat", children: statText(f.dir, f.refs.length) }),
+            jsxRuntime.jsx("button", {
+              type: "button",
+              className: "dshk-home-quiz",
+              onClick: (ev) => {
+                ev.stopPropagation();
+                if (idx !== null && idx.root !== "") qzOpen({ kind: "set", path: absJoinUnder(idx.root, f.dir), title: f.dir.split("/").pop() });
+              },
+              children: t("qzEntry"),
+            }),
+          ],
+        }, f.dir);
+      const recent = idx === null ? [] : [...idx.pages].sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, HOME_RECENT_LIMIT);
+      const secHead = (label, more) =>
+        jsxRuntime.jsxs("div", { className: "dshk-home-sechead", children: [
+          jsxRuntime.jsx("span", { children: label }),
+          more !== undefined ? jsxRuntime.jsx("button", { type: "button", className: "dshk-home-more", onClick: more.run, children: more.label }) : null,
+        ] });
+      return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx("div", { className: "dshk-home", children:
+        showAll === true
+          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+              secHead(t("homeAllSets") + (sets.length > 0 ? "（" + t("homeSetsCount").replace("{n}", String(sets.length)) + "）" : ""), { label: "‹ " + t("homeBack"), run: () => setShowAll(false) }),
+              sets.length === 0 ? jsxRuntime.jsx("div", { className: "dshk-home-hint", children: t("homeSetsEmpty") }) : sets.map(ksRow),
+            ] })
+          : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+              secHead(t("homeKsSection"), sets.length > HOME_SETS_LIMIT ? { label: t("homeAllSets") + " ›", run: () => setShowAll(true) } : undefined),
+              sets.length === 0 ? jsxRuntime.jsx("div", { className: "dshk-home-hint", children: t("homeSetsEmpty") }) : sets.slice(0, HOME_SETS_LIMIT).map(ksRow),
+              secHead(t("homeRecentSection")),
+              recent.length === 0
+                ? jsxRuntime.jsx("div", { className: "dshk-home-hint", children: idx === null ? t("contentLoading") : t("homeSetsEmpty") })
+                : recent.map((p) =>
+                    jsxRuntime.jsxs("div", {
+                      className: "dshk-home-row",
+                      onClick: () => {
+                        if (typeof reader.openPath === "function") reader.openPath(p.path);
+                        else openVaultPageAndDock(p.path);
+                      },
+                      title: p.rel,
+                      children: [
+                        jsxRuntime.jsx("span", { className: "dshk-home-rowname", children: p.rel.split("/").pop().replace(/\.(md|markdown)$/i, "") }),
+                        jsxRuntime.jsx("span", { className: "dshk-home-rowstat", children: p.rel.includes("/") ? p.rel.slice(0, p.rel.lastIndexOf("/")) : "" }),
+                      ],
+                    }, p.path),
+                  ),
+            ] }),
+      }) });
+    }
+
     // ─────────── 本组件生效配置（声明式模型）───────────
     // 配置真源 = 本组件宿主 Config（src/vault/index.ts）。client 启动拉
     // /dsh-kit-vault/config 喂快照；行开关关闭时该端点随宿主半边不物化而 404，
@@ -9989,8 +10152,9 @@ ellipsis，窄列只截字不破版 */
     const VAULT_RB_TABS = [
       { id: "dsh-kit-vault", kind: "dshk-vault", feature: "vault", titleKey: "vaultTitle", perItem: true, keepMounted: true },
       { id: "dsh-kit-schedule", kind: "dshk-schedule", feature: "schedule", titleKey: "schedTab" },
+      { id: "dsh-kit-home", kind: "dshk-home", feature: "home", titleKey: "homeTab" },
     ];
-    const VAULT_RB_BODY = { vault: VaultPaneBody, schedule: SchedulePaneBody };
+    const VAULT_RB_BODY = { vault: VaultPaneBody, schedule: SchedulePaneBody, home: HomePagePane };
     function registerRightbar(rbCtx) {
       const tabs = rbCtx.sidebarRightTabs;
       if (!tabs || typeof tabs.register !== "function") return;
@@ -11191,6 +11355,7 @@ ellipsis，窄列只截字不破版 */
       // 本组件的两张 dock 签 kind 补登（openRightbarTab/closeRightbarTab 按 feature 查 kind）
       dock.tabKinds.vault = { id: "dsh-kit-vault", kind: "dshk-vault" };
       dock.tabKinds.schedule = { id: "dsh-kit-schedule", kind: "dshk-schedule" };
+      dock.tabKinds.home = { id: "dsh-kit-home", kind: "dshk-home" };
       // 座对象（root 只读，本组件填字段）：侧栏索引视图 + 文件树行点击的 vault 改道
       dock.vaultView.renderer = ({ owner }) => jsxRuntime.jsx(SidebarVaultIndex, { ...(owner ?? {}) });
       dock.vaultRoute.open = (path) => {

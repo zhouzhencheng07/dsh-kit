@@ -568,8 +568,9 @@ let vaultFetchPrev = null;
   check("工具条只剩一行", rows.length === 1);
   const barRow = rows[0] ? rows[0][2].children : [];
   const refreshWrap = barRow.find((ch) => ch && ch.props && ["刷新索引与目录树", "Refresh index and tree"].includes(ch.props.label));
+  const homeWrap = barRow.find((ch) => ch && ch.props && ["首页", "Home"].includes(ch.props.label));
   const searchBox = barRow.find((ch) => ch && ch.props && ch.props.className === "dshk-vault-search");
-  check("一行 = 搜索框 + 刷新钮（前进/后退与文件夹筛选框都退役；刷新钮走官方气泡）", barRow.length === 2 && !!searchBox && !!refreshWrap && refreshWrap.props.children.props.className === "dshk-sched-navbtn");
+  check("一行 = 搜索框 + 首页钮 + 刷新钮（前进/后退与文件夹筛选框都退役；刷新钮走官方气泡）", barRow.length === 3 && !!searchBox && !!homeWrap && !!refreshWrap && refreshWrap.props.children.props.className === "dshk-sched-navbtn");
   check(
     "搜索占位「搜索笔记 / 资料库」",
     ["搜索笔记 / 资料库", "Search notes / library"].includes(searchBox && searchBox.props.placeholder),

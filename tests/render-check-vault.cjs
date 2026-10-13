@@ -474,6 +474,29 @@ async function checkApply() {
       quizEntryBody.includes("qzIsMastered(prog, x.id)") && quizEntryBody.includes("dshk-quiz-done") &&
       bundleSrc.includes("exports.qzAnswerable = qzAnswerable;"),
   );
+
+  // ── 首页签（右栏第三张）：注册三处 + 工具条入口 + enterDir 通道 + 组件哨兵 ──
+  const homePaneSrc = sliceBetween("function HomePagePane() {", "─────────── 本组件生效配置");
+  check(
+    "首页签注册三处（RB_TABS / RB_BODY / tabKinds 补登）+ 工具条入口开签",
+    bundleSrc.includes('{ id: "dsh-kit-home", kind: "dshk-home", feature: "home", titleKey: "homeTab" }') &&
+      bundleSrc.includes("home: HomePagePane") &&
+      bundleSrc.includes('dock.tabKinds.home = { id: "dsh-kit-home", kind: "dshk-home" }') &&
+      bundleSrc.includes('openRightbarTab("home")'),
+  );
+  check(
+    "首页签数据面：自取索引 + 每集 quiz-scope/progress 汇总 + 浮层关闭重拉（不挂轮询）",
+    homePaneSrc.includes('kitJson("/dsh-kit/vault/index"') &&
+      homePaneSrc.includes('"/dsh-kit/vault/quiz-scope?"') && homePaneSrc.includes('"/dsh-kit/vault/quiz-progress?"') &&
+      homePaneSrc.includes("qzStatOf(qzQuestionsOf(") &&
+      homePaneSrc.includes("if (req === null) setNonce"),
+  );
+  check(
+    "首页行联动左栏：知识集行 enterDir（reader 通道）+ 页行 openPath；条数常量与桌面同款",
+    bundleSrc.includes("enterDir: openHere") &&
+      homePaneSrc.includes("reader.enterDir") && homePaneSrc.includes("reader.openPath") &&
+      bundleSrc.includes("HOME_SETS_LIMIT = 8") && bundleSrc.includes("HOME_RECENT_LIMIT = 8"),
+  );
 }
 
 (async () => {
