@@ -595,9 +595,10 @@ let vaultFetchPrev = null;
       !callLog.some((c) => c[2] && c[2].className === "dshk-vault-treerow" && c[2].title === "D:/v/library/统计.pdf"),
   );
   check(
-    "知识集行用书本矢量图标（自绘 KsIcon，同目录风格；字形回退退役）+ 资料子组/资料行在场",
-    src.includes("function KsIcon({ className })") &&
-      (src.match(/jsxRuntime.jsx\(KsIcon, \{\}\)/g) ?? []).length === 5 &&
+    "知识集=书本、资料组=文档堆（自绘矢量同目录风格，字形回退退役）+ 资料子组/资料行在场",
+    src.includes("function KsIcon({ className })") && src.includes("function RefIcon({ className })") &&
+      (src.match(/jsxRuntime.jsx\(KsIcon, \{\}\)/g) ?? []).length === 3 &&
+      (src.match(/jsxRuntime.jsx\(RefIcon, \{\}\)/g) ?? []).length === 2 &&
       !src.includes("BookOutline16") &&
       src.includes("const ksGroupRow = (dirPath, refs, depth)") &&
       src.includes("const refRow = (rel, dirPath, depth) => {"),
