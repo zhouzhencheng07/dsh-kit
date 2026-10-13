@@ -18,7 +18,7 @@
 //     不报错，签由官方侧自己决定要不要出现。
 //   功能存在性（getKitUi()）：vaultOpen/browserOpen 是功能签在场
 //     （入口按钮选中态与角标读它）。「开着哪些内容」与「哪张签激活」都不在这儿存
-//     ——那是官方签表，经 rightbarItems/useRightbarItems/activeRightbarFeature 读。
+//     ——那是官方签表，经 rightbarItems/useRightbarItems/activeRightbarItem 读。
 //     索引类视图（知识库目录树）住侧栏 sidebar.workspaces 单槽，点条目开对应右栏签。
 //   文件树/源代码管理：面板群与宿主端点归 dsh-kit/files 组件半边（端点路径
 //     /dsh-kit/*），侧栏浏览区的 tree/git 分支经 kitBase.sidebarView 座回到本包
@@ -553,14 +553,14 @@ window.__ModuleLoader__.load({
     // 组件（分属不同组件半边），状态必须跨槽共享：模块级不可变快照 +
     // useSyncExternalStore 订阅（getSnapshot 返回模块绑定值，恒定引用直到 set 替换）。
     // 功能存在性只记 open 位：打开某功能 = 确保签在，切走不丢状态。「哪张签是激活的」
-    // 归官方签表（activeRightbarFeature 读它），kitUi 不另存。内容类（diff /
+    // 归官方签表（activeRightbarItem 读它），kitUi 不另存。内容类（diff /
     // 知识库页 / 浏览器页）是一内容一签，签表也归官方；文件树与对话区点击走官方
     // 右栏文件签，不进这里。
     // 侧栏那一格是单槽：tree / git / 知识库·日程 三者互斥。知识库与日程同属一个组件、
     // 共占那一格，槽内切哪一面由 vaultSideTab 记（tab 条画在组件自己的侧栏渲染器里）。
     let kitUi = { treeOpen: false, gitOpen: false, vaultSideOpen: false, vaultSideTab: "vault", terminals: [], activeTermId: null, termDockOpen: false, browserOpen: false, vaultOpen: false };
     // terminals/activeTermId/termDockOpen 是 dsh-kit-terminal 组件的水位（入口与坞
-    // 分属两个槽位，状态必须共享一份）；本文件只读 termDockOpen 一处——Esc 收起坞。
+    // 分属两个槽位，状态必须共享一份）。
     const kitUiListeners = new Set();
     function setKitUi(patch) {
       kitUi = { ...kitUi, ...patch };
@@ -803,30 +803,6 @@ window.__ModuleLoader__.load({
       useRightbarItems(feature);
       return activeRightbarItem(feature);
     }
-  /** 当前激活签是不是本 feature 的（Esc 分层用） */
-    function activeRightbarFeature(feature) {
-      const sr = rightbarSr;
-      const f = tabKinds[feature];
-      if (!sr || !f || typeof sr.active !== "function") return false;
-      try {
-        return sr.active()?.kind === f.kind;
-      } catch {
-        return false;
-      }
-    }
-    /** 关掉 on-screen 会话里当前激活的那张签（Esc：关当前内容签，不收功能签） */
-    function closeActiveRightbarTab() {
-      const sr = rightbarSr;
-      if (!sr || typeof sr.active !== "function" || typeof sr.close !== "function") return false;
-      try {
-        const tab = sr.active();
-        if (!tab || tab.id === undefined) return false;
-        sr.close(tab.id);
-        return true;
-      } catch {
-        return false;
-      }
-    }
     /** 打开一个文件的 diff（源代码管理更改清单的入口；文件树与对话区点击走官方
      *  右栏文件签，不进这里）。一个文件一张签：diff 源（未跟踪/已删）编进
      *  地址 query，故同文件换源是另一张签、同一源重复开复用原签。seat 不在场时不动 */
@@ -907,10 +883,8 @@ window.__ModuleLoader__.load({
     exports.closeRightbarItem = closeRightbarItem;
     exports.rightbarTabsOf = rightbarTabsOf;
     exports.markFeaturePresence = markFeaturePresence;
-    exports.activeRightbarFeature = activeRightbarFeature;
     exports.activeRightbarItem = activeRightbarItem;
     exports.useActiveRightbarItem = useActiveRightbarItem;
-    exports.closeActiveRightbarTab = closeActiveRightbarTab;
     exports.openFileAndDock = openFileAndDock;
     exports.tabAddress = tabAddress;
     exports.tabVisible = tabVisible;
@@ -940,12 +914,10 @@ window.__ModuleLoader__.load({
       if (!entry || entry.id === undefined) return;
       if (!exports.sideForms.some((e) => e.id === entry.id)) exports.sideForms.push(entry);
     };
-    exports.inlineEdit = { active: false }; // 树行内改名激活中（root 全局快捷键让路）
     exports.diffPane = { Component: null }; // diff 正文组件（root 右栏「差异」签正文用）
     // 知识库那两处与 root 的接线：座对象由 dsh-kit/vault 组件物化期填字段（root 只读）
     exports.vaultView = { renderer: null }; // 侧栏知识库目录索引视图（root 单槽分发）
     exports.vaultRoute = { open: null }; // 文件树行点击的 vault 改道（命中返回 true）
-    exports.vaultSearch = { open: false, held: 0 }; // 知识库搜索浮层/对话框开着（root 全局 Esc 让路）
     // 底座是活动 entry：client runner 按 client 插件形状物化本模块，必须带 apply
     //（载体 entry，本体无行为）
     exports.apply = async (ctx) => {
@@ -976,13 +948,13 @@ window.__ModuleLoader__.load({
 
     // ─────────── 跨槽开合状态与操作（实现在共享底座 kitBase，单例共享）───
     const {
-      setKitUi, subscribeKitUi, useKitUi, getKitUi,
+      setKitUi, subscribeKitUi, useKitUi,
       KitTip, attachShortcutCatalog, kitWsUrl,
         baseName, pageBasename,
       closeFeatureTab, RB_FEATURES,
       openRightbarTab, closeRightbarTab, openFileAndDock,
     rightbarAddress, rightbarItem, rightbarQuery, openRightbarItem,
-      useRightbarItems, rightbarItems, closeRightbarItem, activeRightbarFeature, closeActiveRightbarTab, tabAddress,
+      useRightbarItems, rightbarItems, closeRightbarItem, tabAddress,
       sidebarViewPatch, getRightbarSr,
       rightbarSeat, useRightbarSeat,
     } = dock;
@@ -2352,33 +2324,9 @@ ellipsis，窄列只截字不破版 */
         };
       }, [ui.treeOpen, ui.gitOpen, ui.vaultSideOpen, cwd, rightbarUp]);
 
-      // Esc 分层：先关当前激活那张文档签（知识库关当前页那张、文件关当前文件那张），
-      // 再关侧栏视图，最后收起终端坞（不拦截，避免挡掉其它 Esc 行为）。功能签归官方 ✕。
-      // 组件自己的命令（知识库 Ctrl+Alt+/ 等）注册进官方 shortcuts 服务，动作闭包在
-      // 组件自己的壳里刷新。
-
-      react.useEffect(() => {
-        const onKey = (e) => {
-          if (e.key === "Escape") {
-            if (dock.inlineEdit.active) return; // 树行改名输入激活（dsh-kit/files 经底座座上报）
-            // 知识库搜索浮层开着时让路：Esc 归它自己（只关自己，不收标签页）
-            if (dock.vaultSearch.open) return;
-            // 代码块语言下拉的输入框在编辑器里，收起走它自己的 keydown：这里再收一次
-            // 就是「Esc 顺手把这一页签关了」（浮层在 body 上，事件目标才是那个输入框）
-            if (e.target instanceof Element && e.target.closest(".dshk-rte-langsel") !== null) return;
-            // Esc 关当前激活那张内容签（diff / 知识库页，与官方签条的 ✕ 同语义——
-            // 内容类页类型一内容一签，关闭走官方 close）
-            if (activeRightbarFeature("file") || activeRightbarFeature("vault")) {
-              closeActiveRightbarTab();
-            } else if (getKitUi().gitOpen || getKitUi().treeOpen || getKitUi().vaultSideOpen) {
-              // 侧栏视图单槽：关一格即可（树/scm/知识库·日程 互斥）；功能签不连带关
-              setKitUi(sidebarViewPatch(null));
-            } else if (getKitUi().termDockOpen) setKitUi({ termDockOpen: false }); // 只隐藏，不杀会话
-          }
-        };
-        window.addEventListener("keydown", onKey, true);
-        return () => window.removeEventListener("keydown", onKey, true);
-      });
+      // Esc 没有全局行为：官方自己认这个键（浮层关闭手势、连按两次停止回复），插件再挂一个
+      // 环境级 Esc 就是同一个按键干两件事——终端里会把 ESC 与坞一起收掉，跑回复时第一下
+      // 顺手关掉知识库/文件页签。页签关、侧栏视图关、终端坞收起各有自己的钮与快捷键。
 
       // 知识库/日程的面板本体归 dsh-kit/vault 自己的壳（见该组件的 VaultShell），
       // 根壳只留 shellShare 桥与手机访问页的座位门控
@@ -3699,18 +3647,6 @@ ellipsis，窄列只截字不破版 */
     const jsxRuntime = require("react/jsx-runtime");
     const reactDom = require("react-dom");
     const dock = kit;
-    // Esc 让路：浮层/对话框/行内菜单开着时 root 的全局 Esc 收手，只关最上层。
-    // **按计数持有**，不用裸布尔——搜索浮层与对话框、行内菜单可能同时开着，
-    // 先关的那个把 open 抹回 false 会让下层浮层（乃至页签）被同一个 Esc 收走
-    const holdEsc = () => {
-      dock.vaultSearch.held = (dock.vaultSearch.held ?? 0) + 1;
-      dock.vaultSearch.open = true;
-    };
-    const releaseEsc = () => {
-      const n = Math.max(0, (dock.vaultSearch.held ?? 0) - 1);
-      dock.vaultSearch.held = n;
-      dock.vaultSearch.open = n > 0;
-    };
     const {
       getKitUi, setKitUi, useKitUi, KitTip, flashToast, writeClipboard,
       kitJson, kitPostJson, resolveZh, baseName, pageBasename,
@@ -4913,9 +4849,8 @@ ellipsis，窄列只截字不破版 */
     /** wide：日程表单比「移动到 / 导入」那类小对话框宽一档 */
     function VaultDialog({ title, onClose, wide, children }) {
       react.useEffect(() => {
-        // 让路座：Esc 归这个对话框（同 target 上 root 的捕获监听注册得更早，
-        // 光 stopPropagation 拦不住它，会连带把右栏页签收了）
-        holdEsc();
+        // Esc 归这个对话框：stopPropagation 不让它穿透到下层浮层（宿主那句 Esc 手势
+        // 派发在 window 冒泡相，捕获相收下就不再下传）
         const onKey = (e) => {
           if (e.key === "Escape") {
             e.stopPropagation();
@@ -4923,10 +4858,7 @@ ellipsis，窄列只截字不破版 */
           }
         };
         window.addEventListener("keydown", onKey, true);
-        return () => {
-          releaseEsc();
-          window.removeEventListener("keydown", onKey, true);
-        };
+        return () => window.removeEventListener("keydown", onKey, true);
       }, [onClose]);
       return jsxRuntime.jsx("div", {
         className: "dshk-vault-modalwrap",
@@ -7704,19 +7636,10 @@ ellipsis，窄列只截字不破版 */
       const [renamingPath, setRenamingPath] = react.useState(null);
       const [createAt, setCreateAt] = react.useState(null);
       const [createName, setCreateName] = react.useState("");
-      // 行内改名/新建期间把 dock.inlineEdit 座置真：root 的 Esc 分层据此让路，
-      // 否则按 Esc 取消编辑会顺手把右栏知识库页签（或整个侧栏视图）关掉
-      react.useEffect(() => {
-        dock.inlineEdit.active = renamingPath !== null || createAt !== null;
-        return () => {
-          dock.inlineEdit.active = false;
-        };
-      }, [renamingPath, createAt]);
       // 对话框（移动到…/导入/删除确认共用一份 state）：{kind, ...}；null = 没开
       const [dialog, setDialog] = react.useState(null);
-      // 搜索框聚焦态（Esc 让路用）。放在已有 state 之后：渲染级检查按 useState
-      // 槽位预置状态（改名/新建/对话框），插在中间会把那些槽位整体挪位
-      const [searchFocused, setSearchFocused] = react.useState(false);
+      // 新 state 一律追加在末尾：渲染级检查按 useState 槽位预置状态，插在中间会把
+      // 后续槽位整体挪位（槽位号写死在 tests/render-check.cjs 里）
       // 有盘上操作在跑（对话框按钮置灰防连点）
       const [busy, setBusy] = react.useState(false);
       // 知识集交互态：资料子组展开（会话内）/ 树顶「资料」段展开（localStorage 记偏好）
@@ -7833,24 +7756,15 @@ ellipsis，窄列只截字不破版 */
         if (searchTimer.current !== null) clearTimeout(searchTimer.current);
       }, []);
 
-      // 关闭手势长在浮层自己身上（同 TreeRowMenu 契约）：点浮层与搜索框之外才关；
-      // 开着期间挂 dock.vaultSearch 座，KitSurfaces 的全局 Esc 让路——Esc 只关浮层，不收页签/侧栏。
-      // 搜索框聚焦时也让路：去抖 + 请求在飞的那几百毫秒里座要是空的，Esc 会把页签收了
+      // 关闭手势长在浮层自己身上（同 TreeRowMenu 契约）：点浮层与搜索框之外才关
       react.useEffect(() => {
-        if (searchRes === null && searchFocused !== true) return undefined;
-        holdEsc();
-        if (searchRes === null) return () => {
-          releaseEsc();
-        };
+        if (searchRes === null) return undefined;
         const onDown = (e) => {
           if (e.target instanceof Element && !e.target.closest(".dshk-vault-vsearch") && !e.target.closest(".dshk-vault-search")) setSearchRes(null);
         };
         document.addEventListener("pointerdown", onDown, true);
-        return () => {
-          releaseEsc();
-          document.removeEventListener("pointerdown", onDown, true);
-        };
-      }, [searchRes, searchFocused]);
+        return () => document.removeEventListener("pointerdown", onDown, true);
+      }, [searchRes]);
 
       // toast 自动消隐
       react.useEffect(() => {
@@ -8553,8 +8467,6 @@ ellipsis，窄列只截字不破版 */
               value: searchQ,
               placeholder: t("vaultSearchPh"),
               spellCheck: false,
-              onFocus: () => setSearchFocused(true),
-              onBlur: () => setSearchFocused(false),
               onChange: (e) => {
                 // 随输入实时搜（去抖）；清空即关浮层
                 setSearchQ(e.target.value);
@@ -8577,7 +8489,6 @@ ellipsis，窄列只截字不破版 */
                   e.preventDefault();
                   setSearchIdx((i) => Math.max(i - 1, 0));
                 } else if (e.key === "Escape" && searchRes !== null) {
-                  // 全局 Esc 已挂 dock.vaultSearch 让路：这里只关浮层
                   e.preventDefault();
                   setSearchRes(null);
                 }
@@ -9126,11 +9037,9 @@ ellipsis，窄列只截字不破版 */
         barMenuAnchorRef.current = e.currentTarget;
         setBarMenu((prev) => (prev === which ? null : which));
       };
-      // 浮层关闭手势长在自己身上（与搜索浮层/TreeRowMenu 同约定）：
-      // 点浮层与触发钮之外 / Esc 即关，Esc 不下传（别顺带收页签）
+      // 浮层关闭手势长在自己身上（与搜索浮层/TreeRowMenu 同约定）：点浮层与触发钮之外 / Esc 即关
       react.useEffect(() => {
         if (barMenu === null) return undefined;
-        holdEsc();
         const onDown = (e) => {
           if (!(e.target instanceof Element)) {
             setBarMenu(null);
@@ -9148,7 +9057,6 @@ ellipsis，窄列只截字不破版 */
         document.addEventListener("pointerdown", onDown, true);
         window.addEventListener("keydown", onKey, true);
         return () => {
-          releaseEsc();
           document.removeEventListener("pointerdown", onDown, true);
           window.removeEventListener("keydown", onKey, true);
         };
@@ -10696,12 +10604,6 @@ ellipsis，窄列只截字不破版 */
         };
       }, [reader.root, ownRoot]);
 
-      // 浮层开着期间 Esc 归它（先关浮层，不让宿主收走下面的界面）
-      react.useEffect(() => {
-        holdEsc();
-        return () => releaseEsc();
-      }, []);
-
       // 拉范围数据 + 5s 指纹轮询：agent 改了题 / 另一端改了阈值都跟着重读
       react.useEffect(() => {
         if (rel === null) return undefined;
@@ -10812,10 +10714,9 @@ ellipsis，窄列只截字不破版 */
       };
 
       // 键盘：回车 = 提交/下一题，数字键 = 勾选项，Esc = 关浮层。不写依赖表 =
-      // 每渲染重挂，读的永远是本次渲染的题与作答。Esc 在**任何非编辑阶段**都关：
-      // 浮层一挂就 holdEsc 了，只在作答阶段认 Esc 的话，设置 / 小结阶段按下去毫无反应、
-      // 宿主那层的关手势也被吞掉（只剩 ✕ 一条路）；「编辑题目」是带未保存内容的输入面，
-      // Esc 不关整层（先改完或用 ✕）
+      // 每渲染重挂，读的永远是本次渲染的题与作答。Esc 在**任何非编辑阶段**都关
+      //（设置 / 作答 / 小结）；「编辑题目」是带未保存内容的输入面，Esc 不关整层
+      //（先改完或用 ✕）
       react.useEffect(() => {
         const onKey = (e) => {
           if (e.key === "Escape") {
@@ -13100,8 +13001,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         loadDir(dirPath);
       };
       // ── 行内改名（✎ 触发）：聚焦时只选中最后一个扩展名分隔符之前的
-      // 主名（目录/隐藏文件选全名），Enter 提交、Esc/失焦取消；改名期间把
-      // dock.inlineEdit 座置真，root 的 Esc 分层据此让路（不会顺手关掉树/预览）──
+      // 主名（目录/隐藏文件选全名），Enter 提交、Esc/失焦取消 ──
       const startRename = (entry) => {
         if (!cwd) return;
         setRenamingPath(entry.path);
@@ -13118,12 +13018,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         pruneExpandedFrom(entry.path);
         loadDir(parentOf(entry.path));
       };
-      react.useEffect(() => {
-        dock.inlineEdit.active = renamingPath !== null;
-        return () => {
-          dock.inlineEdit.active = false;
-        };
-      }, [renamingPath]);
       const deleteEntry = async (entry) => {
         const okDone = await runFsOp(
           { op: "delete", path: entry.path },
@@ -18361,13 +18255,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
         return () => window.removeEventListener("keydown", onKey, true);
       }, [menu]);
 
-      const onKeyDown = (e) => {
-        if (e.key !== "Escape") return;
-        e.stopPropagation();
-        if (menu !== null) setMenu(null);
-        else setChat({ open: false });
-      };
-
       /** 头部拖动 / 右下角缩放：过程只改内存，松手落盘 */
       const startDrag = (ev) => {
         if (ev.button !== 0 || rect === null) return;
@@ -18443,7 +18330,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
       return jsxRuntime.jsxs("div", {
         className: "dshk-chat-panel",
         style,
-        onKeyDown,
         children: [
           jsxRuntime.jsxs("div", { className: "dshk-chat-head", onPointerDown: startDrag, children: [
             jsxRuntime.jsxs("div", { className: "dshk-chat-hgroup", children: [

@@ -113,7 +113,7 @@ const RETURN = "return module.exports;";
 const rootReturn = body.lastIndexOf(RETURN);
 if (rootReturn < 0) { console.log("FATAL: no root return"); process.exit(2); }
 const wrapper = body.slice(0, rootReturn) +
-  "return Object.assign({ KitSurfaces, SideFormBar, SideFormSessions, TreeRowMenu, closeFeatureTab, sidebarViewPatch, kitGetJson, kitPostJson, kitJson, getKitUi, setKitUi, FilePaneBody, openFileAndDock, closeRightbarTab, openOfficialFile, openTreeFile }, kitBase, exports.vault, exports.phone);" +
+  "return Object.assign({ KitSurfaces, SideFormBar, SideFormSessions, TreeRowMenu, closeFeatureTab, sidebarViewPatch, kitGetJson, kitPostJson, kitJson, setKitUi, FilePaneBody, openFileAndDock, closeRightbarTab, openOfficialFile, openTreeFile }, kitBase, exports.vault, exports.phone);" +
   body.slice(rootReturn + RETURN.length);
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -745,14 +745,14 @@ let vaultFetchPrev = null;
       src.includes("const submitRefRename = async (rel, rawName) => {") &&
       src.includes("const deleteRefItem = (rel) => {"),
   );
-  // 展开知识集下的「资料」子组（openRefGroups = 槽 19）：铺开挂载项、保留扩展名
+  // 展开知识集下的「资料」子组（openRefGroups = 槽 17）：铺开挂载项、保留扩展名
   const refsErr = renderVault({
     0: VAULT_INDEX,
     1: "",
     2: null,
     3: TREE,
     4: { "D:/v": true, "D:/v/wiki": true },
-    18: { "D:/v/wiki": true },
+    17: { "D:/v/wiki": true },
   });
   const refRows = callLog.filter((c) => c[2] && c[2].className === "dshk-vault-treerow" && ["D:/v/library/统计.pdf", "D:/v/library/大学/讲义.pdf"].includes(c[2].title));
   check(
@@ -766,8 +766,8 @@ let vaultFetchPrev = null;
       src.includes('{ key: "kdl"') &&
       src.includes("libItemsByRel.get(refMenu.rel) === undefined ? [] : ["),
   );
-  // 添加资料弹层：列出库里还没挂的资料（已挂的不重复列）——addingDir 槽 21 / refQuery 槽 22
-  const addErr = renderVault({ 0: VAULT_INDEX, 1: "", 2: null, 3: TREE, 4: { "D:/v": true }, 20: "D:/v/wiki", 21: "" });
+  // 添加资料弹层：列出库里还没挂的资料（已挂的不重复列）——addingDir 槽 19 / refQuery 槽 20
+  const addErr = renderVault({ 0: VAULT_INDEX, 1: "", 2: null, 3: TREE, 4: { "D:/v": true }, 19: "D:/v/wiki", 20: "" });
   const cands = callLog.filter((c) => c[2] && c[2].className === "dshk-vault-diritem" && typeof c[2].title === "string" && c[2].title.startsWith("D:/v/library/"));
   check(
     "添加资料弹层：列出库里还没挂的资料（已挂的不重复列）",
@@ -854,8 +854,8 @@ let vaultFetchPrev = null;
       !!renameInput && renameInput[2].defaultValue === "a" && renameInput[2].autoFocus === true,
     );
     check(
-      "树内改名/新建占用 inlineEdit 让路座（源码哨兵：Esc 取消编辑不连带关页签/侧栏）",
-      src.includes("dock.inlineEdit.active = renamingPath !== null || createAt !== null;"),
+      "Esc 没有全局让路座：树内改名/新建取消只收自己（源码哨兵）",
+      !src.includes("dock.inlineEdit") && !src.includes("holdEsc"),
     );
     check(
       "跨页 wikilink 的锚点透传（源码哨兵：onOpenPage 收 anchor + newPane，一路传到 pendingAnchor / preferNewPane）",
@@ -1339,7 +1339,7 @@ let vaultFetchPrev = null;
   check("根集合来自注册表 + 请求 cwd，根自身不算内", hostCore.includes("export function registerReadableRoot") && hostCore.includes("export function withinReadable") && hostCore.includes("realpathSync") && hostCore.includes("trimmed === ''"));
   check("知识库与技能各自注册自己的可读根（根归属方才知道自己的根是谁）", hostVault.includes("registerReadableRoot('vault'") && hostSkills.includes("registerReadableRoot('skills'") && hostSkills.includes("resolveRoots(cwd)"));
 }
-// 6.9f) 共享目录一致性 + 保存串行化 + 浮层让路计数（评审批次二）
+// 6.9f) 共享目录一致性 + 保存串行化 + Esc 归属
 {
   const hostSchedule = fs.readFileSync(__dirname + "/../src/vault/schedule.ts", "utf8");
   const hostFs = fs.readFileSync(__dirname + "/../src/vault/fs.ts", "utf8");
@@ -1352,7 +1352,10 @@ let vaultFetchPrev = null;
   check("索引兜底形状与 VaultIndex 一致（folders，不是 spaces）", hostVault2.includes("{ root: null, folders: [], pages: [] }"));
   check("保存串行：控制面与自动保存共用一条队列（并发写必撞 CAS）", src.includes("let saving = false;") && src.includes("let queuedMode = null;") && src.includes("saveQueueRef.current = enqueueSave;") && src.includes("flush: enqueued(\"auto\")"));
   check("卸载保底用挂载那一刻的保存函数（ref 镜像此时已指向新页）", src.includes("const mountedSave = onSaveRef.current;") && src.includes("void mountedSave(rteRef.current.getMd(), \"auto\");"));
-  check("Esc 让路按计数持有（浮层同开，先关的不撤销让路）", src.includes("const holdEsc = () =>") && src.includes("const releaseEsc = () =>") && (src.match(/holdEsc\(\);/g) ?? []).length === 4 && (src.match(/releaseEsc\(\);/g) ?? []).length === 5 && (src.match(/dock\.vaultSearch\.open = true;/g) ?? []).length === 1 && (src.match(/dock\.vaultSearch\.open = false;/g) ?? []).length === 0);
+  // Esc 一律没有环境级行为：root 壳不认这个键（同一个键既收插件界面又触发宿主手势——
+  // 终端里 ESC 与坞一起收、跑回复时顺手关页签）。浮层自己开着时的 Esc 各自持有。
+  check("Esc 无环境级行为（root 不挂全局 Esc、无让路座与全局关签件）", !src.includes("closeActiveRightbarTab") && !src.includes("activeRightbarFeature") && !src.includes("dock.vaultSearch") && !src.includes("else if (getKitUi().termDockOpen) setKitUi({ termDockOpen: false });"));
+  check("浮层自己的 Esc 仍在（树行菜单/分支菜单/对话框持有）", src.includes('if (e.key === "Escape") onClose();') && (src.match(/if \(e\.key === "Escape"\) onClose\(\);/g) ?? []).length === 2 && /if \(e\.key === "Escape"\) \{\s*\n\s*e\.stopPropagation\(\);\s*\n\s*onClose\(\);/.test(src));
   check("读页上下文提交后发布（渲染期通知订阅者）+ 空页表用常量", src.includes("react.useEffect(() => {\n        const refreshIndex = () => void loadIndex();") && src.includes("?? VAULT_EMPTY_PAGES"));
   check("反链 memo 依赖稳定（每次渲染现造 [] 会让 useMemo 恒不命中）", src.includes("const backlinks = react.useMemo(() => vaultBacklinks(indexPages ?? [], path), [indexPages, path]);"));
   check("树路径按 root 的分隔符拼（缓存键/展开态/知识集目录换算同一口径）", src.includes("return rel === \"\" ? base : absJoinUnder(base, rel);") && src.includes("const ksCurrentAbs = headKs;"));
@@ -1434,7 +1437,7 @@ let vaultFetchPrev = null;
   check("周网格表头在滚动区之外（留在里面会被 sticky + y 轴吸附盖住全天带）", src.includes("className: \"dshk-sched-topgrid\"") && src.includes("scroll-padding-top:4px") && !/dshk-sched-dayhead\{position:sticky/.test(src));
   check("周统计跟着周导航取（口径钉 weekStart），拉取失败挂提示", src.includes("useScheduleData(true, weekStart)") && src.includes('date=${encodeURIComponent(statsDate ?? schedToday())}') && src.includes('className: "dshk-sched-headfail"') && src.includes('className: "dshk-sched-taskfail"'));
   check("全天带按列成栈 + 溢出折成 +N（平铺会全叠进同一网格单元）", src.includes("const SCHED_ALLDAY_MAX = 3;") && src.includes("const dateTodoByCol = react.useMemo") && src.includes('className: "dshk-sched-allday is-more"'));
-  check("文档内链接走解析、带协议的外链走 openExternalUrl（openOnClick:false 下不接管就是死点击）", src.includes("onRelLink: (href) => {") && src.includes('if (!isDocHref(href)) {') && src.includes("openExternalUrl(href);") && src.includes('if (href === "" || href.startsWith("#")) return;') && src.includes('e.target.closest(".dshk-rte-langsel") !== null) return;'));
+  check("文档内链接走解析、带协议的外链走 openExternalUrl（openOnClick:false 下不接管就是死点击）", src.includes("onRelLink: (href) => {") && src.includes('if (!isDocHref(href)) {') && src.includes("openExternalUrl(href);") && src.includes('if (href === "" || href.startsWith("#")) return;'));
   check("外链打开只有一份实现：对话改投与编辑器点击共用 openExternalUrl", src.includes("function openExternalUrl(href) {") && (src.match(/openExternalUrl\(href\);/g) ?? []).length === 2 && (src.match(/kitJson\("\/dsh-kit\/browser\/open"/g) ?? []).length === 1);
   check("拖选后松手不触发外链跳转（click 时选区非折叠是在选字）", src.includes("if (sel && !sel.isCollapsed) return;"));
   check("代码块语言下拉有盒子样式（挂 body 的 fixed 浮层，缺样式就掉出视口）", /\.dshk-langdrop\{position:fixed/.test(src) && /\.dshk-langopt\{flex:none/.test(src) && /\.dshk-langempty\{/.test(src) && /\.dshk-langdrop\[hidden\]\{display:none\}/.test(src));

@@ -443,7 +443,6 @@ async function checkApply() {
   // ── 测验：契约钉在宿主半边，入口与浮层钉在 client 半边 ──
   const quizSrc = read("src/vault/quiz.ts");
   const quizFsSrc = read("src/vault/fs.ts");
-  const quizModalBody = sliceBetween("function VaultQuizModal({ req }) {", "      const start = (pool, limit) => {");
   check(
     "宿主测验端点九件套 + 伴生文件跟随（改名/移动/删除/覆盖带走 .quiz）",
     compSrc.includes("/dsh-kit/vault/quiz-scope") && compSrc.includes("/dsh-kit/vault/quiz-progress") &&
@@ -460,17 +459,16 @@ async function checkApply() {
       quizSrc.includes("WS_RE") && quizSrc.includes("sortedProgress"),
   );
   check(
-    "测验浮层挂常驻壳 + 页条/树菜单两个入口 + Esc 让路按计数持有",
+    "测验浮层挂常驻壳 + 页条/树菜单两个入口",
     bundleSrc.includes("jsxRuntime.jsx(VaultQuizOverlay, {})") &&
       bundleSrc.includes("jsxRuntime.jsx(VaultQuizEntry, { path, root, active })") &&
       /key: "qz", label: t\("qzEntry"\)/.test(bundleSrc) &&
-      /holdEsc\(\);/.test(quizModalBody) && /releaseEsc\(\);/.test(quizModalBody) &&
       bundleSrc.includes('"/dsh-kit/vault/quiz-record"') && bundleSrc.includes('"/dsh-kit/vault/quiz-save"'),
   );
-  // 浮层一挂就 holdEsc：只在作答阶段认 Esc 的话，设置 / 小结阶段按 Esc 毫无反应，
-  // 宿主那一层的关手势也被吞掉（剩 ✕ 一条路）；「编辑题目」是带未保存内容的输入面，不关
+  // 测验浮层自己认 Esc：设置 / 作答 / 小结三个阶段都关（不整层关的那一层是「编辑题目」，
+  // 那是带未保存内容的输入面，退出走 ✕）
   check(
-    "测验浮层 Esc：设置 / 作答 / 小结都关，编辑题目那层不整层关（浮层持有 Esc 时不能没反应）",
+    "测验浮层 Esc：设置 / 作答 / 小结都关，编辑题目那层不整层关",
     /if \(e\.key === "Escape"\) \{\s*\n\s*if \(stage === "edit"\) return;/.test(bundleSrc) &&
       /if \(stage !== "session"\) return;/.test(bundleSrc),
   );

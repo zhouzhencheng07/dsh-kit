@@ -94,8 +94,8 @@ check(
   ),
 );
 check(
-  "dock 跨组件服务座（sidebarView 渲染器座 / inlineEdit 让路座 / diffPane 正文座）形状",
-  dockExports.sidebarView && typeof dockExports.sidebarView === "object" && dockExports.sidebarView.renderer === null && dockExports.inlineEdit && dockExports.inlineEdit.active === false && dockExports.diffPane && typeof dockExports.diffPane === "object" && typeof dockExports.diffPane.Component === "function",
+  "dock 跨组件服务座（sidebarView 渲染器座 / diffPane 正文座）形状",
+  dockExports.sidebarView && typeof dockExports.sidebarView === "object" && dockExports.sidebarView.renderer === null && dockExports.diffPane && typeof dockExports.diffPane === "object" && typeof dockExports.diffPane.Component === "function",
 );
 
 // 组件模块随根 bundle 一次加载组装
