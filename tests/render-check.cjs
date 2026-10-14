@@ -158,7 +158,7 @@ if (!baseOk) process.exitCode = 1;
 }
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["KitSurfaces", "TreeRowMenu", "RteEditor", "slashMenuBox", "bubbleBox", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksPanel", "SidebarVaultIndex", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "resolveMdLink", "isDocHref"];
+const names = ["KitSurfaces", "TreeRowMenu", "RteEditor", "slashMenuBox", "bubbleBox", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksPanel", "SidebarVaultIndex", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "vaultSelectionText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -471,6 +471,51 @@ check("vaultCiteText：续草稿补换行", comps.vaultCiteText("在吗", "") ==
 check(
   "vaultCiteText：选区转引用块 + 首尾空行剥除",
   comps.vaultCiteText("在吗", "\n第一行\n第二行\n\n") === "在吗\n> 第一行\n> 第二行\n\n",
+);
+
+// 6.8a) 引用块上限：超长只留开头并标注（页面本体由 @ 芯片指向，引用块是"哪一段"的提示）
+check(
+  "vaultCiteText：超 12 行截断并标注",
+  (() => {
+    const many = Array.from({ length: 40 }, (_v, i) => "第" + (i + 1) + "行").join("\n");
+    const lines = comps.vaultCiteText("", many).trimEnd().split("\n");
+    return lines.length === 13 && lines[0] === "> 第1行" && lines[12] === "> …（已截断）";
+  })(),
+);
+check(
+  "vaultCiteText：单行超 600 字截断并标注",
+  (() => {
+    const lines = comps.vaultCiteText("", "字".repeat(900)).trimEnd().split("\n");
+    return lines.length === 2 && lines[0].length === 602 && lines[1] === "> …（已截断）";
+  })(),
+);
+check(
+  "vaultCiteText：正好 12 行不标注",
+  (() => {
+    const many = Array.from({ length: 12 }, (_v, i) => "第" + (i + 1) + "行").join("\n");
+    const out = comps.vaultCiteText("", many);
+    return !out.includes("已截断") && out.trimEnd().split("\n").length === 12;
+  })(),
+);
+
+// 6.8b) 选区取文本：从编辑器状态取（表格多格不再翻倍空行），原子节点按各自 md 写法补回
+check("vaultSelectionText：无编辑器 / 空选区回空串", comps.vaultSelectionText(null) === "" && comps.vaultSelectionText({ state: { selection: { empty: true }, doc: {} } }) === "");
+check(
+  "vaultSelectionText：leaf 节点补齐（行内公式 / 硬换行 / 图片 / 行间公式 / 图块）",
+  (() => {
+    const fake = [
+      { type: { name: "mathInline" }, attrs: { tex: "x^2" } },
+      { type: { name: "hardBreak" }, attrs: {} },
+      { type: { name: "image" }, attrs: { alt: "图", src: "a.png" } },
+      { type: { name: "mathBlock" }, attrs: { tex: "y" } },
+      { type: { name: "mermaidBlock" }, attrs: { src: "graph TD" } },
+      { type: { name: "horizontalRule" }, attrs: {} },
+    ];
+    const doc = { textBetween: (_f, _t, _sep, leafText) => fake.map((n) => leafText(n)).join("|") };
+    const got = comps.vaultSelectionText({ state: { selection: { empty: false, from: 0, to: 9 }, doc } });
+    const want = ["$x^2$", "\n", "![图](a.png)", "$$\ny\n$$", "```mermaid\ngraph TD\n```", "---"].join("|");
+    return got === want;
+  })(),
 );
 
 // 6.8b) md 相对链接解析（文件签/知识库页里点链接打开目标文件的那条链）：

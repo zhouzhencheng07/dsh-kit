@@ -375,11 +375,17 @@ async function checkApply() {
   // 选区就攥在手里）；空选区兜底给空串
   const bubCiteBody = sliceBetween("const bubCite = () => {", "const BUB_COLORS");
   check(
-    "泡泡菜单挂「引用到对话」（现读选区走引用管线，成功收泡泡）",
+    "泡泡菜单挂「引用到对话」（现读编辑器选区走引用管线，成功收泡泡）",
     bundleSrc.includes('title: t("vtbCite"), onClick: bubCite') &&
       /citeVaultPageToChat\(docKey, selText,/.test(bubCiteBody) &&
-      /textBetween\(sel\.from, sel\.to/.test(bubCiteBody) &&
+      /vaultSelectionText\(h\.editor\)/.test(bubCiteBody) &&
       /setBub\(null\)/.test(bubCiteBody),
+  );
+  // 树行 @ 的选区镜像与泡泡同一条取文本口径：编辑器状态优先（DOM 文本在表格多格
+  // 会多出一倍空行、原子节点整块丢），编辑器选区不可用才退回 DOM 文本
+  check(
+    "树行 @ 的选区镜像走编辑器状态（原子节点按 md 写法补回）",
+    /vaultSelectionText\(handle\.editor\)/.test(bundleSrc) && /vaultCiteText\(draft, selText\)|vaultCiteText/.test(bundleSrc),
   );
   // 双链选择框一次搜出页面与标题：标题随索引走（宿主提取 ATX，frontmatter/围栏/
   // #标签 都不算），客户端页行/标题行并成一列混排；| 后写别名不进搜索，

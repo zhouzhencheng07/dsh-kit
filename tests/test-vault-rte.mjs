@@ -101,6 +101,73 @@ console.log("== 基础块级 ==");
   check("尾部恰好一个换行（段落结尾）", tail2.endsWith("段落\n") && !tail2.endsWith("\n\n"), JSON.stringify(tail2));
 }
 
+console.log("== 表格不变式（格内摊平 / 首行表头）==");
+{
+  const P = (text) => ({ type: "paragraph", content: text === "" ? undefined : [{ type: "text", text }] });
+  const tableDoc = (cellContent) => ({
+    type: "doc",
+    content: [{
+      type: "table",
+      content: [
+        { type: "tableRow", content: [{ type: "tableHeader", content: [P("A")] }, { type: "tableHeader", content: [P("B")] }] },
+        { type: "tableRow", content: [{ type: "tableCell", content: [P("1")] }, { type: "tableCell", content: cellContent }] },
+      ],
+    }],
+  });
+  // 格内块级内容 = 粘贴进来的富文本：md 管道表表示不了，从前"编辑时渲染得好、重开只剩文字"
+  const blocks = [
+    P("前"),
+    { type: "blockquote", content: [P("引用甲")] },
+    { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "3.1 逆变换法" }] },
+    { type: "bulletList", content: [{ type: "listItem", content: [P("列表项")] }] },
+    { type: "codeBlock", content: [{ type: "text", text: "const a = 1;\nconst b = 2;" }] },
+  ];
+  const flat = rig.normalize(tableDoc(blocks));
+  const cell = flat.content?.[0]?.content?.[1]?.content?.[1];
+  check("格内块级全部摊平成段落", (cell?.content ?? []).every((b) => b.type === "paragraph"), JSON.stringify(cell));
+  const text = (cell?.content ?? []).flatMap((b) => b.content ?? []).filter((n) => n.type === "text").map((n) => n.text).join("");
+  check(
+    "格内文字一个不丢",
+    ["前", "引用甲", "3.1 逆变换法", "列表项", "const a = 1;"].every((t) => text.includes(t)),
+    JSON.stringify(text),
+  );
+  check("代码块内的换行摊成硬换行（不留带 \n 的文本）", (cell?.content ?? []).some((b) => (b.content ?? []).some((n) => n.type === "hardBreak")), JSON.stringify(cell));
+  const md = rig.serialize(flat);
+  check("落盘是单行单元格（<br> 连接，表格不塌）", /\|\s*前<br>引用甲<br>.*逆变换法/.test(md), JSON.stringify(md));
+}
+{
+  const P = (text) => ({ type: "paragraph", content: [{ type: "text", text }] });
+  // 首行是普通单元格的表格：md 必须有表头行，否则序列化补一行空的（每存一次多一行）
+  const doc = { type: "doc", content: [{ type: "table", content: [
+    { type: "tableRow", content: [{ type: "tableCell", content: [P("甲")] }] },
+    { type: "tableRow", content: [{ type: "tableCell", content: [P("乙")] }] },
+  ] }] };
+  const out = rig.normalize(doc);
+  check("首行不是表头 → 提成表头行", out.content?.[0]?.content?.[0]?.content?.[0]?.type === "tableHeader", JSON.stringify(out.content?.[0]?.content?.[0]));
+  check("只换格子类型、不加行", out.content?.[0]?.content?.length === 2);
+  const md = rig.serialize(out);
+  check("提表头后往返结构等价", structEq(md, "| 甲 |\n| --- |\n| 乙 |"), JSON.stringify(md));
+}
+{
+  const P = (text) => ({ type: "paragraph", content: text === "" ? undefined : [{ type: "text", text }] });
+  // 嵌套表格（粘贴一整张表进格）：摊成一行一段、格间用全角 ｜ 接上（半角 | 是分隔符）
+  const nested = { type: "table", content: [
+    { type: "tableRow", content: [{ type: "tableHeader", content: [P("x")] }, { type: "tableHeader", content: [P("y")] }] },
+    { type: "tableRow", content: [{ type: "tableCell", content: [P("1")] }, { type: "tableCell", content: [P("2")] }] },
+  ] };
+  const doc = { type: "doc", content: [{ type: "table", content: [
+    { type: "tableRow", content: [{ type: "tableHeader", content: [P("外A")] }] },
+    { type: "tableRow", content: [{ type: "tableCell", content: [P("上"), nested, P("下")] }] },
+  ] }] };
+  const out = rig.normalize(doc);
+  const cell = out.content?.[0]?.content?.[1]?.content?.[0];
+  check("嵌套表格摊平成段落", (cell?.content ?? []).every((b) => b.type === "paragraph"), JSON.stringify(cell));
+  const text = (cell?.content ?? []).flatMap((b) => b.content ?? []).filter((n) => n.type === "text").map((n) => n.text).join("");
+  check("嵌套表格文字不丢、格间全角 ｜", ["上", "x ｜ y", "1 ｜ 2", "下"].every((t) => text.includes(t)), JSON.stringify(text));
+  const md = rig.serialize(out);
+  check("嵌套摊平后仍是一张外表格", md.includes("外A") && md.includes("x ｜ y"), JSON.stringify(md));
+}
+
 console.log("== 行内样式 ==");
 {
   const [out, err] = rt("**粗** 与 *斜* 与 ~~删~~ 与 `码` 与 [链](https://x.y)");

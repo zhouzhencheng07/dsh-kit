@@ -4699,15 +4699,59 @@ ellipsis，窄列只截字不破版 */
      *  时读这份镜像。多个页签同时挂载时只有激活那个能写，避免后台页清掉它。 */
     let vaultSelMirror = "";
 
-    /** M4 笔记→会话：「引用到对话」的选区文本转引用块续在草稿后（首尾空行剥
-     *  掉）。页面路径本体由 @ 引用芯片承载（与文件树
+    /** 选区转文本：优先读编辑器状态——DOM 选区的字符串在表格多格上格与格之间会多出
+     *  一倍空行，公式 / 图片 / 硬换行 / 图块这些原子节点整块丢。leaf 节点按各自的
+     *  markdown 写法补回，块与块之间只留一个换行（引用块要短）。 */
+    function vaultSelectionText(editor) {
+      const state = editor && editor.state;
+      const sel = state ? state.selection : null;
+      if (!state || !sel || sel.empty) return "";
+      return state.doc.textBetween(sel.from, sel.to, "\n", (node) => {
+        switch (node.type.name) {
+          case "hardBreak": return "\n";
+          case "mathInline": return "$" + String(node.attrs?.tex ?? "") + "$";
+          case "mathBlock": return "$$\n" + String(node.attrs?.tex ?? "") + "\n$$";
+          case "mermaidBlock": return "```mermaid\n" + String(node.attrs?.src ?? "") + "\n```";
+          case "rawBlock": return String(node.attrs?.html ?? "");
+          case "horizontalRule": return "---";
+          case "image": return "![" + String(node.attrs?.alt ?? "") + "](" + String(node.attrs?.src ?? "") + ")";
+          default: return "";
+        }
+      });
+    }
+
+    /** 「引用到对话」的引用块上限：超出的选区只留开头并标注——页面本体由 @ 引用芯片
+     *  指向，引用块只是"指的是哪一段"的提示，不必把整段长篇倒进输入框。 */
+    const VAULT_CITE_MAX_LINES = 12;
+    const VAULT_CITE_MAX_CHARS = 600;
+
+    /** M4 笔记→会话：「引用到对话」的选区文本转引用块续在草稿后（首尾空行剥掉，
+     *  超长截断并标注）。页面路径本体由 @ 引用芯片承载（与文件树
      *  「@到对话」同一条路径，此函数只管引用块文本）。render-check 直调。 */
     function vaultCiteText(draft, selText) {
       const base = typeof draft === "string" ? draft : "";
-      const lines = typeof selText === "string" ? selText.replace(/\r\n?/g, "\n").split("\n") : [];
+      const raw = typeof selText === "string" ? selText.replace(/\r\n?/g, "\n") : "";
+      const lines = raw.split("\n");
       while (lines.length > 0 && lines[0].trim() === "") lines.shift();
       while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
-      const quote = lines.length > 0 ? lines.map((l) => `> ${l}`).join("\n") + "\n\n" : "";
+      const kept = [];
+      let chars = 0;
+      let clipped = false;
+      for (const line of lines) {
+        if (kept.length >= VAULT_CITE_MAX_LINES || chars + line.length > VAULT_CITE_MAX_CHARS) {
+          clipped = true;
+          break;
+        }
+        kept.push(line);
+        chars += line.length;
+      }
+      if (kept.length === 0 && lines.length > 0) {
+        kept.push(lines[0].slice(0, VAULT_CITE_MAX_CHARS));
+        clipped = true;
+      }
+      const quoteLines = kept.map((l) => "> " + l);
+      if (clipped) quoteLines.push("> …（已截断）");
+      const quote = quoteLines.length > 0 ? quoteLines.join("\n") + "\n\n" : "";
       const joiner = base !== "" && !base.endsWith("\n") ? "\n" : "";
       return base + joiner + quote;
     }
@@ -6795,8 +6839,8 @@ ellipsis，窄列只截字不破版 */
       const bubCite = () => {
         const h = rteRef.current;
         if (!h) return;
-        const sel = h.editor.state.selection;
-        const selText = sel.empty ? "" : h.editor.state.doc.textBetween(sel.from, sel.to, "\n", " ");
+        // 与树行 @ 同一条取文本口径（编辑器状态优先，原子节点/表格不丢内容）
+        const selText = vaultSelectionText(h.editor);
         citeVaultPageToChat(docKey, selText, (key) => flashToast(t(key)));
         setBubPanel(null);
         setBub(null);
@@ -8843,7 +8887,15 @@ ellipsis，窄列只截字不破版 */
           if (!activeRef.current) return;
           const pane = paneRef.current;
           const sel = document.getSelection();
-          vaultSelMirror = pane && sel && sel.anchorNode && pane.contains(sel.anchorNode) ? String(sel) : "";
+          if (!(pane && sel && sel.anchorNode && pane.contains(sel.anchorNode))) {
+            vaultSelMirror = "";
+            return;
+          }
+          // 编辑器状态优先：DOM 文本在表格多格会多出一倍空行、原子节点整块丢；
+          // 编辑器选区不可用（未挂载 / 选中非编辑内容）才退回 DOM 文本
+          const handle = rteRef.current;
+          const fromEditor = handle ? vaultSelectionText(handle.editor) : "";
+          vaultSelMirror = fromEditor !== "" ? fromEditor : String(sel);
         };
         document.addEventListener("selectionchange", onSel);
         return () => document.removeEventListener("selectionchange", onSel);
@@ -11393,6 +11445,7 @@ ellipsis，窄列只截字不破版 */
     exports.vaultTabsClose = vaultTabsClose;
     exports.vaultDirChoices = vaultDirChoices;
     exports.vaultCiteText = vaultCiteText;
+    exports.vaultSelectionText = vaultSelectionText;
     // PDF 阅读器的版面算术：纯函数，render-check 直测（锚点 ↔ 滚动量往返）
     exports.pdfAnchorAt = pdfAnchorAt;
     exports.pdfScrollFor = pdfScrollFor;

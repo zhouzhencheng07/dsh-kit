@@ -72,14 +72,17 @@ from the page). It stays in the list: **do not turn it off**.
   auto-numbered on clashes, and each material row's `⋯` can rename / unmount / delete it);
   open page tabs follow renames/moves (the tab is reopened at the new address) and close
   on delete; chat integration (vault paths in chat open the page, "@" on a tree row cites
-  page/selection); **page bodies are what-you-see-is-what-you-get editors** (TipTap rich
+  page/selection — a long selection is clipped to the first 12 lines / 600 characters and
+  marked as truncated, while the chip still points at the whole page); **page bodies are what-you-see-is-what-you-get editors** (TipTap rich
   text, no source/preview duality): `/` opens a two-level command menu (headings & text /
   special blocks / lists / math & code / charts / attachments),
   a selection floats an inline format bar (colour swatches and links included) and, inside a
   table, a second bar with row/column insert & delete, left/center/right alignment, header
   column and delete-table; the menu opens a picker for wiki links that searches pages and all
   vault headings at once (a heading row inserts `[[page#heading]]`; type an alias after `|`),
-  a rows/columns dialog for tables (3x3 with header by default), inserts mermaid blocks
+  a rows/columns dialog for tables (3x3 with header by default) — cells hold inline text
+  only, so pasted headings / quotes / lists / nested tables are flattened to text on the spot and
+  the first row is always the header row — inserts mermaid blocks
   (bundled renderer, click to edit the source) and opens the system file picker for images —
   pasted screenshots and picked files alike are compressed then stored content-addressed under
   `attachments/` and inserted; `Tab` sinks/lifts list items (jumps cells in tables, inserts two

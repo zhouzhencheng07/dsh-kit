@@ -12,7 +12,7 @@
 // DOM 约束：本文件不得在模块顶层触碰 document/window（node 测试直接 eval 产物
 // 做 md⇄doc 往返断言）；运行时库（window.katex）只在节点视图内部懒检查。
 import { Editor, Extension, Node, mergeAttributes, getSchema } from "@tiptap/core";
-import { TextSelection, Plugin, PluginKey } from "@tiptap/pm/state";
+import { EditorState, TextSelection, Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { Markdown, MarkdownManager } from "@tiptap/markdown";
 import { UndoRedo, Placeholder } from "@tiptap/extensions";
@@ -1354,12 +1354,131 @@ const VaultImage = Image.extend({
  *  照旧转义才凑出奇数个（`a\\\|b`）读回 `a\|b`；跳过则落盘 `a\\|b`（偶数）→ 竖线被当分隔符，
  *  表格塌掉、格被吞。其余（表头行、列对齐、宽度补空格、多块格用 <br> 连接）全走上游。
  *  另一端复用同一份写盘实现，所以两端写同一个文件口径一致 */
+// ─── 表格不变式（md 管道表的硬约束，改动那一刻就钉住）──────────────────────
+// ① 格内只留段落：一格只能是同一行的行内内容——代码块 / 列表 / 引用 / 嵌套表格这些块级
+//    节点 md 表示不了。从前是编辑器放行、存盘才降级，于是"粘贴或编辑时看着渲染出来了，
+//    重开只剩摊平的文字"。改成改动那一刻就摊平成段落：界面上看到的就是文件里存得下的。
+// ② 首行永远是表头行：md 必须有表头行；首行不是表头时官方序列化器会补一行空的，
+//    浮条删掉表头行后重开又回来（每存一次还多一行）。
+const CELL_TYPES = ["tableCell", "tableHeader"];
+
+/** 第一行不是表头行的表格 → 一笔「把首行格子换成表头」的事务；都合规返 null。
+ *  纯逻辑（只吃 EditorState），测试直调。位置换算：表格 → 第一行 → 第一个格子 = pos + 2 */
+function promoteHeaderRow(state) {
+  const header = state.schema.nodes.tableHeader;
+  if (!header) return null;
+  let tr = null;
+  state.doc.descendants((node, pos) => {
+    if (node.type.name !== "table") return;
+    const row = node.firstChild;
+    if (!row || row.childCount === 0 || row.firstChild?.type.name === "tableHeader") return;
+    tr = tr ?? state.tr;
+    let cellPos = pos + 2;
+    row.forEach((cell) => {
+      tr.setNodeMarkup(cellPos, header, cell.attrs);
+      cellPos += cell.nodeSize;
+    });
+  });
+  return tr;
+}
+
+/** 单元格里的块级节点摊平成段落（内容一个不丢，marks 保留）：嵌套表格一行一段，
+ *  其余块合成一段，块内换行补硬换行。都合规时返回 null */
+function flattenCellBlocks(state) {
+  const paragraph = state.schema.nodes.paragraph;
+  if (!paragraph) return null;
+  // 先收集、再从后往前改：前面的改动不会挪动后面记下的位置
+  const edits = [];
+  state.doc.descendants((node, pos) => {
+    if (!CELL_TYPES.includes(node.type.name)) return;
+    let childPos = pos + 1;
+    node.forEach((child) => {
+      if (child.type.name !== "paragraph") {
+        edits.push({ from: childPos, to: childPos + child.nodeSize, content: flattenBlock(child, state) });
+      }
+      childPos += child.nodeSize;
+    });
+  });
+  if (edits.length === 0) return null;
+  const tr = state.tr;
+  edits.sort((a, b) => b.from - a.from).forEach((e) => tr.replaceWith(e.from, e.to, e.content));
+  return tr;
+}
+
+/** 一个块级节点摊成段落：嵌套表格一行一段（格与格之间用全角 " ｜ " 接上——半角 | 是
+ *  单元格分隔符），其余块合成一段。文字一个不丢，只是不再是原来那个块 */
+function flattenBlock(node, state) {
+  const paragraph = state.schema.nodes.paragraph;
+  if (node.type.name === "table") {
+    const out = [];
+    node.forEach((row) => {
+      const inline = [];
+      row.forEach((cell, _c, cellIdx) => {
+        if (cellIdx > 0) inline.push(state.schema.text(" ｜ "));
+        // 格首不加硬换行（" ｜ " 接上就直接接着写）
+        cell.forEach((child) => collectInline(child, inline, state, true));
+      });
+      out.push(paragraph.create(null, inline.length > 0 ? inline : undefined));
+    });
+    return out.length > 0 ? out : [paragraph.create()];
+  }
+  const inline = [];
+  collectInline(node, inline, state);
+  return [paragraph.create(null, inline.length > 0 ? inline : undefined)];
+}
+
+/** 把一个节点的行内内容收进 out：块与块之间、文字里的换行补硬换行。
+ *  noLeadingBreak：这个节点是接在别的内容后面的（嵌套表格的格），前面不补换行 */
+function collectInline(node, out, state, noLeadingBreak = false) {
+  const hardBreak = state.schema.nodes.hardBreak;
+  const brk = () => {
+    if (hardBreak && out.length > 0 && out[out.length - 1].type.name !== hardBreak.name) out.push(hardBreak.create());
+  };
+  const walk = (n, top = false) => {
+    if (n.isText) {
+      // 代码块这类块里的换行是文字里的 \n：拆开换成硬换行，别留带换行的文本节点
+      String(n.text ?? "").split("\n").forEach((part, i) => {
+        if (i > 0) brk();
+        if (part) out.push(state.schema.text(part, n.marks));
+      });
+      return;
+    }
+    if (n.isInline) {
+      out.push(n);
+      return;
+    }
+    if (!(top && noLeadingBreak)) brk();
+    n.forEach((child) => walk(child));
+  };
+  walk(node, true);
+}
+
+/** 表格不变式总入口：格内摊平 → 首行表头，一次改动里全钉住；都合规时返回 null */
+function normalizeTable(state) {
+  const flattened = flattenCellBlocks(state);
+  if (!flattened) return promoteHeaderRow(state);
+  const after = state.apply(flattened);
+  const header = promoteHeaderRow(after);
+  // 表头那条的步骤建立在"摊平之后"的文档上，接着往前推即可
+  if (header) header.steps.forEach((step) => flattened.step(step));
+  return flattened;
+}
+
 const VaultTable = Table.extend({
   renderMarkdown(node, helpers) {
     return renderTableToMarkdown(node, {
       ...helpers,
       renderChildren: (n) => String(helpers.renderChildren(n) ?? "").replace(/\|/g, "\\|"),
     });
+  },
+  addProseMirrorPlugins() {
+    return [
+      ...(this.parent ? this.parent() : []),
+      new Plugin({
+        // 任何一次文档改动后立刻把表格逼回可存形态（空转即停，不会循环）
+        appendTransaction: (trs, _old, newState) => (trs.some((t) => t.docChanged) ? normalizeTable(newState) : null),
+      }),
+    ];
   },
 });
 
@@ -1636,6 +1755,12 @@ function makeTestRig(markedOptions = { breaks: true, gfm: true }) {
     serialize: (json) => manager.serialize(json),
     /** JSON 合法性（schema 校验），非法抛错原样上抛 */
     validate: (json) => schema.nodeFromJSON(json),
+    /** 表格不变式（格内摊平 / 首行表头）：吃 doc JSON，回不变式后的 doc JSON */
+    normalize: (json) => {
+      const state = EditorState.create({ schema, doc: schema.nodeFromJSON(json) });
+      const tr = normalizeTable(state);
+      return (tr ? state.apply(tr) : state).doc.toJSON();
+    },
     schema,
     manager,
   };
