@@ -419,7 +419,7 @@ async function checkApply() {
   );
   check(
     "root 的 open/closeRightbarTab 按 tabKinds 座查 kind（组件行不靠静态 RB_FEATURES）",
-    bundleSrc.includes("const f = tabKinds[feature];") && bundleSrc.includes('const tabKinds = { file: { id: "dsh-kit-file", kind: "dshk-file" } };') && bundleSrc.includes("exports.tabKinds = tabKinds;"),
+    bundleSrc.includes("const f = tabKinds[feature];") && bundleSrc.includes("const tabKinds = {};") && bundleSrc.includes("exports.tabKinds = tabKinds;"),
   );
   check(
     "知识库/日程 client 半边整体收进 vaultModule（root 侧只剩座与跨槽状态）",

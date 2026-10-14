@@ -149,11 +149,11 @@ for (const p of dynamicKeyPrefixes) {
 }
 
 // ── 4) 座字段活性 ──
-// 组件行与 root 只经座对象单向接线（座没接上 = diffPane 白屏，座只读不写 = 让路
+// 组件行与 root 只经座对象单向接线（座没接上 = 面板白屏，座只读不写 = 让路
 // 之类的跨块判据静默失效）。按「root 读得到却没人写」判死。
 {
   const seats = [...new Set([...src.matchAll(/exports\.([A-Za-z_$][\w$]*)\s*=\s*\{/g)].map((m) => m[1]))]
-  if (seats.length < 4) die('只解析出 ' + seats.length + ' 个座，锚点可能失效')
+  if (seats.length < 3) die('只解析出 ' + seats.length + ' 个座，锚点可能失效')
   for (const seat of seats) {
     const fields = [...new Set([...src.matchAll(new RegExp('(?:dock\\.|exports\\.)' + seat + '\\.([A-Za-z_$][\\w$]*)', 'g'))].map((m) => m[1]))]
     for (const field of fields) {

@@ -1,6 +1,5 @@
 // dsh-kit-files 浏览器半边渲染级检查：加载真实 dock bundle（root client）+ files
-// bundle，直测文件树/源代码管理面板群（TreeNode/FileTreePanel/TreeRowMenu/DiffPane/
-// GitChangesPanel/GitGraphPanel/CommitGraphSvg/GitBranchMenu/FileTreeEntry/ScmEntry）
+// bundle，直测文件树面板群（TreeNode/FileTreePanel/TreeRowMenu/FileTreeEntry）
 // 与 apply 激活契约（形态条登记/配置页/侧栏分支渲染器座）。
 // 用法（dsh-kit 根）：node tests\render-check-files.cjs
 const fs = require("node:fs");
@@ -41,7 +40,7 @@ const loadBundle = (path, requireMap) => {
   return new Function("require", body)(requireMap);
 };
 
-// react hooks 桩（useState 带可预置的 stateStore，供 DiffPane 渲染分支测试）
+// react hooks 桩（useState 带可预置的 stateStore，供面板渲染分支测试）
 let callLog = [];
 const stateStore = new Map();
 let stateSeq = 0;
@@ -94,33 +93,15 @@ check(
   ),
 );
 check(
-  "dock 跨组件服务座（sidebarView 渲染器座 / diffPane 正文座）形状",
-  dockExports.sidebarView && typeof dockExports.sidebarView === "object" && dockExports.sidebarView.renderer === null && dockExports.diffPane && typeof dockExports.diffPane === "object" && typeof dockExports.diffPane.Component === "function",
+  "dock 跨组件服务座（sidebarView 渲染器座）形状",
+  dockExports.sidebarView && typeof dockExports.sidebarView === "object" && dockExports.sidebarView.renderer === null,
 );
 
 // 组件模块随根 bundle 一次加载组装
 const comps = dockExports.files;
 
-check("files 导出 apply（client 插件形状）与 DiffPane（root 右栏「差异」签正文）", typeof comps.apply === "function" && typeof comps.DiffPane === "function");
+check("files 导出 apply（client 插件形状）", typeof comps.apply === "function");
 check("files inject 声明 slots", Array.isArray(comps.inject) && comps.inject[0] === "slots");
-// 跨包单向引用只能走座对象：kitBase → module.exports 是工厂尾部的一次性浅拷贝，
-// 组件后加的键 root 读不到（正是 diffPane 白屏的成因）
-check("files 物化期把 DiffPane 挂上 root 的 diffPane 座", dockExports.diffPane.Component === comps.DiffPane);
-
-// —— 直测：FilePaneBody 地址解出（diff 正文经 diffPane 座取）——
-{
-  const addr = "dsh-resource://dshk-diff/" + encodeURIComponent("C:/x/b.js") + "?u=1";
-  callLog = [];
-  let plain = null;
-  let threw = null;
-  try {
-    plain = dockExports.FilePaneBody({ useTabInfo: () => ({ tab: { contentId: addr } }) });
-  } catch (e) {
-    threw = String((e && e.message) || e);
-  }
-  check("FilePaneBody 常规地址渲染不抛（槽位不落 data-slot-error）", threw === null && !!plain);
-  check("未跟踪源还原成 untracked 传给 diff 正文", !!plain && !!plain.props && plain.props.children.props.untracked === true);
-}
 
 // —— 直测：TreeNode（文件 + 目录 + 常驻操作钮）——
 let out;
@@ -166,192 +147,6 @@ callLog = [];
 out = comps.FileTreePanel({ cwd: "C:/x", onOpenFile: () => {} });
 check("FileTreePanel noCwd(根未加载) 渲染无异常(loading→error兜底)", !!out && typeof out === "object");
 
-// —— 直测：DiffPane（加载中/删除/提交钉定三态/常规/未跟踪/标题）——
-const commitDiffText = "diff --git a/f.js b/f.js\nindex 111..222 100644\n--- a/f.js\n+++ b/f.js\n@@ -1 +1 @@\n-old\n+new\n";
-const readyBody = { phase: "ready", body: { path: "C:/x/f.js", size: 2, mtimeMs: 1, truncated: false, binary: false, content: "new\n" } };
-callLog = [];
-out = comps.DiffPane({ path: "C:/x/b.js", cwd: "C:/x" });
-check("DiffPane 渲染无异常", !!out && typeof out === "object");
-{
-  stateSeq = 0;
-  stateStore.set(0, { phase: "deleted" });
-  stateStore.set(1, {
-    phase: "ready",
-    clean: false,
-    text: "diff --git a/f.md b/f.md\ndeleted file mode 100644\nindex 5d7d2f8..0000000\n--- a/f.md\n+++ /dev/null\n@@ -1,3 +0,0 @@\n-name: hello-kit\n-\n-# hello\n",
-  });
-  callLog = [];
-  out = comps.DiffPane({ path: "C:/x/gone.md", cwd: "C:/x", deleted: true });
-  const deletedNote = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.includes("文件已删除") || c[2].children.includes("File deleted")));
-  const deletedToggle = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].children === "⇄");
-  const metaNoise = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("diff --git") || c[2].children.startsWith("deleted file mode") || c[2].children.startsWith("@@")));
-  const delRedLines = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-il-del").map((c) => c[2].children);
-  check("DiffPane deleted 渲染无异常", !!out && typeof out === "object");
-  check("deleted 渲染删除说明且无 ⇄ 切换", !!deletedNote && !deletedToggle);
-  check("删除内容无 git 元数据且为剥前缀红行", !metaNoise && delRedLines.length === 3 && delRedLines[0] === "name: hello-kit" && delRedLines.includes("# hello"));
-  stateStore.clear();
-  stateSeq = 0;
-}
-{
-  stateStore.set(0, readyBody);
-  stateStore.set(1, { phase: "ready", clean: false, base: "abcd123", text: commitDiffText });
-  callLog = [];
-  comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", commit: "full40hash" });
-  const baseNote = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diffnote" && typeof c[2].children === "string" && c[2].children.includes("abcd123"));
-  const hunkWrap = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-hunks");
-  const rawOnly = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diff");
-  const hunkHead = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-hunkhead");
-  const hunkNos = callLog.filter((c) => c[2] && c[2].className === "dshk-dno").map((c) => c[2].children);
-  const hunkRowCls = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-drow-")).map((c) => c[2].className);
-  check("提交钉定 diff 渲染基线说明（父提交 abcd123）", !!baseNote);
-  check("提交钉定 diff 只渲染 hunk（长文件不再整篇铺开）", !!hunkWrap && !rawOnly);
-  check("hunk 头与 git 输出同形", !!hunkHead && hunkHead[2].children === "@@ -1,1 +1,1 @@");
-  check("hunk 行带旧/新行号", hunkNos.join("|") === "1|||1");
-  check("增删行分色不串", hunkRowCls.join("|") === "dshk-drow dshk-drow-del|dshk-drow dshk-drow-add");
-  stateStore.clear();
-  stateSeq = 0;
-  stateStore.set(0, readyBody);
-  stateStore.set(1, { phase: "ready", clean: false, base: "abcd123", text: commitDiffText, blobMissing: true });
-  callLog = [];
-  comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", commit: "full40hash" });
-  const delRed = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-il-del").map((c) => c[2].children);
-  const delMeta = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("diff --git") || c[2].children.startsWith("@@")));
-  check("提交钉定删除文件走纯红块（无元数据噪音）", delRed.includes("old") && !delRed.includes("new") && !delMeta);
-  stateStore.clear();
-  stateSeq = 0;
-  stateStore.set(0, readyBody);
-  stateStore.set(1, { phase: "ready", clean: false, base: "abcd123", text: commitDiffText });
-  callLog = [];
-  comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", commit: "full40hash" });
-  const pinnedHunks = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-hunks");
-  check("钉定无新像也照常渲染 hunk（不再回落原始 patch）", !!pinnedHunks);
-  stateStore.clear();
-  stateSeq = 0;
-  stateStore.set(0, readyBody);
-  stateStore.set(1, { phase: "ready", clean: false, base: "", text: commitDiffText });
-  callLog = [];
-  comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", commit: "root40hash" });
-  const rootNote = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diffnote" && typeof c[2].children === "string" && (c[2].children.includes("empty tree") || c[2].children.includes("空树")));
-  check("根提交钉定显示空树基线说明", !!rootNote);
-  // 常规 diff：同样只渲染 hunk
-  stateStore.clear();
-  stateSeq = 0;
-  stateStore.set(0, readyBody);
-  stateStore.set(1, { phase: "ready", clean: false, text: commitDiffText });
-  callLog = [];
-  comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x" });
-  const normalHunks = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-hunks");
-  const normalRaw = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-diff");
-  check("常规 diff 也只渲染 hunk", !!normalHunks && !normalRaw);
-  // 未跟踪：整文件按新增着色（内容来自 read）
-  stateStore.clear();
-  stateSeq = 0;
-  stateStore.set(0, { phase: "ready", body: { path: "C:/x/n.js", size: 3, mtimeMs: 1, truncated: false, binary: false, content: "a\nb" } });
-  stateStore.set(1, { phase: "ready", untracked: true, clean: false, text: null });
-  callLog = [];
-  comps.DiffPane({ path: "C:/x/n.js", cwd: "C:/x", untracked: true });
-  const addRows = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-il-add").map((c) => c[2].children);
-  check("未跟踪整文件按新增着色", addRows.join("|") === "a|b");
-  // 三种拿不到内容的原因各说各的，不能都笼统成「暂无 diff」
-  const noteOf = () => {
-    const n = callLog.filter((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[2] && c[2].className === "dshk-note").map((c) => c[2].children);
-    return n.join("|");
-  };
-  stateStore.clear();
-  stateSeq = 0;
-  stateStore.set(0, { phase: "ready", body: { path: "C:/x/big.js", size: 900000, mtimeMs: 1, truncated: true, binary: false, content: "a\nb" } });
-  stateStore.set(1, { phase: "ready", untracked: true, clean: false, text: null });
-  callLog = [];
-  comps.DiffPane({ path: "C:/x/big.js", cwd: "C:/x", untracked: true });
-  check("超 512KB：仍然着色，并标出被截断", callLog.some((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-il-add") && /512KB/.test(noteOf()));
-  stateStore.clear();
-  stateSeq = 0;
-  stateStore.set(0, { phase: "ready", body: { path: "C:/x/x.png", size: 10, mtimeMs: 1, truncated: false, binary: true, content: null } });
-  stateStore.set(1, { phase: "ready", untracked: true, clean: false, text: null });
-  callLog = [];
-  comps.DiffPane({ path: "C:/x/x.png", cwd: "C:/x", untracked: true });
-  check("二进制：只说二进制，不着色", !callLog.some((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-il-add") && /二进制|binary/i.test(noteOf()));
-  stateStore.clear();
-  stateSeq = 0;
-  stateStore.set(0, { phase: "error", error: "读取文件失败：ENOENT" });
-  stateStore.set(1, { phase: "ready", untracked: true, clean: false, text: null });
-  callLog = [];
-  comps.DiffPane({ path: "C:/x/gone.js", cwd: "C:/x", untracked: true });
-  check("读取失败：把端点回的原因显示出来", /ENOENT/.test(noteOf()));
-  stateStore.clear();
-  stateSeq = 0;
-  // 头部标题：绝对路径直显、不挂 title 悬停（文件名由页签 chip 承担）
-  callLog = [];
-  comps.DiffPane({ path: "C:/x/dir/f.js", cwd: "C:/x" });
-  const titleAbs = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-title" && c[2].children === "C:/x/dir/f.js");
-  check("diff 头部标题显示绝对路径", !!titleAbs);
-  check("diff 头部不挂 title 悬停（全路径已直显，悬停只留页签 chip）", !!(titleAbs && titleAbs[2] && titleAbs[2].title === undefined));
-  // 头部两个钮：打开全文（官方右栏文件签）+ 单栏/双栏切换
-  const headBtn = (glyph) => callLog.find((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[2] && c[2].children === glyph);
-  const fullBtn = headBtn("全文") || headBtn("Full");
-  const splitBtn = headBtn("⇄");
-  check("diff 头部有「打开全文」钮（走官方 sidebarRight.openResource）", !!fullBtn && typeof fullBtn[2].onClick === "function");
-  check("diff 头部有单栏/双栏切换钮（默认单栏）", !!splitBtn && splitBtn[2]["aria-pressed"] === false);
-  // 删除态：没有可开的文件、也没有可分栏的两侧 → 两个钮都不出现
-  stateStore.clear();
-  stateSeq = 0;
-  stateStore.set(0, { phase: "deleted" });
-  stateStore.set(1, { phase: "ready", clean: false, text: commitDiffText });
-  callLog = [];
-  comps.DiffPane({ path: "C:/x/gone.md", cwd: "C:/x", deleted: true });
-  check("删除态头部无全文/分栏钮", !headBtn("⇄") && !(headBtn("全文") || headBtn("Full")));
-  // useResource 是宿主标准 hook：按地址是否为空条件调用会让 hook 数随会话选中态
-  // 变化，React 抛「Rendered fewer hooks than expected」→ 整张差异签空白
-  const hookCalls = [];
-  const spyResource = (addr) => { hookCalls.push(addr); return { status: "none", value: undefined }; };
-  stateStore.clear();
-  stateSeq = 0;
-  stateStore.set(0, readyBody);
-  stateStore.set(1, { phase: "ready", clean: false, text: commitDiffText });
-  comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", fileAddress: null, useResource: spyResource });
-  check("无地址时 useResource 仍被调用（不得条件调用）", hookCalls.length === 1 && hookCalls[0] === "");
-  hookCalls.length = 0;
-  comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x", fileAddress: "dsh-resource://file/session/s1/C%3A%2Fx%2Ff.js", useResource: spyResource });
-  check("有地址时 useResource 拿到该地址", hookCalls.length === 1 && hookCalls[0].startsWith("dsh-resource://file/"));
-  hookCalls.length = 0;
-  comps.DiffPane({ path: "C:/x/f.js", cwd: "C:/x" });
-  check("宿主没给 useResource 时不调（桩里没有该钩子）", hookCalls.length === 0);
-  stateStore.clear();
-  stateSeq = 0;
-}
-{
-  // —— 直测：hunk 解析与双栏配对（纯函数）——
-  const patch = [
-    "diff --git a/f.js b/f.js",
-    "index 111..222 100644",
-    "--- a/f.js",
-    "+++ b/f.js",
-    "@@ -10,4 +10,5 @@ head",
-    " ctx-a",
-    "-del-1",
-    "-del-2",
-    "+add-1",
-    "+add-2",
-    "+add-3",
-    " ctx-b",
-    "@@ -40 +41 @@",
-    "-only-del",
-  ].join("\n");
-  const hunks = comps.parsePatchHunks(patch);
-  check("parsePatchHunks 跳过 git 头部只取 hunk", Array.isArray(hunks) && hunks.length === 2);
-  check("hunk 坐标解析（缺省计数按 1）", hunks[0].oldStart === 10 && hunks[0].oldLines === 4 && hunks[0].newStart === 10 && hunks[0].newLines === 5 && hunks[1].oldStart === 40 && hunks[1].newLines === 1);
-  const r0 = hunks[0].rows;
-  check("hunk 行按前缀分 ctx/del/add", r0.map((x) => x.kind).join("|") === "ctx|del|del|add|add|add|ctx");
-  check("hunk 行号双侧各自推进（新增行不占旧号）", r0[0].oldNo === 10 && r0[0].newNo === 10 && r0[1].oldNo === 11 && r0[1].newNo === null && r0[3].oldNo === null && r0[3].newNo === 11 && r0[6].oldNo === 13 && r0[6].newNo === 14);
-  check("hunk 头行（@@ 后缀）不混进行内容", r0[0].text === "ctx-a" && hunks[1].rows[0].text === "only-del");
-  const pairs = comps.splitRowsOf(r0);
-  check("双栏配对：上下文两侧同格", pairs[0].left === pairs[0].right && pairs[0].left.kind === "ctx");
-  check("双栏配对：多删少补时右侧留空", pairs[3].left === null && pairs[3].right.text === "add-3" && pairs[1].left.text === "del-1" && pairs[1].right.text === "add-1");
-  const delPairs = comps.splitRowsOf(hunks[1].rows);
-  check("双栏配对：纯删除右侧整列留空", delPairs.length === 1 && delPairs[0].left.text === "only-del" && delPairs[0].right === null);
-  check("parsePatchHunks 无 hunk 返回 null", comps.parsePatchHunks("diff --git a/f b/f\nindex 1..2\n") === null && comps.parsePatchHunks("") === null);
-}
-
 // —— 直测：形态切换条上的两枚（门控默认开 = 配置快照未就绪按内置默认）——
 callLog = [];
 out = comps.FileTreeEntry({});
@@ -361,146 +156,18 @@ check(
   out.type === dockExports.KitTip && out.props.command === "dsh-kit-files.tree.toggle" && typeof out.props.label === "string" &&
     out.props.children.props.className === "dshk-sfbtn",
 );
-callLog = [];
-out = comps.ScmEntry({});
-check("ScmEntry 渲染无异常", !!out && typeof out === "object");
-check(
-  "ScmEntry 同一条链路（同款图标钮 + 气泡）",
-  out.type === dockExports.KitTip && out.props.command === "dsh-kit-files.scm.toggle" && typeof out.props.label === "string" &&
-    out.props.children.props.className === "dshk-sfbtn",
-);
 {
-  // 侧栏单槽互斥：源代码管理开着时点入口，知识库·日程那一格让出（kitBase 补丁语义）
-  const sidebarResetPatch = { treeOpen: false, gitOpen: false, vaultSideOpen: false, vaultSideTab: "vault", files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null };
+  // 侧栏单槽互斥：文件树开着时点入口，知识库·日程那一格让出（kitBase 补丁语义）
+  const sidebarResetPatch = { treeOpen: false, vaultSideOpen: false, vaultSideTab: "vault", files: [], activeFile: null, vaultOpen: false, vaultPages: [], activeVaultPage: null };
   const svp = dockExports.sidebarViewPatch("vault");
-  check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultSideOpen === true && svp.vaultSideTab === "vault" && svp.treeOpen === false && svp.gitOpen === false);
-  dockExports.setKitUi({ vaultSideOpen: true, vaultSideTab: "vault", vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", gitOpen: false, treeOpen: false });
+  check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultSideOpen === true && svp.vaultSideTab === "vault" && svp.treeOpen === false);
+  dockExports.setKitUi({ vaultSideOpen: true, vaultSideTab: "vault", vaultOpen: true, vaultPages: ["D:/v/a.md"], activeVaultPage: "D:/v/a.md", treeOpen: false });
   callLog = [];
-  comps.ScmEntry({ useSessions: () => ({ id: "s1", cwd: "C:/x" }) });
-  const scmBtnEl = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-sfbtn"));
-  scmBtnEl[2].onClick();
-  check("ScmEntry 点击后侧栏单槽互斥（知识库·日程那一格让出，两个钮不会同时亮）", dockExports.getKitUi().gitOpen === true && dockExports.getKitUi().vaultSideOpen === false && dockExports.getKitUi().vaultOpen === true);
+  comps.FileTreeEntry({ useSessions: () => ({ id: "s1", cwd: "C:/x" }) });
+  const treeBtnEl = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].className === "string" && c[2].className.includes("dshk-sfbtn"));
+  treeBtnEl[2].onClick();
+  check("FileTreeEntry 点击后侧栏单槽互斥（知识库·日程那一格让出，两个钮不会同时亮）", dockExports.getKitUi().treeOpen === true && dockExports.getKitUi().vaultSideOpen === false && dockExports.getKitUi().vaultOpen === true);
   dockExports.setKitUi(sidebarResetPatch);
-}
-
-// —— 直测：更改视图 / 提交图谱 / 分支浮层 ——
-callLog = [];
-out = comps.GitChangesPanel({ cwd: null, onOpenFile: () => {}, onClose: () => {} });
-check("GitChangesPanel noCwd 渲染无异常", !!out && typeof out === "object");
-// 图谱视图：无 cwd（不触发拉取/轮询）
-callLog = [];
-out = comps.GitGraphPanel({ cwd: null });
-check("GitGraphPanel noCwd 渲染无异常", !!out && typeof out === "object");
-// 图谱 lane 几何纯函数：线性链 / 分叉（兄弟提交并拢进父）/ 合并（多线收进主槽位）/ 窗口悬挂
-const geoLinear = comps.computeCommitGraph([
-  { H: "c3", h: "c3", p: ["c2"], an: "a", at: 1, s: "s3", d: "" },
-  { H: "c2", h: "c2", p: ["c1"], an: "a", at: 2, s: "s2", d: "" },
-  { H: "c1", h: "c1", p: [], an: "a", at: 3, s: "s1", d: "main" },
-]);
-check("lane 几何：线性链单 lane 且逐行消费", geoLinear.rows.length === 3 && geoLinear.laneCount === 1 && geoLinear.rows[0].outs.length === 1 && geoLinear.rows[0].ins.length === 0 && geoLinear.rows[1].ins.length === 1 && geoLinear.rows[2].ins.length === 1 && geoLinear.rows[2].outs.length === 0);
-const geoFork = comps.computeCommitGraph([
-  { H: "a1", h: "a1", p: ["p0"], an: "a", at: 1, s: "feat", d: "HEAD -> main" },
-  { H: "b1", h: "b1", p: ["p0"], an: "b", at: 2, s: "fix", d: "" },
-  { H: "p0", h: "p0", p: [], an: "a", at: 3, s: "base", d: "main" },
-]);
-check("lane 几何：兄弟分叉各占 lane 并拢进父（颜色恒定）", geoFork.rows.length === 3 && geoFork.rows[0].lane === 0 && geoFork.rows[1].lane === 1 && geoFork.rows[1].color === 1 && geoFork.rows[2].ins.length === 2 && geoFork.laneCount === 2 && geoFork.rows[0].color === 0);
-const geoMerge = comps.computeCommitGraph([
-  { H: "m1", h: "m1", p: ["ma", "mb"], an: "a", at: 1, s: "merge", d: "" },
-  { H: "ma", h: "ma", p: ["base"], an: "a", at: 2, s: "a", d: "" },
-  { H: "mb", h: "mb", p: ["base"], an: "b", at: 3, s: "b", d: "" },
-  { H: "base", h: "base", p: [], an: "a", at: 4, s: "base", d: "main" },
-]);
-check("lane 几何：合并提交双父两 lane 汇入", geoMerge.rows.length === 4 && geoMerge.rows[0].outs.length === 2 && geoMerge.rows[0].outs[0].x === 0 && geoMerge.rows[0].outs[1].x === 1 && geoMerge.rows[3].ins.length === 2);
-const geoHang = comps.computeCommitGraph([{ H: "x1", h: "x1", p: ["gone"], an: "a", at: 1, s: "s", d: "" }]);
-check("lane 几何：窗口截断的父槽位悬挂延续", geoHang.rows.length === 1 && geoHang.rows[0].outs.length === 1 && geoHang.rows[0].outs[0].x === 0);
-const geoEmpty = comps.computeCommitGraph([]);
-check("lane 几何：空输入安全默认", geoEmpty.rows.length === 0 && geoEmpty.laneCount === 1);
-
-// 图谱面板：预置结构化 records（stub effect 不跑、fetch 不会覆盖预置态）→
-// 行渲染出 SVG/作者/相对时间列 + load more 按钮
-stateStore.clear();
-stateSeq = 0;
-const nowSec = Math.floor(Date.now() / 1000);
-stateStore.set(0, {
-  available: true,
-  hasMore: true,
-  records: [
-    { H: "a1", h: "a1aa", p: ["p0"], an: "张三", at: nowSec - 3600, s: "feat: 图谱", d: "HEAD -> main" },
-    { H: "b1", h: "b1bb", p: ["p0"], an: "李四", at: nowSec - 7200, s: "fix: 分支", d: "" },
-    { H: "p0", h: "p000", p: [], an: "张三", at: nowSec - 86400, s: "初始提交", d: "main" },
-  ],
-});
-callLog = [];
-out = comps.GitGraphPanel({ cwd: "C:/x" });
-const graphRows = callLog.filter((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-grow");
-const graphAuthors = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-gauthor");
-const graphDates = callLog.filter((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-gdate");
-const moreBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].className === "dshk-gmore");
-// 注意：CommitGraphSvg 是嵌套组件，桩只记录元素不执行组件体（已知盲区）——
-// SVG 的 path/circle 产出用下面直调用例覆盖，面板级断言只数行与列
-check("GitGraphPanel 结构化行渲染（3 行+作者+时间列）", graphRows.length === 3 && graphAuthors.length === 3 && graphDates.length === 3);
-// 行不可点：提交详情（作者/说明/文件清单 + 钉定 diff）已撤，完整信息走 title 悬停
-check("GitGraphPanel 行不挂点击（详情视图已撤，信息走 title）", graphRows.every((r) => typeof r[2].onClick !== "function" && typeof r[2].title === "string"));
-check("GitGraphPanel hasMore 渲染 load more 按钮", !!moreBtn && typeof moreBtn[2].onClick === "function");
-callLog = [];
-const svgRow = comps.CommitGraphSvg({ row: geoFork.rows[0], laneCount: 2 });
-const svgParts = callLog.filter((c) => (c[0] === "jsx") && (c[1] === "path" || c[1] === "circle"));
-const svgNode = callLog.find((c) => (c[0] === "jsx") && c[1] === "circle");
-check("CommitGraphSvg 直调渲染出边/点（父边+circle）", !!svgRow && svgParts.length >= 2 && !!svgNode && svgNode[2].cy === 11);
-// 分支浮层：空态 + 列表态（无 hooks 依赖，直接渲染）
-callLog = [];
-out = comps.GitBranchMenu({ rect: { left: 20, top: 40 }, branches: null, busy: false, name: "", onName: () => {}, onCreate: () => {}, onSwitch: () => {}, onDelete: () => {}, onClose: () => {} });
-check("GitBranchMenu 空态渲染无异常", !!out && typeof out === "object");
-callLog = [];
-out = comps.GitBranchMenu({ rect: { left: 20, top: 40 }, branches: { branches: [
-  { name: "main", isHead: true, upstream: null, track: "", trackParsed: null },
-  { name: "dev", isHead: false, upstream: "origin/dev", track: "[ahead 1]", trackParsed: { ahead: 1, behind: 0, gone: false } },
-] }, busy: false, name: "x", created: "dev", onName: () => {}, onCreate: () => {}, onSwitch: () => {}, onDelete: () => {}, onClose: () => {} });
-check("GitBranchMenu 列表渲染无异常", !!out && typeof out === "object");
-
-// —— 源码哨兵：SCM 面板分支按钮会被 .dshk-btn 的 26px 方钮定宽压扁（svg/分支名
-// 0 宽只剩 ▾）。反制必须带 .dshk-btn 复合选择器：基础类在根 UI_CSS、模块样式先注入，
-// 同特异度下基础类后生效，只写 width:auto 是不生效的（真机量到按钮恒 26px）
-{
-  const filesSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
-  check(
-    "分支按钮复合选择器提权 + width:auto + 图标不参与收缩",
-    filesSrc.includes(".dshk-btn.dshk-branchbtn{display:inline-flex;flex:0 0 auto;min-width:0;width:auto") &&
-      filesSrc.includes(".dshk-branchbtn>svg,.dshk-branchbtn .dshk-caret{flex:none}") &&
-      // 按钮不许收缩（flex:0 0 auto）+ 名段只留省略号：头部再怎么挤，分支名都按内容
-      // 取宽显示完整，只有超过 60% 上限的长名才截断
-      filesSrc.includes("gap:4px;max-width:60%;overflow:hidden") &&
-      filesSrc.includes(".dshk-branch-name{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"),
-  );
-  check(
-    "改宽度的钮一律带 .dshk-btn 复合选择器（根 UI_CSS 的 26px 定宽后注入）",
-    !/(?<![\w-])\.dshk-(branchbtn|textbtn)\{[^}]*width:auto/.test(filesSrc),
-  );
-  check(
-    "头部不摆「更新于」与 diff 自动跟随开关（三处都收回）",
-    !filesSrc.includes("scUpdated") && !filesSrc.includes("diffAutoFollow") && !filesSrc.includes("dshk-stalebar"),
-  );
-  check("分支按钮挂全名 title（省略号时悬停可见）", filesSrc.includes("title: data.detached === true ? t(\"scDetached\") : data.branch || \"\","));
-  // 键位整体改由宿主 shortcuts 服务持有（官方「快捷键」页）：本组件
-  // 不再有键位配置项（宿主 schema 同删），注册面见下方 apply 钉子
-  const hostSrc = fs.readFileSync(__dirname + "/../src/files/index.ts", "utf8");
-  check(
-    "键位配置项全退役（client 与宿主 schema 都不再有键位字段与录制控件）",
-    !filesSrc.includes("fileTreeShortcut") && !filesSrc.includes("scShortcut") && !filesSrc.includes("kcfgGroupShortcuts") &&
-      !filesSrc.includes('type: "combo"') && !hostSrc.includes("fileTreeShortcut") && !hostSrc.includes("scShortcut"),
-  );
-  check(
-    "git log 端点先探 HEAD 再带参（未出生不带 HEAD 跑，空库/孤儿分支不再误报图谱失败）",
-    hostSrc.includes("runGit(['rev-parse', '--verify', '--quiet', 'HEAD'], root)") && hostSrc.includes("...(h.ok ? ['HEAD'] : [])"),
-  );
-  // 两处入口钮的悬停改由 KitTip 出官方气泡，不再自带原生 title
-  check("入口钮的悬停不再自带原生 title（全走官方气泡）", !/dshk-enbtn"[\s\S]{0,120}?\n\s*title:/.test(filesSrc));
-  // 行内动作小钮同理：RowActionBtn / SCM 行钮都包 KitTip，行尾一排用 align:end 免得盖住相邻行
-  check(
-    "行内动作钮提示走官方气泡（源码哨兵：RowActionBtn 包 KitTip + align:end）",
-    /function RowActionBtn\(\{ title, onClick, children \}\) \{\s*return jsxRuntime\.jsx\(KitTip, \{\s*label: title,\s*align: "end",/.test(filesSrc) &&
-      !/jsxRuntime\.jsx\("button", \{ type: "button", title: t\("sc(Stage|Unstage|Discard)"\)/.test(filesSrc),
-  );
 }
 
 // —— 官方「工作区文件」入口掩码：规则与字段都住本组件（root 只留浏览器入口的同类规则）——
@@ -569,17 +236,13 @@ async function checkApply() {
   global.document = prevDoc;
   check("files apply 激活不抛错", applyErr === null);
   check(
-    "composer 不再挂文件树/源代码管理入口（已改左栏形态条），配置页仍走 slots.inject 等声明",
+    "composer 不再挂文件树入口（已改左栏形态条），配置页仍走 slots.inject 等声明",
     seatInjects.filter((k) => k === "conversation.input.left").length === 0 && seatInjects.filter((k) => k === "plugins.row.config").length === 1,
   );
   const form = (id) => dockExports.sideForms.find((e) => e && e.id === id);
   check(
     "形态条座席：文件树 order 20（组件指到本组件的入口）",
     !!form("dsh-kit-filetree") && form("dsh-kit-filetree").order === 20 && form("dsh-kit-filetree").Component === comps.FileTreeEntry,
-  );
-  check(
-    "形态条座席：源代码管理 order 30",
-    !!form("dsh-kit-scm") && form("dsh-kit-scm").order === 30 && form("dsh-kit-scm").Component === comps.ScmEntry,
   );
   const cfgKeys = registered.filter((s) => s.name === "plugins.row.config").map((s) => s.key);
   check("files 配置页挂本组件行（单包单口径 key）", cfgKeys.includes("dsh-kit#files") && cfgKeys.length === 1);
@@ -601,47 +264,41 @@ async function checkApply() {
       );
     })(),
   );
-  // 官方快捷键注册（不经自挂 keydown）：两条命令进官方「快捷键」页
+  // 官方快捷键注册（不经自挂 keydown）：文件树那条命令进官方「快捷键」页
   const sc = (id) => shortcutCmds.find((c) => c.id === id);
   const treeCmd = sc("dsh-kit-files.tree.toggle");
-  const scmCmd = sc("dsh-kit-files.scm.toggle");
-  check("files apply 向官方 shortcuts 注册文件树/源代码管理两条命令", !!treeCmd && !!scmCmd && typeof treeCmd.label === "function" && typeof scmCmd.label() === "string");
+  check("files apply 向官方 shortcuts 注册文件树命令", !!treeCmd && typeof treeCmd.label === "function");
   check(
     // 文件树 web 档是 Mod+Shift+,：宿主「打开设置」在 web 占 Mod+Alt+,，register 跨档查重会直接抛
-    "默认键：文件树 desktop Mod+Alt+, / web Mod+Shift+,，源代码管理两档都 Mod+Alt+.",
+    "默认键：文件树 desktop Mod+Alt+, / web Mod+Shift+,",
     treeCmd.defaults["desktop:windows"].code === "Comma" && String(treeCmd.defaults["desktop:windows"].modifiers) === "primary,alt" &&
     treeCmd.defaults["web:windows"].code === "Comma" && String(treeCmd.defaults["web:windows"].modifiers) === "primary,shift" &&
     treeCmd.defaults["web:macos"].modifiers[0] === "primary" && treeCmd.defaults["web:macos"].modifiers[1] === "shift" &&
-    scmCmd.defaults["web:windows"].code === "Period" && String(scmCmd.defaults["web:windows"].modifiers) === "primary,alt" &&
-    !!scmCmd.defaults["desktop:linux"] && ["page", "editable", "terminal"].every((r) => treeCmd.regions.includes(r)),
+    !!treeCmd.defaults["desktop:linux"] && ["page", "editable", "terminal"].every((r) => treeCmd.regions.includes(r)),
   );
-  // resolve 门控：组件配置在测试里未就绪 → 走内置默认（两个功能都开）→ handled
-  const before = JSON.stringify({ tree: dockExports.getKitUi().treeOpen, git: dockExports.getKitUi().gitOpen });
+  check("源代码管理那条命令整体退场", shortcutCmds.every((c) => c.id !== "dsh-kit-files.scm.toggle"));
+  // resolve 门控：组件配置在测试里未就绪 → 走内置默认（功能开）→ handled
+  const before = JSON.stringify({ tree: dockExports.getKitUi().treeOpen });
   const resolved = treeCmd.resolve({ region: "page", modal: null });
   if (resolved.status === "handled") resolved.run();
-  check("resolve 在功能开时 handled 且 run 切侧栏单槽", resolved.status === "handled" && dockExports.getKitUi().treeOpen === true && before !== JSON.stringify({ tree: dockExports.getKitUi().treeOpen, git: dockExports.getKitUi().gitOpen }));
+  check("resolve 在功能开时 handled 且 run 切侧栏单槽", resolved.status === "handled" && dockExports.getKitUi().treeOpen === true && before !== JSON.stringify({ tree: dockExports.getKitUi().treeOpen }));
   dockExports.setKitUi({ treeOpen: false });
   // 官方右栏不在场（全局面板在前台 / 没选会话）：索引视图与右栏同生灭，命令 blocked
   dockExports.rightbarSeat.set(false);
   const gatedTree = treeCmd.resolve({ region: "page", modal: null });
-  const gatedScm = scmCmd.resolve({ region: "page", modal: null });
   check(
-    "右栏不在场：文件树/源代码管理命令 blocked 带说明且不切侧栏",
-    gatedTree.status === "blocked" && ["当前不在对话中", "Not in a conversation"].includes(gatedTree.reason) && gatedScm.status === "blocked" && dockExports.getKitUi().treeOpen === false && dockExports.getKitUi().gitOpen === false,
+    "右栏不在场：文件树命令 blocked 带说明且不切侧栏",
+    gatedTree.status === "blocked" && ["当前不在对话中", "Not in a conversation"].includes(gatedTree.reason) && dockExports.getKitUi().treeOpen === false,
   );
   dockExports.rightbarSeat.set(true);
-  // 渲染器座：apply 后 root 单槽分发到 files 的 tree/git 分支
+  // 渲染器座：apply 后 root 单槽分发到 files 的文件树分支
   const renderer = dockExports.sidebarView.renderer;
   check("files apply 接管 sidebarView 渲染器座", typeof renderer === "function");
   callLog = [];
-  const gitOut = renderer({ ui: { gitOpen: true, treeOpen: false }, cwd: "C:/x", owner: { wide: true } });
-  const gitCall = callLog.find((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[1] === comps.GitChangesPanel);
-  check("渲染器座 gitOpen 分支出 GitChangesPanel（cwd 透传）", !!gitOut && !!gitCall && gitCall[2].cwd === "C:/x");
-  callLog = [];
-  const treeOut = renderer({ ui: { gitOpen: false, treeOpen: true }, cwd: "C:/y", owner: { wide: true } });
+  const treeOut = renderer({ ui: { treeOpen: true }, cwd: "C:/y", owner: { wide: true } });
   const treeCall = callLog.find((c) => (c[0] === "jsx" || c[0] === "jsxs") && c[1] === comps.FileTreePanel);
   check("渲染器座 treeOpen 分支出 FileTreePanel", !!treeOut && !!treeCall && treeCall[2].cwd === "C:/y");
-  check("渲染器座全关返回 null（让位知识库索引分支）", renderer({ ui: { gitOpen: false, treeOpen: false }, cwd: null, owner: {} }) === null);
+  check("渲染器座全关返回 null（让位知识库索引分支）", renderer({ ui: { treeOpen: false }, cwd: null, owner: {} }) === null);
   check("渲染器座收起态（wide=false）返回 null", renderer({ ui: { treeOpen: true }, cwd: null, owner: { wide: false } }) === null);
   // 键帽座跨包共享：files 注册期把宿主 shortcuts 目录挂上 kitBase 的共享座，
   // root 的 KitTip 因此读得到本组件命令当前生效的键（不是把默认键写死在按钮上）

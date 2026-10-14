@@ -14,9 +14,9 @@ stays a single tab). Workspace files are
 viewed through the **official file preview** (kit adds a "Download" button to its
 header); there is no in-plugin editing of workspace files — edit in VS Code or let
 the agent do it.
-Index views (file tree, source control, vault directory) share a single left-sidebar
-slot — a four-way **form switch** at its bottom-left (sessions / file tree / source
-control / knowledge base · schedule) picks which one that slot shows; the conversation
+Index views (file tree, vault directory) share a single left-sidebar slot — a three-way
+**form switch** at its bottom-left (sessions / file tree / knowledge base · schedule) picks
+which one that slot shows; the conversation
 column stays put. Every capability is a **component row** you can
 switch off independently on the Plugins page — turning a row off removes its endpoints,
 agent tools and UI entries together; with all rows off, dsh is stock again. The pack shows
@@ -34,12 +34,6 @@ from the page). It stays in the list: **do not turn it off**.
   create/rename/delete (to Recycle Bin)/copy path / @-mention to chat; clicking a file
   opens it in the **official right-sidebar preview**, while md pages inside the vault
   go to the knowledge-base editor
-- **Source control** (bottom-left form toggle / default **Ctrl+Alt+.**): an in-page git
-  workbench — stage/unstage/discard/commit, click a file to see its diff in a
-  right-dock diff tab (changed regions only, with line numbers and a side-by-side
-  toggle; open the whole file in the sidebar from its header), branch switch/create/delete,
-  ↑↓ sync (pull then push), commit graph (browse-only; hover a row for author/time/subject);
-  one-click repo init for non-git directories
 - **Knowledge base · Schedule** (one component row; the row switch is the master switch —
   turning it off removes the directory index, both dock tabs, the form toggle and the
   shortcut command together)
@@ -175,7 +169,7 @@ from the page). It stays in the list: **do not turn it off**.
   client loads history only for the current session, so a never-opened session's
   compaction is invisible). Notifications go through the browser Notification API; without
    permission no notification is shown (allow it in the site settings)
-- **Shortcuts**: four commands (terminal / file tree / source control / knowledge base) are
+- **Shortcuts**: three commands (terminal / file tree / knowledge base) are
   registered with the **host's shortcut page** (Ctrl+/) — pressing keys to record, conflict
   marking, per-device defaults and persistence all belong to the host; both sidebars toggle with
   the host's own keys (web: left Ctrl+Alt+B, right Ctrl+Shift+B). Rebind there, not in the plugin
@@ -200,8 +194,8 @@ from the page). It stays in the list: **do not turn it off**.
   off restores the official search); the **built-in browser row** covers "open chat links in
   the built-in browser" and "hide the official Browser entry" (row switch = master switch);
   the **usage & monitoring row** covers the balance chip
-  switch, monitor parameters, desktop notifications and OpenCode session-header injection; the **file tree · source control row**
-  covers the file-tree and source-control switches plus hiding the official Workspace Files
+  switch, monitor parameters, desktop notifications and OpenCode session-header injection; the **file tree row**
+  covers the file-tree switch plus hiding the official Workspace Files
   entry. The **terminal** and **skills** rows have no config field (the row switch is the only
   switch — turning it off hides the entry); the **runtime log row** has no config field either
   (its row switch is whether log files get written; the level still comes from the
@@ -231,8 +225,8 @@ dsh plugin --profile web update dsh-kit
 
 The package declares `dsh.bundle.patch`, so it is activated as a profile bundle
 layer. After installing/updating, restart `dsh web`: the composer tool row keeps a single
-Terminal toggle and a four-way form switch (sessions / file tree / source control /
-knowledge base · schedule) appears at the bottom-left of the left sidebar; the workbench
+Terminal toggle and a three-way form switch (sessions / file tree / knowledge base ·
+schedule) appears at the bottom-left of the left sidebar; the workbench
 is carried by the official right sidebar (dock tabs for diffs / vault / schedule /
 browser), and the agent's `web_search` uses the free multi-source chain.
 
@@ -245,14 +239,14 @@ the WebSocket base the host injects).
 
 - `src/*.ts` → `dist/` (committed tsc output): host side — file-tree
   (`/tree`, `/read`, `/raw`, `/fs/op`,
-  `/upload`, `/git/*`), skill-pool, vault (`/vault/*`), schedule (`/schedule/*`) and
+  `/upload`), skill-pool, vault (`/vault/*`), schedule (`/schedule/*`) and
   browser endpoints belong to their components; the `/vendor/*` static assets are
   registered by the component that uses them (xterm → terminal, qrcode → phone access,
   TipTap / KaTeX / mermaid / pdf.js → vault)
 - `client/bundle.js`: browser side (hand-written ModuleLoader bundle, **no build**) —
   the root package keeps only the cross-slot base (kitUi open/close state, the config-page
   skeleton, entry seats, the preview download button); the client halves of the file-tree /
-  source-control, terminal, skills, usage-monitor, web-search, built-in-browser,
+  terminal, skills, usage-monitor, web-search, built-in-browser,
   knowledge-base · schedule and phone-access components live in this same bundle as isolated component
   modules (right-bar pane bodies are served through `sidebar.right.pane.tab`, config pages
   through `plugins.row.config`; the terminal dock renders over the official
@@ -261,8 +255,7 @@ the WebSocket base the host injects).
   `src/vault`, `src/phone`: component boundaries as directories (0.5.3 single-package components — a component is a patch
   row, not a package) — `core` is the host shared library (same-origin check, recycle-bin
   delete, text decoding, dsh-tools loading, logging);
-  `files` serves tree/read/raw/fs-op/
-  git endpoints + file tree and source control panels; `skills` serves `/dsh-kit/skills` and
+  `files` serves tree/read/raw/fs-op endpoints + the file tree panel; `skills` serves `/dsh-kit/skills` and
   `/dsh-kit/skills/op` plus the `/dsh-kit-skills/config` probe (skill-pool manager page);
   `terminal` serves the `/dsh-kit-terminal/config` probe (terminal toggle and dock);
   `monitor` serves `/dsh-kit/usage` + usage chip / repetition guard / session

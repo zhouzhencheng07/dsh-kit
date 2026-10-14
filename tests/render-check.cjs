@@ -1,5 +1,5 @@
 // 渲染级验证：桩掉 react hooks，直接函数调用 dsh-kit 的组件
-// （KitSurfaces/FilePaneBody/TreeRowMenu 等根侧渲染体），跑完整渲染体。
+// （KitSurfaces/TreeRowMenu 等根侧渲染体），跑完整渲染体。
 // 组件各自的分册在 tests\render-check-<组件>.cjs（comps = dockExports.<组件>）。
 // 知识库/日程的行为级检查留在本文件：harness 末尾把 exports.vault 并进 comps，
 // 直测的就是组件里那一份代码（VaultRootView/VaultPagePane/ScheduleView/纯函数）；
@@ -113,7 +113,7 @@ const RETURN = "return module.exports;";
 const rootReturn = body.lastIndexOf(RETURN);
 if (rootReturn < 0) { console.log("FATAL: no root return"); process.exit(2); }
 const wrapper = body.slice(0, rootReturn) +
-  "return Object.assign({ KitSurfaces, SideFormBar, SideFormSessions, TreeRowMenu, closeFeatureTab, sidebarViewPatch, kitGetJson, kitPostJson, kitJson, setKitUi, FilePaneBody, openFileAndDock, closeRightbarTab, openOfficialFile, openTreeFile }, kitBase, exports.vault, exports.phone);" +
+  "return Object.assign({ KitSurfaces, SideFormBar, SideFormSessions, TreeRowMenu, closeFeatureTab, sidebarViewPatch, kitGetJson, kitPostJson, kitJson, setKitUi, closeRightbarTab, openOfficialFile, openTreeFile }, kitBase, exports.vault, exports.phone);" +
   body.slice(rootReturn + RETURN.length);
 const harness = new Function("require", wrapper);
 const reactDomStub = {
@@ -158,7 +158,7 @@ if (!baseOk) process.exitCode = 1;
 }
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["KitSurfaces", "TreeRowMenu", "RteEditor", "slashMenuBox", "bubbleBox", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "FilePaneBody", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksPanel", "SidebarVaultIndex", "openFileAndDock", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "vaultSelectionText", "resolveMdLink", "isDocHref"];
+const names = ["KitSurfaces", "TreeRowMenu", "RteEditor", "slashMenuBox", "bubbleBox", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksPanel", "SidebarVaultIndex", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "vaultSelectionText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -197,7 +197,7 @@ let copiedRel = null;
   const bar = comps.SideFormBar({ wide: true });
   const kids = bar ? bar.props.children : [];
   check(
-    "四枚按 order 排开（10 会话列表 → 20 文件树 → 30 源代码管理 → 40 知识库·日程）",
+    "按 order 排开（10 会话列表 → 20 文件树 → 40 知识库·日程）",
     !!bar && kids.length === 3 && kids[0].type === a.Component && kids[1].type === b.Component && kids[2].type === c.Component,
   );
   check("整条是带名字的按钮组（role=group + aria-label）", !!bar && bar.props.role === "group" && typeof bar.props["aria-label"] === "string" && bar.props.className === "dshk-sideforms");
@@ -207,20 +207,20 @@ let copiedRel = null;
   comps.sideForms.push(...saved);
   // 「会话列表」那枚（根形态）：选中态 = 当前没占任何 kit 形态；点了交回官方列表
   const sesBtnOf = (el) => sfWalk(el, (n) => n.type === "button")[0] ?? null;
-  comps.setKitUi({ treeOpen: false, gitOpen: false, vaultSideOpen: false });
+  comps.setKitUi({ treeOpen: false, vaultSideOpen: false });
   let sesBtn = sesBtnOf(comps.SideFormSessions({}));
   check(
     "会话列表那枚：没占任何形态时按下去（图标钮 + 官方气泡）",
     !!sesBtn && sesBtn.props.className === "dshk-sfbtn" && sesBtn.props["aria-pressed"] === true,
   );
-  comps.setKitUi({ treeOpen: true, gitOpen: false, vaultSideOpen: false });
+  comps.setKitUi({ treeOpen: true, vaultSideOpen: false });
   sesBtn = sesBtnOf(comps.SideFormSessions({}));
   check("文件树占着时它不亮", !!sesBtn && sesBtn.props["aria-pressed"] === false);
-  comps.setKitUi({ treeOpen: true, gitOpen: true, vaultSideOpen: true, vaultSideTab: "schedule" });
+  comps.setKitUi({ treeOpen: true, vaultSideOpen: true, vaultSideTab: "schedule" });
   sesBtnOf(comps.SideFormSessions({})).props.onClick();
   check(
     "点它 = 交回官方会话列表（三个形态全关）",
-    comps.getKitUi().treeOpen === false && comps.getKitUi().gitOpen === false && comps.getKitUi().vaultSideOpen === false,
+    comps.getKitUi().treeOpen === false && comps.getKitUi().vaultSideOpen === false,
   );
   // 接线哨兵：整条挂 sidebar.footer.action，根形态那枚在 apply 期登记
   check(
@@ -258,9 +258,9 @@ check(
 check("知识库 · 日程的快捷键说明用组件行名", /scVault: "知识库 · 日程"/.test(src) && /scVault: "Vault · Schedule"/.test(src));
 // 7.0) 侧栏那格单槽互斥（sidebarViewPatch 纯补丁语义；入口按钮交互在 files 组件直测）
 const svp = comps.sidebarViewPatch("vault");
-check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultSideOpen === true && svp.vaultSideTab === "vault" && svp.treeOpen === false && svp.gitOpen === false);
+check("sidebarViewPatch 单槽互斥：只亮指定位", svp.vaultSideOpen === true && svp.vaultSideTab === "vault" && svp.treeOpen === false);
 const svpSched = comps.sidebarViewPatch("schedule");
-check("日程与知识库同占侧栏那一格（vaultSideOpen 亮、槽内切 tab）", svpSched.vaultSideOpen === true && svpSched.vaultSideTab === "schedule" && svpSched.treeOpen === false && svpSched.gitOpen === false);
+check("日程与知识库同占侧栏那一格（vaultSideOpen 亮、槽内切 tab）", svpSched.vaultSideOpen === true && svpSched.vaultSideTab === "schedule" && svpSched.treeOpen === false);
 // 「哪张签激活」归官方签表，kitUi 不再存激活位。后台任务无插件分支：官方会话
 // 头部自带任务清单 + 实时输出 + 停止
 check("kitUi 不再存激活位（官方签表才是唯一事实）", comps.getKitUi().activeFeature === undefined);
@@ -276,9 +276,6 @@ check("在日程 tab 上点入口钮：收整格（tab 切换只走 tab 条）",
 // 7.1c) 右栏资源地址（一内容一签的载体）：条目 ↔ 地址往返，query 归 diff 源用
 const vAddr = comps.rightbarAddress("vault", "D:/v/a b.md");
 check("知识库页地址：dsh-resource 前缀 + 编码条目", vAddr === "dsh-resource://dshk-vault/D%3A%2Fv%2Fa%20b.md" && comps.rightbarItem("vault", vAddr) === "D:/v/a b.md");
-const dAddr = comps.rightbarAddress("file", "C:/x/a.js", "d=1");
-check("diff 地址：query 跟着地址走（同一文件不同 diff 源是两张签）", dAddr.startsWith("dsh-resource://dshk-diff/C%3A%2Fx%2Fa.js?") && comps.rightbarItem("file", dAddr) === "C:/x/a.js" && comps.rightbarQuery("file", dAddr) === "d=1");
-check("非本 feature 的地址回 null（不串类）", comps.rightbarItem("vault", dAddr) === null && comps.rightbarItem("file", "dsh-resource://file/x") === null);
 check("空条目不给地址", comps.rightbarAddress("vault", "") === "");
 
 stateSeq = 0;
@@ -307,28 +304,6 @@ check("timerMinsOfDT：取 HH:mm 折当日分钟", comps.timerMinsOfDT("2026-09-
 
 // 7.2.2a) 文件签的文档签条已退役：一个文件一张官方签（地址往返见 7.1c）
 
-// 7.2.4e) 右栏 pane 正文组件：一个内容一张签，正文只渲染自己那张签
-// （地址由官方签条给出：tabAddress 读 tab.contentId）
-const tabProps = (address) => ({ useTabInfo: () => ({ tab: { id: "t1", contentId: address, visible: true } }) });
-callLog = [];
-// DiffPane 在 dsh-kit/files 组件：root 只从 kitBase 的 diffPane 座取（物化期挂上）。
-// 桩环境手动挂一枚假组件，钉住「正文类型确实来自座」——座没接线时类型是 undefined
-// （真机 React #130 白屏，桩渲染器不抛，只能这样钉）
-const fakeDiff = function FakeDiff() {};
-comps.diffPane.Component = fakeDiff;
-const diffAddr = comps.rightbarAddress("file", "C:/x/b.md", "u=1");
-out = comps.FilePaneBody(tabProps(diffAddr));
-const fpDiffs = callLog.filter((c) => (c[0] === "jsx") && c[1] === fakeDiff && c[2] && typeof c[2].path === "string");
-check("FilePaneBody 一文件一签：只渲染自己那张签的 diff（未跟踪标志从地址 query 取）", !!out && fpDiffs.length === 1 && fpDiffs[0][2].path === "C:/x/b.md" && fpDiffs[0][2].untracked === true);
-check("FilePaneBody 不再自绘第二层签条", callLog.every((c) => !(c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-tab"))));
-comps.diffPane.Component = null;
-callLog = [];
-out = comps.FilePaneBody(tabProps(comps.rightbarAddress("file", "C:/x/b.md")));
-const fpPlain = callLog.filter((c) => (c[0] === "jsx") && c[1] === null && c[2] && typeof c[2].path === "string");
-check("无 query 标志即普通工作区 diff（untracked/deleted 为假）", fpPlain.length === 1 && fpPlain[0][2].untracked === false && fpPlain[0][2].deleted === false);
-out = comps.FilePaneBody(tabProps(""));
-check("地址认不出（别的页类型/没落地址）→ 不渲染正文", out === null);
-callLog = [];
 out = comps.SchedulePaneBody({});
 check("SchedulePaneBody 挂 ScheduleView（右栏只出网格，清单在侧栏）", !!out && callLog.some((c) => c[1] === comps.ScheduleView));
 callLog = [];
@@ -365,13 +340,11 @@ const timingRows = callLog.filter((c) => c[2] && typeof c[2].className === "stri
 check("计时中：顶部挂走秒状态、挂表那一行亮起", runningBadges.length === 1 && /\d\d:\d\d/.test(String(runningBadges[0][2].children)) && timingRows.length === 1);
 stateSeq = 0;
 stateStore.clear();
-// openFileAndDock / openVaultPageAndDock：签归官方签表，这里断言「开出来的地址对不对」
+// openVaultPageAndDock：签归官方签表，这里断言「开出来的地址对不对」
 // （桩环境无右栏服务 → 只看地址映射，见 7.1c 的往返断言）
-comps.openFileAndDock("C:/x/new.js", false, true);
-check("openFileAndDock 不再往 kitUi 写激活位", comps.getKitUi().activeFeature === undefined);
 comps.openVaultPageAndDock("D:/v/p.md");
 check("openVaultPageAndDock 同样不写激活位", comps.getKitUi().activeFeature === undefined);
-// 6.5b) 官方右栏可用时机（rightbarSeat）：树/源代码管理/知识库三个工作区面与全部
+// 6.5b) 官方右栏可用时机（rightbarSeat）：文件树/知识库工作区面与全部
 // 开签动作跟官方右栏同生灭——全局面板（插件页/设置页）占住中栏或没选会话时收手。
 // 两路信号：layout.panelInfo 回落源先测（mounted 一旦挂上就首选，无退订 API），
 // 再挂 mounted 验首选关系。断言后恢复在场，后面用例按默认态跑。
@@ -397,8 +370,6 @@ check("openVaultPageAndDock 同样不写激活位", comps.getKitUi().activeFeatu
   check("mounted 变 undefined（没选会话 / 全局面板在前台）＝不在场", seat.available === false);
   check("useRightbarSeat 读的就是这份在场状态（KitSurfaces 据此重绘）", comps.useRightbarSeat() === false);
   comps.setKitUi({ activeFeature: null });
-  comps.openFileAndDock("C:/x/gated.js", true, false);
-  check("不在场：openFileAndDock 不激活差异", comps.getKitUi().activeFeature !== "file");
   comps.openVaultPageAndDock("D:/v/gated.md");
   check("不在场：openVaultPageAndDock 不激活知识库", comps.getKitUi().activeFeature !== "vault");
   mountedVal = "session-1";
@@ -411,7 +382,7 @@ check("openVaultPageAndDock 同样不写激活位", comps.getKitUi().activeFeatu
   const occupant = src.indexOf('slotsCtx.slots.register({ name: "sidebar.workspaces", priority: -1000 }');
   check(
     "侧栏工作区面板在位门控（不在场不占 sidebar.workspaces，让回官方会话列表）",
-    occupant > 0 && /if \(!slotsCtx \|\| !rightbarUp \|\| \(!ui\.treeOpen && !ui\.gitOpen && !ui\.vaultSideOpen\)\) return undefined;/.test(src) && src.includes("[ui.treeOpen, ui.gitOpen, ui.vaultSideOpen, cwd, rightbarUp]"),
+    occupant > 0 && /if \(!slotsCtx \|\| !rightbarUp \|\| \(!ui\.treeOpen && !ui\.vaultSideOpen\)\) return undefined;/.test(src) && src.includes("[ui.treeOpen, ui.vaultSideOpen, cwd, rightbarUp]"),
   );
   const fnAt = src.indexOf("function openOfficialFile(path, line) {");
   const gateAt = src.indexOf("if (!rightbarSeat.available) return false;", fnAt);
@@ -1400,7 +1371,7 @@ let vaultFetchPrev = null;
   // Esc 一律没有环境级行为：root 壳不认这个键（同一个键既收插件界面又触发宿主手势——
   // 终端里 ESC 与坞一起收、跑回复时顺手关页签）。浮层自己开着时的 Esc 各自持有。
   check("Esc 无环境级行为（root 不挂全局 Esc、无让路座与全局关签件）", !src.includes("closeActiveRightbarTab") && !src.includes("activeRightbarFeature") && !src.includes("dock.vaultSearch") && !src.includes("else if (getKitUi().termDockOpen) setKitUi({ termDockOpen: false });"));
-  check("浮层自己的 Esc 仍在（树行菜单/分支菜单/对话框持有）", src.includes('if (e.key === "Escape") onClose();') && (src.match(/if \(e\.key === "Escape"\) onClose\(\);/g) ?? []).length === 2 && /if \(e\.key === "Escape"\) \{\s*\n\s*e\.stopPropagation\(\);\s*\n\s*onClose\(\);/.test(src));
+  check("浮层自己的 Esc 仍在（树行菜单与对话框持有）", src.includes('if (e.key === "Escape") onClose();') && (src.match(/if \(e\.key === "Escape"\) onClose\(\);/g) ?? []).length === 1 && /if \(e\.key === "Escape"\) \{\s*\n\s*e\.stopPropagation\(\);\s*\n\s*onClose\(\);/.test(src));
   check("读页上下文提交后发布（渲染期通知订阅者）+ 空页表用常量", src.includes("react.useEffect(() => {\n        const refreshIndex = () => void loadIndex();") && src.includes("?? VAULT_EMPTY_PAGES"));
   check("反链 memo 依赖稳定（每次渲染现造 [] 会让 useMemo 恒不命中）", src.includes("const backlinks = react.useMemo(() => vaultBacklinks(indexPages ?? [], path), [indexPages, path]);"));
   check("树路径按 root 的分隔符拼（缓存键/展开态/知识集目录换算同一口径）", src.includes("return rel === \"\" ? base : absJoinUnder(base, rel);") && src.includes("const ksCurrentAbs = headKs;"));
@@ -1522,10 +1493,6 @@ let vaultFetchPrev = null;
 // 最久没看的那张标签）；重开已存在文件置顶激活不逐出自身
 // 7.2.3) diff 签的 LRU 与来源标记随「地址 query」走：上限 3 张、超限逐出最久没看、
 // 未跟踪/已删各是不同地址（=不同签）。签表归官方，这里只钉地址映射
-const diffAddrOf = (p, q) => comps.rightbarAddress("file", p, q);
-check("未跟踪 diff：地址带 u=1", comps.rightbarQuery("file", diffAddrOf("C:/x/gone.js", "u=1")) === "u=1");
-check("已删 diff：地址带 d=1", comps.rightbarQuery("file", diffAddrOf("C:/x/gone.js", "d=1")) === "d=1");
-check("同文件不同 diff 源是两张签（地址不同）", diffAddrOf("C:/x/gone.js", "u=1") !== diffAddrOf("C:/x/gone.js") && diffAddrOf("C:/x/hist.js") !== diffAddrOf("C:/x/other.js"));
 comps.setKitUi({ terminals: [], activeTermId: null, termDockOpen: false });
 callLog = [];
 out = comps.KitSurfaces({});
@@ -1624,8 +1591,8 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
   const enDesc = JSON.parse(fs.readFileSync(__dirname + "/../locale/en.json", "utf8")).meta.description;
   check(
     "卡片描述按同一顺序枚举十个组件（zh/en 同序）",
-    inOrder(zhDesc, ["文件树·源代码管理", "对话小窗", "知识库·日程", "终端", "浏览器", "技能", "手机访问", "用量与监视", "网页搜索", "运行日志"]) &&
-      inOrder(enDesc, ["File tree & SCM", "chat window", "vault & schedule", "terminal", "browser", "skills", "phone access", "usage & monitor", "web search", "runtime logs"]),
+    inOrder(zhDesc, ["文件树", "对话小窗", "知识库·日程", "终端", "浏览器", "技能", "手机访问", "用量与监视", "网页搜索", "运行日志"]) &&
+      inOrder(enDesc, ["File tree", "chat window", "vault & schedule", "terminal", "browser", "skills", "phone access", "usage & monitor", "web search", "runtime logs"]),
   );
 }
 
@@ -1688,10 +1655,9 @@ check("入口钮的悬停不再自带原生 title（全走官方气泡）", !/ds
 // 正向钉住见 tests\render-check-terminal.cjs（comps = dockExports.terminal）
 
 // 至少渲染出来 JSX 元素（说明走到 render 而非静默 null）。根壳（KitSurfaces）只做座位
-// 门控、恒返回 null，这里用右栏 diff 正文（座组件）确认 JSX 真走到 render。
+// 门控、恒返回 null，这里用日程清单面板确认 JSX 真走到 render。
 callLog = [];
-comps.diffPane.Component = fakeDiff;
-comps.FilePaneBody(tabProps(comps.rightbarAddress("file", "D:/w/a.md")));
+comps.ScheduleTasksPanel({});
 check("渲染体实际产出元素", callLog.length > 0);
 // 收尾结算放进 setTimeout：6.9c 里 ↻ 刷新的目录树重拉排在 await loadIndex()
 // 之后的微任务里，同步段看不到；微任务先于定时器清空，此刻断言才成立
