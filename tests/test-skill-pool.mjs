@@ -6,8 +6,8 @@
 //       选定后一切挂载都去那儿）、
 //       git 体检（写忽略 / 已进仓库内容 409 → 搬到本地根或仅从仓库移除 / 非仓库也写）、
 //       建链接与断链（池里的本体绝不被删被改）、失效链接可见、删除链接条目被拒；
-//       版本记录（只给池技能）：建仓与一条基线首版、改内容不自动提交、有意提交直接可用、
-//       池根自己不建仓（不做池级单一仓库）；
+//       池技能各自的仓库（只给池技能）：建仓与一条基线首版、改内容不自动提交、
+//       池根自己不建仓（不做池级单一仓库）、版本操作不在端点上（看历史去本机应用）；
 //       池的边界：技能只有移动（copy 不是操作）、入池原地留链接（平铺 .md 包成同名目录）、
 //       出池断掉所有工作区的链接且不带版本记录、目标与源同一处被拒、删除本体先断链。
 // 用法：node tests\test-skill-pool.mjs [baseUrl]（需 dev 环境在跑，默认 http://127.0.0.1:3081）
@@ -402,75 +402,20 @@ try {
   check("版本：改内容不会自动提交（拉过列表、等两秒半仍只有基线那一条）", countCommits(verDir) === 1, countCommits(verDir));
   check("版本：改动就躺在工作区里（未提交可见）", git(verDir, ["status", "--porcelain"]).stdout.includes("SKILL.md"));
 
-  // 13.3 面板记一版：提交信息由人/agent 给（空信息拒绝），作者是本仓身份，无改动不空提交
-  const hist0 = await bodyOf(await opIn(proj, { op: "history", src: verDir }));
-  check(
-    "版本：history 回状态（一条基线、未提交 1 个文件、带改动文件名）",
-    hist0.ok === true &&
-      hist0.git.commits.length === 1 &&
-      hist0.git.dirty === 1 &&
-      hist0.git.commits[0].subject === "auto: 初始记录" &&
-      hist0.git.commits[0].names.includes("SKILL.md"),
-    JSON.stringify(hist0.git).slice(0, 200),
-  );
-  res = await opIn(proj, { op: "commit", src: verDir, message: "   " });
-  check("版本：提交信息为空 → 400（历史的信息量就靠它）", res.status === 400 && (await bodyOf(res)).error === "commit-failed");
-  res = await opIn(proj, { op: "commit", src: verDir, message: "改进：补一条说明" });
-  const committed = await bodyOf(res);
-  check(
-    "版本：按给定的提交信息记一版",
-    res.status === 200 &&
-      committed.committed === true &&
-      committed.git.commits.length === 2 &&
-      committed.git.commits[0].subject === "改进：补一条说明",
-    JSON.stringify(committed.git?.commits?.map((c) => c.subject)),
-  );
-  check(
-    "版本：提交作者是仓库里的 dsh-kit（没动全局配置）",
-    git(verDir, ["log", "-1", "--pretty=%an <%ae>"]).stdout.trim() === "dsh-kit <dsh-kit@localhost>",
-  );
-  check("版本：正文自动带上这次改动的文件", git(verDir, ["log", "-1", "--pretty=%b"]).stdout.includes("SKILL.md"));
-  res = await opIn(proj, { op: "commit", src: verDir, message: "再记一次" });
-  check("版本：没有改动 → 不产生空提交", res.status === 200 && (await bodyOf(res)).committed === false);
-  check("版本：这时历史两条", countCommits(verDir) === 2, countCommits(verDir));
+  // 13.3 仓库与基线备好了，历史改在本机应用里看：版本操作整体退出端点
+  for (const gone of ["history", "commit", "rollback"]) {
+    const res2 = await opIn(proj, { op: gone, src: verDir, message: "改进：补一条说明", sha: "abcdef1" });
+    check("版本：" + gone + " 不再是端点操作（400 未知操作）", res2.status === 400 && (await bodyOf(res2)).error === "未知操作");
+  }
 
-  // 13.4 回滚：恢复内容 + 记一条新提交（历史不重写）；未提交的改动必须明确"一起丢掉"
-  const baselineSha = hist0.git.commits[0].sha;
-  fs.appendFileSync(verFile, "\n<!-- 不要了的改动 -->\n");
-  res = await opIn(proj, { op: "rollback", src: verDir, sha: baselineSha });
-  check("版本：有未提交改动时先拒（400 dirty）", res.status === 400 && (await bodyOf(res)).error === "dirty");
-  res = await opIn(proj, { op: "rollback", src: verDir, sha: baselineSha, discard: true });
-  const rolled = await bodyOf(res);
-  const verText = fs.readFileSync(verFile, "utf8");
-  check(
-    "版本：确认丢掉后回滚 200 且内容恢复成那次提交的样子",
-    res.status === 200 && rolled.ok === true && rolled.changed === true && !verText.includes("不要了的改动") && !verText.includes("等一个有意提交"),
-    JSON.stringify(rolled).slice(0, 160),
-  );
-  check(
-    "版本：回滚记一条新提交、主题标明退回到哪一版",
-    rolled.git.commits.length === 3 &&
-      rolled.git.commits[0].subject.startsWith(`回滚到 ${baselineSha.slice(0, 7)}`) &&
-      rolled.git.commits[0].subject.includes("初始记录"),
-    rolled.git.commits.map((c) => c.subject),
-  );
-  res = await opIn(proj, { op: "rollback", src: verDir, sha: rolled.git.commits[0].sha });
-  check("版本：回滚到当前版本 → 无变化", res.status === 200 && (await bodyOf(res)).changed === false);
-  res = await opIn(proj, { op: "rollback", src: verDir, sha: "not-a-sha" });
-  check("版本：提交号非法 → 400 rollback-failed", res.status === 400 && (await bodyOf(res)).error === "rollback-failed");
-
-  // 13.5 只管池里的技能：工作区技能不给版本记录
-  res = await opIn(proj, { op: "history", src: path.join(proj, ".dsh", "skills", "proj-kit") });
-  check("版本：工作区里的技能 → 400 not-in-pool", res.status === 400 && (await bodyOf(res)).error === "not-in-pool");
-
-  // 13.6 池内的写入类操作也不再顺手提交（禁用/启用改的是池里的本体，提交留给人决定）
+  // 13.4 池内的写入类操作也不再顺手提交（禁用/启用改的是池里的本体，提交留给人决定）
   const beforeDisable = countCommits(verDir);
   res = await opIn(proj, { op: "disable", src: verDir, disabled: true });
   check("版本：池技能禁用 200", res.status === 200);
   check("版本：禁用这类写入也不自动提交（历史条数不变）", countCommits(verDir) === beforeDisable, countCommits(verDir));
   await opIn(proj, { op: "disable", src: verDir, disabled: false });
 
-  // 13.7 平铺 .md 只当文件（单文件放不了 .git），也不会被当成技能目录
+  // 13.5 平铺 .md 只当文件（单文件放不了 .git），也不会被当成技能目录
   fs.writeFileSync(path.join(POOL, "flat-ver.md"), "---\nname: flat-ver\ndescription: 平铺版本测试\n---\nbody\n");
   await new Promise((r) => setTimeout(r, 2000));
   check(

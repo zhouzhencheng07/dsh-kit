@@ -1,12 +1,12 @@
-// 技能池的版本记录：每个池技能一个自己的 git 仓库；插件只自动记一条基线，之后由人或
-// agent 带着有效的提交信息有意提交，面板负责列出历史、写提交信息提交、看某次改动、回滚。
+// 技能池的版本：每个池技能一个自己的 git 仓库。插件只做两件事——进池（或启动时发现
+// 手工放进来的）建仓，并记一条**基线**（进池时的状态）；之后的提交、看改动、回滚都在
+// 本机应用里做（池分组头的「在应用里打开」把池目录交给它），插件不重复一套界面。
 //
-// **不做自动提交**：被改一下就记一条，题目只可能是「同步技能内容」，看不出改了什么；
-// 改技能本来是低频的有意动作（效果不理想才让 agent 改），历史很快被同题目的提交淹掉，
-// 真要退的时候反而挑不出该退到哪。所以只有第一次见到这个技能时记一条**基线**
-// （进池时的状态），其余提交都由人/agent 写清"这次改了什么"。
+// **不替用户提交**：被改一下就自动记一条，题目只可能是「同步技能内容」，看不出改了什么；
+// 改技能本来是低频的有意动作，历史很快被同题目的提交淹掉，真要退的时候反而挑不出该退到哪。
+// 插件只把仓库和起点备好，其余是用户的事。
 //
-// 为什么只给池里的技能做：池是跨工作区共用的**本体**，一次坏改动（agent 或手滑）会同时
+// 为什么只给池里的技能备仓库：池是跨工作区共用的**本体**，一次坏改动（agent 或手滑）会同时
 // 影响所有挂载它的工作区；工作区/用户级的技能归各自的仓库或用户自己管，本模块不碰。
 //
 // 边界与契约：
@@ -15,10 +15,7 @@
 //     提交别人的代码。
 //   - 身份与开关只写进该技能仓库自己的 .git/config（dsh-kit / dsh-kit@localhost、
 //     关闭签名与自动 gc），绝不动用户全局 git 配置，也不要求用户配过 user.name——
-//     面板提交、用户直接 `git commit` 都因此开箱可用。
-//   - 回滚 = 把工作树整树恢复成某次提交的样子（`read-tree --reset -u`，多出来的文件一并
-//     删掉）再记一条**新提交**：历史不重写，回滚本身也能再回滚。未提交的改动会随恢复
-//     一起丢掉，所以要调用方明确带上 discard 才执行。
+//     用户直接 `git commit` 因此开箱可用。
 //   - 出池（移动到工作区/用户级）时调用方负责不带上这个仓库：项目仓库里冒出嵌套仓库，
 //     `git add` 只会记一条 gitlink，技能内容反而进不了项目仓库。
 //   - 平铺 `.md` 建不了仓（单文件没有目录放 .git），跳过。
@@ -31,37 +28,10 @@ import { kitLogger } from '../core/log.ts'
 
 const log = kitLogger('skills')
 
-const LOG_LIMIT = 30
 const SUBJECT_BASELINE = 'auto: 初始记录'
 const BODY_BASELINE = '进入技能池时的状态；之后的提交由人或 agent 有意为之'
-/** 提交信息上限（第一行当主题，其余当正文） */
-const MESSAGE_MAX = 2000
 /** 撞 index.lock 时的重试间隔（用户自己的 git 命令通常几百毫秒内就结束） */
 const LOCK_RETRY_MS = [400, 1200, 2500]
-
-export interface PoolGitCommit {
-  sha: string
-  short: string
-  /** 提交时间（epoch 秒） */
-  time: number
-  subject: string
-  files: number
-  insertions: number
-  deletions: number
-  /** 这次提交涉及的文件（相对技能目录），可点开看该文件的改动 */
-  names: string[]
-}
-
-export interface PoolGitState {
-  available: boolean
-  init: boolean
-  /** init=false 的原因：no-git | not-a-dir | init-failed */
-  reason?: string
-  /** 未提交的文件数（插件不会自己提交，等一次有意提交） */
-  dirty: number
-  last: { sha: string; short: string; time: number; subject: string } | null
-  commits: PoolGitCommit[]
-}
 
 interface CommitResult {
   ok: boolean
@@ -178,50 +148,6 @@ function parseStatus(out: string): string[] {
   return names
 }
 
-/** log 解析：\x01 起一条记录，首行 sha/时间/主题，随后是 numstat */
-function parseLog(out: string): PoolGitCommit[] {
-  const commits: PoolGitCommit[] = []
-  for (const chunk of out.split('\u0001')) {
-    const text = chunk.replace(/^\s+/, '')
-    if (text === '') continue
-    const lines = text.split(/\r?\n/)
-    const head = lines[0]!.split('\u001f')
-    const sha = head[0] ?? ''
-    if (!/^[0-9a-f]{7,40}$/i.test(sha)) continue
-    let files = 0
-    let insertions = 0
-    let deletions = 0
-    const names: string[] = []
-    for (const row of lines.slice(1)) {
-      const cols = row.split('\t')
-      if (cols.length < 3) continue
-      files++
-      if (cols[0] !== '-') insertions += Number(cols[0]) || 0
-      if (cols[1] !== '-') deletions += Number(cols[1]) || 0
-      names.push(cols.slice(2).join('\t').trim())
-    }
-    commits.push({
-      sha,
-      short: sha.slice(0, 7),
-      time: Number(head[1]) || 0,
-      subject: (head[2] ?? '').trim(),
-      files,
-      insertions,
-      deletions,
-      names,
-    })
-  }
-  return commits
-}
-
-async function readLog(skillDir: string): Promise<PoolGitCommit[]> {
-  const log = await runGit(
-    ['-c', 'core.quotepath=false', 'log', `-n${LOG_LIMIT}`, '--numstat', '--pretty=format:\u0001%H\u001f%at\u001f%s'],
-    skillDir,
-  )
-  return log.ok ? parseLog(log.out) : []
-}
-
 async function statusNames(skillDir: string): Promise<string[]> {
   const status = await runGit(['-c', 'core.quotepath=false', 'status', '--porcelain'], skillDir)
   return status.ok ? parseStatus(status.out) : []
@@ -272,21 +198,6 @@ async function commitLocked(skillDir: string, subject: string, body?: string): P
   return { ok: false, committed: false, error: last || 'git commit 失败' }
 }
 
-/**
- * 把面板/agent 给的提交信息整理成 subject + body：第一行当主题（截到 200 字），其余当正文。
- * 空信息直接判非法——提交信息是这套版本记录唯一的信息来源，不能又变成机器生成的空话。
- */
-export function splitCommitMessage(raw: string): { ok: boolean; subject?: string; body?: string; error?: string } {
-  const text = raw.replace(/\r\n/g, '\n').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').trim()
-  if (text === '') return { ok: false, error: '提交信息不能为空：写清这次改了什么' }
-  if (text.length > MESSAGE_MAX) return { ok: false, error: `提交信息太长了（上限 ${MESSAGE_MAX} 字）` }
-  const lines = text.split('\n')
-  const subject = (lines[0] ?? '').trim()
-  if (subject === '') return { ok: false, error: '提交信息第一行不能为空' }
-  const body = lines.slice(1).join('\n').trim()
-  return { ok: true, subject: subject.slice(0, 200), body }
-}
-
 /** 还没有历史就记一条基线（进池时的状态）；已有历史立刻返回，不做任何提交 */
 export async function ensurePoolBaseline(skillDir: string): Promise<void> {
   if (!isSkillDir(skillDir)) return
@@ -327,7 +238,7 @@ let chain: Promise<void> = Promise.resolve()
 
 /**
  * 给池里还没有基线的技能补一遍（串行——同时起几十个 git 没必要）。
- * 启动时跑一次；面板打开某个技能的版本面板时，那个技能自己补（见 poolGitState）。
+ * 启动时跑一次；经面板搬进池的技能由 move 分支当场补。
  *
  * 读技能**列表**不碰 git：那里每拉一次就为每个池技能起两个 git 进程，而 git 子进程的
  * CWD 正是技能目录——Windows 上会短暂锁住它，紧接着的出池/删除就会 EPERM（实测踩到）。
@@ -338,70 +249,4 @@ export function ensurePoolBaselines(poolDir: string): Promise<void> {
   })
   chain = run.catch(() => undefined)
   return run
-}
-
-/** 读版本状态：顺带把基线补上（打开面板这个动作本身就是"要看历史"的表示） */
-export async function poolGitState(skillDir: string): Promise<PoolGitState> {
-  const empty: PoolGitState = { available: true, init: false, dirty: 0, last: null, commits: [] }
-  if (!isDir(skillDir)) return { ...empty, reason: 'not-a-dir' }
-  if (!(await gitAvailable())) return { ...empty, available: false, reason: 'no-git' }
-  await ensurePoolBaseline(skillDir)
-  if (!(await isOwnRepo(skillDir))) return { ...empty, reason: 'init-failed' }
-  const commits = await readLog(skillDir)
-  const dirtyNames = await statusNames(skillDir)
-  const head = commits[0]
-  return {
-    available: true,
-    init: true,
-    dirty: dirtyNames.length,
-    last: head ? { sha: head.sha, short: head.short, time: head.time, subject: head.subject } : null,
-    commits,
-  }
-}
-
-/** 记一版：提交信息由人或 agent 给（空信息拒绝，见 splitCommitMessage） */
-export async function poolGitCommit(skillDir: string, message: string): Promise<CommitResult> {
-  const parsed = splitCommitMessage(message)
-  if (!parsed.ok || typeof parsed.subject !== 'string') {
-    return { ok: false, committed: false, error: parsed.error ?? '提交信息非法' }
-  }
-  const subject = parsed.subject
-  const body = parsed.body
-  if (!isDir(skillDir)) return { ok: false, committed: false, error: '技能目录不存在' }
-  return withSkillLock(skillDir, () => commitLocked(skillDir, subject, body))
-}
-
-/**
- * 回滚到某次提交：整树恢复成那次提交的样子，再记一条新提交（历史不重写）。
- * 未提交的改动会被恢复动作覆盖，所以没带 discard 时先拒绝，让调用方明确"就是不要了"。
- */
-export async function poolGitRollback(
-  skillDir: string,
-  sha: string,
-  discard: boolean,
-): Promise<{ ok: boolean; changed: boolean; dirty: number; error?: string }> {
-  if (!/^[0-9a-f]{7,40}$/i.test(sha)) return { ok: false, changed: false, dirty: 0, error: '提交号非法' }
-  if (!isDir(skillDir)) return { ok: false, changed: false, dirty: 0, error: '技能目录不存在' }
-  return withSkillLock(skillDir, async () => {
-    const ready = await ensureRepo(skillDir)
-    if (!ready.ok) return { ok: false, changed: false, dirty: 0, error: ready.error ?? '仓库不可用' }
-    const dirty = (await statusNames(skillDir)).length
-    if (dirty > 0 && discard !== true) {
-      return { ok: false, changed: false, dirty, error: `有 ${dirty} 个文件没提交：回滚会连同它们一起丢掉` }
-    }
-    const head = await runGit(['rev-parse', 'HEAD'], skillDir)
-    const target = await runGit(['rev-parse', '--verify', '--quiet', `${sha}^{commit}`], skillDir)
-    if (!target.ok) return { ok: false, changed: false, dirty, error: '找不到这次提交' }
-    const full = target.out.trim()
-    if (head.ok && head.out.trim() === full) return { ok: true, changed: false, dirty }
-    // read-tree --reset -u：索引与工作树一起恢复成目标树（多出来的文件会被删掉）
-    const tree = await runGit(['read-tree', '--reset', '-u', full], skillDir)
-    if (!tree.ok) return { ok: false, changed: false, dirty, error: tree.err.trim() || 'git read-tree 失败' }
-    const back = await runGit(['log', '-1', '--pretty=%s', full], skillDir)
-    const targetSubject = back.ok ? back.out.trim() : ''
-    const subject = targetSubject === '' ? `回滚到 ${full.slice(0, 7)}` : `回滚到 ${full.slice(0, 7)}：${targetSubject}`
-    const commit = await commitLocked(skillDir, subject.slice(0, 200), `恢复成 ${full.slice(0, 7)} 时的内容`)
-    if (!commit.ok) return { ok: false, changed: true, dirty, error: commit.error ?? '回滚后的提交失败' }
-    return { ok: true, changed: commit.committed, dirty }
-  })
 }

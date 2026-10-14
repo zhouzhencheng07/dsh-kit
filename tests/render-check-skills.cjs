@@ -89,68 +89,63 @@ const comps = dockExports.skills;
 
 check("skills 导出 apply（client 插件形状）与 inject 声明 slots", typeof comps.apply === "function" && Array.isArray(comps.inject) && comps.inject[0] === "slots");
 check(
-  "skills 导出面齐全（管理页/技能行/版本面板/端点调用/探针取值）",
-  [comps.SkillsManager, comps.SkillRow, comps.SkillGitPanel, comps.fetchSkillsPage, comps.cfgFromSnapshot].every((fn) => typeof fn === "function"),
+  "skills 导出面齐全（管理页/技能行/池目录按钮/端点调用/探针取值）",
+  [comps.SkillsManager, comps.SkillRow, comps.OpenPoolButton, comps.openInAppName, comps.fetchSkillsPage, comps.cfgFromSnapshot].every(
+    (fn) => typeof fn === "function",
+  ),
 );
 
-// —— 版本面板（池技能）：状态行 + 写提交信息记一版 + 提交列表 + 看改动 + 回滚 ——
-{
-  // diff 正文座是文件组件物化期挂的；这里手工摆上，验证"文件片点开看改动"这条接线
-  dockExports.diffPane.Component = function FakeDiff() {};
-  const nowSec = Math.floor(Date.now() / 1000);
-  const shaA = "abcdef1234567890abcdef1234567890abcdef12";
-  const shaB = "1234567890abcdef1234567890abcdef12345678";
-  const fakeGit = {
-    available: true,
-    init: true,
-    dirty: 1,
-    dirtyNames: ["SKILL.md"],
-    last: { sha: shaA, short: "abcdef1", time: nowSec - 120, subject: "改进：把触发条件写清楚" },
-    commits: [
-      { sha: shaA, short: "abcdef1", time: nowSec - 120, subject: "改进：把触发条件写清楚", files: 1, insertions: 2, deletions: 1, names: ["SKILL.md"] },
-      { sha: shaB, short: "1234567", time: nowSec - 86400 * 2, subject: "auto: 初始记录", files: 2, insertions: 5, deletions: 0, names: ["SKILL.md", "references/a.md"] },
-    ],
-  };
-  const renderPanel = (seed) => {
-    stateSeq = 0;
-    stateStore.clear();
-    callLog = [];
-    stateStore.set(0, fakeGit); // SkillGitPanel 的第一个 useState 就是版本状态
-    for (const [id, value] of Object.entries(seed ?? {})) stateStore.set(Number(id), value);
-    return comps.SkillGitPanel({ skill: { path: "C:/pool/hello-kit" }, cwd: "C:/x" });
-  };
-  const btn = (labels) => callLog.find((c) => c[0] === "jsx" && c[1] === "button" && labels.includes(c[2].children));
-  const textOf = (re) => callLog.some((c) => typeof c[2]?.children === "string" && re.test(c[2].children));
-
-  const panel = renderPanel();
-  check("版本面板渲染无异常", !!panel && typeof panel === "object");
+// —— 池目录的「在应用里打开」：走宿主 open-in-app 路由，且与官方共用同一份记忆 ——
+async function checkOpenInApp() {
+  // 应用名：官方 open-in-app 词典优先；词典里没有该条目时退回 id（按钮不至于空白）
+  const dict = { translate: (ns, key) => (ns === "open-in-app" && key === "app.editor" ? "编辑器" : key) };
+  check("应用名取官方 open-in-app 词典", comps.openInAppName("editor", dict) === "编辑器");
   check(
-    "版本面板：状态行含已记录 / 上次提交 / 未提交改动",
-    textOf(/已记录 2|commits 2/) && textOf(/未提交|uncommitted/),
-    JSON.stringify(callLog.filter((c) => c[2] && c[2].className === "dshk-sk-desc").map((c) => c[2].children)),
+    "词典里没有该条目时退回 id",
+    comps.openInAppName("other", dict) === "other" && comps.openInAppName("other", null) === "other",
   );
-  const shas = callLog.filter((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-sk-sha").map((c) => c[2].children);
-  check("版本面板：逐条列出提交（提交号）", shas.length === 2 && shas[0] === "abcdef1" && shas[1] === "1234567", shas);
-  check("版本面板：提交主题直显（人写的，不再是机器空话）", textOf(/改进：把触发条件写清楚/) && textOf(/auto: 初始记录/));
-  check("版本面板：给出「记一版」入口（提交信息由人写）", !!btn(["记一版", "Record"]));
-  check("版本面板：回滚钮在（二次确认在点击后）", !!btn(["回滚", "Roll back"]));
-  const files = callLog.filter((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-sk-file").map((c) => c[2].children);
-  check("版本面板：每次提交列出改动文件（可点开看改动）", files.includes("SKILL.md") && files.includes("references/a.md"), files);
 
-  // composing（第 5 个 useState）＝ 输入态：给提交信息框 + 提交钮
-  renderPanel({ 4: true, 5: "改进：xxx" });
-  const input = callLog.find((c) => c[0] === "jsx" && c[1] === "input" && c[2].className === "dshk-sk-input");
-  check("版本面板：输入态给提交信息框（初值回显）", !!input && input[2].value === "改进：xxx");
-  check("版本面板：输入态给提交钮", !!btn(["提交", "Commit"]));
+  // 宿主三路由：可用应用 / 图标 / 启动
+  const calls = [];
+  global.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    if (String(url).endsWith("/open-in-app/apps")) {
+      return { ok: true, status: 200, json: async () => ({ apps: ["editor", "explorer"] }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  };
+  const apps = await comps.fetchOpenApps(undefined);
+  check("可用应用取宿主 /open-in-app/apps", calls[0].url === "/open-in-app/apps" && apps.length === 2, apps);
+  await comps.openDirInApp("editor", "C:/pool");
+  const launched = calls[calls.length - 1];
+  const sent = JSON.parse(launched.init.body);
+  check(
+    "启动走宿主 /open-in-app/open（带 app 与目录绝对路径）",
+    launched.url === "/open-in-app/open" && sent.app === "editor" && sent.path === "C:/pool",
+    sent,
+  );
 
-  // confirmSha（第 7 个 useState）＝ 二次确认态
-  renderPanel({ 6: shaA });
-  check("版本面板：回滚二次确认（确认回滚？）", !!btn(["确认回滚？", "Confirm rollback?"]));
+  // 上次选的应用落在官方同一个 localStorage 键上（会话头部那枚也读它）
+  comps.writeOpenAppChoice("editor");
+  check("应用选择写在官方同一个键上", String(global.localStorage.getItem("dsh.open-in-app.choice")) === '"editor"');
+  check("读回上次选择", comps.readOpenAppChoice() === "editor");
+  global.localStorage.setItem("dsh.open-in-app.choice", "{oops");
+  check("记录坏掉时按没选过处理（于是回退第一个可用应用）", comps.readOpenAppChoice() === "");
 
-  // pick（第 8 个 useState）＝ 展开某次提交里某个文件的 diff
-  renderPanel({ 7: { sha: shaA, name: "SKILL.md" } });
-  const box = callLog.find((c) => c[0] === "jsx" && c[2] && c[2].className === "dshk-sk-diffbox");
-  check("版本面板：点文件展开该次提交的 diff（走 diff 座）", !!box && box[2].children.type === dockExports.diffPane.Component);
+  // 组件：有可用应用就摆按钮，主键用上次选的那个，图标走宿主路由
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  comps.writeOpenAppChoice("explorer");
+  const box = comps.OpenPoolButton({ dir: "C:/pool" });
+  check("池目录按钮渲染无异常", !!box && typeof box === "object");
+  const icons = callLog.filter((c) => c[1] === "img").map((c) => String(c[2].src));
+  check("主键用上次选的应用（图标走宿主路由）", icons[0] === "/open-in-app/icon/explorer", icons);
+  check(
+    "主键带应用名、另有 ▾ 展开全部可用应用",
+    callLog.some((c) => c[1] === "span" && c[2].children === "explorer") &&
+      !!callLog.find((c) => c[1] === "button" && c[2].children === "▾"),
+  );
 }
 
 // —— 技能管理页渲染：无 cwd 与有 cwd；头部刷新走官方气泡 ——
@@ -201,7 +196,7 @@ check(
   check("池技能行：没有复制（技能一律只移动）", !btn(["复制", "Copy"]));
   check("池技能行：被工作区挂着时不给移动（要移出先让各挂载方卸载）", !btn(["移动", "Move"]));
   check("池技能行：挂载数可见（被几个工作区挂着）", textOf(/^(挂载|Mounted in) 2$/));
-  check("池技能行：给「版本」入口（历史 + 写提交信息）", !!btn(["版本", "Versions"]));
+  check("池技能行：不再有版本入口（历史改在本机应用里看）", !btn(["版本", "Versions"]));
 
   // 没人挂的池技能仍可移动；moveAsk 是 SkillRow 的第三个 useState（id 2）：直接喂出确认态
   const poolFree = { ...poolSkill, mounts: 0 };
@@ -226,7 +221,7 @@ check(
 
   renderRow({ name: "local", root: "project-dsh", path: "C:/x/.dsh/skills/local" }, "workspace");
   check("非池实体行：给移动、没有复制（技能一律只移动）", !!btn(["移动", "Move"]) && !btn(["复制", "Copy"]));
-  check("非池实体行：不给版本入口（版本记录只给池里的技能）", !btn(["版本", "Versions"]));
+  check("非池实体行：也没有版本入口（只有池里的技能各自带仓库）", !btn(["版本", "Versions"]));
 
   // 进池方向同样先确认（本体交出去共用 / 用户级来源不再全局可见）
   stateSeq = 0;
@@ -323,19 +318,33 @@ async function checkApply() {
   check("组件入口挂技能池端点与行可达性探针", compSrc.includes("applySkillPool") && compSrc.includes("/dsh-kit-skills/config"));
   check("技能页样式随组件自带（.dshk-sk 只在组件 CSS 块出现一次）", bundleSrc.includes("SKS_CSS") && bundleSrc.split(".dshk-sk{").length - 1 === 1);
   check(
-    "版本面板走宿主版本端点（history/commit/rollback，提交带 message、回滚带 discard）",
-    ["history", "commit", "rollback"].every((op) => bundleSrc.includes(`op: "${op}"`)) &&
-      bundleSrc.includes("message }") &&
-      bundleSrc.includes("discard: discard === true"),
+    "池目录按钮走宿主 open-in-app 三路由，选择写官方同一个键",
+    bundleSrc.includes('"/open-in-app/apps"') &&
+      bundleSrc.includes("/open-in-app/icon/") &&
+      bundleSrc.includes('"/open-in-app/open"') &&
+      bundleSrc.includes('"dsh.open-in-app.choice"'),
   );
-  check("版本入口只挂在池技能行（工作区/用户级行不给）", bundleSrc.includes("isPool && gitOpen"));
+  check("一个应用都没探到时不摆按钮", bundleSrc.includes('if (app === "") return null;'));
+  check(
+    "版本面板整体退场（客户端组件与宿主 history/commit/rollback 都不在）",
+    !bundleSrc.includes("SkillGitPanel") &&
+      !poolSrc.includes("poolGitState") &&
+      !poolSrc.includes("body.op === 'history'") &&
+      !poolSrc.includes("poolGitCommit"),
+  );
   check("技能只有移动（源里没有复制按钮/词条，宿主不再认 copy 操作）", !bundleSrc.includes("skCopy") && poolSrc.includes("body.op === 'move'") && !poolSrc.includes("body.op === 'copy'"));
   check("平铺 .md 进池：包成同名目录再挂回来（池挂不住单个文件）", poolSrc.includes("const wrap = destRoot.id === 'pool' && flatMd") && !poolSrc.includes("'flat-skill'"));
   check("池行显示挂载数（宿主列表带 mounts）", bundleSrc.includes("skill.mounts") && poolSrc.includes("mountCounts[path.basename(skill.path)]"));
   const poolGitSrc = fs.readFileSync(__dirname + "/../src/skills/pool-git.ts", "utf8");
-  check("池版本记录：只给池里的技能做（组件入口按池目录补基线）", compSrc.includes("ensurePoolBaselines(defaultPoolDir())"));
-  check("池版本记录：身份只写技能自己的仓库、基线主题写明初始记录", poolGitSrc.includes("'config', '--local'") && poolGitSrc.includes("'auto: 初始记录'"));
-  check("池版本记录：不做自动提交、不挂 fs.watch（提交是有意识动作）", !poolGitSrc.includes("fs.watch") && !poolGitSrc.includes("'auto: 同步技能内容'"));
+  check("池仓库：只给池里的技能备（组件入口按池目录补基线）", compSrc.includes("ensurePoolBaselines(defaultPoolDir())"));
+  check("池仓库：身份只写技能自己的仓库、基线主题写明初始记录", poolGitSrc.includes("'config', '--local'") && poolGitSrc.includes("'auto: 初始记录'"));
+  check(
+    "池仓库：不替用户提交、不挂 fs.watch（历史在本机应用里看）",
+    !poolGitSrc.includes("fs.watch") &&
+      !poolGitSrc.includes("'auto: 同步技能内容'") &&
+      !poolGitSrc.includes("poolGitCommit") &&
+      !poolGitSrc.includes("poolGitRollback"),
+  );
   check("出池不带版本记录（.git 不进工作区根）与断链登记表都在宿主", poolSrc.includes("detachPoolLinks") && poolSrc.includes("skipRepo"));
   const mountSrc = fs.readFileSync(__dirname + "/../src/skills/mount.ts", "utf8");
   check(
@@ -348,7 +357,7 @@ async function checkApply() {
   check("选定后一切挂载都去那儿（另一根只当搬出载体根时的落点）", mountSrc.includes("state.otherDir") && mountSrc.includes("export function setCarrier"));
 }
 
-checkEndpoint().then(checkApply).then(() => {
+checkOpenInApp().then(checkEndpoint).then(checkApply).then(() => {
   console.log(failed === 0 ? "\nALL PASS (render-check skills)" : "FAILED: " + failed);
   process.exit(failed === 0 ? 0 : 1);
 });

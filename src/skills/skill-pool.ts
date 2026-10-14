@@ -15,7 +15,7 @@
 //       技能（只读展示）、失效链接清单、以及载体根状态 mount。
 //   POST /dsh-kit/skills/op   body 为 JSON：
 //       {op:'move',  src, dest, overwrite?}   搬到目标根（dest=物理根 id）。技能只有移动、
-//                                             没有复制（副本与本体分叉，版本记录失去意义）：
+//                                             没有复制（副本与本体会各自漂移）：
 //                                             进池 = 本体入池 + 原地留链接（平铺 .md 包成同名
 //                                             目录再挂——池靠目录链接挂载，挂不住一个文件），
 //                                             出池 = 先断掉所有挂载链接再搬本体（不带 .git）
@@ -26,10 +26,6 @@
 //                                             体检载体根：处理已进仓库的内容 + 写忽略
 //       {op:'mount', src}                     在载体根建指向池技能的链接（并登记挂载点）
 //       {op:'unmount', src}                   断链（池里的本体不动）
-//       {op:'history', src}                   池技能的历史（提交列表 + 未提交改动；顺带补基线）
-//       {op:'commit', src, message}           按给定提交信息记一版（空信息拒绝，无改动不提交）
-//       {op:'rollback', src, sha, discard?}   回滚到某次提交（恢复内容 + 记一条新提交）；
-//                                             有未提交改动时必须带 discard:true
 //       同名冲突回 409 {error:'conflict'}，客户端确认后带 overwrite:true 重发；
 //       载体根有已进仓库的内容时回 409 {error:'tracked', tracked:[...]}。
 //
@@ -65,7 +61,7 @@ import { dshHome, kitPath } from '../core/data-path.ts'
 import { kitLogger } from '../core/log.ts'
 
 const log = kitLogger('skills')
-import { ensurePoolBaseline, poolGitCommit, poolGitRollback, poolGitState } from './pool-git.ts'
+import { ensurePoolBaseline } from './pool-git.ts'
 import { parseFrontmatter } from './frontmatter.ts'
 
 const POOL_DIRNAME = 'skill-pool'
@@ -720,53 +716,6 @@ export function applySkillPool(ctx: KitCtx, hooks?: SkillPoolHooks): void {
                 syncMounts(defaultPoolDir(), [{ poolSkillDir: located.path, project: projectDirs.projectRoot, link: mounted.path }])
               }
               jsonOf(res, 200, { ok: true, op: 'mount', path: mounted.path, mount: await computeMountState(projectDirs) })
-              return
-            }
-
-            // ── 池技能的版本记录（每技能一仓；提交信息由人或 agent 给，见 ./pool-git.ts）──
-            if (body.op === 'history' || body.op === 'commit' || body.op === 'rollback') {
-              const located = locateInside(roots, body.src)
-              if (!located || !directChildOnly(located)) {
-                jsonOf(res, 400, { error: '源不是白名单根下的技能条目' })
-                return
-              }
-              if (located.root.id !== 'pool') {
-                jsonOf(res, 400, { error: 'not-in-pool', message: '只有技能池里的技能做版本记录' })
-                return
-              }
-              if (body.op === 'history') {
-                jsonOf(res, 200, { ok: true, op: 'history', git: await poolGitState(located.path) })
-                return
-              }
-              if (body.op === 'commit') {
-                const result = await poolGitCommit(located.path, typeof body.message === 'string' ? body.message : '')
-                if (!result.ok) {
-                  jsonOf(res, 400, {
-                    error: 'commit-failed',
-                    message: result.error ?? '提交失败',
-                    git: await poolGitState(located.path),
-                  })
-                  return
-                }
-                jsonOf(res, 200, { ok: true, op: 'commit', committed: result.committed, git: await poolGitState(located.path) })
-                return
-              }
-              const rolled = await poolGitRollback(
-                located.path,
-                typeof body.sha === 'string' ? body.sha : '',
-                body.discard === true,
-              )
-              if (!rolled.ok) {
-                jsonOf(res, 400, {
-                  // dirty = 有未提交改动，客户端确认"一起丢掉"后带 discard 重发
-                  error: rolled.dirty > 0 ? 'dirty' : 'rollback-failed',
-                  message: rolled.error ?? '回滚失败',
-                  dirty: rolled.dirty,
-                  git: await poolGitState(located.path),
-                })
-                return
-              }
-              jsonOf(res, 200, { ok: true, op: 'rollback', changed: rolled.changed, git: await poolGitState(located.path) })
               return
             }
 
