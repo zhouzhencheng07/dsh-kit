@@ -198,27 +198,34 @@ check(
   const poolSkill = { name: "hello-kit", root: "pool", path: "C:/home/.dsh/skill-pool/hello-kit", mounts: 2, description: "共享技能" };
   const row = renderRow(poolSkill, "pool");
   check("池技能行渲染无异常", !!row && typeof row === "object");
-  check("池技能行：只有移动、没有复制", !btn(["复制", "Copy"]) && !!btn(["移动", "Move"]));
+  check("池技能行：没有复制（技能一律只移动）", !btn(["复制", "Copy"]));
+  check("池技能行：被工作区挂着时不给移动（要移出先让各挂载方卸载）", !btn(["移动", "Move"]));
   check("池技能行：挂载数可见（被几个工作区挂着）", textOf(/^(挂载|Mounted in) 2$/));
   check("池技能行：给「版本」入口（历史 + 写提交信息）", !!btn(["版本", "Versions"]));
 
-  // moveAsk 是 SkillRow 的第三个 useState（id 2）：直接喂出确认态
+  // 没人挂的池技能仍可移动；moveAsk 是 SkillRow 的第三个 useState（id 2）：直接喂出确认态
+  const poolFree = { ...poolSkill, mounts: 0 };
+  renderRow(poolFree, "pool");
+  check("没人挂的池技能：给移动", !!btn(["移动", "Move"]));
   stateSeq = 0;
   stateStore.clear();
   callLog = [];
   stateStore.set(2, { dest: "project-dsh" });
-  comps.SkillRow({ skill: poolSkill, groupId: "pool", allRoots: ROOTS, cwd: "C:/x", busy: false, runOp: () => {}, picker: null, setPicker: () => {} });
+  comps.SkillRow({ skill: poolFree, groupId: "pool", allRoots: ROOTS, cwd: "C:/x", busy: false, runOp: () => {}, picker: null, setPicker: () => {} });
   check(
-    "池技能行：移出池前要确认（说清会断掉别的工作区的链接）",
-    textOf(/移出技能池|Move out of the skill pool/) && textOf(/别的工作区不再有它|other workspaces lose it/) && !!btn(["确认移动", "Confirm move"]),
+    "池技能行：移出池前要确认（说清池里不再有它、版本记录不跟走）",
+    textOf(/移出技能池|Move out of the skill pool/) && textOf(/池里不再有它|leaves the pool/) && textOf(/版本记录也不会跟着走|version history kept there/) && !!btn(["确认移动", "Confirm move"]),
   );
 
   const linkSkill = { name: "hi", root: "project-agents", path: "C:/x/.agents/skills/hi", link: true, linkInPool: true };
   renderRow(linkSkill, "workspace");
-  check("池挂载链接行：只有移动（不给复制、不给禁用），另给卸载", !btn(["复制", "Copy"]) && !btn(["禁用", "Disable"]) && !!btn(["卸载", "Unmount"]));
+  check(
+    "池挂载链接行：不给移动（要动先卸载）、不给复制、不给禁用，另给卸载",
+    !btn(["移动", "Move"]) && !btn(["复制", "Copy"]) && !btn(["禁用", "Disable"]) && !!btn(["卸载", "Unmount"]),
+  );
 
   renderRow({ name: "local", root: "project-dsh", path: "C:/x/.dsh/skills/local" }, "workspace");
-  check("非池实体行：也没有复制（技能一律只移动）", !btn(["复制", "Copy"]));
+  check("非池实体行：给移动、没有复制（技能一律只移动）", !!btn(["移动", "Move"]) && !btn(["复制", "Copy"]));
   check("非池实体行：不给版本入口（版本记录只给池里的技能）", !btn(["版本", "Versions"]));
 
   // 进池方向同样先确认（本体交出去共用 / 用户级来源不再全局可见）

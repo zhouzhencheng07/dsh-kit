@@ -2480,9 +2480,9 @@ ellipsis，窄列只截字不破版 */
       skAgoDay: "天前",
       skMountCount: "挂载",
       skNoMount: "未挂载",
-      skMountCountTip: "这个池技能被几个工作区挂着（登记表记的）。移动或删除本体时会把它们一并断掉",
+      skMountCountTip: "这个池技能被几个工作区挂着（登记表记的）。删除本体时会一并断掉它们",
       skMoveOutAsk: "移出技能池？",
-      skMoveOutTip: "本体搬到目标根，别的工作区不再有它（挂载链接会被断开），版本记录也不再跟随",
+      skMoveOutTip: "本体搬到目标根，池里不再有它；池里那份版本记录也不会跟着走",
       skMoveInAsk: "移入技能池？",
       skMoveInTip: "本体搬进池里共用，本工作区自动挂回来；以后改动立即对所有挂载它的工作区生效",
       skMoveInTipUser: "从用户级搬进池后不再全局可见：要用的工作区得各自挂载它",
@@ -2582,9 +2582,9 @@ ellipsis，窄列只截字不破版 */
       skAgoDay: "d ago",
       skMountCount: "Mounted in",
       skNoMount: "Not mounted",
-      skMountCountTip: "How many workspaces mount this pool skill (from the mount registry). Moving or deleting the pool copy unlinks them all",
+      skMountCountTip: "How many workspaces mount this pool skill (from the mount registry). Deleting the pool copy unlinks them all",
       skMoveOutAsk: "Move out of the skill pool?",
-      skMoveOutTip: "The pool copy moves to the target root: other workspaces lose it (their links are removed) and the version history stops following it",
+      skMoveOutTip: "The pool copy moves to the target root and leaves the pool; the version history kept there does not travel with it",
       skMoveInAsk: "Move into the skill pool?",
       skMoveInTip: "The copy moves into the pool and this workspace gets a link back; later edits take effect in every workspace mounting it",
       skMoveInTipUser: "Moving a user-level skill into the pool makes it no longer global: each workspace has to mount it",
@@ -3057,9 +3057,10 @@ ellipsis，窄列只截字不破版 */
       // 影响所有挂载它的工作区，要禁用请到池那一组去操作
       const isLink = skill.link === true;
       const isPool = groupId === "pool";
-      // 动到池的移动（本体或挂载点，或目标就是池）要先确认
-      const touchesPool = isPool || isLink;
       const mountCount = typeof skill.mounts === "number" ? skill.mounts : 0;
+      // 挂载关系上的技能不给移动：挂载点要动先卸载，被工作区挂着的池技能要移出也
+      // 得先把各挂载方卸载——一次点击就断掉别的工作区的链接太容易误伤
+      const canMove = !isLink && !(isPool && mountCount > 0);
       const isUserSource = typeof skill.root === "string" && skill.root.startsWith("user-");
 
       const startPicker = () => setPicker(pickerOpen ? null : skill.path);
@@ -3075,7 +3076,7 @@ ellipsis，窄列只截字不破版 */
       };
       const pickDest = (rootId) => {
         setPicker(null);
-        if (touchesPool || rootId === "pool") {
+        if (isPool || rootId === "pool") {
           setMoveAsk({ dest: rootId });
           return;
         }
@@ -3134,7 +3135,9 @@ ellipsis，窄列只截字不破版 */
                         children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => runOp({ op: "mount", src: skill.path, cwd }), children: t("skMount") }),
                       })
                     : null,
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: startPicker, children: t("skMove") }),
+                  canMove
+                    ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: startPicker, children: t("skMove") })
+                    : null,
                   // 版本记录只给池里的技能（池是本体所在地，坏改动影响所有挂载方）
                   isPool
                     ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setGitOpen((v) => !v), children: t("skGit") })
