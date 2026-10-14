@@ -42,9 +42,10 @@ export declare function readFolderRefs(dirAbs: string): string[];
 /** 一个目录是不是知识集（标记文件存在即算） */
 export declare function isKnowledgeSet(dirAbs: string): boolean;
 /** 写一个知识集的挂载清单（**全量写回**——挂载 / 移除都由调用方拼好整张清单）。
- *  嵌套冲突时报错；refs 为空也照写（「标记了但还没挂资料」是合法状态），取消标记走
- *  unmarkFolder。**标记**动作要求目录非空（已标记的只更新清单，内容删光也还是知识集）。
- *  tmp + rename 原子落盘。 */
+ *  **允许嵌套**（与桌面端同口径）：目录树本来就能把集套进集里，每一层各挂各的清单；
+ *  refs 为空也照写（「标记了但还没挂资料」是合法状态），取消标记走 unmarkFolder。
+ *  **标记**动作要求目录非空（已标记的只更新清单，内容删光也还是知识集）。tmp + rename
+ *  原子落盘。 */
 export declare function setFolderRefs(root: string, dirAbs: string, refs: unknown): void;
 /** 取消知识集：删标记文件（清单随之消失，资料实物不动） */
 export declare function unmarkFolder(root: string, dirAbs: string): void;

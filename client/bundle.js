@@ -8134,14 +8134,14 @@ ellipsis，窄列只截字不破版 */
         const lib = isLibPath(entry.path);
         const atLibRoot = libRoot !== null && entry.path === libRoot;
         const extraItems = [];
-        // 知识集：普通目录可设（祖先已是知识集的不再给——嵌套没有语义；空目录没有
-        // 「进入」的意义，置灰不给设）；已是知识集的给「添加资料…」与「取消」
+        // 知识集：普通目录可设（空目录没有「进入」的意义，置灰不给设）；已是知识集的
+        // 给「添加资料…」与「取消」——允许嵌套，父子各挂各的清单
         if (!lib && entry.dir === true) {
           const ksRefs = ksRefsOf(entry.path);
           if (ksRefs !== null) {
             extraItems.push({ key: "ksadd", label: t("vaultKsAdd"), run: () => startAdding(entry.path) });
             extraItems.push({ key: "ksunmark", label: t("vaultKsUnmark"), run: () => setDialog({ kind: "unmark", entry }) });
-          } else if (ksAncestorOf(entry.path) === null) {
+          } else {
             extraItems.push({ key: "ksset", label: t("vaultKsSet"), disabled: dirHasChildren(entry.path) !== true, title: t("vaultKsEmptyDir"), run: () => markFolderKs(entry.path) });
           }
         }

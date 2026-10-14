@@ -149,7 +149,8 @@ export function isLibraryRoot(root: string, target: string): boolean {
 // 标记与清单存在**目录体内的隐藏文件** .refs.json（存在 = 是知识集，内容 = 挂载清单）：
 // 跟着目录生死，改名 / 移动 / 删除都不用单独维护；扫描只收 .md，点前缀文件不进索引。
 // 清单里存的是库内 rel（相对 library/、正斜杠）；资料实物在 library/ 里只存一份，
-// 多个知识集挂同一本书就是多条 ref 指向同一个 rel。嵌套知识集没有语义（下面拦）。
+// 多个知识集挂同一本书就是多条 ref 指向同一个 rel。允许嵌套（每一层各挂各的清单，
+// 呈现按「最近的一层」走），与桌面端同口径。
 
 /** 知识集标记文件名 */
 export const REFS_FILE = '.refs.json'
@@ -212,49 +213,16 @@ function dirHasContent(dirAbs: string): boolean {
   return false
 }
 
-/** 嵌套检查：祖先链上已有标记、或自己的子树里已有标记都算冲突。
- *  返回冲突目录相对 vault 根的 rel（正斜杠）；没有冲突返 null。 */
-function nestedConflict(rootReal: string, dirAbs: string): string | null {
-  let cur = path.dirname(dirAbs)
-  while (cur !== rootReal) {
-    if (relUnderRoot(rootReal, cur) === null) break
-    if (isKnowledgeSet(cur)) return relUnderRoot(rootReal, cur) ?? ''
-    const parent = path.dirname(cur)
-    if (parent === cur) break
-    cur = parent
-  }
-  const stack = [dirAbs]
-  while (stack.length > 0) {
-    const dir = stack.pop()
-    if (dir === undefined) continue
-    let entries: fs.Dirent[]
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true })
-    } catch {
-      continue
-    }
-    for (const ent of entries) {
-      if (!ent.isDirectory()) continue
-      if (ent.name.startsWith('.') || REFS_SKIP_DIRS.has(ent.name)) continue
-      const sub = path.join(dir, ent.name)
-      if (isKnowledgeSet(sub)) return relUnderRoot(rootReal, sub) ?? ''
-      stack.push(sub)
-    }
-  }
-  return null
-}
-
 /** 写一个知识集的挂载清单（**全量写回**——挂载 / 移除都由调用方拼好整张清单）。
- *  嵌套冲突时报错；refs 为空也照写（「标记了但还没挂资料」是合法状态），取消标记走
- *  unmarkFolder。**标记**动作要求目录非空（已标记的只更新清单，内容删光也还是知识集）。
- *  tmp + rename 原子落盘。 */
+ *  **允许嵌套**（与桌面端同口径）：目录树本来就能把集套进集里，每一层各挂各的清单；
+ *  refs 为空也照写（「标记了但还没挂资料」是合法状态），取消标记走 unmarkFolder。
+ *  **标记**动作要求目录非空（已标记的只更新清单，内容删光也还是知识集）。tmp + rename
+ *  原子落盘。 */
 export function setFolderRefs(root: string, dirAbs: string, refs: unknown): void {
   const rootReal = fs.realpathSync(root)
   const dir = resolveInside(root, dirAbs, { allowRoot: true })
   if (dir === rootReal) throw new Error('知识库根不能设为知识集')
   if (!fs.statSync(dir).isDirectory()) throw new Error('落点不是文件夹')
-  const clash = nestedConflict(rootReal, dir)
-  if (clash !== null) throw new Error(`知识集不能嵌套：${clash} 已经是知识集`)
   if (!isKnowledgeSet(dir) && !dirHasContent(dir)) throw new Error('空目录不能设为知识集')
   const doc = { dir: relUnderRoot(rootReal, dir) ?? '', refs: cleanRefs(refs) }
   const tmp = path.join(dir, `${REFS_FILE}.${process.pid}.tmp`)

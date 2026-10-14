@@ -371,16 +371,23 @@ await test('知识集：cleanRefs 与桌面端同口径 + 标记写 .refs.json +
   assert.equal(listKnowledgeSets(root).some((s) => s.dir === '课'), true)
 })
 
-await test('知识集：空目录 / 嵌套 / 库根都拒；unmark 删标记（资料实物不动）', () => {
+await test('知识集：允许嵌套；空目录 / 库根都拒；unmark 删标记（资料实物不动）', () => {
   write('课2/子/页.md', '# 页')
   const ke2 = path.join(root, '课2')
   const zi = path.join(root, '课2', '子')
-  setFolderRefs(root, zi, [])
-  // 子树里已有标记：从祖先设也拒（嵌套没有语义）
-  assert.throws(() => setFolderRefs(root, ke2, []), /知识集不能嵌套/)
+  setFolderRefs(root, zi, ['书.pdf'])
+  // 嵌套：含知识集的父目录照样能自己标记，两层清单互不干扰
+  setFolderRefs(root, ke2, ['别的.pdf'])
+  assert.equal(isKnowledgeSet(zi), true)
+  assert.deepEqual(readFolderRefs(zi), ['书.pdf'])
+  assert.deepEqual(readFolderRefs(ke2), ['别的.pdf'])
+  const dirs = listKnowledgeSets(root).map((s) => s.dir)
+  assert.equal(dirs.includes('课2'), true)
+  assert.equal(dirs.includes('课2/子'), true)
   unmarkFolder(root, zi)
   assert.equal(exists('课2/子/.refs.json'), false)
   assert.equal(exists('课2/子/页.md'), true)
+  unmarkFolder(root, ke2)
   const empty = path.join(root, '空课')
   fs.mkdirSync(empty)
   assert.throws(() => setFolderRefs(root, empty, []), /空目录/)
