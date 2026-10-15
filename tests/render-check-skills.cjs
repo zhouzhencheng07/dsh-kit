@@ -74,6 +74,10 @@ const primStub = {
   SegmentedTabs: jsxPrim("dsw-segmented-tabs"),
   Tag: jsxPrim("dsw-tag"),
   Tooltip: jsxPrim("dsw-tooltip"),
+  Menu: jsxPrim("dsw-menu"),
+  IconChevronDownOutlineRegular: jsxPrim("dsw-icon-chevron-down"),
+  IconRightUpOutlineRegular: jsxPrim("dsw-icon-right-up"),
+  IconFolderOpenOutlineRegular: jsxPrim("dsw-icon-folder-open"),
 };
 const requireMap = (name) => {
   if (name === "react") return reactStub;
@@ -132,20 +136,35 @@ async function checkOpenInApp() {
   global.localStorage.setItem("dsh.open-in-app.choice", "{oops");
   check("记录坏掉时按没选过处理（于是回退第一个可用应用）", comps.readOpenAppChoice() === "");
 
-  // 组件：有可用应用就摆按钮，主键用上次选的那个，图标走宿主路由
+  // 应用图标：走宿主路由，加载失败回落官方图标
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  comps.OpenAppIcon({ id: "editor" });
+  check("应用图标走宿主 /open-in-app/icon/<id>", callLog.some((c) => c[1] === "img" && String(c[2].src) === "/open-in-app/icon/editor"));
+
+  // 组件：官方分体按钮 + primitives.Menu 浮层（主键用上次选的应用，当前应用标「默认」）
   stateSeq = 0;
   stateStore.clear();
   callLog = [];
   comps.writeOpenAppChoice("explorer");
   const box = comps.OpenPoolButton({ dir: "C:/pool" });
   check("池目录按钮渲染无异常", !!box && typeof box === "object");
-  const icons = callLog.filter((c) => c[1] === "img").map((c) => String(c[2].src));
-  check("主键用上次选的应用（图标走宿主路由）", icons[0] === "/open-in-app/icon/explorer", icons);
+  const menu = callLog.find((c) => c[0] === "jsx" && c[1] === primStub.Menu);
   check(
-    "主键带应用名、另有 ▾ 展开全部可用应用",
-    callLog.some((c) => c[1] === "span" && c[2].children === "explorer") &&
-      !!callLog.find((c) => c[1] === "button" && c[2].children === "▾"),
+    "走官方 primitives.Menu（浮层、贴右端、紧凑），锚点是官方同款分体按钮",
+    !!menu && menu[2].portal === true && menu[2].align === "end" && menu[2].dense === true &&
+      !!menu[2].anchor && menu[2].anchor.props.className === "dshk-sk-split",
   );
+  const items = menu ? menu[2].items : [];
+  check(
+    "菜单项：图标 + 应用名（当前应用标「默认」）",
+    items.length === 2 &&
+      items.every((it) => it.icon && it.icon.props && typeof it.icon.props.id === "string") &&
+      items.some((it) => it.icon.props.id === "explorer" && /(默认|default)/i.test(String(it.label))) &&
+      items.some((it) => it.icon.props.id === "editor" && !/(默认|default)/i.test(String(it.label))),
+  );
+  check("chevron 用官方图标（不是文字 ▾）", callLog.some((c) => c[1] === primStub.IconChevronDownOutlineRegular));
 }
 
 // —— 技能管理页渲染：无 cwd 与有 cwd；头部刷新走官方气泡 ——

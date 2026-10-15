@@ -2316,6 +2316,7 @@ ellipsis，窄列只截字不破版 */
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
     const react = require("react");
     const jsxRuntime = require("react/jsx-runtime");
+    const dswPrim = require("@deepseek-ai/dsh-client-ui-primitives");
     const dock = kit;
     const { KitTip, kitGetJson, kitPostJson, kitJson, resolveZh, useCurrentCwd, registerNavIcon, flashToast } = dock;
 
@@ -2378,6 +2379,7 @@ ellipsis，窄列只截字不破版 */
       skClean: "清理",
       skOpenPool: "在应用里打开技能池目录",
       skOpenPoolMore: "换一个应用",
+      skDefaultSuffix: "（默认）",
       skOpenFail: "打不开应用",
       skMountCount: "挂载",
       skNoMount: "未挂载",
@@ -2453,6 +2455,7 @@ ellipsis，窄列只截字不破版 */
       skClean: "Clean",
       skOpenPool: "Open the skill-pool directory in an application",
       skOpenPoolMore: "Pick another application",
+      skDefaultSuffix: " (default)",
       skOpenFail: "Could not open the application",
       skMountCount: "Mounted in",
       skNoMount: "Not mounted",
@@ -2531,8 +2534,27 @@ ellipsis，窄列只截字不破版 */
       }
     }
 
-    /** 池分组头右侧的「在应用里打开」：主键按上次选的应用（原选择不可用时回退第一个
-     *  可用应用），▾ 就地展开全部可用应用；一个应用都没探到就整枚不摆 */
+    /** 应用图标：走宿主 /open-in-app/icon/<id>，取不到或加载失败回落官方图标（与官方同款） */
+    function OpenAppIcon({ id, size = 13 }) {
+      const [failed, setFailed] = react.useState(false);
+      const Fallback = dswPrim && typeof dswPrim.IconRightUpOutlineRegular === "function" ? dswPrim.IconRightUpOutlineRegular : null;
+      if (failed || Fallback === null) {
+        return Fallback === null ? jsxRuntime.jsx("span", { className: "dshk-sk-split-icon" }) : jsxRuntime.jsx(Fallback, { size });
+      }
+      return jsxRuntime.jsx("img", {
+        className: "dshk-sk-split-icon",
+        src: `/open-in-app/icon/${id}`,
+        width: size,
+        height: size,
+        alt: "",
+        draggable: false,
+        onError: () => setFailed(true),
+      });
+    }
+
+    /** 池分组头右侧的「在应用里打开」：照官方 open-in-app 的分体按钮 + primitives.Menu 浮层
+     *  （主键只出图标，▾ 摊开全部可用应用，当前应用在菜单里标「默认」）。一个应用都没探到就不摆；
+     *  primitives 取不到时退回单键加原生 title，不挡启动。 */
     function OpenPoolButton({ dir }) {
       const [apps, setApps] = react.useState(openAppsCache);
       const [open, setOpen] = react.useState(false);
@@ -2540,9 +2562,10 @@ ellipsis，窄列只截字不破版 */
       const chosen = readOpenAppChoice();
       const list = apps ?? [];
       const app = list.includes(chosen) ? chosen : list.length > 0 ? list[0] : "";
+      const name = (id) => openInAppName(id, appDict);
       const run = async (id) => {
-        setBusy(true);
         setOpen(false);
+        setBusy(true);
         try {
           await openDirInApp(id, dir);
           writeOpenAppChoice(id);
@@ -2560,47 +2583,73 @@ ellipsis，窄列只截字不破版 */
         return () => ctrl.abort();
       }, [dir]);
       if (app === "") return null;
-      return jsxRuntime.jsxs("span", {
-        className: "dshk-sk-appbar",
+      const Menu = dswPrim && typeof dswPrim.Menu === "function" ? dswPrim.Menu : null;
+      const IconChevron = dswPrim && typeof dswPrim.IconChevronDownOutlineRegular === "function" ? dswPrim.IconChevronDownOutlineRegular : null;
+      if (Menu === null) {
+        return jsxRuntime.jsx(KitTip, {
+          label: `${t("skOpenPool")} · ${name(app)}`,
+          side: "bottom",
+          children: jsxRuntime.jsxs("button", {
+            type: "button",
+            className: "dshk-sk-btn dshk-sk-appbtn",
+            disabled: busy,
+            onClick: () => run(app),
+            children: [jsxRuntime.jsx(OpenAppIcon, { id: app }), jsxRuntime.jsx("span", { children: name(app) })],
+          }),
+        });
+      }
+      const hasMenu = list.length > 1;
+      const label = `${t("skOpenPool")} · ${name(app)}`;
+      const anchor = jsxRuntime.jsxs("div", {
+        className: "dshk-sk-split",
+        "data-open-target": "directory",
+        "data-size": "compact",
         children: [
           jsxRuntime.jsx(KitTip, {
-            label: `${t("skOpenPool")} · ${openInAppName(app, appDict)}`,
-            side: "bottom",
-            children: jsxRuntime.jsxs("button", {
-              type: "button",
-              className: "dshk-sk-btn dshk-sk-appbtn",
-              disabled: busy,
-              onClick: () => run(app),
-              children: [
-                jsxRuntime.jsx("img", { className: "dshk-sk-appicon", src: `/open-in-app/icon/${app}`, alt: "" }),
-                jsxRuntime.jsx("span", { children: openInAppName(app, appDict) }),
-              ],
-            }),
-          }),
-          jsxRuntime.jsx(KitTip, {
-            label: t("skOpenPoolMore"),
+            label,
             side: "bottom",
             children: jsxRuntime.jsx("button", {
               type: "button",
-              className: "dshk-sk-btn dshk-sk-appmore",
+              className: "dshk-sk-split-main",
               disabled: busy,
-              onClick: () => setOpen((v) => !v),
-              children: "▾",
+              "aria-label": label,
+              onClick: () => run(app),
+              children: jsxRuntime.jsx(OpenAppIcon, { id: app }),
             }),
           }),
-          open
-            ? list.map((id) =>
-                jsxRuntime.jsx("button", {
-                  key: id,
+          hasMenu
+            ? jsxRuntime.jsx(KitTip, {
+                label: t("skOpenPoolMore"),
+                side: "bottom",
+                children: jsxRuntime.jsx("button", {
                   type: "button",
-                  className: "dshk-sk-btn dshk-sk-appitem",
+                  className: "dshk-sk-split-chevron",
                   disabled: busy,
-                  onClick: () => run(id),
-                  children: openInAppName(id, appDict),
-                }, id),
-              )
+                  "aria-haspopup": "menu",
+                  "aria-expanded": open && !busy,
+                  "aria-label": t("skOpenPoolMore"),
+                  onClick: () => setOpen((v) => !v),
+                  children: IconChevron === null ? "▾" : jsxRuntime.jsx(IconChevron, { size: 10 }),
+                }),
+              })
             : null,
         ],
+      });
+      return jsxRuntime.jsx(Menu, {
+        className: "dshk-sk-appbar",
+        open: open && !busy && hasMenu,
+        autoFocus: true,
+        portal: true,
+        dense: true,
+        align: "end",
+        onClose: () => setOpen(false),
+        items: list.map((id) => ({
+          id,
+          icon: jsxRuntime.jsx(OpenAppIcon, { id }),
+          label: id === app ? `${name(id)}${t("skDefaultSuffix")}` : name(id),
+        })),
+        onSelect: (id) => run(id),
+        anchor,
       });
     }
 
@@ -2692,10 +2741,16 @@ ellipsis，窄列只截字不破版 */
 .dshk-sk-badge-off{border-style:dashed;color:var(--dsw-alias-label-tertiary)}
 .dshk-sk-desc{flex:1;min-width:0;color:var(--dsw-alias-label-secondary);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 .dshk-sk-actions{flex:none;display:flex;align-items:center;gap:5px}
-/* 应用打开：图标 + 名字（名字来自官方词典）；▾ 就地摊开全部可用应用 */
-.dshk-sk-appbar{flex:none;display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+/* 应用打开：分体按钮 + 浮层菜单（尺寸/边框/悬停与官方 open-in-app 同 token；菜单本体走 primitives.Menu） */
+.dshk-sk-appbar{flex:none;align-self:center;display:inline-flex}
+.dshk-sk-split{box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm);height:24px;font-family:var(--dsw-font-family);align-items:stretch;display:inline-flex;overflow:hidden}
+.dshk-sk-split-main,.dshk-sk-split-chevron{color:var(--dsw-alias-label-primary);white-space:nowrap;cursor:pointer;background:0 0;border:0;justify-content:center;align-items:center;font-size:11px;line-height:16px;display:inline-flex}
+.dshk-sk-split-main{gap:4px;padding:3px 5px}
+.dshk-sk-split-chevron{border-left:.5px solid var(--dsw-alias-border-l4);color:var(--dsw-alias-label-secondary);padding:3px 4px 3px 3px}
+.dshk-sk-split-main:hover:not(:disabled),.dshk-sk-split-main:focus-visible,.dshk-sk-split-chevron:hover:not(:disabled),.dshk-sk-split-chevron:focus-visible{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-sk-split-main:disabled,.dshk-sk-split-chevron:disabled{cursor:default}
+.dshk-sk-split-icon{width:14px;height:14px;display:block;object-fit:contain}
 .dshk-sk-appbtn{display:inline-flex;align-items:center;gap:5px;padding:3px 7px}
-.dshk-sk-appicon{width:14px;height:14px;display:block}
 .dshk-sk-btn{appearance:none;background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:12px;line-height:1;padding:4px 9px;white-space:nowrap}
 .dshk-sk-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-sk-btn[data-danger="1"]{color:var(--dsw-alias-label-primary);font-weight:600;border-color:var(--dsw-alias-label-secondary)}
@@ -3230,6 +3285,7 @@ ellipsis，窄列只截字不破版 */
     exports.SkillsManager = SkillsManager;
     exports.SkillRow = SkillRow;
     exports.OpenPoolButton = OpenPoolButton;
+    exports.OpenAppIcon = OpenAppIcon;
     exports.openInAppName = openInAppName;
     exports.fetchOpenApps = fetchOpenApps;
     exports.openDirInApp = openDirInApp;
