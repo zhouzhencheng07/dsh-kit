@@ -13,6 +13,7 @@
 // 官方路由——非 Electron 的启动器不吃这个标记，没必要自己接管（客户端见 openDirInApp）。
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { scrubbedChildEnv } from "../core/subprocess-env.js";
 /** 启动器的观察窗：窗口内退出非零算失败，窗口结束仍在跑算启动成功（常驻前台的启动器不会被误杀） */
 const LAUNCH_WATCH_MS = 1500;
 /** 官方目录里以 Electron 启动器打开目录、因此吃宿主那个标记的应用 */
@@ -92,30 +93,12 @@ export function resolveAppLauncher(app, env = process.env) {
     }
     return null;
 }
-/** 启动器子进程环境：摘掉 ELECTRON_RUN_AS_NODE，并按宿主同一条规则摘掉凭证类与 DSH_* 变量
- *  （编辑器不该拿到 agent 的密钥，官方启动器同样清洗）。 */
-export function launcherEnv(base = process.env) {
-    const env = {};
-    for (const [key, value] of Object.entries(base)) {
-        if (value === undefined)
-            continue;
-        const upper = key.toUpperCase();
-        if (upper === 'ELECTRON_RUN_AS_NODE')
-            continue;
-        if (/KEY|PASSWORD|SECRET|TOKEN/.test(upper))
-            continue;
-        if (upper.startsWith('DSH_'))
-            continue;
-        env[key] = value;
-    }
-    return env;
-}
 /** 起一个不随宿主退出的启动器进程；启动成功（含窗口内退 0、窗口结束仍在跑）返回 true */
 export function startApp(exe, args, watchMs = LAUNCH_WATCH_MS) {
     return new Promise((resolve) => {
         let child;
         try {
-            child = spawn(exe, [...args], { detached: true, stdio: 'ignore', env: launcherEnv() });
+            child = spawn(exe, [...args], { detached: true, stdio: 'ignore', env: scrubbedChildEnv() });
         }
         catch {
             resolve(false);

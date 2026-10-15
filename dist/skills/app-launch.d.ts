@@ -7,8 +7,5 @@ export declare function expandEnvRefs(text: string, env?: NodeJS.ProcessEnv): st
 export declare function parseRegStringValue(dump: string, env?: NodeJS.ProcessEnv): string | null;
 /** 应用的启动器绝对路径：App Paths 优先，再退默认安装位置；两者都没有返回 null */
 export declare function resolveAppLauncher(app: string, env?: NodeJS.ProcessEnv): string | null;
-/** 启动器子进程环境：摘掉 ELECTRON_RUN_AS_NODE，并按宿主同一条规则摘掉凭证类与 DSH_* 变量
- *  （编辑器不该拿到 agent 的密钥，官方启动器同样清洗）。 */
-export declare function launcherEnv(base?: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
 /** 起一个不随宿主退出的启动器进程；启动成功（含窗口内退 0、窗口结束仍在跑）返回 true */
 export declare function startApp(exe: string, args: string[], watchMs?: number): Promise<boolean>;

@@ -1,4 +1,4 @@
-/** 把一整行命令拆成可执行文件 + 参数；双引号包住的部分不拆（路径里有空格时用） */
+/** 把一整行命令拆成可执行文件 + 参数；双引号包住的部分不拆（路径里有空格时用），空引号不产生参数 */
 export declare function parseCommandLine(command: string): {
     exe: string;
     args: string[];

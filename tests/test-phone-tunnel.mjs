@@ -11,19 +11,27 @@ const check = (label, ok, detail) => {
   if (!ok) failed++
 }
 
-// ── 命令拆解：双引号包住的路径不被空格拆开 ──
+// ── 命令拆解：双引号包住的路径不被空格拆开；空引号不产生参数 ──
 check('空命令 → null', parseCommandLine('') === null && parseCommandLine('   ') === null)
 {
   const p = parseCommandLine('frpc.exe -c frpc.toml')
   check('基本拆解：exe + 参数', p?.exe === 'frpc.exe' && JSON.stringify(p.args) === '["-c","frpc.toml"]', JSON.stringify(p))
   const q = parseCommandLine('"C:\\Program Files\\frp\\frpc.exe" -c "D:\\my dir\\frpc.toml"')
   check('引号包住含空格的路径', q?.exe === 'C:\\Program Files\\frp\\frpc.exe' && q.args[1] === 'D:\\my dir\\frpc.toml', JSON.stringify(q))
+  const e = parseCommandLine('frpc.exe -c ""')
+  check('空引号不产生参数', JSON.stringify(e) === '{"exe":"frpc.exe","args":["-c"]}', JSON.stringify(e))
+  const u = parseCommandLine('frpc.exe -c "D:\\my dir')
+  check('未闭合的引号按到行尾', u?.args[1] === 'D:\\my dir', JSON.stringify(u))
 }
 
-// ── 进程生命周期：拿 node 自己当「隧道客户端」 ──
+// ── 进程生命周期：拿命令行解释器当「隧道客户端」──
+// 不能用 node / Electron 二进制：本测试可能跑在 Electron 当 node 的进程里，而隧道会按宿主
+// 那条规则清掉 ELECTRON_RUN_AS_NODE，那种子进程会当场变成 GUI 进程。
 {
-  const code = 'setTimeout(function(){}, 30000)'
-  const t = startTunnel({ command: `"${process.execPath}" -e "${code}"` })
+  const isWin = process.platform === 'win32'
+  const shell = isWin ? process.env.ComSpec ?? 'C:\\Windows\\System32\\cmd.exe' : '/bin/sh'
+  const script = isWin ? 'ping -n 30 127.0.0.1 > nul' : 'sleep 30'
+  const t = startTunnel({ command: `"${shell}" ${isWin ? '/c' : '-c'} "${script}"` })
   check('启动后 running，且拿到 pid', t.state().running === true && typeof t.pid() === 'number', JSON.stringify(t.state()))
   t.stop()
   await new Promise((resolve) => setTimeout(resolve, 400))

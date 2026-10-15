@@ -1,4 +1,5 @@
-// 池目录启动面：应用表 / 环境清洗 / 注册表取值解析，以及真起进程的启动语义。
+// 池目录启动面：应用表 / 注册表取值解析，以及真起进程的启动语义（环境清洗归
+// src/core/subprocess-env.ts，见 test-child-env.mjs）。
 // 探针用系统的命令行解释器而不是 node：本测试可能跑在 Electron 二进制当 node 的进程里，
 // 那种情况下去掉标记的 node 子进程会变成 GUI 进程。（pwsh 也不行：detached 起 pwsh 时它
 // 不执行脚本就退出——那是 pwsh 自己的行为，与启动器无关。）
@@ -9,7 +10,6 @@ import path from 'node:path'
 
 import {
   expandEnvRefs,
-  launcherEnv,
   managedAppIds,
   parseRegStringValue,
   resolveAppLauncher,
@@ -60,26 +60,6 @@ check('引用未定义的名字 → null', expandEnvRefs('%NOPE%/x', {}) === nul
     String(parseRegStringValue(en, { ProgramFiles: 'C:\\Program Files' })),
   )
   check('没有值的输出 → null', parseRegStringValue('错误: 系统找不到指定的注册表项或值。') === null)
-}
-
-// ── 子进程环境：摘掉标记与凭证类变量，其余照留 ──
-{
-  const env = launcherEnv({
-    ELECTRON_RUN_AS_NODE: '1',
-    DEEPSEEK_API_KEY: 'sk-x',
-    DSH_HOME: 'D:\\agent\\.dsh',
-    MY_TOKEN: 't',
-    PATH: 'C:\\bin',
-  })
-  check(
-    '摘掉标记 / 凭证类 / DSH_*，保留其余',
-    env.ELECTRON_RUN_AS_NODE === undefined &&
-      env.DEEPSEEK_API_KEY === undefined &&
-      env.DSH_HOME === undefined &&
-      env.MY_TOKEN === undefined &&
-      env.PATH === 'C:\\bin',
-    JSON.stringify(env),
-  )
 }
 
 // ── 真起进程：子进程自己报看到的环境 ──

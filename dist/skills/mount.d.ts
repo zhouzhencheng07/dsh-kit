@@ -60,9 +60,9 @@ export interface PrepareResult {
     wroteIgnore?: boolean;
 }
 /**
- * 把载体根一次处理到可挂载：从仓库索引移除（文件保留）+ 写忽略规则并自检生效。
+ * 把载体根一次处理到可挂载：写忽略规则并自检生效 + 从仓库索引移除（文件保留）。
  * 未忽略的载体根不能挂载——一挂，池里的内容就会被项目仓库当普通文件收进去。
- * 调用方要么整步成功、要么整步不做：没处理完的中间态一律不落盘。
+ * **忽略在前、索引在后**：索引改动没法回退，忽略那一步失败时索引还没动过。
  */
 export declare function prepareCarrier(state: MountState): Promise<PrepareResult>;
 /** 建一条指向池技能的目录链接（Windows junction 免管理员；POSIX 目录 symlink） */

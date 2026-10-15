@@ -2,14 +2,17 @@
 // 进程生命周期完全跟着插件里的「远程访问」开关走——远程没开就不启动，不依赖开机任务。
 //
 // 命令是一整行字符串（如 `D:\tools\tunnel.exe -c D:\tools\tunnel.toml`）；含空格的路径用
-// 双引号包住。插件按这行命令直接 spawn（不经 shell），所以拿到的是客户端本身的 pid，
-// 关闭时能干净地杀掉它，也不会多出一层 shell 进程。
+// 双引号包住（空引号不产生参数）。插件按这行命令直接 spawn（不经 shell），所以拿到的是
+// 客户端本身的 pid；关闭时连它带起的伴随进程一起收掉，也不会多出一层 shell 进程。
+// 子进程环境照宿主那条规则清洗（见 src/core/subprocess-env.ts）。
 
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
-/** 把一整行命令拆成可执行文件 + 参数；双引号包住的部分不拆（路径里有空格时用） */
+import { scrubbedChildEnv } from '../core/subprocess-env.ts'
+
+/** 把一整行命令拆成可执行文件 + 参数；双引号包住的部分不拆（路径里有空格时用），空引号不产生参数 */
 export function parseCommandLine(command: string): { exe: string; args: string[] } | null {
   const parts: string[] = []
   let cur = ''
@@ -22,17 +25,15 @@ export function parseCommandLine(command: string): { exe: string; args: string[]
       continue
     }
     if (!quoted && /\s/.test(ch)) {
-      if (started) {
-        parts.push(cur)
-        cur = ''
-        started = false
-      }
+      if (started && cur !== '') parts.push(cur)
+      cur = ''
+      started = false
       continue
     }
     cur += ch
     started = true
   }
-  if (started) parts.push(cur)
+  if (started && cur !== '') parts.push(cur)
   const exe = parts[0]
   if (parts.length === 0 || exe === undefined || exe === '') return null
   return { exe, args: parts.slice(1) }
@@ -40,13 +41,25 @@ export function parseCommandLine(command: string): { exe: string; args: string[]
 
 /** 进程镜像名（Windows 走 tasklist；POSIX 读 /proc）；取不到返回 null */
 function imageNameOf(pid: number): string | null {
-  try {
-    if (process.platform === 'win32') {
+  if (process.platform === 'win32') {
+    try {
       const out = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { windowsHide: true, encoding: 'utf8' })
       const line = String(out.stdout ?? '').trim().split(/\r?\n/)[0] ?? ''
       const m = /^"([^"]+)"/.exec(line)
       return m === null ? null : (m[1] ?? null)
+    } catch {
+      return null
     }
+  }
+  // POSIX：先读 cmdline 的第一个参数（comm 只留 15 字符，长名字比不中）；macOS 没有 /proc，
+  // 两次都读不到就返回 null——宁可不收孤儿，也不误杀
+  try {
+    const cmd = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')[0] ?? ''
+    if (cmd !== '') return path.basename(cmd)
+  } catch {
+    // 落到 comm
+  }
+  try {
     return fs.readFileSync(`/proc/${pid}/comm`, 'utf8').trim()
   } catch {
     return null
@@ -99,6 +112,7 @@ export function startTunnel({ command, log = () => {} }: StartTunnelOptions): Tu
     cwd: path.dirname(exe),
     windowsHide: true,
     stdio: 'ignore',
+    env: scrubbedChildEnv(),
   })
   const state: { running: boolean; error: string | null } = { running: true, error: null }
   let stopping = false
@@ -118,7 +132,14 @@ export function startTunnel({ command, log = () => {} }: StartTunnelOptions): Tu
     stop() {
       stopping = true
       try {
-        child.kill()
+        // Windows 的 child.kill() 只终结直接子进程，客户端带起的伴随进程会留下；与
+        // 「收孤儿」那条走同一条整棵杀
+        const pid = child.pid
+        if (process.platform === 'win32' && typeof pid === 'number') {
+          spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true })
+        } else {
+          child.kill()
+        }
       } catch {
         // 已经不在就当关过了
       }

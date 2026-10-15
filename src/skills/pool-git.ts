@@ -94,7 +94,7 @@ interface EnsureResult {
 }
 
 /**
- * 本地配置补齐：缺什么补什么，已有值一律不动。身份缺失会让面板提交直接报
+ * 本地配置补齐：缺什么补什么，已有值一律不动。身份缺失会让用户在本机应用里提交时报
  * Author identity unknown（clone 进来、或从别处搬进池的仓库就没有本地身份），
  * 与文件头「不要求用户配过 user.name」冲突。一次 get-regexp 看清全部，够用就不再多起进程。
  */
@@ -153,7 +153,7 @@ async function statusNames(skillDir: string): Promise<string[]> {
   return status.ok ? parseStatus(status.out) : []
 }
 
-// ── 每个技能一把锁：面板提交/回滚与基线补齐都会动同一个仓库 ──
+// ── 每个技能一把锁：动同一个仓库的动作排队（现在只有基线补齐会动它）──
 const chains = new Map<string, Promise<unknown>>()
 
 function withSkillLock<T>(skillDir: string, job: () => Promise<T>): Promise<T> {

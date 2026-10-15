@@ -275,22 +275,15 @@ function ensureIgnoreLine(file, line) {
     return true;
 }
 /**
- * 把载体根一次处理到可挂载：从仓库索引移除（文件保留）+ 写忽略规则并自检生效。
+ * 把载体根一次处理到可挂载：写忽略规则并自检生效 + 从仓库索引移除（文件保留）。
  * 未忽略的载体根不能挂载——一挂，池里的内容就会被项目仓库当普通文件收进去。
- * 调用方要么整步成功、要么整步不做：没处理完的中间态一律不落盘。
+ * **忽略在前、索引在后**：索引改动没法回退，忽略那一步失败时索引还没动过。
  */
 export async function prepareCarrier(state) {
     if (state.needsChoice)
         return { ok: false, error: '还没选定挂载点：先选池技能挂哪个根（.dsh/skills 或 .agents/skills）' };
     const untracked = [];
     const { file, line } = ignoreLineOf(state);
-    if (state.repoRoot !== null && state.tracked.length > 0) {
-        const rel = toPosix(path.relative(state.repoRoot, state.carrierDir));
-        const result = await runGit(['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', rel], state.repoRoot);
-        if (!result.ok)
-            return { ok: false, error: `从仓库索引移除失败：${state.carrierDir}`, untracked, ignoreFile: file, wroteIgnore: false };
-        untracked.push(...state.tracked);
-    }
     const wroteIgnore = ensureIgnoreLine(file, line);
     if (state.repoRoot !== null) {
         const check = await runGit(['check-ignore', '-v', '--', carrierSpec(state, state.repoRoot)], state.repoRoot);
@@ -300,6 +293,13 @@ export async function prepareCarrier(state) {
     }
     else if (!hasIgnoreLine(file, line)) {
         return { ok: false, error: '忽略规则写入失败', untracked, ignoreFile: file, wroteIgnore };
+    }
+    if (state.repoRoot !== null && state.tracked.length > 0) {
+        const rel = toPosix(path.relative(state.repoRoot, state.carrierDir));
+        const result = await runGit(['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', rel], state.repoRoot);
+        if (!result.ok)
+            return { ok: false, error: `从仓库索引移除失败：${state.carrierDir}`, untracked, ignoreFile: file, wroteIgnore };
+        untracked.push(...state.tracked);
     }
     return { ok: true, untracked, ignoreFile: file, wroteIgnore };
 }
