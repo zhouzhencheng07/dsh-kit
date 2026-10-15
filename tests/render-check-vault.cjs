@@ -387,6 +387,15 @@ async function checkApply() {
     "树行 @ 的选区镜像走编辑器状态（原子节点按 md 写法补回）",
     /vaultSelectionText\(handle\.editor\)/.test(bundleSrc) && /vaultCiteText\(draft, selText\)|vaultCiteText/.test(bundleSrc),
   );
+  // 页条 @：侧栏收起时树行的 @ 够不着，页条上留一枚常驻入口——与树行 @ 同一条
+  // 管线（本页路径 + 编辑器当下选区），mousedown 保编辑器选区（点下去焦点一走就塌）
+  const editBarBody = sliceBetween('className: "dshk-vault-editbar"', "// CAS 冲突条");
+  check(
+    "页条挂 @（本页 + 编辑器当下选区走引用管线，mousedown 保选区）",
+    /citeVaultPageToChat\(path, vaultSelectionText\(rteRef\.current\?\.editor\),/.test(editBarBody) &&
+      /onMouseDown: \(ev\) => ev\.preventDefault\(\)/.test(editBarBody) &&
+      editBarBody.includes('children: "@"'),
+  );
   // 双链选择框一次搜出页面与标题：标题随索引走（宿主提取 ATX，frontmatter/围栏/
   // #标签 都不算），客户端页行/标题行并成一列混排；| 后写别名不进搜索，
   // 标题行插 [[页#标题|别名]]（锚点 = 标题原文，与编辑器解析同口径才能滚到位）
