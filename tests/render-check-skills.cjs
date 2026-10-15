@@ -243,14 +243,15 @@ check(
   check("池技能行：挂载数可见（被几个工作区挂着）", textOf(/^(挂载|Mounted in) 2$/));
   check("池技能行：不再有版本入口（历史改在本机应用里看）", !btn(["版本", "Versions"]));
 
-  // 没人挂的池技能仍可移动；moveAsk 是 SkillRow 的第三个 useState（id 2）：直接喂出确认态
+  // 没人挂的池技能仍可移动；moveAsk 是 SkillRow 的第二个 useState（id 1）：直接喂出确认态
+  // （序号跟行内状态数走——详情展开退场后前移了一位，再加行内状态先改这里）
   const poolFree = { ...poolSkill, mounts: 0 };
   renderRow(poolFree, "pool");
   check("没人挂的池技能：给移动", !!btn(["移动", "Move"]));
   stateSeq = 0;
   stateStore.clear();
   callLog = [];
-  stateStore.set(2, { dest: "project-dsh" });
+  stateStore.set(1, { dest: "project-dsh" });
   comps.SkillRow({ skill: poolFree, groupId: "pool", allRoots: ROOTS, cwd: "C:/x", busy: false, runOp: () => {}, picker: null, setPicker: () => {} });
   check(
     "池技能行：移出池前要确认（说清池里不再有它、版本记录不跟走）",
@@ -272,7 +273,7 @@ check(
   stateSeq = 0;
   stateStore.clear();
   callLog = [];
-  stateStore.set(2, { dest: "pool" });
+  stateStore.set(1, { dest: "pool" });
   comps.SkillRow({ skill: { name: "local", root: "project-dsh", path: "C:/x/.dsh/skills/local" }, groupId: "workspace", allRoots: ROOTS, cwd: "C:/x", busy: false, runOp: () => {}, picker: null, setPicker: () => {} });
   check("进池前要确认（本体进池共用、本工作区留链接）", textOf(/移入技能池|Move into the skill pool/) && textOf(/自动挂回来|link back/));
 
@@ -280,7 +281,7 @@ check(
   stateSeq = 0;
   stateStore.clear();
   callLog = [];
-  stateStore.set(2, { dest: "pool" });
+  stateStore.set(1, { dest: "pool" });
   comps.SkillRow({ skill: { name: "flat", root: "project-dsh", path: "C:/x/.dsh/skills/flat.md", kind: "file" }, groupId: "workspace", allRoots: ROOTS, cwd: "C:/x", busy: false, runOp: () => {}, picker: null, setPicker: () => {} });
   check("平铺入池前提示包成目录", textOf(/包成同名目录|wrapped into a same-name directory/));
 }
@@ -371,13 +372,15 @@ async function checkApply() {
   );
   check("一个应用都没探到时不摆按钮", bundleSrc.includes('if (app === "") return null;'));
   const appLaunchSrc = fs.readFileSync(__dirname + "/../src/skills/app-launch.ts", "utf8");
+  const envSrc = fs.readFileSync(__dirname + "/../src/core/subprocess-env.ts", "utf8");
   check(
-    "接管的应用自己找启动器、自己清子进程环境（摘掉 Electron 标记，不碰宿主环境）",
-    appLaunchSrc.includes("ELECTRON_RUN_AS_NODE") &&
+    "接管的应用自己找启动器、子进程环境走公共清洗（摘掉 Electron 标记，不碰宿主环境）",
+    appLaunchSrc.includes("scrubbedChildEnv") &&
       appLaunchSrc.includes("App Paths") &&
       appLaunchSrc.includes("managedAppIds") &&
+      envSrc.includes("ELECTRON_RUN_AS_NODE") &&
       poolSrc.includes("/dsh-kit/skills/open-app") &&
-      !appLaunchSrc.includes("process.env.ELECTRON_RUN_AS_NODE = "),
+      !envSrc.includes("process.env.ELECTRON_RUN_AS_NODE = "),
   );
   check(
     "版本面板整体退场（客户端组件与宿主 history/commit/rollback 都不在）",
@@ -387,6 +390,10 @@ async function checkApply() {
       !poolSrc.includes("poolGitCommit"),
   );
   check("技能只有移动（源里没有复制按钮/词条，宿主不再认 copy 操作）", !bundleSrc.includes("skCopy") && poolSrc.includes("body.op === 'move'") && !poolSrc.includes("body.op === 'copy'"));
+  check(
+    "技能行详情展开已退役（要看 SKILL.md 全文直接开文件）",
+    !bundleSrc.includes("SkillContent") && !bundleSrc.includes("dshk-sk-detail") && !bundleSrc.includes("dshk-sk-pre") && !bundleSrc.includes("skView"),
+  );
   check("平铺 .md 进池：包成同名目录再挂回来（池挂不住单个文件）", poolSrc.includes("const wrap = destRoot.id === 'pool' && flatMd") && !poolSrc.includes("'flat-skill'"));
   check("池行显示挂载数（宿主列表带 mounts）", bundleSrc.includes("skill.mounts") && poolSrc.includes("mountCounts[path.basename(skill.path)]"));
   const poolGitSrc = fs.readFileSync(__dirname + "/../src/skills/pool-git.ts", "utf8");

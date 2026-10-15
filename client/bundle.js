@@ -1256,13 +1256,11 @@ window.__ModuleLoader__.load({
       treeCopied: "已复制路径",
       treeMenu: "更多操作",
       contentLoading: "加载中…",
-      contentEmpty: "（空）",
       confirmDelete: "删除「{name}」？内容将移入回收站。",
       created: "已创建",
       renamed: "已重命名",
       deleted: "已删除",
       edit: "编辑",
-      contentBinary: "二进制文件，无法预览",
       fileDownload: "下载到本机",
       contentFail: "读取失败",
       officialOpenFail: "打开失败",
@@ -1288,13 +1286,11 @@ window.__ModuleLoader__.load({
       treeCopied: "Path copied",
       treeMenu: "More actions",
       contentLoading: "Loading…",
-      contentEmpty: "(empty)",
       confirmDelete: "Delete \"{name}\"? It will be moved to the Recycle Bin.",
       created: "Created",
       renamed: "Renamed",
       deleted: "Deleted",
       edit: "Edit",
-      contentBinary: "Binary file, preview unavailable",
       fileDownload: "Download file",
       contentFail: "Failed to read",
       officialOpenFail: "Open failed",
@@ -2324,7 +2320,6 @@ ellipsis，窄列只截字不破版 */
     const zh = {
       skillsLabel: "技能",
       skRefresh: "刷新",
-      skLoading: "加载中…",
       skFail: "加载失败",
       skEmpty: "（此组暂无技能）",
       skNotCreated: "未创建",
@@ -2339,8 +2334,6 @@ ellipsis，窄列只截字不破版 */
       skShadowTip: "同名技能在更高优先级位置生效（优先级：.dsh > .agents > $DSH_HOME/skills > ~/.agents/skills）",
       skVersionTip: "技能自带版本（frontmatter version）：用来对照自己手上这份抄的是哪版",
       skByPlugin: "随插件",
-      skHide: "收起",
-      skView: "详情",
       skMove: "移动",
       skPickTarget: "选择目标位置",
       skDisable: "禁用",
@@ -2393,14 +2386,10 @@ ellipsis，窄列只截字不破版 */
       skMoveOutConfirm: "确认移动",
       skMoved: "已移动",
       skDeleteMountedTip: "这个池技能还被别的工作区挂着：删除会一并断掉那些链接",
-      contentFail: "读取失败",
-      contentEmpty: "（空）",
-      contentBinary: "二进制文件，无法预览",
     };
     const en = {
       skillsLabel: "Skills",
       skRefresh: "Refresh",
-      skLoading: "Loading…",
       skFail: "Failed to load",
       skEmpty: "(no skills here)",
       skNotCreated: "not created",
@@ -2415,8 +2404,6 @@ ellipsis，窄列只截字不破版 */
       skShadowTip: "A same-name skill at a higher-priority location takes effect (priority: .dsh > .agents > $DSH_HOME/skills > ~/.agents/skills)",
       skVersionTip: "Skill's own version (frontmatter version), to compare against your own copy",
       skByPlugin: "Plugin-bundled",
-      skHide: "Hide",
-      skView: "Details",
       skMove: "Move",
       skPickTarget: "Pick destination",
       skDisable: "Disable",
@@ -2469,9 +2456,6 @@ ellipsis，窄列只截字不破版 */
       skMoveOutConfirm: "Confirm move",
       skMoved: "Moved",
       skDeleteMountedTip: "Other workspaces still mount this pool skill: deleting unlinks them all",
-      contentFail: "Failed to read",
-      contentEmpty: "(empty)",
-      contentBinary: "Binary file, preview unavailable",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? key;
@@ -2778,13 +2762,11 @@ ellipsis，窄列只截字不破版 */
 /* 展开式目标选择条：点复制/移动后出现在该行下方（同一时间只展开一行） */
 .dshk-sk-target{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 12px;border-top:1px dashed var(--dsw-alias-border-l1);background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-sk-target-label{font-size:12px;color:var(--dsw-alias-label-secondary)}
-.dshk-sk-detail{padding:2px 12px 10px}
-/* 挂载条：载体根 + git 忽略状态 + 体检入口（一行内换行排列） */
+/* 挂载条：载体根 + 忽略状态 + 已进仓库的内容（一行内换行排列） */
 .dshk-sk-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 12px;margin-bottom:12px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshk-sk-bar-title{font-weight:600;color:var(--dsw-alias-label-primary)}
 .dshk-sk-warn{color:var(--dsw-alias-label-primary);white-space:nowrap}
 .dshk-sk-spacer{flex:1}
-.dshk-sk-pre{margin:0;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
     `;
     function injectStyles() {
       if (typeof document === "undefined") return;
@@ -2795,32 +2777,6 @@ ellipsis，窄列只截字不破版 */
         tag.textContent = SKS_CSS;
         document.head.appendChild(tag);
       }
-    }
-
-    function SkillContent({ file, cwd }) {
-      const [state, setState] = react.useState({ phase: "loading", text: "" });
-      react.useEffect(() => {
-        const controller = new AbortController();
-        setState({ phase: "loading", text: "" });
-        // cwd 是「工作区那一根」——项目级技能池（<cwd>/.agents/skills）靠它才在可读根内
-        const root = typeof cwd === "string" && cwd.trim() !== "" ? `&cwd=${encodeURIComponent(cwd.trim())}` : "";
-        kitGetJson(`/dsh-kit/read?path=${encodeURIComponent(file)}${root}`, controller.signal)
-          .then((body) =>
-            setState({
-              phase: "ready",
-              text: body.binary ? t("contentBinary") : body.content ?? "",
-            }),
-          )
-          .catch((error) => {
-            if (!controller.signal.aborted) setState({ phase: "error", text: String(error?.message ?? error) });
-          });
-        return () => controller.abort();
-      }, [file, cwd]);
-      if (state.phase === "loading") return jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { padding: "6px 0 0" }, children: t("skLoading") });
-      if (state.phase === "error")
-        return jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { padding: "6px 0 0" }, children: `${t("contentFail")}：${state.text}` });
-      if (state.text.trim() === "") return jsxRuntime.jsx("div", { className: "dshk-sk-status", style: { padding: "6px 0 0" }, children: t("contentEmpty") });
-      return jsxRuntime.jsx("pre", { className: "dshk-sk-pre", children: state.text });
     }
 
     /** 展开式目标选择条：点选物理根即执行（不存在的根由宿主按需创建） */
@@ -2841,14 +2797,13 @@ ellipsis，窄列只截字不破版 */
     }
 
     /**
-     * 单个技能行（单行布局）：名称+徽标+描述截断+移动/禁用/删除/详情。
+     * 单个技能行（单行布局）：名称+徽标+描述截断+移动/禁用/删除。
      * 池内技能没有禁用按钮（池不被扫描，禁用无意义）；移动展开目标选择条
      * （picker 状态提升到页面级，同一时间只允许一行展开）。
      * 技能只有移动、没有复制（副本与本体分叉），挂载关系上的连移动都不给；
      * 沾池的移动前要确认：出池等于把池里那份本体交出去，进池等于交给所有挂载方共用。
      */
     function SkillRow({ skill, groupId, allRoots, cwd, busy, runOp, picker, setPicker }) {
-      const [open, setOpen] = react.useState(false);
       const [confirming, setConfirming] = react.useState(false);
       // 沾池的移动：picker 选完目标先停在这里等确认（{dest}）
       const [moveAsk, setMoveAsk] = react.useState(null);
@@ -2951,7 +2906,6 @@ ellipsis，窄列只截字不破版 */
                   !isLink && confirming
                     ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setConfirming(false), children: t("skCancel") })
                     : null,
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setOpen((v) => !v), children: open ? t("skHide") : t("skView") }),
                 ],
               }),
             ],
@@ -2985,7 +2939,6 @@ ellipsis，窄列只截字不破版 */
                 ],
               })
             : null,
-          open ? jsxRuntime.jsx("div", { className: "dshk-sk-detail", children: jsxRuntime.jsx(SkillContent, { file: skill.file, cwd }) }) : null,
         ],
       });
     }
@@ -11851,7 +11804,6 @@ ellipsis，窄列只截字不破版 */
       treeAtUnavailable: "输入框未就绪（无会话或不可用）",
       treeMenu: "更多操作",
       contentLoading: "加载中…",
-      contentEmpty: "（空文件）",
       kcfgGroupFeatures: "功能开关",
 
       kcfgFileTreeEnabled: "文件树",
@@ -11886,7 +11838,6 @@ ellipsis，窄列只截字不破版 */
       treeAtUnavailable: "Composer is not ready (no active session)",
       treeMenu: "More actions",
       contentLoading: "Loading…",
-      contentEmpty: "(empty file)",
 
 
       kcfgGroupFeatures: "Features",

@@ -237,6 +237,11 @@ async function checkApply() {
     .map((d) => read(`src/${d}/index.ts`)).join("\n");
   const compSrc = read("src/phone/index.ts");
   const gwSrc = read("src/phone/gateway.ts");
+  const tunnelSrc = read("src/phone/tunnel.ts");
+  check(
+    "远程隧道：按命令直接 spawn（不经 shell）、子进程照宿主规则清洗环境、收整棵",
+    tunnelSrc.includes("scrubbedChildEnv") && tunnelSrc.includes("'taskkill'") && !tunnelSrc.includes("shell: true"),
+  );
   const patchSrc = read("cordis.patch.yml");
   const pkg = JSON.parse(read("package.json"));
   const sliceBetween = (from, to) => {
