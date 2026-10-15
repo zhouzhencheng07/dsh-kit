@@ -389,8 +389,8 @@ const MathBlock = Node.create({
 });
 
 // ─── mermaid 图块（```mermaid 围栏 ↔ 独立图块，点击进源码编辑、跳出即渲染） ────
-// 落盘是 GitHub / Obsidian 同款 ```mermaid 围栏：桌面端/其它宿主读同一份文件时把它当
-// 普通代码块，互不影响。mermaid 库**不进 bundle**（katex 同款懒检查 window.mermaid），
+// 落盘用 ```mermaid 围栏（Markdown 通用约定）：别的工具读同一份文件时把它当
+// 普通代码块，互不影响。mermaid 库**不进 bundle**（与 katex 一致，懒检查 window.mermaid），
 // 宿主要不要带这 5MB、何时注入脚本由 index.html/bridge 决定：node view 缺库时先请
 // window.__dshkMermaidLoad() 钩子、停在占位态，宿主脚本 onload 调 DshRTE.mermaidReady()
 // 重画全部图块；没有钩子的宿主（node 测试/未配 vendor 的阅读面）回落纯文本源码展示。

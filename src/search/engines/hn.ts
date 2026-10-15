@@ -1,5 +1,5 @@
-// Hacker News engine: tech-news search via the Algolia public API (no key).
-// Participates only for explicit HN-ish queries.
+// Hacker News 引擎：走 Algolia 公开 API 搜科技新闻（无需密钥）。
+// 只在查询明确指向 HN（hacker news / hn / ycombinator 字样）时参与。
 
 const HN_API = 'https://hn.algolia.com/api/v1/search'
 

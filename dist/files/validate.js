@@ -1,6 +1,6 @@
-// 浏览器路径参数校验（tree/read/raw/fs-op/git 端点共用）：绝对路径、存在性、
+// 浏览器路径参数校验（tree/read/raw/fs-op 端点共用）：绝对路径、存在性、
 // 类型门槛（文件/目录）——路径穿越与相对路径在这里挡掉。带存在性的校验一律
-// realpathSync 规范化后放行；目标是 git 对象（无工作区文件）的场景走 validatePathShape。
+// realpathSync 规范化后放行。
 import fs from 'node:fs';
 import path from 'node:path';
 /** 校验浏览器传来的 cwd：绝对路径 + 存在 + 是目录，返回规范化的真实路径 */
@@ -48,14 +48,6 @@ export function validateFile(raw) {
     if (!stat.isFile())
         return { ok: false, message: `不是文件：${real}` };
     return { ok: true, path: real, size: stat.size, mtimeMs: stat.mtimeMs };
-}
-/** 仅校验路径形态（非空、规范化为绝对路径），不做存在性检查——供目标是 git 对象
- *  而非工作区文件的端点用（典型：已删除文件的 diff）；越界由调用方按 git root
- *  二次把关 */
-export function validatePathShape(raw) {
-    if (typeof raw !== 'string' || raw.trim() === '')
-        return { ok: false, message: '缺少文件路径' };
-    return { ok: true, path: path.resolve(raw.trim()) };
 }
 /** 校验浏览器传来的路径：绝对路径 + 存在（文件或目录均可），返回真实路径 */
 export function validateAny(raw) {

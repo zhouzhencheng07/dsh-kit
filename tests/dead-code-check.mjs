@@ -1,7 +1,7 @@
 // 死代码哨兵（client/bundle.js）：把"功能删了、残件还留着"的东西拦在提交前。
 // 扫描面 = 根 bundle（组件半边都在同一个文件里）。
 // 三类发现，全部按引用计数判死，判据随每条注释：
-//   1) i18n 词条：zh/en 字典里定义了、全文件却只有定义处那两处（动态拼的键前缀除外）
+//   1) i18n 词条：zh/en 字典里定义了、词典区域外却没有任何 "key" 引用（动态拼的键前缀除外）
 //   2) 顶层函数：全文件只出现一次（定义行），且不在 render-check 的导出表里
 //   3) CSS 类：UI_CSS 里定了规则，但 JS 侧与所有 vendor 产物里都没有这个类名
 //     （模板串拼出来的类名按前缀豁免，前缀从源码里现扫）
@@ -100,7 +100,13 @@ for (const p of dynamicKeyPrefixes) {
     totalKeys += keys.length
     for (const key of keys) {
       if (dynamicKeyPrefixes.some((p) => key.startsWith(p))) continue
-      if (count(src, key) <= 2) fail('i18n 死词条：' + key + '（只有字典定义处，无代码引用；zh/en 各一条）')
+      // 按词典对判死：引用一律是 "key" 这种带引号形态（t("key") / labelKey: "key"），
+      // 词典区域外一次都不出现即死。全文件计数救不了「根包 + 组件词典各备一份」的
+      // 同名词条（定义 2+2 互相掩护），按对扣掉本对区域才数得出来。
+      const quoted = new RegExp("['\"]" + key + "['\"]", 'g')
+      const refs = (src.match(quoted) ?? []).length -
+        (zhBody.match(quoted) ?? []).length - (enBody.match(quoted) ?? []).length
+      if (refs === 0) fail('i18n 死词条：' + key + '（词典区域外无 "key" 引用）')
       if (!enBody.includes(key + ':')) fail('i18n 键缺 en 侧：' + key)
     }
   }

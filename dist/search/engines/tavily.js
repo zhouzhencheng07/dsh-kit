@@ -1,4 +1,4 @@
-// Tavily engine: keyless by default, keyed when TAVILY_API_KEY is set.
+// Tavily 引擎：默认免钥，设了 TAVILY_API_KEY 即带密钥调用。
 // https://docs.tavily.com/documentation/api-reference/endpoint/search
 const TAVILY_BASE = 'https://api.tavily.com';
 const KEYLESS_HEADER = { 'X-Tavily-Access-Mode': 'keyless' };

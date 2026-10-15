@@ -1,10 +1,8 @@
-// Free engine chain for the dsh web seam.
+// 免费引擎链（接管宿主 web seam 的网页搜索）。
 //
-// Tries engines in priority order and fails over automatically. Specialized
-// engines (GitHub, arXiv, StackExchange, HN) only participate when the query
-// strongly signals their domain; general engines (Tavily keyless, Bing RSS,
-// Sogou HTML) always participate. All engines are free: Tavily runs in keyless
-// mode unless TAVILY_API_KEY is set, everything else needs no key at all.
+// 按优先级逐个尝试，失败自动换下一家。专用引擎（GitHub / arXiv / StackExchange /
+// HN）只在查询强烈指向各自领域时参与；通用引擎（Tavily 免钥、Bing RSS、搜狗 HTML）
+// 始终参与。全部免费：Tavily 没设 TAVILY_API_KEY 时走免钥模式，其余一律无需密钥。
 
 import { tavilyEngine } from './engines/tavily.ts'
 import { bingEngine } from './engines/bing.ts'
@@ -35,8 +33,7 @@ export interface SearchEngine {
   search(query: string, opts: { maxResults?: number; signal?: AbortSignal }): Promise<SearchResult>
 }
 
-// Priority order: specialized first when matched (they are the best fit for
-// their domain), then the general engines by result quality.
+// 优先级：命中的专用引擎最前（各领域它们最对口），其后通用引擎按结果质量排。
 const ENGINES: SearchEngine[] = [
   githubEngine,
   arxivEngine,
@@ -50,8 +47,8 @@ const ENGINES: SearchEngine[] = [
 const ENGINE_TIMEOUT_MS = 12_000
 
 /**
- * Run one search through the chain. Returns the first successful engine's
- * normalized result; throws with a per-engine attempt trail when all fail.
+ * 跑一次链式搜索：返回第一个成功引擎的规范化结果；全部失败时抛错，
+ * 错误信息带各引擎的逐家尝试记录。
  */
 export async function searchChain(
   query: string,

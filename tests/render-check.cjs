@@ -1487,17 +1487,10 @@ let vaultFetchPrev = null;
   stateSeq = 0;
   stateStore.clear();
 }
-// 文件标签（多开）在 7.2.2 覆盖，舞台不可收起在 7.2.4 覆盖
-
-// 7.2.3) 文件标签 LRU 纯逻辑：默认上限 3，超限开新文件逐出 usedAt 最小者（=关掉
-// 最久没看的那张标签）；重开已存在文件置顶激活不逐出自身
-// 7.2.3) diff 签的 LRU 与来源标记随「地址 query」走：上限 3 张、超限逐出最久没看、
-// 未跟踪/已删各是不同地址（=不同签）。签表归官方，这里只钉地址映射
 comps.setKitUi({ terminals: [], activeTermId: null, termDockOpen: false });
 callLog = [];
 out = comps.KitSurfaces({});
 check("KitSurfaces 无hooks渲染无异常（根壳不渲染面板本体）", out === null);
-// 更改视图/提交图谱/分支浮层直测在 tests\render-check-files.cjs；
 // 技能管理页直测在 tests\render-check-skills.cjs
 callLog = [];
 const fakeHooks = {
@@ -1615,8 +1608,8 @@ check(
   );
 }
 
-// 工作区文件编辑/预览面已退役（树与对话区点击改投官方右栏文件签，diff 签归 SCM
-// 专用）：CM/编辑区/保存链路/pdf·xlsx·docx 沙箱与其 vendor 都不得再出现
+// 工作区文件编辑/预览面已退役（树与对话区点击改投官方右栏文件签）：
+// CM/编辑区/保存链路/pdf·xlsx·docx 沙箱与其 vendor 都不得再出现
 check(
   "工作区文件编辑预览面已退役（CM/编辑区/write 端点/沙箱库全链移除）",
   !src.includes("dshk-cm-host") && !src.includes("dshk-editarea") && !src.includes("setCmHost") &&

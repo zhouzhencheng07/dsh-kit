@@ -3,13 +3,13 @@
 //
 // 结构：
 //   入口：左栏底部的形态切换条（sidebar.footer.action）——会话列表 / 文件树 /
-//     源代码管理 / 知识库·日程四枚一行，管的是侧栏那一格显示哪个形态（四形态
-//     天然互斥）。整条归 root 渲染（SideFormBar），组件那几枚由各自的组件半边
+//     知识库·日程三枚一行，管的是侧栏那一格显示哪个形态（三形态天然互斥）。
+//     整条归 root 渲染（SideFormBar），组件那几枚由各自的组件半边
 //     物化期登记进 kitBase.sideForms。composer 工具行只剩终端一枚
 //     （conversation.input.left，dsh-kit/terminal 自注册）；日程的家是右栏 dock 签。
 //   右栏（唯一工作台形态）：sidebarRightTabs 注册四类 dock 签，
 //     pane 正文经 slots.inject（sidebar.right.pane.tab）按 id 提供，pane 内自管
-//     pane 正文。dock 签本身没有按钮：diff/知识库/日程都是被动签（SCM/树/对话
+//     pane 正文。dock 签本身没有按钮：知识库/日程都是被动签（树/对话
 //     点开即开，日程随侧栏那格切到「日程」tab 开），浏览器走右栏开始页清单与
 //     自动跟随。开始页保留官方 ShippedGuide（罗盘 + 胶囊条目），我们只贡献
 //     guide 条目：浏览器一枚（其余签都是被动签，不给条目），官方「工作区文件」
@@ -606,7 +606,7 @@ window.__ModuleLoader__.load({
     }
     /** 官方右栏可用时机（= 官方那张 session seat 是否在场）：对话在前台且有选中会话
      *  时 mounted 有值；全局面板（插件页 / 设置页）占住中栏或没选会话时 undefined。
-     *  树 / 源代码管理 / 知识库三个工作区面与全部开签动作跟它同生灭——seat 不在场时
+     *  树 / 知识库两个工作区面与全部开签动作跟它同生灭——seat 不在场时
      *  右栏压根不画（开签必抛「no session surface is mounted」），左栏浏览区也得让回
      *  官方会话列表。信号没挂上（服务缺位 / 极简组合）时保持 true；信号翻假只收面、
      *  不清状态，回到对话即原样恢复（同官方右栏的签按会话保留）。 */
@@ -883,9 +883,9 @@ window.__ModuleLoader__.load({
     // 座对象的字段上 root 才读得到）
     const tabKinds = {};
     exports.tabKinds = tabKinds;
-    exports.sidebarView = { renderer: null }; // 侧栏浏览区 tree/git 分支渲染器（root 单槽分发）
+    exports.sidebarView = { renderer: null }; // 侧栏浏览区 tree 分支渲染器（root 单槽分发）
     // 侧栏形态切换条（左栏底部那一行）：形态 = 侧栏浏览区显示什么（官方会话列表 /
-    // 文件树 / 源代码管理 / 知识库·日程）。整条归 root 渲染，各组件物化期登记自己
+    // 文件树 / 知识库·日程）。整条归 root 渲染，各组件物化期登记自己
     // 那一枚；数组只 push 不换引用（同 tabKinds 的理由，后写的顶层键 root 读不到）
     exports.sideForms = [];
     /** 登记一枚形态钮（{ id, order, Component }）：同 id 幂等，apply 重入不叠加 */
@@ -1025,11 +1025,11 @@ window.__ModuleLoader__.load({
         });
     }
 
-    // ── 侧栏形态切换条（sidebar.footer.action）与那四枚钮 ──
-    // 侧栏那一格只有四种形态：官方会话列表 / 文件树 / 源代码管理 / 知识库·日程。
-    // 四枚钮排成一行（铁轨态竖排），最左是交回官方会话列表的那枚，其余三枚由各
+    // ── 侧栏形态切换条（sidebar.footer.action）与那三枚钮 ──
+    // 侧栏那一格只有三种形态：官方会话列表 / 文件树 / 知识库·日程。
+    // 三枚钮排成一行（铁轨态竖排），最左是交回官方会话列表的那枚，其余两枚由各
     // 组件物化期登记进 dock.sideForms（行关 = 不登记 = 不出那枚）。选中态直接取
-    // 各自的开合位（与右栏签无关），所以四种形态天然互斥——否则同一格上会有两枚
+    // 各自的开合位（与右栏签无关），所以三种形态天然互斥——否则同一格上会有两枚
     // 一起亮，而视图按优先级只显示其一。
     // 语义：点别的形态 = 换成那个形态（收起态顺带展开侧栏——视图渲染进铁轨等于
     // 不可见）；点会话列表 = 把那一格交回官方列表（功能签不跟着关，签的归宿是
@@ -1261,19 +1261,7 @@ window.__ModuleLoader__.load({
       created: "已创建",
       renamed: "已重命名",
       deleted: "已删除",
-      committed: "已提交",
-      scDetached: "分离头",
-      scGraph: "提交图谱",
-      scGraphEmpty: "（尚无提交）",
-      scGraphFail: "图谱加载失败",
-      scGraphMore: "加载更多",
       edit: "编辑",
-      gitM: "已修改",
-      gitA: "新文件",
-      gitD: "已删除",
-      gitR: "重命名",
-      gitU: "未跟踪",
-      gitTip: "git 变更",
       contentBinary: "二进制文件，无法预览",
       fileDownload: "下载到本机",
       contentFail: "读取失败",
@@ -1305,18 +1293,6 @@ window.__ModuleLoader__.load({
       created: "Created",
       renamed: "Renamed",
       deleted: "Deleted",
-      committed: "Committed",
-      scDetached: "detached HEAD",
-      scGraph: "Commit graph",
-      scGraphEmpty: "(no commits yet)",
-      scGraphFail: "Failed to load graph",
-      scGraphMore: "Load more",
-      gitM: "Modified",
-      gitA: "Added",
-      gitD: "Deleted",
-      gitR: "Renamed",
-      gitU: "Untracked",
-      gitTip: "git change",
       edit: "Edit",
       contentBinary: "Binary file, preview unavailable",
       fileDownload: "Download file",
@@ -1398,8 +1374,8 @@ window.__ModuleLoader__.load({
 .dshk-sidetab:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-sidetab.is-active{color:var(--dsw-alias-brand-primary);border-bottom-color:var(--dsw-alias-brand-primary)}
 .dshk-sidebody{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
-/* 侧栏形态切换条（sidebar.footer.action）：左栏那一格的四个形态——会话列表 /
-   文件树 / 源代码管理 / 知识库·日程（左→右）——图标钮均分一行；铁轨态竖排成
+/* 侧栏形态切换条（sidebar.footer.action）：左栏那一格的三个形态——会话列表 /
+   文件树 / 知识库·日程（左→右）——图标钮均分一行；铁轨态竖排成
    28px 方钮（与宿主 iconButton 同尺寸）。名字走悬停气泡，选中态 = 品牌色填充 */
 .dshk-sideforms{display:flex;align-items:center;gap:2px;width:100%;box-sizing:border-box;padding:2px 0}
 .dshk-sideforms.is-rail{flex-direction:column;width:auto}
@@ -2181,15 +2157,15 @@ ellipsis，窄列只截字不破版 */
 
 
     // ─────────── 入口按钮（conversation.input.left）───────────
-    // 输入行只剩终端一枚（dsh-kit/terminal 组件自注册）；文件树/源代码管理与
-    // 知识库·日程都已改挂左栏底部的形态切换条（见上面的 SideFormBar）。
+    // 输入行只剩终端一枚（dsh-kit/terminal 组件自注册）；文件树与知识库·日程
+    // 都已改挂左栏底部的形态切换条（见上面的 SideFormBar）。
     // 选中态标记：aria-pressed 属性选择器命中 .dshk-enbtn[aria-pressed="true"]
     // 规则（底色 + 品牌色图标）；形态条那几枚是同款观感的 .dshk-sfbtn 规则。
     // 选中态底色必须用真实存在的 tool-bar-fill 令牌——不存在的变量（如
     // --dsw-alias-fill-l2）会解析成透明，选中态等于没有。
 
     // ── 侧边栏兜底与快捷键 ──
-    // 文件树/源代码管理视图承载在 sidebar.workspaces 里，侧边栏收起时只剩图标栏，
+    // 文件树视图承载在 sidebar.workspaces 里，侧边栏收起时只剩图标栏，
     // 视图会挤进铁轨里很难看——所以打开动作做自动展开：状态探测官方切换按钮
     // （aria-label 随状态变化，收起态是「打开侧边栏」/"Open sidebar"，注意关键字
     // 是「打开」不是「展开」），只在收起态点击——幂等且方向安全。官方的
@@ -2241,7 +2217,7 @@ ellipsis，窄列只截字不破版 */
       // 从这里取最新值（槽位注册发生在 effect，渲染期的 props 用模块变量桥接）
       shellShare.current = props;
 
-      // 侧边栏浏览区占用：单槽轮换——源代码管理 ↔ 文件树 ↔ 知识库·日程
+      // 侧边栏浏览区占用：单槽轮换——文件树 ↔ 知识库·日程
       // （组件内自己切知识库/日程两个 tab），全关回官方会话列表。右栏不在场时
       // 不占（全局面板在前台时左栏该是官方会话列表）：开合状态留着，回到对话原样
       // 恢复。动态注册若在运行时抛错，捕获并回滚开合状态，避免入口被错误边界摘掉。
@@ -2255,7 +2231,7 @@ ellipsis，窄列只截字不破版 */
           dispose = slotsCtx.slots.register({ name: "sidebar.workspaces", priority: -1000 }, (owner) => {
             const side = owner ?? {};
             if (side.wide === false) return null;
-            // 文件树/源代码管理分支归 dsh-kit/files、知识库·日程归 dsh-kit/vault，
+            // 文件树分支归 dsh-kit/files、知识库·日程归 dsh-kit/vault，
             // 各经 kitBase 的座对象接管；两者都不在场（未装 / 行关闭）时不占槽
             const branch = dock.sidebarView.renderer ? dock.sidebarView.renderer({ ui, cwd, owner }) : null;
             if (branch) return branch;
@@ -3456,7 +3432,6 @@ ellipsis，窄列只截字不破版 */
       schedTimerSoloBtn: "独立计时",
       schedTimerAttachBtn: "挂这条计时",
       schedTimerBallTip: "走秒与停表都在悬浮球上",
-      schedWeekdays: "一,二,三,四,五,六,日",
       vaultTitle: "知识库",
       // 左栏底部那枚入口钮的名：它开的是整格（知识库 + 日程两 tab），不是某一个 tab
       vaultEntryTitle: "知识库·日程",
@@ -3774,7 +3749,6 @@ ellipsis，窄列只截字不破版 */
       schedTimerSoloBtn: "Standalone timer",
       schedTimerAttachBtn: "Attach this task",
       schedTimerBallTip: "Elapsed time and stop live on the floating timer",
-      schedWeekdays: "Mo,Tu,We,Th,Fr,Sa,Su",
       vaultTitle: "Knowledge base",
       vaultEntryTitle: "Knowledge base · Schedule",
       vaultNotConfigured: "Knowledge base directory not configured",
@@ -11716,13 +11690,6 @@ ellipsis，窄列只截字不破版 */
       treeEmpty: "（空目录）",
       treeFail: "加载失败",
       treeTruncated: "条目过多，列表已截断",
-      // git 行尾徽标（M/A/D/R/U）的悬停文案：本包 t() 只读本包词典，root 那份读不到
-      gitM: "已修改",
-      gitA: "新文件",
-      gitD: "已删除",
-      gitR: "重命名",
-      gitU: "未跟踪",
-      gitTip: "git 变更",
       treeNewAny: "新建文件/目录",
       treeNewPh: "名称，\\ 开头新建文件夹，可含 / 多级，回车创建",
       treeRename: "重命名",
@@ -11731,12 +11698,6 @@ ellipsis，窄列只截字不破版 */
       treeAt: "@ 到对话",
       treeAtUnavailable: "输入框未就绪（无会话或不可用）",
       treeMenu: "更多操作",
-      scTitle: "源代码管理",
-      scGraph: "提交图谱",
-      scGraphFail: "图谱加载失败",
-      scGraphEmpty: "（暂无提交）",
-      scGraphMore: "加载更多",
-      scDetached: "游离 HEAD",
       contentLoading: "加载中…",
       contentEmpty: "（空文件）",
       kcfgGroupFeatures: "功能开关",
@@ -11755,8 +11716,6 @@ ellipsis，窄列只截字不破版 */
       created: "已创建",
       renamed: "已重命名",
       deleted: "已删除",
-      committed: "已提交",
-      saving: "保存中…",
     };
     const en = {
       noCwd: "No session workspace available: open or create a session first",
@@ -11766,13 +11725,6 @@ ellipsis，窄列只截字不破版 */
       treeEmpty: "(empty)",
       treeFail: "Failed to load",
       treeTruncated: "Too many entries, list truncated",
-      // git status badge (M/A/D/R/U) tooltips: this module's t() only reads its own dict
-      gitM: "Modified",
-      gitA: "Added",
-      gitD: "Deleted",
-      gitR: "Renamed",
-      gitU: "Untracked",
-      gitTip: "git change",
       treeNewAny: "New file/folder",
       treeNewPh: "Name, \\ prefix creates a folder, / for nesting, Enter to create",
       treeRename: "Rename",
@@ -11781,12 +11733,6 @@ ellipsis，窄列只截字不破版 */
       treeAt: "Insert @ mention",
       treeAtUnavailable: "Composer is not ready (no active session)",
       treeMenu: "More actions",
-      scTitle: "Source Control",
-      scGraph: "Commit graph",
-      scGraphFail: "Failed to load the graph",
-      scGraphEmpty: "(no commits)",
-      scGraphMore: "Load more",
-      scDetached: "Detached HEAD",
       contentLoading: "Loading…",
       contentEmpty: "(empty file)",
 
@@ -11803,8 +11749,6 @@ ellipsis，窄列只截字不破版 */
       created: "Created",
       renamed: "Renamed",
       deleted: "Deleted",
-      committed: "Committed",
-      saving: "Saving…",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? key;
@@ -11884,18 +11828,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 .dshk-name{overflow:hidden;text-overflow:ellipsis}
 .dshk-dir{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);font-family:ui-monospace,Consolas,monospace;font-size:12px}
 .dshk-file .dshk-name{color:var(--dsw-alias-label-secondary)}
-/* git 状态徽标与 diff 着色 */
-/* ±N 行数统计（更改清单行内） */
-/* 提交框 + 行悬停操作 + 可折叠组头（源代码管理） */
-/* 无基线的整文件着色（未跟踪 / 已删除）：新增绿、删除红 */
-/* hunk 视图：只渲染改动附近。行号列定宽不折行，长行交给文本列 */
-/* 双栏：左右各半，缺的一侧留空占位，中缝一条线 */
-/* 「更改」清单（源代码管理视图） */
-/* 源代码管理：分支/推送/图谱（头部工具、分支浮层、提交图谱） */
-/* 选择器要带 .dshk-btn：基础类的 width:26px 在根 UI_CSS 里、而本模块样式先注入，
-   同特异度下基础类反而后生效，方钮定宽会把分支名压成 0 宽（只剩图标与 ▾） */
-/* 分支浮层（fixed 悬浮面板）：自带内部滚动，不参与 .dshk-tree 的 flex 挤压 */
-/* 提交图谱（结构化 lane + SVG 绘制，横向滚动；窄容器隐藏作者/时间列） */
     `;
     function injectStyles() {
       if (typeof document === "undefined") return;
@@ -12345,7 +12277,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         const draft = state && typeof state.draft === "string" ? state.draft : "";
         shell.actions.setDraft(draft === "" ? mention : `${draft} ${mention}`);
       };
-      /** 已打开的文件被改名/删除后关掉对应那张 diff 签（含其子路径） */
+      /** 已打开的文件被改名/删除后关掉对应那张文件签（含其子路径） */
       const closeStalePreview = (prefix) => {
         for (const item of rightbarItems("file")) {
           if (item === prefix || item.startsWith(prefix + "\\") || item.startsWith(prefix + "/")) closeRightbarItem("file", item);
@@ -12529,8 +12461,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // anchor = 开菜单的那颗触发钮：宿主据此把它做成开关（再点一次关掉）。
 
     /** 文件树那枚形态钮（侧栏底部切换条）：开 = 侧栏那一格换成文件树（收起态顺带
-     *  展开侧栏），再点 = 交回官方会话列表。走单槽互斥补丁（顺带让出源代码管理/
-     *  知识库目录/日程待办那一格），关闭动作保留已打开的文件标签（标签有独立 ✕） */
+     *  展开侧栏），再点 = 交回官方会话列表。走单槽互斥补丁（顺带让出知识库目录/
+     *  日程待办那一格），关闭动作保留已打开的文件签（签有独立 ✕） */
     function FileTreeEntry() {
       const ui = useKitUi();
       const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
@@ -12818,7 +12750,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     // ─────────── 句子级复读检测（判据真源 src/monitor/loop-guard.ts，此处手抄）───────────
     // 单位是句子：结尾同一句（或连续几句话）连续重复 N 遍才算复读。字符级周期扫描与
-    // 「单步字符上限」都已删除——它们把正常长输出、结构重复当成失控，是误杀来源。
+    // 「单步字符上限」都不看——它们把正常长输出、结构重复当成失控，是误杀来源。
     const MONITOR_WARN_COPIES = 3;
     const MONITOR_MIN_BLOCK_CHARS = 6;
     const MONITOR_MAX_BLOCK_UNITS = 8;
@@ -13562,7 +13494,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
      * 高峰时段（本地时区，仅工作日，[起,止) 分钟数）：只标 DeepSeek 工作日
      *   9:00–12:00、14:00–18:00（opencode 无公开口径不标）。
      *   高峰时芯片前加红色「峰」字提示限流风险。
-     * DeepSeek 峰谷补充（官方 2026-09-19 说明）：周六日全天、调休上班的周末、
+     * DeepSeek 峰谷补充（官方说明）：周六日全天、调休上班的周末、
      *   中国法定节假日全天均按空闲时段计费——前两者被周末判定覆盖，落在工作日的
      *   假期靠 USAGE_HOLIDAYS 免标。
      */
@@ -15850,7 +15782,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     // 只负责开合与按压态；坞本体在本组件注册的 shell.overlay 里渲染
     // （fixed 定位不受 composer 祖先 stacking context 影响）。
     /** 终端图标：描边同族（15px / viewBox 16 / 1.2 描边 / currentColor）——与左栏
-     *  形态切换条那几枚（会话列表 / 文件树 / 源代码管理 / 知识库·日程）同一套画法。
+     *  形态切换条那几枚（会话列表 / 文件树 / 知识库·日程）同一套画法。
      *  官方引导条目的实心深色卡（#17191d 底 + 白提示符）在输入行里比其余钮重一大截，
      *  看着像另一套按钮 */
     function TerminalIcon() {
@@ -16020,7 +15952,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
 
     // ── dsh-kit/chat 组件（对话小窗）──
     // 贴边常驻的把手 + 点开成浮窗。内核是宿主官方 conversation.content 工厂的
-    // embedded 变体（官方子智能体侧栏同款用法），本组件只自绘外壳与做会话绑定：
+    // embedded 变体，本组件只自绘外壳与做会话绑定：
     // 自己 retain 一条会话，与主面选中哪个会话无关（独立小窗）。
     // 行开关 = 总开关：宿主半边不物化时 /dsh-kit-chat/config 404，apply 整体不注册。
     const chatModule = (kit, require) => {
@@ -16317,7 +16249,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     }
 
     // ─────────── 内嵌对话内核 ───────────
-    /** 只留对话这一个 view（与官方子智能体侧栏同款取舍） */
+    /** 只留对话这一个 view */
     function FixedChatView(props) {
       return props.renderSlot("conversation.session", { view: "chat" });
     }

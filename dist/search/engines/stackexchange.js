@@ -1,5 +1,5 @@
-// StackExchange engine: programming Q&A search via the public API (no key).
-// Participates only for explicit StackOverflow-ish queries.
+// StackExchange 引擎：走公开 API 搜编程问答（无需密钥）。
+// 只在查询明确指向 StackOverflow（stackoverflow / stack exchange 等字样）时参与。
 const SE_API = 'https://api.stackexchange.com/2.3/search/advanced';
 export const stackExchangeEngine = {
     id: 'stackexchange',

@@ -295,8 +295,8 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
           json(res, 200, scheduleStore.stats(scope, schedDateParam(url, 'date')))
         }),
       )
-      // 写端点：面板的建/改/删/完成/计时/计时段编辑都走这一个 op 分发（与 files/
-      // git 的 op 端点同款）。字段口径、校验与原子写全在 store 里，与 agent 工具
+      // 写端点：面板的建/改/删/完成/计时/计时段编辑都走这一个 op 分发（files 的
+      // /fs/op 也是这个形态）。字段口径、校验与原子写全在 store 里，与 agent 工具
       // 走的是同一份实现——两边不会长出两套规则。
       // 错误语义：参数/规则不合法（store 抛错）回 400，按 id 定位不到回 404。
       disposeSchedule.push(

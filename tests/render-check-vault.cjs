@@ -275,13 +275,13 @@ async function checkApply() {
   };
   const btnOf = (el) => walk(el, (n) => n.type === "button" && typeof (n.props && n.props.className) === "string" && n.props.className === "dshk-sfbtn")[0] ?? null;
   const renderEntry = () => { stateSeq = 0; stateStore.clear(); callLog = []; return comps.VaultFooterEntry({}); };
-  dockExports.setKitUi({ treeOpen: false, gitOpen: false, vaultSideOpen: false, vaultSideTab: "vault" });
+  dockExports.setKitUi({ treeOpen: false, vaultSideOpen: false, vaultSideTab: "vault" });
   dockExports.rightbarSeat.set(false);
   check("seat 不在场（没选会话 / 全局面板在前台）时不画那一枚", renderEntry() === null);
   dockExports.rightbarSeat.set(true);
   const raw = renderEntry();
   check(
-    "那一枚是图标钮：名字与键帽走官方气泡（四枚一行，不出文字）",
+    "那一枚是图标钮：名字与键帽走官方气泡（三枚一行，不出文字）",
     raw.type === dockExports.KitTip && typeof raw.props.label === "string" && raw.props.command === "dsh-kit.vault.toggle" &&
       walk(raw, (n) => n.type === "span").length === 0,
   );
@@ -289,9 +289,9 @@ async function checkApply() {
   check("未占用时 aria-pressed=false", !!vBtn && vBtn.props["aria-pressed"] === false);
   if (vBtn) vBtn.props.onClick();
   check(
-    "点它 = 左栏那一格占住并落在知识库 tab（与快捷键同一动作，文件树/SCM 让格）",
+    "点它 = 左栏那一格占住并落在知识库 tab（与快捷键同一动作，文件树让格）",
     dockExports.getKitUi().vaultSideOpen === true && dockExports.getKitUi().vaultSideTab === "vault" &&
-      dockExports.getKitUi().treeOpen === false && dockExports.getKitUi().gitOpen === false,
+      dockExports.getKitUi().treeOpen === false,
   );
   if (vBtn) vBtn.props.onClick();
   check("再点一次 = 回官方会话列表（整格开合只有这一处入口）", dockExports.getKitUi().vaultSideOpen === false);

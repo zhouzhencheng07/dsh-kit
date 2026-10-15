@@ -17,11 +17,10 @@
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { spawn } from 'node:child_process'
 
 import { loadDep, decodePreviewText, sameOrigin, recycleDelete, findProjectRoot, readableRoots, withinReadable, sendRawFile } from '../core/index.ts'
 import { rawContentType, rawDownloadContentType } from './raw-file.ts'
-import { validateCwd, validateFile, validateAny, validatePathShape, withinTree, invalidFsName } from './validate.ts'
+import { validateCwd, validateFile, validateAny, withinTree, invalidFsName } from './validate.ts'
 
 interface KitWebRoute {
   kind: 'exact' | 'prefix'

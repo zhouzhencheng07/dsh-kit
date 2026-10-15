@@ -147,7 +147,7 @@ callLog = [];
 out = comps.FileTreePanel({ cwd: "C:/x", onOpenFile: () => {} });
 check("FileTreePanel noCwd(根未加载) 渲染无异常(loading→error兜底)", !!out && typeof out === "object");
 
-// —— 直测：形态切换条上的两枚（门控默认开 = 配置快照未就绪按内置默认）——
+// —— 直测：形态切换条上的文件树那枚（门控默认开 = 配置快照未就绪按内置默认）——
 callLog = [];
 out = comps.FileTreeEntry({});
 check("FileTreeEntry 渲染无异常", !!out && typeof out === "object");

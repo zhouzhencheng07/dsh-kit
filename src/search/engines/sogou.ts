@@ -1,10 +1,9 @@
-// Sogou engine: free Chinese web search via its HTML endpoint (no key).
+// 搜狗引擎：走 HTML 结果页的免费中文网页搜索（无需密钥）。
 // https://www.sogou.com/web?query=...
 //
-// Sogou's SERP is server-rendered (unlike Baidu's JS-only shell). Result
-// anchors point at /link?url=... redirect pages, whose real target is
-// resolved from the redirect page's `window.location.replace("...")`.
-// Unofficial and rate-limited; used as a fallback, never the primary.
+// 搜狗的结果页是服务端直出 HTML，结果锚点指向 /link?url=... 跳转页，
+// 真实地址要从跳转页的 `window.location.replace("...")` 里解出来。
+// 非官方接口、有限频；只当兜底，不做首选。
 
 const SOGOU_WEB = 'https://www.sogou.com/web'
 const UA =
@@ -27,7 +26,7 @@ export const sogouEngine = {
     if (blocks.length === 0) {
       throw new Error('sogou: no results in SERP (anti-bot or layout change)')
     }
-    // Resolve the /link?url=... redirects to real URLs (parallel, capped).
+    // 把 /link?url=... 跳转解成真实地址（并发、限量）。
     const resolved = await Promise.all(
       blocks.slice(0, maxResults).map(async (b) => {
         if (!b.redirect) return { ...b, url: '' }

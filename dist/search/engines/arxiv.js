@@ -1,5 +1,5 @@
-// arXiv engine: paper/preprint search via the public API (no key).
-// Participates only for arXiv-ish queries (explicit "arxiv"/preprint words).
+// arXiv 引擎：走公开 API 搜论文/预印本（无需密钥）。
+// 只在查询明确指向 arXiv（出现 "arxiv"/预印本/preprint 字样）时参与。
 const ARXIV_API = 'https://export.arxiv.org/api/query';
 export const arxivEngine = {
     id: 'arxiv',
@@ -8,7 +8,7 @@ export const arxivEngine = {
         return /\barxiv\b|预印本|preprint/i.test(query);
     },
     async search(query, { maxResults = 5, signal } = {}) {
-        // "arxiv 1706.03762" style: fetch the paper directly by id.
+        // 「arxiv 1706.03762」这类查询直接按 id 取论文。
         const idMatch = query.match(/\b(\d{4}\.\d{4,5}(?:v\d+)?)\b/);
         const url = idMatch
             ? `${ARXIV_API}?id_list=${idMatch[1]}`

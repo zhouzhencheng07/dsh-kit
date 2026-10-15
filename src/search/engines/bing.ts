@@ -1,12 +1,10 @@
-// Bing engine: free general web search via its RSS output (no key).
+// Bing 引擎：走 RSS 输出的免费通用网页搜索（无需密钥）。
 // https://www.bing.com/search?q=...&format=rss
 //
-// `format=rss` is an undocumented-but-stable Bing parameter returning the SERP
-// as an RSS 2.0 feed (title/link/description per item; hard cap of 10 items —
-// the `count` parameter is ignored). The host may 302 to a regional host
-// (cn.bing.com etc.); fetch follows transparently, so results come back
-// region-localized. Unofficial and rate-limited; sits between Tavily
-// (primary) and Sogou (last resort).
+// `format=rss` 是未写进文档但长期稳定的参数：把结果页以 RSS 2.0 吐出
+// （每条 title/link/description；硬上限 10 条——`count` 参数被忽略）。
+// 服务端可能 302 到区域主机（cn.bing.com 等），fetch 透明跟随，结果即区域化的。
+// 非官方接口、有限频；排在 Tavily（首选）之后、搜狗（兜底）之前。
 
 const BING_SEARCH = 'https://www.bing.com/search'
 const UA =

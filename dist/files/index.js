@@ -16,10 +16,9 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { loadDep, decodePreviewText, sameOrigin, recycleDelete, findProjectRoot, readableRoots, withinReadable, sendRawFile } from "../core/index.js";
 import { rawContentType, rawDownloadContentType } from "./raw-file.js";
-import { validateCwd, validateFile, validateAny, validatePathShape, withinTree, invalidFsName } from "./validate.js";
+import { validateCwd, validateFile, validateAny, withinTree, invalidFsName } from "./validate.js";
 // ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile
 // 写入 = 热提交（fiber config 里的稳定 ref），readSettings 统一解引用。默认值与

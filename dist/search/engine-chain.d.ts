@@ -20,8 +20,8 @@ export interface SearchEngine {
     }): Promise<SearchResult>;
 }
 /**
- * Run one search through the chain. Returns the first successful engine's
- * normalized result; throws with a per-engine attempt trail when all fail.
+ * 跑一次链式搜索：返回第一个成功引擎的规范化结果；全部失败时抛错，
+ * 错误信息带各引擎的逐家尝试记录。
  */
 export declare function searchChain(query: string, { maxResults, signal }?: {
     maxResults?: number;

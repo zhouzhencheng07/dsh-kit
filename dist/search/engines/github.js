@@ -1,11 +1,11 @@
-// GitHub engine: code/repository search via the public REST API (no key,
-// unauthenticated rate limits apply). Participates only for repo-like queries.
+// GitHub 引擎：走公开 REST API 搜代码/仓库（无需密钥，匿名有限频）。
+// 只在查询像找仓库时参与。
 const GITHUB_SEARCH = 'https://api.github.com/search/repositories';
 const UA = 'dsh-free-search/0.2';
 export const githubEngine = {
     id: 'github',
     available: () => true,
-    // Repo-like: github.com links, explicit code words, or owner/repo shapes.
+    // 像找仓库：github.com 链接、明确的代码词、或 owner/repo 形态。
     match(query) {
         return (/github\.com\/[\w.-]+\/[\w.-]+/i.test(query) ||
             /(^|\s)(repo|repository|代码库|仓库|开源项目)(\s|$)/i.test(query) ||

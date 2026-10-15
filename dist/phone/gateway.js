@@ -143,7 +143,7 @@ export function phoneCompatScript() {
  * 删掉就是凭空少一块，而判据一旦变化还得靠人重新发现。
  * 判据取官方 open-in-app 分体按钮容器的语义属性 `data-open-target`：directory = 会话头部
  * 的「在应用中打开」，file = 文档预览 / 交付卡 / 变更对比页的打开与定位。一个选择器覆盖
- * 全部——按钮文案带应用名（"用 VS Code 打开" / "更多打开方式"），按 aria-label 匹配逐版漂移。
+ * 全部——按钮文案带目标应用名且逐版漂移，按 aria-label 匹配靠不住。
  */
 const HOST_ONLY_LOCKED = ['[data-open-target]'];
 // 官方右栏「工作区文件」胶囊不锁：手机上文件预览（md/PDF）可用
