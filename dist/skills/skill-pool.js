@@ -2,7 +2,7 @@
 //
 // 技能池 <DSH_HOME>/dsh-kit/skill-pool 不挂任何扫描根（DSH 不会把它当技能源）：它是跨工作区
 // 共用技能的**本体**所在地。要让某个工作区看见池里的技能，就在该工作区的一个项目级根
-// 里建一条指向池的目录链接（载体根选择、git 体检与建链/断链见 ./mount.ts）。技能永远
+// 里建一条指向池的目录链接（载体根选定与处理、建链/断链见 ./mount.ts）。技能永远
 // 不进项目仓库——载体根整目录被 git 忽略。
 //
 // 端点（同源校验；webserver 默认只绑 loopback）：
@@ -21,13 +21,11 @@
 //                                             出池 = 先断掉所有挂载链接再搬本体（不带 .git）
 //       {op:'delete', src}                    删除；Windows 移入回收站（链接只断链）
 //       {op:'disable', src, disabled}         改 SKILL.md frontmatter 双键
-//       {op:'setcarrier', carrier}            记住本项目的载体根（两根都在用时二选一）
-//       {op:'prepare', resolve?:'move'|'untrack'}
-//                                             体检载体根：处理已进仓库的内容 + 写忽略
+//       {op:'setcarrier', carrier}            选定本项目的载体根：当场处理到可挂载（写忽略 +
+//                                             从仓库索引移除），失败 = 这个根不落盘、不算选定
 //       {op:'mount', src}                     在载体根建指向池技能的链接（并登记挂载点）
 //       {op:'unmount', src}                   断链（池里的本体不动）
-//       同名冲突回 409 {error:'conflict'}，客户端确认后带 overwrite:true 重发；
-//       载体根有已进仓库的内容时回 409 {error:'tracked', tracked:[...]}。
+//       同名冲突回 409 {error:'conflict'}，客户端确认后带 overwrite:true 重发。
 //
 // 安全边界：
 //   - 可写范围白名单：池目录、项目级两根（自 cwd 推导）、用户级两根；之外一律拒绝。
@@ -41,7 +39,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { recycleDelete, findProjectRoot } from "../core/index.js";
 import { sameOrigin } from "../core/index.js";
-import { computeMountState, forgetMount, liveMounts, mountLink, mountPrecondition, prepareCarrier, setCarrier, syncMounts, unmountLink, } from "./mount.js";
+import { computeMountState, forgetMount, liveMounts, mountLink, mountStateFor, prepareCarrier, setCarrier, syncMounts, unmountLink, } from "./mount.js";
 import { dshHome, kitPath } from "../core/data-path.js";
 import { kitLogger } from "../core/log.js";
 const log = kitLogger('skills');
@@ -548,35 +546,20 @@ export function applySkillPool(ctx, hooks) {
                                 jsonOf(res, 400, { error: '没有会话工作区' });
                                 return;
                             }
+                            // 选定即处理到可挂载：要么整步成功并落盘，要么报错且这个根不算选定
+                            const candidate = await mountStateFor(projectDirs, carrier);
+                            const handled = await prepareCarrier(candidate);
+                            if (!handled.ok) {
+                                jsonOf(res, 400, { error: 'prepare-failed', message: handled.error ?? '载体根处理失败', mount: candidate });
+                                return;
+                            }
                             setCarrier(projectDirs.projectRoot, carrier);
-                            jsonOf(res, 200, { ok: true, op: 'setcarrier', mount: await computeMountState(projectDirs) });
-                            return;
-                        }
-                        if (body.op === 'prepare') {
-                            if (projectDirs === null) {
-                                jsonOf(res, 400, { error: '没有会话工作区' });
-                                return;
-                            }
-                            const resolve = body.resolve === 'move' || body.resolve === 'untrack' ? body.resolve : undefined;
-                            const state = await computeMountState(projectDirs);
-                            const result = await prepareCarrier(projectDirs, state, resolve);
-                            if (!result.ok) {
-                                jsonOf(res, result.needResolve === true ? 409 : 400, {
-                                    error: result.needResolve === true ? 'tracked' : 'prepare-failed',
-                                    message: result.error ?? '载体根里有已进仓库的内容',
-                                    tracked: result.tracked ?? [],
-                                    mount: state,
-                                });
-                                return;
-                            }
                             jsonOf(res, 200, {
                                 ok: true,
-                                op: 'prepare',
-                                moved: result.moved ?? [],
-                                skipped: result.skipped ?? [],
-                                untracked: result.untracked ?? [],
-                                ignoreFile: result.ignoreFile ?? '',
-                                wroteIgnore: result.wroteIgnore === true,
+                                op: 'setcarrier',
+                                untracked: handled.untracked ?? [],
+                                ignoreFile: handled.ignoreFile ?? '',
+                                wroteIgnore: handled.wroteIgnore === true,
                                 mount: await computeMountState(projectDirs),
                             });
                             return;
@@ -610,9 +593,14 @@ export function applySkillPool(ctx, hooks) {
                                 return;
                             }
                             const state = await computeMountState(projectDirs);
-                            const pre = mountPrecondition(state);
-                            if (!pre.ok) {
-                                jsonOf(res, 400, { error: 'not-prepared', message: pre.error ?? '载体根未就绪', mount: state });
+                            if (state.needsChoice) {
+                                jsonOf(res, 400, { error: 'not-prepared', message: '还没选定挂载点：先选池技能挂哪个根（.dsh/skills 或 .agents/skills）', mount: state });
+                                return;
+                            }
+                            // 载体根若已失效（忽略被删/又有内容进仓库），就地再处理一次，处理不了才拒绝
+                            const handled = await prepareCarrier(state);
+                            if (!handled.ok) {
+                                jsonOf(res, 400, { error: 'not-prepared', message: handled.error ?? '载体根未就绪', mount: state });
                                 return;
                             }
                             const mounted = mountLink(located.path, state.carrierDir);
@@ -696,9 +684,13 @@ export function applySkillPool(ctx, hooks) {
                                     return;
                                 }
                                 mountState = await computeMountState(projectDirs);
-                                const pre = mountPrecondition(mountState);
-                                if (!pre.ok) {
-                                    jsonOf(res, 400, { error: 'not-prepared', message: pre.error ?? '载体根未就绪', mount: mountState });
+                                if (mountState.needsChoice) {
+                                    jsonOf(res, 400, { error: 'not-prepared', message: '还没选定挂载点：先选池技能挂哪个根（.dsh/skills 或 .agents/skills）', mount: mountState });
+                                    return;
+                                }
+                                const handled = await prepareCarrier(mountState);
+                                if (!handled.ok) {
+                                    jsonOf(res, 400, { error: 'not-prepared', message: handled.error ?? '载体根未就绪', mount: mountState });
                                     return;
                                 }
                             }

@@ -99,9 +99,9 @@ check(
     comps.PHONE_NAV_ICON.html.indexOf("<svg") === 0 && comps.PHONE_NAV_ICON.html.indexOf("</svg>") > 0,
 );
 
-// 2) 配置页：单组（不出页签）、三字段（端口数值 / 远程域名文本 / 网关常驻开关）
+// 2) 配置页：单组（不出页签）、四字段（端口数值 / 远程域名 + 隧道命令文本 / 网关常驻开关）
 {
-  const fakeForm = { state: { status: "ready", value: { phonePort: 3091, phoneRemoteDomain: "dsh.example.com", phoneKeepGatewayOn: true }, base: { phonePort: 3090, phoneRemoteDomain: "", phoneKeepGatewayOn: false }, user: { phonePort: 3091, phoneKeepGatewayOn: true }, revision: 7, writable: true }, mutate: async () => true };
+  const fakeForm = { state: { status: "ready", value: { phonePort: 3091, phoneRemoteDomain: "dsh.example.com", phoneRemoteCommand: "tunnel.exe -c tunnel.toml", phoneKeepGatewayOn: true }, base: { phonePort: 3090, phoneRemoteDomain: "", phoneRemoteCommand: "", phoneKeepGatewayOn: false }, user: { phonePort: 3091, phoneKeepGatewayOn: true }, revision: 7, writable: true }, mutate: async () => true };
   stateSeq = 0;
   stateStore.clear();
   callLog = [];
@@ -109,13 +109,15 @@ check(
   check("PhoneConfigPage 渲染无异常且单组不出页签", !!out && typeof out === "object" && !callLog.some((c) => c[1] === primStub.SegmentedTabs));
   const sw = callLog.filter((c) => c[1] === primStub.Switch);
   const vf = callLog.filter((c) => c[1] === primStub.SettingsValueField);
-  check("三字段 = 1 开关 + 2 值字段（没有与行开关同粒度的「页入口」开关）", sw.length === 1 && vf.length === 2 && comps.PHONE_CFG_FIELDS.length === 3);
+  check("四字段 = 1 开关 + 3 值字段（没有与行开关同粒度的「页入口」开关）", sw.length === 1 && vf.length === 3 && comps.PHONE_CFG_FIELDS.length === 4);
   const port = vf.find((c) => c[2].id === "dshk-cfgp-phonePort");
   const domain = vf.find((c) => c[2].id === "dshk-cfgp-phoneRemoteDomain");
+  const cmd = vf.find((c) => c[2].id === "dshk-cfgp-phoneRemoteCommand");
   check(
-    "字段回显受理值：端口数值 + 远程域名文本",
+    "字段回显受理值：端口数值 + 远程域名/隧道命令文本",
     !!port && port[2].numeric === true && port[2].text === "3091" && port[2].invalid === false &&
-      !!domain && domain[2].numeric !== true && domain[2].text === "dsh.example.com",
+      !!domain && domain[2].numeric !== true && domain[2].text === "dsh.example.com" &&
+      !!cmd && cmd[2].text === "tunnel.exe -c tunnel.toml",
   );
   check("summary 视图返回 null（行详情收起态）", comps.PhoneConfigPage({ view: "summary", form: fakeForm }) === null);
   // 草稿 ops：number set / 清空文本 unset（按字段表序）；非法数字挡保存
@@ -264,9 +266,9 @@ async function checkApply() {
     "组件入口自持端点与配置，且带探针（404 = 行关闭）",
     compSrc.includes("name = 'dsh-kit/phone'") && compSrc.includes("/dsh-kit-phone/config") &&
       compSrc.includes("/dsh-kit/phone/info") && compSrc.includes("/dsh-kit/phone/link") &&
-      compSrc.includes("/dsh-kit/phone/rotate") && compSrc.includes("/dsh-kit/phone/gateway") &&
-      compSrc.includes("phoneRemoteDomain") && compSrc.includes("phonePort") && compSrc.includes("phoneKeepGatewayOn") &&
-      compSrc.includes("lockPickerEntries") && compSrc.includes("from './gateway.ts'"),
+      compSrc.includes("/dsh-kit/phone/rotate") && compSrc.includes("/dsh-kit/phone/gateway") && compSrc.includes("/dsh-kit/phone/remote") &&
+      compSrc.includes("phoneRemoteDomain") && compSrc.includes("phoneRemoteCommand") && compSrc.includes("phonePort") && compSrc.includes("phoneKeepGatewayOn") &&
+      compSrc.includes("lockPickerEntries") && compSrc.includes("from './gateway.ts'") && compSrc.includes("from './tunnel.ts'"),
   );
   check(
     "手机访问 client 半边整体收进 phoneModule，根 UI_CSS 不再持有手机访问样式",

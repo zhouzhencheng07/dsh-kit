@@ -1,14 +1,15 @@
-// 技能池挂载：载体根选择 + git 体检/忽略 + 目录链接的建立与移除。
+// 技能池挂载：载体根选择 + 目录链接的建立与移除。
 //
 // 池（<DSH_HOME>/dsh-kit/skill-pool）不挂扫描根，要让某个工作区看见池里的技能，就得在该工作区
 // 的一个项目级根里建一条指向池的目录链接（Windows 用 junction、POSIX 用目录 symlink）。
 // 两个项目级根放什么由用户自己决定：插件不判断哪个根"在用"、也不默认哪一根。这个工作区
-// 第一次挂池技能时面板给出两个根让用户选，选定后记进策略文件，之后所有池链接（含入池
-// 自动回挂）都落在那儿。载体根整目录写进 .gitignore——技能不进项目仓库（junction 会被
-// git 当普通目录收录、`git restore` 还会写穿回池里的本体）。
+// 第一次挂池技能时面板给出两个根让用户选，**选定即一次处理到可挂载**（载体根整目录写进
+// .gitignore、并从仓库索引移除），之后所有池链接（含入池自动回挂）都落在那儿。
+// 技能不进项目仓库——junction 会被 git 当普通目录收录、`git restore` 还会写穿回池里的本体。
+// 取消选定 = 什么都不做、这个根不落盘：要么不用，要么处理到能挂，没有中间态。
 //
 // 本模块只做机制，不做取舍：跨根同名的优先级由宿主 rank 决定，删链接还是删本体由用户
-// 决定；这里只负责"判定载体根 / 写忽略 / 建链 / 断链"，外加一份挂载登记表——池技能被
+// 决定；这里只负责"判定载体根 / 处理到可挂载 / 建链 / 断链"，外加一份挂载登记表——池技能被
 // 哪些工作区挂了只存在于各项目的磁盘上，出池或删除本体时得靠这份账断链。
 import fs from 'node:fs';
 import path from 'node:path';
@@ -202,19 +203,17 @@ async function repoRootOf(dir) {
     const out = result.out.trim();
     return out !== '' ? out : null;
 }
-/** 读载体根当前状态（只读，不写盘）：挂载点、忽略状态、已跟踪内容 */
-export async function computeMountState(dirs) {
-    const carrier = readPolicy().projects[dirs.projectRoot]?.carrier ?? null;
+/** 读某个载体根的当前状态（只读，不写盘）：忽略状态、已跟踪内容；carrier=null 表示还没选过 */
+export async function mountStateFor(dirs, carrier) {
     // 未选定时按 .agents 探一份只读状态给需要选择的面板用（needsChoice 为真时面板不显示这些）
     const effective = carrier ?? 'project-agents';
     const carrierDir = effective === 'project-dsh' ? dirs.dshDir : dirs.agentsDir;
-    const otherRoot = effective === 'project-dsh' ? 'project-agents' : 'project-dsh';
     const carrierRoles = entryRoles(carrierDir);
     const repoRoot = await repoRootOf(dirs.projectRoot);
     let ignored = null;
     let tracked = [];
     if (repoRoot !== null) {
-        const rel = toPosix(path.relative(repoRoot, effective === 'project-dsh' ? dirs.dshDir : dirs.agentsDir));
+        const rel = toPosix(path.relative(repoRoot, carrierDir));
         const check = await runGit(['check-ignore', '-v', '--', `${rel}/`], repoRoot);
         ignored = check.ok && check.out.trim() !== '';
         const ls = await runGit(['ls-files', '--', rel], repoRoot);
@@ -225,8 +224,6 @@ export async function computeMountState(dirs) {
         repoRoot,
         carrierRoot: carrier,
         carrierDir,
-        otherRoot,
-        otherDir: otherRoot === 'project-dsh' ? dirs.dshDir : dirs.agentsDir,
         pinned: carrier !== null,
         needsChoice: carrier === null,
         ignored,
@@ -234,7 +231,12 @@ export async function computeMountState(dirs) {
         carrierOwn: carrierRoles.own,
     };
 }
-// ── git 体检与忽略 ──
+/** 本工作区已选定的载体根状态（没选过时 carrierRoot=null、needsChoice=true） */
+export async function computeMountState(dirs) {
+    const carrier = readPolicy().projects[dirs.projectRoot]?.carrier ?? null;
+    return mountStateFor(dirs, carrier);
+}
+// ── 处理到可挂载（忽略 + 从索引移除）──
 /** 忽略文件里那行锚定模式（相对忽略文件所在目录 = 仓库根 / 项目根） */
 function ignoreLineOf(state) {
     const base = state.repoRoot ?? state.projectRoot;
@@ -273,84 +275,33 @@ function ensureIgnoreLine(file, line) {
     return true;
 }
 /**
- * 体检并准备载体根：处理已进仓库的内容（搬到另一个根 / 仅从仓库移除）+ 写忽略规则。
+ * 把载体根一次处理到可挂载：从仓库索引移除（文件保留）+ 写忽略规则并自检生效。
  * 未忽略的载体根不能挂载——一挂，池里的内容就会被项目仓库当普通文件收进去。
+ * 调用方要么整步成功、要么整步不做：没处理完的中间态一律不落盘。
  */
-export async function prepareCarrier(dirs, state, resolve) {
+export async function prepareCarrier(state) {
     if (state.needsChoice)
         return { ok: false, error: '还没选定挂载点：先选池技能挂哪个根（.dsh/skills 或 .agents/skills）' };
-    const tracked = state.repoRoot !== null ? state.tracked : [];
-    if (tracked.length > 0 && resolve === undefined)
-        return { ok: false, needResolve: true, tracked };
-    const moved = [];
-    const skipped = [];
-    if (resolve === 'move') {
-        fs.mkdirSync(state.otherDir, { recursive: true });
-        let dirents = [];
-        try {
-            dirents = fs.readdirSync(state.carrierDir, { withFileTypes: true });
-        }
-        catch {
-            // 载体根还不存在，没有要搬的
-        }
-        for (const ent of dirents) {
-            if (ent.name.startsWith('.'))
-                continue;
-            const full = path.join(state.carrierDir, ent.name);
-            try {
-                if (fs.lstatSync(full).isSymbolicLink())
-                    continue; // 已有的池链接不动
-            }
-            catch {
-                continue;
-            }
-            const dst = path.join(state.otherDir, ent.name);
-            if (fs.existsSync(dst)) {
-                skipped.push(ent.name);
-                continue;
-            }
-            try {
-                fs.renameSync(full, dst);
-                moved.push(ent.name);
-            }
-            catch {
-                skipped.push(ent.name);
-            }
-        }
-    }
     const untracked = [];
-    if (state.repoRoot !== null && tracked.length > 0) {
-        const base = state.repoRoot;
-        const rel = toPosix(path.relative(base, state.carrierDir));
-        const result = await runGit(['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', rel], base);
-        if (result.ok)
-            untracked.push(...tracked);
-    }
     const { file, line } = ignoreLineOf(state);
+    if (state.repoRoot !== null && state.tracked.length > 0) {
+        const rel = toPosix(path.relative(state.repoRoot, state.carrierDir));
+        const result = await runGit(['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', rel], state.repoRoot);
+        if (!result.ok)
+            return { ok: false, error: `从仓库索引移除失败：${state.carrierDir}`, untracked, ignoreFile: file, wroteIgnore: false };
+        untracked.push(...state.tracked);
+    }
     const wroteIgnore = ensureIgnoreLine(file, line);
     if (state.repoRoot !== null) {
         const check = await runGit(['check-ignore', '-v', '--', carrierSpec(state, state.repoRoot)], state.repoRoot);
         if (!(check.ok && check.out.trim() !== '')) {
-            return { ok: false, error: `忽略规则未生效：${state.carrierDir} 仍会被仓库跟踪`, moved, skipped, untracked, ignoreFile: file, wroteIgnore };
+            return { ok: false, error: `忽略规则未生效：${state.carrierDir} 仍会被仓库跟踪`, untracked, ignoreFile: file, wroteIgnore };
         }
     }
     else if (!hasIgnoreLine(file, line)) {
-        return { ok: false, error: '忽略规则写入失败', moved, skipped, untracked, ignoreFile: file, wroteIgnore };
+        return { ok: false, error: '忽略规则写入失败', untracked, ignoreFile: file, wroteIgnore };
     }
-    return { ok: true, moved, skipped, untracked, ignoreFile: file, wroteIgnore };
-}
-/** 挂载前置条件：载体根已由用户选定且已被忽略（非仓库时看忽略行是否在 .gitignore 里） */
-export function mountPrecondition(state) {
-    if (state.needsChoice)
-        return { ok: false, error: '还没选定挂载点：先选池技能挂哪个根（.dsh/skills 或 .agents/skills）' };
-    if (state.ignored === false)
-        return { ok: false, error: '载体根还没被 git 忽略：先做体检（否则池里的技能会被项目仓库收进去）' };
-    if (state.repoRoot === null) {
-        const { file, line } = ignoreLineOf(state);
-        if (!hasIgnoreLine(file, line))
-            return { ok: false, error: '载体根还没写忽略规则：先做体检' };
-    }
-    return { ok: true };
+    return { ok: true, untracked, ignoreFile: file, wroteIgnore };
 }
 // ── 链接 ──
 /** 建一条指向池技能的目录链接（Windows junction 免管理员；POSIX 目录 symlink） */

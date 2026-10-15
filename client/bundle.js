@@ -2358,13 +2358,12 @@ ellipsis，窄列只截字不破版 */
       skPickAgents: "用 .agents/skills",
       skIgnored: "已忽略",
       skNotIgnored: "未忽略",
-      skPrepare: "体检并准备",
+      skCarrierAsk: "将忽略技能根（写入 .gitignore），并把它从仓库索引移除（文件保留）；继续就选定这个根",
+      skCarrierAskConfirm: "确定",
       skCarrierOwn: "载体根里有自己的技能",
-      skCarrierOwnTip: "载体根里还有非链接的技能：它们不会进项目仓库，要收进仓库就搬到另一个根",
+      skCarrierOwnTip: "载体根里还有非链接的技能：它们不会进项目仓库，要收进仓库请自己搬到另一个根",
       skTracked: "载体根下有已进仓库的内容",
-      skTrackedTip: "先把它们从仓库索引移除（文件保留），或搬到另一个根；否则挂链接会把池里的内容带进仓库",
-      skMoveLocalTo: "搬到",
-      skUntrack: "仅从仓库移除",
+      skTrackedTip: "选定这个根时会从仓库索引移除它们（文件保留），并写好忽略规则",
       skPrepared: "载体根已就绪",
       skMount: "挂载",
       skUnmount: "卸载",
@@ -2434,13 +2433,12 @@ ellipsis，窄列只截字不破版 */
       skPickAgents: "Use .agents/skills",
       skIgnored: "ignored",
       skNotIgnored: "not ignored",
-      skPrepare: "Check and prepare",
+      skCarrierAsk: "This will ignore the skill root (write .gitignore) and remove it from the repo index (files kept). Continue to select this root",
+      skCarrierAskConfirm: "Confirm",
       skCarrierOwn: "This root has skills of its own",
-      skCarrierOwnTip: "The carrier root also holds non-link skills: they will not enter the project repo; move them to the other root to keep them in the repo",
+      skCarrierOwnTip: "The carrier root also holds non-link skills: they will not enter the project repo; move them yourself to keep them in the repo",
       skTracked: "This root has content already in the repo",
-      skTrackedTip: "Remove them from the repo index (files are kept) or move them to the other root; otherwise linking would drag pool content into the repo",
-      skMoveLocalTo: "Move to",
-      skUntrack: "Remove from repo only",
+      skTrackedTip: "Selecting this root removes them from the repo index (files kept) and writes the ignore rule",
       skPrepared: "Carrier root ready",
       skMount: "Mount",
       skUnmount: "Unmount",
@@ -2939,11 +2937,10 @@ ellipsis，窄列只截字不破版 */
     }
 
     /**
-     * 挂载条：挂载点（用户自己选的载体根）+ git 忽略状态 + 体检入口。只呈现事实与机制操作——
-     * 没选过就先让用户选一个根；选定后这个工作区的池链接都挂那儿，插件不再自己判断该用哪根。
+     * 挂载条：没选过就让用户选一个根；选定 = 当场处理到可挂载（写忽略 + 从仓库索引移除），
+     * 取消 = 这个根不落盘。选定后只呈现事实（哪根、已忽略、根里有什么），没有独立的体检入口。
      */
-    function MountBar({ mount, busy, resolvePrompt, onChoose, onPrepare, onResolve, onCancelResolve }) {
-      const needPrepare = mount.ignored === false || mount.tracked.length > 0 || mount.carrierOwn > 0;
+    function MountBar({ mount, busy, pendingCarrier, onChoose, onConfirmCarrier, onCancelCarrier }) {
       return jsxRuntime.jsxs(jsxRuntime.Fragment, {
         children: [
           jsxRuntime.jsxs("div", {
@@ -2971,27 +2968,25 @@ ellipsis，窄列只截字不破版 */
                   })
                 : null,
               jsxRuntime.jsx("span", { className: "dshk-sk-spacer" }),
-              mount.needsChoice
+              mount.needsChoice && pendingCarrier === null
                 ? jsxRuntime.jsxs(jsxRuntime.Fragment, {
                     children: [
                       jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => onChoose("project-dsh"), children: t("skPickDsh") }),
                       jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => onChoose("project-agents"), children: t("skPickAgents") }),
                     ],
                   })
-                : needPrepare
-                  ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => onPrepare(), children: t("skPrepare") })
-                  : null,
+                : null,
             ],
           }),
-          resolvePrompt !== null
+          pendingCarrier !== null
             ? jsxRuntime.jsxs("div", {
                 className: "dshk-sk-bar",
                 children: [
-                  jsxRuntime.jsx("span", { className: "dshk-sk-warn", children: t("skTrackedTip") }),
+                  jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: skRootShort(pendingCarrier) }),
+                  jsxRuntime.jsx("span", { className: "dshk-sk-warn", children: t("skCarrierAsk") }),
                   jsxRuntime.jsx("span", { className: "dshk-sk-spacer" }),
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => onResolve("move"), children: `${t("skMoveLocalTo")} ${skRootShort(mount.otherRoot)}` }),
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => onResolve("untrack"), children: t("skUntrack") }),
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onCancelResolve, children: t("skCancel") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onConfirmCarrier, children: t("skCarrierAskConfirm") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onCancelCarrier, children: t("skCancel") }),
                 ],
               })
             : null,
@@ -3010,8 +3005,8 @@ ellipsis，窄列只截字不破版 */
       const [nonce, setNonce] = react.useState(0);
       // 展开中的移动目标选择条（技能路径，单值）；单值保证同一时间只展开一行
       const [picker, setPicker] = react.useState(null);
-      // 载体根下有已进仓库的内容时，等用户选处理方式（[] = 已弹出，等待选择）
-      const [resolvePrompt, setResolvePrompt] = react.useState(null);
+      // 已点选但还没确认的载体根（null = 没有待确认的）；确认才真正处理并落盘
+      const [pendingCarrier, setPendingCarrier] = react.useState(null);
 
       react.useEffect(() => {
         const controller = new AbortController();
@@ -3027,7 +3022,7 @@ ellipsis，窄列只截字不破版 */
       }, [cwd, nonce]);
 
       /** 各操作成功后显示的那句话（带 warning 的响应用 warning） */
-      const OP_DONE_KEY = { delete: "skDeleted", mount: "skMounted", unmount: "skUnmounted", prepare: "skPrepared", move: "skMoved" };
+      const OP_DONE_KEY = { delete: "skDeleted", mount: "skMounted", unmount: "skUnmounted", setcarrier: "skPrepared", move: "skMoved" };
 
       const runOp = async (payload) => {
         if (busy) return;
@@ -3038,11 +3033,6 @@ ellipsis，窄列只截字不破版 */
           try {
             body = await postSkillOp(payload);
           } catch (err) {
-            // 载体根下有已进仓库的内容：不是错误而是缺一个决定（搬到另一个根 / 仅从仓库移除）
-            if (err && err.status === 409 && err.body && err.body.error === "tracked") {
-              setResolvePrompt(Array.isArray(err.body.tracked) ? err.body.tracked : []);
-              return;
-            }
             if (err && err.status === 409 && window.confirm(t("skOverwrite"))) {
               // 覆盖重试同样可能失败：外层只有 finally，这里再抛就是未处理拒绝——
               // 用户只看到忙态消失、没有任何提示
@@ -3060,7 +3050,6 @@ ellipsis，窄列只截字不破版 */
           // 宿主做了但没做全（例如入池后没能挂回来）：照它的话说出来，别用"完成"糊过去
           const warning = body && typeof body.warning === "string" && body.warning !== "" ? body.warning : null;
           setMessage(warning ?? t(OP_DONE_KEY[payload.op] ?? "skDone"));
-          setResolvePrompt(null);
           setPicker(null);
           setNonce((n) => n + 1);
         } finally {
@@ -3091,11 +3080,14 @@ ellipsis，窄列只截字不破版 */
             ? jsxRuntime.jsx(MountBar, {
                 mount: data.mount,
                 busy,
-                resolvePrompt,
-                onChoose: (carrier) => runOp({ op: "setcarrier", carrier, cwd }),
-                onPrepare: () => runOp({ op: "prepare", cwd }),
-                onResolve: (resolve) => runOp({ op: "prepare", cwd, resolve }),
-                onCancelResolve: () => setResolvePrompt(null),
+                pendingCarrier,
+                onChoose: (carrier) => setPendingCarrier(carrier),
+                onConfirmCarrier: () => {
+                  const carrier = pendingCarrier;
+                  setPendingCarrier(null);
+                  if (carrier !== null) runOp({ op: "setcarrier", carrier, cwd });
+                },
+                onCancelCarrier: () => setPendingCarrier(null),
               })
             : null,
           data && Array.isArray(data.brokenLinks) && data.brokenLinks.length > 0
@@ -11224,11 +11216,20 @@ ellipsis，窄列只截字不破版 */
       phoneRotated: "链接已刷新，旧链接已失效",
       phoneGateFail: "网关启停失败：{error}",
       phoneRotateFail: "刷新失败：{error}",
+      phoneRemoteStart: "开启远程",
+      phoneRemoteStop: "关闭远程",
+      phoneRemoteOff: "远程未开启（只跑局域网）",
+      phoneRemoteOn: "远程已开启",
+      phoneRemoteUnreachable: "远程已开启，但域名探测不可达：检查隧道与远程服务",
+      phoneRemoteErr: "远程未运行：{error}",
+      phoneRemoteNoCmd: "没填远程隧道命令",
       kcfgGroupPhone: "手机访问",
       kcfgPhonePort: "手机访问端口（1–65535）",
       kcfgPhonePortHint: "网关对外端口（绑定 0.0.0.0）。",
       kcfgPhoneRemoteDomain: "手机远程域名",
       kcfgPhoneRemoteDomainHint: "远程访问域名（如内网穿透地址），留空只用局域网。",
+      kcfgPhoneRemoteCommand: "远程隧道命令",
+      kcfgPhoneRemoteCommandHint: "本机隧道客户端的启动命令（如 ...exe -c ...toml），含空格的路径用引号；开启远程时由插件拉起进程。",
       kcfgPhoneKeepGatewayOn: "网关常驻",
       kcfgPhoneKeepGatewayOnHint: "页面关闭后网关继续跑。",
     };
@@ -11252,11 +11253,20 @@ ellipsis，窄列只截字不破版 */
       phoneRotated: "Link rotated; the old one is dead",
       phoneGateFail: "Could not {op} the gateway: {error}",
       phoneRotateFail: "Rotate failed: {error}",
+      phoneRemoteStart: "Start remote",
+      phoneRemoteStop: "Stop remote",
+      phoneRemoteOff: "Remote off (LAN only)",
+      phoneRemoteOn: "Remote on",
+      phoneRemoteUnreachable: "Remote is on but the domain probe failed: check the tunnel and the remote service",
+      phoneRemoteErr: "Remote not running: {error}",
+      phoneRemoteNoCmd: "no remote tunnel command",
       kcfgGroupPhone: "Phone access",
       kcfgPhonePort: "Phone access port (1–65535)",
       kcfgPhonePortHint: "Gateway port bound on 0.0.0.0.",
       kcfgPhoneRemoteDomain: "Phone remote domain",
       kcfgPhoneRemoteDomainHint: "Remote access domain (e.g. a tunnel host); leave blank for LAN only.",
+      kcfgPhoneRemoteCommand: "Remote tunnel command",
+      kcfgPhoneRemoteCommandHint: "Command that starts the local tunnel client (e.g. ...exe -c ...toml); quote paths with spaces. The plugin runs it when remote is on.",
       kcfgPhoneKeepGatewayOn: "Keep gateway on",
       kcfgPhoneKeepGatewayOnHint: "Keeps the gateway running after the page closes.",
     };
@@ -11289,6 +11299,7 @@ ellipsis，窄列只截字不破版 */
     const PHONE_CFG_FIELDS = [
       { key: "phonePort", type: "number", min: 1, max: 65535, group: "kcfgGroupPhone", labelKey: "kcfgPhonePort", hintKey: "kcfgPhonePortHint" },
       { key: "phoneRemoteDomain", type: "string", group: "kcfgGroupPhone", labelKey: "kcfgPhoneRemoteDomain", hintKey: "kcfgPhoneRemoteDomainHint" },
+      { key: "phoneRemoteCommand", type: "string", group: "kcfgGroupPhone", labelKey: "kcfgPhoneRemoteCommand", hintKey: "kcfgPhoneRemoteCommandHint" },
       { key: "phoneKeepGatewayOn", type: "bool", group: "kcfgGroupPhone", labelKey: "kcfgPhoneKeepGatewayOn", hintKey: "kcfgPhoneKeepGatewayOnHint" },
     ];
     const PHONE_CFG_GROUPS = ["kcfgGroupPhone"];
@@ -11422,6 +11433,30 @@ ellipsis，窄列只截字不破版 */
         }
         setGateBusy(false);
       };
+      // 远程隧道开关（POST /dsh-kit/phone/remote；进程启停归宿主，见 src/phone/tunnel.ts）。
+      // 开启远程时宿主会把网关一并拉起，所以这里不额外处理网关。
+      const [remoteBusy, setRemoteBusy] = react.useState(false);
+      const toggleRemote = async (next) => {
+        if (remoteBusy) return;
+        setRemoteBusy(true);
+        try {
+          const body = await kitPostJson("/dsh-kit/phone/remote", { on: next }, (b) => typeof b.remoteOn === "boolean");
+          setInfo((info) =>
+            info === null
+              ? info
+              : { ...info, remoteOn: body.remoteOn, remoteRunning: body.running === true, remoteError: body.error ?? null, remoteReachable: null },
+          );
+          if (body.remoteOn && body.running) {
+            fetchPhoneLinks(new AbortController().signal).then(setLinkData).catch(() => {});
+          } else {
+            setLinkData(null);
+          }
+        } catch (e) {
+          setNotice(tf("phoneGateFail", { op: next ? t("phoneRemoteStart") : t("phoneRemoteStop"), error: String(e?.message ?? e) }));
+          setTimeout(() => setNotice(""), 3000);
+        }
+        setRemoteBusy(false);
+      };
       // 手动轮换令牌：作废旧链接生成新链接（启停不轮换，见宿主 setGatewayEnabled）
       const rotateLink = async () => {
         if (gateBusy) return;
@@ -11516,6 +11551,21 @@ ellipsis，窄列只截字不破版 */
       if (loadErr !== "") {
         statusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: tf("phoneLoadFail", { error: loadErr }) });
       }
+      const remoteOn = info !== null && info.remoteOn === true;
+      let remoteStatusNode = null;
+      if (info !== null) {
+        if (!remoteOn) remoteStatusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: t("phoneRemoteOff") });
+        else if (info.remoteRunning !== true) {
+          remoteStatusNode = jsxRuntime.jsx("p", {
+            className: "dshk-phone-status",
+            children: tf("phoneRemoteErr", { error: info.remoteError ?? (info.remoteCommand === "" ? t("phoneRemoteNoCmd") : "unknown") }),
+          });
+        } else if (info.remoteReachable === false) {
+          remoteStatusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: t("phoneRemoteUnreachable") });
+        } else {
+          remoteStatusNode = jsxRuntime.jsx("p", { className: "dshk-phone-status", children: t("phoneRemoteOn") });
+        }
+      }
 
       return jsxRuntime.jsxs("div", {
         className: "dshk-phone",
@@ -11540,6 +11590,18 @@ ellipsis，窄列只截字不破版 */
             children: t(gatewayOn ? "phoneGateStop" : "phoneGateStart"),
           }),
           statusNode,
+          info !== null
+            ? jsxRuntime.jsx("button", {
+                type: "button",
+                className: remoteOn ? "dshk-phone-gatebtn dshk-phone-gatebtn-stop" : "dshk-phone-gatebtn",
+                disabled: remoteBusy,
+                onClick: () => {
+                  toggleRemote(!remoteOn);
+                },
+                children: t(remoteOn ? "phoneRemoteStop" : "phoneRemoteStart"),
+              })
+            : null,
+          remoteStatusNode,
           links.length > 0
             ? jsxRuntime.jsxs(
                 "div",

@@ -354,7 +354,13 @@ async function checkApply() {
       !mountSrc.includes("linkedCarrier") &&
       !mountSrc.includes("poolLinks"),
   );
-  check("选定后一切挂载都去那儿（另一根只当搬出载体根时的落点）", mountSrc.includes("state.otherDir") && mountSrc.includes("export function setCarrier"));
+  check(
+    "选定后一切挂载都去那儿（选定即处理到可挂载，没有独立体检与半处理状态）",
+    mountSrc.includes("export function setCarrier") &&
+      mountSrc.includes("export async function prepareCarrier") &&
+      !mountSrc.includes("mountPrecondition") &&
+      !mountSrc.includes("resolve === 'move'"),
+  );
 }
 
 checkOpenInApp().then(checkEndpoint).then(checkApply).then(() => {

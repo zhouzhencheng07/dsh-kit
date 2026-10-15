@@ -13,9 +13,6 @@ export interface MountState {
     /** 挂载点（载体根）；null = 这个工作区还没选过，第一次挂载时问用户 */
     carrierRoot: ProjectRootId | null;
     carrierDir: string;
-    /** 另一个根：载体根里有用户自己的技能时，可把实体挪到那边去（插件不指定谁该放什么） */
-    otherRoot: ProjectRootId;
-    otherDir: string;
     /** 载体根来自用户选择（已持久化）；false = 还没选过，等用户选 */
     pinned: boolean;
     needsChoice: boolean;
@@ -50,30 +47,24 @@ export declare function syncMounts(poolDir: string, items: Array<{
 export declare function forgetMount(poolDir: string, link: string): void;
 /** 某个池技能当前有效的挂载点（读的时候顺带清理失效条目） */
 export declare function liveMounts(poolDir: string, poolSkillDir: string): MountRecord[];
-/** 读载体根当前状态（只读，不写盘）：挂载点、忽略状态、已跟踪内容 */
+/** 读某个载体根的当前状态（只读，不写盘）：忽略状态、已跟踪内容；carrier=null 表示还没选过 */
+export declare function mountStateFor(dirs: ProjectDirs, carrier: ProjectRootId | null): Promise<MountState>;
+/** 本工作区已选定的载体根状态（没选过时 carrierRoot=null、needsChoice=true） */
 export declare function computeMountState(dirs: ProjectDirs): Promise<MountState>;
 export interface PrepareResult {
     ok: boolean;
     error?: string;
-    /** 载体根里有已进仓库的内容，需要用户先选处理方式 */
-    needResolve?: boolean;
-    tracked?: string[];
-    moved?: string[];
-    skipped?: string[];
+    /** 从仓库索引移除的路径（相对仓库根；文件都还在） */
     untracked?: string[];
     ignoreFile?: string;
     wroteIgnore?: boolean;
 }
 /**
- * 体检并准备载体根：处理已进仓库的内容（搬到另一个根 / 仅从仓库移除）+ 写忽略规则。
+ * 把载体根一次处理到可挂载：从仓库索引移除（文件保留）+ 写忽略规则并自检生效。
  * 未忽略的载体根不能挂载——一挂，池里的内容就会被项目仓库当普通文件收进去。
+ * 调用方要么整步成功、要么整步不做：没处理完的中间态一律不落盘。
  */
-export declare function prepareCarrier(dirs: ProjectDirs, state: MountState, resolve?: 'move' | 'untrack'): Promise<PrepareResult>;
-/** 挂载前置条件：载体根已由用户选定且已被忽略（非仓库时看忽略行是否在 .gitignore 里） */
-export declare function mountPrecondition(state: MountState): {
-    ok: boolean;
-    error?: string;
-};
+export declare function prepareCarrier(state: MountState): Promise<PrepareResult>;
 /** 建一条指向池技能的目录链接（Windows junction 免管理员；POSIX 目录 symlink） */
 export declare function mountLink(poolSkillDir: string, carrierDir: string): {
     ok: boolean;

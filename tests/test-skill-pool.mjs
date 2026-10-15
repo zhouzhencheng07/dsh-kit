@@ -224,24 +224,14 @@ try {
   );
   res = await opIn(proj, { op: "mount", src: poolSkill.path });
   check("挂载：没选载体根 → 400 not-prepared", res.status === 400 && (await bodyOf(res)).error === "not-prepared");
-  res = await opIn(proj, { op: "prepare" });
-  check("体检：没选载体根 → 400（先选再动盘）", res.status === 400);
   res = await opIn(proj, { op: "setcarrier", carrier: "project-agents" });
-  check("选载体根：200 且即刻生效", res.status === 200 && (await bodyOf(res)).mount.carrierRoot === "project-agents");
-  m = (await listIn(proj)).mount;
-  check("选载体根：持久化（不再问）", m.pinned === true && m.needsChoice === false && m.carrierRoot === "project-agents");
-  check("选载体根：另一根就是没选的那个（载体根里有自己的技能时可搬过去）", m.otherRoot === "project-dsh", JSON.stringify(m));
-  check("载体根：新仓库尚未忽略载体根", m.ignored === false && m.tracked.length === 0);
-
-  // 12.2 体检：写忽略（幂等），有仓库时自检生效
-  res = await opIn(proj, { op: "prepare" });
   let prep = await bodyOf(res);
-  check("体检：200 且写入忽略", res.status === 200 && prep.ok === true && prep.wroteIgnore === true, JSON.stringify(prep));
-  check("体检：.gitignore 写入锚定的载体根", fs.readFileSync(path.join(proj, ".gitignore"), "utf8").includes("/.agents/skills/"));
+  check("选载体根：200 且当场处理到可挂载", res.status === 200 && prep.wroteIgnore === true && prep.mount.carrierRoot === "project-agents", JSON.stringify(prep));
+  check("选载体根：.gitignore 写入锚定的载体根", fs.readFileSync(path.join(proj, ".gitignore"), "utf8").includes("/.agents/skills/"));
   m = (await listIn(proj)).mount;
-  check("体检后：载体根已忽略、无待处理内容", m.ignored === true && m.tracked.length === 0);
-  res = await opIn(proj, { op: "prepare" });
-  check("体检：重复执行不重复写", res.status === 200 && (await bodyOf(res)).wroteIgnore === false);
+  check("选载体根：持久化（不再问）、已忽略无待处理", m.pinned === true && m.needsChoice === false && m.carrierRoot === "project-agents" && m.ignored === true && m.tracked.length === 0);
+  res = await opIn(proj, { op: "setcarrier", carrier: "project-agents" });
+  check("选载体根：重复执行不重复写忽略", res.status === 200 && (await bodyOf(res)).wroteIgnore === false);
 
   // 12.3 挂载 = 目录链接，宿主照常发现
   res = await opIn(proj, { op: "mount", src: poolSkill.path });
@@ -289,57 +279,39 @@ try {
   m = (await listIn(proj2)).mount;
   check("载体根：没选过 → 等用户选（根里放没放技能都一样）", m.needsChoice === true && m.carrierRoot === null);
   check("载体根：报告已进仓库的内容", m.tracked.some((p) => p.includes("legacy-kit")), JSON.stringify(m.tracked));
-  res = await opIn(proj2, { op: "prepare" });
-  check("体检：未选载体根 → 400", res.status === 400);
   res = await opIn(proj2, { op: "setcarrier", carrier: "project-agents" });
-  check("选载体根：200 且即刻生效", res.status === 200 && (await bodyOf(res)).mount.carrierRoot === "project-agents");
+  const pick2 = await bodyOf(res);
+  check("选载体根：当场把已进仓库的内容从索引移除并写忽略", res.status === 200 && pick2.untracked?.some((p) => p.includes("legacy-kit")) && pick2.wroteIgnore === true, JSON.stringify(pick2));
+  check("选载体根：文件保留、仓库不再跟踪", fs.existsSync(path.join(proj2, ".agents", "skills", "legacy-kit", "SKILL.md")) && git(proj2, ["ls-files", "--", ".agents/skills"]).stdout.trim() === "");
   m = (await listIn(proj2)).mount;
-  check("选载体根：持久化（不再问）", m.pinned === true && m.needsChoice === false && m.otherRoot === "project-dsh");
-  res = await opIn(proj2, { op: "prepare" });
-  check("体检：有已进仓库的内容 → 409 tracked（等用户选）", res.status === 409 && (await bodyOf(res)).error === "tracked");
-  res = await opIn(proj2, { op: "prepare", resolve: "untrack" });
-  check("体检·仅从仓库移除：200", res.status === 200);
-  check(
-    "体检·仅从仓库移除：文件保留、仓库不再跟踪",
-    fs.existsSync(path.join(proj2, ".agents", "skills", "legacy-kit", "SKILL.md")) &&
-      git(proj2, ["ls-files", "--", ".agents/skills"]).stdout.trim() === "",
-  );
-  m = (await listIn(proj2)).mount;
-  check("体检后：已忽略、无待处理内容", m.ignored === true && m.tracked.length === 0);
+  check("选载体根：持久化（不再问）、已忽略无待处理", m.pinned === true && m.needsChoice === false && m.ignored === true && m.tracked.length === 0);
 
-  // 12.7 体检·搬到项目技能根
+  // 12.7 选定 = 一次处理到位：只移出仓库索引，实体不搬家（要收进仓库得自己搬到另一个根）
   const proj3 = mkProject("dshkit-mount3-");
   mkSkillIn(proj3, ".dsh/skills", "keep-kit", "本地根");
   mkSkillIn(proj3, ".agents/skills", "movable-kit", "载体根里的实体");
   git(proj3, ["add", "-A"]);
   git(proj3, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"]);
-  await opIn(proj3, { op: "setcarrier", carrier: "project-agents" });
-  res = await opIn(proj3, { op: "prepare", resolve: "move" });
+  res = await opIn(proj3, { op: "setcarrier", carrier: "project-agents" });
   prep = await bodyOf(res);
-  check("体检·搬到项目技能根：200 且报告搬了 1 项", res.status === 200 && prep.moved?.includes("movable-kit"), JSON.stringify(prep));
-  check(
-    "体检·搬到项目技能根：实体落到本地根、载体根清空",
-    fs.existsSync(path.join(proj3, ".dsh", "skills", "movable-kit", "SKILL.md")) &&
-      !fs.existsSync(path.join(proj3, ".agents", "skills", "movable-kit")),
-  );
-  check("体检·搬到项目技能根：忽略同时写好", fs.readFileSync(path.join(proj3, ".gitignore"), "utf8").includes("/.agents/skills/"));
+  check("选载体根：已进仓库的内容从索引移除", res.status === 200 && prep.untracked?.includes(".agents/skills/movable-kit/SKILL.md"), JSON.stringify(prep));
+  check("选载体根：实体还在原处（只移出索引，不搬家）", fs.existsSync(path.join(proj3, ".agents", "skills", "movable-kit", "SKILL.md")));
+  check("选载体根：忽略同时写好", fs.readFileSync(path.join(proj3, ".gitignore"), "utf8").includes("/.agents/skills/"));
 
   // 12.8 非仓库也先写忽略（防以后建仓才乱），写完即可挂载
   const proj4 = mkProject("dshkit-mount4-", false);
   mkSkillIn(proj4, ".dsh/skills", "plain-kit", "非仓库项目");
   await opIn(proj4, { op: "setcarrier", carrier: "project-agents" });
   m = (await listIn(proj4)).mount;
-  check("非仓库：没有仓库可体检（repoRoot/ignored 为 null）", m.repoRoot === null && m.ignored === null);
-  res = await opIn(proj4, { op: "prepare" });
-  check("非仓库：体检也写 .gitignore", res.status === 200 && fs.readFileSync(path.join(proj4, ".gitignore"), "utf8").includes("/.agents/skills/"));
+  check("非仓库：没有仓库可处理（repoRoot/ignored 为 null）", m.repoRoot === null && m.ignored === null);
+  check("非仓库：选定也写 .gitignore", fs.readFileSync(path.join(proj4, ".gitignore"), "utf8").includes("/.agents/skills/"));
   res = await opIn(proj4, { op: "mount", src: poolSkill.path });
-  check("非仓库：写完忽略即可挂载", res.status === 200 && fs.lstatSync(path.join(proj4, ".agents", "skills", "hello-kit")).isSymbolicLink());
+  check("非仓库：选定后即可挂载", res.status === 200 && fs.lstatSync(path.join(proj4, ".agents", "skills", "hello-kit")).isSymbolicLink());
 
   // 12.9 选定之后一切都去那儿（含入池自动回挂）：另一根里放什么、哪根更"像在用"都不再影响
   const proj5 = mkProject("dshkit-mount5-");
   mkSkillIn(proj5, ".dsh/skills", "own-kit", "项目自己的技能");
   await opIn(proj5, { op: "setcarrier", carrier: "project-agents" });
-  await opIn(proj5, { op: "prepare" });
   res = await opIn(proj5, { op: "mount", src: poolSkill.path });
   const carrierLink = path.join(proj5, ".agents", "skills", "hello-kit");
   check("选定后：链接落在选定的根", res.status === 200 && fs.lstatSync(carrierLink).isSymbolicLink());
@@ -374,7 +346,6 @@ try {
   const verProj = mkProject("dshkit-ver-");
   const verSrc = mkSkillIn(verProj, ".dsh/skills", "ver-kit", "版本记录测试技能");
   await opIn(verProj, { op: "setcarrier", carrier: "project-agents" });
-  await opIn(verProj, { op: "prepare" });
   res = await opIn(verProj, { op: "move", src: verSrc, dest: "pool" });
   const verDir = path.join(POOL, "ver-kit");
   const verFile = path.join(verDir, "SKILL.md");
@@ -438,7 +409,6 @@ try {
   const inProj = mkProject("dshkit-pool-in-");
   const inKitSrc = mkSkillIn(inProj, ".dsh/skills", "in-kit", "要共用的技能");
   await opIn(inProj, { op: "setcarrier", carrier: "project-agents" });
-  await opIn(inProj, { op: "prepare" });
   res = await opIn(inProj, { op: "move", src: inKitSrc, dest: "pool" });
   const movedIn = await bodyOf(res);
   const poolInKit = path.join(POOL, "in-kit");
@@ -475,7 +445,6 @@ try {
   fs.mkdirSync(path.dirname(flatSrc), { recursive: true });
   fs.writeFileSync(flatSrc, "---\nname: flat-in\ndescription: 平铺进池\n---\nbody\n");
   await opIn(flatProj, { op: "setcarrier", carrier: "project-agents" });
-  await opIn(flatProj, { op: "prepare" });
   res = await opIn(flatProj, { op: "move", src: flatSrc, dest: "pool" });
   const flatIn = await bodyOf(res);
   const flatPoolDir = path.join(POOL, "flat-in");
@@ -507,7 +476,6 @@ try {
   const outProj = mkProject("dshkit-pool-out-");
   mkSkillIn(outProj, ".dsh/skills", "out-local", "本地根占位");
   await opIn(outProj, { op: "setcarrier", carrier: "project-agents" });
-  await opIn(outProj, { op: "prepare" });
   res = await opIn(outProj, { op: "mount", src: poolInKit });
   const otherLink = (await bodyOf(res)).path;
   check("出池前：第二个工作区也挂上（登记表 2 处）", res.status === 200 && (await poolKitOf("in-kit"))?.mounts === 2, JSON.stringify(await poolKitOf("in-kit")));
@@ -526,7 +494,6 @@ try {
   const delKit = mkSkillIn(POOL, "", "del-kit", "删除断链测试技能");
   const delProj = mkProject("dshkit-pool-del-");
   await opIn(delProj, { op: "setcarrier", carrier: "project-agents" });
-  await opIn(delProj, { op: "prepare" });
   res = await opIn(delProj, { op: "mount", src: delKit });
   const delLink = (await bodyOf(res)).path;
   check("删除前：挂载成功", res.status === 200 && fs.lstatSync(delLink).isSymbolicLink());

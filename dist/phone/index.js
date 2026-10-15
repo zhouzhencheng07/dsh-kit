@@ -4,19 +4,26 @@
 // 辅助脚本）；本文件是组件的装配面：网关启停/令牌/链接端点与组件配置。
 // 组件行关闭 = 本模块不物化 = 网关起不来、端点全 404，client 半边探到 404 后整体不注册
 // （设置页「手机访问」整块、组件配置页与设置导航图标全不出现）——行开关就是总开关。
-// 配置：phonePort（对外端口）、phoneRemoteDomain（远程域名）、phoneKeepGatewayOn
-// （重启后是否自动拉起）。网关启停本身走 /dsh-kit/phone/gateway + 状态文件，不经 settings
-// （settings 读取器回填有时序滞后，实测开关写了但 reader 仍报旧值）。
+// 配置：phonePort（对外端口）、phoneRemoteDomain（远程域名）、phoneRemoteCommand
+// （本机隧道客户端的启动命令）、phoneKeepGatewayOn（重启后是否自动拉起网关）。网关启停本身
+// 走 /dsh-kit/phone/gateway + 状态文件，远程隧道启停走 /dsh-kit/phone/remote + 同一状态文件，
+// 都不经 settings（settings 读取器回填有时序滞后，实测开关写了但 reader 仍报旧值）。
+// 远程隧道进程由本组件按命令拉起（./tunnel.ts），不依赖操作系统的开机任务：远程没开就不启动。
 //
 // 端点（同源校验；主 webserver 只绑 loopback，本网关是唯一对外口）：
 //   GET  /dsh-kit-phone/config      —— 生效配置快照（client 门控与可达性探针：404 = 行关闭）
-//   GET  /dsh-kit/phone/info|link   —— 网关状态与带令牌链接
-//   POST /dsh-kit/phone/rotate|gateway —— 轮换令牌 / 热启停网关
+//   GET  /dsh-kit/phone/info|link   —— 网关/隧道状态与带令牌链接
+//   POST /dsh-kit/phone/rotate|gateway|remote —— 轮换令牌 / 热启停网关 / 启停远程隧道
 //   GET  /dsh-kit/vendor/qrcode.js  —— 设置页二维码用的 vendored 生成器，随本行伺服
+import fs from 'node:fs';
 import http from 'node:http';
+import https from 'node:https';
+import path from 'node:path';
+import { kitPath } from "../core/data-path.js";
 import { loadDep, sameOrigin } from "../core/index.js";
 import { registerVendorFiles } from "../core/vendor-route.js";
 import { startPhoneGateway, lanAddresses, defaultStateFile, loadGatewayState, saveGatewayState } from "./gateway.js";
+import { killStaleTunnel, parseCommandLine, startTunnel } from "./tunnel.js";
 import { kitLogger } from "../core/log.js";
 const log = kitLogger('phone');
 /** 手机访问网关对外端口（0.0.0.0）的默认值，可在组件配置页改（phonePort，1-65535） */
@@ -31,12 +38,13 @@ const z = (schemastery?.default ?? schemastery ?? null);
 export const Config = z && typeof z.object === 'function'
     ? z.object({
         phoneRemoteDomain: z.string().default('').volatile(),
+        phoneRemoteCommand: z.string().default('').volatile(),
         phonePort: z.number().step(1).min(1).max(65535).default(3090).volatile(),
         phoneKeepGatewayOn: z.boolean().default(false).volatile(),
     })
     : undefined;
 export async function apply(ctx, config = {}) {
-    const defaults = Config ? Config({}) : { phoneRemoteDomain: '', phonePort: PHONE_PORT, phoneKeepGatewayOn: false };
+    const defaults = Config ? Config({}) : { phoneRemoteDomain: '', phoneRemoteCommand: '', phonePort: PHONE_PORT, phoneKeepGatewayOn: false };
     // volatile 字段在 fiber config 里是稳定 ref（{get}），统一解引用
     const readRef = (v) => v !== null && typeof v === 'object' && typeof v.get === 'function'
         ? v.get()
@@ -131,12 +139,15 @@ export async function apply(ctx, config = {}) {
             // 启动评估：readSettings 自 apply 起就是完整值（声明式配置），注入段末尾
             // 直接评估网关启用位，无需等设置服务回调。
             let phoneGwWanted = false;
+            // 远程开启位与网关同文件：开着的话重启也要把它拉起来（且必须有网关，否则隧道没处转）
+            let remoteWanted = bootGwState.remote === true;
             const bootEvalGateway = () => {
-                phoneGwWanted = phoneKeepGatewayOn() && bootGwState.enabled === true;
+                phoneGwWanted = (phoneKeepGatewayOn() && bootGwState.enabled === true) || remoteWanted;
                 if (bootGwState.enabled !== phoneGwWanted) {
-                    saveGatewayState(stateFile, { token: bootGwState.token, enabled: phoneGwWanted }, warnLog);
+                    saveGatewayState(stateFile, { token: bootGwState.token, enabled: phoneGwWanted, remote: remoteWanted }, warnLog);
                 }
                 syncPhoneGateway();
+                syncTunnel();
             };
             /** 现役实例监听的端口；null = 无实例。用于识别端口配置变更 */
             let gwPort = null;
@@ -189,6 +200,141 @@ export async function apply(ctx, config = {}) {
                     phoneGwError = null;
                 }
             };
+            // ── 远程隧道进程（插件管启停；不依赖开机任务）──
+            // 远程没开就不启动。命令是用户在组件配置页填的一整行（解析与进程管理见 ./tunnel.ts）。
+            const phoneRemoteCommand = () => String(readSettings().phoneRemoteCommand ?? '').trim();
+            // 隧道进程的 pid 单独落一个文件：插件进程被强杀时靠它收掉遗留的孤儿进程
+            const remotePidFile = kitPath('phone-remote.pid');
+            const readRemotePid = () => {
+                try {
+                    const n = Number(fs.readFileSync(remotePidFile, 'utf8').trim());
+                    return Number.isInteger(n) && n > 0 ? n : null;
+                }
+                catch {
+                    return null;
+                }
+            };
+            const writeRemotePid = (pid) => {
+                try {
+                    if (pid === null)
+                        fs.rmSync(remotePidFile, { force: true });
+                    else
+                        fs.writeFileSync(remotePidFile, String(pid));
+                }
+                catch {
+                    // pid 只用于防孤儿，写不进去不影响主流程
+                }
+            };
+            let tunnel = null;
+            let tunnelCommand = null;
+            let tunnelError = null;
+            /** 远程域名可达性（拿令牌探一次，看整条链路通不通）；null = 还没探过 */
+            let remoteReachable = null;
+            let remoteProbedAt = 0;
+            const REMOTE_PROBE_MS = 15000;
+            const syncTunnel = () => {
+                const command = phoneRemoteCommand();
+                // 命令改了要换进程；进程已经退出的也先收掉
+                if (tunnel !== null && (tunnelCommand !== command || !tunnel.state().running)) {
+                    tunnel.stop();
+                    tunnel = null;
+                    tunnelCommand = null;
+                    writeRemotePid(null);
+                }
+                if (!remoteWanted) {
+                    if (tunnel !== null) {
+                        tunnel.stop();
+                        tunnel = null;
+                        tunnelCommand = null;
+                        writeRemotePid(null);
+                        log.info('远程隧道已关闭');
+                    }
+                    tunnelError = null;
+                    remoteReachable = null;
+                    return;
+                }
+                if (tunnel !== null)
+                    return;
+                if (command === '') {
+                    tunnelError = '未配置远程隧道命令（到组件配置页填写）';
+                    return;
+                }
+                // 上次插件进程被强杀可能留下还占着隧道的孤儿：先按 pid 文件收掉再拉新的
+                const stale = readRemotePid();
+                if (stale !== null) {
+                    const parsed = parseCommandLine(command);
+                    if (parsed !== null)
+                        killStaleTunnel(stale, path.resolve(parsed.exe), warnLog);
+                    writeRemotePid(null);
+                }
+                try {
+                    tunnel = startTunnel({ command, log: warnLog });
+                    writeRemotePid(tunnel.pid());
+                    tunnelCommand = command;
+                    tunnelError = null;
+                    remoteReachable = null;
+                    remoteProbedAt = 0;
+                }
+                catch (error) {
+                    tunnel = null;
+                    tunnelCommand = null;
+                    tunnelError = error instanceof Error ? error.message : String(error);
+                    log.error('远程隧道启动失败', { err: error });
+                }
+            };
+            /** 探一次远程域名（短超时 + 缓存；不阻塞端点回包） */
+            const probeRemote = () => {
+                const domain = phoneRemoteDomain();
+                const token = phoneGw ? phoneGw.token() : loadGatewayState(stateFile, warnLog).token;
+                if (domain === '' || token === '')
+                    return Promise.resolve(false);
+                return new Promise((resolve) => {
+                    let settled = false;
+                    const finish = (ok) => {
+                        if (!settled) {
+                            settled = true;
+                            resolve(ok);
+                        }
+                    };
+                    const req = https.get({ host: domain, port: 443, path: `/?k=${encodeURIComponent(token)}`, timeout: 2500 }, (res) => {
+                        res.resume();
+                        // 网关对有效令牌回 302（甩掉 query）；隧道断时上游是 VPS 的 502，到不了这里
+                        finish(res.statusCode === 302);
+                    });
+                    req.on('timeout', () => {
+                        req.destroy();
+                        finish(false);
+                    });
+                    req.on('error', () => finish(false));
+                });
+            };
+            // 宿主进程正常退出时也把隧道收掉（进程被强杀跑不到这里，靠上面的 pid 文件兜底）
+            const killTunnelOnExit = () => {
+                if (tunnel)
+                    tunnel.stop();
+            };
+            process.on('exit', killTunnelOnExit);
+            /** 配置页改了命令后，下次取状态时换成新命令（进程还活着且命令没变就不动它） */
+            const syncRemoteCommand = () => {
+                if (!remoteWanted)
+                    return;
+                if (phoneRemoteCommand() !== tunnelCommand)
+                    syncTunnel();
+            };
+            const refreshRemoteProbe = () => {
+                const now = Date.now();
+                if (now - remoteProbedAt < REMOTE_PROBE_MS)
+                    return;
+                remoteProbedAt = now;
+                if (remoteWanted && tunnel !== null && tunnel.state().running && phoneRemoteDomain() !== '') {
+                    void probeRemote().then((ok) => {
+                        remoteReachable = ok;
+                    });
+                }
+                else {
+                    remoteReachable = null;
+                }
+            };
             // 启动评估（配置在本 entry 加载时已解析，无时序差）
             bootEvalGateway();
             /** 改启用位（持久化到状态文件 + 热启停）；由 /dsh-kit/phone/gateway 端点调用。
@@ -197,8 +343,18 @@ export async function apply(ctx, config = {}) {
             const setGatewayEnabled = (on) => {
                 phoneGwWanted = on === true;
                 const token = phoneGw ? phoneGw.token() : loadGatewayState(stateFile, warnLog).token;
-                saveGatewayState(stateFile, { token, enabled: phoneGwWanted }, warnLog);
+                saveGatewayState(stateFile, { token, enabled: phoneGwWanted, remote: remoteWanted }, warnLog);
                 syncPhoneGateway();
+            };
+            /** 改远程开启位：开时先把网关拉起来（隧道转发的就是它），再按配置命令启停隧道 */
+            const setRemoteEnabled = (on) => {
+                const next = on === true;
+                if (next && !phoneGwWanted)
+                    setGatewayEnabled(true);
+                remoteWanted = next;
+                const current = loadGatewayState(stateFile, warnLog);
+                saveGatewayState(stateFile, { token: phoneGw ? phoneGw.token() : current.token, enabled: phoneGwWanted, remote: remoteWanted }, warnLog);
+                syncTunnel();
             };
             /** 带令牌的可扫码链接：局域网每个 IPv4 一条 + 远程域名（配置了才有） */
             const phoneLinks = () => {
@@ -210,7 +366,9 @@ export async function apply(ctx, config = {}) {
                 const port = phoneGw.port() ?? phonePort();
                 const k = encodeURIComponent(phoneGw.token());
                 const links = lanAddresses().map((ip) => ({ label: 'lan', url: `http://${ip}:${port}/?k=${k}` }));
-                if (phoneRemoteDomain() !== '') {
+                // 远程链接只在隧道真的在跑、且没探到不可达时出：扫一个注定连不上的码没有意义
+                refreshRemoteProbe();
+                if (phoneRemoteDomain() !== '' && remoteWanted && tunnel !== null && tunnel.state().running && remoteReachable !== false) {
                     links.push({ label: 'remote', url: `https://${phoneRemoteDomain()}/?k=${k}` });
                 }
                 return links;
@@ -238,12 +396,19 @@ export async function apply(ctx, config = {}) {
                 handler: (req, res) => {
                     if (!phoneGuardGet(req, res))
                         return;
+                    syncRemoteCommand();
+                    refreshRemoteProbe();
                     phoneJson(res, 200, {
                         gatewayOn: phoneGwWanted,
                         running: phoneGw !== null && phoneGw.state().listening,
                         error: phoneGwError ?? phoneGw?.state().error ?? null,
                         port: phoneGw ? (phoneGw.port() ?? phonePort()) : phonePort(),
                         remoteDomain: phoneRemoteDomain(),
+                        remoteCommand: phoneRemoteCommand(),
+                        remoteOn: remoteWanted,
+                        remoteRunning: tunnel !== null && tunnel.state().running,
+                        remoteError: tunnelError ?? tunnel?.state().error ?? null,
+                        remoteReachable,
                     });
                 },
             });
@@ -331,6 +496,42 @@ export async function apply(ctx, config = {}) {
                     });
                 },
             });
+            const disposePhoneRemote = webCtx.webServer.register({
+                kind: 'exact',
+                path: '/dsh-kit/phone/remote',
+                handler: (req, res) => {
+                    if (req.method !== 'POST') {
+                        phoneJson(res, 405, { error: 'method not allowed' });
+                        return;
+                    }
+                    if (!sameOrigin(req)) {
+                        phoneJson(res, 403, { error: 'cross-origin denied' });
+                        return;
+                    }
+                    let raw = '';
+                    req.on('data', (c) => { raw += c.toString('utf8'); });
+                    req.on('end', () => {
+                        let on = null;
+                        try {
+                            on = JSON.parse(raw || '{}').on;
+                        }
+                        catch {
+                            on = null;
+                        }
+                        if (typeof on !== 'boolean') {
+                            phoneJson(res, 400, { error: 'body 需 {"on": true|false}' });
+                            return;
+                        }
+                        setRemoteEnabled(on);
+                        // 隧道启停是同步判定（spawn 失败立刻有 error），直接回状态
+                        phoneJson(res, 200, {
+                            remoteOn: remoteWanted,
+                            running: tunnel !== null && tunnel.state().running,
+                            error: tunnelError ?? tunnel?.state().error ?? null,
+                        });
+                    });
+                },
+            });
             return () => {
                 disposeVendor();
                 disposePhoneConfig();
@@ -338,8 +539,13 @@ export async function apply(ctx, config = {}) {
                 disposePhoneLink();
                 disposePhoneRotate();
                 disposePhoneGateway();
+                disposePhoneRemote();
                 if (phoneGw)
                     phoneGw.close();
+                if (tunnel)
+                    tunnel.stop();
+                writeRemotePid(null);
+                process.off('exit', killTunnelOnExit);
             };
         }, 'dsh-kit/phone: config/phone endpoints');
     });

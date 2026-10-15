@@ -100,6 +100,8 @@ export declare function defaultStateFile(): string;
 export interface GatewayState {
     token: string;
     enabled: boolean;
+    /** 远程访问开关（隧道进程要不要跑）；与令牌同文件，重启后按它恢复 */
+    remote: boolean;
 }
 /**
  * 状态文件读写（令牌 + 网关启用位）。启用位独立于 settings 通道：
@@ -107,7 +109,7 @@ export interface GatewayState {
  * /dsh-kit/phone/gateway 端点。
  */
 export declare function loadGatewayState(stateFile: string, log?: (msg: string) => void): GatewayState;
-export declare function saveGatewayState(stateFile: string, { token, enabled }: GatewayState, log?: (msg: string) => void): void;
+export declare function saveGatewayState(stateFile: string, { token, enabled, remote }: GatewayState, log?: (msg: string) => void): void;
 /** 本机非回环 IPv4 地址列表（二维码里局域网链接的候选）；@param interfaces 测试注入用 */
 export declare function lanAddresses(interfaces?: NodeJS.Dict<import('node:os').NetworkInterfaceInfo[]>): string[];
 export interface PhoneGatewayOptions {

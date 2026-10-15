@@ -376,19 +376,20 @@ export function loadGatewayState(stateFile, log = () => { }) {
         return {
             token: raw.token,
             enabled: typeof raw.enabled === 'boolean' ? raw.enabled : false,
+            remote: typeof raw.remote === 'boolean' ? raw.remote : false,
         };
     }
     catch (error) {
         const code = error?.code;
         if (code !== 'ENOENT')
             log(`状态文件读取失败，将重新生成：${error instanceof Error ? error.message : String(error)}`);
-        return { token: newToken(), enabled: false };
+        return { token: newToken(), enabled: false, remote: false };
     }
 }
-export function saveGatewayState(stateFile, { token, enabled }, log = () => { }) {
+export function saveGatewayState(stateFile, { token, enabled, remote }, log = () => { }) {
     try {
         fs.mkdirSync(path.dirname(stateFile), { recursive: true });
-        const body = JSON.stringify({ token, enabled, createdAt: new Date().toISOString() });
+        const body = JSON.stringify({ token, enabled, remote, createdAt: new Date().toISOString() });
         const tmp = `${stateFile}.${process.pid}.tmp`;
         fs.writeFileSync(tmp, body);
         fs.renameSync(tmp, stateFile);
@@ -416,7 +417,7 @@ export function startPhoneGateway({ port, upstreamPort, stateFile = defaultState
     const boot = loadGatewayState(stateFile, log);
     let token = boot.token;
     // 首次运行立即落盘：否则重启会重新随机生成，手机 Cookie 活不过第一次重启
-    saveGatewayState(stateFile, { token, enabled: boot.enabled }, log);
+    saveGatewayState(stateFile, { token, enabled: boot.enabled, remote: boot.remote }, log);
     /** 从请求里验令牌：query ?k= 或 Cookie，二者其一命中即可 */
     function authorized(req, urlObj) {
         const q = urlObj.searchParams.get('k');
@@ -683,11 +684,11 @@ export function startPhoneGateway({ port, upstreamPort, stateFile = defaultState
         },
         token: () => token,
         rotate() {
-            // enabled 读状态文件现值而非启动快照：启停走 /dsh-kit/phone/gateway 端点直写
-            // 文件，rotate 若回写 boot 值会把用户改过的启用位悄悄回退（重启后网关不自启）
-            const enabled = loadGatewayState(stateFile, log).enabled;
+            // enabled/remote 读状态文件现值而非启动快照：启停走端点直写文件，rotate 若回写
+            // boot 值会把用户改过的开关悄悄回退（重启后网关不自启 / 远程被关掉）
+            const cur = loadGatewayState(stateFile, log);
             token = newToken();
-            saveGatewayState(stateFile, { token, enabled }, log);
+            saveGatewayState(stateFile, { token, enabled: cur.enabled, remote: cur.remote }, log);
             return token;
         },
         state: () => ({ listening: state.listening, error: state.error }),
