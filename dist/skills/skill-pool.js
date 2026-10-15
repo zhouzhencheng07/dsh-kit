@@ -42,6 +42,7 @@ import { sameOrigin } from "../core/index.js";
 import { computeMountState, forgetMount, liveMounts, mountLink, mountStateFor, prepareCarrier, setCarrier, syncMounts, unmountLink, } from "./mount.js";
 import { dshHome, kitPath } from "../core/data-path.js";
 import { kitLogger } from "../core/log.js";
+import { managedAppIds, resolveAppLauncher, startApp } from "./app-launch.js";
 const log = kitLogger('skills');
 import { ensurePoolBaseline } from "./pool-git.js";
 import { parseFrontmatter } from "./frontmatter.js";
@@ -832,9 +833,59 @@ export function applySkillPool(ctx, hooks) {
                     }
                 },
             });
+            // ── 池目录在应用里打开 ──
+            // GET 交回「由本插件启动」的应用 id（Electron 系，见 ./app-launch.ts），客户端据此决定
+            // 这枚按钮走本端点还是宿主官方那条；POST 自己启动，不经过官方启动器。
+            const disposeOpen = webCtx.webServer.register({
+                kind: 'exact',
+                path: '/dsh-kit/skills/open-app',
+                handler: async (req, res) => {
+                    if (!origins(req)) {
+                        jsonOf(res, 403, { error: 'cross-origin denied' });
+                        return;
+                    }
+                    if (req.method === 'GET' || req.method === 'HEAD') {
+                        jsonOf(res, 200, { apps: managedAppIds() });
+                        return;
+                    }
+                    if (req.method !== 'POST') {
+                        jsonOf(res, 405, { error: 'method not allowed' });
+                        return;
+                    }
+                    let body;
+                    try {
+                        body = await readBody(req);
+                    }
+                    catch (error) {
+                        jsonOf(res, 400, { error: `请求体非法：${error instanceof Error ? error.message : error}` });
+                        return;
+                    }
+                    const app = typeof body.app === 'string' ? body.app : '';
+                    const dir = typeof body.path === 'string' ? body.path : '';
+                    if (!managedAppIds().includes(app)) {
+                        jsonOf(res, 400, { error: 'not-managed', message: `不由本插件启动的应用：${app}` });
+                        return;
+                    }
+                    if (dir === '' || !path.isAbsolute(dir) || !isDir(dir)) {
+                        jsonOf(res, 400, { error: 'bad-path', message: '要打开的目标必须是存在的目录（绝对路径）' });
+                        return;
+                    }
+                    const exe = resolveAppLauncher(app);
+                    if (exe === null) {
+                        jsonOf(res, 502, { error: 'not-found', message: `找不到 ${app} 的启动器：App Paths 未登记，也不在默认安装位置` });
+                        return;
+                    }
+                    if (!(await startApp(exe, [dir]))) {
+                        jsonOf(res, 502, { error: 'launch-failed', message: `启动失败：${exe}` });
+                        return;
+                    }
+                    jsonOf(res, 200, { ok: true, app, exe });
+                },
+            });
             return () => {
                 disposeList();
                 disposeOp();
+                disposeOpen();
             };
         }, 'dsh-kit: skill pool endpoints');
     });

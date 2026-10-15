@@ -2493,6 +2493,7 @@ ellipsis，窄列只截字不破版 */
     const OPEN_APP_CHOICE = "dsh.open-in-app.choice";
     let appDict = null; // apply 期注入的官方 locale 服务
     let openAppsCache = null; // 可用应用：拉过一次就留着，换页回来先按上次结果渲染
+    let managedAppsCache = null; // 宿主自己启动的应用（Electron 系）：决定这枚按钮走哪条路由
 
     /** 应用名：官方词典优先，查不到退回 id（裸 id 也比按钮消失强） */
     function openInAppName(id, dict) {
@@ -2512,7 +2513,21 @@ ellipsis，窄列只截字不破版 */
       });
     }
 
+    /** 宿主自己启动的应用 id（skills 组件的 /open-app）；拉不到按空处理 = 一律走官方路由 */
+    function fetchManagedApps(signal) {
+      return kitGetJson("/dsh-kit/skills/open-app", signal, (b) => Array.isArray(b.apps)).then((b) => {
+        managedAppsCache = b.apps.filter((id) => typeof id === "string" && id !== "");
+        return managedAppsCache;
+      });
+    }
+
     function openDirInApp(app, dir) {
+      // Electron 系应用（编辑器 / IDE）交给宿主自己启动：官方启动器会把宿主进程的
+      // ELECTRON_RUN_AS_NODE 原样传给子进程，那种应用会以 node 身份跑——窗口不出现。
+      // 表外的应用（资源管理器、终端、原生 IDE）不吃这个标记，仍走官方路由。
+      if (Array.isArray(managedAppsCache) && managedAppsCache.includes(app)) {
+        return kitPostJson("/dsh-kit/skills/open-app", { app, path: dir }, (b) => b.ok === true);
+      }
       return kitPostJson("/open-in-app/open", { app, path: dir }, (b) => b.ok === true);
     }
 
@@ -2577,9 +2592,14 @@ ellipsis，窄列只截字不破版 */
       };
       react.useEffect(() => {
         const ctrl = new AbortController();
-        fetchOpenApps(ctrl.signal)
-          .then((next) => setApps(next))
-          .catch(() => setApps([]));
+        // 两列表都到齐再渲染按钮：按钮一出现，路由选择（自己启动 / 官方路由）就已经是确定的
+        Promise.all([
+          fetchOpenApps(ctrl.signal).catch(() => []),
+          fetchManagedApps(ctrl.signal).catch(() => {
+            managedAppsCache = [];
+            return [];
+          }),
+        ]).then(([list]) => setApps(list));
         return () => ctrl.abort();
       }, [dir]);
       if (app === "") return null;
@@ -3288,6 +3308,7 @@ ellipsis，窄列只截字不破版 */
     exports.OpenAppIcon = OpenAppIcon;
     exports.openInAppName = openInAppName;
     exports.fetchOpenApps = fetchOpenApps;
+    exports.fetchManagedApps = fetchManagedApps;
     exports.openDirInApp = openDirInApp;
     exports.readOpenAppChoice = readOpenAppChoice;
     exports.writeOpenAppChoice = writeOpenAppChoice;

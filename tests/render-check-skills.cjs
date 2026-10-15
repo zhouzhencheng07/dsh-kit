@@ -94,7 +94,7 @@ const comps = dockExports.skills;
 check("skills 导出 apply（client 插件形状）与 inject 声明 slots", typeof comps.apply === "function" && Array.isArray(comps.inject) && comps.inject[0] === "slots");
 check(
   "skills 导出面齐全（管理页/技能行/池目录按钮/端点调用/探针取值）",
-  [comps.SkillsManager, comps.SkillRow, comps.OpenPoolButton, comps.openInAppName, comps.fetchSkillsPage, comps.cfgFromSnapshot].every(
+  [comps.SkillsManager, comps.SkillRow, comps.OpenPoolButton, comps.openInAppName, comps.fetchSkillsPage, comps.fetchManagedApps, comps.cfgFromSnapshot].every(
     (fn) => typeof fn === "function",
   ),
 );
@@ -128,6 +128,32 @@ async function checkOpenInApp() {
     launched.url === "/open-in-app/open" && sent.app === "editor" && sent.path === "C:/pool",
     sent,
   );
+
+  // Electron 系应用由本组件启动（官方启动器会把宿主进程的 ELECTRON_RUN_AS_NODE 传给子进程，
+  // 那种应用会以 node 身份跑）；其余应用仍交回官方路由
+  const managedCalls = [];
+  global.fetch = async (url, init) => {
+    managedCalls.push({ url: String(url), init });
+    if (String(url).endsWith("/dsh-kit/skills/open-app")) {
+      return { ok: true, status: 200, json: async () => (init && init.method === "POST" ? { ok: true } : { apps: ["editor"] }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  };
+  const managed = await comps.fetchManagedApps(undefined);
+  check(
+    "接管的启动器取自宿主 /dsh-kit/skills/open-app",
+    managedCalls[0].url === "/dsh-kit/skills/open-app" && managed[0] === "editor",
+    JSON.stringify(managed),
+  );
+  await comps.openDirInApp("editor", "C:/pool");
+  const ownLaunch = managedCalls[managedCalls.length - 1];
+  check(
+    "接管的应用走本组件端点启动（带目录绝对路径）",
+    ownLaunch.url === "/dsh-kit/skills/open-app" && JSON.parse(ownLaunch.init.body).path === "C:/pool",
+    ownLaunch.url,
+  );
+  await comps.openDirInApp("explorer", "C:/pool");
+  check("未接管的应用仍走宿主官方路由", managedCalls[managedCalls.length - 1].url === "/open-in-app/open");
 
   // 上次选的应用落在官方同一个 localStorage 键上（会话头部那枚也读它）
   comps.writeOpenAppChoice("editor");
@@ -344,6 +370,15 @@ async function checkApply() {
       bundleSrc.includes('"dsh.open-in-app.choice"'),
   );
   check("一个应用都没探到时不摆按钮", bundleSrc.includes('if (app === "") return null;'));
+  const appLaunchSrc = fs.readFileSync(__dirname + "/../src/skills/app-launch.ts", "utf8");
+  check(
+    "接管的应用自己找启动器、自己清子进程环境（摘掉 Electron 标记，不碰宿主环境）",
+    appLaunchSrc.includes("ELECTRON_RUN_AS_NODE") &&
+      appLaunchSrc.includes("App Paths") &&
+      appLaunchSrc.includes("managedAppIds") &&
+      poolSrc.includes("/dsh-kit/skills/open-app") &&
+      !appLaunchSrc.includes("process.env.ELECTRON_RUN_AS_NODE = "),
+  );
   check(
     "版本面板整体退场（客户端组件与宿主 history/commit/rollback 都不在）",
     !bundleSrc.includes("SkillGitPanel") &&
