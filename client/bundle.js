@@ -9244,27 +9244,27 @@ ellipsis，窄列只截字不破版 */
                         children: t("vaultToc"),
                       }),
                     }),
+                    // 光标所属标题链（面包屑，二级归属最近一级）：
+                    // 占满余宽、超长省略，title 给全文；无标题覆盖时隐藏
+                    crumb === "" ? null : jsxRuntime.jsx("span", { className: "dshk-vault-crumb", title: crumb, children: crumb }),
                     // 页条 @：与树行同一条引用管线（本页 + 编辑器当下的选区）。
-                    // 侧栏收起时树行的 @ 够不着，这一枚常驻页条；mousedown 保选区
-                    // （点下去焦点离开编辑器，原生选区会先塌掉）
+                    // 侧栏收起时树行的 @ 够不着，这一枚站右端固定簇首位（tbpush
+                    // 顶住右端）；mousedown 保选区（点下去焦点离开编辑器，原生选区会先塌掉）
                     jsxRuntime.jsx(KitTip, {
                       label: t("treeAt"),
                       children: jsxRuntime.jsx("button", {
                         type: "button",
-                        className: "dshk-vault-tbtn",
+                        className: "dshk-vault-tbtn dshk-vault-tbpush",
                         onMouseDown: (ev) => ev.preventDefault(),
                         onClick: () => citeVaultPageToChat(path, vaultSelectionText(rteRef.current?.editor), (key) => flashToast(t(key))),
                         children: "@",
                       }),
                     }),
-                    // 光标所属标题链（面包屑，二级归属最近一级）：
-                    // 占满余宽、超长省略，title 给全文；无标题覆盖时隐藏
-                    crumb === "" ? null : jsxRuntime.jsx("span", { className: "dshk-vault-crumb", title: crumb, children: crumb }),
                     jsxRuntime.jsx(KitTip, {
                       label: backlinks.length === 0 ? t("vaultBlEmpty") : t("vaultBacklinks"),
                       children: jsxRuntime.jsx("button", {
                         type: "button",
-                        className: `dshk-vault-tbtn dshk-vault-tbpush${backlinks.length === 0 ? " is-empty" : ""}`,
+                        className: `dshk-vault-tbtn${backlinks.length === 0 ? " is-empty" : ""}`,
                         onClick: (e) => openBarMenu("bl", e),
                         children: `${t("vaultBacklinks")}${backlinks.length > 0 ? ` ${backlinks.length}` : ""}`,
                       }),
