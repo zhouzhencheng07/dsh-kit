@@ -43,23 +43,58 @@ function normalizeMounts(raw) {
     }
     return out;
 }
+function normalizeGroups(raw) {
+    const out = {};
+    if (raw === null || typeof raw !== 'object')
+        return out;
+    for (const [key, value] of Object.entries(raw)) {
+        const name = key.trim();
+        if (name === '' || !Array.isArray(value))
+            continue;
+        const members = [];
+        for (const item of value) {
+            if (typeof item !== 'string')
+                continue;
+            const member = item.trim();
+            if (member === '' || members.includes(member))
+                continue;
+            members.push(member);
+        }
+        out[name] = members;
+    }
+    return out;
+}
 function readPolicy() {
     try {
         const parsed = JSON.parse(fs.readFileSync(policyFile(), 'utf8'));
         const rawProjects = parsed.projects;
         const projects = rawProjects !== null && typeof rawProjects === 'object' ? rawProjects : {};
-        return { projects, mounts: normalizeMounts(parsed.mounts) };
+        return {
+            projects,
+            mounts: normalizeMounts(parsed.mounts),
+            groups: normalizeGroups(parsed.groups),
+        };
     }
     catch {
         // 无文件/坏文件都当空策略
     }
-    return { projects: {}, mounts: {} };
+    return { projects: {}, mounts: {}, groups: {} };
 }
-/** 整文件回写：projects 与 mounts 同住一个文件，谁都不能把对方抹掉 */
+/** 整文件回写：projects、mounts、groups 同住一个文件，谁都不能把对方抹掉 */
 function writePolicy(policy) {
     const file = policyFile();
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, `${JSON.stringify(policy, null, 2)}\n`, 'utf8');
+}
+/** 组合清单（组名 → 池技能目录名） */
+export function readGroups() {
+    return readPolicy().groups;
+}
+/** 覆盖写组合清单：projects / mounts 原样保留（同一份文件，谁都不能把对方抹掉） */
+export function writeGroups(groups) {
+    const policy = readPolicy();
+    policy.groups = groups;
+    writePolicy(policy);
 }
 /** 记住用户为某个项目选定的载体根（工作区第一次挂池技能时选，之后一直用它） */
 export function setCarrier(projectRoot, carrier) {

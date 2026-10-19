@@ -32,6 +32,10 @@ export interface MountRecord {
     /** 载体根里的链接路径 */
     link: string;
 }
+/** 组合清单（组名 → 池技能目录名） */
+export declare function readGroups(): Record<string, string[]>;
+/** 覆盖写组合清单：projects / mounts 原样保留（同一份文件，谁都不能把对方抹掉） */
+export declare function writeGroups(groups: Record<string, string[]>): void;
 /** 记住用户为某个项目选定的载体根（工作区第一次挂池技能时选，之后一直用它） */
 export declare function setCarrier(projectRoot: string, carrier: ProjectRootId): void;
 /**

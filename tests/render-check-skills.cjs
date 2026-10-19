@@ -286,6 +286,151 @@ check(
   check("平铺入池前提示包成目录", textOf(/包成同名目录|wrapped into a same-name directory/));
 }
 
+// —— 池列表定位：本工作区的挂载标记 + 技能组合（批量挂载/卸载）——
+{
+  const ROOTS = [
+    { id: "project-dsh", dir: "C:/x/.dsh/skills" },
+    { id: "project-agents", dir: "C:/x/.agents/skills" },
+  ];
+  const btn = (labels) => callLog.find((c) => c[0] === "jsx" && c[1] === "button" && labels.includes(c[2].children));
+  const textOf = (re) => callLog.some((c) => typeof c[2]?.children === "string" && re.test(c[2].children));
+  // 挂载状态必须是状态标记（.dshk-sk-state，无描边不可点），不能长回按钮/普通徽标的样子
+  const stateSpan = (re) => callLog.some((c) => c[1] === "span" && c[2].className === "dshk-sk-state" && typeof c[2].children === "string" && re.test(c[2].children));
+  const renderPoolRow = (skill, groupNames = [], groupName = "", runOp = () => {}) => {
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    return comps.SkillRow({ skill, groupId: "pool", allRoots: ROOTS, cwd: "C:/x", busy: false, runOp, picker: null, setPicker: () => {}, groupNames, groupName });
+  };
+
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  const mountedRow = comps.SkillRow({
+    skill: { name: "hello-kit", root: "pool", path: "C:/home/.dsh/dsh-kit/skill-pool/hello-kit", mounts: 1, mountedHere: true, mountPath: "C:/x/.agents/skills/hello-kit" },
+    groupId: "pool", allRoots: ROOTS, cwd: "C:/x", busy: false, runOp: () => {}, picker: null, setPicker: () => {},
+  });
+  // 本工作区挂没挂 + 被几个工作区挂着：合成一枚状态标记（不再拆成两枚）
+  const stateSpans = () => callLog.filter((c) => c[1] === "span" && c[2].className === "dshk-sk-state");
+  check(
+    "池行：本工作区已挂载 → 一枚状态标记（挂载数，点亮表示就在本工作区）+ 按钮变卸载",
+    !!mountedRow &&
+      stateSpan(/^(挂载|Mounted in) 1$/) &&
+      stateSpans().length === 1 &&
+      stateSpans()[0][2]["data-on"] === true &&
+      !!btn(["卸载", "Unmount"]) &&
+      !btn(["挂载", "Mount"]),
+    JSON.stringify(stateSpans().map((c) => c[2].children)),
+  );
+
+  renderPoolRow({ name: "hello-kit", root: "pool", path: "C:/home/.dsh/dsh-kit/skill-pool/hello-kit", mounts: 0 });
+  check("池行：未挂载是状态标记（不点亮），「挂载」仍是按钮", stateSpan(/^(未挂载|Not mounted)$/) && !stateSpans()[0][2]["data-on"] && !!btn(["挂载", "Mount"]));
+
+  renderPoolRow({ name: "hello-kit", root: "pool", path: "C:/home/.dsh/dsh-kit/skill-pool/hello-kit", mounts: 3 });
+  check(
+    "池行：只有别的工作区挂着 → 同一个数字标记但不点亮（点亮与否就是本工作区在用没用）",
+    stateSpan(/^(挂载|Mounted in) 3$/) && stateSpans().length === 1 && !stateSpans()[0][2]["data-on"] && !btn(["挂载 3", "Mounted in 3"]),
+  );
+
+  // 池技能行的分组选择：一个技能只属于一个组合，控件停在当前归属上（下拉 = 明显不是状态标记）
+  {
+    let assigned = null;
+    renderPoolRow({ name: "word", kind: "dir", root: "pool", path: "C:/p/word", mounts: 0 }, ["办公", "写作"], "写作", (o) => {
+      assigned = o;
+    });
+    const sel = callLog.find((c) => c[1] === "select" && c[2].className === "dshk-sk-select");
+    const opts = callLog.filter((c) => c[1] === "option").map((c) => c[2].value);
+    check(
+      "池行：分组选择是个下拉（不分组 + 各组合），默认停在当前归属",
+      !!sel && sel[2].value === "写作" && typeof sel[2].onChange === "function" && opts.join(",") === ",办公,写作",
+      JSON.stringify(opts),
+    );
+    sel[2].onChange({ target: { value: "办公" } });
+    check("池行：改选发出的就是 group-assign（改派，不是新建组）", assigned?.op === "group-assign" && assigned.skill === "word" && assigned.group === "办公", JSON.stringify(assigned));
+    renderPoolRow({ name: "word", kind: "dir", root: "pool", path: "C:/p/word", mounts: 0 });
+    check("池行：一个组合都没有时不给分组下拉（无处可归）", !callLog.some((c) => c[1] === "select"));
+    renderPoolRow({ name: "flat", kind: "file", root: "pool", path: "C:/p/flat.md", mounts: 0 }, ["办公"], "");
+    check("池行：平铺 .md 不给分组（挂不住，进不了组合）", !callLog.some((c) => c[1] === "select"));
+  }
+
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  comps.GroupEditor({
+    poolSkills: [{ name: "word", path: "C:/p/word" }, { name: "excel", path: "C:/p/excel" }],
+    initial: { from: null, name: "办公", members: ["word"] },
+    busy: false, onSave: () => {}, onCancel: () => {},
+  });
+  const chips = callLog.filter((c) => c[1] === "button" && c[2].className === "dshk-sk-chip");
+  check("组合编辑器：组名输入 + 成员按池技能点选", callLog.some((c) => c[1] === "input" && c[2].className === "dshk-sk-input") && chips.length === 2);
+  check(
+    "组合编辑器：已选成员点亮、未选不亮",
+    chips.some((c) => c[2]["data-on"] === true) && chips.some((c) => c[2]["data-on"] === undefined),
+  );
+
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  comps.GroupEditor({
+    poolSkills: [{ name: "word", path: "C:/p/word" }, { name: "excel", path: "C:/p/excel" }, { name: "ppt", path: "C:/p/ppt" }],
+    takenBy: { excel: "写作", ppt: "写作" },
+    initial: { from: "办公", name: "办公", members: ["word"] },
+    busy: false, onSave: () => {}, onCancel: () => {},
+  });
+  const chips2 = callLog.filter((c) => c[1] === "button" && c[2].className === "dshk-sk-chip");
+  check(
+    "组合编辑器：已在别的组合里的技能不列出（一个技能只属于一个组合），并说明藏了几个",
+    chips2.length === 1 && chips2[0][2].children === "word" && textOf(/已在其他组合的技能不在这里|already in another group/),
+    chips2.map((c) => c[2].children).join(","),
+  );
+
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  comps.GroupPanel({ skillGroups: [{ name: "办公", members: ["word", "excel"], missing: [] }], poolSkills: [], busy: false, runOp: () => {}, groupEdit: null, setGroupEdit: () => {}, cwd: "C:/x" });
+  check("组合卡片：新建入口 + 每行交给组合行（整组操作在行上）", !!btn(["新建组合", "New group"]) && callLog.some((c) => c[1] === comps.GroupRow && c[2].group.name === "办公"));
+
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  comps.GroupRow({ group: { name: "办公", members: ["word", "excel"], missing: [] }, busy: false, runOp: () => {}, setGroupEdit: () => {}, cwd: "C:/x" });
+  check(
+    "组合行：一枚按钮（没挂满 = 挂载全部）+ 编辑 + 删除",
+    !!btn(["挂载全部", "Mount all"]) && !btn(["卸载全部", "Unmount all"]) && !!btn(["编辑", "Edit"]) && !!btn(["删除", "Delete"]),
+  );
+  check("组合行：成员数与成员清单可见、没有失效成员时不标", textOf(/^(成员|Members) 2$/) && !textOf(/^(不在池里|missing)/));
+
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  comps.GroupRow({ group: { name: "办公", members: ["word", "gone"], missing: ["gone"] }, busy: false, runOp: () => {}, setGroupEdit: () => {}, cwd: "C:/x" });
+  check("组合行：失效成员单独标出来（不悄悄删）", textOf(/^(不在池里|missing) 1$/) && textOf(/^(成员|Members) 1$/));
+
+  // 整组挂上后被单独卸载一个成员：组合行要看得出来只剩几个（状态标记，不是按钮）
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  comps.GroupRow({ group: { name: "办公", members: ["word", "excel"], missing: [] }, busy: false, runOp: () => {}, setGroupEdit: () => {}, cwd: "C:/x", mountedDirs: new Set(["word"]) });
+  check(
+    "组合行：只挂了一部分 → 状态标记 x/y（不点亮）、按钮仍是「挂载全部」（补齐缺的）",
+    stateSpan(/^(已挂载|Mounted) 1\/2$/) &&
+      !callLog.some((c) => c[2]?.className === "dshk-sk-state" && c[2]["data-on"] === true) &&
+      !!btn(["挂载全部", "Mount all"]) &&
+      !btn(["卸载全部", "Unmount all"]),
+  );
+  stateSeq = 0;
+  stateStore.clear();
+  callLog = [];
+  comps.GroupRow({ group: { name: "办公", members: ["word", "excel"], missing: [] }, busy: false, runOp: () => {}, setGroupEdit: () => {}, cwd: "C:/x", mountedDirs: new Set(["word", "excel"]) });
+  check(
+    "组合行：整组挂着 → 状态标记点亮、按钮翻成「卸载全部」（两态共用一枚按钮）",
+    stateSpan(/^(已挂载|Mounted) 2\/2$/) &&
+      callLog.some((c) => c[2]?.className === "dshk-sk-state" && c[2]["data-on"] === true) &&
+      !!btn(["卸载全部", "Unmount all"]) &&
+      !btn(["挂载全部", "Mount all"]),
+  );
+}
+
 // —— 端点调用：cwd 查询串 ——
 async function checkEndpoint() {
   const urls = [];
@@ -405,6 +550,27 @@ async function checkApply() {
   );
   check("出池不带版本记录（.git 不进工作区根）与断链登记表都在宿主", poolSrc.includes("detachPoolLinks") && poolSrc.includes("skipRepo"));
   const mountSrc = fs.readFileSync(__dirname + "/../src/skills/mount.ts", "utf8");
+  check("池列表带本工作区的挂载状态（mountedHere / mountPath）", poolSrc.includes("mountedHere") && bundleSrc.includes("skill.mountedHere"));
+  check(
+    "技能组合：清单存插件数据，整组挂载/卸载只动本工作区两个项目根",
+    mountSrc.includes("groups: Record<string, string[]>") &&
+      poolSrc.includes("body.op === 'group-set'") &&
+      poolSrc.includes("body.op === 'group-delete'") &&
+      poolSrc.includes("body.op === 'group'") &&
+      poolSrc.includes("linkInWorkspace"),
+  );
+  check(
+    "技能组合：一个技能只属于一个组合（撞组 409 + 池技能行可改派），成员名必须是池根下一层目录",
+    poolSrc.includes("error: 'member-taken'") &&
+      poolSrc.includes("body.op === 'group-assign'") &&
+      poolSrc.includes("name !== path.basename(name)") &&
+      bundleSrc.includes("takenBy") &&
+      bundleSrc.includes("dshk-sk-select"),
+  );
+  check(
+    "池组筛选只按挂载状态（全部/已挂载/未挂载），按组合归组合面板",
+    bundleSrc.includes("skOnlyMounted") && bundleSrc.includes("skOnlyUnmounted") && !bundleSrc.includes("skAllGroups") && !bundleSrc.includes("activeGroup"),
+  );
   check(
     "挂载点只由用户选（没选就问，不带哪根在用的启发式、不默认）",
     mountSrc.includes("const carrier = readPolicy().projects[dirs.projectRoot]?.carrier ?? null") &&

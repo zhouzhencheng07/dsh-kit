@@ -11,8 +11,10 @@
 //       ~/.agents 两根聚合）、pool。每个技能带 root（物理根）、rank（DSH 扫描
 //       优先级，越小越优先）、shadowed（同名跨根时非最优者）；链接条目另带
 //       link/linkTarget/linkInPool；池技能另带 mounts（被几个工作区挂了——读的时候
-//       顺手把本项目里看到的链接登记进账，失效条目清掉）。另附注册表中非白名单来源的
-//       技能（只读展示）、失效链接清单、以及载体根状态 mount。
+//       顺手把本项目里看到的链接登记进账，失效条目清掉）与 mountedHere/mountPath
+//       （本工作区已挂载 → 面板显示「已挂载」并把按钮换成卸载）。另附技能组合
+//       skillGroups（组名/成员/已失效成员）、注册表中非白名单来源的技能（只读展示）、
+//       失效链接清单、以及载体根状态 mount。
 //   POST /dsh-kit/skills/op   body 为 JSON：
 //       {op:'move',  src, dest, overwrite?}   搬到目标根（dest=物理根 id）。技能只有移动、
 //                                             没有复制（副本与本体会各自漂移）：
@@ -25,6 +27,17 @@
 //                                             从仓库索引移除），失败 = 这个根不落盘、不算选定
 //       {op:'mount', src}                     在载体根建指向池技能的链接（并登记挂载点）
 //       {op:'unmount', src}                   断链（池里的本体不动）
+//       {op:'group-set', name, members, from?} 建/改/改名一个技能组合（成员必须是池里现在的
+//                                              技能目录；from = 改名前那个组名，保位置；
+//                                              成员已在别的组里回 409，一个技能只属于一个组合）
+//       {op:'group-delete', group}            删掉一个组合
+//       {op:'group-assign', skill, group}     把某个池技能归到某个组合（池技能行上的分组选择）；
+//                                             group 为空 = 不分组。一个技能只属于一个组合，
+//                                             所以先整体摘掉再按目标组追加
+//       {op:'group', action:'mount'|'unmount', group}
+//                                             整组批量挂载/卸载，只动**本工作区**两个项目根：
+//                                             已挂的跳过、池里没有的成员跳过，逐个报结果
+//                                             （mounted/skipped/failed/missing），不整组回滚
 //       同名冲突回 409 {error:'conflict'}，客户端确认后带 overwrite:true 重发。
 //
 // 安全边界：
@@ -39,7 +52,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { recycleDelete, findProjectRoot } from "../core/index.js";
 import { sameOrigin } from "../core/index.js";
-import { computeMountState, forgetMount, liveMounts, mountLink, mountStateFor, prepareCarrier, setCarrier, syncMounts, unmountLink, } from "./mount.js";
+import { computeMountState, forgetMount, liveMounts, mountLink, mountStateFor, prepareCarrier, readGroups, setCarrier, syncMounts, unmountLink, writeGroups, } from "./mount.js";
 import { dshHome, kitPath } from "../core/data-path.js";
 import { kitLogger } from "../core/log.js";
 import { managedAppIds, resolveAppLauncher, startApp } from "./app-launch.js";
@@ -98,6 +111,13 @@ export function resolveRoots(cwd) {
         roots.push({ ...def, dir });
     }
     return roots;
+}
+/** 池里的技能目录：目录且含 SKILL.md（组合成员与批量挂载都按这条认，不认任意子目录） */
+function isPoolSkillDir(poolDir, name) {
+    // 名字必须是池根下的**一层**目录名（成员清单来自客户端）：'../x'、'a/b' 一律不算
+    if (name === '' || name === '.' || name === '..' || name !== path.basename(name))
+        return false;
+    return fs.existsSync(path.join(poolDir, name, 'SKILL.md'));
 }
 function isDir(p) {
     try {
@@ -421,6 +441,8 @@ export function applySkillPool(ctx, hooks) {
                     const poolReal = safeRealpath(defaultPoolDir());
                     // 本工作区里看到的池链接（下面补进挂载登记表：手工建的链接也能进账）
                     const seenMounts = [];
+                    // 只属于这两个项目级根的池链接：池技能的目录名 → 本工作区那条链接的路径
+                    const linkedHere = new Map();
                     for (const root of roots) {
                         const exists = isDir(root.dir);
                         const skills = exists ? scanRoot(root) : [];
@@ -434,6 +456,10 @@ export function applySkillPool(ctx, hooks) {
                                         (target === poolReal || target.startsWith(`${poolReal}${path.sep}`));
                                 if (skill.linkInPool === true && typeof target === 'string' && projectDirs !== null) {
                                     seenMounts.push({ poolSkillDir: target, project: projectDirs.projectRoot, link: skill.path });
+                                    // 「本工作区已挂载」只认两个项目级根：用户级根里的链接是全局可见的那份，
+                                    // 不是这个工作区的挂载点
+                                    if (root.group === 'workspace')
+                                        linkedHere.set(path.basename(target), skill.path);
                                 }
                             }
                         }
@@ -467,12 +493,26 @@ export function applySkillPool(ctx, hooks) {
                     // 池技能被几个工作区挂载：登记本工作区看到的链接，顺手清失效条目
                     const poolDir = defaultPoolDir();
                     const mountCounts = syncMounts(poolDir, seenMounts);
+                    // 本工作区已经挂着的池技能：面板据此显示「已挂载」并把按钮换成卸载，
+                    // 不用再点一下报"同名条目已存在"
                     for (const group of groups) {
                         if (group.id !== 'pool')
                             continue;
-                        for (const skill of group.skills)
+                        for (const skill of group.skills) {
                             skill.mounts = mountCounts[path.basename(skill.path)] ?? 0;
+                            const here = linkedHere.get(path.basename(skill.path));
+                            if (here !== undefined) {
+                                skill.mountedHere = true;
+                                skill.mountPath = here;
+                            }
+                        }
                     }
+                    // 技能组合：组名 → 池技能目录名。成员已不在池里的标成 missing，不悄悄删
+                    const skillGroups = Object.entries(readGroups()).map(([name, members]) => ({
+                        name,
+                        members,
+                        missing: members.filter((member) => !isPoolSkillDir(poolDir, member)),
+                    }));
                     // 载体根状态（挂载入口据此渲染；无会话 cwd 时为 null）
                     const mount = projectDirs !== null ? await computeMountState(projectDirs) : null;
                     // 注册表增强：插件自带 / 运行时 / custom 等不在白名单根里的技能，只读展示。
@@ -507,7 +547,7 @@ export function applySkillPool(ctx, hooks) {
                             log.warn('skills registry 列表不可用', { err: error });
                         }
                     }
-                    jsonOf(res, 200, { cwd, groups, providers, brokenLinks, mount });
+                    jsonOf(res, 200, { cwd, groups, skillGroups, providers, brokenLinks, mount });
                 },
             });
             // ── POST 操作 ──
@@ -822,6 +862,204 @@ export function applySkillPool(ctx, hooks) {
                                 // 链接条目改的是池里的本体（所有挂载方同步生效），客户端据此提示
                                 link: located.isLink,
                             });
+                            return;
+                        }
+                        // ── 技能组合（组名 → 一批池技能；清单存插件数据 skills.json）──
+                        // 组合只做本工作区的批量挂载/卸载：组里那份是池技能，挂载点与断链都只在本项目。
+                        if (body.op === 'group-set') {
+                            const name = typeof body.name === 'string' ? body.name.trim() : '';
+                            if (name === '') {
+                                jsonOf(res, 400, { error: 'bad-group', message: '组合名不能为空' });
+                                return;
+                            }
+                            if (name.length > 40) {
+                                jsonOf(res, 400, { error: 'bad-group', message: '组合名太长（最多 40 字）' });
+                                return;
+                            }
+                            const from = typeof body.from === 'string' && body.from.trim() !== '' ? body.from.trim() : null;
+                            const rawMembers = Array.isArray(body.members) ? body.members : null;
+                            if (rawMembers === null) {
+                                jsonOf(res, 400, { error: 'bad-group', message: '成员清单缺失' });
+                                return;
+                            }
+                            const members = [];
+                            for (const item of rawMembers) {
+                                if (typeof item !== 'string')
+                                    continue;
+                                const member = item.trim();
+                                if (member === '' || members.includes(member))
+                                    continue;
+                                members.push(member);
+                            }
+                            // 成员必须是池里**现在**的技能目录：平铺 .md 进池挂不住，天然不在可选之列
+                            const poolDir = defaultPoolDir();
+                            const unknown = members.filter((member) => !isPoolSkillDir(poolDir, member));
+                            if (unknown.length > 0) {
+                                jsonOf(res, 400, { error: 'unknown-member', message: `池里没有这些技能：${unknown.join('、')}` });
+                                return;
+                            }
+                            const groups = readGroups();
+                            if (from !== null && from !== name) {
+                                if (groups[from] === undefined) {
+                                    jsonOf(res, 400, { error: 'no-such-group', message: `没有这个组合：${from}` });
+                                    return;
+                                }
+                                if (groups[name] !== undefined) {
+                                    jsonOf(res, 409, { error: 'conflict', message: `已有同名组合：${name}` });
+                                    return;
+                                }
+                            }
+                            // 一个技能只属于一个组合：撞组的成员直接拒——重叠时同一条链接会被两个组各卸一次
+                            const taken = new Map();
+                            for (const [key, value] of Object.entries(groups)) {
+                                if (key === name || (from !== null && key === from))
+                                    continue;
+                                for (const member of value)
+                                    if (!taken.has(member))
+                                        taken.set(member, key);
+                            }
+                            const conflicts = members
+                                .filter((member) => taken.has(member))
+                                .map((member) => ({ member, group: taken.get(member) }));
+                            if (conflicts.length > 0) {
+                                jsonOf(res, 409, {
+                                    error: 'member-taken',
+                                    message: `这些技能已属于别的组合：${conflicts.map((c) => `${c.member}（${c.group}）`).join('、')}`,
+                                    conflicts,
+                                });
+                                return;
+                            }
+                            // 保位置：改名时顶替原键的位置，新建追加到末尾
+                            const next = {};
+                            for (const [key, value] of Object.entries(groups)) {
+                                if ((from !== null && key === from) || key === name)
+                                    next[name] = members;
+                                else
+                                    next[key] = value;
+                            }
+                            if (!(name in next))
+                                next[name] = members;
+                            writeGroups(next);
+                            jsonOf(res, 200, { ok: true, op: 'group-set', name, members });
+                            return;
+                        }
+                        if (body.op === 'group-delete') {
+                            const name = typeof body.group === 'string' ? body.group.trim() : '';
+                            const groups = readGroups();
+                            if (name === '' || groups[name] === undefined) {
+                                jsonOf(res, 400, { error: 'no-such-group', message: '没有这个组合' });
+                                return;
+                            }
+                            const next = { ...groups };
+                            delete next[name];
+                            writeGroups(next);
+                            jsonOf(res, 200, { ok: true, op: 'group-delete', name });
+                            return;
+                        }
+                        if (body.op === 'group-assign') {
+                            const skill = typeof body.skill === 'string' ? body.skill.trim() : '';
+                            const group = typeof body.group === 'string' ? body.group.trim() : '';
+                            if (skill === '' || !isPoolSkillDir(defaultPoolDir(), skill)) {
+                                jsonOf(res, 400, { error: 'unknown-member', message: `池里没有这个技能：${skill}` });
+                                return;
+                            }
+                            const groups = readGroups();
+                            if (group !== '' && groups[group] === undefined) {
+                                jsonOf(res, 400, { error: 'no-such-group', message: `没有这个组合：${group}` });
+                                return;
+                            }
+                            // 空组留着：成员被搬走的组合还在，只是暂时没人
+                            const next = {};
+                            for (const [key, value] of Object.entries(groups)) {
+                                next[key] = value.filter((member) => member !== skill);
+                            }
+                            if (group !== '')
+                                next[group].push(skill);
+                            writeGroups(next);
+                            jsonOf(res, 200, { ok: true, op: 'group-assign', skill, group });
+                            return;
+                        }
+                        if (body.op === 'group' && (body.action === 'mount' || body.action === 'unmount')) {
+                            const name = typeof body.group === 'string' ? body.group.trim() : '';
+                            const members = readGroups()[name];
+                            if (members === undefined) {
+                                jsonOf(res, 400, { error: 'no-such-group', message: '没有这个组合' });
+                                return;
+                            }
+                            if (projectDirs === null) {
+                                jsonOf(res, 400, { error: '没有会话工作区' });
+                                return;
+                            }
+                            const poolDir = defaultPoolDir();
+                            // 组里已不在池里的成员跳过：列表上已标成失效，再点一下不该整组失败
+                            const present = members.filter((member) => isPoolSkillDir(poolDir, member));
+                            const missing = members.filter((member) => !present.includes(member));
+                            // 本工作区只认自己的两个项目根：批量卸载不碰别的工作区的链接
+                            const workspaceDirs = [projectDirs.dshDir, projectDirs.agentsDir];
+                            const linkInWorkspace = (target) => {
+                                for (const dir of workspaceDirs) {
+                                    let dirents;
+                                    try {
+                                        dirents = fs.readdirSync(dir, { withFileTypes: true });
+                                    }
+                                    catch {
+                                        continue;
+                                    }
+                                    for (const ent of dirents) {
+                                        const full = path.join(dir, ent.name);
+                                        if (!isLinkAt(full) || safeRealpath(full) !== target)
+                                            continue;
+                                        return full;
+                                    }
+                                }
+                                return null;
+                            };
+                            if (body.action === 'unmount') {
+                                const unmounted = [];
+                                for (const member of present) {
+                                    const memberReal = safeRealpath(path.join(poolDir, member));
+                                    if (memberReal === null)
+                                        continue;
+                                    const link = linkInWorkspace(memberReal);
+                                    if (link === null)
+                                        continue;
+                                    if (unmountLink(link).ok)
+                                        unmounted.push(link);
+                                    forgetMount(poolDir, link);
+                                }
+                                jsonOf(res, 200, { ok: true, op: 'group', action: 'unmount', unmounted, missing });
+                                return;
+                            }
+                            // mount：载体根没选定/没处理到可挂载就整组不做（与单技能挂载同一道前置）
+                            const state = await computeMountState(projectDirs);
+                            if (state.needsChoice) {
+                                jsonOf(res, 400, { error: 'not-prepared', message: '还没选定挂载点：先选池技能挂哪个根（.dsh/skills 或 .agents/skills）', mount: state });
+                                return;
+                            }
+                            const handled = await prepareCarrier(state);
+                            if (!handled.ok) {
+                                jsonOf(res, 400, { error: 'not-prepared', message: handled.error ?? '载体根未就绪', mount: state });
+                                return;
+                            }
+                            const mounted = [];
+                            const skipped = [];
+                            const failed = [];
+                            for (const member of present) {
+                                const memberDir = path.join(poolDir, member);
+                                const memberReal = safeRealpath(memberDir);
+                                if (memberReal !== null && linkInWorkspace(memberReal) !== null) {
+                                    skipped.push(member);
+                                    continue;
+                                }
+                                const result = mountLink(memberDir, state.carrierDir);
+                                if (!result.ok || typeof result.path !== 'string') {
+                                    failed.push({ name: member, error: result.error ?? '挂载失败' });
+                                    continue;
+                                }
+                                mounted.push(member);
+                                syncMounts(poolDir, [{ poolSkillDir: memberDir, project: projectDirs.projectRoot, link: result.path }]);
+                            }
+                            jsonOf(res, 200, { ok: true, op: 'group', action: 'mount', mounted, skipped, failed, missing, mount: await computeMountState(projectDirs) });
                             return;
                         }
                         jsonOf(res, 400, { error: '未知操作' });

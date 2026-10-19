@@ -8,6 +8,8 @@
 //       建链接与断链（池里的本体绝不被删被改）、失效链接可见、删除链接条目被拒；
 //       池里的 git 归技能自己：插件零动作——自带 .git 随本体进池（历史/配置/未提交改动都在）、
 //       没仓库的不补建、池根自己不建仓、改内容不自动提交、版本操作不在端点上（看历史去本机应用）；
+//       技能组合：清单存插件数据、一个技能只属于一个组合（撞组 409、池技能行可改派/清空归属）、
+//       整组挂载/卸载只动本工作区（已挂的跳过、出池的标 missing 跳过）、成员名必须是池根下一层目录；
 //       池的边界：技能只有移动（copy 不是操作）、入池原地留链接（平铺 .md 包成同名目录）、
 //       出池断掉所有工作区的链接且不带版本记录、目标与源同一处被拒、删除本体先断链。
 // 用法：node tests\test-skill-pool.mjs [baseUrl]（需 dev 环境在跑，默认 http://127.0.0.1:3081）
@@ -400,7 +402,7 @@ try {
   mkSkillIn(POOL, "", "idle-kit", "没人挂载的池技能");
   check("边界：没人挂载的池技能 mounts=0", (await poolKitOf("idle-kit"))?.mounts === 0, JSON.stringify(await poolKitOf("idle-kit")));
 
-  // 14.2 入池 = 本体进池 + 原地留链接（共用化），进池即有历史
+  // 14.2 入池 = 本体进池 + 原地留链接（共用化），技能自己的 git 跟着本体走
   const inProj = mkProject("dshkit-pool-in-");
   const inKitSrc = mkSkillIn(inProj, ".dsh/skills", "in-kit", "要共用的技能");
   await opIn(inProj, { op: "setcarrier", carrier: "project-agents" });
@@ -492,13 +494,144 @@ try {
   const delBody = await bodyOf(res);
   check("删除池本体：200 且报告断掉的链接", res.status === 200 && delBody.unmounted?.includes(delLink) === true, JSON.stringify(delBody));
   check("删除池本体：链接消失、本体消失", !fs.existsSync(delLink) && !fs.existsSync(delKit));
+  // ── 15) 技能组合：清单存插件数据，整组挂载/卸载只动本工作区 ──
+  const grpNames = ["e2e-grp", "e2e-grp-renamed", "e2e-half"];
+  const grpA = mkSkillIn(POOL, "", "grp-a", "组合成员甲");
+  const grpB = mkSkillIn(POOL, "", "grp-b", "组合成员乙");
+  const grpParked = path.join(POOL, "grp-a-parked");
+  const grpBParked = path.join(POOL, "grp-b-parked");
+  // 池外的同名技能：成员清单来自客户端，'../x' 一律不算池技能
+  mkSkillIn(path.dirname(POOL), "", "outside-kit", "池外的技能");
+  const grpProj = mkProject("dshkit-group-");
+  const grpOther = mkProject("dshkit-group2-");
+  const grpBare = mkProject("dshkit-group3-");
+  for (const name of grpNames) await opIn(grpProj, { op: "group-delete", group: name }); // 清上次残留
+  await opIn(grpProj, { op: "setcarrier", carrier: "project-agents" });
+  await opIn(grpOther, { op: "setcarrier", carrier: "project-agents" });
+
+  res = await opIn(grpProj, { op: "group-set", name: "e2e-grp", members: ["grp-a", "grp-b"] });
+  check("组合：建档（组名 + 池技能目录名）", res.status === 200);
+  let grpList = await listIn(grpProj);
+  const grpRow = grpList.skillGroups?.find((g) => g.name === "e2e-grp");
+  check("组合：列表带出来（成员齐全、没有失效条目）", grpRow?.members.join(",") === "grp-a,grp-b" && grpRow?.missing.length === 0, JSON.stringify(grpList.skillGroups));
+  check("组合：建组本身不动挂载", find(grpList, "pool", "grp-a")?.mountedHere === undefined);
+  res = await opIn(grpProj, { op: "group-set", name: "e2e-grp", members: ["grp-a", "not-in-pool"] });
+  check("组合：成员必须是池里现在的技能 → 400 unknown-member", res.status === 400 && (await bodyOf(res)).error === "unknown-member");
+
+  res = await opIn(grpProj, { op: "group", action: "mount", group: "e2e-grp" });
+  let grpBody = await bodyOf(res);
+  const grpLinkA = path.join(grpProj, ".agents", "skills", "grp-a");
+  const grpLinkB = path.join(grpProj, ".agents", "skills", "grp-b");
+  check("组合挂载：整组一次挂上两个", res.status === 200 && grpBody.mounted?.length === 2 && fs.lstatSync(grpLinkA).isSymbolicLink() && fs.lstatSync(grpLinkB).isSymbolicLink(), JSON.stringify(grpBody));
+  grpList = await listIn(grpProj);
+  check("组合挂载后：池行标出本工作区已挂载并带链接路径", find(grpList, "pool", "grp-a")?.mountedHere === true && find(grpList, "pool", "grp-a")?.mountPath === grpLinkA);
+  check("组合挂载后：工作区按链接枚举", find(grpList, "workspace", "grp-a")?.link === true);
+  res = await opIn(grpProj, { op: "group", action: "mount", group: "e2e-grp" });
+  grpBody = await bodyOf(res);
+  check("组合挂载：已挂的跳过（不报错、不重复建链）", res.status === 200 && grpBody.mounted?.length === 0 && grpBody.skipped?.length === 2, JSON.stringify(grpBody));
+
+  // 组合卸载按链接目标认，不看到底是谁挂的：单个挂上去的成员一样会被卸掉
+  await opIn(grpProj, { op: "unmount", src: grpLinkA });
+  await opIn(grpProj, { op: "unmount", src: grpLinkB });
+  res = await opIn(grpProj, { op: "mount", src: grpA });
+  check("组合：单个挂上的成员也算在本组名下（只挂了其中一个）", res.status === 200 && fs.existsSync(grpLinkA) && !fs.existsSync(grpLinkB));
+  res = await opIn(grpProj, { op: "group", action: "unmount", group: "e2e-grp" });
+  grpBody = await bodyOf(res);
+  check(
+    "组合卸载：单个挂上的成员被一并卸掉",
+    res.status === 200 && grpBody.unmounted?.length === 1 && grpBody.unmounted[0] === grpLinkA && !fs.existsSync(grpLinkA),
+    JSON.stringify(grpBody),
+  );
+  // 复原成整组挂着的状态，后面的跨工作区用例按这个状态继续
+  await opIn(grpProj, { op: "group", action: "mount", group: "e2e-grp" });
+
+  res = await opIn(grpOther, { op: "mount", src: grpA });
+  const grpOtherLink = (await bodyOf(res)).path;
+  await listIn(grpOther); // 让登记表记上这一处
+  res = await opIn(grpProj, { op: "group", action: "unmount", group: "e2e-grp" });
+  grpBody = await bodyOf(res);
+  check("组合卸载：只断本工作区那两条", res.status === 200 && grpBody.unmounted?.length === 2 && !fs.existsSync(grpLinkA) && !fs.existsSync(grpLinkB), JSON.stringify(grpBody));
+  check("组合卸载：别的工作区的链接不动", fs.lstatSync(grpOtherLink).isSymbolicLink());
+  check("组合卸载后：池行不再标已挂载", find(await listIn(grpProj), "pool", "grp-a")?.mountedHere === undefined);
+
+  // 用户级根里的链接是全局可见的那一份，不算这个工作区的挂载点
+  const userRoot = path.join(process.env.DSH_HOME ?? path.join(os.homedir(), ".dsh"), "skills");
+  const userHadDir = fs.existsSync(userRoot);
+  fs.mkdirSync(userRoot, { recursive: true });
+  const userLink = path.join(userRoot, "grp-a");
+  try { fs.unlinkSync(userLink); } catch {}
+  mkLink(grpA, userLink);
+  const userScoped = await listIn(grpProj);
+  check("组合：用户级根里的链接不算「本工作区已挂载」", find(userScoped, "pool", "grp-a")?.mountedHere === undefined);
+  check("组合：全局那份照常枚举在用户级组里", find(userScoped, "user", "grp-a")?.link === true);
+  try { fs.unlinkSync(userLink); } catch { try { fs.rmdirSync(userLink); } catch {} }
+  if (!userHadDir) { try { fs.rmdirSync(userRoot); } catch {} }
+
+  res = await opIn(grpProj, { op: "group-set", name: "e2e-grp-renamed", from: "e2e-grp", members: ["grp-a"] });
+  grpList = await listIn(grpProj);
+  check(
+    "组合改名：成员跟着走、旧名不残留、还能删",
+    res.status === 200 &&
+      grpList.skillGroups?.some((g) => g.name === "e2e-grp-renamed" && g.members.join(",") === "grp-a") === true &&
+      !grpList.skillGroups?.some((g) => g.name === "e2e-grp"),
+  );
+  res = await opIn(grpBare, { op: "group", action: "mount", group: "e2e-grp-renamed" });
+  check("组合挂载：没选载体根 → 400 not-prepared", res.status === 400 && (await bodyOf(res)).error === "not-prepared");
+
+  // 一个技能只属于一个组合：撞组的成员直接拒，不静默搬走
+  res = await opIn(grpProj, { op: "group-set", name: "e2e-dup", members: ["grp-a"] });
+  let dupBody = await bodyOf(res);
+  check(
+    "组合：成员已在别的组 → 409 member-taken 并指出撞在哪个组",
+    res.status === 409 && dupBody.error === "member-taken" && dupBody.conflicts?.[0]?.member === "grp-a" && dupBody.conflicts?.[0]?.group === "e2e-grp-renamed",
+    JSON.stringify(dupBody),
+  );
+  check("组合：撞组被拒后不多出这个组", !(await listIn(grpProj)).skillGroups?.some((g) => g.name === "e2e-dup"));
+  res = await opIn(grpProj, { op: "group-set", name: "e2e-dup", members: ["../outside-kit"] });
+  check("组合：成员名必须是池根下一层目录（'../x' 不算池技能）→ 400 unknown-member", res.status === 400 && (await bodyOf(res)).error === "unknown-member");
+
+  // 成员出池/改名后：列表标 missing，整组挂载跳过它而不是整组失败
+  res = await opIn(grpProj, { op: "group-set", name: "e2e-half", members: ["grp-b"] });
+  fs.renameSync(grpB, grpBParked);
+  const halfRow = (await listIn(grpProj)).skillGroups?.find((g) => g.name === "e2e-half");
+  check("组合：成员不在池里时标 missing（不悄悄删）", halfRow?.members.join(",") === "grp-b" && halfRow?.missing.join(",") === "grp-b", JSON.stringify(halfRow));
+  res = await opIn(grpProj, { op: "group", action: "mount", group: "e2e-half" });
+  grpBody = await bodyOf(res);
+  check("组合挂载：成员不在池里就跳过，不整组失败", res.status === 200 && grpBody.mounted?.length === 0 && grpBody.missing?.includes("grp-b") === true, JSON.stringify(grpBody));
+  fs.renameSync(grpBParked, grpB);
+
+  // 池技能行上的分组选择：改派 = 从原组摘出来，空值 = 不分组
+  res = await opIn(grpProj, { op: "group-assign", skill: "grp-b", group: "e2e-grp-renamed" });
+  grpList = await listIn(grpProj);
+  const renamedRow = grpList.skillGroups?.find((g) => g.name === "e2e-grp-renamed");
+  const halfAfter = grpList.skillGroups?.find((g) => g.name === "e2e-half");
+  check(
+    "分组改派：从原组摘出来、进目标组（一个技能只在一个组）",
+    res.status === 200 && renamedRow?.members.join(",") === "grp-a,grp-b" && halfAfter?.members.length === 0,
+    JSON.stringify(grpList.skillGroups),
+  );
+  res = await opIn(grpProj, { op: "group-assign", skill: "grp-b", group: "" });
+  const cleared = await listIn(grpProj);
+  check("分组清空：哪个组都不再含它", res.status === 200 && (cleared.skillGroups ?? []).every((g) => !g.members.includes("grp-b")));
+  res = await opIn(grpProj, { op: "group-assign", skill: "grp-b", group: "no-such-group" });
+  check("分组改派：目标组不存在 → 400 no-such-group", res.status === 400 && (await bodyOf(res)).error === "no-such-group");
+  res = await opIn(grpProj, { op: "group-assign", skill: "../outside-kit", group: "e2e-half" });
+  check("分组改派：'../x' 不是池技能 → 400 unknown-member", res.status === 400 && (await bodyOf(res)).error === "unknown-member");
+
+  for (const name of ["e2e-grp-renamed", "e2e-half"]) {
+    res = await opIn(grpProj, { op: "group-delete", group: name });
+    check(`组合删除：${name} → 200`, res.status === 200);
+  }
+  check("组合清理：建过的组都不在了", !(await listIn(grpProj)).skillGroups?.some((g) => grpNames.includes(g.name)));
+
 } finally {
   for (const dir of extra) fs.rmSync(dir, { recursive: true, force: true });
   fs.rmSync(tmp, { recursive: true, force: true });
   // 版本记录 / 边界测试用到的池技能（含各自的 .git）与平铺文件都清掉，别留在 dev 环境的池里
-  for (const name of ["hello-kit", "ver-kit", "in-kit", "flat-in", "carri-kit", "del-kit", "idle-kit", "flat-ver.md"]) {
+  for (const name of ["hello-kit", "ver-kit", "bare-kit", "in-kit", "flat-in", "carri-kit", "del-kit", "idle-kit", "flat-ver.md", "grp-a", "grp-b", "grp-a-parked", "grp-b-parked"]) {
     fs.rmSync(path.join(POOL, name), { recursive: true, force: true });
   }
+  fs.rmSync(path.join(path.dirname(POOL), "outside-kit"), { recursive: true, force: true });
 }
 
 console.log(failed === 0 ? "\nALL SKILL-POOL TESTS PASS" : `\n${failed} FAIL`);

@@ -31,6 +31,16 @@ export interface SkillEntry {
     linkInPool?: boolean;
     /** 池技能被几个工作区挂载（登记表；只有池组带） */
     mounts?: number;
+    /** 登记表里本工作区已经挂着它（只有池组带；面板据此显示「已挂载」并把按钮换成卸载） */
+    mountedHere?: boolean;
+    /** 本工作区那条挂载链接的路径（mountedHere 为真时给，卸载要用） */
+    mountPath?: string;
+}
+/** 技能组合的展示形态：成员已不在池里的另列出来（不悄悄删，面板上就地可见） */
+export interface SkillGroupView {
+    name: string;
+    members: string[];
+    missing: string[];
 }
 /** 失效链接：链接指向的池技能已不在（改名/删除），宿主发现时会静默跳过 */
 export interface BrokenLink {

@@ -2376,7 +2376,7 @@ ellipsis，窄列只截字不破版 */
       skOpenFail: "打不开应用",
       skMountCount: "挂载",
       skNoMount: "未挂载",
-      skMountCountTip: "这个池技能被几个工作区挂着（登记表记的）。删除本体时会一并断掉它们",
+      skMountStateTip: "数字 = 这个池技能被几个工作区挂着（登记表记的）；点亮 = 其中一条就在本工作区，池里的本体就是它、改动都落在本体上",
       skMoveOutAsk: "移出技能池？",
       skMoveOutTip: "本体搬到目标根，池里不再有它；池里那份版本记录也不会跟着走",
       skMoveInAsk: "移入技能池？",
@@ -2386,6 +2386,31 @@ ellipsis，窄列只截字不破版 */
       skMoveOutConfirm: "确认移动",
       skMoved: "已移动",
       skDeleteMountedTip: "这个池技能还被别的工作区挂着：删除会一并断掉那些链接",
+      skUnmountHereTip: "断开本工作区这条链接（池里的本体不动）",
+      skGroups: "技能组合",
+      skGroupsTip: "组合是一批池技能：可整体挂载到当前工作区，也可整体卸载",
+      skGroupNew: "新建组合",
+      skGroupsEmpty: "（还没有组合）",
+      skGroupName: "组合名",
+      skGroupMembers: "成员",
+      skGroupMissing: "不在池里",
+      skGroupMissingTip: "这些成员已经不在池里（出池/改名/删除）：编辑组合保存后即从组里去掉",
+      skGroupPickTip: "归入一个技能组合：组合卡片能整组挂载/卸载。一个技能只属于一个组合，换组即从原组摘出来",
+      skGroupNone: "不分组",
+      skGroupHidden: "已在其他组合的技能不在这里",
+      skGroupMountTip: "本工作区已挂载的成员数（「挂载全部」只补齐缺的那些）",
+      skMountAll: "挂载全部",
+      skUnmountAll: "卸载全部",
+      skEdit: "编辑",
+      skSave: "保存",
+      skMountFailed: "失败",
+      skMountSkipped: "跳过（已挂载）",
+      skGroupSaved: "组合已保存",
+      skGroupDeleted: "组合已删除",
+      skAll: "全部",
+      skOnlyMounted: "已挂载",
+      skOnlyUnmounted: "未挂载",
+      skFilterEmpty: "（没有符合筛选条件的技能）",
     };
     const en = {
       skillsLabel: "Skills",
@@ -2446,7 +2471,7 @@ ellipsis，窄列只截字不破版 */
       skOpenFail: "Could not open the application",
       skMountCount: "Mounted in",
       skNoMount: "Not mounted",
-      skMountCountTip: "How many workspaces mount this pool skill (from the mount registry). Deleting the pool copy unlinks them all",
+      skMountStateTip: "The number is how many workspaces mount this pool skill (from the mount registry); a lit dot means one of them is this workspace — the pool copy is the real entry and edits land there",
       skMoveOutAsk: "Move out of the skill pool?",
       skMoveOutTip: "The pool copy moves to the target root and leaves the pool; the version history kept there does not travel with it",
       skMoveInAsk: "Move into the skill pool?",
@@ -2456,6 +2481,31 @@ ellipsis，窄列只截字不破版 */
       skMoveOutConfirm: "Confirm move",
       skMoved: "Moved",
       skDeleteMountedTip: "Other workspaces still mount this pool skill: deleting unlinks them all",
+      skUnmountHereTip: "Unlink it in this workspace (the pool copy is untouched)",
+      skGroups: "Skill groups",
+      skGroupsTip: "A group is a set of pool skills: mount the whole set into this workspace, or unmount it",
+      skGroupNew: "New group",
+      skGroupsEmpty: "(no groups yet)",
+      skGroupName: "Group name",
+      skGroupMembers: "Members",
+      skGroupMissing: "missing",
+      skGroupMissingTip: "These members are no longer in the pool (moved out/renamed/deleted): save the group to drop them",
+      skGroupPickTip: "Put it in a skill group: the group card mounts/unmounts the whole set. A skill belongs to one group only — switching moves it out of the old one",
+      skGroupNone: "No group",
+      skGroupHidden: "Skills already in another group are not listed here",
+      skGroupMountTip: "Members mounted in this workspace (Mount all only fills the gaps)",
+      skMountAll: "Mount all",
+      skUnmountAll: "Unmount all",
+      skEdit: "Edit",
+      skSave: "Save",
+      skMountFailed: "failed",
+      skMountSkipped: "skipped (already mounted)",
+      skGroupSaved: "Group saved",
+      skGroupDeleted: "Group deleted",
+      skAll: "All",
+      skOnlyMounted: "Mounted",
+      skOnlyUnmounted: "Not mounted",
+      skFilterEmpty: "(no skill matches the filter)",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? key;
@@ -2674,6 +2724,12 @@ ellipsis，窄列只截字不破版 */
       return groupId === "user" ? t("skUserLevel") : t("skWorkspace");
     }
 
+    /** 路径最后一段：池技能的组合成员按**目录名**记（frontmatter 的 name 可能被改过） */
+    function skBaseName(p) {
+      const parts = String(p).split(/[\\/]/);
+      return parts[parts.length - 1] ?? "";
+    }
+
     /** 宿主错误文案：带 message 时优先用它（error 字段是机器可读的码，如 not-prepared） */
     function skErrText(err) {
       return err && err.body && typeof err.body.message === "string" && err.body.message !== ""
@@ -2767,6 +2823,27 @@ ellipsis，窄列只截字不破版 */
 .dshk-sk-bar-title{font-weight:600;color:var(--dsw-alias-label-primary)}
 .dshk-sk-warn{color:var(--dsw-alias-label-primary);white-space:nowrap}
 .dshk-sk-spacer{flex:1}
+/* 挂载状态标记：填充底 + 状态点、无描边——按钮才是有描边可点的那个，两者不复用同一套观感 */
+.dshk-sk-state{flex:none;display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:16px;padding:1px 7px;border-radius:4px;font-family:ui-monospace,Consolas,monospace;white-space:nowrap;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
+.dshk-sk-state::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.45;flex:none}
+.dshk-sk-state[data-on]{color:var(--dsw-alias-label-primary)}
+.dshk-sk-state[data-on]::before{opacity:1}
+/* 池组筛选条：只按挂载状态（全部/已挂载/未挂载） */
+.dshk-sk-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 12px;border-top:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-sk-seg{display:inline-flex;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;overflow:hidden}
+.dshk-sk-segbtn{appearance:none;background:transparent;border:0;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:12px;line-height:1;padding:5px 9px}
+.dshk-sk-segbtn + .dshk-sk-segbtn{border-left:1px solid var(--dsw-alias-border-l2)}
+.dshk-sk-segbtn[data-on]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);font-weight:600}
+/* 组合编辑器：组名输入 + 从池技能里点选成员 */
+.dshk-sk-input{font-size:12px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;padding:4px 8px;min-width:160px}
+.dshk-sk-chips{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:5px;max-height:170px;overflow:auto;padding-top:2px}
+.dshk-sk-chip{appearance:none;background:transparent;border:1px dashed var(--dsw-alias-border-l2);border-radius:999px;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:11px;line-height:1;padding:4px 9px}
+.dshk-sk-chip[data-on]{border-style:solid;border-color:var(--dsw-alias-label-secondary);color:var(--dsw-alias-label-primary);font-weight:600}
+.dshk-sk-chip:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+/* 池技能行上的分组归属选择：一个技能只属于一个组合，换组 = 从原组摘出来 */
+.dshk-sk-select{appearance:none;box-sizing:border-box;flex:none;max-width:118px;font-family:var(--dsw-font-family);font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;padding:2px 4px;cursor:pointer}
+.dshk-sk-select:hover:not(:disabled){color:var(--dsw-alias-label-primary)}
+.dshk-sk-select:disabled{opacity:.5;cursor:default}
     `;
     function injectStyles() {
       if (typeof document === "undefined") return;
@@ -2803,7 +2880,7 @@ ellipsis，窄列只截字不破版 */
      * 技能只有移动、没有复制（副本与本体分叉），挂载关系上的连移动都不给；
      * 沾池的移动前要确认：出池等于把池里那份本体交出去，进池等于交给所有挂载方共用。
      */
-    function SkillRow({ skill, groupId, allRoots, cwd, busy, runOp, picker, setPicker }) {
+    function SkillRow({ skill, groupId, allRoots, cwd, busy, runOp, picker, setPicker, groupNames = [], groupName = "" }) {
       const [confirming, setConfirming] = react.useState(false);
       // 沾池的移动：picker 选完目标先停在这里等确认（{dest}）
       const [moveAsk, setMoveAsk] = react.useState(null);
@@ -2815,6 +2892,9 @@ ellipsis，窄列只截字不破版 */
       const isLink = skill.link === true;
       const isPool = groupId === "pool";
       const mountCount = typeof skill.mounts === "number" ? skill.mounts : 0;
+      // 本工作区已挂载：行上标出来，按钮直接换成卸载（再点挂载只会报"同名条目已存在"）
+      const mountedHere = isPool && skill.mountedHere === true;
+      const canUnmountHere = mountedHere && typeof skill.mountPath === "string" && skill.mountPath !== "";
       // 挂载关系上的技能不给移动：挂载点要动先卸载，被工作区挂着的池技能要移出也
       // 得先把各挂载方卸载——一次点击就断掉别的工作区的链接太容易误伤
       const canMove = !isLink && !(isPool && mountCount > 0);
@@ -2873,24 +2953,45 @@ ellipsis，窄列只截字不破版 */
               typeof skill.description === "string" && skill.description !== ""
                 ? jsxRuntime.jsx("span", { className: "dshk-sk-desc", title: skill.description, children: skill.description })
                 : null,
-              // 池技能被几个工作区挂着（登记表）：0 = 谁也没用，可以删
+              // 池技能的挂载状态只占一枚标记：数字 = 被几个工作区挂着（0 = 谁也没用，可以删），
+              // 点亮 = 其中一条就在本工作区（按钮随之变卸载、筛选条按它分）
               isPool
                 ? jsxRuntime.jsx(KitTip, {
-                    label: t("skMountCountTip"),
+                    label: t("skMountStateTip"),
                     children: jsxRuntime.jsx("span", {
-                      className: mountCount > 0 ? "dshk-sk-badge" : "dshk-sk-badge dshk-sk-badge-off",
-                      children: mountCount > 0 ? `${t("skMountCount")} ${mountCount}` : t("skNoMount"),
+                      className: "dshk-sk-state",
+                      "data-on": mountedHere || undefined,
+                      children: mountCount === 0 ? t("skNoMount") : `${t("skMountCount")} ${mountCount}`,
                     }),
                   })
                 : null,
               jsxRuntime.jsxs("div", {
                 className: "dshk-sk-actions",
                 children: [
-                  groupId === "pool"
-                    ? jsxRuntime.jsx(KitTip, {
-                        label: t("skCarrierTip"),
-                        children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => runOp({ op: "mount", src: skill.path, cwd }), children: t("skMount") }),
+                  // 池技能的归属分组：一个技能只属于一个组合，选择即从原组摘出来（不分组 = 空值）
+                  isPool && skill.kind !== "file" && groupNames.length > 0
+                    ? jsxRuntime.jsxs("select", {
+                        className: "dshk-sk-select",
+                        title: t("skGroupPickTip"),
+                        disabled: busy,
+                        value: groupName,
+                        onChange: (ev) => runOp({ op: "group-assign", skill: skBaseName(skill.path), group: ev.target.value, cwd }),
+                        children: [
+                          jsxRuntime.jsx("option", { value: "", children: t("skGroupNone") }, ""),
+                          groupNames.map((name) => jsxRuntime.jsx("option", { value: name, children: name }, name)),
+                        ],
                       })
+                    : null,
+                  groupId === "pool"
+                    ? canUnmountHere
+                      ? jsxRuntime.jsx(KitTip, {
+                          label: t("skUnmountHereTip"),
+                          children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => runOp({ op: "unmount", src: skill.mountPath, cwd }), children: t("skUnmount") }),
+                        })
+                      : jsxRuntime.jsx(KitTip, {
+                          label: t("skCarrierTip"),
+                          children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => runOp({ op: "mount", src: skill.path, cwd }), children: t("skMount") }),
+                        })
                     : null,
                   canMove
                     ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: startPicker, children: t("skMove") })
@@ -2938,6 +3039,182 @@ ellipsis，窄列只截字不破版 */
                   jsxRuntime.jsx("span", { className: "dshk-sk-desc", children: t("skDeleteMountedTip") }),
                 ],
               })
+            : null,
+        ],
+      });
+    }
+
+    /**
+     * 技能组合卡片：组 = 一批池技能（清单存本机 skills.json）。整组挂载/卸载只作用于
+     * 当前工作区的两个项目根；组里已不在池里的成员列成失效，编辑保存即从组里去掉。
+     */
+    function GroupPanel({ skillGroups, poolSkills, busy, runOp, groupEdit, setGroupEdit, cwd }) {
+      const editing = groupEdit !== null;
+      // 本工作区已挂着的池技能目录：组合行据此显示「已挂载 x/y」（被单独卸载一个也看得出来）
+      const mountedDirs = new Set(poolSkills.filter((skill) => skill.mountedHere === true).map((skill) => skBaseName(skill.path)));
+      // 已在**别的**组合里的技能：编辑这个组时不进候选（一个技能只属于一个组合）
+      const takenBy = {};
+      for (const item of skillGroups) {
+        if (groupEdit !== null && item.name === groupEdit.from) continue;
+        for (const member of Array.isArray(item.members) ? item.members : []) {
+          if (takenBy[member] === undefined) takenBy[member] = item.name;
+        }
+      }
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-sk-group",
+        children: [
+          jsxRuntime.jsxs("div", {
+            className: "dshk-sk-group-head",
+            children: [
+              jsxRuntime.jsx("span", { children: t("skGroups") }),
+              jsxRuntime.jsx("span", { children: `· ${skillGroups.length}` }),
+              jsxRuntime.jsx("span", { className: "dshk-sk-group-dir", children: t("skGroupsTip") }),
+              editing
+                ? null
+                : jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-sk-btn",
+                    disabled: busy,
+                    onClick: () => setGroupEdit({ from: null, name: "", members: [] }),
+                    children: t("skGroupNew"),
+                  }),
+            ],
+          }),
+          skillGroups.length === 0 && !editing
+            ? jsxRuntime.jsx("div", { className: "dshk-sk-row dshk-sk-status", children: t("skGroupsEmpty") })
+            : null,
+          skillGroups.map((item) => jsxRuntime.jsx(GroupRow, { group: item, busy, runOp, setGroupEdit, cwd, mountedDirs }, item.name)),
+          editing
+            ? jsxRuntime.jsx(GroupEditor, {
+                poolSkills,
+                takenBy,
+                initial: groupEdit,
+                busy,
+                onCancel: () => setGroupEdit(null),
+                onSave: (payload) => {
+                  // 先收起编辑器再发请求：保存失败会由页面状态条说出来
+                  setGroupEdit(null);
+                  runOp({ op: "group-set", ...payload, cwd });
+                },
+              })
+            : null,
+        ],
+      });
+    }
+
+    /** 组合行：整组挂载 / 整组卸载 / 编辑 / 删除（删除要二次确认） */
+    function GroupRow({ group, busy, runOp, setGroupEdit, cwd, mountedDirs }) {
+      const [confirming, setConfirming] = react.useState(false);
+      const members = Array.isArray(group.members) ? group.members : [];
+      const missing = Array.isArray(group.missing) ? group.missing : [];
+      const present = members.filter((member) => !missing.includes(member));
+      const mounted = mountedDirs instanceof Set ? present.filter((member) => mountedDirs.has(member)).length : 0;
+      // 挂满与没挂满是互斥的两态，共用一枚按钮：挂满只能卸载，没挂满只能挂载（部分挂着时补齐缺的）
+      const fullyMounted = present.length > 0 && mounted >= present.length;
+      const remove = () => {
+        if (!confirming) {
+          setConfirming(true);
+          return;
+        }
+        setConfirming(false);
+        runOp({ op: "group-delete", group: group.name, cwd });
+      };
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-sk-row",
+        children: [
+          jsxRuntime.jsx("span", { className: "dshk-sk-name", children: group.name }),
+          jsxRuntime.jsx("span", { className: "dshk-sk-badge", children: `${t("skGroupMembers")} ${present.length}` }),
+          // 本工作区挂着几个：整组挂上后被单独卸载一个，这里就变成 x/y
+          present.length > 0 && mounted > 0
+            ? jsxRuntime.jsx(KitTip, {
+                label: t("skGroupMountTip"),
+                children: jsxRuntime.jsx("span", {
+                  className: "dshk-sk-state",
+                  "data-on": mounted >= present.length || undefined,
+                  children: `${t("skMounted")} ${mounted}/${present.length}`,
+                }),
+              })
+            : null,
+          missing.length > 0
+            ? jsxRuntime.jsx(KitTip, {
+                label: t("skGroupMissingTip"),
+                children: jsxRuntime.jsx("span", { className: "dshk-sk-badge dshk-sk-badge-off", children: `${t("skGroupMissing")} ${missing.length}` }),
+              })
+            : null,
+          members.length > 0 ? jsxRuntime.jsx("span", { className: "dshk-sk-desc", title: members.join("、"), children: members.join("、") }) : null,
+          jsxRuntime.jsxs("div", {
+            className: "dshk-sk-actions",
+            children: [
+              jsxRuntime.jsx("button", {
+                type: "button",
+                className: "dshk-sk-btn",
+                disabled: busy,
+                onClick: () => runOp({ op: "group", action: fullyMounted ? "unmount" : "mount", group: group.name, cwd }),
+                children: fullyMounted ? t("skUnmountAll") : t("skMountAll"),
+              }),
+              // 编辑时只带上还在池里的成员：保存即把失效成员从组里去掉
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setGroupEdit({ from: group.name, name: group.name, members: present }), children: t("skEdit") }),
+              confirming
+                ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", "data-danger": "1", disabled: busy, onClick: remove, children: t("skConfirmDelete") })
+                : jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: remove, children: t("skDelete") }),
+              confirming
+                ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => setConfirming(false), children: t("skCancel") })
+                : null,
+            ],
+          }),
+        ],
+      });
+    }
+
+    /** 组合编辑器（展开在组合卡片里）：组名 + 从池技能里点选成员；保存即整组覆盖写 */
+    function GroupEditor({ poolSkills, takenBy = {}, initial, busy, onCancel, onSave }) {
+      const [name, setName] = react.useState(initial.name);
+      const [members, setMembers] = react.useState(initial.members);
+      const toggle = (dir) => setMembers((list) => (list.includes(dir) ? list.filter((item) => item !== dir) : [...list, dir]));
+      const canSave = name.trim() !== "";
+      // 已属于别的组合的不列出来：一个技能只属于一个组合，要挪就先去那个组里去掉
+      const candidates = poolSkills.filter((skill) => {
+        const dir = skBaseName(skill.path);
+        return members.includes(dir) || takenBy[dir] === undefined;
+      });
+      const hidden = poolSkills.length - candidates.length;
+      return jsxRuntime.jsxs("div", {
+        className: "dshk-sk-target",
+        children: [
+          jsxRuntime.jsx("span", { className: "dshk-sk-target-label", children: t("skGroupName") }),
+          jsxRuntime.jsx("input", { className: "dshk-sk-input", value: name, disabled: busy, onChange: (ev) => setName(ev.target.value) }),
+          jsxRuntime.jsx("span", { className: "dshk-sk-target-label", children: `${t("skGroupMembers")} ${members.length}` }),
+          jsxRuntime.jsx("span", { className: "dshk-sk-spacer" }),
+          jsxRuntime.jsx("button", {
+            type: "button",
+            className: "dshk-sk-btn",
+            disabled: busy || !canSave,
+            onClick: () => onSave({ name: name.trim(), members, from: initial.from }),
+            children: t("skSave"),
+          }),
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onCancel, children: t("skCancel") }),
+          candidates.length > 0
+            ? jsxRuntime.jsx("div", {
+                className: "dshk-sk-chips",
+                children: candidates.map((skill) => {
+                  const dir = skBaseName(skill.path);
+                  return jsxRuntime.jsx(
+                    "button",
+                    {
+                      type: "button",
+                      className: "dshk-sk-chip",
+                      "data-on": members.includes(dir) || undefined,
+                      disabled: busy,
+                      onClick: () => toggle(dir),
+                      children: skill.name,
+                    },
+                    dir,
+                  );
+                }),
+              })
+            : null,
+          hidden > 0
+            ? jsxRuntime.jsx("span", { className: "dshk-sk-target-label", children: `${t("skGroupHidden")} · ${hidden}` })
             : null,
         ],
       });
@@ -3035,6 +3312,10 @@ ellipsis，窄列只截字不破版 */
       const [picker, setPicker] = react.useState(null);
       // 已点选但还没确认的载体根（null = 没有待确认的）；确认才真正处理并落盘
       const [pendingCarrier, setPendingCarrier] = react.useState(null);
+      // 池组筛选：全部 / 已挂载 / 未挂载（按组合的查看归「技能组合」面板，不再各做一套）
+      const [poolState, setPoolState] = react.useState("all");
+      // 展开中的组合编辑器：{ from, name, members }；null = 没有
+      const [groupEdit, setGroupEdit] = react.useState(null);
 
       react.useEffect(() => {
         const controller = new AbortController();
@@ -3050,7 +3331,21 @@ ellipsis，窄列只截字不破版 */
       }, [cwd, nonce]);
 
       /** 各操作成功后显示的那句话（带 warning 的响应用 warning） */
-      const OP_DONE_KEY = { delete: "skDeleted", mount: "skMounted", unmount: "skUnmounted", setcarrier: "skPrepared", move: "skMoved" };
+      const OP_DONE_KEY = { delete: "skDeleted", mount: "skMounted", unmount: "skUnmounted", setcarrier: "skPrepared", move: "skMoved", "group-delete": "skGroupDeleted", "group-set": "skGroupSaved" };
+
+      /** 完成提示：整组挂载/卸载把「挂了多少、跳过几个、哪几个失败」一并说出来 */
+      const doneText = (payload, body) => {
+        if (payload.op === "group") {
+          const list = payload.action === "mount" ? body?.mounted : body?.unmounted;
+          const parts = [`${payload.action === "mount" ? t("skMounted") : t("skUnmounted")} ${Array.isArray(list) ? list.length : 0}`];
+          if (payload.action === "mount") {
+            if (Array.isArray(body?.skipped) && body.skipped.length > 0) parts.push(`${t("skMountSkipped")} ${body.skipped.length}`);
+            if (Array.isArray(body?.failed) && body.failed.length > 0) parts.push(`${t("skMountFailed")} ${body.failed.length}：${body.failed[0].error}`);
+          }
+          return parts.join(" · ");
+        }
+        return t(OP_DONE_KEY[payload.op] ?? "skDone");
+      };
 
       const runOp = async (payload) => {
         if (busy) return;
@@ -3077,7 +3372,7 @@ ellipsis，窄列只截字不破版 */
           }
           // 宿主做了但没做全（例如入池后没能挂回来）：照它的话说出来，别用"完成"糊过去
           const warning = body && typeof body.warning === "string" && body.warning !== "" ? body.warning : null;
-          setMessage(warning ?? t(OP_DONE_KEY[payload.op] ?? "skDone"));
+          setMessage(warning ?? doneText(payload, body));
           setPicker(null);
           setNonce((n) => n + 1);
         } finally {
@@ -3089,6 +3384,98 @@ ellipsis，窄列只截字不破版 */
         ? [...data.groups].sort((a, b) => (SK_GROUP_RANK[a.id] ?? 99) - (SK_GROUP_RANK[b.id] ?? 99))
         : [];
       const allRoots = data ? groups.flatMap((group) => group.roots) : [];
+      // 技能组合（宿主列表带）：组名 → 池技能目录名
+      const skillGroups = data && Array.isArray(data.skillGroups) ? data.skillGroups : [];
+      // 组合编辑器只列池里挂得住的技能：平铺 .md 建不了链接，不进成员候选
+      const poolSkills = (groups.find((group) => group.id === "pool")?.skills ?? []).filter((skill) => skill.kind === "dir");
+      // 一个技能只属于一个组合：池技能行靠它查自己的归属
+      const groupNames = skillGroups.map((item) => item.name);
+      const groupOf = (dir) => {
+        for (const item of skillGroups) {
+          if (Array.isArray(item.members) && item.members.includes(dir)) return item.name;
+        }
+        return "";
+      };
+      const filterActive = poolState !== "all";
+      /** 池筛选只按本工作区的挂载状态：按组合的查看归「技能组合」面板，两边不再各做一套 */
+      const filterPool = (skills) =>
+        skills.filter((skill) => {
+          if (poolState === "mounted" && skill.mountedHere !== true) return false;
+          if (poolState === "unmounted" && skill.mountedHere === true) return false;
+          return true;
+        });
+
+      /** 逻辑组卡片；池那一组多一条筛选条（全部/已挂载/未挂载 × 按组合） */
+      function renderLogicalGroup(group, isPool) {
+        // 池那一组的目录交给本机应用打开（版本在各技能自己的仓库里）
+        const poolRoot = isPool ? group.roots.find((root) => root.id === "pool") : null;
+        const shown = isPool ? filterPool(group.skills) : group.skills;
+        return jsxRuntime.jsxs(
+          "div",
+          {
+            className: "dshk-sk-group",
+            children: [
+              jsxRuntime.jsxs("div", {
+                className: "dshk-sk-group-head",
+                children: [
+                  jsxRuntime.jsx("span", { children: skGroupTitle(group.id) }),
+                  jsxRuntime.jsx("span", { children: isPool && filterActive ? `· ${shown.length}/${group.skills.length}` : `· ${group.skills.length}` }),
+                  jsxRuntime.jsx("span", {
+                    className: "dshk-sk-group-dir",
+                    title: group.roots.map((root) => root.dir).join("\n"),
+                    children: group.roots
+                      .map((root) =>
+                        root.id === "pool"
+                          ? `${root.dir}${root.exists ? "" : `（${t("skNotCreated")}）`}`
+                          : `${skRootShort(root.id)}(${root.rank})${root.exists ? "" : `（${t("skNotCreated")}）`}`,
+                      )
+                      .join(" | "),
+                  }),
+                  poolRoot && poolRoot.exists ? jsxRuntime.jsx(OpenPoolButton, { dir: poolRoot.dir }) : null,
+                ],
+              }),
+              isPool
+                ? jsxRuntime.jsxs("div", {
+                    className: "dshk-sk-filters",
+                    children: [
+                      jsxRuntime.jsx("div", {
+                        className: "dshk-sk-seg",
+                        children: [
+                          ["all", "skAll"],
+                          ["mounted", "skOnlyMounted"],
+                          ["unmounted", "skOnlyUnmounted"],
+                        ].map(([id, key]) =>
+                          jsxRuntime.jsx(
+                            "button",
+                            {
+                              type: "button",
+                              className: "dshk-sk-segbtn",
+                              "data-on": poolState === id || undefined,
+                              disabled: busy,
+                              onClick: () => setPoolState(id),
+                              children: t(key),
+                            },
+                            id,
+                          ),
+                        ),
+                      }),
+                    ],
+                  })
+                : null,
+              shown.length === 0
+                ? jsxRuntime.jsx("div", { className: "dshk-sk-row dshk-sk-status", children: isPool && filterActive ? t("skFilterEmpty") : t("skEmpty") })
+                : shown.map((skill) =>
+                    jsxRuntime.jsx(
+                      SkillRow,
+                      { skill, groupId: group.id, allRoots, cwd, busy, runOp, picker, setPicker, groupNames, groupName: groupOf(skBaseName(skill.path)) },
+                      skill.path,
+                    ),
+                  ),
+            ],
+          },
+          group.id,
+        );
+      }
 
       return jsxRuntime.jsxs("div", {
         className: "dshk-sk",
@@ -3159,47 +3546,12 @@ ellipsis，窄列只截字不破版 */
                 ],
               })
             : null,
-          groups.map((group) => {
-            // 池那一组的目录交给本机应用打开（版本在各技能自己的仓库里）
-            const poolRoot = group.id === "pool" ? group.roots.find((root) => root.id === "pool") : null;
-            return jsxRuntime.jsxs(
-              "div",
-              {
-                className: "dshk-sk-group",
-                children: [
-                  jsxRuntime.jsxs("div", {
-                    className: "dshk-sk-group-head",
-                    children: [
-                      jsxRuntime.jsx("span", { children: skGroupTitle(group.id) }),
-                      jsxRuntime.jsx("span", { children: `· ${group.skills.length}` }),
-                      jsxRuntime.jsx("span", {
-                        className: "dshk-sk-group-dir",
-                        title: group.roots.map((root) => root.dir).join("\n"),
-                        children: group.roots
-                          .map((root) =>
-                            root.id === "pool"
-                              ? `${root.dir}${root.exists ? "" : `（${t("skNotCreated")}）`}`
-                              : `${skRootShort(root.id)}(${root.rank})${root.exists ? "" : `（${t("skNotCreated")}）`}`,
-                          )
-                          .join(" | "),
-                      }),
-                      poolRoot && poolRoot.exists ? jsxRuntime.jsx(OpenPoolButton, { dir: poolRoot.dir }) : null,
-                    ],
-                  }),
-                  group.skills.length === 0
-                    ? jsxRuntime.jsx("div", { className: "dshk-sk-row dshk-sk-status", children: t("skEmpty") })
-                    : group.skills.map((skill) =>
-                        jsxRuntime.jsx(
-                          SkillRow,
-                          { skill, groupId: group.id, allRoots, cwd, busy, runOp, picker, setPicker },
-                          skill.path,
-                        ),
-                      ),
-                ],
-              },
-              group.id,
-            );
-          }),
+          groups.filter((group) => group.id !== "pool").map((group) => renderLogicalGroup(group)),
+          groups.filter((group) => group.id === "pool").map((group) => renderLogicalGroup(group, true)),
+          // 组合属于池：卡片排在池之后，摆前面会读成"池之外的独立一层"
+          data
+            ? jsxRuntime.jsx(GroupPanel, { skillGroups, poolSkills, busy, runOp, groupEdit, setGroupEdit, cwd }, "skill-groups")
+            : null,
           data && Array.isArray(data.providers) && data.providers.length > 0
             ? jsxRuntime.jsxs("div", {
                 className: "dshk-sk-group",
@@ -3257,6 +3609,9 @@ ellipsis，窄列只截字不破版 */
     // 渲染级检查与直测引用
     exports.SkillsManager = SkillsManager;
     exports.SkillRow = SkillRow;
+    exports.GroupPanel = GroupPanel;
+    exports.GroupRow = GroupRow;
+    exports.GroupEditor = GroupEditor;
     exports.OpenPoolButton = OpenPoolButton;
     exports.OpenAppIcon = OpenAppIcon;
     exports.openInAppName = openInAppName;

@@ -133,7 +133,8 @@ from the page). It stays in the list: **do not turn it off**.
 - **Skill management** (new Settings page): workspace / user-level / skill-pool groups with
   move, delete, disable/enable (move only — no copy, otherwise copies drift (anything under a mount is not movable: a link must be unmounted first, and a pool skill other workspaces mount must have those mounts released first); a flat `.md`
   dropped into the pool is wrapped into a same-named directory, and the row shows how many
-  workspaces mount it); a pool skill's own repository and history stay with the skill (the plugin does not
+  workspaces mount it (one marker tells how many and whether this workspace is one of them); pool skills can be bundled into a **group** (e.g. word/excel/ppt as "Office", stored in the plugin data) and mounted or unmounted as a set — one button flips with the state (fully mounted = "Unmount all", otherwise "Mount all", which only fills the gaps); a skill belongs to one group only, chosen from a dropdown on its pool row ("No group" clears it), and skills already in another group are not offered in the group editor; a group row also shows "Mounted x/y" (unmounting one member individually shows up there); the pool header filters by mounted/not-mounted,
+  and a skill mounted in this workspace is badged with its button switched to "Unmount"); a pool skill's own repository and history stay with the skill (the plugin does not
   touch git in the pool), and a control in the pool header hands the pool directory to an installed
   application — history, commits and rollbacks happen there; same-name skills shadowed by
   another root get a dashed badge
