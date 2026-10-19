@@ -6,8 +6,7 @@
 // client 拉 200 = 行启用、404（行禁用 → 本子模块不物化）= 不注册设置页。
 import http from 'node:http';
 import { sameOrigin, registerReadableRoot } from "../core/index.js";
-import { ensurePoolBaselines } from "./pool-git.js";
-import { applySkillPool, defaultPoolDir, resolveRoots } from "./skill-pool.js";
+import { applySkillPool, resolveRoots } from "./skill-pool.js";
 export const name = 'dsh-kit/skills';
 export function apply(ctx) {
     // skills 注册表是可选增强（归属展示），服务晚于本行就绪也无碍——注入回调捕获引用
@@ -16,9 +15,7 @@ export function apply(ctx) {
         skillsRegistry = skillsCtx.skills;
     });
     applySkillPool(ctx, { getRegistry: () => skillsRegistry });
-    // 池技能的版本记录：只备仓库与基线首版（**不做自动提交**，提交由人或 agent 有意识
-    // 地做）。这里先把启动时已有的池技能补齐；之后手工放进池的技能，由面板拉列表时补。
-    void ensurePoolBaselines(defaultPoolDir());
+    // 池里的技能各自带不带仓库、历史怎么记，归技能自己（插件不建仓、不记基线、不写身份）
     const disposers = [];
     ctx.inject(['webServer'], (webCtx) => {
         // ── 行启用探针：GET /dsh-kit-skills/config，恒回空对象 ──

@@ -133,8 +133,8 @@ from the page). It stays in the list: **do not turn it off**.
 - **Skill management** (new Settings page): workspace / user-level / skill-pool groups with
   move, delete, disable/enable (move only — no copy, otherwise copies drift (anything under a mount is not movable: a link must be unmounted first, and a pool skill other workspaces mount must have those mounts released first); a flat `.md`
   dropped into the pool is wrapped into a same-named directory, and the row shows how many
-  workspaces mount it); each pool skill gets its own repository with one baseline commit when it
-  enters the pool, and a control in the pool header hands the pool directory to an installed
+  workspaces mount it); a pool skill's own repository and history stay with the skill (the plugin does not
+  touch git in the pool), and a control in the pool header hands the pool directory to an installed
   application — history, commits and rollbacks happen there; same-name skills shadowed by
   another root get a dashed badge
 - **Phone access** (new Settings page; the component row switch is the master switch —

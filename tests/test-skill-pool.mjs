@@ -6,8 +6,8 @@
 //       选定后一切挂载都去那儿）、
 //       git 体检（写忽略 / 已进仓库内容 409 → 搬到本地根或仅从仓库移除 / 非仓库也写）、
 //       建链接与断链（池里的本体绝不被删被改）、失效链接可见、删除链接条目被拒；
-//       池技能各自的仓库（只给池技能）：建仓与一条基线首版、改内容不自动提交、
-//       池根自己不建仓（不做池级单一仓库）、版本操作不在端点上（看历史去本机应用）；
+//       池里的 git 归技能自己：插件零动作——自带 .git 随本体进池（历史/配置/未提交改动都在）、
+//       没仓库的不补建、池根自己不建仓、改内容不自动提交、版本操作不在端点上（看历史去本机应用）；
 //       池的边界：技能只有移动（copy 不是操作）、入池原地留链接（平铺 .md 包成同名目录）、
 //       出池断掉所有工作区的链接且不带版本记录、目标与源同一处被拒、删除本体先断链。
 // 用法：node tests\test-skill-pool.mjs [baseUrl]（需 dev 环境在跑，默认 http://127.0.0.1:3081）
@@ -341,60 +341,55 @@ try {
     fs.existsSync(path.join(noChoice, "SKILL.md")) && !fs.existsSync(path.join(POOL, "nochoice-kit")),
   );
 
-  // ── 13) 池技能的版本记录（每技能一仓 + 一条基线首版；不做自动提交）──
-  // 基线由「搬进池」这条操作立刻补上（插件启动时也会给已有的池技能补一遍）
+  // ── 13) 池里的 git 归技能自己：插件不建仓、不记基线、不写身份、不替谁提交 ──
   const verProj = mkProject("dshkit-ver-");
   const verSrc = mkSkillIn(verProj, ".dsh/skills", "ver-kit", "版本记录测试技能");
+  // 技能自带仓库是技能自己的事：先给它一个仓库与一条自己的历史
+  git(verSrc, ["init", "-q"]);
+  git(verSrc, ["config", "--local", "user.name", "skill"]);
+  git(verSrc, ["config", "--local", "user.email", "skill@t"]);
+  git(verSrc, ["add", "-A"]);
+  git(verSrc, ["commit", "-qm", "chore: 技能自己的历史"]);
   await opIn(verProj, { op: "setcarrier", carrier: "project-agents" });
   res = await opIn(verProj, { op: "move", src: verSrc, dest: "pool" });
   const verDir = path.join(POOL, "ver-kit");
-  const verFile = path.join(verDir, "SKILL.md");
   const countCommits = (dir) => Number(git(dir, ["rev-list", "--count", "HEAD"]).stdout.trim() || 0);
   const lastSubject = (dir) => git(dir, ["log", "-1", "--pretty=%s"]).stdout.trim();
 
-  // 13.1 进池即备好仓库 + 一条「初始记录」基线
-  check("版本：技能进池就备好了自己的仓库", res.status === 200 && fs.existsSync(path.join(verDir, ".git")), await bodyOf(res));
-  check("版本：基线首版已记（主题标明初始记录）", countCommits(verDir) === 1 && lastSubject(verDir) === "auto: 初始记录", lastSubject(verDir));
+  // 13.1 进池不动技能自己的仓库：历史原样跟过来，身份也不被改写
   check(
-    "版本：仓库是技能目录自己的（不会替外层仓库提交）",
-    fs.realpathSync(git(verDir, ["rev-parse", "--show-toplevel"]).stdout.trim()) === fs.realpathSync(verDir),
+    "版本：进池后技能自己的仓库与历史原样在（不是插件建的那条）",
+    res.status === 200 && countCommits(verDir) === 1 && lastSubject(verDir) === "chore: 技能自己的历史",
+    lastSubject(verDir),
   );
-  check(
-    "版本：身份只写本仓，不动用户全局 git 配置",
-    git(verDir, ["config", "--local", "user.name"]).stdout.trim() === "dsh-kit" &&
-      git(verDir, ["config", "--local", "user.email"]).stdout.trim() === "dsh-kit@localhost",
-  );
-  check("版本：一仓一技能目录，池根自己不建仓（不做池级单一仓库）", !fs.existsSync(path.join(POOL, ".git")));
+  check("版本：插件不改仓库身份（技能自己配的还在）", git(verDir, ["config", "--local", "user.name"]).stdout.trim() === "skill");
+  check("版本：没有基线条目（插件不替技能记历史）", !git(verDir, ["log", "-1", "--pretty=%s"]).stdout.includes("auto: 初始记录"));
+  check("版本：池根自己不建仓（不做池级单一仓库）", !fs.existsSync(path.join(POOL, ".git")));
 
-  // 13.2 改内容**不会**自动提交：历史不能被同题目的提交淹掉，提交是有意识动作
-  fs.appendFileSync(verFile, "\n<!-- 等一个有意提交 -->\n");
+  // 13.2 没有仓库的技能进池也不会被补一个：插件对池里的 git 零动作
+  const bareSrc = mkSkillIn(verProj, ".dsh/skills", "bare-kit", "没有仓库的技能");
+  res = await opIn(verProj, { op: "move", src: bareSrc, dest: "pool" });
+  const bareDir = path.join(POOL, "bare-kit");
+  check("版本：没仓库的技能进池后仍然没有仓库（不建仓）", res.status === 200 && fs.existsSync(path.join(bareDir, "SKILL.md")) && !fs.existsSync(path.join(bareDir, ".git")));
   await listIn(verProj);
-  await new Promise((r) => setTimeout(r, 2600));
-  check("版本：改内容不会自动提交（拉过列表、等两秒半仍只有基线那一条）", countCommits(verDir) === 1, countCommits(verDir));
-  check("版本：改动就躺在工作区里（未提交可见）", git(verDir, ["status", "--porcelain"]).stdout.includes("SKILL.md"));
+  await new Promise((r) => setTimeout(r, 1600));
+  check("版本：拉列表不碰 git（等一会儿仍不会冒出仓库）", !fs.existsSync(path.join(bareDir, ".git")));
 
-  // 13.3 仓库与基线备好了，历史改在本机应用里看：版本操作整体退出端点
+  // 13.3 版本操作整体退出端点：历史在本机应用里做（命令行走 `git -C <池技能目录>`）
   for (const gone of ["history", "commit", "rollback"]) {
     const res2 = await opIn(proj, { op: gone, src: verDir, message: "改进：补一条说明", sha: "abcdef1" });
     check("版本：" + gone + " 不再是端点操作（400 未知操作）", res2.status === 400 && (await bodyOf(res2)).error === "未知操作");
   }
 
-  // 13.4 池内的写入类操作也不再顺手提交（禁用/启用改的是池里的本体，提交留给人决定）
-  const beforeDisable = countCommits(verDir);
-  res = await opIn(proj, { op: "disable", src: verDir, disabled: true });
-  check("版本：池技能禁用 200", res.status === 200);
-  check("版本：禁用这类写入也不自动提交（历史条数不变）", countCommits(verDir) === beforeDisable, countCommits(verDir));
-  await opIn(proj, { op: "disable", src: verDir, disabled: false });
-
-  // 13.5 平铺 .md 只当文件（单文件放不了 .git），也不会被当成技能目录
+  // 13.4 平铺 .md 只当文件（单文件放不了 .git），也不会被当成技能目录
   fs.writeFileSync(path.join(POOL, "flat-ver.md"), "---\nname: flat-ver\ndescription: 平铺版本测试\n---\nbody\n");
-  await new Promise((r) => setTimeout(r, 2000));
+  await new Promise((r) => setTimeout(r, 1500));
   check(
     "版本：平铺 .md 只当文件（不给它建仓/建目录）",
     fs.statSync(path.join(POOL, "flat-ver.md")).isFile() && !fs.existsSync(path.join(POOL, "flat-ver")),
   );
 
-  // ── 14) 池的边界：只有移动（复制会让同一个技能出现两份，版本记录也就分叉）──
+  // ── 14) 池的边界：只有移动（复制会让同一个技能出现两份，历史也就分叉）──
   const poolKitOf = async (name) => find(await listSkills(), "pool", name);
   const mkLink = (target, linkPath) => {
     fs.symlinkSync(fs.realpathSync(target), linkPath, process.platform === "win32" ? "junction" : "dir");
@@ -423,11 +418,7 @@ try {
     typeof movedIn.mounted === "string" && fs.lstatSync(movedIn.mounted).isSymbolicLink() && fs.realpathSync(movedIn.mounted) === fs.realpathSync(poolInKit),
     movedIn.mounted,
   );
-  check(
-    "入池：进池即有历史（基线已记）",
-    fs.existsSync(path.join(poolInKit, ".git")) && countCommits(poolInKit) === 1 && lastSubject(poolInKit) === "auto: 初始记录",
-    lastSubject(poolInKit),
-  );
+  check("入池：没有仓库的技能进池后仍然没有仓库（插件不建仓）", !fs.existsSync(path.join(poolInKit, ".git")));
   const inRow = find(await listIn(inProj), "workspace", "in-kit");
   check("入池：面板按链接枚举（技能没丢）", inRow?.link === true && inRow?.linkInPool === true, JSON.stringify(inRow));
   check("入池：池组显示被 1 个工作区挂载", (await poolKitOf("in-kit"))?.mounts === 1, JSON.stringify(await poolKitOf("in-kit")));
@@ -458,7 +449,7 @@ try {
     !fs.existsSync(flatSrc) && typeof flatIn.mounted === "string" && fs.realpathSync(flatIn.mounted) === fs.realpathSync(flatPoolDir),
     String(flatIn.mounted),
   );
-  check("入池：包成的目录照常拿到版本记录（基线已记）", countCommits(flatPoolDir) === 1, lastSubject(flatPoolDir));
+  check("入池：包成的目录同样不建仓（git 归技能自己）", !fs.existsSync(path.join(flatPoolDir, ".git")));
   const flatRow = find(await listIn(flatProj), "workspace", "flat-in");
   check("入池：工作区按目录型链接继续看得见", flatRow?.link === true && flatRow?.linkInPool === true, JSON.stringify(flatRow));
 

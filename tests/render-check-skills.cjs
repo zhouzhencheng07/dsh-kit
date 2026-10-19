@@ -396,15 +396,12 @@ async function checkApply() {
   );
   check("平铺 .md 进池：包成同名目录再挂回来（池挂不住单个文件）", poolSrc.includes("const wrap = destRoot.id === 'pool' && flatMd") && !poolSrc.includes("'flat-skill'"));
   check("池行显示挂载数（宿主列表带 mounts）", bundleSrc.includes("skill.mounts") && poolSrc.includes("mountCounts[path.basename(skill.path)]"));
-  const poolGitSrc = fs.readFileSync(__dirname + "/../src/skills/pool-git.ts", "utf8");
-  check("池仓库：只给池里的技能备（组件入口按池目录补基线）", compSrc.includes("ensurePoolBaselines(defaultPoolDir())"));
-  check("池仓库：身份只写技能自己的仓库、基线主题写明初始记录", poolGitSrc.includes("'config', '--local'") && poolGitSrc.includes("'auto: 初始记录'"));
   check(
-    "池仓库：不替用户提交、不挂 fs.watch（历史在本机应用里看）",
-    !poolGitSrc.includes("fs.watch") &&
-      !poolGitSrc.includes("'auto: 同步技能内容'") &&
-      !poolGitSrc.includes("poolGitCommit") &&
-      !poolGitSrc.includes("poolGitRollback"),
+    "池里的 git 归技能自己：插件不建仓、不记基线、不写身份",
+    !fs.existsSync(__dirname + "/../src/skills/pool-git.ts") &&
+      !compSrc.includes("ensurePoolBaseline") &&
+      !poolSrc.includes("ensurePoolBaseline") &&
+      !poolSrc.includes("auto: 初始记录"),
   );
   check("出池不带版本记录（.git 不进工作区根）与断链登记表都在宿主", poolSrc.includes("detachPoolLinks") && poolSrc.includes("skipRepo"));
   const mountSrc = fs.readFileSync(__dirname + "/../src/skills/mount.ts", "utf8");

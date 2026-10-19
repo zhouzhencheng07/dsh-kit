@@ -60,7 +60,6 @@ import { kitLogger } from '../core/log.ts'
 import { managedAppIds, resolveAppLauncher, startApp } from './app-launch.ts'
 
 const log = kitLogger('skills')
-import { ensurePoolBaseline } from './pool-git.ts'
 import { parseFrontmatter } from './frontmatter.ts'
 
 const POOL_DIRNAME = 'skill-pool'
@@ -835,8 +834,7 @@ export function applySkillPool(ctx: KitCtx, hooks?: SkillPoolHooks): void {
               let mountedBack: string | null = null
               let warning: string | null = null
               if (destRoot.id === 'pool' && isDir(dst)) {
-                // 进池即备好仓库与基线：之后的历史由人或 agent 有意识地提交（见 ./pool-git.ts）
-                await ensurePoolBaseline(dst)
+                // 技能自带的仓库随本体搬过来（cpSync 原样复制），插件不再建仓也不再记基线
                 if (willMount && projectDirs !== null) {
                   const state = mountState ?? (await computeMountState(projectDirs))
                   const back = mountLink(dst, state.carrierDir)

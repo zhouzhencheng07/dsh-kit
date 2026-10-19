@@ -44,7 +44,6 @@ import { dshHome, kitPath } from "../core/data-path.js";
 import { kitLogger } from "../core/log.js";
 import { managedAppIds, resolveAppLauncher, startApp } from "./app-launch.js";
 const log = kitLogger('skills');
-import { ensurePoolBaseline } from "./pool-git.js";
 import { parseFrontmatter } from "./frontmatter.js";
 const POOL_DIRNAME = 'skill-pool';
 const PHYSICAL_ROOTS = [
@@ -750,8 +749,7 @@ export function applySkillPool(ctx, hooks) {
                             let mountedBack = null;
                             let warning = null;
                             if (destRoot.id === 'pool' && isDir(dst)) {
-                                // 进池即备好仓库与基线：之后的历史由人或 agent 有意识地提交（见 ./pool-git.ts）
-                                await ensurePoolBaseline(dst);
+                                // 技能自带的仓库随本体搬过来（cpSync 原样复制），插件不再建仓也不再记基线
                                 if (willMount && projectDirs !== null) {
                                     const state = mountState ?? (await computeMountState(projectDirs));
                                     const back = mountLink(dst, state.carrierDir);
