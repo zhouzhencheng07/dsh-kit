@@ -186,6 +186,9 @@ const WikiLink = Node.create({
 });
 
 // ─── 数学（行内 $..$ / 行间 $$..$$，KaTeX 渲染、点击改 tex） ────────────────
+/** click 距最近一次 touchstart 不超过这么久，就按触屏点开处理（触摸后 click 紧跟着来） */
+const TOUCH_CLICK_MS = 1000;
+
 function mathNodeView(props, display) {
   const wrap = document.createElement(display ? "div" : "span");
   wrap.className = display ? "dshk-rte-mathblock" : "dshk-rte-math";
@@ -215,6 +218,8 @@ function mathNodeView(props, display) {
     );
     props.editor.view.focus();
   };
+  // 最近一次触摸的时间戳：点开的这一下是触屏还是鼠标，决定输入框要不要全选
+  let touchAt = 0;
   const openEditor = () => {
     if (wrap.classList.contains("is-editing")) return;
     wrap.classList.add("is-editing");
@@ -269,13 +274,18 @@ function mathNodeView(props, display) {
     input.addEventListener("blur", commit);
     wrap.appendChild(input);
     input.focus();
-    input.select();
+    // 触屏点开不进全选：全选状态下点框内不会把全选收成光标，接着打字整条 tex 被替换，
+    // 等于没法把光标挪到要改的那一处；触屏改为光标落末尾，之后点框内哪一处就落哪一处。
+    // 鼠标点开仍全选（点开即可整体替换）——触摸设备也常带鼠标，不按设备类型一刀切。
+    if (Date.now() - touchAt < TOUCH_CLICK_MS) input.setSelectionRange(input.value.length, input.value.length);
+    else input.select();
   };
   render(props.node.attrs.tex ?? "");
   if ((props.node.attrs.tex ?? "") === "") {
     // 斜杠菜单插入的空公式：直接进编辑态（tex 空 KaTeX 无从渲染）
     queueMicrotask(() => openEditor());
   }
+  wrap.addEventListener("touchstart", () => { touchAt = Date.now(); }, { passive: true });
   wrap.addEventListener("click", openEditor);
   return {
     dom: wrap,
