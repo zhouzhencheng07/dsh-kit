@@ -1438,8 +1438,9 @@ window.__ModuleLoader__.load({
    滚动仍是 rtehost 自己（下面 .dshk-md 那条），这里只留弹性与不透明底色 */
 .dshk-vault-rtehost{flex:1 1 auto;min-height:0;background:var(--dsw-alias-bg-base)}
 /* 复用 .dshk-md 排版（标题/表格/引用/代码），只覆盖编辑态差异：
-   滚动容器是 rtehost 自身，ProseMirror 去描边、正文区给最小高度 */
-.dshk-vault-rtehost.dshk-md{flex:1 1 auto;overflow:auto;padding:12px 16px}
+   滚动容器是 rtehost 自身，ProseMirror 去描边、正文区给最小高度。
+   页尾留白：正文区没有页脚撑着，长文滚到底时最后一行/图贴着窗底观感差 */
+.dshk-vault-rtehost.dshk-md{flex:1 1 auto;overflow:auto;padding:12px 16px 64px}
 .dshk-vault-rtehost .ProseMirror{outline:none;min-height:60px;caret-color:var(--dsw-alias-brand-primary,#1971c2)}
 /* gap cursor：表格 / 折叠块 / 代码块这类非 textblock 的块下方留白处的落点（打字就在那儿
    起一个段落）。vendor 把它画成 20px 横线 + 闪烁，看着像"横着的光标"。只改 ::after 的形状
