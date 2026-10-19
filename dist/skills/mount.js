@@ -214,7 +214,9 @@ export async function mountStateFor(dirs, carrier) {
     let tracked = [];
     if (repoRoot !== null) {
         const rel = toPosix(path.relative(repoRoot, carrierDir));
-        const check = await runGit(['check-ignore', '-v', '--', `${rel}/`], repoRoot);
+        // --no-index：索引里已跟踪的路径默认不算"被忽略"，不带上会把这里的判定变成假阴性
+        // （载体根里恰恰常有已进仓库的内容）。这里要答的是"规则忽略它吗"，与是否已跟踪无关。
+        const check = await runGit(['check-ignore', '-v', '--no-index', '--', `${rel}/`], repoRoot);
         ignored = check.ok && check.out.trim() !== '';
         const ls = await runGit(['ls-files', '--', rel], repoRoot);
         tracked = ls.ok ? ls.out.split(/\r?\n/).map((s) => s.trim()).filter((s) => s !== '') : [];
@@ -286,7 +288,8 @@ export async function prepareCarrier(state) {
     const { file, line } = ignoreLineOf(state);
     const wroteIgnore = ensureIgnoreLine(file, line);
     if (state.repoRoot !== null) {
-        const check = await runGit(['check-ignore', '-v', '--', carrierSpec(state, state.repoRoot)], state.repoRoot);
+        // 同上：自检要验的是**规则**，索引里的跟踪状态不算（移出索引就在下一步做）
+        const check = await runGit(['check-ignore', '-v', '--no-index', '--', carrierSpec(state, state.repoRoot)], state.repoRoot);
         if (!(check.ok && check.out.trim() !== '')) {
             return { ok: false, error: `忽略规则未生效：${state.carrierDir} 仍会被仓库跟踪`, untracked, ignoreFile: file, wroteIgnore };
         }
