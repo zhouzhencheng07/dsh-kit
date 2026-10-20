@@ -179,6 +179,252 @@ check(
     );
   }
 
+  // ── 学习 / 复习：纯逻辑 + 浮层渲染桩（与测验同一口径）──
+  {
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    check(
+      "学习导出面齐全（纯逻辑 + 入口/记录/总览三个面）",
+      Array.isArray(comps.STUDY_LADDER) &&
+        [
+          "studyToday",
+          "studyDateAfter",
+          "studyDueDiffDays",
+          "studyDueLabel",
+          "studyStatusText",
+          "studyHistoryText",
+          "studyScopeCounts",
+          "studyFetchState",
+          "studyOp",
+          "StudyDialog",
+          "VaultStudyEntry",
+          "VaultStudyRecordDialog",
+          "VaultStudySetDialog",
+        ].every((n) => typeof comps[n] === "function"),
+    );
+    check("STUDY_LADDER 与宿主/桌面同一份默认表", JSON.stringify(comps.STUDY_LADDER) === JSON.stringify([1, 2, 4, 7, 15, 30, 60, 120]));
+    check(
+      "studyToday / studyDateAfter：日期串按本地日推、间隔选择器预览（0/10/120 天）",
+      comps.studyToday("2026-10-21") === "2026-10-21" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(comps.studyToday()) &&
+        comps.studyDateAfter(0, "2026-10-21") === "2026-10-21" &&
+        comps.studyDateAfter(10, "2026-10-21") === "2026-10-31" &&
+        comps.studyDateAfter(120, "2026-10-21") === "2027-02-18",
+    );
+    check(
+      "studyDueDiffDays / studyDueLabel：今天、N 天后、逾期 N 天、没有下次 = 已完成",
+      comps.studyDueDiffDays("2026-10-21", "2026-10-21") === 0 &&
+        comps.studyDueDiffDays("2026-10-24", "2026-10-21") === 3 &&
+        comps.studyDueDiffDays("2026-10-19", "2026-10-21") === -2 &&
+        comps.studyDueDiffDays("", "2026-10-21") === null &&
+        ["今天", "today"].includes(comps.studyDueLabel("2026-10-21", "2026-10-21")) &&
+        ["3 天后", "in 3 d"].includes(comps.studyDueLabel("2026-10-24", "2026-10-21")) &&
+        ["逾期2天", "2 d overdue"].includes(comps.studyDueLabel("2026-10-19", "2026-10-21")) &&
+        ["已完成", "Done"].includes(comps.studyDueLabel(undefined, "2026-10-21")),
+    );
+    check(
+      "studyStatusText：首次学习 / 第 N 次复习 / 已完成 · 共复习 N 次",
+      ["首次学习", "First learned"].includes(comps.studyStatusText({ status: "active", reps: 0 })) &&
+        ["第 2 次复习", "Review no. 2"].includes(comps.studyStatusText({ status: "active", reps: 2 })) &&
+        ["已完成 · 共复习 3 次", "Done · reviewed 3 times"].includes(comps.studyStatusText({ status: "done", reps: 3 })) &&
+        ["已完成", "Done"].includes(comps.studyStatusText({ status: "done", reps: 0 })),
+    );
+    check(
+      "studyHistoryText：五种历史（首次 / 第 N 次 / 调整 / 完成 / 重启）文案带下次日期",
+      ["首次学习", "First learned"].includes(comps.studyHistoryText({ at: "2026-10-21", kind: "first" })) &&
+        ["第 2 次 · 下次 4 天 → 11-01", "No. 2 · next in 4 d → 11-01"].includes(comps.studyHistoryText({ at: "2026-10-25", kind: "review", reps: 2, intervalDays: 4, dueAt: "2026-11-01" })) &&
+        ["调整下次间隔为 10 天 → 10-31", "Next interval set to 10 d → 10-31"].includes(comps.studyHistoryText({ at: "2026-10-21", kind: "adjust", intervalDays: 10, dueAt: "2026-10-31" })) &&
+        ["完成 · 不再安排", "Done · no further review"].includes(comps.studyHistoryText({ at: "2026-10-21", kind: "done" })) &&
+        ["重启 · 1 天 → 10-22", "Restarted · 1 d → 10-22"].includes(comps.studyHistoryText({ at: "2026-10-21", kind: "restart", intervalDays: 1, dueAt: "2026-10-22" })),
+    );
+    check(
+      "studyScopeCounts：在学 / 今日（含逾期）/ 逾期 / 已完成",
+      JSON.stringify(
+        comps.studyScopeCounts(
+          [
+            { rel: "a", record: { status: "active", dueAt: "2026-10-21" } },
+            { rel: "b", record: { status: "active", dueAt: "2026-10-19" } },
+            { rel: "c", record: { status: "active", dueAt: "2026-10-25" } },
+            { rel: "d", record: { status: "done" } },
+          ],
+          "2026-10-21",
+        ),
+      ) === JSON.stringify({ active: 3, due: 2, over: 1, done: 1 }),
+    );
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    const recShell = comps.VaultStudyRecordDialog({ rel: "数学/函数", path: "D:/v/数学/函数.md", toast: () => {}, onClose: () => {}, onChanged: () => {} });
+    check(
+      "VaultStudyRecordDialog：渲染桩下出浮层壳（标题带页名），不因缺数据炸",
+      !!recShell && recShell.type === comps.StudyDialog && typeof recShell.props.title === "string" &&
+        (recShell.props.title.startsWith("学习记录") || recShell.props.title.startsWith("Study record")),
+    );
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    const setShell = comps.VaultStudySetDialog({ dir: "数学", name: "数学", root: "D:/v", onClose: () => {} });
+    check(
+      "VaultStudySetDialog：渲染桩下出浮层壳（标题「学习 · 集名」），不因缺数据炸",
+      !!setShell && setShell.type === comps.StudyDialog && typeof setShell.props.title === "string" &&
+        (setShell.props.title.startsWith("学习 · ") || setShell.props.title.startsWith("Study · ")),
+    );
+    // 浮层壳自身的投递口径：portal 到 body（页条是 sticky 层，就地画会被压在正文下面）
+    const dlg = comps.StudyDialog({ title: "x", onClose: () => {}, children: null });
+    check("StudyDialog：portal 到 body（与测验浮层同一条投递口径）", !!dlg && dlg.$$dshk === "portal" && dlg.props.container === global.document.body);
+    check(
+      "vaultPagePathOfRel：索引 rel 去扩展名 + 不折大小写匹配，返回带扩展名的绝对路径（.markdown 页也认）",
+      comps.vaultPagePathOfRel(
+        [
+          { rel: "数学/函数", path: "D:/v/数学/函数.markdown" },
+          { rel: "物理/Mechanics.md", path: "D:/v/物理/Mechanics.md" },
+        ],
+        "数学/函数",
+      ) === "D:/v/数学/函数.markdown" &&
+        comps.vaultPagePathOfRel([{ rel: "物理/Mechanics.md", path: "D:/v/物理/Mechanics.md" }], "物理/mechanics") === "D:/v/物理/Mechanics.md" &&
+        comps.vaultPagePathOfRel([{ rel: "数学/函数", path: "D:/v/数学/函数.md" }], "不存在") === "" &&
+        comps.vaultPagePathOfRel(null, "a") === "" &&
+        comps.vaultPagePathOfRel([{ rel: "数学/函数", path: "D:/v/数学/函数.md" }], "") === "",
+    );
+    // 间隔选择器（记录浮层「调整下次」与日程复习提示的「调整」共用）：8 档 + 自定义 1..3650 + 预览 + 回传
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    let pickedDays = null;
+    comps.StudyIntervalPicker({ initial: 7, onSave: (d) => { pickedDays = d; }, onCancel: () => {} });
+    const ladderBtns = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-study-daybtn"));
+    const daysInput = callLog.find((c) => c[2] && c[2].type === "number" && c[2].className === "dshk-vault-modalinput");
+    const previewLine = callLog.find((c) => c[2] && c[2].className === "dshk-study-line" && typeof c[2].children === "string" && /下次|Next/.test(c[2].children));
+    check(
+      "间隔选择器：8 枚默认档位（当前档高亮）+ 自定义输入回显 + 下次日期预览",
+      ladderBtns.length === 8 && !!daysInput && daysInput[2].value === "7" &&
+        ladderBtns.some((b) => String(b[2].className).includes("is-on")) &&
+        !!previewLine && /\d{4}-\d{2}-\d{2}/.test(String(previewLine[2].children)),
+    );
+    // 越界夹取：99999 → 3650；保存回调回传所选天数（不是 initial）
+    daysInput[2].onChange({ target: { value: "99999" } });
+    stateSeq = 0;
+    callLog = [];
+    comps.StudyIntervalPicker({ initial: 7, onSave: (d) => { pickedDays = d; }, onCancel: () => {} });
+    const input2 = callLog.find((c) => c[2] && c[2].type === "number" && c[2].className === "dshk-vault-modalinput");
+    callLog.filter((c) => c[2] && c[2].className === "dshk-btn-save").pop()[2].onClick();
+    check("间隔选择器：自定义 1..3650 夹取，保存回传所选天数", input2[2].value === "3650" && pickedDays === 3650);
+    // 知识集学习总览行：点击把 rel 交给 pageAbsOf 解析（T2 bug 回归：裸拼 joinRelPath 少了扩展名）
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    stateStore.set(0, [{ rel: "数学/函数", name: "函数", record: { version: 1, firstLearnedAt: "2026-10-01", dueAt: "2026-10-25", intervalDays: 4, reps: 2, status: "active", history: [], updatedMs: 1 } }]);
+    let askedRel = null;
+    let setDlgErr = null;
+    try {
+      comps.VaultStudySetDialog({ dir: "数学", name: "数学", pageAbsOf: (rel) => { askedRel = rel; return "D:/v/数学/函数.markdown"; }, onClose: () => {} });
+    } catch (e) {
+      setDlgErr = e;
+    }
+    const setRow = callLog.find((c) => c[2] && c[2].className === "dshk-study-row");
+    check("学习总览行：随数据出行（页名 + 右侧第 N 次/日期）", setDlgErr === null && !!setRow);
+    if (setRow) {
+      try {
+        setRow[2].onClick();
+      } catch {
+        /* 桩环境无右栏服务：开签本身可能静默返回，链路断言看 rel 是否交给解析器 */
+      }
+    }
+    check("学习总览行点击：rel 交给 pageAbsOf 解析成带扩展名的绝对路径（不再裸拼 .md）", askedRel === "数学/函数");
+    stateSeq = 0;
+    stateStore.clear();
+  }
+
+  // ── 首页知识集行：学习统计 + 「学习计划」鈕（HomePagePane 直渲，state 槽序 0=idx 1=stats 2=showAll 3=studySet 4=nonce）──
+  {
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    stateStore.set(0, { root: "D:/v", pages: [], knowledgeSets: [{ dir: "数学", refs: [] }, { dir: "物理", refs: [] }] });
+    stateStore.set(1, new Map([
+      ["数学", { quiz: { total: 3, mastered: 1 }, study: { active: 2, due: 1, over: 1, done: 1 } }],
+      ["物理", { quiz: { total: 0, mastered: 0 }, study: null }],
+    ]));
+    stateStore.set(2, false);
+    stateStore.set(3, null);
+    stateStore.set(4, 0);
+    let homeErr = null;
+    let homeOut = null;
+    try {
+      homeOut = comps.HomePagePane({});
+    } catch (e) {
+      homeErr = e;
+    }
+    const homeRows = callLog.filter((c) => c[2] && c[2].className === "dshk-home-row");
+    const homeStats = callLog.filter((c) => c[2] && c[2].className === "dshk-home-rowstat");
+    const s0 = String((homeStats[0] && homeStats[0][2].children) || "");
+    const s1 = String((homeStats[1] && homeStats[1][2].children) || "");
+    check("首页知识集行渲染不崩（两集各一行）", homeErr === null && !!homeOut && homeRows.length === 2);
+    check(
+      "首页知识集行统计：资料 · 题目 m/t + 在学 / 今日（学习取不到就退化，不连累题目数字）",
+      (s0.includes("题目 1/3") || s0.includes("Quiz 1/3")) &&
+        (s0.includes("在学 2") || s0.includes("studying 2")) &&
+        (s0.includes("今日 1") || s0.includes("due today 1")) &&
+        (s1.includes("题目 0") || s1.includes("Quiz 0")) &&
+        !/在学|studying|今日|due today/.test(s1),
+    );
+    const studyBtn = callLog.find((c) => c[2] && c[2].className === "dshk-home-study");
+    const quizBtn = callLog.find((c) => c[2] && c[2].className === "dshk-home-quiz");
+    const studyTip = callLog.find((c) => c[1] === dockExports.KitTip && c[2] && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-home-study");
+    check(
+      "「学习计划」图标钮在「测验」钮之前（KsIcon + 官方气泡「学习计划」）",
+      !!studyBtn && !!quizBtn && callLog.indexOf(studyBtn) < callLog.indexOf(quizBtn) &&
+        !!studyTip && ["学习计划", "Study plan"].includes(studyTip[2].label),
+    );
+    if (studyBtn) studyBtn[2].onClick({ stopPropagation: () => {} });
+    stateSeq = 0;
+    callLog = [];
+    let reopenErr = null;
+    try {
+      comps.HomePagePane({});
+    } catch (e) {
+      reopenErr = e;
+    }
+    check(
+      "点「学习计划」= 挂该集总览浮层（VaultStudySetDialog，带 dir/name）",
+      reopenErr === null && callLog.some((c) => c[1] === comps.VaultStudySetDialog && c[2].dir === "数学" && c[2].name === "数学"),
+    );
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+  }
+
+// 学习侧 rel → 可打开的绝对路径：索引优先（.markdown 页只有索引认得），索引缺了按
+// .md → .markdown 探 stat；stat 对不存在路径回 200 {gone:true}，gone 不能当命中
+async function checkStudyPageAbs() {
+  const prevFetch = global.fetch;
+  const statAsked = [];
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes("/dsh-kit/vault/index")) {
+      return { ok: true, status: 200, json: async () => ({ root: "D:/v", pages: [{ rel: "物理/力学.md", path: "D:/v/物理/力学.md" }] }) };
+    }
+    if (u.includes("/dsh-kit/vault/stat")) {
+      const p = decodeURIComponent(u.slice(u.indexOf("path=") + 5));
+      statAsked.push(p);
+      return { ok: true, status: 200, json: async () => (p.endsWith(".md") ? { gone: true } : { mtimeMs: 1, size: 2 }) };
+    }
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+  const idxHit = await comps.studyPageAbs("物理/力学");
+  const fallback = await comps.studyPageAbs("数学/函数");
+  const empty = await comps.studyPageAbs("");
+  global.fetch = prevFetch;
+  check("studyPageAbs：索引命中直接用索引 path（.markdown 页只有索引认得）", idxHit === "D:/v/物理/力学.md");
+  check(
+    "studyPageAbs：索引未命中按 .md → .markdown 探 stat，gone 不算命中（兜底到 .markdown）",
+    fallback === "D:/v/数学/函数.markdown" &&
+      statAsked.some((p) => p.endsWith("数学/函数.md")) && statAsked.some((p) => p.endsWith("数学/函数.markdown")),
+  );
+  check('studyPageAbs：空 rel 回 ""（调用方给提示，不瞎开）', empty === "");
+}
+
 // 3) apply 装配门控：行关闭（探针 404）= 一个槽都不注册；可用 = 壳 + 右栏两签 +
 //    两个配置页 key + 两个座 + 快捷键
 async function checkApply() {
@@ -189,12 +435,18 @@ async function checkApply() {
     const shortcutCmds = [];
     const clickListeners = [];
     const origAdd = global.document.addEventListener;
+    const fetchCalls = [];
     global.document.addEventListener = (type, fn, capture) => { clickListeners.push([type, capture === true]); };
-    global.fetch = async (url) => {
+    global.fetch = async (url, opts) => {
       const u = String(url);
+      fetchCalls.push({ url: u, method: (opts && opts.method) || "GET" });
       if (u.includes("/dsh-kit-vault/config")) {
         if (!available) return { ok: false, status: 404, json: async () => ({ error: "HTTP 404" }) };
         return { ok: true, status: 200, json: async () => ({ vaultRoot: "" }) };
+      }
+      if (u.includes("/dsh-kit/vault/study-sync") && available) {
+        // created>0 → 前端要 bump 日程总线（复习待办是真实条目）
+        return { ok: true, status: 200, json: async () => ({ created: 2 }) };
       }
       return { ok: true, status: 200, json: async () => ({ root: "D:/v", folders: [], pages: [], library: null }) };
     };
@@ -216,12 +468,27 @@ async function checkApply() {
     };
     await comps.apply(ctx);
     global.document.addEventListener = origAdd;
-    return { registered, slotInjects, svcInjects, shortcutCmds, clickListeners };
+    return { registered, slotInjects, svcInjects, shortcutCmds, clickListeners, fetchCalls };
   };
   const off = await run(false);
   check("行关闭（/dsh-kit-vault/config 404）：一个槽、一个服务注入都不发生", off.registered.length === 0 && off.slotInjects.length === 0 && off.svcInjects.length === 0);
   const on = await run(true);
   check("apply 激活不抛错且等 sidebarRightTabs/shortcuts 声明（inject 而非直读）", on.svcInjects.includes("sidebarRightTabs") && on.svcInjects.includes("shortcuts"));
+  // 启动对齐：物化后拍一次 study-sync（记录可能在别端 / agent 写下）；created>0 要 bump 日程总线
+  const syncBefore = comps.schedBus.getVersion();
+  const syncCall = on.fetchCalls.find((c) => c.url.includes("/dsh-kit/vault/study-sync"));
+  check(
+    "启动对齐：apply 里 POST /dsh-kit/vault/study-sync（补建复习待办）",
+    !!syncCall && syncCall.method === "POST",
+  );
+  await new Promise((r) => setTimeout(r, 0));
+  check("启动对齐：created>0 才 bump 日程总线（数字不等 30s 那一拍）", comps.schedBus.getVersion() > syncBefore);
+  // 防重入：apply 重跑不再拍第二次（模块级 studySyncRequested）
+  const on2 = await run(true);
+  check(
+    "启动对齐防重入：apply 重跑不再发 state-sync 请求",
+    !on2.fetchCalls.some((c) => c.url.includes("/dsh-kit/vault/study-sync")),
+  );
   const keys = on.registered.filter((s) => s && s.name === "plugins.row.config").map((s) => s.key);
   check("配置页挂本组件行（单包单口径 key）", keys.includes("dsh-kit#vault") && keys.length === 1);
   check(
@@ -517,6 +784,20 @@ async function checkApply() {
       homePaneSrc.includes("reader.enterDir") && homePaneSrc.includes("reader.openPath") &&
       bundleSrc.includes("HOME_SETS_LIMIT = 8") && bundleSrc.includes("HOME_RECENT_LIMIT = 8"),
   );
+  check(
+    "首页知识集行：学习统计（在学 / 今日）与「学习计划」钮（在测验钮之前）+ 总览浮层随开随挂",
+    homePaneSrc.includes('"/dsh-kit/vault/study-scope?"') &&
+      homePaneSrc.includes("studyScopeCounts(") &&
+      homePaneSrc.includes('t("homeStudyActive")') && homePaneSrc.includes('t("homeStudyDue")') &&
+      homePaneSrc.includes('className: "dshk-home-study"') &&
+      homePaneSrc.includes("setStudySet({ dir: f.dir") &&
+      homePaneSrc.includes("jsxRuntime.jsx(VaultStudySetDialog, {") &&
+      homePaneSrc.indexOf("dshk-home-study") < homePaneSrc.indexOf("dshk-home-quiz"),
+  );
+  check(
+    "首页学习数字随手动作刷新（订阅日程总线；学习写动作最后是改复习待办）",
+    homePaneSrc.includes("schedBus.subscribe("),
+  );
 
   // ── 树头动作平铺 + 资料段／添加资料同归属（只看树根）──
   check(
@@ -532,9 +813,86 @@ async function checkApply() {
       bundleSrc.includes("const ksCurrentRefs = headKs === null ? null : ksRefsOf(headKs) ?? [];") &&
       !bundleSrc.includes("ksStartRels"),
   );
+  // ── 学习/复习：宿主契约钉在 study.ts / study-events.ts；端点与伴生文件钉在 index/fs ──
+  const studySrc = read("src/vault/study.ts");
+  const studyEventsSrc = read("src/vault/study-events.ts");
+  const schedSrc = read("src/vault/schedule.ts");
+  check(
+    "学习端点九件套（记录读写 + 动作 + 启动对齐）",
+    [
+      "/dsh-kit/vault/study",
+      "/dsh-kit/vault/study-scope",
+      "/dsh-kit/vault/study-first",
+      "/dsh-kit/vault/study-complete",
+      "/dsh-kit/vault/study-adjust",
+      "/dsh-kit/vault/study-finish",
+      "/dsh-kit/vault/study-restart",
+      "/dsh-kit/vault/study-remove",
+      "/dsh-kit/vault/study-sync",
+    ].every((u) => compSrc.includes("'" + u + "'")),
+  );
+  check(
+    "学习跨端契约哨兵：.study 布局、默认间隔表与上限、version=1、camelCase 记录字段",
+    studySrc.includes("STUDY_DIR = '.study'") &&
+      studySrc.includes("[1, 2, 4, 7, 15, 30, 60, 120]") &&
+      studySrc.includes("MAX_INTERVAL = 3650") &&
+      studySrc.includes("MAX_HISTORY = 500") &&
+      studySrc.includes("version: 1") &&
+      studySrc.includes("nextLadder") &&
+      ["firstLearnedAt", "lastReviewedAt", "dueAt", "intervalDays", "reps", "updatedMs"].every((k) => studySrc.includes(k)),
+  );
+  check(
+    "记录跟页面走：改名 / 移动 / 删除 / 覆盖把 .study 与 .quiz 一并带上（伴生文件收在一处）",
+    quizFsSrc.includes("followStudyPage") &&
+      quizFsSrc.includes("studySiblingsForDelete") &&
+      quizFsSrc.includes("function pageSiblingsForDelete(") &&
+      quizFsSrc.includes("export function relOfEntry(") &&
+      quizFsSrc.includes("extrasOf.set(p, pageSiblingsForDelete(p))"),
+  );
+  check(
+    "复习待办是日程里的真实条目：studyRel 三态写路径 + 同步层建/归档/改名/清理",
+    schedSrc.includes("studyRel?: string") &&
+      schedSrc.includes("has('studyRel')") &&
+      schedSrc.includes("setOrClear('studyRel', f.studyRel)") &&
+      ["ensureReviewEvent", "completeReviewEvent", "finishReviewEvents", "removeReviewEvents", "moveReviewLinks", "syncReviewEvents"].every((fn) => studyEventsSrc.includes("export function " + fn + "(")) &&
+      studyEventsSrc.includes("studyRel: rel") &&
+      studyEventsSrc.includes("store.setDone("),
+  );
+  check(
+    "学习记录告警接 kitLogger；写端点体上限 256KB（与桌面同口径）",
+    compSrc.includes("setStudyWarn(kitLogger('vault').warn)") && compSrc.includes("STUDY_BODY_LIMIT = 256 * 1024"),
+  );
+  // ── 学习/复习：client 半边的写路径与排期投影（行为级断言在根 render-check）──
+  check(
+    "复习待办在清单/浮层/提示三处认 studyRel（父目录第二行 + 打开页面 + 完成走学习端点）",
+    bundleSrc.includes('className: "dshk-sched-taskparent"') &&
+      bundleSrc.includes('className: "dshk-sched-rtoast"') &&
+      bundleSrc.includes('"/dsh-kit/vault/study-complete"') &&
+      bundleSrc.includes('"/dsh-kit/vault/study-finish"') &&
+      bundleSrc.includes('"/dsh-kit/vault/study-adjust"') &&
+      bundleSrc.includes("openStudyPage(rel)"),
+  );
+  check(
+    "复习待办「打开页面」按 rel 解析成绝对路径（.md / .markdown 都认，不靠裸拼扩展名）",
+    bundleSrc.includes("async function studyPageAbs(rel)") &&
+      bundleSrc.includes('for (const ext of [".md", ".markdown"])') &&
+      bundleSrc.includes("vaultPagePathOfRel(vaultIndexPagesHint, want)") &&
+      !bundleSrc.includes("openVaultPageAndDock(joinRelPath(root, s.rel))"),
+  );
+  check(
+    "启动 / 同步对齐：物化后一次性 POST study-sync，补建了条目才 bump 日程总线",
+    bundleSrc.includes('"/dsh-kit/vault/study-sync"') &&
+      bundleSrc.includes("studySyncRequested") &&
+      /Number\(body && body\.created\) > 0\) schedBus\.bump\(\)/.test(bundleSrc),
+  );
+  check(
+    "学习写动作成功即广播日程总线（复习待办是真实条目，侧栏/首页不等 30s）",
+    /async function studyOp\(path, payload\) \{[\s\S]{0,220}?schedBus\.bump\(\);/.test(bundleSrc),
+  );
 }
 
 (async () => {
+  await checkStudyPageAbs();
   await checkApply();
   console.log(failed === 0 ? "ALL RENDER OK (vault)" : "FAILED: " + failed);
   process.exit(failed === 0 ? 0 : 1);

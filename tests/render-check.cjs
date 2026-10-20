@@ -338,6 +338,28 @@ out = comps.ScheduleTasksPanel({});
 const runningBadges = callLog.filter((c) => c[2] && c[2].className === "dshk-sched-running");
 const timingRows = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-sched-task is-timing"));
 check("计时中：顶部挂走秒状态、挂表那一行亮起", runningBadges.length === 1 && /\d\d:\d\d/.test(String(runningBadges[0][2].children)) && timingRows.length === 1);
+// 复习待办（studyRel 指回页面）：标题下第二行父目录（截断、title=rel），行尾多一枚
+// 「打开页面」（在计时钮之前）——与普通待办区分开，勾完成走学习端点（见收尾的写路径）
+stateSeq = 0;
+stateStore.clear();
+stateStore.set(0, { events: [{ id: "s1", title: "函数", due: "2026-10-21", studyRel: "数学/第一章/函数" }], occurrences: [], orphans: [], runningTimer: null });
+callLog = [];
+out = comps.ScheduleTasksPanel({});
+const studyParent = callLog.find((c) => c[2] && c[2].className === "dshk-sched-taskparent");
+const studyOpenTip = callLog.find((c) => c[1] === comps.KitTip && c[2] && ["打开页面", "Open page"].includes(c[2].label));
+const studyRowActBtns = callLog.filter((c) => c[2] && c[2].className === "dshk-sched-taskact" && typeof c[2]["aria-label"] === "string");
+const studyOpenBtn = studyRowActBtns.find((c) => ["打开页面", "Open page"].includes(c[2]["aria-label"]));
+const studyTimerBtn = callLog.find((c) => c[2] && c[2].className === "dshk-sched-tasktimer");
+check(
+  "复习待办行：第二行父目录（10px 暗字、截断，title 给全 rel）",
+  !!studyParent && studyParent[2].children === "数学/第一章" && studyParent[2].title === "数学/第一章/函数",
+);
+check(
+  "复习待办行：行尾「打开页面」钮在计时钮之前（气泡 + aria-label 同一文案）",
+  !!studyOpenBtn && !!studyOpenTip && !!studyTimerBtn && callLog.indexOf(studyOpenBtn) < callLog.indexOf(studyTimerBtn),
+);
+check("普通待办行不出父目录与打开页面钮（只给复习待办）：上一轮普通行仍只有计时/编辑/删除三枚动作", timerBtns.length === 1 && rowActs.length === 2);
+
 stateSeq = 0;
 stateStore.clear();
 // openVaultPageAndDock：签归官方签表，这里断言「开出来的地址对不对」
@@ -1098,9 +1120,9 @@ let vaultFetchPrev = null;
     (src.match(/closest\("\.dshk-menu"\)/g) ?? []).length === 1,
   );
 }
-// 6.9b) VaultPagePane 直渲（所见即所得编辑视图）：预置 state#0（page 已加载）走完整
-// 编辑面——页条（撤销/重做 + 阅读条目录/反链）+ RTE；@ 与删除仍只在左树侧，
-// 冲突条只在盘上被抢写后出现（预置态不出）
+// 6.9b) VaultPagePane 直渲（所见即所得编辑视图）：预置 state#0（页已加载）走完整
+// 编辑面——页条（撤销/重做 + 右端固定簇 @ · 学习 · 测验 · 反链 · 目录）+ RTE；
+// 删除只在左树行 ⋯ 菜单，冲突条只在盘上被抢写后出现（预置态不出）
 {
   stateSeq = 0;
   stateStore.clear();
@@ -1113,22 +1135,64 @@ let vaultFetchPrev = null;
     paneErr = e;
   }
   const editbar = callLog.find((c) => (c[0] === "jsxs") && c[2] && c[2].className === "dshk-vault-editbar");
-  // @ 挂在左侧树的文件行上，页条里不该再有它（「页条不得有 @」的回归哨兵）
-  const citeBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["引用到对话", "Cite to chat"].includes(c[2].title));
-  // 删除同理在树上行的 ⋯ 菜单：页条里不得再有「删除」按钮/文案
+  // 页条 @（右端固定簇首位，走与树行 @ 同一条引用管线）与删除（只在树行 ⋯ 菜单）
+  const barKids = editbar !== undefined && editbar[2] && Array.isArray(editbar[2].children) ? editbar[2].children : [];
+  const barIdxOf = (pred) => barKids.findIndex(pred);
+  const atIdx = barIdxOf((n) => n && n.type === comps.KitTip && n.props && n.props.children && n.props.children.props && n.props.children.props.children === "@");
   const delBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["删除", "Delete"].includes(c[2].children));
   // 文档级命令：撤销 / 重做（行内格式在泡泡菜单、块插入在斜杠菜单，都不进页条）
   const undoBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].children === "↶");
   const redoBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].children === "↷");
   const rte = callLog.find((c) => c[1] === comps.RteEditor);
-  // 阅读条两枚页面级入口：目录 / 反链（计数印在按钮上）
+  // 右端固定簇（左→右）：@ · 学习 · 测验 · 反链 · 目录——五枚紧挨着，@ 起头
+  const studyIdx = barIdxOf((n) => n && n.type === comps.VaultStudyEntry);
+  const quizIdx = barIdxOf((n) => n && n.type === comps.VaultQuizEntry);
+  const blIdx = barIdxOf((n) => {
+    const txt = n && n.type === comps.KitTip && n.props && n.props.children && n.props.children.props ? n.props.children.props.children : null;
+    return typeof txt === "string" && (txt.startsWith("反链") || txt.startsWith("Backlinks"));
+  });
+  const tocIdx = barIdxOf((n) => n && n.type === comps.KitTip && ["目录", "Outline"].includes(n.props.label));
   const tocBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["目录", "Outline"].includes(c[2].children));
   const blBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("反链") || c[2].children.startsWith("Backlinks")));
   const conflictBar = callLog.find((c) => c[2] && c[2].className === "dshk-vault-conflict");
-  check("VaultPagePane 渲染无异常（页条 + RTE 就位，页条不带 @）", paneErr === null && !!editbar && !citeBtn && !!rte);
+  check("VaultPagePane 渲染无异常（页条 + RTE 就位，@ 在页条右端）", paneErr === null && !!editbar && atIdx >= 0 && !!rte);
   check("页条不再带删除按钮（删除在左侧树的行 ⋯ 菜单）", !delBtn);
   check("页条带撤销/重做 + 阅读条目录/反链，无冲突条（预置态盘上没被抢写）", !!undoBtn && !!redoBtn && !!tocBtn && !!blBtn && !conflictBar);
+  check(
+    "页条右端顺序 = @ → 学习 → 测验 → 反链 → 目录（五枚紧挨着，撤销/重做留在左端）",
+    atIdx >= 0 && studyIdx === atIdx + 1 && quizIdx === studyIdx + 1 && blIdx === quizIdx + 1 && tocIdx === blIdx + 1,
+  );
   if (paneErr) console.log("  VaultPagePane error:", paneErr.message);
+  // 学习入口三态：无记录 = 「学习」；在学 = 「复习 · …」；已完成 = 「已完成」置灰。桩不跑
+  // effect（数据不会自己到），这里按 state 槽预置记录直测渲染体，且无数据时不得崩
+  {
+    const renderStudy = (state) => {
+      stateSeq = 0;
+      stateStore.clear();
+      callLog = [];
+      if (state !== null) stateStore.set(0, state);
+      let err = null;
+      try {
+        comps.VaultStudyEntry({ path: "D:/v/wiki/a.md", root: "D:/v", active: true, toast: () => {} });
+      } catch (e) {
+        err = e;
+      }
+      const btn = callLog.find((c) => c[0] === "jsx" && c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-vault-tbtn"));
+      return { err, btn, label: btn && typeof btn[2].children === "string" ? btn[2].children : "" };
+    };
+    const noRec = renderStudy(null);
+    check("页条学习入口：无记录时不崩、先出「学习」", noRec.err === null && ["学习", "Study"].includes(noRec.label));
+    const activeRec = {
+      rel: "wiki/a",
+      name: "a",
+      record: { version: 1, firstLearnedAt: "2026-10-01", dueAt: comps.studyDateAfter(1), intervalDays: 1, reps: 0, status: "active", history: [], updatedMs: 1 },
+    };
+    const inStudy = renderStudy(activeRec);
+    check("页条学习入口：在学 = 「复习 · 1 天后」", inStudy.err === null && ["复习 · 1 天后", "Review · in 1 d"].includes(inStudy.label));
+    const doneRec = { ...activeRec, record: { ...activeRec.record, status: "done", dueAt: undefined } };
+    const doneStudy = renderStudy(doneRec);
+    check("页条学习入口：已完成 = 「已完成」置灰（仍可点开记录）", doneStudy.err === null && ["已完成", "Done"].includes(doneStudy.label) && String(doneStudy.btn[2].className).includes("is-empty"));
+  }
   stateSeq = 0;
   stateStore.clear();
   callLog = [];
@@ -1778,6 +1842,98 @@ setTimeout(async () => {
       entrySave.body.op === "entry-update" && entrySave.body.owner === null && entrySave.body.index === 2 &&
         entrySave.body.patch.start === "2026-10-02T09:00" && entrySave.body.patch.end === "2026-10-02T10:00",
     );
+    // ── 复习待办（studyRel）：行勾选走学习端点、条目浮层只读、完成提示带快动作 ──
+    {
+      const prevInner = global.fetch;
+      global.fetch = async (url, opts) => {
+        calls.push({ url: String(url), body: JSON.parse(String((opts || {}).body || "{}")) });
+        return { ok: true, status: 200, json: async () => ({ state: { rel: "数学/函数", name: "函数", record: { reps: 4, dueAt: "2026-10-25", intervalDays: 7, status: "active" } } }) };
+      };
+      stateSeq = 0;
+      stateStore.clear();
+      stateStore.set(0, { events: [{ id: "s1", title: "函数", due: "2026-10-21", studyRel: "数学/函数" }], occurrences: [], orphans: [], runningTimer: null });
+      callLog = [];
+      comps.ScheduleTasksPanel({});
+      const revCheck = callLog.find((c) => c[2] && c[2].type === "checkbox" && c[2].className === "dshk-sched-taskcheck");
+      if (revCheck) revCheck[2].onChange();
+      await new Promise((r) => setTimeout(r, 0));
+      const revDone = calls[calls.length - 1];
+      check(
+        "清单行勾选（复习待办）= POST study-complete（推进学习记录，不发 op=done）",
+        !!revCheck && !!revDone && revDone.url === "/dsh-kit/vault/study-complete" && revDone.body.rel === "数学/函数",
+      );
+      // 完成后出「第 N 次复习 · 下次 …」提示（带调整 / 完成两个快动作）
+      stateSeq = 0;
+      callLog = [];
+      comps.ScheduleTasksPanel({});
+      const reviewToastEl = callLog.find((c) => c[1] === comps.SchedReviewToast);
+      check(
+        "勾完出复习完成提示（第 4 次复习 · 下次 2026-10-25，带调整/完成）",
+        !!reviewToastEl && !!reviewToastEl[2].info && reviewToastEl[2].info.dueAt === "2026-10-25" &&
+          reviewToastEl[2].info.reps === 4 && typeof reviewToastEl[2].onAdjust === "function" &&
+          typeof reviewToastEl[2].onFinish === "function",
+      );
+      // 提示本体（导出直测）：文案 + 两个快动作各接各的回调
+      stateSeq = 0;
+      callLog = [];
+      let adjustHit = 0;
+      let finishHit = 0;
+      comps.SchedReviewToast({
+        info: { rel: "数学/函数", reps: 4, dueAt: "2026-10-25", intervalDays: 7 },
+        onAdjust: () => { adjustHit += 1; },
+        onFinish: () => { finishHit += 1; },
+      });
+      const toastBtns = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-sched-rtoastbtn"));
+      const toastText = callLog.find((c) => c[2] && c[2].className === "dshk-sched-rtoasttext");
+      toastBtns.forEach((b) => b[2].onClick());
+      check(
+        "复习完成提示本体：第 4 次复习 · 下次 10-25 文案 + 「调整」「完成」回调",
+        !!toastText && /第 4 次复习|Review no\. 4/.test(String(toastText[2].children)) &&
+          toastBtns.length === 2 && adjustHit === 1 && finishHit === 1,
+      );
+      // 条目浮层：studyRel 走只读视图（没有可编辑输入框），只有 关闭 / 完成本次复习 / 打开页面
+      stateSeq = 0;
+      stateStore.clear();
+      callLog = [];
+      let revDlgErr = null;
+      try {
+        comps.SchedEventDialog({ ev: { id: "s1", title: "函数", due: "2026-10-21", studyRel: "数学/函数" }, onClose: () => {} });
+      } catch (e) {
+        revDlgErr = e;
+      }
+      const revDlgTitle = callLog.find((c) => c[1] === comps.VaultDialog && c[2] && (c[2].title === "复习待办" || c[2].title === "Review to-do"));
+      const revRelLine = callLog.find((c) => c[2] && c[2].className === "dshk-study-next" && c[2].title === "数学/函数");
+      const revInputs = callLog.filter((c) => c[2] && c[2].className === "dshk-vault-modalinput");
+      const revBtnProps = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-btn-")).map((c) => c[2]);
+      const revBtnOf = (labels) => revBtnProps.find((b) => labels.includes(b.children));
+      check(
+        "条目浮层（复习待办）：只读视图（标题/rel/截止，没有输入框——日期与完成跟学习记录走）",
+        revDlgErr === null && !!revDlgTitle && !!revRelLine && revInputs.length === 0,
+      );
+      const revComplete = revBtnOf(["完成本次复习", "Finish this review"]);
+      const revOpenPage = revBtnOf(["打开页面", "Open page"]);
+      const revClose = revBtnOf(["关闭", "Close"]);
+      check("只读浮层按钮：关闭 / 完成本次复习 / 打开页面", !!revClose && !!revComplete && !!revOpenPage);
+      if (revComplete) revComplete.onClick();
+      await new Promise((r) => setTimeout(r, 0));
+      const revAdvance = calls[calls.length - 1];
+      check(
+        "「完成本次复习」走 study-complete（不写 completedAt）",
+        !!revAdvance && revAdvance.url === "/dsh-kit/vault/study-complete" && revAdvance.body.rel === "数学/函数",
+      );
+      // 已完成的那条只给 关闭 / 打开页面
+      stateSeq = 0;
+      stateStore.clear();
+      callLog = [];
+      comps.SchedEventDialog({ ev: { id: "s2", title: "函数", due: "2026-10-21", studyRel: "数学/函数", completedAt: "2026-10-21T10:00" }, onClose: () => {} });
+      const doneBtnProps = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-btn-")).map((c) => c[2]);
+      check(
+        "已完成的复习待办：只给 关闭 / 打开页面（不再给完成本次复习）",
+        !doneBtnProps.some((b) => ["完成本次复习", "Finish this review"].includes(b.children)) &&
+          doneBtnProps.some((b) => ["打开页面", "Open page"].includes(b.children)),
+      );
+      global.fetch = prevInner;
+    }
     // 悬浮球：空闲不渲染；有表在跑就出走秒 + 停表
     stateSeq = 0;
     stateStore.clear();

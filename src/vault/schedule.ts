@@ -62,6 +62,9 @@ export interface ScheduleEvent {
   skip?: string[]
   completedAt?: string | null
   parentId?: string
+  /** 复习待办指回的页面 rel（存在 = 这条待办是某页的复习；完成走学习端点）。
+   *  只由宿主的学习同步层写，面板不直接改 */
+  studyRel?: string
   timeEntries?: ScheduleTimeEntry[]
   createdAt: string
   updatedAt: string
@@ -238,6 +241,7 @@ interface SanitizedFields {
   skip?: string[] | null
   completedAt?: string | null
   parentId?: string | null
+  studyRel?: string | null
 }
 
 /** 待办截止：纯日期或日期时刻都收（"今天18:00 交表"这类带时刻的写法），统一截到分钟 */
@@ -311,6 +315,13 @@ function sanitizeFields(input: Record<string, unknown>, patch: boolean): Sanitiz
     if (typeof v === 'string') out.parentId = v === '' ? null : v
     else if (v === null && patch) out.parentId = null
   }
+  // 复习待办指回页面 rel：同一套三态（字符串 trim 落值、空串/null 清空、不带键不动）。
+  // 学习同步层按它找「这一页当前那条待办」，改名 / 移动时按 rel 或前缀改写
+  if (has('studyRel')) {
+    const v = input.studyRel
+    if (typeof v === 'string') out.studyRel = v.trim() === '' ? null : v.trim()
+    else if (v === null && patch) out.studyRel = null
+  }
   // patch 语义允许显式清空可选字段；create 语义只在给了合法值时带上
   if (patch) return out
   if (out.title === undefined) return {}
@@ -334,6 +345,7 @@ function applyFields(ev: ScheduleEvent, f: SanitizedFields): void {
   setOrClear('skip', f.skip)
   setOrClear('completedAt', f.completedAt)
   setOrClear('parentId', f.parentId)
+  setOrClear('studyRel', f.studyRel)
 }
 
 /**

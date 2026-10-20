@@ -225,6 +225,15 @@ function sanitizeFields(input, patch) {
         else if (v === null && patch)
             out.parentId = null;
     }
+    // 复习待办指回页面 rel：同一套三态（字符串 trim 落值、空串/null 清空、不带键不动）。
+    // 学习同步层按它找「这一页当前那条待办」，改名 / 移动时按 rel 或前缀改写
+    if (has('studyRel')) {
+        const v = input.studyRel;
+        if (typeof v === 'string')
+            out.studyRel = v.trim() === '' ? null : v.trim();
+        else if (v === null && patch)
+            out.studyRel = null;
+    }
     // patch 语义允许显式清空可选字段；create 语义只在给了合法值时带上
     if (patch)
         return out;
@@ -254,6 +263,7 @@ function applyFields(ev, f) {
     setOrClear('skip', f.skip);
     setOrClear('completedAt', f.completedAt);
     setOrClear('parentId', f.parentId);
+    setOrClear('studyRel', f.studyRel);
 }
 /**
  * 合并结果的整体校验（create 与 update 都先推演成完整条目再校验，不做半截更新）：

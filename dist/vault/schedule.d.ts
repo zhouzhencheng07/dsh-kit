@@ -30,6 +30,9 @@ export interface ScheduleEvent {
     skip?: string[];
     completedAt?: string | null;
     parentId?: string;
+    /** 复习待办指回的页面 rel（存在 = 这条待办是某页的复习；完成走学习端点）。
+     *  只由宿主的学习同步层写，面板不直接改 */
+    studyRel?: string;
     timeEntries?: ScheduleTimeEntry[];
     createdAt: string;
     updatedAt: string;

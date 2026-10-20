@@ -89,8 +89,9 @@ from the page). It stays in the list: **do not turn it off**.
   overwrites silently and never touches git); external changes while the page is clean are
   still re-read silently; the plugin creates no skeleton directories and never touches git
   - **Home** (the third right-dock tab, opened by `⌂` in the panel toolbar): a knowledge-sets
-    section (first 8: book icon + name + "Materials N · Quiz mastered/total" + an inline
-    "Quiz" button; more than 8 offers "All knowledge sets ›", an in-tab full view) and a
+    section (first 8: book icon + name + "Materials N · Quiz mastered/total" + studying / due-today
+    counts + inline "Study plan" (opens this set's study overview) and "Quiz" buttons; more than 8
+    offers "All knowledge sets ›", an in-tab full view) and a
     recently-updated section (the whole vault by mtime, first 8, folder shown on the right).
     Clicking a set re-roots the left tree to it (with a hint when the vault tree is not the
     active form); clicking a page row opens it
@@ -102,6 +103,14 @@ from the page). It stays in the list: **do not turn it off**.
     "Edit questions" (add/change/delete written back wholesale, optionally keeping mastery).
     Mastery is consecutive correct answers ≥ a threshold stored in `.quiz-state/settings.json`
     at the vault root (editable in the panel)
+  - **Study / review** (shares one `.study` dataset with the desktop end; one record per page):
+    the page bar's fixed right cluster (left to right) is `@` · Study · Quiz · Backlinks · Outline;
+    the "Study" button turns into "Review · today / in N d / N d overdue" or "Done" — marking a
+    page as learned schedules the first review for tomorrow; the study-record dialog shows the
+    current state, next date, owning knowledge set and history, with "Adjust next / Review now /
+    Finish / Restart review / Remove" (interval ladder 1/2/4/7/15/30/60/120 days, a single interval can be
+    set to 1–3650 days). Study records and quiz progress are two independent datasets: mastery
+    never moves a review date, and completing reviews never changes quiz progress
   - **Schedule** (one shared entry — the bottom-left Knowledge base form toggle and **Ctrl+Alt+/** open the
   left sidebar cell, whose top tab strip switches between the two): the task
    list (3-day / week / all scopes) fills that cell and
@@ -111,7 +120,13 @@ from the page). It stays in the list: **do not turn it off**.
   encode state only (upcoming orange / running green / past blue / overdue red);
   **the panel edits**: tick a row done, click its title to edit the item (repeat rule, location and
   notes included), click a grid block to edit it (event blocks edit the item, time-segment blocks
-  edit that segment), and "New" at the top of the cell creates a task or an event; **timing is one
+  edit that segment), and "New" at the top of the cell creates a task or an event; items carrying
+  `studyRel` are **review to-dos** (a study page's real to-do in the schedule): a second line under
+  the title shows the parent folder and a row-end "Open page" button, ticking it completes this
+  review (advancing the record, creating the next item and archiving the old one — the archived
+  item is dated the actual completion day — with a completion prompt offering "Adjust" / "Finish"), and clicking the title opens a read-only view — editing its
+  date or type would leave the record and the to-do with two sources of truth; on startup missing
+  review to-dos for pages under study are filled in automatically; **timing is one
   global timer**: "Start timer" in the schedule cell attaches an unfinished task or takes a title for
   a standalone run, the floating ball at the bottom right keeps the seconds and stops it (it stays
   up with every panel closed), and closed segments land on the grid and in the stats; **there are

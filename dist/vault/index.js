@@ -25,6 +25,10 @@
 //                                     题目 / 范围汇总 / 掌握度 / 外部改动指纹
 //   POST /dsh-kit/vault/quiz-save|quiz-record|quiz-mark|quiz-forget|quiz-threshold
 //                              —— 出题写回 / 记作答 / 标掌握 / 遗忘 / 改阈值
+//   GET  /dsh-kit/vault/study|study-scope —— 学习/复习：一页记录 / 范围汇总
+//   POST /dsh-kit/vault/study-first|study-complete|study-adjust|study-finish|
+//                       study-restart|study-remove|study-sync
+//                              —— 学习动作（记录与复习待办同一拍维护）
 //   POST /dsh-kit/vault/write  —— 正文写回（mtime CAS，不符回 modified）
 //   POST /dsh-kit/vault/attach —— 编辑面粘贴的图片进 attachments/（内容寻址）
 //   GET  /dsh-kit/schedule/data     —— 事件 + 区间展开 + 独立计时段 + 进行中的计时
@@ -42,10 +46,12 @@ import path from 'node:path';
 import { loadDep, sameOrigin, registerReadableRoot, sendRawFile } from "../core/index.js";
 import { registerVendorFiles, registerVendorSubdir } from "../core/vendor-route.js";
 import { VaultScanner, defaultVaultRoot } from "./scanner.js";
-import { createEntry, renameEntry, moveEntry, importEntry, deleteEntries, parseConflict, setFolderRefs, unmarkFolder, writePage, storeAttachment, resolveInside, } from "./fs.js";
+import { createEntry, renameEntry, moveEntry, importEntry, deleteEntries, parseConflict, setFolderRefs, unmarkFolder, writePage, storeAttachment, resolveInside, relOfEntry, } from "./fs.js";
 import { syncScheduleStore, isRealDateStr, todayStr } from "./schedule.js";
 import { kitLogger } from "../core/log.js";
 import { forget, markMastered, readPage, readProgress, readScope, record, revision, savePage, setQuizWarn, setThreshold, } from "./quiz.js";
+import { adjust as studyAdjust, complete as studyComplete, finish as studyFinish, first as studyFirst, get as studyGet, listActive as studyListActive, remove as studyRemove, restart as studyRestart, safeStudyRel, scope as studyScope, setStudyWarn, } from "./study.js";
+import { completeReviewEvent, ensureReviewEvent, finishReviewEvents, moveReviewLinks, removeReviewEvents, syncReviewEvents, } from "./study-events.js";
 export const name = 'dsh-kit/vault';
 // ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile
@@ -431,11 +437,26 @@ export async function apply(ctx, config = {}) {
             vaultPost('/dsh-kit/vault/rename', async (body, root) => {
                 // 双链改写要用**操作前**的页面集合（改完名字旧页已不在索引里，判重名会走偏）
                 const index = await vaultScanner.scan();
-                return renameEntry(root, String(body.path ?? ''), body.name, index?.pages ?? []);
+                const targetPath = String(body.path ?? '');
+                const oldRel = relOfEntry(root, targetPath);
+                const result = renameEntry(root, targetPath, body.name, index?.pages ?? []);
+                // 学习记录跟页面走（fs.ts），复习待办指回的 rel 与标题也跟过来（目录按前缀）
+                const newRel = relOfEntry(root, result.path);
+                if (oldRel !== null && newRel !== null && oldRel !== newRel)
+                    moveReviewLinks(scheduleStore, oldRel, newRel);
+                return result;
             });
             vaultPost('/dsh-kit/vault/move', async (body, root) => {
                 const index = await vaultScanner.scan();
-                return moveEntry(root, String(body.path ?? ''), String(body.dest ?? ''), parseConflict(body.conflict), index?.pages ?? []);
+                const targetPath = String(body.path ?? '');
+                const oldRel = relOfEntry(root, targetPath);
+                const result = await moveEntry(root, targetPath, String(body.dest ?? ''), parseConflict(body.conflict), index?.pages ?? []);
+                if (!result.skipped) {
+                    const newRel = relOfEntry(root, result.path);
+                    if (oldRel !== null && newRel !== null && oldRel !== newRel)
+                        moveReviewLinks(scheduleStore, oldRel, newRel);
+                }
+                return result;
             });
             vaultPost('/dsh-kit/vault/import', async (body, root) => {
                 const data = typeof body.dataBase64 === 'string' && body.dataBase64 !== '' ? Buffer.from(body.dataBase64, 'base64') : undefined;
@@ -450,7 +471,19 @@ export async function apply(ctx, config = {}) {
             }, VAULT_IMPORT_LIMIT);
             vaultPost('/dsh-kit/vault/delete', async (body, root) => {
                 const paths = Array.isArray(body.paths) ? body.paths : [];
-                return deleteEntries(root, paths);
+                // rel 要在删前算（删完路径就不在了）；删除成功的页面 / 目录，它名下所有复习待办
+                // 一并删掉——记录已随页面进了回收站，留着的待办只是一条指不到页面的脏条目
+                const rels = paths.map((p) => (typeof p === 'string' ? relOfEntry(root, p) : null));
+                const result = await deleteEntries(root, paths);
+                paths.forEach((p, i) => {
+                    const rel = rels[i];
+                    if (rel === null || rel === undefined || typeof p !== 'string')
+                        return;
+                    if (fs.existsSync(path.resolve(p)))
+                        return;
+                    moveReviewLinks(scheduleStore, rel, null);
+                });
+                return result;
             });
             // 知识集：目录体内的 .refs.json 是标记 + 挂载清单（见 fs.ts）。set 全量写回
             // 清单、unmark 删标记；嵌套 / 空目录 / 库根都在 fs.ts 里拦，前端只发动作。
@@ -518,6 +551,87 @@ export async function apply(ctx, config = {}) {
                     throw new Error('阈值必须是数字');
                 return { threshold: setThreshold(root, body.value) };
             });
+            // ── 学习 / 复习端点（./study.ts + ./study-events.ts）──
+            //   记录在页面所在目录 .study/<页名>.json（点前缀目录不进索引与树，与桌面端同一份
+            //   数据）；复习待办是日程里的真实条目（studyRel 指回页面），每个写动作一拍维护
+            //   两者——记录是间隔与历史的真源，待办只是它的排期投影。
+            setStudyWarn(kitLogger('vault').warn);
+            vaultRoute('/dsh-kit/vault/study', quizRead((url, root) => ({ state: studyGet(root, url.searchParams.get('rel') ?? '') })));
+            vaultRoute('/dsh-kit/vault/study-scope', quizRead((url, root) => ({ items: studyScope(root, url.searchParams.get('dir') ?? '') })));
+            /** 写请求体上限：一次学习动作只有 rel / nextInterval / mode 几个短字段 */
+            const STUDY_BODY_LIMIT = 256 * 1024;
+            /** nextInterval：缺省 = 按默认表；给了必须是 u32 整数（与桌面端入参同口径） */
+            const nextIntervalOf = (v) => {
+                if (v === undefined || v === null)
+                    return undefined;
+                if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > 0xffffffff) {
+                    throw new Error('nextInterval 不合法');
+                }
+                return v;
+            };
+            /** 写动作的 rel 统一先过守卫（与记录里的规范形一致；复习待办的 studyRel 也用它） */
+            const studyRelOf = (body) => safeStudyRel(String(body.rel ?? ''));
+            vaultPost('/dsh-kit/vault/study-first', (body, root) => {
+                const rel = studyRelOf(body);
+                const state = studyFirst(root, rel);
+                const due = state.record.dueAt;
+                try {
+                    if (due === undefined)
+                        throw new Error('复习日期为空');
+                    ensureReviewEvent(scheduleStore, rel, due);
+                }
+                catch (error) {
+                    // 待办没建成 = 这页还没进学习计划：回滚刚写下的记录，别留半截状态
+                    studyRemove(root, rel);
+                    throw new Error('创建复习待办失败：' + (error instanceof Error ? error.message : String(error)));
+                }
+                return { state };
+            }, STUDY_BODY_LIMIT);
+            vaultPost('/dsh-kit/vault/study-complete', (body, root) => {
+                const rel = studyRelOf(body);
+                const state = studyComplete(root, rel, nextIntervalOf(body.nextInterval));
+                const due = state.record.dueAt;
+                if (due !== undefined)
+                    completeReviewEvent(scheduleStore, rel, due);
+                return { state };
+            }, STUDY_BODY_LIMIT);
+            vaultPost('/dsh-kit/vault/study-adjust', (body, root) => {
+                const rel = studyRelOf(body);
+                const next = nextIntervalOf(body.nextInterval);
+                if (next === undefined)
+                    throw new Error('缺少 nextInterval');
+                const state = studyAdjust(root, rel, next);
+                const due = state.record.dueAt;
+                if (due !== undefined)
+                    ensureReviewEvent(scheduleStore, rel, due);
+                return { state };
+            }, STUDY_BODY_LIMIT);
+            vaultPost('/dsh-kit/vault/study-finish', (body, root) => {
+                const rel = studyRelOf(body);
+                const state = studyFinish(root, rel);
+                finishReviewEvents(scheduleStore, rel);
+                return { state };
+            }, STUDY_BODY_LIMIT);
+            vaultPost('/dsh-kit/vault/study-restart', (body, root) => {
+                const rel = studyRelOf(body);
+                const mode = body.mode === 'last' ? 'last' : body.mode === 'first' ? 'first' : null;
+                if (mode === null)
+                    throw new Error('mode 必须是 first 或 last');
+                const state = studyRestart(root, rel, mode, nextIntervalOf(body.nextInterval));
+                const due = state.record.dueAt;
+                if (due !== undefined)
+                    ensureReviewEvent(scheduleStore, rel, due);
+                return { state };
+            }, STUDY_BODY_LIMIT);
+            vaultPost('/dsh-kit/vault/study-remove', (body, root) => {
+                const rel = studyRelOf(body);
+                const removed = studyRemove(root, rel);
+                if (removed)
+                    removeReviewEvents(scheduleStore, rel);
+                return { removed };
+            }, STUDY_BODY_LIMIT);
+            // 启动 / 同步后对齐：记录可能在别端 / agent 写下，靠这一拍补齐复习待办
+            vaultPost('/dsh-kit/vault/study-sync', (_body, root) => ({ created: syncReviewEvents(scheduleStore, studyListActive(root, '')) }), STUDY_BODY_LIMIT);
             return () => {
                 disposeVendor();
                 disposeVendorFonts();

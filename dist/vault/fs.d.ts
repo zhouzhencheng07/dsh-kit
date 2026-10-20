@@ -8,6 +8,9 @@ export declare function safeLeaf(raw: unknown): string | null;
 export declare function safeRel(raw: unknown, maxSegs?: number): string;
 /** 去掉 md 扩展名（页面名的规范形态；.markdown 一并按 md 收） */
 export declare function stripMd(name: string): string;
+/** 绝对路径 → 页面 / 目录在库内的 rel（页面去 .md / .markdown 后缀，目录保持原样）；
+ *  不在库内返回 null。学习记录跟随页面 / 目录时用它换算 rel。 */
+export declare function relOfEntry(root: string, absPath: string): string | null;
 /** 撞名顺序名：`名字 (2)` 起、上限 999；全占返 null。页带扩展名时序号插在扩展名前 */
 export declare function dedupeName(dir: string, name: string, exists?: (p: string) => boolean): string | null;
 /** 绝对路径归一：拒空与任何 `..` 段（只做前缀比较的话 `root\..\x` 能蒙混过关），

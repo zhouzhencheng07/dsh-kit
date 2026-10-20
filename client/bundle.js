@@ -1729,6 +1729,17 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-tasktimer:hover,.dshk-sched-taskact:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-sched-tasktimer.is-on{color:var(--dsw-alias-brand-primary);border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 45%,transparent)}
 .dshk-sched-taskact.is-arm{width:auto;padding:0 6px;color:var(--dsw-alias-danger,#cd3131);border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent)}
+/* 复习待办：标题下第二行给父目录（rel 是库根相对的去扩展名路径），勾完成走学习端点 */
+.dshk-sched-taskmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.dshk-sched-taskmain .dshk-sched-tasktitle{flex:none;width:100%}
+.dshk-sched-taskparent{font-size:10px;line-height:1.2;color:var(--dsw-alias-label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 复习完成提示（带「调整 / 完成」两个快捷动作）：portal 到 body，别压在侧栏里 */
+.dshk-sched-rtoast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:1250;display:flex;align-items:center;gap:10px;max-width:min(92vw,560px);padding:8px 12px;border-radius:10px;background:var(--dsw-alias-bg-layer-3);border:1px solid var(--dsw-alias-border-l2);box-shadow:0 4px 16px rgba(0,0,0,.18);color:var(--dsw-alias-label-primary);font-size:12px;line-height:1.5}
+.dshk-sched-rtoasttext{min-width:0;overflow-wrap:anywhere}
+.dshk-sched-rtoastacts{flex:none;display:flex;align-items:center;gap:6px}
+.dshk-sched-rtoastbtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);border-radius:6px;font:inherit;font-size:11px;line-height:1;padding:5px 9px;cursor:pointer;white-space:nowrap}
+.dshk-sched-rtoastbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshk-sched-rtoastbtn.is-ghost{border-color:transparent}
 /* 表单（建 / 改条目与计时段共用）：标签内联在左、控件在右，一行一项；
    最长的周重复一次排完，切换类型 / 重复档都不出滚动 */
 .dshk-vault-modal.is-wide{width:min(94vw,460px)}
@@ -1898,6 +1909,42 @@ ellipsis，窄列只截字不破版 */
 .dshk-quiz-mini.is-danger:hover{color:var(--dsw-alias-danger,#cd3131)}
 .dshk-quiz-box{border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:6px 10px;margin-top:4px;background:var(--dsw-alias-bg-layer-1)}
 .dshk-quiz-math .katex{font-size:1.05em}
+/* 学习 / 复习：页条状态钮 + 学习记录浮层 + 知识集学习总览（记录在页面目录的 .study/）。
+   浮层壳复用 .dshk-vault-modal*（VaultDialog），这里只补内容排版 */
+.dshk-study-line{font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary);margin:4px 0}
+.dshk-study-head{display:flex;align-items:flex-start;gap:8px}
+.dshk-study-headmain{flex:1 1 auto;min-width:0}
+.dshk-study-status{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary);margin:2px 0}
+.dshk-study-next{font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
+.dshk-study-hist{max-height:220px;overflow:auto;margin-top:10px;border-top:1px solid var(--dsw-alias-border-l1);padding-top:6px}
+.dshk-study-histrow{display:flex;align-items:baseline;gap:8px;padding:3px 0}
+.dshk-study-histdate{flex:none;width:44px;font-size:11px;color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums}
+.dshk-study-histtext{min-width:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-primary);overflow-wrap:anywhere}
+.dshk-study-set{flex:none;margin-left:auto;font-size:11px;color:var(--dsw-alias-label-tertiary);max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-study-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:14px}
+.dshk-study-btns{display:flex;align-items:center;gap:6px}
+.dshk-study-danger{appearance:none;border:1px solid color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent);background:none;color:var(--dsw-alias-danger,#cd3131);border-radius:6px;font:inherit;font-size:12px;line-height:1;padding:5px 10px;cursor:pointer}
+.dshk-study-danger:hover{background:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 12%,transparent)}
+.dshk-study-ladder{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 10px}
+.dshk-study-daybtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);border-radius:6px;font:inherit;font-size:12px;line-height:1;padding:6px 10px;cursor:pointer}
+.dshk-study-daybtn:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-study-daybtn.is-on{background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);font-weight:600}
+.dshk-study-choice{display:block;width:100%;text-align:left;margin-top:8px}
+.dshk-study-counts{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshk-study-counts .is-over{color:var(--dsw-alias-danger,#cd3131);font-weight:600}
+.dshk-study-list{max-height:min(56vh,420px);overflow:auto;margin-top:10px;display:flex;flex-direction:column;gap:1px}
+.dshk-study-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer}
+.dshk-study-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-study-rowmain{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+.dshk-study-rowname{font-size:13px;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-study-rowsub{font-size:10px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-study-rowright{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}
+.dshk-study-rowright.is-over{color:var(--dsw-alias-danger,#cd3131)}
+.dshk-study-empty{font-size:12px;color:var(--dsw-alias-label-secondary);padding:8px 0}
+/* 首页知识集行的「学习计划」钮（测验钮之前那一枚，图标钮） */
+.dshk-home-study{flex:none;display:inline-flex;align-items:center;justify-content:center;appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);border-radius:6px;line-height:1;padding:3px 5px;cursor:pointer}
+.dshk-home-study:hover{color:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary)}
+.dshk-home-studyicon{display:block}
 `;
 
     /** 注入本插件样式（style），幂等 */
@@ -4062,6 +4109,81 @@ ellipsis，窄列只截字不破版 */
       qzMultiNeed: "多选题至少两个答案",
       qzBlankEmpty: "每个空至少给一个答案",
       qzLoadFail: "测验数据读取失败",
+
+      // 学习 / 复习（页条入口、学习记录浮层、知识集学习总览）
+      studyEntry: "学习",
+      studyEntryTip: "标记已学，明天开始复习",
+      studyFirstTitle: "标记已学",
+      studyFirstAsk: "「{name}」进入学习计划，明天第一次复习。",
+      studyFirstGo: "标记已学",
+      studyFirstDone: "已加入学习 · 明天复习",
+      studyReview: "复习",
+      studyDone: "已完成",
+      studyDoneTip: "已完成 · 查看学习记录",
+      studyTipFirst: "首次学习 · 下次 {due}",
+      studyTipReview: "第 {n} 次复习 · 下次 {due}",
+      studyRecordTitle: "学习记录 · {name}",
+      studyStatusFirst: "首次学习",
+      studyStatusReview: "第 {n} 次复习",
+      studyStatusDone: "已完成",
+      studyStatusDoneReps: "已完成 · 共复习 {n} 次",
+      studyNextDue: "下次 {date}（{label}）",
+      studyDoneKeep: "记录保留，可重启",
+      studyHistFirst: "首次学习",
+      studyHistReview: "第 {n} 次 · 下次 {d} 天 → {date}",
+      studyHistAdjust: "调整下次间隔为 {d} 天 → {date}",
+      studyHistDone: "完成 · 不再安排",
+      studyHistRestart: "重启 · {d} 天 → {date}",
+      studyDueToday: "今天",
+      studyDueIn: "{n} 天后",
+      studyDueOver: "逾期{n}天",
+      studyRemove: "移出学习",
+      studyRemoveTitle: "移出学习",
+      studyRemoveAsk: "这一页会退出学习计划，记录一并删除。",
+      studyRemoveGo: "移出",
+      studyRemoveDone: "已移出学习",
+      studyAdjust: "调整下次",
+      studyAdjustTitle: "调整下次间隔",
+      studyAdjustDone: "下次 {date}",
+      studyComplete: "提前复习",
+      studyCompleteDone: "第 {n} 次复习 · 下次 {date}",
+      studyFinish: "完成",
+      studyFinishDone: "已完成 · 记录保留",
+      studyRestart: "重启复习",
+      studyRestartTitle: "重启复习",
+      studyRestartAsk: "从哪一档接着来？",
+      studyRestartFirst: "按第一次（1 天）",
+      studyRestartLast: "接着上次（{n} 天）",
+      studyRestartDone: "已重启 · 下次 {date}",
+      studyOpFail: "操作失败：{error}",
+      studyLoadFail: "学习数据读取失败",
+      studyLoading: "载入中…",
+      studyCancel: "取消",
+      studySave: "保存",
+      studyLadderDay: "{n} 天",
+      studyCustomDays: "自定义天数（1–3650）",
+      studyNextPreview: "下次：{date}",
+      studySetEntry: "学习计划",
+      studySetTitle: "学习 · {name}",
+      studySetActive: "在学 {n}",
+      studySetDue: "今日 {n}",
+      studySetOver: "逾期 {n}",
+      studySetDone: "已完成 {n}",
+      studySetEmpty: "还没有页面加入学习",
+      studySetRowReview: "第 {n} 次",
+      studySetRowDone: "已完成 · {n} 次",
+      studySetRowDoneZero: "已完成",
+      studySetLast: "上次 {date}",
+      homeStudyActive: "在学 {n}",
+      homeStudyDue: "今日 {n}",
+      studyOpenPage: "打开页面",
+      studyPageMissing: "找不到这一页（可能已被移动或删除）",
+      studyEventTitle: "复习待办",
+      studyEventDue: "截止 {date}",
+      studyEventHint: "完成本次复习或打开页面；调整间隔在页面学习记录里。",
+      studyClose: "关闭",
+      studyCompleteThis: "完成本次复习",
+      schedReviewNext: "第 {n} 次复习 · 下次 {date}（{label}）",
     };
     const en = {
       kcfgGroupVault: "Vault",
@@ -4378,6 +4500,81 @@ ellipsis，窄列只截字不破版 */
       qzMultiNeed: "Multiple choice needs two or more answers",
       qzBlankEmpty: "Each blank needs at least one accepted answer",
       qzLoadFail: "Failed to load quiz data",
+
+      // Study / review
+      studyEntry: "Study",
+      studyEntryTip: "Mark as learned — reviews start tomorrow",
+      studyFirstTitle: "Mark as learned",
+      studyFirstAsk: "Add “{name}” to the study plan; the first review is tomorrow.",
+      studyFirstGo: "Mark as learned",
+      studyFirstDone: "Added to study · review tomorrow",
+      studyReview: "Review",
+      studyDone: "Done",
+      studyDoneTip: "Done · view study record",
+      studyTipFirst: "First learned · next {due}",
+      studyTipReview: "Review no. {n} · next {due}",
+      studyRecordTitle: "Study record · {name}",
+      studyStatusFirst: "First learned",
+      studyStatusReview: "Review no. {n}",
+      studyStatusDone: "Done",
+      studyStatusDoneReps: "Done · reviewed {n} times",
+      studyNextDue: "Next {date} ({label})",
+      studyDoneKeep: "Record kept; can restart",
+      studyHistFirst: "First learned",
+      studyHistReview: "No. {n} · next in {d} d → {date}",
+      studyHistAdjust: "Next interval set to {d} d → {date}",
+      studyHistDone: "Done · no further review",
+      studyHistRestart: "Restarted · {d} d → {date}",
+      studyDueToday: "today",
+      studyDueIn: "in {n} d",
+      studyDueOver: "{n} d overdue",
+      studyRemove: "Remove",
+      studyRemoveTitle: "Remove from study",
+      studyRemoveAsk: "This page leaves the study plan; its record is deleted too.",
+      studyRemoveGo: "Remove",
+      studyRemoveDone: "Removed from study",
+      studyAdjust: "Adjust next",
+      studyAdjustTitle: "Adjust next interval",
+      studyAdjustDone: "Next {date}",
+      studyComplete: "Review now",
+      studyCompleteDone: "Review no. {n} · next {date}",
+      studyFinish: "Finish",
+      studyFinishDone: "Done · record kept",
+      studyRestart: "Restart review",
+      studyRestartTitle: "Restart review",
+      studyRestartAsk: "Where should it pick up?",
+      studyRestartFirst: "From the start (1 day)",
+      studyRestartLast: "Where it left off ({n} days)",
+      studyRestartDone: "Restarted · next {date}",
+      studyOpFail: "Failed: {error}",
+      studyLoadFail: "Failed to load study data",
+      studyLoading: "Loading…",
+      studyCancel: "Cancel",
+      studySave: "Save",
+      studyLadderDay: "{n} d",
+      studyCustomDays: "Custom days (1–3650)",
+      studyNextPreview: "Next: {date}",
+      studySetEntry: "Study plan",
+      studySetTitle: "Study · {name}",
+      studySetActive: "Studying {n}",
+      studySetDue: "Due today {n}",
+      studySetOver: "Overdue {n}",
+      studySetDone: "Done {n}",
+      studySetEmpty: "No page has joined study yet",
+      studySetRowReview: "No. {n}",
+      studySetRowDone: "Done · {n} times",
+      studySetRowDoneZero: "Done",
+      studySetLast: "Last {date}",
+      homeStudyActive: "studying {n}",
+      homeStudyDue: "due today {n}",
+      studyOpenPage: "Open page",
+      studyPageMissing: "Page not found (maybe moved or deleted)",
+      studyEventTitle: "Review to-do",
+      studyEventDue: "Due {date}",
+      studyEventHint: "Finish this review or open the page; adjust the interval in the page's study record.",
+      studyClose: "Close",
+      studyCompleteThis: "Finish this review",
+      schedReviewNext: "Review no. {n} · next {date} ({label})",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? rootT(key);
@@ -4484,6 +4681,10 @@ ellipsis，窄列只截字不破版 */
     // vaultPendingAnchor：[[页#锚]] 跨页跳转的待落锚（openVaultPageAndDock 记、
     // 目标页 VaultPagePane 消费；同页锚点不经它，直接就地滚动）。
     let vaultRootHint = null;
+    // 索引页表顺手缓存（同一个 /vault/index 回包）：日程侧的复习待办只存 rel
+    // （去扩展名；记录跟页面走，待办里没有绝对路径），打开页面要靠它换回真实路径
+    // ——.markdown 页也只有这里认得出来。VaultRootView 有自己那份，不读它。
+    let vaultIndexPagesHint = null;
     let vaultRootHintFetching = null;
     let vaultOpenRequest = null;
     let vaultPendingAnchor = null;
@@ -4496,6 +4697,7 @@ ellipsis，窄列只截字不破版 */
         vaultRootHintFetching = kitJson("/dsh-kit/vault/index")
           .then((body) => {
             vaultRootHint = body && typeof body.root === "string" && body.root !== "" ? body.root : null;
+            vaultIndexPagesHint = Array.isArray(body && body.pages) ? body.pages : null;
             return vaultRootHint;
           })
           .catch(() => null)
@@ -5397,6 +5599,37 @@ ellipsis，窄列只截字不破版 */
       const set = (patch) => setF((prev) => ({ ...prev, ...patch }));
       const isNew = !ev;
       const fail = (e) => setErr(e && e.message ? e.message : t("schedOpFail").replace("{error}", "?"));
+      // 复习待办不是普通日程：截止与完成都跟学习记录走（勾完成 = 推进记录并归档/新建待办），
+      // 这里只给看、完成、跳转——在这页改日期或类型会让两边各存一套真源
+      if (ev !== null && typeof ev.studyRel === "string" && ev.studyRel !== "") {
+        const rel = ev.studyRel;
+        const completeReview = () => {
+          studyOp("/dsh-kit/vault/study-complete", { rel })
+            .then((body) => {
+              const rec = body && body.state && body.state.record ? body.state.record : null;
+              flashToast(rec === null
+                ? t("studyCompleteThis")
+                : t("schedReviewNext").replace("{n}", String(rec.reps ?? 0)).replace("{date}", String(rec.dueAt ?? "")).replace("{label}", studyDueLabel(rec.dueAt)));
+              onClose();
+            })
+            .catch((e) => flashToast(t("studyOpFail").replace("{error}", e && e.message ? e.message : "?")));
+        };
+        return jsxRuntime.jsx(VaultDialog, {
+          title: t("studyEventTitle"),
+          onClose,
+          children: jsxRuntime.jsxs(react.Fragment, { children: [
+            jsxRuntime.jsx("div", { className: "dshk-study-status", children: ev.title }),
+            jsxRuntime.jsx("div", { className: "dshk-study-next", title: rel, children: rel }),
+            jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("studyEventDue").replace("{date}", typeof ev.due === "string" && ev.due !== "" ? ev.due : "—") }),
+            jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("studyEventHint") }),
+            jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: onClose, children: t("studyClose") }),
+              ev.completedAt ? null : jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: completeReview, children: t("studyCompleteThis") }),
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-save", onClick: () => { openStudyPage(rel); onClose(); }, children: t("studyOpenPage") }),
+            ] }),
+          ] }),
+        });
+      }
       const save = async () => {
         const title = f.title.trim();
         if (title === "") return setErr(t("schedTitleRequired"));
@@ -5706,6 +5939,41 @@ ellipsis，窄列只截字不破版 */
         events,
       };
     }
+    /** 复习完成提示（勾完成 → 推进记录 → 下次日期）：带「调整 / 完成」两个快捷动作。
+     *  8s 自动收归调用方；portal 到 body，不压在侧栏里。 */
+    function SchedReviewToast({ info, onAdjust, onFinish }) {
+      return jsxRuntime.jsxs("div", { className: "dshk-sched-rtoast", role: "status", children: [
+        jsxRuntime.jsx("span", { className: "dshk-sched-rtoasttext", children:
+          t("schedReviewNext").replace("{n}", String(info.reps)).replace("{date}", info.dueAt).replace("{label}", studyDueLabel(info.dueAt)) }),
+        jsxRuntime.jsxs("span", { className: "dshk-sched-rtoastacts", children: [
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-rtoastbtn", onClick: onAdjust, children: t("studyAdjust") }),
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-rtoastbtn is-ghost", onClick: onFinish, children: t("studyFinish") }),
+        ] }),
+      ] });
+    }
+
+    /** 复习间隔调整（日程侧）：与页面学习记录里那一步同一张档位表，
+     *  保存即改记录（study-adjust 同步复习待办的截止日） */
+    function SchedStudyAdjustDialog({ rel, initial, onClose }) {
+      return jsxRuntime.jsx(VaultDialog, {
+        title: t("studyAdjustTitle"),
+        onClose,
+        children: jsxRuntime.jsx(StudyIntervalPicker, {
+          initial,
+          onCancel: onClose,
+          onSave: (days) => {
+            studyOp("/dsh-kit/vault/study-adjust", { rel, nextInterval: days })
+              .then((body) => {
+                const due = body && body.state && body.state.record ? String(body.state.record.dueAt ?? "") : "";
+                flashToast(t("studyAdjustDone").replace("{date}", due));
+                onClose();
+              })
+              .catch((e) => flashToast(t("studyOpFail").replace("{error}", e && e.message ? e.message : "?")));
+          },
+        }),
+      });
+    }
+
     function ScheduleTasksPanel() {
       const { data, loadFail } = useScheduleData(false);
       const [scope, setScope] = react.useState(schedTodoScopeSaved);
@@ -5714,6 +5982,14 @@ ellipsis，窄列只截字不破版 */
       const [newOpen, setNewOpen] = react.useState(false);
       const [delArmId, setDelArmId] = react.useState(null);
       const [timerOpen, setTimerOpen] = react.useState(false);
+      // 学习侧：复习待办勾完的提示（带「调整 / 完成」）与它开出来的间隔浮层
+      const [reviewToast, setReviewToast] = react.useState(null); // { rel, reps, dueAt, intervalDays } | null
+      const [adjustInfo, setAdjustInfo] = react.useState(null); // { rel, initial } | null
+      react.useEffect(() => {
+        if (reviewToast === null) return undefined;
+        const timer = setTimeout(() => setReviewToast(null), 8000);
+        return () => clearTimeout(timer);
+      }, [reviewToast]);
       const running = data.runningTimer ?? null;
       const eventById = react.useCallback(
         (id) => (Array.isArray(data.events) ? data.events : []).find((e) => e.id === id) ?? null,
@@ -5727,6 +6003,27 @@ ellipsis，窄列只截字不破版 */
         } catch (e) {
           flashToast(t("schedOpFail").replace("{error}", e && e.message ? e.message : "?"));
         }
+      };
+      /** 复习待办勾完成 = 推进学习记录（study-complete 归档旧待办并建下一条），
+       *  不是普通待办的 completedAt——走学习端点，面板靠 schedBus 跟新 */
+      const completeReview = (rel) => {
+        studyOp("/dsh-kit/vault/study-complete", { rel })
+          .then((body) => {
+            const rec = body && body.state && body.state.record ? body.state.record : null;
+            if (rec === null) return;
+            setReviewToast({
+              rel: String(body.state.rel ?? rel),
+              reps: Number(rec.reps) || 0,
+              dueAt: String(rec.dueAt ?? ""),
+              intervalDays: Number(rec.intervalDays) > 0 ? Number(rec.intervalDays) : STUDY_LADDER[0],
+            });
+          })
+          .catch((e) => flashToast(t("studyOpFail").replace("{error}", e && e.message ? e.message : "?")));
+      };
+      const finishReview = (rel) => {
+        studyOp("/dsh-kit/vault/study-finish", { rel })
+          .then(() => flashToast(t("studyFinishDone")))
+          .catch((e) => flashToast(t("studyOpFail").replace("{error}", e && e.message ? e.message : "?")));
       };
       const groups = react.useMemo(() => schedBuildTodoRows(data), [data]);
       const today = schedToday();
@@ -5793,6 +6090,9 @@ ellipsis，窄列只截字不破版 */
                   ] }, row.key);
                 }
                 const ev = row.ev;
+                // 复习待办（studyRel 指回页面）：第二行给父目录；勾完成走学习端点而不是 completedAt
+                const rel = typeof ev.studyRel === "string" ? ev.studyRel : "";
+                const parent = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
                 const dueTxt = typeof ev.due === "string" ? ev.due.slice(5).replace("T", " ") : "";
                 const isRunning = running !== null && running.id === ev.id;
                 return jsxRuntime.jsxs("div", { className: `dshk-sched-task${isRunning ? " is-timing" : ""}`, children: [
@@ -5801,14 +6101,25 @@ ellipsis，窄列只截字不破版 */
                     className: "dshk-sched-taskcheck",
                     checked: false,
                     "aria-label": t("schedDone"),
-                    onChange: () => void runOp({ op: "done", id: ev.id, done: true }),
+                    onChange: () => (rel === "" ? void runOp({ op: "done", id: ev.id, done: true }) : completeReview(rel)),
                   }),
-                  jsxRuntime.jsx("span", { className: "dshk-sched-tasktitle is-link", title: t("schedEdit"), onClick: () => setEditEv(ev), children: ev.title }),
+                  jsxRuntime.jsxs("div", { className: "dshk-sched-taskmain", children: [
+                    jsxRuntime.jsx("span", { className: "dshk-sched-tasktitle is-link", title: t("schedEdit"), onClick: () => setEditEv(ev), children: ev.title }),
+                    parent === "" ? null : jsxRuntime.jsx("span", { className: "dshk-sched-taskparent", title: rel, children: parent }),
+                  ] }),
                   dueTxt
                     ? jsxRuntime.jsx("span", { className: `dshk-sched-taskduebadge${row.overdue ? " is-overdue" : ""}`, children: row.overdue ? `${t("schedOverdue")} ${dueTxt}` : dueTxt })
                     : jsxRuntime.jsx("span", { className: "dshk-sched-taskduebadge", children: t("schedNoDue") }),
                   // 行尾动作：悬停才显（窄侧栏常驻三枚钮太挤）
                   jsxRuntime.jsxs("span", { className: "dshk-sched-taskacts", children: [
+                    rel === "" ? null : jsxRuntime.jsx(KitTip, { label: t("studyOpenPage"), children:
+                      jsxRuntime.jsx("button", {
+                        type: "button",
+                        className: "dshk-sched-taskact",
+                        "aria-label": t("studyOpenPage"),
+                        onClick: () => openStudyPage(rel),
+                        children: "↗",
+                      }) }),
                     jsxRuntime.jsx(KitTip, { label: isRunning ? t("schedTimerStop") : t("schedTimerStart"), children:
                       jsxRuntime.jsx("button", {
                         type: "button",
@@ -5841,6 +6152,21 @@ ellipsis，窄列只截字不破版 */
         editEv ? jsxRuntime.jsx(SchedEventDialog, { ev: editEv, onClose: () => setEditEv(null) }) : null,
         newOpen ? jsxRuntime.jsx(SchedEventDialog, { ev: null, onClose: () => setNewOpen(false) }) : null,
         timerOpen ? jsxRuntime.jsx(SchedTimerStartDialog, { events: data.events, onClose: () => setTimerOpen(false) }) : null,
+        // 复习完成提示：portal 到 body（侧栏这一格有自己的层叠上下文，就地 fixed 会被裁）
+        reviewToast === null || typeof reactDom.createPortal !== "function" || typeof document === "undefined" || document.body === null
+          ? null
+          : reactDom.createPortal(jsxRuntime.jsx(SchedReviewToast, {
+              info: reviewToast,
+              onAdjust: () => {
+                setReviewToast(null);
+                setAdjustInfo({ rel: reviewToast.rel, initial: reviewToast.intervalDays });
+              },
+              onFinish: () => {
+                setReviewToast(null);
+                finishReview(reviewToast.rel);
+              },
+            }), document.body, "dshk-sched-review"),
+        adjustInfo === null ? null : jsxRuntime.jsx(SchedStudyAdjustDialog, { rel: adjustInfo.rel, initial: adjustInfo.initial, onClose: () => setAdjustInfo(null) }),
       ] });
     }
 
@@ -9213,10 +9539,11 @@ ellipsis，窄列只截字不破版 */
                 ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultTooLargeHint") })
               : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
                   jsxRuntime.jsxs("div", { className: "dshk-vault-editbar", children: [
-                    // 页条 = 文档级命令 + 阅读条（sticky）：撤销/重做、未保存脏点；
-                    // 右端是目录/反链两个页面级入口（长文滚到哪儿都够得到——吊在
-                    // 页尾的老反链区就是够不到才撤掉的）。表格命令在选区浮条上，
-                    // 空了按钮留原位置灰，别忽长忽短
+                    // 页条 = 文档级命令 + 阅读条（sticky）：撤销/重做、未保存脏点、
+                    // 面包屑；右端固定簇（左→右）= @ · 学习 · 测验 · 反链 · 目录。
+                    // 页面级入口全挂页条（长文滚到哪儿都够得到——吊在页尾的老反链
+                    // 区就是够不到才撤掉的）。表格命令在选区浮条上，空了按钮留原位
+                    // 置灰，别忽长忽短
                     jsxRuntime.jsx(KitTip, {
                       label: t("vtbUndo"),
                       children: jsxRuntime.jsx("button", {
@@ -9236,15 +9563,6 @@ ellipsis，窄列只截字不破版 */
                       }),
                     }),
                     dirtyDot ? jsxRuntime.jsx("span", { className: "dshk-vault-dirtydot", title: t("vaultUnsaved"), children: "●" }) : null,
-                    jsxRuntime.jsx(KitTip, {
-                      label: outline !== null && outline.items.length === 0 ? t("vaultTocEmpty") : t("vaultToc"),
-                      children: jsxRuntime.jsx("button", {
-                        type: "button",
-                        className: `dshk-vault-tbtn${outline !== null && outline.items.length === 0 ? " is-empty" : ""}`,
-                        onClick: (e) => openBarMenu("toc", e),
-                        children: t("vaultToc"),
-                      }),
-                    }),
                     // 光标所属标题链（面包屑，二级归属最近一级）：
                     // 占满余宽、超长省略，title 给全文；无标题覆盖时隐藏
                     crumb === "" ? null : jsxRuntime.jsx("span", { className: "dshk-vault-crumb", title: crumb, children: crumb }),
@@ -9261,6 +9579,10 @@ ellipsis，窄列只截字不破版 */
                         children: "@",
                       }),
                     }),
+                    // 学习入口：无记录「学习」/ 在学「复习 · 今天」/ 已完成「已完成」（置灰但可点开记录）
+                    jsxRuntime.jsx(VaultStudyEntry, { path, root, active, toast }),
+                    // 测验入口：带题数徽标（0 题也进得去——进去就是出题）
+                    jsxRuntime.jsx(VaultQuizEntry, { path, root, active }),
                     jsxRuntime.jsx(KitTip, {
                       label: backlinks.length === 0 ? t("vaultBlEmpty") : t("vaultBacklinks"),
                       children: jsxRuntime.jsx("button", {
@@ -9270,8 +9592,15 @@ ellipsis，窄列只截字不破版 */
                         children: `${t("vaultBacklinks")}${backlinks.length > 0 ? ` ${backlinks.length}` : ""}`,
                       }),
                     }),
-                    // 测验入口：带题数徽标（0 题也进得去——进去就是出题）
-                    jsxRuntime.jsx(VaultQuizEntry, { path, root, active }),
+                    jsxRuntime.jsx(KitTip, {
+                      label: outline !== null && outline.items.length === 0 ? t("vaultTocEmpty") : t("vaultToc"),
+                      children: jsxRuntime.jsx("button", {
+                        type: "button",
+                        className: "dshk-vault-tbtn" + (outline !== null && outline.items.length === 0 ? " is-empty" : ""),
+                        onClick: (e) => openBarMenu("toc", e),
+                        children: t("vaultToc"),
+                      }),
+                    }),
                   ] }),
                   // CAS 冲突条：盘上被改而自动保存已暂停，由人裁决（覆盖 / 读盘上）
                   conflict !== null
@@ -10064,8 +10393,10 @@ ellipsis，窄列只截字不破版 */
     }
 
     /** 首页 pane：知识集段（只展示前几条，「全部」视图收全量）+ 最近更新段——与桌面端
-     *  首页同构。数据自取（索引 + 每集 quiz 汇总；测验浮层关掉 = 答完一轮，重拉统计，
-     *  不挂轮询）；行点击经 vaultReader 联动左栏：知识集行 = 换树根，页行 = 开页 */
+     *  首页同构。数据自取（索引 + 每集 quiz 汇总 + 每集学习统计；测验浮层关掉 = 答完一轮，
+     *  重拉统计，不挂轮询）；学习动作（页条 / 记录浮层 / 复习待办勾完成）会 bump 日程总线，
+     *  这里订阅它重取——学习动的就是复习待办，与日程列表看同一个信号。
+     *  行点击经 vaultReader 联动左栏：知识集行 = 换树根，页行 = 开页 */
     const HOME_SETS_LIMIT = 8;
     const HOME_RECENT_LIMIT = 8;
     function HomePagePane() {
@@ -10073,12 +10404,15 @@ ellipsis，窄列只截字不破版 */
       const reader = useVaultReader();
       const req = useQzReq();
       const [idx, setIdx] = react.useState(null); // { root, pages, knowledgeSets }
-      const [stats, setStats] = react.useState(null); // Map<dir, {total, mastered}>
+      const [stats, setStats] = react.useState(null); // Map<dir, { quiz: {total,mastered}, study: {active,due,over,done} }>
       const [showAll, setShowAll] = react.useState(false);
+      const [studySet, setStudySet] = react.useState(null); // { dir, name } | null
       const [nonce, setNonce] = react.useState(0);
       react.useEffect(() => {
         if (req === null) setNonce((n) => n + 1);
       }, [req]);
+      // 学习动作改的是复习待办（真实日程条目）：订阅日程总线，数字跟着立刻刷
+      react.useEffect(() => schedBus.subscribe(() => setNonce((n) => n + 1)), []);
       react.useEffect(() => {
         let alive = true;
         kitJson("/dsh-kit/vault/index", undefined, (b) => !!b)
@@ -10110,11 +10444,16 @@ ellipsis，窄列只截字不破版 */
           list.map(async (dir) => {
             const query = "dir=" + encodeURIComponent(dir);
             try {
-              const [scope, pg] = await Promise.all([
+              const [scope, pg, study] = await Promise.all([
                 kitJson("/dsh-kit/vault/quiz-scope?" + query, undefined, (b) => !!b),
                 kitJson("/dsh-kit/vault/quiz-progress?" + query, undefined, (b) => !!b),
+                // 学习统计跟测验统计同一拍取；这一路取不到就退化（不连累测验数字）
+                kitJson("/dsh-kit/vault/study-scope?" + query, undefined, (b) => !!b).catch(() => null),
               ]);
-              return [dir, qzStatOf(qzQuestionsOf(Array.isArray(scope?.pages) ? scope.pages : []), pg?.progress ?? {})];
+              return [dir, {
+                quiz: qzStatOf(qzQuestionsOf(Array.isArray(scope?.pages) ? scope.pages : []), pg?.progress ?? {}),
+                study: study === null ? null : studyScopeCounts(Array.isArray(study.items) ? study.items : []),
+              }];
             } catch {
               return [dir, null];
             }
@@ -10126,10 +10465,22 @@ ellipsis，窄列只截字不破版 */
           alive = false;
         };
       }, [nonce, setsKey]);
+      // 学习总览行里的 rel（去扩展名）→ 绝对页路径：优先索引里的真实路径（.markdown
+      // 也认），索引里没有（刚加的页 / 索引没刷新）再按 .md 兜底拼
+      const studyPageAbsOf = (rel) => {
+        const hit = vaultPagePathOfRel(idx !== null ? idx.pages : null, rel);
+        if (hit !== "") return hit;
+        return idx !== null && idx.root !== "" ? joinRelPath(idx.root, String(rel) + ".md") : "";
+      };
       const statText = (dir, refs) => {
         const s = stats === null ? null : stats.get(dir) ?? null;
-        const quiz = s === null ? "…" : t("homeQuiz") + " " + (s.total > 0 ? s.mastered + "/" + s.total : "0");
-        return t("homeRefs") + " " + refs + " · " + quiz;
+        const quiz = s === null ? "…" : t("homeQuiz") + " " + (s.quiz.total > 0 ? s.quiz.mastered + "/" + s.quiz.total : "0");
+        // 在学 / 今日到期只在有数时追加（0 不占地方）
+        const study = s === null || s.study === null
+          ? ""
+          : (s.study.active > 0 ? " · " + t("homeStudyActive").replace("{n}", String(s.study.active)) : "") +
+            (s.study.due > 0 ? " · " + t("homeStudyDue").replace("{n}", String(s.study.due)) : "");
+        return t("homeRefs") + " " + refs + " · " + quiz + study;
       };
       const enterSet = (dir) => {
         const abs = idx !== null && idx.root !== "" ? absJoinUnder(idx.root, dir) : "";
@@ -10145,6 +10496,19 @@ ellipsis，窄列只截字不破版 */
             jsxRuntime.jsx(KsIcon, {}),
             jsxRuntime.jsx("span", { className: "dshk-home-rowname", children: f.dir.split("/").pop() }),
             jsxRuntime.jsx("span", { className: "dshk-home-rowstat", children: statText(f.dir, f.refs.length) }),
+            // 学习计划：这一集的学习进度总览（在测验钮之前，图标钮）
+            jsxRuntime.jsx(KitTip, {
+              label: t("studySetEntry"),
+              children: jsxRuntime.jsx("button", {
+                type: "button",
+                className: "dshk-home-study",
+                onClick: (ev) => {
+                  ev.stopPropagation();
+                  setStudySet({ dir: f.dir, name: f.dir.split("/").pop() });
+                },
+                children: jsxRuntime.jsx(KsIcon, { className: "dshk-home-studyicon" }),
+              }),
+            }),
             jsxRuntime.jsx("button", {
               type: "button",
               className: "dshk-home-quiz",
@@ -10162,7 +10526,8 @@ ellipsis，窄列只截字不破版 */
           jsxRuntime.jsx("span", { children: label }),
           more !== undefined ? jsxRuntime.jsx("button", { type: "button", className: "dshk-home-more", onClick: more.run, children: more.label }) : null,
         ] });
-      return jsxRuntime.jsx("div", { className: "dshk-rbpane", children: jsxRuntime.jsx("div", { className: "dshk-home", children:
+      return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
+        jsxRuntime.jsx("div", { className: "dshk-home", children:
         showAll === true
           ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
               secHead(t("homeAllSets") + (sets.length > 0 ? "（" + t("homeSetsCount").replace("{n}", String(sets.length)) + "）" : ""), { label: "‹ " + t("homeBack"), run: () => setShowAll(false) }),
@@ -10189,7 +10554,15 @@ ellipsis，窄列只截字不破版 */
                     }, p.path),
                   ),
             ] }),
-      }) });
+        }),
+        // 知识集学习总览：每次打开重挂（取一次 study-scope），关掉即卸
+        studySet === null ? null : jsxRuntime.jsx(VaultStudySetDialog, {
+          dir: studySet.dir,
+          name: studySet.name,
+          pageAbsOf: studyPageAbsOf,
+          onClose: () => setStudySet(null),
+        }, "study-set"),
+      ] });
     }
 
     // ─────────── 本组件生效配置（声明式模型）───────────
@@ -10198,6 +10571,8 @@ ellipsis，窄列只截字不破版 */
     // apply 据此整体不注册（侧栏索引、右栏签、入口按钮、对话改投全不出现）。
     let vSnap = null;
     let vAvailable = false;
+    // 启动对齐只跑一次：apply 会因配置热提交 / 插件热更新重入
+    let studySyncRequested = false;
     const getVSnap = () => vSnap;
     const V_CFG_DEFAULTS = { vaultRoot: "", builtinPdf: false };
     function vCfgFromSnapshot(snap) {
@@ -11434,6 +11809,479 @@ ellipsis，窄列只截字不破版 */
       ] });
     }
 
+    // ─────────── 学习 / 复习（记录在页面所在目录的 .study/，跟页面走）───────────
+    // 一页一条记录：首次学习时间、下次复习日、间隔档位、次数与历史都写 .study/<页名>.json
+    // （宿主半边 src/vault/study.ts），页面改名 / 移动 / 删除时跟着走。入口三处：
+    // 页条「学习」钮（本页状态 + 学习记录浮层）、首页知识集行的「学习计划」钮
+    // （知识集学习总览）、日程待办里勾完成 = 完成一次复习（复习待办用 studyRel 指回页面）。
+    // 每条复习待办都是真实日程条目：学习动作写完一律 schedBus.bump()，侧栏清单与网格
+    // 立刻重取；本钮自己的状态另外现取（GET study?rel=）。文案口径与桌面端同一套：
+    // 今天 / N 天后 / 逾期N天，间隔档位表 [1,2,4,7,15,30,60,120] 天。
+
+    /** 默认复习档位（天）：单次改写不受它限制 */
+    const STUDY_LADDER = [1, 2, 4, 7, 15, 30, 60, 120];
+
+    /** 本地日期串（YYYY-MM-DD）：复习日只认日期，不含时刻 */
+    const studyDateStr = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    function studyToday(today) {
+      return typeof today === "string" && today !== "" ? today : studyDateStr(new Date());
+    }
+    /** base（缺省今天）之后 days 天的日期串：间隔选择器的「下次」预览 */
+    function studyDateAfter(days, from) {
+      const base = studyToday(from);
+      const d = new Date(Number(base.slice(0, 4)), Number(base.slice(5, 7)) - 1, Number(base.slice(8, 10)));
+      d.setDate(d.getDate() + Math.max(0, Math.floor(Number(days) || 0)));
+      return studyDateStr(d);
+    }
+    /** 距下次复习还有几天（负 = 逾期；没有下次 = null） */
+    function studyDueDiffDays(due, today) {
+      if (typeof due !== "string" || due === "") return null;
+      const from = Date.parse(studyToday(today) + "T00:00:00");
+      const to = Date.parse(due + "T00:00:00");
+      if (Number.isNaN(from) || Number.isNaN(to)) return null;
+      return Math.round((to - from) / 86400000);
+    }
+    /** 短文案：今天 / 3 天后 / 逾期2天 / 已完成（没有下次 = 已完成） */
+    function studyDueLabel(due, today) {
+      const diff = studyDueDiffDays(due, today);
+      if (diff === null) return t("studyStatusDone");
+      if (diff < 0) return t("studyDueOver").replace("{n}", String(-diff));
+      if (diff === 0) return t("studyDueToday");
+      return t("studyDueIn").replace("{n}", String(diff));
+    }
+    /** 状态行：首次学习 / 第 N 次复习 / 已完成 · 共复习 N 次 */
+    function studyStatusText(rec) {
+      if (!rec || typeof rec !== "object") return "";
+      if (rec.status === "done") return rec.reps > 0 ? t("studyStatusDoneReps").replace("{n}", String(rec.reps)) : t("studyStatusDone");
+      return rec.reps === 0 ? t("studyStatusFirst") : t("studyStatusReview").replace("{n}", String(rec.reps));
+    }
+    /** 历史条目文案（MM-DD 印在左侧一列，这里只出正文） */
+    function studyHistoryText(e) {
+      const kind = e && typeof e.kind === "string" ? e.kind : "";
+      const days = Number(e && e.intervalDays) || 0;
+      const date = typeof (e && e.dueAt) === "string" ? e.dueAt.slice(5) : "";
+      if (kind === "first") return t("studyHistFirst");
+      if (kind === "review") return t("studyHistReview").replace("{n}", String(e.reps ?? 0)).replace("{d}", String(days)).replace("{date}", date);
+      if (kind === "adjust") return t("studyHistAdjust").replace("{d}", String(days)).replace("{date}", date);
+      if (kind === "done") return t("studyHistDone");
+      if (kind === "restart") return t("studyHistRestart").replace("{d}", String(days)).replace("{date}", date);
+      return "";
+    }
+    /** 知识集总览的计数：在学 / 今日到期（含逾期）/ 逾期 / 已完成 */
+    function studyScopeCounts(items, today) {
+      const todayStr = studyToday(today);
+      const out = { active: 0, due: 0, over: 0, done: 0 };
+      for (const it of Array.isArray(items) ? items : []) {
+        const rec = it && it.record ? it.record : null;
+        if (rec === null) continue;
+        if (rec.status === "done") {
+          out.done += 1;
+          continue;
+        }
+        out.active += 1;
+        if (typeof rec.dueAt === "string" && rec.dueAt !== "" && rec.dueAt <= todayStr) {
+          out.due += 1;
+          if ((studyDueDiffDays(rec.dueAt, todayStr) ?? 0) < 0) out.over += 1;
+        }
+      }
+      return out;
+    }
+    /** 一页的学习状态（没有记录 = null） */
+    async function studyFetchState(rel) {
+      const body = await kitJson("/dsh-kit/vault/study?rel=" + encodeURIComponent(rel), undefined, (b) => !!b);
+      return body && body.state ? body.state : null;
+    }
+    /** 学习写动作：宿主回 {state}（移出回 {removed}）；成功后广播日程（复习待办跟着变） */
+    async function studyOp(path, payload) {
+      const body = await kitPostJson(path, payload, (b) => b !== null && typeof b === "object");
+      schedBus.bump();
+      return body;
+    }
+    /** 页面 rel（去扩展名）→ 索引里的绝对路径：索引条目也按去扩展名 + 不折大小写比；
+     *  找不到回 ""（调用方自己兜底）。首页有完整索引，日程侧用缓存那份。 */
+    function vaultPagePathOfRel(pages, rel) {
+      const want = String(rel ?? "").trim().toLowerCase();
+      if (want === "") return "";
+      for (const p of Array.isArray(pages) ? pages : []) {
+        const base = String(p && p.rel ? p.rel : "").toLowerCase().replace(/\.(md|markdown)$/i, "");
+        if (base === want && typeof p.path === "string" && p.path !== "") return p.path;
+      }
+      return "";
+    }
+    /** 复习待办只有 rel（记录跟页面走，待办里没有绝对路径）：换成能开的绝对路径。
+     *  先查索引缓存（.markdown 页只有它能认出来），没有就按 .md / .markdown 逐个
+     *  探 stat（新页 / 索引没刷新的情况）；都对不上回 ""。 */
+    async function studyPageAbs(rel) {
+      const want = String(rel ?? "").trim();
+      if (want === "") return "";
+      await ensureVaultRootHint();
+      const hit = vaultPagePathOfRel(vaultIndexPagesHint, want);
+      if (hit !== "") return hit;
+      const root = vaultRootHint;
+      if (root === null || root === "") return "";
+      for (const ext of [".md", ".markdown"]) {
+        const abs = joinRelPath(root, want + ext);
+        try {
+          // 单文件 stat 对不存在的路径回 200 {gone:true}（页签「已消失」同一条口径）：
+          // 判据要带上 gone，只判 !!b 会把第一候选 .md 当成命中
+          await kitJson("/dsh-kit/vault/stat?path=" + encodeURIComponent(abs), undefined, (b) => !!b && b.gone !== true);
+          return abs;
+        } catch {
+          /* gone / 404：试下一个扩展名 */
+        }
+      }
+      return "";
+    }
+    /** 打开一页的 rel（复习待办的行尾钮与浮层「打开页面」共用）：解析不到 / 坞不在就说一声 */
+    function openStudyPage(rel) {
+      void studyPageAbs(rel).then((abs) => {
+        if (abs === "") {
+          flashToast(t("studyPageMissing"));
+          return;
+        }
+        if (!rightbarSeat.available) {
+          // 右栏不在（没选会话 / 全局面板在前台）：开页没有落点，说出来别静默
+          flashToast(t("scNoSeat"));
+          return;
+        }
+        openVaultPageAndDock(abs);
+      });
+    }
+    /** 间隔选择（页条学习记录浮层里的「调整下次」与日程复习提示里的「调整」共用）：
+     *  默认档位 + 自定义 1..3650 + 下次日期预览；保存动作归调用方。 */
+    function StudyIntervalPicker({ initial, onSave, onCancel }) {
+      const [days, setDays] = react.useState(() => {
+        const n = Math.floor(Number(initial));
+        return Number.isFinite(n) && n >= 1 ? Math.min(3650, n) : STUDY_LADDER[0];
+      });
+      return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+        jsxRuntime.jsx("div", { className: "dshk-study-line", children: t("studyCustomDays") }),
+        jsxRuntime.jsx("div", { className: "dshk-study-ladder", children: STUDY_LADDER.map((d) =>
+          jsxRuntime.jsx("button", {
+            type: "button",
+            className: "dshk-study-daybtn" + (days === d ? " is-on" : ""),
+            onClick: () => setDays(d),
+            children: t("studyLadderDay").replace("{n}", String(d)),
+          }, String(d)),
+        ) }),
+        jsxRuntime.jsx("input", {
+          type: "number",
+          min: 1,
+          max: 3650,
+          className: "dshk-vault-modalinput",
+          value: String(days),
+          onChange: (ev) => {
+            const n = Math.floor(Number(ev.target.value));
+            setDays(Number.isFinite(n) ? Math.min(3650, Math.max(1, n)) : 1);
+          },
+        }),
+        jsxRuntime.jsx("div", { className: "dshk-study-line", children: t("studyNextPreview").replace("{date}", studyDateAfter(days)) }),
+        jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: onCancel, children: t("studyCancel") }),
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-save", onClick: () => onSave(days), children: t("studySave") }),
+        ] }),
+      ] });
+    }
+    /** 学习浮层的壳：portal 到 body——页条是 sticky 层（自带层叠上下文），就地画
+     *  fixed 遮罩会被压在正文下面；与测验浮层同一条投递口径 */
+    function StudyDialog({ title, onClose, wide, children }) {
+      if (typeof reactDom.createPortal !== "function" || typeof document === "undefined" || document.body === null) return null;
+      return reactDom.createPortal(jsxRuntime.jsx(VaultDialog, { title, onClose, wide, children }), document.body, "dshk-study");
+    }
+
+    /** 一页的学习记录浮层：当前状态 + 历史（倒序）+ 移出 / 调整 / 提前复习 / 完成 / 重启。
+     *  子步骤（调整间隔 / 重启 / 移出确认）在同一个浮层里换 mode——三层浮层叠着开时
+     *  Esc 会把三层一起关掉（三份 window 捕获相监听互相不挡），换内容没有这个问题。 */
+    function VaultStudyRecordDialog({ rel, path, toast, onClose, onChanged }) {
+      const say = typeof toast === "function" ? toast : flashToast;
+      const [state, setState] = react.useState(null); // null = 载入中
+      const [mode, setMode] = react.useState("record"); // record | interval | restart | remove
+      react.useEffect(() => {
+        let alive = true;
+        studyFetchState(rel)
+          .then((next) => {
+            if (alive) setState(next);
+          })
+          .catch((error) => {
+            if (alive) say(t("studyLoadFail") + "：" + String(error?.message ?? error));
+          });
+        return () => {
+          alive = false;
+        };
+      }, [rel]);
+      const apply = (body) => {
+        const next = body && body.state ? body.state : null;
+        setState(next);
+        if (typeof onChanged === "function") onChanged(next);
+        return next;
+      };
+      const run = (endpoint, payload, done) => {
+        studyOp(endpoint, payload)
+          .then((body) => {
+            setMode("record");
+            if (typeof done === "function") done(apply(body));
+          })
+          .catch((error) => say(t("studyOpFail").replace("{error}", String(error?.message ?? error))));
+      };
+      const rec = state !== null && state.record ? state.record : null;
+      const isDone = rec !== null && rec.status === "done";
+      const setName = state !== null && typeof state.set === "string" && state.set !== "" ? state.set : "";
+      const name = state !== null && typeof state.name === "string" && state.name !== "" ? state.name : pageBasename(path);
+      let title = t("studyRecordTitle").replace("{name}", name);
+      let body = null;
+      if (mode === "interval" && rec !== null && isDone === false) {
+        title = t("studyAdjustTitle");
+        body = jsxRuntime.jsx(StudyIntervalPicker, {
+          initial: rec.intervalDays,
+          onSave: (d) => run("/dsh-kit/vault/study-adjust", { rel, nextInterval: d }, (next) => say(t("studyAdjustDone").replace("{date}", String(next?.record?.dueAt ?? "")))),
+          onCancel: () => setMode("record"),
+        });
+      } else if (mode === "restart" && isDone === true) {
+        title = t("studyRestartTitle");
+        const restart = (m) => run("/dsh-kit/vault/study-restart", { rel, mode: m }, (next) => say(t("studyRestartDone").replace("{date}", String(next?.record?.dueAt ?? ""))));
+        body = jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+          jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("studyRestartAsk") }),
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel dshk-study-choice", onClick: () => restart("first"), children: t("studyRestartFirst") }),
+          jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel dshk-study-choice", onClick: () => restart("last"), children: t("studyRestartLast").replace("{n}", String(Number(rec?.intervalDays) > 0 ? rec.intervalDays : 1)) }),
+        ] });
+      } else if (mode === "remove") {
+        title = t("studyRemoveTitle");
+        body = jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+          jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("studyRemoveAsk") }),
+          jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setMode("record"), children: t("studyCancel") }),
+            jsxRuntime.jsx("button", {
+              type: "button",
+              className: "dshk-study-danger",
+              onClick: () => {
+                studyOp("/dsh-kit/vault/study-remove", { rel })
+                  .then(() => {
+                    apply(null);
+                    onClose();
+                    say(t("studyRemoveDone"));
+                  })
+                  .catch((error) => say(t("studyOpFail").replace("{error}", String(error?.message ?? error))));
+              },
+              children: t("studyRemoveGo"),
+            }),
+          ] }),
+        ] });
+      } else if (rec === null) {
+        body = jsxRuntime.jsx("div", { className: "dshk-study-empty", children: t("studyLoading") });
+      } else {
+        const hist = Array.isArray(rec.history) ? rec.history.slice().reverse() : [];
+        body = jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+          jsxRuntime.jsxs("div", { className: "dshk-study-head", children: [
+            jsxRuntime.jsxs("div", { className: "dshk-study-headmain", children: [
+              jsxRuntime.jsx("div", { className: "dshk-study-status", children: studyStatusText(rec) }),
+              jsxRuntime.jsx("div", { className: "dshk-study-next", children: isDone
+                ? t("studyDoneKeep")
+                : t("studyNextDue").replace("{date}", String(rec.dueAt ?? "")).replace("{label}", studyDueLabel(rec.dueAt)) }),
+            ] }),
+            setName === "" ? null : jsxRuntime.jsx("div", { className: "dshk-study-set", title: setName, children: setName.split("/").pop() }),
+          ] }),
+          jsxRuntime.jsx("div", { className: "dshk-study-hist", children: hist.map((h, i) =>
+            jsxRuntime.jsxs("div", { className: "dshk-study-histrow", children: [
+              jsxRuntime.jsx("span", { className: "dshk-study-histdate", children: typeof h.at === "string" ? h.at.slice(5) : "" }),
+              jsxRuntime.jsx("span", { className: "dshk-study-histtext", children: studyHistoryText(h) }),
+            ] }, String(i)),
+          ) }),
+          jsxRuntime.jsxs("div", { className: "dshk-study-foot", children: [
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-study-danger", onClick: () => setMode("remove"), children: t("studyRemove") }),
+            jsxRuntime.jsxs("div", { className: "dshk-study-btns", children: isDone
+              ? [jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-save", onClick: () => setMode("restart"), children: t("studyRestart") }, "restart")]
+              : [
+                  jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-btn-cancel",
+                    onClick: () => setMode("interval"),
+                    children: t("studyAdjust"),
+                  }, "adjust"),
+                  jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-btn-cancel",
+                    onClick: () => run("/dsh-kit/vault/study-complete", { rel }, (next) => say(t("studyCompleteDone").replace("{n}", String(next?.record?.reps ?? 0)).replace("{date}", String(next?.record?.dueAt ?? "")))),
+                    children: t("studyComplete"),
+                  }, "complete"),
+                  jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-btn-save",
+                    onClick: () => run("/dsh-kit/vault/study-finish", { rel }, () => say(t("studyFinishDone"))),
+                    children: t("studyFinish"),
+                  }, "finish"),
+                ] }),
+          ] }),
+        ] });
+      }
+      return jsxRuntime.jsx(StudyDialog, {
+        title,
+        wide: true,
+        onClose: mode === "record" ? onClose : () => setMode("record"),
+        children: body,
+      });
+    }
+
+    /** 页条「学习」钮：本页的复习状态 + 学习记录浮层。
+     *  无记录 = 「学习」（点了先确认再标记，明天第一次复习）；在学 = 「复习 · 今天 / 3 天后」；
+     *  已完成 = 「已完成」置灰（记录还在，点开可重启）。5s 轮询只跑激活页；动作成功
+     *  即重取自身并广播日程。 */
+    function VaultStudyEntry({ path, root, active, toast }) {
+      const rel = qzPageRel(root, path);
+      const say = typeof toast === "function" ? toast : flashToast;
+      const [state, setState] = react.useState(null); // null = 没有记录（或还没读到）
+      const [dialog, setDialog] = react.useState(null); // null | "first" | "record"
+      react.useEffect(() => {
+        if (rel === null || active !== true) return undefined;
+        let alive = true;
+        const load = () => {
+          studyFetchState(rel)
+            .then((next) => {
+              if (alive) setState(next);
+            })
+            .catch(() => {
+              if (alive) setState(null);
+            });
+        };
+        load();
+        const timer = setInterval(load, 5000);
+        return () => {
+          alive = false;
+          clearInterval(timer);
+        };
+      }, [rel, active]);
+      if (rel === null) return null;
+      const rec = state !== null && state.record ? state.record : null;
+      const isDone = rec !== null && rec.status === "done";
+      const label = rec === null ? t("studyEntry") : isDone ? t("studyDone") : t("studyReview") + " · " + studyDueLabel(rec.dueAt);
+      const tip = rec === null
+        ? t("studyEntryTip")
+        : isDone
+          ? t("studyDoneTip")
+          : (rec.reps === 0 ? t("studyTipFirst") : t("studyTipReview").replace("{n}", String(rec.reps))).replace("{due}", String(rec.dueAt ?? ""));
+      const firstDialog = dialog === "first"
+        ? jsxRuntime.jsx(StudyDialog, {
+            title: t("studyFirstTitle"),
+            onClose: () => setDialog(null),
+            children: jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+              jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("studyFirstAsk").replace("{name}", pageBasename(path)) }),
+              jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
+                jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setDialog(null), children: t("studyCancel") }),
+                jsxRuntime.jsx("button", {
+                  type: "button",
+                  className: "dshk-btn-save",
+                  onClick: () => {
+                    studyOp("/dsh-kit/vault/study-first", { rel })
+                      .then((body) => {
+                        setDialog(null);
+                        setState(body && body.state ? body.state : null);
+                        say(t("studyFirstDone"));
+                      })
+                      .catch((error) => say(t("studyOpFail").replace("{error}", String(error?.message ?? error))));
+                  },
+                  children: t("studyFirstGo"),
+                }),
+              ] }),
+            ] }),
+          }, "first")
+        : null;
+      const recordDialog = dialog === "record"
+        ? jsxRuntime.jsx(VaultStudyRecordDialog, {
+            rel,
+            path,
+            toast: say,
+            onClose: () => setDialog(null),
+            onChanged: (next) => setState(next),
+          }, "record")
+        : null;
+      return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+        jsxRuntime.jsx(KitTip, {
+          label: tip,
+          children: jsxRuntime.jsx("button", {
+            type: "button",
+            className: "dshk-vault-tbtn" + (isDone ? " is-empty" : ""),
+            onClick: () => setDialog(rec === null ? "first" : "record"),
+            children: label,
+          }),
+        }),
+        firstDialog,
+        recordDialog,
+      ] });
+    }
+
+    /** 知识集的学习总览（首页知识集行「学习计划」钮）：只列已加入的页——
+     *  这一面是「查看进度」，不是全量页面清单。先列在学（按下次复习日），再列已完成。
+     *  行里的 rel 是去扩展名的库根相对路径：打开页面要把 rel 换回**真实文件路径**
+     *  （.markdown 页也只有索引认得出来），解析函数由首页传进来（它手里有 idx.pages）。 */
+    function VaultStudySetDialog({ dir, name, pageAbsOf, onClose }) {
+      const [items, setItems] = react.useState(null); // null = 载入中
+      react.useEffect(() => {
+        let alive = true;
+        kitJson("/dsh-kit/vault/study-scope?dir=" + encodeURIComponent(dir), undefined, (b) => !!b)
+          .then((body) => {
+            if (alive) setItems(Array.isArray(body?.items) ? body.items : []);
+          })
+          .catch(() => {
+            if (alive) setItems([]);
+          });
+        return () => {
+          alive = false;
+        };
+      }, [dir]);
+      const list = items ?? [];
+      const counts = studyScopeCounts(list);
+      const active = list
+        .filter((s) => s && s.record && s.record.status === "active")
+        .sort((a, b) => String(a.record.dueAt ?? "9999").localeCompare(String(b.record.dueAt ?? "9999")) || String(a.rel).localeCompare(String(b.rel)));
+      const done = list.filter((s) => s && s.record && s.record.status === "done");
+      const row = (s) => {
+        const rec = s.record;
+        const rowDone = rec.status === "done";
+        const late = rowDone === false && (studyDueDiffDays(rec.dueAt) ?? 0) < 0;
+        const right = rowDone
+          ? (rec.reps > 0 ? t("studySetRowDone").replace("{n}", String(rec.reps)) : t("studySetRowDoneZero"))
+          : (rec.reps === 0 ? t("studyStatusFirst") : t("studySetRowReview").replace("{n}", String(rec.reps))) + " · " + studyDueLabel(rec.dueAt);
+        const parent = typeof s.rel === "string" && s.rel.includes("/") ? s.rel.slice(0, s.rel.lastIndexOf("/")) : "";
+        const sub = [parent, rec.lastReviewedAt ? t("studySetLast").replace("{date}", String(rec.lastReviewedAt).slice(5)) : ""].filter((x) => x !== "").join(" · ");
+        return jsxRuntime.jsxs("div", {
+          className: "dshk-study-row",
+          title: String(s.rel ?? ""),
+          onClick: () => {
+            onClose();
+            const abs = typeof pageAbsOf === "function" ? pageAbsOf(s.rel) : "";
+            if (abs === "") flashToast(t("studyPageMissing"));
+            else openVaultPageAndDock(abs);
+          },
+          children: [
+            jsxRuntime.jsxs("div", { className: "dshk-study-rowmain", children: [
+              jsxRuntime.jsx("div", { className: "dshk-study-rowname", children: s.name || pageBasename(s.rel) }),
+              sub === "" ? null : jsxRuntime.jsx("div", { className: "dshk-study-rowsub", children: sub }),
+            ] }),
+            jsxRuntime.jsx("div", { className: "dshk-study-rowright" + (late ? " is-over" : ""), children: right }),
+          ],
+        }, String(s.rel ?? ""));
+      };
+      return jsxRuntime.jsx(StudyDialog, {
+        title: t("studySetTitle").replace("{name}", name),
+        wide: true,
+        onClose,
+        children: jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+          items === null
+            ? jsxRuntime.jsx("div", { className: "dshk-study-empty", children: t("studyLoading") })
+            : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                jsxRuntime.jsxs("div", { className: "dshk-study-counts", children: [
+                  jsxRuntime.jsx("span", { children: t("studySetActive").replace("{n}", String(counts.active)) }),
+                  jsxRuntime.jsx("span", { children: t("studySetDue").replace("{n}", String(counts.due)) }),
+                  counts.over > 0 ? jsxRuntime.jsx("span", { className: "is-over", children: t("studySetOver").replace("{n}", String(counts.over)) }) : null,
+                  jsxRuntime.jsx("span", { children: t("studySetDone").replace("{n}", String(counts.done)) }),
+                ] }),
+                list.length === 0
+                  ? jsxRuntime.jsx("div", { className: "dshk-study-empty", children: t("studySetEmpty") })
+                  : jsxRuntime.jsx("div", { className: "dshk-study-list", children: active.concat(done).map(row) }),
+              ] }),
+        ] }),
+      });
+    }
+
     // 测验：纯逻辑与浮层面（render-check 直测）
     exports.qzShuffle = qzShuffle;
     exports.qzPick = qzPick;
@@ -11463,6 +12311,26 @@ ellipsis，窄列只截字不破版 */
     exports.QuizMdView = QuizMdView;
     exports.QuizInline = QuizInline;
 
+    // 学习 / 复习：纯逻辑 + 三个浮层/入口面（render-check 直测）
+    exports.STUDY_LADDER = STUDY_LADDER;
+    exports.studyToday = studyToday;
+    exports.studyDateAfter = studyDateAfter;
+    exports.studyDueDiffDays = studyDueDiffDays;
+    exports.studyDueLabel = studyDueLabel;
+    exports.studyStatusText = studyStatusText;
+    exports.studyHistoryText = studyHistoryText;
+    exports.studyScopeCounts = studyScopeCounts;
+    exports.studyFetchState = studyFetchState;
+    exports.studyOp = studyOp;
+    exports.vaultPagePathOfRel = vaultPagePathOfRel;
+    exports.studyPageAbs = studyPageAbs;
+    exports.openStudyPage = openStudyPage;
+    exports.StudyIntervalPicker = StudyIntervalPicker;
+    exports.StudyDialog = StudyDialog;
+    exports.VaultStudyEntry = VaultStudyEntry;
+    exports.VaultStudyRecordDialog = VaultStudyRecordDialog;
+    exports.VaultStudySetDialog = VaultStudySetDialog;
+
     exports.inject = ["slots"];
     // 行开关即总开关：宿主半边不物化时 /dsh-kit-vault/config 404，这里整体不注册
     //（侧栏索引、右栏知识库/日程签、对话路径改投、快捷键全不出现）。
@@ -11484,6 +12352,16 @@ ellipsis，窄列只截字不破版 */
       // vault root 预取：文件树/对话点击的判定同步读缓存，等点击时再取来不及
       //（索引端点宿主侧有 mtime 缓存，零成本）
       void ensureVaultRootHint();
+      // 学习记录是复习待办的真源：物化后对齐一次——老记录（功能上线前就在学的页）、
+      // 别端 / agent 写下来的记录都靠这一拍补齐待办、清掉不在学的残留待办
+      if (!studySyncRequested) {
+        studySyncRequested = true;
+        void kitPostJson("/dsh-kit/vault/study-sync", {}, (b) => b !== null && typeof b === "object")
+          .then((body) => {
+            if (Number(body && body.created) > 0) schedBus.bump();
+          })
+          .catch(() => {});
+      }
       // 侧栏底部形态切换条上的知识库·日程那枚（整条由 root 渲染，这里只登记）：
       // 与快捷键同一个动作（整格开合）；格内的 tab 条只有格已经开着才看得见
       kit.registerSideForm({ id: "dsh-kit-vault", order: 40, Component: VaultFooterEntry });
@@ -11507,6 +12385,7 @@ ellipsis，窄列只截字不破版 */
     exports.VaultView = VaultView;
     exports.VaultRootView = VaultRootView;
     exports.VaultPaneBody = VaultPaneBody;
+    exports.HomePagePane = HomePagePane;
     exports.SchedulePaneBody = SchedulePaneBody;
     exports.ScheduleView = ScheduleView;
     exports.ScheduleTasksPanel = ScheduleTasksPanel;
@@ -11514,6 +12393,8 @@ ellipsis，窄列只截字不破版 */
     exports.SchedEntryDialog = SchedEntryDialog;
     exports.SchedTimerStartDialog = SchedTimerStartDialog;
     exports.SchedTimerBall = SchedTimerBall;
+    exports.SchedReviewToast = SchedReviewToast;
+    exports.SchedStudyAdjustDialog = SchedStudyAdjustDialog;
     exports.schedOp = schedOp;
     exports.schedBus = schedBus;
     exports.schedElapsed = schedElapsed;

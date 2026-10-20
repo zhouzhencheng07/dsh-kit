@@ -10,7 +10,8 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { recycleDeleteBatch } from '../core/index.ts'
-import { followPage, siblingsForDelete } from './quiz.ts'
+import { followPage as followQuizPage, siblingsForDelete as quizSiblingsForDelete } from './quiz.ts'
+import { followPage as followStudyPage, siblingsForDelete as studySiblingsForDelete } from './study.ts'
 
 /** 撞名策略（未知取值按 skip 处理，与前端选项一一对应） */
 export type Conflict = 'skip' | 'overwrite' | 'rename'
@@ -53,6 +54,26 @@ export function safeRel(raw: unknown, maxSegs = 8): string {
 /** 去掉 md 扩展名（页面名的规范形态；.markdown 一并按 md 收） */
 export function stripMd(name: string): string {
   return name.replace(/\.(md|markdown)$/i, '')
+}
+
+/** 页面的伴生文件：.quiz 的题目 / 掌握度与 .study 的学习记录。改名 / 移动 / 删除 /
+ *  覆盖撞名时与页面一类走（两处 siblingsForDelete 各自判存在） */
+function pageSiblingsForDelete(pageFile: string): string[] {
+  return [...quizSiblingsForDelete(pageFile), ...studySiblingsForDelete(pageFile)]
+}
+
+/** 绝对路径 → 页面 / 目录在库内的 rel（页面去 .md / .markdown 后缀，目录保持原样）；
+ *  不在库内返回 null。学习记录跟随页面 / 目录时用它换算 rel。 */
+export function relOfEntry(root: string, absPath: string): string | null {
+  const target = path.resolve(absPath)
+  const rel = relUnderRoot(root, target)
+  if (rel === null) return null
+  try {
+    if (fs.statSync(target).isDirectory()) return rel
+  } catch {
+    /* 路径已不在：按页面处理 */
+  }
+  return stripMd(rel)
 }
 
 function existsSync(p: string): boolean {
@@ -519,9 +540,10 @@ async function settleConflict(root: string, dir: string, name: string, conflict:
 }
 
 /** 覆盖前丢掉目标：优先回收站，失败退回直删。被覆盖的笔记页把同目录 .quiz/ 里的
- *  题目与掌握度一并带走——那是那一页的东西，留下会冒充（或顶掉）新页的题目 */
+ *  题目与掌握度、.study/ 里的学习记录一并带走——那是那一页的东西，留下会冒充
+ *  （或顶掉）新页的题目与复习记录 */
 async function discard(root: string, target: string): Promise<void> {
-  const extras = /\.(md|markdown)$/i.test(target) && !inLibrary(root, target) ? siblingsForDelete(target) : []
+  const extras = /\.(md|markdown)$/i.test(target) && !inLibrary(root, target) ? pageSiblingsForDelete(target) : []
   const all = [target, ...extras]
   const results = await recycleDeleteBatch(all)
   const left = all.filter((_, i) => results[i] !== true)
@@ -649,8 +671,9 @@ export function renameEntry(
     if (libNew !== null) rewriteLibraryRefs(root, libOld, libNew)
     return { path: next, links: 0 }
   }
-  // 页面改名：题目与掌握度跟着走（同目录 .quiz/ 下换的是文件名）
-  followPage(target, next)
+  // 页面改名：题目 / 掌握度与学习记录跟着走（同目录 .quiz/ 与 .study/ 下换的是文件名）
+  followQuizPage(target, next)
+  followStudyPage(target, next)
   if (oldRel === null) return { path: next, links: 0 }
   return { path: next, links: rewriteRefs(pages, stripMd(oldRel), { kind: 'name', name: stripMd(finalLeaf) }, next) }
 }
@@ -694,8 +717,11 @@ export async function moveEntry(
     const libNew = libraryRel(root, next)
     if (libNew !== null) rewriteLibraryRefs(root, libOld, libNew)
   }
-  // 页面移动：题目与掌握度跟着走（目录里的 .quiz/ 随目录整体搬，不用处理）
-  if (!stat.isDirectory() && !inLibrary(root, next)) followPage(target, next)
+  // 页面移动：题目 / 掌握度与学习记录跟着走（目录里的 .quiz/、.study/ 随目录整体搬，不用处理）
+  if (!stat.isDirectory() && !inLibrary(root, next)) {
+    followQuizPage(target, next)
+    followStudyPage(target, next)
+  }
   const newRel = relUnderRoot(root, next)
   const skipLinks = stat.isDirectory() || oldRel === null || newRel === null || inLibrary(root, next)
   const links = skipLinks ? 0 : rewriteRefs(pages, stripMd(oldRel), { kind: 'move', rel: stripMd(newRel) }, next)
@@ -1057,12 +1083,12 @@ export async function deleteEntries(root: string, paths: unknown[]): Promise<{ d
     seen.add(target)
     targets.push(target)
   }
-  // 页面删除连带它的题目与掌握度一起进回收站（同目录 .quiz/ 下的两份伴生文件；
-  // 目录删除不用管：.quiz/ 在目录体内，跟着整棵走）。**只随删除成功的页走**——
-  // 页面本身没删掉时先清它的题，会留下「页还在、题没了」的半截状态
+  // 页面删除连带它的题目 / 掌握度 / 学习记录一起进回收站（同目录 .quiz/ 与 .study/
+  // 下的伴生文件；目录删除不用管：这些目录在目录体内，跟着整棵走）。**只随删除成功
+  // 的页走**——页面本身没删掉时先清它的题与记录，会留下「页还在、题没了」的半截状态
   const extrasOf = new Map<string, string[]>()
   for (const p of targets) {
-    if (!fs.statSync(p).isDirectory() && !inLibrary(root, p)) extrasOf.set(p, siblingsForDelete(p))
+    if (!fs.statSync(p).isDirectory() && !inLibrary(root, p)) extrasOf.set(p, pageSiblingsForDelete(p))
   }
   let deleted = 0
   const failed: string[] = []
