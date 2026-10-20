@@ -12987,8 +12987,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 
     // ── dsh-kit/monitor 组件（用量与监视）──
 // dsh-kit/monitor 浏览器半边 —— 用量与监视组件的 client 面。
-// 现收纳：余额与用量芯片（UsageLine）+ 复读提示（MonitorLine）
-// + 会话通知（系统通知）。
+// 现收纳：余额与用量芯片（UsageLine）+ 会话通知（系统通知）。
 //
 // 数据走宿主 /dsh-kit/usage（key 在宿主侧复用模型配置，浏览器拿不到）。状态带
 // 右缘只出**一张**芯片：当前会话选中的模型 provider（modelDirectories 服务按
@@ -13038,10 +13037,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       usageResets: "重置",
       usageNoCard: "模型配置未提供此服务的用量数据",
       usageOfficialPage: "官方用量页",
-      // 会话监视（复读提示）
-      monitorWarn: "检测到输出在重复（已连续 {copies} 遍），继续重复到 {stop} 遍将停止本回合",
-      monitorStopping: "重复持续，正在停止当前回合…",
-      monitorStop: "停止",
       // 会话通知
       notifyCompleteTitle: "{title} · 回合完成",
       notifyCompleteBody: "点击回到该会话",
@@ -13053,8 +13048,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       notifyBlockedBody: "这一轮没能推进下去，点开看看",
       notifyMaxTokensTitle: "{title} · 撞上输出上限",
       notifyMaxTokensBody: "这一轮因输出 token 触顶结束",
-      notifyLoopBreakTitle: "{title} · 检测到死循环已停止",
-      notifyLoopBreakBody: "模型输出陷入重复，已自动中止该轮",
       notifyCompactTitle: "{title} · 上下文压缩完成",
       notifyCompactBody: "上下文已压缩完成",
       notifyCompactBodyTokens: "已压缩约 {tokens} tokens 的历史",
@@ -13069,15 +13062,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       kcfgGroupUsage: "用量与余额",
       kcfgUsageEnabled: "余额与用量芯片",
       kcfgUsageEnabledHint: "composer 下方状态带显示当前会话 provider 的余额/配额芯片。",
-      kcfgGroupMonitor: "会话监视与通知",
+      kcfgGroupMonitor: "会话通知",
       kcfgNotifyEnabled: "会话桌面通知",
       kcfgNotifyEnabledHint: "页面不在前台时，回合收尾/压缩完成/agent 提问提醒你一次。",
-      kcfgMonitorEnabled: "输出复读守卫",
-      kcfgMonitorEnabledHint: "同一句话或连续几句话在结尾连续重复时：先提示，继续重复才停止该回合。",
-      kcfgMonitorWarnCopies: "提示档：连续重复遍数（3–10）",
-      kcfgMonitorWarnCopiesHint: "结尾同一句（或同一组连续句）重复到这么多遍，先在当前会话提示。",
-      kcfgMonitorStopCopies: "停止档：连续重复遍数（4–20）",
-      kcfgMonitorStopCopiesHint: "重复继续到这么多遍才自动停止该回合；不大于提示档时按提示档+1 处理。",
       kcfgGroupRequest: "模型请求",
       kcfgSessionHeader: "OpenCode Go 会话头",
       kcfgSessionHeaderHint: "发往 opencode / opencode-go 的模型请求按会话携带 x-opencode-session（复用 DSH 会话 id）：网关按它做路由亲和与提示词缓存，缺失会 400。关掉后不再注入。",
@@ -13098,9 +13085,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       usageResets: "resets",
       usageNoCard: "No usage data for this service in the model config",
       usageOfficialPage: "Usage dashboard",
-      monitorWarn: "Output is repeating (the same text {copies} times in a row); reaching {stop} will stop this turn",
-      monitorStopping: "Repetition continues — stopping this turn…",
-      monitorStop: "Stop",
       notifyCompleteTitle: "{title} · turn finished",
       notifyCompleteBody: "Click to return to this session",
       notifyErrorTitle: "{title} · turn errored",
@@ -13111,8 +13095,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       notifyBlockedBody: "This turn could not make progress — open it to take a look",
       notifyMaxTokensTitle: "{title} · output limit reached",
       notifyMaxTokensBody: "This turn ended at the output token ceiling",
-      notifyLoopBreakTitle: "{title} · dead loop stopped",
-      notifyLoopBreakBody: "The model output started repeating itself, so that turn was stopped",
       notifyCompactTitle: "{title} · context compacted",
       notifyCompactBody: "Context compaction finished",
       notifyCompactBodyTokens: "Compacted ~{tokens} tokens of history",
@@ -13126,15 +13108,9 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       kcfgGroupUsage: "Usage & balance",
       kcfgUsageEnabled: "Balance & usage chip",
       kcfgUsageEnabledHint: "Shows a balance/quota chip for the session's provider under the composer.",
-      kcfgGroupMonitor: "Session monitor & notifications",
+      kcfgGroupMonitor: "Session notifications",
       kcfgNotifyEnabled: "Session desktop notifications",
       kcfgNotifyEnabledHint: "One reminder on turn completion / compaction / agent questions while the page is in the background.",
-      kcfgMonitorEnabled: "Repetition guard",
-      kcfgMonitorEnabledHint: "When a sentence (or a few consecutive sentences) repeats at the end: warn first, stop the turn only if it keeps repeating.",
-      kcfgMonitorWarnCopies: "Warn at N consecutive repeats (3–10)",
-      kcfgMonitorWarnCopiesHint: "Show an in-session hint once the same ending text repeats this many times.",
-      kcfgMonitorStopCopies: "Stop at N consecutive repeats (4–20)",
-      kcfgMonitorStopCopiesHint: "Stop the turn only once the repetition reaches this many times; values at or below the warn level are treated as warn+1.",
       kcfgGroupRequest: "Model requests",
       kcfgSessionHeader: "OpenCode Go session header",
       kcfgSessionHeaderHint: "Model requests to opencode / opencode-go carry x-opencode-session per session (reusing the DSH session id): the gateway uses it for routing affinity and prompt caching, and 400s without it. Turn off to stop injecting.",
@@ -13147,9 +13123,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // { status:'ready', value }；端点不可达按全默认处理（与门控同源语义）。
     const M_CFG_DEFAULTS = {
       usageEnabled: true,
-      monitorEnabled: true,
-      monitorWarnCopies: 3,
-      monitorStopCopies: 5,
       notifyEnabled: true,
       sessionHeaderEnabled: true,
     };
@@ -13183,22 +13156,12 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       if (!snap || snap.status !== "ready" || !snap.value || typeof snap.value !== "object") return out;
       const v = snap.value;
       out.usageEnabled = v.usageEnabled === true;
-      out.monitorEnabled = v.monitorEnabled !== false;
-      out.monitorWarnCopies =
-        Number.isInteger(v.monitorWarnCopies) && v.monitorWarnCopies >= 3 && v.monitorWarnCopies <= 10
-          ? v.monitorWarnCopies
-          : M_CFG_DEFAULTS.monitorWarnCopies;
-      out.monitorStopCopies =
-        Number.isInteger(v.monitorStopCopies) && v.monitorStopCopies >= 4 && v.monitorStopCopies <= 20
-          ? v.monitorStopCopies
-          : M_CFG_DEFAULTS.monitorStopCopies;
-      if (out.monitorStopCopies <= out.monitorWarnCopies) out.monitorStopCopies = out.monitorWarnCopies + 1;
       out.notifyEnabled = v.notifyEnabled !== false;
       out.sessionHeaderEnabled = v.sessionHeaderEnabled !== false;
       return out;
     }
     void loadCfg();
-    /** 带占位符的文案变体：tf("monitorWarn", { copies: 3, stop: 5 }) */
+    /** 带占位符的文案变体：tf("notifyCompleteTitle", { title: "会话名" }) */
     const tf = (key, vars) => {
       let s = lang()[key] ?? key;
       for (const [name, value] of Object.entries(vars ?? {})) s = s.split(`{${name}}`).join(String(value));
@@ -13206,175 +13169,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     };
     // 主视图会话行判定随会话行共享收进 dock
     const mainRowOf = dock.mainRowOf;
-
-    // ─────────── 句子级复读检测（判据真源 src/monitor/loop-guard.ts，此处手抄）───────────
-    // 单位是句子：结尾同一句（或连续几句话）连续重复 N 遍才算复读。字符级周期扫描与
-    // 「单步字符上限」都不看——它们把正常长输出、结构重复当成失控，是误杀来源。
-    const MONITOR_WARN_COPIES = 3;
-    const MONITOR_MIN_BLOCK_CHARS = 6;
-    const MONITOR_MAX_BLOCK_UNITS = 8;
-    const MONITOR_SCAN_MS = 1000; // 界面扫描节奏；判据本身与时间无关
-    const MONITOR_ACCUM_MAX = 12000; // 只看尾部若干句，累积文本留余量封顶
-    const MONITOR_SENTENCE_END = new Set(["。", "！", "？", "；", "…", "!", "?", ";"]);
-
-    function monitorNormalizeUnit(raw) {
-      return String(raw).replace(/\s+/g, " ").trim();
-    }
-
-    /** 切句：句末标点/换行/不夹在数字中间的英文句点处断句；尾部未收束句 complete=false */
-    function monitorSegment(text) {
-      const out = [];
-      if (typeof text !== "string" || text === "") return out;
-      const n = text.length;
-      let start = 0;
-      const push = (end, complete) => {
-        const norm = monitorNormalizeUnit(text.slice(start, end));
-        if (norm !== "") out.push({ text: norm, complete });
-        start = end;
-      };
-      for (let i = 0; i < n; i++) {
-        const ch = text[i];
-        if (ch === "\n") {
-          push(i + 1, true);
-          continue;
-        }
-        if (MONITOR_SENTENCE_END.has(ch)) {
-          let j = i + 1;
-          while (j < n && MONITOR_SENTENCE_END.has(text[j])) j++;
-          push(j, true);
-          i = j - 1;
-          continue;
-        }
-        if (ch === ".") {
-          const prev = text[i - 1];
-          const next = text[i + 1];
-          const digitPrev = prev !== undefined && prev >= "0" && prev <= "9";
-          const digitNext = next !== undefined && next >= "0" && next <= "9";
-          if (!digitPrev && !digitNext && (next === undefined || /\s/.test(next))) push(i + 1, true);
-        }
-      }
-      if (start < n) push(n, false);
-      return out;
-    }
-
-    /** 尾部连续重复块扫描：最小块 1..8 句、块字符数 ≥6、连续重复 ≥3 遍即命中 */
-    function monitorTailLoop(units) {
-      let end = units.length;
-      while (end > 0 && units[end - 1].complete !== true) end--;
-      const n = end;
-      if (n < MONITOR_WARN_COPIES) return null;
-      for (let p = 1; p <= MONITOR_MAX_BLOCK_UNITS && p * MONITOR_WARN_COPIES <= n; p++) {
-        let chars = 0;
-        for (let k = n - p; k < n; k++) chars += units[k].text.length;
-        if (chars < MONITOR_MIN_BLOCK_CHARS) continue;
-        let copies = 1;
-        while ((copies + 1) * p <= n) {
-          let same = true;
-          for (let k = 0; k < p; k++) {
-            if (units[n - (copies + 1) * p + k].text !== units[n - p + k].text) {
-              same = false;
-              break;
-            }
-          }
-          if (!same) break;
-          copies++;
-        }
-        if (copies >= MONITOR_WARN_COPIES) return { units: p, copies, chars };
-      }
-      return null;
-    }
-
-    function monitorDetectLoop(text) {
-      if (typeof text !== "string" || text === "") return null;
-      return monitorTailLoop(monitorSegment(text));
-    }
-
-    // 当前会话只做「提示 + 手动停止」：宿主侧 loop-breaker 才是执行档（覆盖全部会话，
-    // 命中停止档时 cancel）。旧实现自己 cancel 再自动续跑话术，正是误判扰民那一套，已删。
-    function MonitorLine(props) {
-      const { useChat, useSession, sessionId } = props;
-      react.useSyncExternalStore(subscribeLocale, getLocaleVersion);
-      const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
-      const nodes = typeof useChat === "function" ? useChat((s) => s.legacy.nodes) : [];
-      const partial = typeof useChat === "function" ? useChat((s) => s.legacy.partial) : null;
-      const running = typeof useSession === "function" ? useSession((s) => s.running) : false;
-      const [hit, setHit] = react.useState(null);
-      const textRef = react.useRef("");
-      // 组装运行中文本：partial（流式中）优先，否则最新未中断 assistant 节点兜底
-      react.useEffect(() => {
-        if (!running) {
-          textRef.current = "";
-          setHit(null);
-          return;
-        }
-        let text = "";
-        if (partial && Array.isArray(partial.blocks)) {
-          for (const b of partial.blocks) {
-            if ((b.kind === "text" || b.kind === "reasoning") && typeof b.text === "string") text += b.text;
-          }
-        }
-        if (text === "") {
-          for (let i = nodes.length - 1; i >= 0; i--) {
-            const n = nodes[i];
-            if (n && n.kind === "assistant") {
-              if (n.interrupted !== true && Array.isArray(n.blocks)) {
-                let t = "";
-                for (const b of n.blocks) {
-                  if ((b.kind === "text" || b.kind === "reasoning") && typeof b.text === "string") t += b.text;
-                }
-                text = t;
-              }
-              break;
-            }
-          }
-        }
-        textRef.current = text.length > MONITOR_ACCUM_MAX ? text.slice(-MONITOR_ACCUM_MAX) : text;
-      }, [partial, nodes, running]);
-      // 1s 节流扫描：只在命中结果变化时 setState（流式高频 setState 会拖渲染）
-      react.useEffect(() => {
-        if (!cfg.monitorEnabled || !running) {
-          setHit(null);
-          return undefined;
-        }
-        const scan = () => {
-          const found = monitorDetectLoop(textRef.current);
-          setHit((prev) => {
-            if (found === null) return prev === null ? prev : null;
-            if (prev && prev.units === found.units && prev.copies === found.copies && prev.chars === found.chars) return prev;
-            return found;
-          });
-        };
-        const timer = setInterval(scan, MONITOR_SCAN_MS);
-        scan();
-        return () => clearInterval(timer);
-      }, [running, cfg.monitorEnabled]);
-      if (!cfg.monitorEnabled || !running || !hit || hit.copies < cfg.monitorWarnCopies) return null;
-      const stopping = hit.copies >= cfg.monitorStopCopies;
-      const line = stopping
-        ? t("monitorStopping")
-        : tf("monitorWarn", { copies: String(hit.copies), stop: String(cfg.monitorStopCopies) });
-      return jsxRuntime.jsxs("div", {
-        className: "dshk-monitor-line",
-        children: [
-          jsxRuntime.jsx("span", { className: "dshk-monitor-text", children: line }),
-          jsxRuntime.jsx("button", {
-            type: "button",
-            className: "dshk-monitor-cancel",
-            onClick: () => {
-              try {
-                const sessions = slotsCtx ? slotsCtx.get("sessions") : null;
-                const binding = sessions && typeof sessions.binding === "function" ? sessions.binding(sessionId) : null;
-                const sess = binding && binding.session;
-                if (sess && typeof sess.cancel === "function") void sess.cancel().catch(() => {});
-              } catch {
-                // 服务未就绪：忽略
-              }
-            },
-            children: t("monitorStop"),
-          }),
-        ],
-      });
-    }
 
     // ─────────── 会话通知（回合收尾 / 上下文压缩 / agent 提问）───────────
     // 页面不在前台、或事件不属于当前打开的会话时弹一条系统通知（浏览器
@@ -13575,19 +13369,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       return events;
     }
 
-    /** 宿主侧熔断写在 cancel cause 里的标记（与 src/monitor/loop-breaker.ts 同串） */
-    const NOTIFY_LOOP_CAUSE = "dsh-kit:dead-loop";
     /** 收尾通知按 turn/end 的 reason 分类：官方 TurnEndReason 的可读子集各有各的
      *  文案，缺 reason 的会话（从未打开过、没有事件窗）退回「回合完成」——那不是
      *  猜，是我们对未知结局的诚实说法。
      *  @param reason 整条 reason 对象（kind + 可能的 cause），不是仅 kind */
     function notifyTurnKind(reason) {
-      // turn/end 的 aborted 形如 {kind:'aborted', reason:<AgentCancelCause>}；
-      // 熔断那条 cause 是 {kind:'hook', reason:'dsh-kit:dead-loop'}
-      const cause = reason && typeof reason === "object" ? reason.reason : null;
-      if (reason && typeof reason === "object" && reason.kind === "aborted" && cause && cause.reason === NOTIFY_LOOP_CAUSE) {
-        return "loopBreak";
-      }
       const kind = reason && typeof reason === "object" ? reason.kind : reason;
       switch (kind) {
         case "error":
@@ -13670,7 +13456,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         aborted: "notifyAbortedTitle",
         blocked: "notifyBlockedTitle",
         maxTokens: "notifyMaxTokensTitle",
-        loopBreak: "notifyLoopBreakTitle",
         compact: "notifyCompactTitle",
         approval: "notifyApprovalTitle",
         plan: "notifyPlanTitle",
@@ -13682,7 +13467,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         aborted: "notifyAbortedBody",
         blocked: "notifyBlockedBody",
         maxTokens: "notifyMaxTokensBody",
-        loopBreak: "notifyLoopBreakBody",
         compact: "notifyCompactBody",
       };
       const title = tf(TITLE_BY_KIND[ev.kind] ?? "notifyQuestionTitle", { title: ev.title });
@@ -13706,7 +13490,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     }
 
     /** 回合收尾的 kind：走「落定判定」再投递（notifyTurnKind 的全部取值） */
-    const TURN_END_KINDS = new Set(["complete", "error", "aborted", "blocked", "maxTokens", "loopBreak"]);
+    const TURN_END_KINDS = new Set(["complete", "error", "aborted", "blocked", "maxTokens"]);
 
     /** 事件入口（订阅回调与首帧共用）：读快照 → 核心判定 → 逐条投递 */
     function notifyEvaluate(sessions, workspaces) {
@@ -13836,9 +13620,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     // 本组件配置页（插件页 dsh-kit/monitor 行「配置」）：骨架在 dock，这里只喂字段表
     const MONITOR_CFG_FIELDS = [
       { key: "usageEnabled", type: "bool", group: "kcfgGroupUsage", labelKey: "kcfgUsageEnabled", hintKey: "kcfgUsageEnabledHint" },
-      { key: "monitorEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgMonitorEnabled", hintKey: "kcfgMonitorEnabledHint" },
-      { key: "monitorWarnCopies", type: "number", min: 3, max: 10, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorWarnCopies", hintKey: "kcfgMonitorWarnCopiesHint" },
-      { key: "monitorStopCopies", type: "number", min: 4, max: 20, group: "kcfgGroupMonitor", labelKey: "kcfgMonitorStopCopies", hintKey: "kcfgMonitorStopCopiesHint" },
       { key: "notifyEnabled", type: "bool", group: "kcfgGroupMonitor", labelKey: "kcfgNotifyEnabled", hintKey: "kcfgNotifyEnabledHint" },
       { key: "sessionHeaderEnabled", type: "bool", group: "kcfgGroupRequest", labelKey: "kcfgSessionHeader", hintKey: "kcfgSessionHeaderHint" },
     ];
@@ -13889,11 +13670,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         ".dshk-usage-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",
         ".dshk-usage-refresh{appearance:none;border:.5px solid var(--dsw-alias-border-l1);background:0 0;border-radius:999px;padding:2px 10px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);cursor:pointer}",
         ".dshk-usage-refresh:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",
-        // 会话监视条（composer.dock 槽）
-        ".dshk-monitor-line{display:flex;align-items:center;gap:10px;padding:5px 12px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 35%,transparent);border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#4b7bd6) 8%,transparent);font-size:12px;color:var(--dsw-alias-label-secondary)}",
-        ".dshk-monitor-text{flex:1;min-width:0}",
-        ".dshk-monitor-cancel{appearance:none;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:none;padding:2px 10px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer}",
-        ".dshk-monitor-cancel:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-tertiary)}",
       ].join("\n");
       document.head.appendChild(style);
     }
@@ -14024,7 +13800,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       react.useSyncExternalStore(subscribeLocale, getLocaleVersion);
       const cfg = cfgFromSnapshot(react.useSyncExternalStore(subscribeCfg, getCfgSnapshot));
       const [, forceTick] = react.useState(0); // 重置倒计时每分钟重算
-      // 官方回合运行位（与 MonitorLine 同源）：回合收尾时补一拍刷新
+      // 官方回合运行位：回合收尾时补一拍刷新
       const running = typeof useSession === "function" ? useSession((s) => s.running) : false;
       const dirsVersion = react.useSyncExternalStore(
         (cb) => {
@@ -14298,13 +14074,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           UsageLine,
         ),
       );
-      // 复读提示条（同槽 order 5，排官方 StatsLine 之后；monitorEnabled 门控在组件内）
-      ctx.slots.inject("conversation.composer.dock", () =>
-        ctx.slots.register(
-          { name: "conversation.composer.dock", id: "dsh-kit-monitor", order: 5 },
-          MonitorLine,
-        ),
-      );
       // 会话通知：订阅官方数据源（就绪时机不保证，用 inject 等）
       ctx.inject(["sessions"], (sctx) => {
         const offs = [];
@@ -14396,10 +14165,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
     };
 
     // 渲染级检查与单测取用（依赖注入的纯核心，直测不经过 apply）
-    exports.MonitorLine = MonitorLine;
-    exports.monitorSegment = monitorSegment;
-    exports.monitorTailLoop = monitorTailLoop;
-    exports.monitorDetectLoop = monitorDetectLoop;
     exports.notifyDiffCore = notifyDiffCore;
     exports.notifyKindOf = notifyKindOf;
     exports.notifyBodyOf = notifyBodyOf;

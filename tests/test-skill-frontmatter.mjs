@@ -1,7 +1,6 @@
 // frontmatter 解析直测（tests/test-skill-frontmatter.mjs）
 //
-// 解析器是 TS，跑测试前需 pnpm build（本脚本读 dist 产物，与 test-loop-breaker /
-// test-schedule 同一口径）。覆盖：行级平铺值、块标量（折叠/保留换行、三种 chomping、
+// 解析器是 TS，跑测试前需 pnpm build（本脚本读 dist 产物，与 test-schedule 同一口径）。覆盖：行级平铺值、块标量（折叠/保留换行、三种 chomping、
 // 缩进指示、块内更深缩进的行）、CRLF、无 frontmatter、块后仍有键。
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'

@@ -1,7 +1,7 @@
 // dsh-kit 用量与监视组件（宿主半边入口）
 //
-// 组件化切片：/dsh-kit/usage 聚合端点 + 用量芯片（client/bundle.js）+ 输出侧
-// 复读守卫（loop-breaker.ts，宿主侧覆盖全部会话）+ 会话通知 + OpenCode Go 会话头
+// 组件化切片：/dsh-kit/usage 聚合端点 + 用量芯片（client/bundle.js）+ 会话通知
+// + OpenCode Go 会话头
 // 按会话注入（opencode-session.ts），从 dsh-kit 主包迁出，独立成 entry（bundle
 // patch 插单，profile 里行 id: monitor）。provider 配置读取不依赖主包：经宿主
 // configEditor 服务现读 llm-pi-ai entry 的合成配置
@@ -10,7 +10,6 @@
 
 
 import { registerUsageRoutes } from './usage.ts'
-import { registerLoopGuard } from './loop-breaker.ts'
 import { applyOpenCodeSessionHeader } from './opencode-session.ts'
 import { loadDep, sameOrigin } from '../core/index.ts'
 import { kitLogEmit } from '../core/log.ts'
@@ -36,15 +35,6 @@ export const Config =
         // llm-pi-ai.providers 的凭证引用），开 = /dsh-kit/usage 端点放行 +
         // client 半边出余额/配额芯片，关 = 端点 403 + 芯片不出。
         usageEnabled: z.boolean().default(true).volatile(),
-        // 复读守卫（宿主侧 loop-breaker.ts 消费，客户端也读同名字段）：同一句话
-        // 或连续几句话在尾部连续重复时，宿主侧分两档处置——警告档记日志并向模型注入
-        // 一条提醒（当前会话另由客户端画提示），停止档才 cancel 该 agent 的当前回合。
-        // 覆盖全部会话，不依赖页面开着。
-        monitorEnabled: z.boolean().default(true).volatile(),
-        // 警告档：尾部连续重复到这么多遍时提示（只警告，不停）
-        monitorWarnCopies: z.number().step(1).min(3).max(10).default(3).volatile(),
-        // 停止档：重复继续到这么多遍才停止回合（小于等于警告档时按警告档+1 处理）
-        monitorStopCopies: z.number().step(1).min(4).max(20).default(5).volatile(),
         // 会话通知（纯浏览器端消费，宿主不读）：回合收尾、上下文压缩完成或 agent 提问时，
         // 若页面不在前台（或事件不属于当前打开的会话）弹桌面通知——浏览器 Notification
         // API，未授权就不发（不再退回标题闪烁）。收尾按 turn/end 的 reason 分类（完成/出错/中止/
@@ -61,7 +51,7 @@ export const Config =
 export async function apply(ctx: any, config: KitSettings = {}): Promise<void> {
   const defaults: KitSettings = Config
     ? Config({})
-    : { usageEnabled: true, monitorEnabled: true, monitorWarnCopies: 3, monitorStopCopies: 5, notifyEnabled: true, sessionHeaderEnabled: true }
+    : { usageEnabled: true, notifyEnabled: true, sessionHeaderEnabled: true }
   // volatile 字段在 fiber config 里是稳定 ref（{get}），统一解引用
   const readRef = (v: unknown): any =>
     v !== null && typeof v === 'object' && typeof (v as { get?: unknown }).get === 'function'
@@ -129,14 +119,6 @@ export async function apply(ctx: any, config: KitSettings = {}): Promise<void> {
         },
       }),
     )
-  })
-
-  // 输出侧复读守卫（宿主侧）：覆盖【全部】会话，与页面开没开、当前看哪个会话
-  // 无关——这是客户端那一层做不到的（它挂在当前会话的组件上，切走即失效，而
-  // 人不在正是复读白烧额度的时候）。判据见 loop-guard.ts，动作分警告/停止两档。
-  // 等 agent 服务就位再挂（它不总在本组件之前加载）
-  ctx.inject(['agent'], () => {
-    disposers.push(registerLoopGuard(ctx, { readSettings: () => readSettings() }))
   })
 
   // entry 注销时撤路由（disposers 由注入回调在 apply 期间同步填充）

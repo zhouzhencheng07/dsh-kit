@@ -148,10 +148,9 @@ async function checkApply() {
   global.window = prevWin;
   check("U apply 激活不抛错", applyErr === null);
   check("U apply 声明 modelDirectories/sessions/remote 依赖", JSON.stringify(injects[0]) === JSON.stringify(["modelDirectories"]) && injects.some((d) => d[0] === "sessions") && injects.some((d) => d[0] === "remote" && d[1] === "sessions"));
-  check("U apply 槽位与配置页都经 slots.inject 等声明", seatInjects.filter((k) => k === "conversation.composer.dock").length === 2 && seatInjects.includes("plugins.row.config") && !seatInjects.includes("conversation.session.header.actions"));
+  check("U apply 槽位与配置页都经 slots.inject 等声明", seatInjects.filter((k) => k === "conversation.composer.dock").length === 1 && seatInjects.includes("plugins.row.config") && !seatInjects.includes("conversation.session.header.actions"));
   const seat = (id) => registered.find((s) => s.id === id);
   check("U 槽位座席：用量芯片 composer.dock order 6", seat("dsh-kit-usage") && seat("dsh-kit-usage").order === 6);
-  check("U 槽位座席：复读提示条 composer.dock order 5", seat("dsh-kit-monitor") && seat("dsh-kit-monitor").order === 5);
   check("U 头部状态条座位已随 429 机制退役", seat("dsh-kit-monitor-bg") === undefined);
   const cfgKeys = registered.filter((s) => s.name === "plugins.row.config").map((s) => s.key);
   check("U 配置页挂本组件行（单包单口径 key）", cfgKeys.includes("dsh-kit#monitor") && cfgKeys.length === 1);
@@ -303,9 +302,6 @@ async function checkApply() {
     comps.notifyCompleteSettled(sessionsOf(false), { ...ev, kind: "aborted" });
     check("N 中止的回合换文案", posted.length === 1 && /已中止|turn stopped/.test(posted[0].title));
     posted.length = 0;
-    comps.notifyCompleteSettled(sessionsOf(false), { ...ev, kind: "loopBreak" });
-    check("N 熔断中止的回合有专用文案", posted.length === 1 && /死循环已停止|dead loop stopped/.test(posted[0].title));
-    posted.length = 0;
     comps.notifyCompleteSettled({ list: { getSnapshot: () => ({ ids: [], byId: {}, current: null }) } }, ev);
     check("N 会话已不在列表：不发", posted.length === 0);
   } finally {
@@ -375,16 +371,10 @@ async function checkApply() {
   }
 }
 
-// 10e) 熔断分类识别（notifyTurnKind）：宿主侧 loop-breaker 走
-//      cancel({kind:'hook', reason:'dsh-kit:dead-loop'})，turn/end 落地为
-//      {kind:'aborted', reason:{kind:'hook', reason:'dsh-kit:dead-loop'}}——
-//      必须与「人点了停止」区分开。
+// 10e) 收尾分类（notifyTurnKind）：reason.kind 直接映射，缺 reason 按完成
 {
-  const LOOP_CAUSE = { kind: "hook", reason: "dsh-kit:dead-loop" };
-  const abortedOfLoop = { kind: "aborted", reason: LOOP_CAUSE };
   const abortedByUser = { kind: "aborted", reason: { kind: "user" } };
-  check("T 熔断 cause → loopBreak", comps.notifyTurnKind(abortedOfLoop) === "loopBreak");
-  check("T 人为停止 → aborted（不误报熔断）", comps.notifyTurnKind(abortedByUser) === "aborted");
+  check("T 人为停止 → aborted", comps.notifyTurnKind(abortedByUser) === "aborted");
   check("T completed → complete", comps.notifyTurnKind({ kind: "completed" }) === "complete");
   check("T error → error", comps.notifyTurnKind({ kind: "error" }) === "error");
   check("T blocked → blocked", comps.notifyTurnKind({ kind: "blocked" }) === "blocked");
@@ -453,95 +443,6 @@ async function checkApply() {
 }
 
 
-// 10) MonitorLine（复读提示条）：空闲/未命中时渲染 null（占位不占视觉）；
-//     桩 useEffect 不执行 → 扫描不跑，只验证渲染体不抛异常；实机动作由宿主守卫执行。
-callLog = [];
-const fakeSnap = {
-  legacy: {
-    nodes: [{ kind: "assistant", seq: 1 }, { kind: "turn-error", seq: 2, code: "RATE_LIMIT", message: "x" }],
-    partial: null,
-  },
-};
-out = comps.MonitorLine({
-  useChat: (sel) => sel(fakeSnap),
-  useSession: (sel) => sel({ running: false }),
-  useInput: (sel) => sel({ draft: "" }),
-  inputActions: { setDraft() {}, submit() {} },
-  sessionId: "s1",
-});
-check("MonitorLine 空闲渲染无异常（null/条）", out === null || (typeof out === "object" && !!out));
-
-
-// 10b) 句子级复读判据（客户端手抄副本）：正常长文/结构重复不误报，同句或连续几句
-//      重复命中；下面的 10b3 用同一语料与宿主 dist 逐条比对，防两份漂移
-const rep = (unit, n) => unit.repeat(n);
-const longText = (() => {
-  let t = "";
-  for (let i = 0; t.length < 65000; i++) t += `第 ${i} 步：检查模块 m${i} 的边界条件与错误分支，然后记录结论。\n`;
-  return t;
-})();
-const numbered = Array.from({ length: 40 }, (_, i) => `${i + 1}. 检查第 ${i + 1} 项配置`).join("\n");
-const table = "| 项目 | 状态 |\n|---|---|\n" + Array.from({ length: 30 }, (_, i) => `| 模块${i} | 通过 |`).join("\n");
-const code = "\u0060\u0060\u0060js\n" + Array.from({ length: 40 }, (_, i) => `  const v${i} = compute(${i});`).join("\n") + "\n\u0060\u0060\u0060";
-check("正常长文（6.5 万字符、不重复）不误报", comps.monitorDetectLoop(longText) === null);
-check("编号列表（结构相同、内容不同）不误报", comps.monitorDetectLoop(numbered) === null);
-check("markdown 表格不误报", comps.monitorDetectLoop(table) === null);
-check("代码块（缩进/分号重复）不误报", comps.monitorDetectLoop(code) === null);
-check("短噪声「好。」连说 5 遍不误报", comps.monitorDetectLoop(rep("好。", 5)) === null);
-check("重复之后说了别的（已自愈）不误报", comps.monitorDetectLoop(rep("这段在复读。", 3) + "后面是完全不同的一句收尾。") === null);
-{
-  const h = comps.monitorDetectLoop(rep("这个方案需要再确认一下。", 3));
-  check("同一句话连说 3 遍命中（1 句块 × 3 遍）", h !== null && h.units === 1 && h.copies === 3);
-}
-{
-  const h = comps.monitorDetectLoop(rep("先定位问题。再修复它。", 3));
-  check("两句话绕圈 3 遍命中（2 句块）", h !== null && h.units === 2 && h.copies === 3);
-}
-{
-  const h = comps.monitorDetectLoop(rep("第一步定位文件。第二步读取内容。第三步修改配置。", 3));
-  check("三句话绕圈 3 遍命中（3 句块）", h !== null && h.units === 3 && h.copies === 3);
-}
-check("尾部未完成的第 4 句不参与判定", comps.monitorDetectLoop(rep("这个方案需要再确认一下。", 3) + "这个方案")?.copies === 3);
-check("只有 2 个完整重复句 + 半句：不命中", comps.monitorDetectLoop(rep("这个方案需要再确认一下。", 2) + "这个方案") === null);
-{
-  const seg = comps.monitorSegment("Version 1.2.3 is ready. Next sentence. 中文一句。");
-  check("切句：英文句点断句、版本号里的点不断、尾句已收束", seg.length === 3 && seg[0].text === "Version 1.2.3 is ready." && seg[2].complete === true);
-}
-check("空文本安全", comps.monitorDetectLoop("") === null && comps.monitorSegment("").length === 0);
-
-// 10b3) 宿主与客户端判据同源（客户端是手抄副本，用同一语料逐条比对防漂移）
-async function checkGuardParity() {
-  let host = null;
-  try {
-    host = await import(`file://${__dirname.replace(/\\/g, "/")}/../dist/monitor/loop-guard.js`);
-  } catch {
-    console.log("NOTE  宿主判据 dist 缺失，跳过同源比对");
-    return;
-  }
-  const corpus = [
-    longText,
-    numbered,
-    table,
-    code,
-    rep("好。", 5),
-    rep("这个方案需要再确认一下。", 3),
-    rep("先定位问题。再修复它。", 3),
-    rep("第一步定位文件。第二步读取内容。第三步修改配置。", 3),
-    rep("这个方案需要再确认一下。", 3) + "这个方案",
-    rep("这段在复读。", 3) + "后面是完全不同的一句收尾。",
-    "Version 1.2.3 is ready. Next sentence. 中文一句。",
-    "",
-  ];
-  const sig = (h) => (h === null ? "null" : `${h.units}/${h.copies}/${h.chars}`);
-  const drift = [];
-  for (const text of corpus) {
-    const a = sig(comps.monitorDetectLoop(text));
-    const b = sig(host.detectLoop(text));
-    if (a !== b) drift.push(`${a}≠${b}`);
-  }
-  check(`宿主与客户端判据同源（${corpus.length} 条语料${drift.length ? "，漂移：" + drift.join(",") : "，无漂移"}）`, drift.length === 0);
-}
-
 // 3) U 系列：用量芯片峰谷判定（usageIsPeak 直测）——工作日双峰、周末与调休
 //    上班的周末全天免标、法定节假日（落在工作日的）全天免标；只有 deepseek 标峰；
 //    表过期年份退化回工作日双峰。
@@ -604,7 +505,6 @@ function checkConfigSurface() {
 
 (async () => {
   await checkApply();
-  await checkGuardParity();
   checkPeaks();
   checkConfigSurface();
   console.log(failed === 0 ? "ALL RENDER OK (monitor)" : `FAILED: ${failed}`);

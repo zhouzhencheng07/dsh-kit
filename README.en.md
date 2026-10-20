@@ -149,23 +149,14 @@ from the page). It stays in the list: **do not turn it off**.
   replaces the paid `deepseek-official` — specialized engines first when the query
   matches (GitHub / arXiv / StackExchange / HN), then the general ones (Tavily keyless →
   Bing → Sogou) with automatic failover; its config page only holds the result count
-- **Repetition guard** (on by default): when a sentence — or a few consecutive sentences —
-  repeats at the end of the output, a reminder is injected to the model (and shown in the
-  current session) at 3 repeats, and the turn is stopped only if it keeps repeating to 5
-  (both thresholds are configurable on this component's page). The unit is the **sentence**, not characters: long but non-repeating
-  output, and lists / tables / code whose shape repeats while the content differs, never
-  match; ordinary emphasis ("say it three times") only warns. It applies to **every
-  session, even with the page closed** (the check lives in the host process, not in the
-  browser). It covers **output-side** repetition (text and reasoning); tool-call loops are
-  left to the official `repeat-tool-reminder`, which only warns and never stops
 - **Session notifications** (on by default; one switch covers every alert): a desktop notification when a turn finishes,
   context compaction completes, or the agent asks a question / awaits tool approval /
   submits a plan for review (browser Notification API; click it to return to that
   session) — fires while the page sits in a background tab or another window, or when the
   event belongs to a session you are not looking at; silent while you are watching that
-  very session. Turn endings are classified from the official `turn/end` reason into six
-  messages — completed / errored / stopped / blocked / output limit reached / dead loop
-  stopped — instead of always reporting "finished"; compaction alerts cover sessions you
+  very session. Turn endings are classified from the official `turn/end` reason into five
+  messages — completed / errored / stopped / blocked / output limit reached — instead of
+  always reporting "finished"; compaction alerts cover sessions you
   have opened (the official
   client loads history only for the current session, so a never-opened session's
   compaction is invisible). Notifications go through the browser Notification API; without
@@ -259,8 +250,8 @@ the WebSocket base the host injects).
   `files` serves tree/read/raw/fs-op endpoints + the file tree panel; `skills` serves `/dsh-kit/skills` and
   `/dsh-kit/skills/op` plus the `/dsh-kit-skills/config` probe (skill-pool manager page);
   `terminal` serves the `/dsh-kit-terminal/config` probe (terminal toggle and dock);
-  `monitor` serves `/dsh-kit/usage` + usage chip / repetition guard / session
-  notifications and the per-session OpenCode session-header injection (switchable on its
+  `monitor` serves `/dsh-kit/usage` + usage chip / session notifications and the
+  per-session OpenCode session-header injection (switchable on its
   config page); `browser` serves the 7 `browser_*` tools, the `/dsh-kit/browser` panel
   WebSocket, `/dsh-kit/browser/open` and the `/dsh-kit-browser/config` probe (right-bar
   browser tab, shared control, link redirection); `vault` serves `/dsh-kit/vault/*`
