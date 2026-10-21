@@ -1665,11 +1665,28 @@ ellipsis，窄列只截字不破版 */
    逾期红；不在本周的落周一列。**一列一个容器**（.dshk-sched-alldaycol）逐条堆叠
    ——chip 各自当网格项会全落进同一格互相盖住，读者只看得见最后一条 */
 .dshk-sched-alldaycol{display:flex;flex-direction:column;gap:2px;padding:2px 0;min-width:0}
-.dshk-sched-allday{padding:2px 4px;font-size:11px;background:#ffe8cc;color:#d9480f;border-radius:4px;margin:0 2px;min-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.dshk-sched-allday{display:flex;align-items:center;gap:3px;padding:2px 3px;font-size:11px;background:#ffe8cc;color:#d9480f;border-radius:4px;margin:0 2px;min-height:20px;cursor:pointer}
 .dshk-sched-allday:hover{filter:brightness(.97)}
+/* 待办轨的每条 = 一个小方框 + 标题：勾了就是完成（复习待办照旧推进记录） */
+.dshk-sched-alldaycheck{flex:none;width:10px;height:10px;margin:0;padding:0;accent-color:var(--dsw-alias-brand-primary);cursor:pointer}
+.dshk-sched-alldaytitle{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 没有待办的那格不是漏了：悬停出「+ 待办」，点了就给这天新建一条 */
+.dshk-sched-alldayadd{appearance:none;border:0;background:none;font:inherit;font-size:10px;line-height:16px;min-height:16px;padding:0 6px;color:var(--dsw-alias-label-tertiary);text-align:left;cursor:pointer;opacity:0;transition:opacity .12s;border-radius:3px}
+.dshk-sched-alldaycol:hover .dshk-sched-alldayadd{opacity:.7}
+.dshk-sched-alldayadd:hover{background:var(--dsw-alias-interactive-bg-hover);opacity:1}
 .dshk-sched-allday.is-overdue{background:#ffe3e3;color:#c92a2a}
 .dshk-sched-allday.is-done{background:#f1f3f5;color:#868e96}
-.dshk-sched-allday.is-more{background:transparent;color:var(--dsw-alias-label-tertiary);text-align:center;cursor:default;box-shadow:inset 0 0 0 1px var(--dsw-alias-border-l2)}
+/* 溢出的那条只留一行浅字（不画框）：带高不涨，看着几乎就是空白 */
+.dshk-sched-allday.is-more{appearance:none;border:0;font-family:inherit;background:transparent;color:var(--dsw-alias-label-tertiary);text-align:left;cursor:pointer;box-shadow:none;padding:0 6px;font-size:10px;min-height:14px;line-height:14px;border-radius:3px}
+.dshk-sched-allday.is-more:hover{background:var(--dsw-alias-interactive-bg-hover);filter:none}
+/* 全天带溢出清单：点 +N 就地弹出这一列的待办，条目点了开条目浮层（与网格块同一个编辑面） */
+.dshk-sched-daymore{position:fixed;z-index:1200;width:200px;box-sizing:border-box;max-height:min(56vh,300px);overflow:auto;padding:4px 0;display:flex;flex-direction:column;gap:1px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:var(--dsw-elevation-panel,0 4px 16px rgba(0,0,0,.18))}
+.dshk-sched-daymorehead{padding:3px 10px 5px;font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dshk-sched-daymoreitem{display:flex;align-items:center;gap:6px;width:100%;padding:4px 10px;text-align:left;font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer}
+.dshk-sched-daymoreitem.is-done{color:var(--dsw-alias-label-tertiary)}
+.dshk-sched-daymoreitem:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshk-sched-daymorename{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshk-sched-daymorestate{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)}
 /* 拉取失败提示（面板还挂着上一次的数据，口径已不可信——说出来而不是静默） */
 .dshk-sched-headfail{font-size:11px;color:var(--dsw-alias-label-tertiary);border:1px solid var(--dsw-alias-border-l2);border-radius:6px;padding:2px 8px}
 .dshk-sched-taskfail{flex:none;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-tertiary);padding:6px 10px;border-bottom:1px solid var(--dsw-alias-border-l1)}
@@ -4187,6 +4204,8 @@ ellipsis，窄列只截字不破版 */
       studyClose: "关闭",
       studyCompleteThis: "完成本次复习",
       schedReviewNext: "第 {n} 次复习 · 下次 {date}（{label}）",
+      schedMoreItems: "还有 {n} 条",
+      schedDayMoreTitle: "{date} · {n} 条待办",
     };
     const en = {
       kcfgGroupVault: "Vault",
@@ -4579,6 +4598,8 @@ ellipsis，窄列只截字不破版 */
       studyClose: "Close",
       studyCompleteThis: "Finish this review",
       schedReviewNext: "Review no. {n} · next {date} ({label})",
+      schedMoreItems: "{n} more",
+      schedDayMoreTitle: "{date} · {n} to-dos",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? rootT(key);
@@ -5402,8 +5423,8 @@ ellipsis，窄列只截字不破版 */
     const SCHED_DAY_START = 0; // 网格 0:00–24:00（起止时刻零裁剪）
     const SCHED_DAY_END = 24 * 60;
     const SCHED_HOUR_PX = 42;
-    // 全天带一列最多画几条 chip，多的折成 +N（带高随之封顶）
-    const SCHED_ALLDAY_MAX = 3;
+    // 全天带一列只列一条（学习/复习铺开以后一天多条是常态），其余点 +N 弹出来看
+    const SCHED_ALLDAY_VISIBLE = 1;
     // 宿主 occurrence.state → 状态色类（浅底深字）
     const SCHED_STATE_CLASS = { todo: "is-todo", doing: "is-doing", past: "is-past" };
 
@@ -5595,8 +5616,13 @@ ellipsis，窄列只截字不破版 */
      * 校验与字段白名单在宿主做，这里只挡"当场就能看出来的错"（空标题、结束早于开始），
      * 其余错误原样显示宿主给的原因——面板不复制一份规则。
      */
-    function SchedEventDialog({ ev, onClose }) {
-      const [f, setF] = react.useState(() => schedFormFrom(ev));
+    function SchedEventDialog({ ev, initialDue, onClose }) {
+      const [f, setF] = react.useState(() => {
+        const base = schedFormFrom(ev);
+        // 从全天带「+ 待办」进来的新建：那一天预填成截止日（时刻留空 = 只到日）
+        if (!ev && typeof initialDue === "string" && initialDue !== "") base.dueDate = initialDue;
+        return base;
+      });
       const [busy, setBusy] = react.useState(false);
       const [err, setErr] = react.useState("");
       const [delArm, setDelArm] = react.useState(false);
@@ -6176,6 +6202,37 @@ ellipsis，窄列只截字不破版 */
       ] });
     }
 
+    /** 全天带溢出的那一天：点「+N」弹出这一列的全部待办，条目点了开条目浮层
+     *  （与网格块同一个编辑面）。定位由调用方按 +N 钮实测写死（fixed，贴钮下方）。 */
+    function SchedDayMore({ date, items, top, left, maxH, onPick, onComplete }) {
+      const zh = resolveZh();
+      return jsxRuntime.jsxs("div", { className: "dshk-sched-daymore", style: { top, left, maxHeight: maxH }, children: [
+        jsxRuntime.jsx("div", { className: "dshk-sched-daymorehead", children: t("schedDayMoreTitle").replace("{date}", date.slice(5).replace("-", "/")).replace("{n}", String(items.length)) }),
+        items.map((o) => jsxRuntime.jsxs("div", {
+          className: `dshk-sched-daymoreitem${o.done ? " is-done" : ""}`,
+          title: `${o.title} · ${t("schedTaskDue")} ${o.date}`,
+          onClick: () => onPick(o),
+          children: [
+            jsxRuntime.jsx("input", {
+              type: "checkbox",
+              className: "dshk-sched-alldaycheck",
+              checked: o.done,
+              disabled: o.done,
+              "aria-label": o.done ? t("schedDone") : o.rel !== "" ? t("studyCompleteThis") : t("schedDone"),
+              onClick: (e) => e.stopPropagation(),
+              onChange: () => {
+                if (!o.done) onComplete(o);
+              },
+            }),
+            jsxRuntime.jsx("span", { className: "dshk-sched-daymorename", children: o.title }),
+            !o.done && (o.late || o.outOfWeek)
+              ? jsxRuntime.jsx("span", { className: "dshk-sched-daymorestate", children: o.late ? t("schedOverdue") : zh ? "不在本周" : "other week" })
+              : null,
+          ],
+        }, `dm-${o.baseId}`)),
+      ] });
+    }
+
     function ScheduleView({ active }) {
       const [weekStart, setWeekStart] = react.useState(() => schedMondayOf(schedToday()));
       // 统计跟着网格走：翻到哪一周就报哪一周（口径写死本周会让翻页后的数字对不上眼前这周）
@@ -6184,6 +6241,27 @@ ellipsis，窄列只截字不破版 */
       // 点块编辑：条目（事件/待办）与计时段各开自己的浮层
       const [editEv, setEditEv] = react.useState(null);
       const [entry, setEntry] = react.useState(null);
+      // 全天带溢出的那几条第几列、弹在哪：{ date, top, left, maxH } | null
+      const [dayMore, setDayMore] = react.useState(null);
+      // 空日子的「+ 待办」：点哪一天，新建浮层的截止日就预填哪一天
+      const [newTodoDate, setNewTodoDate] = react.useState(null);
+      // 溢出清单自己收：点浮层外 / Esc 关（条目点了开条目浮层，浮层先关）
+      react.useEffect(() => {
+        if (dayMore === null) return undefined;
+        const onDown = (e) => {
+          if (e.target instanceof Element && (e.target.closest(".dshk-sched-daymore") !== null || e.target.closest(".dshk-sched-allday.is-more") !== null)) return;
+          setDayMore(null);
+        };
+        const onKey = (e) => {
+          if (e.key === "Escape") setDayMore(null);
+        };
+        document.addEventListener("pointerdown", onDown, true);
+        window.addEventListener("keydown", onKey, true);
+        return () => {
+          document.removeEventListener("pointerdown", onDown, true);
+          window.removeEventListener("keydown", onKey, true);
+        };
+      }, [dayMore]);
 
       const weekDates = react.useMemo(() => {
         const days = [];
@@ -6281,18 +6359,47 @@ ellipsis，窄列只截字不破版 */
           const inWeek = cols.has(day);
           const arr = cols.get(inWeek ? day : monday) ?? [];
           const done = !!ev.completedAt;
-          arr.push({ baseId: ev.id, date: day, title: ev.title, done, late: !done && schedIsOverdue(ev), outOfWeek: !inWeek });
+          arr.push({ baseId: ev.id, date: day, title: ev.title, done, late: !done && schedIsOverdue(ev), outOfWeek: !inWeek, rel: typeof ev.studyRel === "string" ? ev.studyRel : "" });
           cols.set(inWeek ? day : monday, arr);
         }
-        // 本周那天的排前面，跨周堆积的按截止日从早到晚（逾期最久的先看见）
+        // 本周那天的排前面，跨周堆积的按截止日从早到晚（逾期最久的先看见）；
+        // 已完成的沉到最下面——露在外面的那条优先是还没做的
         for (const arr of cols.values()) {
-          arr.sort((a, b) => (a.outOfWeek === b.outOfWeek ? a.date.localeCompare(b.date) : a.outOfWeek ? 1 : -1));
+          arr.sort((a, b) => {
+            if (a.outOfWeek !== b.outOfWeek) return a.outOfWeek ? 1 : -1;
+            if (a.done !== b.done) return a.done ? 1 : -1;
+            return a.date.localeCompare(b.date);
+          });
         }
         return cols;
       }, [data.events, weekDates]);
 
       const today = schedToday();
       const isCurrentWeek = weekDates.includes(today);
+      /** 全天带 chip / 溢出清单 → 条目浮层（与网格块同一个编辑面） */
+      const openEntryOf = (id) => {
+        const base = (Array.isArray(data.events) ? data.events : []).find((e) => e.id === id);
+        if (base) setEditEv(base);
+      };
+      /** 待办轨上的勾：普通待办标完成；复习待办走学习端点（推进记录、旧条归档） */
+      const completeTodo = (o) => {
+        const ev = (Array.isArray(data.events) ? data.events : []).find((e) => e.id === o.baseId);
+        if (!ev) return;
+        const rel = typeof ev.studyRel === "string" ? ev.studyRel : "";
+        if (rel === "") {
+          schedOp({ op: "done", id: ev.id, done: true })
+            .catch((e) => flashToast(t("schedOpFail").replace("{error}", e && e.message ? e.message : "?")));
+          return;
+        }
+        studyOp("/dsh-kit/vault/study-complete", { rel })
+          .then((body) => {
+            const rec = body && body.state && body.state.record ? body.state.record : null;
+            flashToast(rec === null
+              ? t("studyCompleteThis")
+              : t("schedReviewNext").replace("{n}", String(rec.reps ?? 0)).replace("{date}", String(rec.dueAt ?? "")).replace("{label}", studyDueLabel(rec.dueAt)));
+          })
+          .catch((e) => flashToast(t("studyOpFail").replace("{error}", e && e.message ? e.message : "?")));
+      };
       const nowMins = new Date(nowTick).getHours() * 60 + new Date(nowTick).getMinutes();
       const hours = [];
       for (let h = SCHED_DAY_START / 60; h < SCHED_DAY_END / 60; h++) hours.push(h);
@@ -6334,34 +6441,67 @@ ellipsis，窄列只截字不破版 */
           ),
           ...weekDates.map((date, i) => {
             const items = dateTodoByCol.get(date) ?? [];
-            if (items.length === 0) return null;
-            const shown = items.slice(0, SCHED_ALLDAY_MAX);
-            const rest = items.slice(SCHED_ALLDAY_MAX);
+            // 一天只列一条（学习/复习铺开以后一天多条是常态），其余折成浅色 +N；
+            // 没有待办的那格也不是漏了：悬停出「+ 待办」，点了给这天新建一条
+            const more = items.length > SCHED_ALLDAY_VISIBLE;
+            const shown = items.slice(0, more ? SCHED_ALLDAY_VISIBLE : items.length);
+            const rest = items.slice(shown.length);
             const zh = resolveZh();
-            const chip = (o) => {
-              const hint =
-                `${o.title} · ${t("schedTaskDue")} ${o.date}` +
-                (o.done ? ` · ${zh ? "已完成" : "done"}` : o.late ? ` · ${t("schedOverdue")}` : "") +
-                (o.outOfWeek ? (zh ? `（不在本周）` : " (not this week)") : "");
-              return jsxRuntime.jsx(
-                "div",
-                {
-                  className: `dshk-sched-allday${o.done ? " is-done" : o.late ? " is-overdue" : ""}`,
-                  title: hint,
-                  children: o.title,
-                },
-                `ad-${o.baseId}`,
-              );
-            };
+            const hintOf = (o) =>
+              `${o.title} · ${t("schedTaskDue")} ${o.date}` +
+              (o.done ? ` · ${zh ? "已完成" : "done"}` : o.late ? ` · ${t("schedOverdue")}` : "") +
+              (o.outOfWeek ? (zh ? `（不在本周）` : " (not this week)") : "");
+            const chip = (o) => jsxRuntime.jsxs("div", {
+              className: `dshk-sched-allday${o.done ? " is-done" : o.late ? " is-overdue" : ""}`,
+              children: [
+                jsxRuntime.jsx("input", {
+                  type: "checkbox",
+                  className: "dshk-sched-alldaycheck",
+                  checked: o.done,
+                  disabled: o.done,
+                  title: hintOf(o),
+                  "aria-label": o.done ? t("schedDone") : o.rel !== "" ? t("studyCompleteThis") : t("schedDone"),
+                  onClick: (e) => e.stopPropagation(),
+                  onChange: () => {
+                    if (!o.done) completeTodo(o);
+                  },
+                }),
+                jsxRuntime.jsx("span", { className: "dshk-sched-alldaytitle", title: hintOf(o), onClick: () => openEntryOf(o.baseId), children: o.title }),
+              ],
+            }, `ad-${o.baseId}`);
             return jsxRuntime.jsxs("div", { className: "dshk-sched-alldaycol", style: { gridRow: 2, gridColumn: i + 2 }, children: [
               ...shown.map(chip),
-              // 溢出折叠成一条：带高随之封顶，不然一列十几条会把表头带撑得太高
               rest.length > 0
-                ? jsxRuntime.jsx("div", {
+                ? jsxRuntime.jsx("button", {
+                    type: "button",
                     className: "dshk-sched-allday is-more",
-                    title: rest.map((o) => `${o.title} · ${t("schedTaskDue")} ${o.date}`).join("\n"),
+                    title: rest.map(hintOf).join("\n"),
+                    "aria-label": t("schedMoreItems").replace("{n}", String(rest.length)),
+                    onClick: (e) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      const vh = window.innerHeight || 800;
+                      const top = Math.round(Math.min(r.bottom + 4, vh - 132));
+                      setDayMore((prev) => (prev !== null && prev.date === date
+                        ? null
+                        : {
+                            date,
+                            top,
+                            left: Math.round(Math.max(8, Math.min(r.left, (window.innerWidth || 1200) - 208))),
+                            // 往下放不下就压高度（而不是让清单探出视口外）
+                            maxH: Math.max(96, vh - top - 8),
+                          }));
+                    },
                     children: `+${rest.length}`,
                   }, "ad-more")
+                : null,
+              items.length === 0
+                ? jsxRuntime.jsx("button", {
+                    type: "button",
+                    className: "dshk-sched-alldayadd",
+                    title: `${t("schedNew")} · ${t("schedKindTodo")}`,
+                    onClick: () => setNewTodoDate(date),
+                    children: `+ ${t("schedKindTodo")}`,
+                  }, "ad-add")
                 : null,
             ] }, `adc-${date}`);
           }),
@@ -6446,6 +6586,23 @@ ellipsis，窄列只截字不破版 */
           topGrid,
           jsxRuntime.jsx("div", { className: "dshk-sched-gridwrap", ref: gridRef, children: jsxRuntime.jsx("div", { className: "dshk-sched-gridinner", children: grid }) }),
         ] }),
+        dayMore !== null && (dateTodoByCol.get(dayMore.date) ?? []).length > 0
+          ? jsxRuntime.jsx(SchedDayMore, {
+              date: dayMore.date,
+              items: dateTodoByCol.get(dayMore.date) ?? [],
+              top: dayMore.top,
+              left: dayMore.left,
+              maxH: dayMore.maxH,
+              onPick: (o) => {
+                setDayMore(null);
+                openEntryOf(o.baseId);
+              },
+              onComplete: completeTodo,
+            })
+          : null,
+        newTodoDate !== null
+          ? jsxRuntime.jsx(SchedEventDialog, { ev: null, initialDue: newTodoDate, onClose: () => setNewTodoDate(null) })
+          : null,
         editEv ? jsxRuntime.jsx(SchedEventDialog, { ev: editEv, onClose: () => setEditEv(null) }) : null,
         entry ? jsxRuntime.jsx(SchedEntryDialog, { owner: entry.owner, index: entry.index, entry: entry.entry, onClose: () => setEntry(null) }) : null,
       ] });
@@ -12510,6 +12667,7 @@ ellipsis，窄列只截字不破版 */
     exports.SchedTimerStartDialog = SchedTimerStartDialog;
     exports.SchedTimerBall = SchedTimerBall;
     exports.SchedReviewToast = SchedReviewToast;
+    exports.SchedDayMore = SchedDayMore;
     exports.SchedStudyAdjustDialog = SchedStudyAdjustDialog;
     exports.schedOp = schedOp;
     exports.schedBus = schedBus;

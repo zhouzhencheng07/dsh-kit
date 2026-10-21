@@ -1516,7 +1516,44 @@ let vaultFetchPrev = null;
   );
   check("周网格表头在滚动区之外（留在里面会被 sticky + y 轴吸附盖住全天带）", src.includes("className: \"dshk-sched-topgrid\"") && src.includes("scroll-padding-top:4px") && !/dshk-sched-dayhead\{position:sticky/.test(src));
   check("周统计跟着周导航取（口径钉 weekStart），拉取失败挂提示", src.includes("useScheduleData(true, weekStart)") && src.includes('date=${encodeURIComponent(statsDate ?? schedToday())}') && src.includes('className: "dshk-sched-headfail"') && src.includes('className: "dshk-sched-taskfail"'));
-  check("全天带按列成栈 + 溢出折成 +N（平铺会全叠进同一网格单元）", src.includes("const SCHED_ALLDAY_MAX = 3;") && src.includes("const dateTodoByCol = react.useMemo") && src.includes('className: "dshk-sched-allday is-more"'));
+  check(
+    "全天带一列一条 + 勾选框（复习待办走学习端点）+ 空日子悬停「+ 待办」+ 溢出折成浅色 +N",
+    src.includes("const SCHED_ALLDAY_VISIBLE = 1;") &&
+      src.includes("const dateTodoByCol = react.useMemo") &&
+      src.includes('className: "dshk-sched-alldaycheck"') &&
+      src.includes('className: "dshk-sched-alldaytitle"') &&
+      src.includes("const completeTodo = (o) =>") &&
+      src.includes('"/dsh-kit/vault/study-complete"') &&
+      src.includes('className: "dshk-sched-alldayadd"') &&
+      src.includes("initialDue: newTodoDate") &&
+      src.includes('className: "dshk-sched-allday is-more"') &&
+      src.includes("function SchedDayMore(") &&
+      src.includes('className: "dshk-sched-daymore"') &&
+      src.includes("setDayMore((prev) => (prev !== null && prev.date === date") &&
+      src.includes("onClick: () => openEntryOf(o.baseId),"),
+  );
+  // 溢出清单本体（导出直测）：整列逐条列出，点哪条回传哪条
+  stateSeq = 0;
+  callLog = [];
+  const morePick = [];
+  comps.SchedDayMore({
+    date: "2026-10-21",
+    items: [
+      { baseId: "m1", date: "2026-10-21", title: "甲", done: false, late: false, outOfWeek: false },
+      { baseId: "m2", date: "2026-10-20", title: "乙", done: true, late: false, outOfWeek: false },
+      { baseId: "m3", date: "2026-10-15", title: "丙", done: false, late: true, outOfWeek: true },
+    ],
+    top: 10,
+    left: 20,
+    onPick: (o) => morePick.push(o.baseId),
+  });
+  const moreHead = callLog.find((c) => c[2] && c[2].className === "dshk-sched-daymorehead");
+  const moreRows = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-sched-daymoreitem"));
+  moreRows.forEach((r) => r[2].onClick());
+  check(
+    "全天带溢出清单：整列待办逐条列出，点任一条回传那条（调用方开条目浮层）",
+    !!moreHead && /10\/21/.test(String(moreHead[2].children)) && moreRows.length === 3 && morePick.join(",") === "m1,m2,m3",
+  );
   check("文档内链接走解析、带协议的外链走 openExternalUrl（openOnClick:false 下不接管就是死点击）", src.includes("onRelLink: (href) => {") && src.includes('if (!isDocHref(href)) {') && src.includes("openExternalUrl(href);") && src.includes('if (href === "" || href.startsWith("#")) return;'));
   check("外链打开只有一份实现：对话改投与编辑器点击共用 openExternalUrl", src.includes("function openExternalUrl(href) {") && (src.match(/openExternalUrl\(href\);/g) ?? []).length === 2 && (src.match(/kitJson\("\/dsh-kit\/browser\/open"/g) ?? []).length === 1);
   check("拖选后松手不触发外链跳转（click 时选区非折叠是在选字）", src.includes("if (sel && !sel.isCollapsed) return;"));
@@ -1801,6 +1838,17 @@ setTimeout(async () => {
       created.url === "/dsh-kit/schedule/op" && created.body.op === "create" && created.body.input.title === "写周报" &&
         created.body.input.due === "2026-10-05" && created.body.input.start === null &&
         created.body.input.end === null && created.body.input.recurrence === null,
+    );
+    // 全天带空日子的「+ 待办」：新建浮层把那天预填成截止日（时刻留空 = 只到日）
+    stateSeq = 0;
+    stateStore.clear();
+    const dueFields = (() => {
+      rerender(() => comps.SchedEventDialog({ ev: null, initialDue: "2026-10-22", onClose: () => {} }));
+      return inputsOf();
+    })();
+    check(
+      "空日子的「+ 待办」：新建浮层预填那天的截止日",
+      !!dueFields[1] && dueFields[1].type === "date" && dueFields[1].value === "2026-10-22",
     );
     // 改已有日程：起止与重复规则原样带回，完成勾选走 completedAt（不是独立 op）
     stateSeq = 0;
