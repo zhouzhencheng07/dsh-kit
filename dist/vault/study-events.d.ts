@@ -4,7 +4,9 @@ import type { StudyState } from './study.ts';
 export declare function ensureReviewEvent(store: ScheduleStore, rel: string, due: string): void;
 /** 完成本次：先把下一次排出来，再把当前这条归档（时间条目跟着归档条目走） */
 export declare function completeReviewEvent(store: ScheduleStore, rel: string, nextDue: string): void;
-/** 完成这一轮：归档未完成待办，不建下一条 */
+/** 完成这一轮：删掉未完成待办，不建下一条。
+ *  不归档：归档 = 勾完成，可这轮复习根本没发生，记成已完成会在日程里多出一条
+ *  当天的假记录（刚完成一次再结束时，新排的那条会被当成"又完成了一次"）。 */
 export declare function finishReviewEvents(store: ScheduleStore, rel: string): void;
 /** 移出学习：删掉该 rel 的全部待办（含已归档的——记录都没了，留着只是脏条目） */
 export declare function removeReviewEvents(store: ScheduleStore, rel: string): void;

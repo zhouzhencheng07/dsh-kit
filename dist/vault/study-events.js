@@ -3,12 +3,13 @@
 // 间隔与历史的真源，本层只负责把「记录的状态」落成日程条目：
 //   * 首次学习 / 调整 / 重启 → 保证有且只有一条未完成待办，due 与记录一致
 //   * 完成本次复习 → 先建下一条（新 due），再把旧条归档（时间条目跟着归档条走）
-//   * 完成这一轮 → 归档未完成待办（不建下一条）
+//   * 完成这一轮 → 删掉未完成待办（不建下一条；这轮复习没发生，不该留一条已完成）
 //   * 移出学习 → 删掉该 rel 的全部待办（含已完成）
 //   * 改名 / 移动 → 按 rel 或目录前缀改写 studyRel + 标题；删除 → 删条目
 //   * 启动 / 同步后对齐 → 在学页补未完成待办、清掉不在学的未完成待办
-// 归档 = 勾完成（completedAt）并把截止挪到**实际完成日**，不删条目——历史与计时留在
-// 日程里可查；网格 / 清单按 due 落位，留在原计划日会让「提前完成」看起来发生在未来。
+// 归档（只用于真实完成一次复习）= 勾完成（completedAt）并把截止挪到**实际完成日**，
+// 不删条目——历史与计时留在日程里可查；网格 / 清单按 due 落位，留在原计划日会让
+// 「提前完成」看起来发生在未来。
 import { SCHED_TITLE_MAX, dtStrOf, todayStr } from "./schedule.js";
 /** 页面 rel → 日程标题（页名，与日程标题同一条截断规则） */
 function titleOf(rel) {
@@ -63,10 +64,12 @@ export function completeReviewEvent(store, rel, nextDue) {
     for (const id of olds)
         archiveReviewEvent(store, id);
 }
-/** 完成这一轮：归档未完成待办，不建下一条 */
+/** 完成这一轮：删掉未完成待办，不建下一条。
+ *  不归档：归档 = 勾完成，可这轮复习根本没发生，记成已完成会在日程里多出一条
+ *  当天的假记录（刚完成一次再结束时，新排的那条会被当成"又完成了一次"）。 */
 export function finishReviewEvents(store, rel) {
     for (const id of openIds(store, rel))
-        archiveReviewEvent(store, id);
+        store.remove(id);
 }
 /** 移出学习：删掉该 rel 的全部待办（含已归档的——记录都没了，留着只是脏条目） */
 export function removeReviewEvents(store, rel) {

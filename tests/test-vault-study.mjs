@@ -474,19 +474,23 @@ await test('completeReviewEvent：先建下一条再归档旧条；归档条截�
   assert.ok(old.completedAt)
 })
 
-await test('finishReviewEvents：未完成的全归档（截止挪到实际完成日）、已完成的不动；removeReviewEvents：连历史一起删', () => {
+await test('finishReviewEvents：删掉未完成待办（不把它记成已完成），真实完成过的归档条留着；removeReviewEvents：连历史一起删', () => {
   const s = store()
   const rel = '化学/原子'
   ensureReviewEvent(s, rel, DAY1)
   ensureReviewEvent(s, rel, DAY1) // 仍只有一条
-  const archivedBefore = allEvents(s, '物理/力学').filter((e) => e.completedAt).length
+  // 先完成一次（旧条归档、新条排到下一次），再结束这一轮：只该留下真正完成的那条
+  completeReviewEvent(s, rel, '2026-10-25')
+  assert.equal(allEvents(s, rel).length, 2)
   finishReviewEvents(s, rel)
   assert.equal(openEvents(s, rel).length, 0)
-  const done = allEvents(s, rel)
-  assert.equal(done.length, 1)
-  assert.equal(done[0].due, TODAY)
-  assert.ok(done[0].completedAt)
-  // 已归档的既有条目不被 finish 再动（别的 rel）
+  const kept = allEvents(s, rel)
+  assert.equal(kept.length, 1) // 未完成的那条删掉，不是记成"已完成"
+  assert.equal(kept[0].due, TODAY)
+  assert.ok(kept[0].completedAt)
+  // 别的 rel 的已完成条目不受影响
+  const archivedBefore = allEvents(s, '物理/力学').filter((e) => e.completedAt).length
+  finishReviewEvents(s, '物理/力学')
   assert.equal(allEvents(s, '物理/力学').filter((e) => e.completedAt).length, archivedBefore)
   removeReviewEvents(s, rel)
   assert.equal(allEvents(s, rel).length, 0)
