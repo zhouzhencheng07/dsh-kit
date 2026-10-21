@@ -314,7 +314,15 @@ callLog = [];
 out = comps.ScheduleTasksPanel({});
 const scopeChips = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-sched-wdchip"));
 const barBtns = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-sched-actionbtn"));
-check("ScheduleTasksPanel 渲染清单壳（标题带行数 + 近三日/近一周/全部三档）", !!out && scopeChips.length === 3);
+check("ScheduleTasksPanel 渲染清单壳（标题带行数 + 今日/近三日/全部三档）", !!out && scopeChips.length === 3);
+{
+  const labels = scopeChips.map((c) => c[2].children).join(",");
+  check(
+    "范围档是今日/近三日/全部（近一周退场）",
+    /今日|Today/.test(labels) && /近三日|3 days/.test(labels) && /全部|All/.test(labels) && !/近一周|Week/.test(labels),
+    labels,
+  );
+}
 check("计时入口在侧栏日程 tab 顶部（新建 + 开始计时两枚）", barBtns.length === 2);
 // 预置 useScheduleData 的数据槽（0）让清单真出行：标题 + 截止徽章 + 行尾动作
 stateSeq = 0;

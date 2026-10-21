@@ -1727,7 +1727,7 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-taskduebadge{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary);border:1px solid var(--dsw-alias-border-l2);border-radius:5px;padding:1px 5px}
 .dshk-sched-taskduebadge.is-overdue{color:var(--dsw-alias-danger,#cd3131);border-color:color-mix(in srgb,var(--dsw-alias-danger,#cd3131) 45%,transparent)}
 .dshk-sched-emptytasks{font-size:12px;color:var(--dsw-alias-label-tertiary);text-align:center;padding:8px 0}
-/* 清单范围档（近三日/近一周/全部）：一排小 chip，复用 wdchip 的形态 */
+/* 清单范围档（今日/近三日/全部）：一排小 chip，复用 wdchip 的形态 */
 /* 统计小字行（表头右端）：窄坞截断由 ellipsis 兜底，完整值在悬停提示里 */
 .dshk-sched-statrow{font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dshk-sched-wdchip{appearance:none;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer}
@@ -3744,8 +3744,8 @@ ellipsis，窄列只截字不破版 */
       schedTaskDue: "截止",
       schedOverdue: "逾期",
       schedTasksEmpty: "暂无待办",
+      schedScopeToday: "今日",
       schedScope3d: "近三日",
-      schedScopeWeek: "近一周",
       schedScopeAll: "全部",
       schedStatsEvents: "事件",
       schedStatsDone: "已过",
@@ -4139,8 +4139,8 @@ ellipsis，窄列只截字不破版 */
       schedTaskDue: "Due",
       schedOverdue: "Overdue",
       schedTasksEmpty: "No tasks",
+      schedScopeToday: "Today",
       schedScope3d: "3 days",
-      schedScopeWeek: "Week",
       schedScopeAll: "All",
       schedStatsEvents: "Events",
       schedStatsDone: "Past",
@@ -5856,13 +5856,13 @@ ellipsis，窄列只截字不破版 */
 
     /** 待办清单（侧栏「日程」tab 整格）——清单口径：
      *  行 = 逾期待办 → 有截止日待办 → 无期限待办（仅「全部」）→ 还没过去的定时
-     *  事件实例（**一次一次列**，重复系列不合并）。范围档：近三日/近一周/全部
+     *  事件实例（**一次一次列**，重复系列不合并）。范围档：今日/近三日/全部
      *  （滑动窗口严格层层包含，逾期永远进前两档、无期限待办只在「全部」）；
      *  行全部渲染、这一层自己滚（不做分页加载）。
      *  计时入口在这一格顶部（新建 / 开始计时 + 计时中状态）；行可勾完成、点标题改
      *  单条、行尾悬停出计时与删除。 */
-    const SCHED_TODO_SCOPES = ["3d", "week", "all"];
-    const SCHED_SCOPE_KEY = { "3d": "schedScope3d", week: "schedScopeWeek", all: "schedScopeAll" };
+    const SCHED_TODO_SCOPES = ["today", "3d", "all"];
+    const SCHED_SCOPE_KEY = { today: "schedScopeToday", "3d": "schedScope3d", all: "schedScopeAll" };
     function schedTodoScopeSaved() {
       try {
         const saved = localStorage.getItem("dshk:sched:todoScope");
@@ -5974,8 +5974,8 @@ ellipsis，窄列只截字不破版 */
       };
       const groups = react.useMemo(() => schedBuildTodoRows(data), [data]);
       const today = schedToday();
-      // 前两档 = 滑动窗口（今天 +2/+6 天，严格层层包含）；「全部」不设窗
-      const windowEnd = scope === "3d" ? schedAddDays(today, 2) : scope === "week" ? schedAddDays(today, 6) : null;
+      // 前两档 = 滑动窗口（今天 / 今天 +2 天，严格层层包含）；「全部」不设窗
+      const windowEnd = scope === "today" ? today : scope === "3d" ? schedAddDays(today, 2) : null;
       const rows = react.useMemo(() => {
         const todoRows = [];
         // 逾期无条件进所有档（"今天该补的债"）
