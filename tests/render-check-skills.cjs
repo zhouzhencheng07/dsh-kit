@@ -93,8 +93,8 @@ const comps = dockExports.skills;
 
 check("skills 导出 apply（client 插件形状）与 inject 声明 slots", typeof comps.apply === "function" && Array.isArray(comps.inject) && comps.inject[0] === "slots");
 check(
-  "skills 导出面齐全（管理页/技能行/池目录按钮/端点调用/探针取值）",
-  [comps.SkillsManager, comps.SkillRow, comps.OpenPoolButton, comps.openInAppName, comps.fetchSkillsPage, comps.fetchManagedApps, comps.cfgFromSnapshot].every(
+  "skills 导出面齐全（管理页/技能行/技能行打开按钮/端点调用/探针取值）",
+  [comps.SkillsManager, comps.SkillRow, comps.OpenDirButton, comps.poolRows, comps.sortSkillRows, comps.openInAppName, comps.fetchSkillsPage, comps.fetchManagedApps, comps.cfgFromSnapshot].every(
     (fn) => typeof fn === "function",
   ),
 );
@@ -174,8 +174,8 @@ async function checkOpenInApp() {
   stateStore.clear();
   callLog = [];
   comps.writeOpenAppChoice("explorer");
-  const box = comps.OpenPoolButton({ dir: "C:/pool" });
-  check("池目录按钮渲染无异常", !!box && typeof box === "object");
+  const box = comps.OpenDirButton({ path: "C:/pool", apps: ["editor", "explorer"] });
+  check("技能行打开按钮渲染无异常", !!box && typeof box === "object");
   const menu = callLog.find((c) => c[0] === "jsx" && c[1] === primStub.Menu);
   check(
     "走官方 primitives.Menu（浮层、贴右端、紧凑），锚点是官方同款分体按钮",
@@ -240,7 +240,10 @@ check(
   check("池技能行渲染无异常", !!row && typeof row === "object");
   check("池技能行：没有复制（技能一律只移动）", !btn(["复制", "Copy"]));
   check("池技能行：被工作区挂着时不给移动（要移出先让各挂载方卸载）", !btn(["移动", "Move"]));
-  check("池技能行：挂载数可见（被几个工作区挂着）", textOf(/^(挂载|Mounted in) 2$/));
+  check(
+    "池技能行：不摆挂载数（工作区视角的面板不看别处挂了几份，挂没挂由按钮说）",
+    !textOf(/^(挂载|Mounted in) \d+$/) && !callLog.some((c) => c[2]?.className === "dshk-sk-state"),
+  );
   check("池技能行：不再有版本入口（历史改在本机应用里看）", !btn(["版本", "Versions"]));
 
   // 没人挂的池技能仍可移动；moveAsk 是 SkillRow 的第二个 useState（id 1）：直接喂出确认态
@@ -310,27 +313,58 @@ check(
     skill: { name: "hello-kit", root: "pool", path: "C:/home/.dsh/dsh-kit/skill-pool/hello-kit", mounts: 1, mountedHere: true, mountPath: "C:/x/.agents/skills/hello-kit" },
     groupId: "pool", allRoots: ROOTS, cwd: "C:/x", busy: false, runOp: () => {}, picker: null, setPicker: () => {},
   });
-  // 本工作区挂没挂 + 被几个工作区挂着：合成一枚状态标记（不再拆成两枚）
   const stateSpans = () => callLog.filter((c) => c[1] === "span" && c[2].className === "dshk-sk-state");
+  // 池组只列未挂载的（组级过滤，见 poolRows）：行本体不摆挂载数，也不给「卸载」——
+  // 已挂载的那条在它自己的工作区组里，那儿才是卸载的入口
   check(
-    "池行：本工作区已挂载 → 一枚状态标记（挂载数，点亮表示就在本工作区）+ 按钮变卸载",
-    !!mountedRow &&
-      stateSpan(/^(挂载|Mounted in) 1$/) &&
-      stateSpans().length === 1 &&
-      stateSpans()[0][2]["data-on"] === true &&
-      !!btn(["卸载", "Unmount"]) &&
-      !btn(["挂载", "Mount"]),
+    "池行：不摆挂载数标记，也不给「卸载」（已挂载的由池组过滤掉，卸载在工作区组）",
+    !!mountedRow && stateSpans().length === 0 && !!btn(["挂载", "Mount"]) && !btn(["卸载", "Unmount"]),
     JSON.stringify(stateSpans().map((c) => c[2].children)),
+  );
+  check(
+    "池组只列未挂载到本工作区的（mountedHere 的行不进池组）",
+    comps.poolRows([{ name: "a", mountedHere: true }, { name: "b" }, { name: "c", mountedHere: false }]).map((s) => s.name).join(",") === "b,c",
+  );
+  check(
+    "行序：实体技能在前、挂载链接在后（同一类里保持宿主给的顺序）",
+    comps.sortSkillRows([{ name: "l1", link: true }, { name: "e1" }, { name: "l2", link: true }, { name: "e2" }]).map((s) => s.name).join(",") === "e1,e2,l1,l2",
   );
 
   renderPoolRow({ name: "hello-kit", root: "pool", path: "C:/home/.dsh/dsh-kit/skill-pool/hello-kit", mounts: 0 });
-  check("池行：未挂载是状态标记（不点亮），「挂载」仍是按钮", stateSpan(/^(未挂载|Not mounted)$/) && !stateSpans()[0][2]["data-on"] && !!btn(["挂载", "Mount"]));
+  check("池行：未挂载 → 「挂载」仍是按钮，同样没有挂载数标记", !!btn(["挂载", "Mount"]) && stateSpans().length === 0);
 
   renderPoolRow({ name: "hello-kit", root: "pool", path: "C:/home/.dsh/dsh-kit/skill-pool/hello-kit", mounts: 3 });
   check(
-    "池行：只有别的工作区挂着 → 同一个数字标记但不点亮（点亮与否就是本工作区在用没用）",
-    stateSpan(/^(挂载|Mounted in) 3$/) && stateSpans().length === 1 && !stateSpans()[0][2]["data-on"] && !btn(["挂载 3", "Mounted in 3"]),
+    "池行：别的工作区挂着它也不显示数量（本工作区没挂 → 仍是「挂载」按钮）",
+    stateSpans().length === 0 && !!btn(["挂载", "Mount"]) && !textOf(/挂载 \d|Mounted in \d/),
   );
+
+  // 每个技能行都有自己的「在应用里打开」（不是整池一枚）；探不到可用应用就不摆
+  {
+    const rowProps = { skill: { name: "word", root: "project-dsh", path: "C:/x/.dsh/skills/word" }, groupId: "workspace", allRoots: ROOTS, cwd: "C:/x", busy: false, runOp: () => {}, picker: null, setPicker: () => {} };
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    comps.SkillRow({ ...rowProps, openApps: ["editor", "explorer"] });
+    const openCall = callLog.find((c) => c[1] === comps.OpenDirButton);
+    check(
+      "技能行：每行一枚「在应用里打开」，目标就是这一行自己的路径",
+      !!openCall && openCall[2].path === "C:/x/.dsh/skills/word" && openCall[2].apps.length === 2,
+      JSON.stringify(openCall?.[2]),
+    );
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    comps.SkillRow({ ...rowProps, openApps: [] });
+    check("技能行：探不到可用应用时不摆打开按钮（不挡其它操作）", !callLog.some((c) => c[1] === comps.OpenDirButton));
+    // 平铺 .md 开所在目录（启动器只吃存在的目录）
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    comps.SkillRow({ ...rowProps, skill: { name: "flat", root: "project-dsh", path: "C:/x/.dsh/skills/flat.md", kind: "file" }, openApps: ["editor"] });
+    const flatCall = callLog.find((c) => c[1] === comps.OpenDirButton);
+    check("技能行：平铺 .md 的打开目标是所在目录（不是文件本身）", !!flatCall && flatCall[2].path === "C:/x/.dsh/skills", JSON.stringify(flatCall?.[2]));
+  }
 
   // 池技能行的分组选择：一个技能只属于一个组合，控件停在当前归属上（下拉 = 明显不是状态标记）
   {
@@ -568,8 +602,12 @@ async function checkApply() {
       bundleSrc.includes("dshk-sk-select"),
   );
   check(
-    "池组筛选只按挂载状态（全部/已挂载/未挂载），按组合归组合面板",
-    bundleSrc.includes("skOnlyMounted") && bundleSrc.includes("skOnlyUnmounted") && !bundleSrc.includes("skAllGroups") && !bundleSrc.includes("activeGroup"),
+    "归属组合是控制件不是普通按钮：外框与「在应用里打开」同一套 token",
+    bundleSrc.includes(".dshk-sk-select{") && bundleSrc.includes("border:.5px solid var(--dsw-alias-border-l4)") && bundleSrc.includes("border-radius:var(--dsw-radius-sm)"),
+  );
+  check(
+    "池列表不再按挂载状态筛选、行上不再摆挂载数（工作区视角的面板，挂载状态由行上按钮说）",
+    !bundleSrc.includes("skOnlyMounted") && !bundleSrc.includes("skOnlyUnmounted") && !bundleSrc.includes("skMountStateTip") && !bundleSrc.includes("dshk-sk-filters") && !bundleSrc.includes("activeGroup"),
   );
   check(
     "挂载点只由用户选（没选就问，不带哪根在用的启发式、不默认）",

@@ -2437,13 +2437,11 @@ ellipsis，窄列只截字不破版 */
       skBroken: "失效链接",
       skBrokenTip: "链接指向的池技能已不在（改名或删除），宿主发现时会静默跳过",
       skClean: "清理",
-      skOpenPool: "在应用里打开技能池目录",
-      skOpenPoolMore: "换一个应用",
+      skOpenDir: "在应用里打开",
+      skOpenMore: "换一个应用",
       skDefaultSuffix: "（默认）",
       skOpenFail: "打不开应用",
-      skMountCount: "挂载",
-      skNoMount: "未挂载",
-      skMountStateTip: "数字 = 这个池技能被几个工作区挂着（登记表记的）；点亮 = 其中一条就在本工作区，池里的本体就是它、改动都落在本体上",
+      skMountedElsewhere: "其他工作区挂载",
       skMoveOutAsk: "移出技能池？",
       skMoveOutTip: "本体搬到目标根，池里不再有它；池里那份版本记录也不会跟着走",
       skMoveInAsk: "移入技能池？",
@@ -2453,11 +2451,11 @@ ellipsis，窄列只截字不破版 */
       skMoveOutConfirm: "确认移动",
       skMoved: "已移动",
       skDeleteMountedTip: "这个池技能还被别的工作区挂着：删除会一并断掉那些链接",
-      skUnmountHereTip: "断开本工作区这条链接（池里的本体不动）",
       skGroups: "技能组合",
       skGroupsTip: "组合是一批池技能：可整体挂载到当前工作区，也可整体卸载",
       skGroupNew: "新建组合",
       skGroupsEmpty: "（还没有组合）",
+      skPoolAllMounted: "（池里的技能都已挂载到本工作区）",
       skGroupName: "组合名",
       skGroupMembers: "成员",
       skGroupMissing: "不在池里",
@@ -2474,10 +2472,6 @@ ellipsis，窄列只截字不破版 */
       skMountSkipped: "跳过（已挂载）",
       skGroupSaved: "组合已保存",
       skGroupDeleted: "组合已删除",
-      skAll: "全部",
-      skOnlyMounted: "已挂载",
-      skOnlyUnmounted: "未挂载",
-      skFilterEmpty: "（没有符合筛选条件的技能）",
     };
     const en = {
       skillsLabel: "Skills",
@@ -2532,13 +2526,11 @@ ellipsis，窄列只截字不破版 */
       skBroken: "Broken link",
       skBrokenTip: "The pool skill it points to is gone (renamed or deleted); host discovery skips it silently",
       skClean: "Clean",
-      skOpenPool: "Open the skill-pool directory in an application",
-      skOpenPoolMore: "Pick another application",
+      skOpenDir: "Open in an application",
+      skOpenMore: "Pick another application",
       skDefaultSuffix: " (default)",
       skOpenFail: "Could not open the application",
-      skMountCount: "Mounted in",
-      skNoMount: "Not mounted",
-      skMountStateTip: "The number is how many workspaces mount this pool skill (from the mount registry); a lit dot means one of them is this workspace — the pool copy is the real entry and edits land there",
+      skMountedElsewhere: "Mounted elsewhere",
       skMoveOutAsk: "Move out of the skill pool?",
       skMoveOutTip: "The pool copy moves to the target root and leaves the pool; the version history kept there does not travel with it",
       skMoveInAsk: "Move into the skill pool?",
@@ -2548,11 +2540,11 @@ ellipsis，窄列只截字不破版 */
       skMoveOutConfirm: "Confirm move",
       skMoved: "Moved",
       skDeleteMountedTip: "Other workspaces still mount this pool skill: deleting unlinks them all",
-      skUnmountHereTip: "Unlink it in this workspace (the pool copy is untouched)",
       skGroups: "Skill groups",
       skGroupsTip: "A group is a set of pool skills: mount the whole set into this workspace, or unmount it",
       skGroupNew: "New group",
       skGroupsEmpty: "(no groups yet)",
+      skPoolAllMounted: "(every pool skill is mounted in this workspace)",
       skGroupName: "Group name",
       skGroupMembers: "Members",
       skGroupMissing: "missing",
@@ -2569,10 +2561,6 @@ ellipsis，窄列只截字不破版 */
       skMountSkipped: "skipped (already mounted)",
       skGroupSaved: "Group saved",
       skGroupDeleted: "Group deleted",
-      skAll: "All",
-      skOnlyMounted: "Mounted",
-      skOnlyUnmounted: "Not mounted",
-      skFilterEmpty: "(no skill matches the filter)",
     };
     const lang = () => (resolveZh() ? zh : en);
     const t = (key) => lang()[key] ?? key;
@@ -2668,11 +2656,11 @@ ellipsis，窄列只截字不破版 */
       });
     }
 
-    /** 池分组头右侧的「在应用里打开」：照官方 open-in-app 的分体按钮 + primitives.Menu 浮层
-     *  （主键只出图标，▾ 摊开全部可用应用，当前应用在菜单里标「默认」）。一个应用都没探到就不摆；
-     *  primitives 取不到时退回单键加原生 title，不挡启动。 */
-    function OpenPoolButton({ dir }) {
-      const [apps, setApps] = react.useState(openAppsCache);
+    /** 技能行右侧的「在应用里打开」：照官方 open-in-app 的分体按钮 + primitives.Menu 浮层
+     *  （主键只出图标，▾ 摊开全部可用应用，当前应用在菜单里标「默认」）。可用应用清单由面板取一次
+     *  传下来（不在每行各拉一遍）；一个应用都没探到就不摆；primitives 取不到时退回单键加原生
+     *  title，不挡启动。 */
+    function OpenDirButton({ path, apps }) {
       const [open, setOpen] = react.useState(false);
       const [busy, setBusy] = react.useState(false);
       const chosen = readOpenAppChoice();
@@ -2683,7 +2671,7 @@ ellipsis，窄列只截字不破版 */
         setOpen(false);
         setBusy(true);
         try {
-          await openDirInApp(id, dir);
+          await openDirInApp(id, path);
           writeOpenAppChoice(id);
         } catch (error) {
           flashToast(`${t("skOpenFail")}：${skErrText(error)}`);
@@ -2691,24 +2679,12 @@ ellipsis，窄列只截字不破版 */
           setBusy(false);
         }
       };
-      react.useEffect(() => {
-        const ctrl = new AbortController();
-        // 两列表都到齐再渲染按钮：按钮一出现，路由选择（自己启动 / 官方路由）就已经是确定的
-        Promise.all([
-          fetchOpenApps(ctrl.signal).catch(() => []),
-          fetchManagedApps(ctrl.signal).catch(() => {
-            managedAppsCache = [];
-            return [];
-          }),
-        ]).then(([list]) => setApps(list));
-        return () => ctrl.abort();
-      }, [dir]);
       if (app === "") return null;
       const Menu = dswPrim && typeof dswPrim.Menu === "function" ? dswPrim.Menu : null;
       const IconChevron = dswPrim && typeof dswPrim.IconChevronDownOutlineRegular === "function" ? dswPrim.IconChevronDownOutlineRegular : null;
       if (Menu === null) {
         return jsxRuntime.jsx(KitTip, {
-          label: `${t("skOpenPool")} · ${name(app)}`,
+          label: `${t("skOpenDir")} · ${name(app)}`,
           side: "bottom",
           children: jsxRuntime.jsxs("button", {
             type: "button",
@@ -2720,7 +2696,7 @@ ellipsis，窄列只截字不破版 */
         });
       }
       const hasMenu = list.length > 1;
-      const label = `${t("skOpenPool")} · ${name(app)}`;
+      const label = `${t("skOpenDir")} · ${name(app)}`;
       const anchor = jsxRuntime.jsxs("div", {
         className: "dshk-sk-split",
         "data-open-target": "directory",
@@ -2740,7 +2716,7 @@ ellipsis，窄列只截字不破版 */
           }),
           hasMenu
             ? jsxRuntime.jsx(KitTip, {
-                label: t("skOpenPoolMore"),
+                label: t("skOpenMore"),
                 side: "bottom",
                 children: jsxRuntime.jsx("button", {
                   type: "button",
@@ -2748,7 +2724,7 @@ ellipsis，窄列只截字不破版 */
                   disabled: busy,
                   "aria-haspopup": "menu",
                   "aria-expanded": open && !busy,
-                  "aria-label": t("skOpenPoolMore"),
+                  "aria-label": t("skOpenMore"),
                   onClick: () => setOpen((v) => !v),
                   children: IconChevron === null ? "▾" : jsxRuntime.jsx(IconChevron, { size: 10 }),
                 }),
@@ -2895,12 +2871,6 @@ ellipsis，窄列只截字不破版 */
 .dshk-sk-state::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.45;flex:none}
 .dshk-sk-state[data-on]{color:var(--dsw-alias-label-primary)}
 .dshk-sk-state[data-on]::before{opacity:1}
-/* 池组筛选条：只按挂载状态（全部/已挂载/未挂载） */
-.dshk-sk-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 12px;border-top:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-sk-seg{display:inline-flex;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;overflow:hidden}
-.dshk-sk-segbtn{appearance:none;background:transparent;border:0;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:12px;line-height:1;padding:5px 9px}
-.dshk-sk-segbtn + .dshk-sk-segbtn{border-left:1px solid var(--dsw-alias-border-l2)}
-.dshk-sk-segbtn[data-on]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);font-weight:600}
 /* 组合编辑器：组名输入 + 从池技能里点选成员 */
 .dshk-sk-input{font-size:12px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;padding:4px 8px;min-width:160px}
 .dshk-sk-chips{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:5px;max-height:170px;overflow:auto;padding-top:2px}
@@ -2908,8 +2878,9 @@ ellipsis，窄列只截字不破版 */
 .dshk-sk-chip[data-on]{border-style:solid;border-color:var(--dsw-alias-label-secondary);color:var(--dsw-alias-label-primary);font-weight:600}
 .dshk-sk-chip:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
 /* 池技能行上的分组归属选择：一个技能只属于一个组合，换组 = 从原组摘出来 */
-.dshk-sk-select{appearance:none;box-sizing:border-box;flex:none;max-width:118px;font-family:var(--dsw-font-family);font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;padding:2px 4px;cursor:pointer}
-.dshk-sk-select:hover:not(:disabled){color:var(--dsw-alias-label-primary)}
+/* 归属组合是「控制」不是普通按钮：外框与「在应用里打开」同一套（border-l4 / radius-sm / 24 高） */
+.dshk-sk-select{appearance:none;box-sizing:border-box;flex:none;max-width:118px;height:24px;font-family:var(--dsw-font-family);font-size:11px;line-height:16px;color:var(--dsw-alias-label-primary);background:transparent;border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm);padding:2px 4px;cursor:pointer}
+.dshk-sk-select:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-sk-select:disabled{opacity:.5;cursor:default}
     `;
     function injectStyles() {
@@ -2947,7 +2918,14 @@ ellipsis，窄列只截字不破版 */
      * 技能只有移动、没有复制（副本与本体分叉），挂载关系上的连移动都不给；
      * 沾池的移动前要确认：出池等于把池里那份本体交出去，进池等于交给所有挂载方共用。
      */
-    function SkillRow({ skill, groupId, allRoots, cwd, busy, runOp, picker, setPicker, groupNames = [], groupName = "" }) {
+    /** 「在应用里打开」的目标：平铺 .md 打开所在目录（启动器只吃存在的目录），其余就是技能自己 */
+    function openTargetOf(skill) {
+      if (skill.kind !== "file") return skill.path;
+      const idx = Math.max(skill.path.lastIndexOf("/"), skill.path.lastIndexOf("\\"));
+      return idx > 0 ? skill.path.slice(0, idx) : skill.path;
+    }
+
+    function SkillRow({ skill, groupId, allRoots, cwd, busy, runOp, picker, setPicker, groupNames = [], groupName = "", openApps = [] }) {
       const [confirming, setConfirming] = react.useState(false);
       // 沾池的移动：picker 选完目标先停在这里等确认（{dest}）
       const [moveAsk, setMoveAsk] = react.useState(null);
@@ -2958,10 +2936,8 @@ ellipsis，窄列只截字不破版 */
       // 影响所有挂载它的工作区，要禁用请到池那一组去操作
       const isLink = skill.link === true;
       const isPool = groupId === "pool";
+      // 别的工作区还挂着它：池里这条本体就先别动（移动/删除会波及那些链接）
       const mountCount = typeof skill.mounts === "number" ? skill.mounts : 0;
-      // 本工作区已挂载：行上标出来，按钮直接换成卸载（再点挂载只会报"同名条目已存在"）
-      const mountedHere = isPool && skill.mountedHere === true;
-      const canUnmountHere = mountedHere && typeof skill.mountPath === "string" && skill.mountPath !== "";
       // 挂载关系上的技能不给移动：挂载点要动先卸载，被工作区挂着的池技能要移出也
       // 得先把各挂载方卸载——一次点击就断掉别的工作区的链接太容易误伤
       const canMove = !isLink && !(isPool && mountCount > 0);
@@ -3020,21 +2996,14 @@ ellipsis，窄列只截字不破版 */
               typeof skill.description === "string" && skill.description !== ""
                 ? jsxRuntime.jsx("span", { className: "dshk-sk-desc", title: skill.description, children: skill.description })
                 : null,
-              // 池技能的挂载状态只占一枚标记：数字 = 被几个工作区挂着（0 = 谁也没用，可以删），
-              // 点亮 = 其中一条就在本工作区（按钮随之变卸载、筛选条按它分）
-              isPool
-                ? jsxRuntime.jsx(KitTip, {
-                    label: t("skMountStateTip"),
-                    children: jsxRuntime.jsx("span", {
-                      className: "dshk-sk-state",
-                      "data-on": mountedHere || undefined,
-                      children: mountCount === 0 ? t("skNoMount") : `${t("skMountCount")} ${mountCount}`,
-                    }),
-                  })
-                : null,
               jsxRuntime.jsxs("div", {
                 className: "dshk-sk-actions",
                 children: [
+                  // 每个技能自己一枚「在应用里打开」：池行开池里那份本体，工作区/用户级行开自己那份
+                  // （看历史、写提交、回滚都在本机应用里做；平铺 .md 开所在目录）
+                  openApps.length > 0
+                    ? jsxRuntime.jsx(OpenDirButton, { path: openTargetOf(skill), apps: openApps })
+                    : null,
                   // 池技能的归属分组：一个技能只属于一个组合，选择即从原组摘出来（不分组 = 空值）
                   isPool && skill.kind !== "file" && groupNames.length > 0
                     ? jsxRuntime.jsxs("select", {
@@ -3049,16 +3018,12 @@ ellipsis，窄列只截字不破版 */
                         ],
                       })
                     : null,
-                  groupId === "pool"
-                    ? canUnmountHere
-                      ? jsxRuntime.jsx(KitTip, {
-                          label: t("skUnmountHereTip"),
-                          children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => runOp({ op: "unmount", src: skill.mountPath, cwd }), children: t("skUnmount") }),
-                        })
-                      : jsxRuntime.jsx(KitTip, {
-                          label: t("skCarrierTip"),
-                          children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => runOp({ op: "mount", src: skill.path, cwd }), children: t("skMount") }),
-                        })
+                  // 池组只列未挂载到本工作区的（已挂载的那条在它自己的工作区组里，那儿给「卸载」）
+                  isPool
+                    ? jsxRuntime.jsx(KitTip, {
+                        label: t("skCarrierTip"),
+                        children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: () => runOp({ op: "mount", src: skill.path, cwd }), children: t("skMount") }),
+                      })
                     : null,
                   canMove
                     ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: startPicker, children: t("skMove") })
@@ -3102,7 +3067,7 @@ ellipsis，窄列只截字不破版 */
             ? jsxRuntime.jsxs("div", {
                 className: "dshk-sk-bar",
                 children: [
-                  jsxRuntime.jsx("span", { className: "dshk-sk-warn", children: `${t("skMountCount")} ${mountCount}` }),
+                  jsxRuntime.jsx("span", { className: "dshk-sk-warn", children: `${t("skMountedElsewhere")} ${mountCount}` }),
                   jsxRuntime.jsx("span", { className: "dshk-sk-desc", children: t("skDeleteMountedTip") }),
                 ],
               })
@@ -3368,6 +3333,16 @@ ellipsis，窄列只截字不破版 */
 
     const SK_GROUP_RANK = { workspace: 0, user: 1, pool: 2 };
 
+    /** 池组只列未挂载到本工作区的：已挂载的那条在它自己的工作区组里（那儿给「卸载」） */
+    function poolRows(skills) {
+      return skills.filter((skill) => skill.mountedHere !== true);
+    }
+
+    /** 行序：实体技能在前、挂载链接在后（同一类里保持宿主给的顺序） */
+    function sortSkillRows(skills) {
+      return [...skills].sort((a, b) => (a.link === true ? 1 : 0) - (b.link === true ? 1 : 0));
+    }
+
     function SkillsManager(props) {
       const cwd = useCurrentCwd(props);
       const [data, setData] = react.useState(null);
@@ -3379,10 +3354,10 @@ ellipsis，窄列只截字不破版 */
       const [picker, setPicker] = react.useState(null);
       // 已点选但还没确认的载体根（null = 没有待确认的）；确认才真正处理并落盘
       const [pendingCarrier, setPendingCarrier] = react.useState(null);
-      // 池组筛选：全部 / 已挂载 / 未挂载（按组合的查看归「技能组合」面板，不再各做一套）
-      const [poolState, setPoolState] = react.useState("all");
       // 展开中的组合编辑器：{ from, name, members }；null = 没有
       const [groupEdit, setGroupEdit] = react.useState(null);
+      // 可用应用清单：面板取一次传给各行（每行只读，不在行里各拉一遍）
+      const [openApps, setOpenApps] = react.useState(openAppsCache);
 
       react.useEffect(() => {
         const controller = new AbortController();
@@ -3396,6 +3371,19 @@ ellipsis，窄列只截字不破版 */
           });
         return () => controller.abort();
       }, [cwd, nonce]);
+
+      react.useEffect(() => {
+        const ctrl = new AbortController();
+        // 两列表都到齐再渲染按钮：按钮一出现，路由选择（自己启动 / 官方路由）就已经是确定的
+        Promise.all([
+          fetchOpenApps(ctrl.signal).catch(() => []),
+          fetchManagedApps(ctrl.signal).catch(() => {
+            managedAppsCache = [];
+            return [];
+          }),
+        ]).then(([list]) => setOpenApps(list));
+        return () => ctrl.abort();
+      }, []);
 
       /** 各操作成功后显示的那句话（带 warning 的响应用 warning） */
       const OP_DONE_KEY = { delete: "skDeleted", mount: "skMounted", unmount: "skUnmounted", setcarrier: "skPrepared", move: "skMoved", "group-delete": "skGroupDeleted", "group-set": "skGroupSaved" };
@@ -3463,20 +3451,9 @@ ellipsis，窄列只截字不破版 */
         }
         return "";
       };
-      const filterActive = poolState !== "all";
-      /** 池筛选只按本工作区的挂载状态：按组合的查看归「技能组合」面板，两边不再各做一套 */
-      const filterPool = (skills) =>
-        skills.filter((skill) => {
-          if (poolState === "mounted" && skill.mountedHere !== true) return false;
-          if (poolState === "unmounted" && skill.mountedHere === true) return false;
-          return true;
-        });
-
-      /** 逻辑组卡片；池那一组多一条筛选条（全部/已挂载/未挂载 × 按组合） */
+      /** 逻辑组卡片（工作区 / 用户级 / 池）：池只列未挂载的，行序实体在前、挂载链接在后 */
       function renderLogicalGroup(group, isPool) {
-        // 池那一组的目录交给本机应用打开（版本在各技能自己的仓库里）
-        const poolRoot = isPool ? group.roots.find((root) => root.id === "pool") : null;
-        const shown = isPool ? filterPool(group.skills) : group.skills;
+        const shown = sortSkillRows(isPool ? poolRows(group.skills) : group.skills);
         return jsxRuntime.jsxs(
           "div",
           {
@@ -3486,7 +3463,7 @@ ellipsis，窄列只截字不破版 */
                 className: "dshk-sk-group-head",
                 children: [
                   jsxRuntime.jsx("span", { children: skGroupTitle(group.id) }),
-                  jsxRuntime.jsx("span", { children: isPool && filterActive ? `· ${shown.length}/${group.skills.length}` : `· ${group.skills.length}` }),
+                  jsxRuntime.jsx("span", { children: `· ${shown.length}` }),
                   jsxRuntime.jsx("span", {
                     className: "dshk-sk-group-dir",
                     title: group.roots.map((root) => root.dir).join("\n"),
@@ -3498,43 +3475,14 @@ ellipsis，窄列只截字不破版 */
                       )
                       .join(" | "),
                   }),
-                  poolRoot && poolRoot.exists ? jsxRuntime.jsx(OpenPoolButton, { dir: poolRoot.dir }) : null,
                 ],
               }),
-              isPool
-                ? jsxRuntime.jsxs("div", {
-                    className: "dshk-sk-filters",
-                    children: [
-                      jsxRuntime.jsx("div", {
-                        className: "dshk-sk-seg",
-                        children: [
-                          ["all", "skAll"],
-                          ["mounted", "skOnlyMounted"],
-                          ["unmounted", "skOnlyUnmounted"],
-                        ].map(([id, key]) =>
-                          jsxRuntime.jsx(
-                            "button",
-                            {
-                              type: "button",
-                              className: "dshk-sk-segbtn",
-                              "data-on": poolState === id || undefined,
-                              disabled: busy,
-                              onClick: () => setPoolState(id),
-                              children: t(key),
-                            },
-                            id,
-                          ),
-                        ),
-                      }),
-                    ],
-                  })
-                : null,
               shown.length === 0
-                ? jsxRuntime.jsx("div", { className: "dshk-sk-row dshk-sk-status", children: isPool && filterActive ? t("skFilterEmpty") : t("skEmpty") })
+                ? jsxRuntime.jsx("div", { className: "dshk-sk-row dshk-sk-status", children: isPool && group.skills.length > 0 ? t("skPoolAllMounted") : t("skEmpty") })
                 : shown.map((skill) =>
                     jsxRuntime.jsx(
                       SkillRow,
-                      { skill, groupId: group.id, allRoots, cwd, busy, runOp, picker, setPicker, groupNames, groupName: groupOf(skBaseName(skill.path)) },
+                      { skill, groupId: group.id, allRoots, cwd, busy, runOp, picker, setPicker, groupNames, groupName: groupOf(skBaseName(skill.path)), openApps },
                       skill.path,
                     ),
                   ),
@@ -3679,7 +3627,9 @@ ellipsis，窄列只截字不破版 */
     exports.GroupPanel = GroupPanel;
     exports.GroupRow = GroupRow;
     exports.GroupEditor = GroupEditor;
-    exports.OpenPoolButton = OpenPoolButton;
+    exports.OpenDirButton = OpenDirButton;
+    exports.poolRows = poolRows;
+    exports.sortSkillRows = sortSkillRows;
     exports.OpenAppIcon = OpenAppIcon;
     exports.openInAppName = openInAppName;
     exports.fetchOpenApps = fetchOpenApps;
