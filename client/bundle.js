@@ -1439,8 +1439,10 @@ window.__ModuleLoader__.load({
 .dshk-vault-rtehost{flex:1 1 auto;min-height:0;background:var(--dsw-alias-bg-base)}
 /* 复用 .dshk-md 排版（标题/表格/引用/代码），只覆盖编辑态差异：
    滚动容器是 rtehost 自身，ProseMirror 去描边、正文区给最小高度。
-   页尾留白：正文区没有页脚撑着，长文滚到底时最后一行/图贴着窗底观感差 */
-.dshk-vault-rtehost.dshk-md{flex:1 1 auto;overflow:auto;padding:12px 16px 64px}
+   页尾留白：正文区没有页脚撑着，长文滚到底时最后一行贴着窗底看不清下文；
+   --dshk-rte-tail 由编辑器组件按窗高比例写在行内（长文约一屏的四成，
+   短页回落到 64px），值变了就是换留白高度 */
+.dshk-vault-rtehost.dshk-md{flex:1 1 auto;overflow:auto;padding:12px 16px var(--dshk-rte-tail,64px)}
 .dshk-vault-rtehost .ProseMirror{outline:none;min-height:60px;caret-color:var(--dsw-alias-brand-primary,#1971c2)}
 /* gap cursor：表格 / 折叠块 / 代码块这类非 textblock 的块下方留白处的落点（打字就在那儿
    起一个段落）。vendor 把它画成 20px 横线 + 闪烁，看着像"横着的光标"。只改 ::after 的形状
@@ -7363,6 +7365,50 @@ ellipsis，窄列只截字不破版 */
           }, 150);
         };
         host.addEventListener("scroll", onCrumbScroll);
+        // 页尾留白：正文高过可视区时底部留一段按窗高比例的可滚空白（短页不留——
+        // 页面不该能滚进空白），长文滚到底时最后一行不贴着窗底。正文变高
+        // （图片/图表异步撑开）与窗高变化都要重量：正文与宿主各挂一个观察
+        const pmDom = h.editor.view.dom;
+        let tailOn = false;
+        let tailPx = -1;
+        const applyTailRoom = () => {
+          const hh = host.clientHeight;
+          if (hh <= 0) return;
+          const contentH = pmDom.offsetHeight + 12;
+          if (!tailOn && contentH > hh - 4) tailOn = true;
+          else if (tailOn && contentH < hh - 80) tailOn = false;
+          const tail = tailOn ? Math.max(120, Math.min(520, Math.round(hh * 0.42))) : 64;
+          if (tail === tailPx) return;
+          tailPx = tail;
+          host.style.setProperty("--dshk-rte-tail", `${tail}px`);
+        };
+        applyTailRoom();
+        const tailRo = new ResizeObserver(applyTailRoom);
+        // 宿主观 border-box：留白改的是内边距，按 content-box 看会自己触发自己
+        tailRo.observe(host, { box: "border-box" });
+        tailRo.observe(pmDom);
+        // 打字位：在文末那一块里输入 / 挪光标时，光标在视口里始终高过窗底约
+        // 五分之一屏（视线随逐行下移，不贴底边）。页面中间靠下的编辑不抢滚动权
+        const followTyping = () => {
+          const ed = h.editor;
+          const hh = host.clientHeight;
+          if (hh <= 0) return;
+          const doc = ed.state.doc;
+          const head = ed.state.selection.head;
+          let $head;
+          let coords;
+          try {
+            $head = doc.resolve(head);
+            coords = ed.view.coordsAtPos(head);
+          } catch {
+            return; /* 文档替换瞬间选区失效 */
+          }
+          if ($head.index(0) !== doc.childCount - 1) return;
+          const keep = Math.max(72, Math.round(hh * 0.2));
+          const gap = host.getBoundingClientRect().bottom - coords.bottom;
+          if (gap >= keep) return;
+          host.scrollTop += keep - gap;
+        };
         const cancelRestore = restoreReadPos(mountedKey, host, (anchor) => {
           try {
             const size = h.editor.state.doc.content.size;
@@ -7421,6 +7467,7 @@ ellipsis，窄列只截字不破版 */
         const offUpdate = h.onUpdate(() => {
           dirtyRef.current = true;
           editGenRef.current += 1;
+          followTyping();
           report();
           clearTimeout(saveTimer);
           saveTimer = setTimeout(flushSave, 2000);
@@ -7489,6 +7536,7 @@ ellipsis，窄列只截字不破版 */
         const offSelection = h.onSelectionUpdate(() => {
           bubbleSync();
           syncSlashMenu();
+          followTyping();
           const active = rteRef.current?.inTable() === true;
           if (active !== inTableRef.current) {
             inTableRef.current = active;
@@ -7691,6 +7739,7 @@ ellipsis，窄列只截字不破版 */
           cancelRestore();
           host.removeEventListener("scroll", onPosScroll);
           host.removeEventListener("scroll", onCrumbScroll);
+          tailRo.disconnect();
           if (crumbTimer !== null) clearTimeout(crumbTimer);
           recordReadPos(mountedKey, host, posAnchor());
           // 有防抖未触发的改动 → 卸载前尽力落盘（保底）。**走挂载那一刻的保存

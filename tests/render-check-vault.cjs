@@ -806,6 +806,17 @@ async function checkApply() {
       bundleSrc.includes('host.removeEventListener("scroll", onCrumbScroll)') &&
       bundleSrc.includes("return crumbAtViewport(host, ed) || chain;"),
   );
+  check(
+    "页尾留白与打字位：长文底部按窗高留可滚空白（短页不留），文末输入时光标不贴窗底",
+    bundleSrc.includes("const applyTailRoom = () =>") &&
+      bundleSrc.includes('host.style.setProperty("--dshk-rte-tail"') &&
+      bundleSrc.includes("--dshk-rte-tail,64px") &&
+      bundleSrc.includes('tailRo.observe(host, { box: "border-box" })') &&
+      bundleSrc.includes("const followTyping = () =>") &&
+      bundleSrc.includes("host.scrollTop += keep - gap;") &&
+      bundleSrc.includes("tailRo.disconnect();") &&
+      (bundleSrc.match(/followTyping\(\);/g) ?? []).length === 2,
+  );
 
   // ── 树头动作平铺 + 资料段／添加资料同归属（只看树根）──
   check(
