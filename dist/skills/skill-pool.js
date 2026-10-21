@@ -31,7 +31,6 @@
 //                                              技能目录；from = 改名前那个组名，保位置；
 //                                              成员已在别的组里回 409，一个技能只属于一个组合）
 //       {op:'group-delete', group}            删掉一个组合
-//       {op:'group-assign', skill, group}     把某个池技能归到某个组合（池技能行上的分组选择）；
 //                                             group 为空 = 不分组。一个技能只属于一个组合，
 //                                             所以先整体摘掉再按目标组追加
 //       {op:'group', action:'mount'|'unmount', group}
@@ -909,33 +908,15 @@ export function applySkillPool(ctx, hooks) {
                                     return;
                                 }
                             }
-                            // 一个技能只属于一个组合：撞组的成员直接拒——重叠时同一条链接会被两个组各卸一次
-                            const taken = new Map();
-                            for (const [key, value] of Object.entries(groups)) {
-                                if (key === name || (from !== null && key === from))
-                                    continue;
-                                for (const member of value)
-                                    if (!taken.has(member))
-                                        taken.set(member, key);
-                            }
-                            const conflicts = members
-                                .filter((member) => taken.has(member))
-                                .map((member) => ({ member, group: taken.get(member) }));
-                            if (conflicts.length > 0) {
-                                jsonOf(res, 409, {
-                                    error: 'member-taken',
-                                    message: `这些技能已属于别的组合：${conflicts.map((c) => `${c.member}（${c.group}）`).join('、')}`,
-                                    conflicts,
-                                });
-                                return;
-                            }
+                            // 一个技能只属于一个组合：新组里列到的成员从别的组里摘出来（重叠时同一条链接
+                            // 会被两个组各卸一次）。归属只在组合编辑器里改——选中已在别组的技能即换组
                             // 保位置：改名时顶替原键的位置，新建追加到末尾
                             const next = {};
                             for (const [key, value] of Object.entries(groups)) {
                                 if ((from !== null && key === from) || key === name)
                                     next[name] = members;
                                 else
-                                    next[key] = value;
+                                    next[key] = value.filter((member) => !members.includes(member));
                             }
                             if (!(name in next))
                                 next[name] = members;
@@ -954,29 +935,6 @@ export function applySkillPool(ctx, hooks) {
                             delete next[name];
                             writeGroups(next);
                             jsonOf(res, 200, { ok: true, op: 'group-delete', name });
-                            return;
-                        }
-                        if (body.op === 'group-assign') {
-                            const skill = typeof body.skill === 'string' ? body.skill.trim() : '';
-                            const group = typeof body.group === 'string' ? body.group.trim() : '';
-                            if (skill === '' || !isPoolSkillDir(defaultPoolDir(), skill)) {
-                                jsonOf(res, 400, { error: 'unknown-member', message: `池里没有这个技能：${skill}` });
-                                return;
-                            }
-                            const groups = readGroups();
-                            if (group !== '' && groups[group] === undefined) {
-                                jsonOf(res, 400, { error: 'no-such-group', message: `没有这个组合：${group}` });
-                                return;
-                            }
-                            // 空组留着：成员被搬走的组合还在，只是暂时没人
-                            const next = {};
-                            for (const [key, value] of Object.entries(groups)) {
-                                next[key] = value.filter((member) => member !== skill);
-                            }
-                            if (group !== '')
-                                next[group].push(skill);
-                            writeGroups(next);
-                            jsonOf(res, 200, { ok: true, op: 'group-assign', skill, group });
                             return;
                         }
                         if (body.op === 'group' && (body.action === 'mount' || body.action === 'unmount')) {

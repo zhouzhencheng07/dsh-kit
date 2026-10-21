@@ -366,25 +366,13 @@ check(
     check("技能行：平铺 .md 的打开目标是所在目录（不是文件本身）", !!flatCall && flatCall[2].path === "C:/x/.dsh/skills", JSON.stringify(flatCall?.[2]));
   }
 
-  // 池技能行的分组选择：一个技能只属于一个组合，控件停在当前归属上（下拉 = 明显不是状态标记）
+  // 归属只在「技能组合」里改：池行不给任何分组控件（改派在组合编辑器里点选）
   {
-    let assigned = null;
-    renderPoolRow({ name: "word", kind: "dir", root: "pool", path: "C:/p/word", mounts: 0 }, ["办公", "写作"], "写作", (o) => {
-      assigned = o;
-    });
-    const sel = callLog.find((c) => c[1] === "select" && c[2].className === "dshk-sk-select");
-    const opts = callLog.filter((c) => c[1] === "option").map((c) => c[2].value);
+    renderPoolRow({ name: "word", kind: "dir", root: "pool", path: "C:/p/word", mounts: 0 }, ["办公", "写作"], "写作");
     check(
-      "池行：分组选择是个下拉（不分组 + 各组合），默认停在当前归属",
-      !!sel && sel[2].value === "写作" && typeof sel[2].onChange === "function" && opts.join(",") === ",办公,写作",
-      JSON.stringify(opts),
+      "池行：不给分组控件（归属只在「技能组合」里改）",
+      !callLog.some((c) => c[1] === "select") && !callLog.some((c) => c[2]?.className === "dshk-sk-select"),
     );
-    sel[2].onChange({ target: { value: "办公" } });
-    check("池行：改选发出的就是 group-assign（改派，不是新建组）", assigned?.op === "group-assign" && assigned.skill === "word" && assigned.group === "办公", JSON.stringify(assigned));
-    renderPoolRow({ name: "word", kind: "dir", root: "pool", path: "C:/p/word", mounts: 0 });
-    check("池行：一个组合都没有时不给分组下拉（无处可归）", !callLog.some((c) => c[1] === "select"));
-    renderPoolRow({ name: "flat", kind: "file", root: "pool", path: "C:/p/flat.md", mounts: 0 }, ["办公"], "");
-    check("池行：平铺 .md 不给分组（挂不住，进不了组合）", !callLog.some((c) => c[1] === "select"));
   }
 
   stateSeq = 0;
@@ -413,9 +401,12 @@ check(
   });
   const chips2 = callLog.filter((c) => c[1] === "button" && c[2].className === "dshk-sk-chip");
   check(
-    "组合编辑器：已在别的组合里的技能不列出（一个技能只属于一个组合），并说明藏了几个",
-    chips2.length === 1 && chips2[0][2].children === "word" && textOf(/已在其他组合的技能不在这里|already in another group/),
-    chips2.map((c) => c[2].children).join(","),
+    "组合编辑器：候选列全池技能，已在别的组合的标出来（选中即换组）",
+    chips2.length === 3 &&
+      chips2.filter((c) => c[2]["data-taken"] === true).length === 2 &&
+      chips2.filter((c) => typeof c[2].title === "string" && /已在别的组合|already in another group/i.test(c[2].title)).length === 2 &&
+      chips2.every((c) => c[2]["data-on"] === (c[2].children === "word" ? true : undefined)),
+    chips2.map((c) => `${c[2].children}${c[2]["data-taken"] ? "(taken)" : ""}`).join(","),
   );
 
   stateSeq = 0;
@@ -594,16 +585,12 @@ async function checkApply() {
       poolSrc.includes("linkInWorkspace"),
   );
   check(
-    "技能组合：一个技能只属于一个组合（撞组 409 + 池技能行可改派），成员名必须是池根下一层目录",
-    poolSrc.includes("error: 'member-taken'") &&
-      poolSrc.includes("body.op === 'group-assign'") &&
+    "技能组合：一个技能只属于一个组合（新组列到即从原组摘出来），成员名必须是池根下一层目录",
+    !poolSrc.includes("member-taken") &&
+      !poolSrc.includes("group-assign") &&
       poolSrc.includes("name !== path.basename(name)") &&
       bundleSrc.includes("takenBy") &&
-      bundleSrc.includes("dshk-sk-select"),
-  );
-  check(
-    "归属组合是控制件不是普通按钮：外框与「在应用里打开」同一套 token",
-    bundleSrc.includes(".dshk-sk-select{") && bundleSrc.includes("border:.5px solid var(--dsw-alias-border-l4)") && bundleSrc.includes("border-radius:var(--dsw-radius-sm)"),
+      bundleSrc.includes("dshk-sk-chip[data-taken]"),
   );
   check(
     "池列表不再按挂载状态筛选、行上不再摆挂载数（工作区视角的面板，挂载状态由行上按钮说）",

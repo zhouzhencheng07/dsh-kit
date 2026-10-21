@@ -2460,9 +2460,7 @@ ellipsis，窄列只截字不破版 */
       skGroupMembers: "成员",
       skGroupMissing: "不在池里",
       skGroupMissingTip: "这些成员已经不在池里（出池/改名/删除）：编辑组合保存后即从组里去掉",
-      skGroupPickTip: "归入一个技能组合：组合卡片能整组挂载/卸载。一个技能只属于一个组合，换组即从原组摘出来",
-      skGroupNone: "不分组",
-      skGroupHidden: "已在其他组合的技能不在这里",
+      skGroupTakenTip: "已在别的组合：选中即从原组摘出来",
       skGroupMountTip: "本工作区已挂载的成员数（「挂载全部」只补齐缺的那些）",
       skMountAll: "挂载全部",
       skUnmountAll: "卸载全部",
@@ -2549,9 +2547,7 @@ ellipsis，窄列只截字不破版 */
       skGroupMembers: "Members",
       skGroupMissing: "missing",
       skGroupMissingTip: "These members are no longer in the pool (moved out/renamed/deleted): save the group to drop them",
-      skGroupPickTip: "Put it in a skill group: the group card mounts/unmounts the whole set. A skill belongs to one group only — switching moves it out of the old one",
-      skGroupNone: "No group",
-      skGroupHidden: "Skills already in another group are not listed here",
+      skGroupTakenTip: "Already in another group: selecting it moves it out of the old one",
       skGroupMountTip: "Members mounted in this workspace (Mount all only fills the gaps)",
       skMountAll: "Mount all",
       skUnmountAll: "Unmount all",
@@ -2877,11 +2873,8 @@ ellipsis，窄列只截字不破版 */
 .dshk-sk-chip{appearance:none;background:transparent;border:1px dashed var(--dsw-alias-border-l2);border-radius:999px;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:11px;line-height:1;padding:4px 9px}
 .dshk-sk-chip[data-on]{border-style:solid;border-color:var(--dsw-alias-label-secondary);color:var(--dsw-alias-label-primary);font-weight:600}
 .dshk-sk-chip:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
-/* 池技能行上的分组归属选择：一个技能只属于一个组合，换组 = 从原组摘出来 */
-/* 归属组合是「控制」不是普通按钮：外框与「在应用里打开」同一套（border-l4 / radius-sm / 24 高） */
-.dshk-sk-select{appearance:none;box-sizing:border-box;flex:none;max-width:118px;height:24px;font-family:var(--dsw-font-family);font-size:11px;line-height:16px;color:var(--dsw-alias-label-primary);background:transparent;border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm);padding:2px 4px;cursor:pointer}
-.dshk-sk-select:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-sk-select:disabled{opacity:.5;cursor:default}
+/* 已在别的组合的候选：点线 + 次级色，点它等于换组（从原组摘出来） */
+.dshk-sk-chip[data-taken]{border-style:dotted;color:var(--dsw-alias-label-tertiary)}
     `;
     function injectStyles() {
       if (typeof document === "undefined") return;
@@ -2925,7 +2918,7 @@ ellipsis，窄列只截字不破版 */
       return idx > 0 ? skill.path.slice(0, idx) : skill.path;
     }
 
-    function SkillRow({ skill, groupId, allRoots, cwd, busy, runOp, picker, setPicker, groupNames = [], groupName = "", openApps = [] }) {
+    function SkillRow({ skill, groupId, allRoots, cwd, busy, runOp, picker, setPicker, openApps = [] }) {
       const [confirming, setConfirming] = react.useState(false);
       // 沾池的移动：picker 选完目标先停在这里等确认（{dest}）
       const [moveAsk, setMoveAsk] = react.useState(null);
@@ -3003,20 +2996,6 @@ ellipsis，窄列只截字不破版 */
                   // （看历史、写提交、回滚都在本机应用里做；平铺 .md 开所在目录）
                   openApps.length > 0
                     ? jsxRuntime.jsx(OpenDirButton, { path: openTargetOf(skill), apps: openApps })
-                    : null,
-                  // 池技能的归属分组：一个技能只属于一个组合，选择即从原组摘出来（不分组 = 空值）
-                  isPool && skill.kind !== "file" && groupNames.length > 0
-                    ? jsxRuntime.jsxs("select", {
-                        className: "dshk-sk-select",
-                        title: t("skGroupPickTip"),
-                        disabled: busy,
-                        value: groupName,
-                        onChange: (ev) => runOp({ op: "group-assign", skill: skBaseName(skill.path), group: ev.target.value, cwd }),
-                        children: [
-                          jsxRuntime.jsx("option", { value: "", children: t("skGroupNone") }, ""),
-                          groupNames.map((name) => jsxRuntime.jsx("option", { value: name, children: name }, name)),
-                        ],
-                      })
                     : null,
                   // 池组只列未挂载到本工作区的（已挂载的那条在它自己的工作区组里，那儿给「卸载」）
                   isPool
@@ -3198,18 +3177,13 @@ ellipsis，窄列只截字不破版 */
       });
     }
 
-    /** 组合编辑器（展开在组合卡片里）：组名 + 从池技能里点选成员；保存即整组覆盖写 */
+    /** 组合编辑器（展开在组合卡片里）：组名 + 从池技能里点选成员；保存即整组覆盖写。
+     *  归属只在这里改：选中已在别的组合里的技能 = 换组（保存时从原组摘出来）。 */
     function GroupEditor({ poolSkills, takenBy = {}, initial, busy, onCancel, onSave }) {
       const [name, setName] = react.useState(initial.name);
       const [members, setMembers] = react.useState(initial.members);
       const toggle = (dir) => setMembers((list) => (list.includes(dir) ? list.filter((item) => item !== dir) : [...list, dir]));
       const canSave = name.trim() !== "";
-      // 已属于别的组合的不列出来：一个技能只属于一个组合，要挪就先去那个组里去掉
-      const candidates = poolSkills.filter((skill) => {
-        const dir = skBaseName(skill.path);
-        return members.includes(dir) || takenBy[dir] === undefined;
-      });
-      const hidden = poolSkills.length - candidates.length;
       return jsxRuntime.jsxs("div", {
         className: "dshk-sk-target",
         children: [
@@ -3225,17 +3199,21 @@ ellipsis，窄列只截字不破版 */
             children: t("skSave"),
           }),
           jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onCancel, children: t("skCancel") }),
-          candidates.length > 0
+          poolSkills.length > 0
             ? jsxRuntime.jsx("div", {
                 className: "dshk-sk-chips",
-                children: candidates.map((skill) => {
+                children: poolSkills.map((skill) => {
                   const dir = skBaseName(skill.path);
+                  // 已在别的组合里的候选：点它就等于换组（保存时从原组摘出来）
+                  const other = members.includes(dir) ? "" : takenBy[dir] ?? "";
                   return jsxRuntime.jsx(
                     "button",
                     {
                       type: "button",
                       className: "dshk-sk-chip",
                       "data-on": members.includes(dir) || undefined,
+                      "data-taken": other !== "" || undefined,
+                      title: other === "" ? undefined : `${t("skGroupTakenTip")}（${other}）`,
                       disabled: busy,
                       onClick: () => toggle(dir),
                       children: skill.name,
@@ -3244,9 +3222,6 @@ ellipsis，窄列只截字不破版 */
                   );
                 }),
               })
-            : null,
-          hidden > 0
-            ? jsxRuntime.jsx("span", { className: "dshk-sk-target-label", children: `${t("skGroupHidden")} · ${hidden}` })
             : null,
         ],
       });
@@ -3443,14 +3418,6 @@ ellipsis，窄列只截字不破版 */
       const skillGroups = data && Array.isArray(data.skillGroups) ? data.skillGroups : [];
       // 组合编辑器只列池里挂得住的技能：平铺 .md 建不了链接，不进成员候选
       const poolSkills = (groups.find((group) => group.id === "pool")?.skills ?? []).filter((skill) => skill.kind === "dir");
-      // 一个技能只属于一个组合：池技能行靠它查自己的归属
-      const groupNames = skillGroups.map((item) => item.name);
-      const groupOf = (dir) => {
-        for (const item of skillGroups) {
-          if (Array.isArray(item.members) && item.members.includes(dir)) return item.name;
-        }
-        return "";
-      };
       /** 逻辑组卡片（工作区 / 用户级 / 池）：池只列未挂载的，行序实体在前、挂载链接在后 */
       function renderLogicalGroup(group, isPool) {
         const shown = sortSkillRows(isPool ? poolRows(group.skills) : group.skills);
@@ -3482,7 +3449,7 @@ ellipsis，窄列只截字不破版 */
                 : shown.map((skill) =>
                     jsxRuntime.jsx(
                       SkillRow,
-                      { skill, groupId: group.id, allRoots, cwd, busy, runOp, picker, setPicker, groupNames, groupName: groupOf(skBaseName(skill.path)), openApps },
+                      { skill, groupId: group.id, allRoots, cwd, busy, runOp, picker, setPicker, openApps },
                       skill.path,
                     ),
                   ),

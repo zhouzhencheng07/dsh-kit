@@ -578,17 +578,26 @@ try {
   res = await opIn(grpBare, { op: "group", action: "mount", group: "e2e-grp-renamed" });
   check("组合挂载：没选载体根 → 400 not-prepared", res.status === 400 && (await bodyOf(res)).error === "not-prepared");
 
-  // 一个技能只属于一个组合：撞组的成员直接拒，不静默搬走
+  // 一个技能只属于一个组合：新组里列到它就从原组摘出来（归属只在组合编辑器里改）
   res = await opIn(grpProj, { op: "group-set", name: "e2e-dup", members: ["grp-a"] });
-  let dupBody = await bodyOf(res);
+  const afterSteal = (await listIn(grpProj)).skillGroups ?? [];
   check(
-    "组合：成员已在别的组 → 409 member-taken 并指出撞在哪个组",
-    res.status === 409 && dupBody.error === "member-taken" && dupBody.conflicts?.[0]?.member === "grp-a" && dupBody.conflicts?.[0]?.group === "e2e-grp-renamed",
-    JSON.stringify(dupBody),
+    "组合：成员已在别的组 → 从原组摘出来（一个技能只在一个组）",
+    res.status === 200 &&
+      afterSteal.find((g) => g.name === "e2e-grp-renamed")?.members.includes("grp-a") === false &&
+      afterSteal.find((g) => g.name === "e2e-dup")?.members.join(",") === "grp-a",
+    JSON.stringify(afterSteal),
   );
-  check("组合：撞组被拒后不多出这个组", !(await listIn(grpProj)).skillGroups?.some((g) => g.name === "e2e-dup"));
   res = await opIn(grpProj, { op: "group-set", name: "e2e-dup", members: ["../outside-kit"] });
   check("组合：成员名必须是池根下一层目录（'../x' 不算池技能）→ 400 unknown-member", res.status === 400 && (await bodyOf(res)).error === "unknown-member");
+  // 放回原组（后面的用例按这个状态继续），多出来的那个组删掉
+  res = await opIn(grpProj, { op: "group-set", name: "e2e-grp-renamed", members: ["grp-a"] });
+  check(
+    "组合：换组能来回走（放回原组后 e2e-dup 空着）",
+    res.status === 200 && ((await listIn(grpProj)).skillGroups ?? []).find((g) => g.name === "e2e-dup")?.members.length === 0,
+  );
+  res = await opIn(grpProj, { op: "group-delete", group: "e2e-dup" });
+  check("组合：e2e-dup 清理 → 200", res.status === 200);
 
   // 成员出池/改名后：列表标 missing，整组挂载跳过它而不是整组失败
   res = await opIn(grpProj, { op: "group-set", name: "e2e-half", members: ["grp-b"] });
@@ -600,23 +609,21 @@ try {
   check("组合挂载：成员不在池里就跳过，不整组失败", res.status === 200 && grpBody.mounted?.length === 0 && grpBody.missing?.includes("grp-b") === true, JSON.stringify(grpBody));
   fs.renameSync(grpBParked, grpB);
 
-  // 池技能行上的分组选择：改派 = 从原组摘出来，空值 = 不分组
-  res = await opIn(grpProj, { op: "group-assign", skill: "grp-b", group: "e2e-grp-renamed" });
+  // 归属只在组合编辑器里改：保存时列到的成员从别的组摘出来（这就是「换组」）
+  res = await opIn(grpProj, { op: "group-set", name: "e2e-grp-renamed", members: ["grp-a", "grp-b"] });
   grpList = await listIn(grpProj);
   const renamedRow = grpList.skillGroups?.find((g) => g.name === "e2e-grp-renamed");
   const halfAfter = grpList.skillGroups?.find((g) => g.name === "e2e-half");
   check(
-    "分组改派：从原组摘出来、进目标组（一个技能只在一个组）",
+    "换组：保存后从原组摘出来、进目标组（一个技能只在一个组）",
     res.status === 200 && renamedRow?.members.join(",") === "grp-a,grp-b" && halfAfter?.members.length === 0,
     JSON.stringify(grpList.skillGroups),
   );
-  res = await opIn(grpProj, { op: "group-assign", skill: "grp-b", group: "" });
+  res = await opIn(grpProj, { op: "group-set", name: "e2e-grp-renamed", members: ["grp-a"] });
   const cleared = await listIn(grpProj);
-  check("分组清空：哪个组都不再含它", res.status === 200 && (cleared.skillGroups ?? []).every((g) => !g.members.includes("grp-b")));
-  res = await opIn(grpProj, { op: "group-assign", skill: "grp-b", group: "no-such-group" });
-  check("分组改派：目标组不存在 → 400 no-such-group", res.status === 400 && (await bodyOf(res)).error === "no-such-group");
-  res = await opIn(grpProj, { op: "group-assign", skill: "../outside-kit", group: "e2e-half" });
-  check("分组改派：'../x' 不是池技能 → 400 unknown-member", res.status === 400 && (await bodyOf(res)).error === "unknown-member");
+  check("移出组合：取消勾选保存后哪个组都不含它", res.status === 200 && (cleared.skillGroups ?? []).every((g) => !g.members.includes("grp-b")));
+  res = await opIn(grpProj, { op: "group-set", name: "e2e-half", members: ["../outside-kit"] });
+  check("换组：'../x' 不是池技能 → 400 unknown-member", res.status === 400 && (await bodyOf(res)).error === "unknown-member");
 
   for (const name of ["e2e-grp-renamed", "e2e-half"]) {
     res = await opIn(grpProj, { op: "group-delete", group: name });
