@@ -798,6 +798,14 @@ async function checkApply() {
     "首页学习数字随手动作刷新（订阅日程总线；学习写动作最后是改复习待办）",
     homePaneSrc.includes("schedBus.subscribe("),
   );
+  check(
+    "页条面包屑跟随阅读位置（光标滚出视口 / 未落光标时按视口顶部那一节的标题链算，滚动时重算）",
+    bundleSrc.includes("const crumbAtViewport = (host, ed)") &&
+      bundleSrc.includes("const onCrumbScroll = () =>") &&
+      bundleSrc.includes('host.addEventListener("scroll", onCrumbScroll)') &&
+      bundleSrc.includes('host.removeEventListener("scroll", onCrumbScroll)') &&
+      bundleSrc.includes("return crumbAtViewport(host, ed) || chain;"),
+  );
 
   // ── 树头动作平铺 + 资料段／添加资料同归属（只看树根）──
   check(

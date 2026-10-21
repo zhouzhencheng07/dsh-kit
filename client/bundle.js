@@ -6910,15 +6910,15 @@ ellipsis，窄列只截字不破版 */
       // 归属按「文档顺序」解释——从光标顶层块向前扫，遇到比链尾更高级（level
       // 更小）的标题就接上，得到 「# 一级 > ## 二级 > ### 三级」；二级标题归属
       // 它上面最近的同级/上级标题语境（二级属于最近的一级）。
+      // **光标不在视口里时按当前阅读位置算**：页刚打开 / 只滚没落光标时光标还停在
+      // 文档开头，光标链会一直空着，面包屑得跟眼睛看到的那一节走。
       // 无任何标题覆盖返回空串隐藏
-      const crumbOf = () => {
-        const ed = rteRef.current?.editor;
-        if (!ed) return "";
+      const crumbAt = (ed, pos) => {
         try {
-          const { $from } = ed.state.selection;
+          const $pos = ed.state.doc.resolve(Math.max(0, Math.min(pos, ed.state.doc.content.size)));
           const parts = [];
           let min = 99;
-          for (let i = $from.index(0); i >= 0 && min > 1; i--) {
+          for (let i = $pos.index(0); i >= 0 && min > 1; i--) {
             const node = ed.state.doc.child(i);
             if (node.type.name !== "heading") continue;
             const level = Number(node.attrs.level ?? 1);
@@ -6931,8 +6931,57 @@ ellipsis，窄列只截字不破版 */
           return parts.join(" > ");
         } catch {
           /* 文档替换瞬间 selection 可能短暂失效，按无标题处理 */
+          return "";
         }
-        return "";
+      };
+      /** 当前阅读位置（视口顶部那一块）的标题链：从文档头扫到第一个与视口相交的
+       *  顶层块，标题按层级栈归属（与光标链同一口径）；量不到返回空串 */
+      const crumbAtViewport = (host, ed) => {
+        let top = 0;
+        try {
+          top = host.getBoundingClientRect().top + 2;
+        } catch {
+          return "";
+        }
+        const stack = [];
+        let reached = false;
+        try {
+          ed.state.doc.forEach((node, offset) => {
+            if (reached) return;
+            if (node.type.name === "heading") {
+              const level = Number(node.attrs.level ?? 1);
+              const text = node.textBetween(0, node.content.size, "\n", " ").trim();
+              if (text !== "") {
+                while (stack.length > 0 && stack[stack.length - 1].level >= level) stack.pop();
+                stack.push({ level, label: `${"#".repeat(level)} ${text}` });
+              }
+            }
+            const dom = ed.view.nodeDOM(offset);
+            if (!(dom instanceof Element)) return;
+            if (dom.getBoundingClientRect().bottom > top) reached = true;
+          });
+        } catch {
+          return "";
+        }
+        return stack.map((x) => x.label).join(" > ");
+      };
+      const crumbOf = () => {
+        const ed = rteRef.current?.editor;
+        if (!ed) return "";
+        const host = rteHostRef.current;
+        const chain = crumbAt(ed, ed.state.selection.from);
+        if (!host) return chain;
+        // 光标在视口里 → 光标链；滚出视口 / 还没落光标 → 阅读位置链
+        let visible = true;
+        try {
+          const coords = ed.view.coordsAtPos(ed.state.selection.from);
+          const rect = host.getBoundingClientRect();
+          visible = coords.top >= rect.top - 2 && coords.top <= rect.bottom + 2;
+        } catch {
+          /* 坐标取不到按光标链走 */
+        }
+        if (visible) return chain;
+        return crumbAtViewport(host, ed) || chain;
       };
       const report = () => {
         onStateRef.current?.({ dirty: dirtyRef.current, crumb: crumbOf() });
@@ -7303,6 +7352,17 @@ ellipsis，窄列只截字不破版 */
           }, 300);
         };
         host.addEventListener("scroll", onPosScroll);
+        // 面包屑跟阅读位置走：滚动时重算一次（150ms 节流——滚动事件每帧都有，
+        // 逐帧量顶层块位置会把滚动拖卡）
+        let crumbTimer = null;
+        const onCrumbScroll = () => {
+          if (crumbTimer !== null) return;
+          crumbTimer = setTimeout(() => {
+            crumbTimer = null;
+            report();
+          }, 150);
+        };
+        host.addEventListener("scroll", onCrumbScroll);
         const cancelRestore = restoreReadPos(mountedKey, host, (anchor) => {
           try {
             const size = h.editor.state.doc.content.size;
@@ -7630,6 +7690,8 @@ ellipsis，窄列只截字不破版 */
           if (posTimer !== null) clearTimeout(posTimer);
           cancelRestore();
           host.removeEventListener("scroll", onPosScroll);
+          host.removeEventListener("scroll", onCrumbScroll);
+          if (crumbTimer !== null) clearTimeout(crumbTimer);
           recordReadPos(mountedKey, host, posAnchor());
           // 有防抖未触发的改动 → 卸载前尽力落盘（保底）。**走挂载那一刻的保存
           // 函数**：清理发生在新一次渲染之后，onSaveRef.current 已经是**新页**的
