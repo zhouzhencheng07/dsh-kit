@@ -1862,13 +1862,13 @@ setTimeout(async () => {
         "清单行勾选（复习待办）= POST study-complete（推进学习记录，不发 op=done）",
         !!revCheck && !!revDone && revDone.url === "/dsh-kit/vault/study-complete" && revDone.body.rel === "数学/函数",
       );
-      // 完成后出「第 N 次复习 · 下次 …」提示（带调整 / 完成两个快动作）
+      // 完成后出「第 N 次复习 · 下次 …」提示（带调整下次 / 结束学习两个快动作）
       stateSeq = 0;
       callLog = [];
       comps.ScheduleTasksPanel({});
       const reviewToastEl = callLog.find((c) => c[1] === comps.SchedReviewToast);
       check(
-        "勾完出复习完成提示（第 4 次复习 · 下次 2026-10-25，带调整/完成）",
+        "勾完出复习完成提示（第 4 次复习 · 下次 2026-10-25，带调整下次/结束学习）",
         !!reviewToastEl && !!reviewToastEl[2].info && reviewToastEl[2].info.dueAt === "2026-10-25" &&
           reviewToastEl[2].info.reps === 4 && typeof reviewToastEl[2].onAdjust === "function" &&
           typeof reviewToastEl[2].onFinish === "function",
@@ -1886,10 +1886,14 @@ setTimeout(async () => {
       const toastBtns = callLog.filter((c) => c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-sched-rtoastbtn"));
       const toastText = callLog.find((c) => c[2] && c[2].className === "dshk-sched-rtoasttext");
       toastBtns.forEach((b) => b[2].onClick());
+      const toastLabels = toastBtns.map((b) => b[2].children);
       check(
-        "复习完成提示本体：第 4 次复习 · 下次 10-25 文案 + 「调整」「完成」回调",
+        "复习完成提示本体：第 4 次复习 · 下次 10-25 文案 + 「调整下次」「结束学习」回调（结束动作带说明）",
         !!toastText && /第 4 次复习|Review no\. 4/.test(String(toastText[2].children)) &&
-          toastBtns.length === 2 && adjustHit === 1 && finishHit === 1,
+          toastBtns.length === 2 && adjustHit === 1 && finishHit === 1 &&
+          (toastLabels.includes("调整下次") || toastLabels.includes("Adjust next")) &&
+          (toastLabels.includes("结束学习") || toastLabels.includes("End study")) &&
+          toastBtns.some((b) => /结束这页的学习|End study for this page/.test(String(b[2].title ?? ""))),
       );
       // 条目浮层：studyRel 走只读视图（没有可编辑输入框），只有 关闭 / 完成本次复习 / 打开页面
       stateSeq = 0;

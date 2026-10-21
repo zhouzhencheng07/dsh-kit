@@ -231,11 +231,11 @@ check(
         ["已完成", "Done"].includes(comps.studyStatusText({ status: "done", reps: 0 })),
     );
     check(
-      "studyHistoryText：五种历史（首次 / 第 N 次 / 调整 / 完成 / 重启）文案带下次日期",
+      "studyHistoryText：五种历史（首次 / 第 N 次 / 调整 / 结束 / 重启）文案带下次日期",
       ["首次学习", "First learned"].includes(comps.studyHistoryText({ at: "2026-10-21", kind: "first" })) &&
         ["第 2 次 · 下次 4 天 → 11-01", "No. 2 · next in 4 d → 11-01"].includes(comps.studyHistoryText({ at: "2026-10-25", kind: "review", reps: 2, intervalDays: 4, dueAt: "2026-11-01" })) &&
         ["调整下次间隔为 10 天 → 10-31", "Next interval set to 10 d → 10-31"].includes(comps.studyHistoryText({ at: "2026-10-21", kind: "adjust", intervalDays: 10, dueAt: "2026-10-31" })) &&
-        ["完成 · 不再安排", "Done · no further review"].includes(comps.studyHistoryText({ at: "2026-10-21", kind: "done" })) &&
+        ["结束 · 不再安排", "Ended · no further review"].includes(comps.studyHistoryText({ at: "2026-10-21", kind: "done" })) &&
         ["重启 · 1 天 → 10-22", "Restarted · 1 d → 10-22"].includes(comps.studyHistoryText({ at: "2026-10-21", kind: "restart", intervalDays: 1, dueAt: "2026-10-22" })),
     );
     check(
@@ -890,6 +890,14 @@ async function checkApply() {
       bundleSrc.includes('"/dsh-kit/vault/study-finish"') &&
       bundleSrc.includes('"/dsh-kit/vault/study-adjust"') &&
       bundleSrc.includes("openStudyPage(rel)"),
+  );
+  check(
+    "复习口径与普通待办分清：勾 = 完成本次复习，提示里的结束动作叫「结束学习」（带说明，不是再记一次完成）",
+    bundleSrc.includes('"aria-label": rel === "" ? t("schedDone") : t("studyCompleteThis")') &&
+      bundleSrc.includes('title: rel === "" ? undefined : t("studyCompleteThis")') &&
+      bundleSrc.includes('title: t("studyFinishTip")') &&
+      bundleSrc.includes('studyFinish: "结束学习"') &&
+      bundleSrc.includes('studyFinishTip: "结束这页的学习'),
   );
   check(
     "复习待办「打开页面」按 rel 解析成绝对路径（.md / .markdown 都认，不靠裸拼扩展名）",
