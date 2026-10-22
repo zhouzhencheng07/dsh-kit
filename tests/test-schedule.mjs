@@ -15,6 +15,7 @@ import {
   mondayOf,
   isDateStr,
   timedMsInRange,
+  SLEEP_NOTE,
   resolveScheduleDir,
   addDays,
   todayStr,
@@ -395,6 +396,29 @@ test('独立计时段持久化往返（entries/<id>.json，文件名即身份）
   const s2 = new ScheduleStore(sched)
   assert.equal(s2.listOrphans().length, 0)
   assert.ok(fs.existsSync(path.join(entriesDir, 'o1.json.bak')))
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('睡眠：独立段只上网格，不计入总时长（名目 SLEEP_NOTE）', () => {
+  const dir = tmp()
+  const sched = path.join(dir, 'sched')
+  const entriesDir = path.join(sched, 'entries')
+  fs.mkdirSync(entriesDir, { recursive: true })
+  // 一条 8 小时睡眠段 + 一条 20 分钟独立计时：睡眠不算，计时照算
+  fs.writeFileSync(
+    path.join(entriesDir, 'sleep.json'),
+    JSON.stringify({ id: 'sleep', start: '2026-09-07T23:00:00', end: '2026-09-08T07:00:00', note: SLEEP_NOTE }),
+    'utf8',
+  )
+  fs.writeFileSync(
+    path.join(entriesDir, 'work.json'),
+    JSON.stringify({ id: 'work', start: '2026-09-08T09:00:00', end: '2026-09-08T09:20:00', note: '独立计时' }),
+    'utf8',
+  )
+  const store = new ScheduleStore(sched)
+  assert.equal(store.listOrphans().length, 2) // 网格照常能看到睡眠段
+  assert.equal(store.stats('day', '2026-09-08').timedMs, 20 * 60000)
+  assert.equal(store.stats('day', '2026-09-08').totalMs, 20 * 60000)
   fs.rmSync(dir, { recursive: true, force: true })
 })
 

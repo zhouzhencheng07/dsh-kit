@@ -807,13 +807,18 @@ export function rangeOf(scope, date) {
     const lastDay = new Date(y, m, 0).getDate();
     return [first, `${y}-${pad2(m)}-${pad2(lastDay)}`];
 }
+/** 睡眠段的名目：睡眠是特殊计时（只记起止、不走全局计时），只上网格看一天怎么切，
+ *  不计入「总时长」——只认独立计时段；挂条目的段带的是备注，不按名目判 */
+export const SLEEP_NOTE = '睡眠';
 /** 区间内计时合计（按计时段 start 归属日；进行中的不计入；orphans=独立计时段） */
 export function timedMsInRange(events, from, to, orphans) {
     let total = 0;
-    const addRange = (entries) => {
+    const addRange = (entries, skipSleep) => {
         if (!Array.isArray(entries))
             return;
         for (const t of entries) {
+            if (skipSleep && t.note === SLEEP_NOTE)
+                continue; // 睡眠只上网格，不算学习/工作时间
             if (t.end === undefined)
                 continue;
             const day = t.start.slice(0, 10);
@@ -826,8 +831,8 @@ export function timedMsInRange(events, from, to, orphans) {
         }
     };
     for (const ev of events)
-        addRange(ev.timeEntries);
-    addRange(orphans);
+        addRange(ev.timeEntries, false);
+    addRange(orphans, true);
     return total;
 }
 /** 实例的已占位时长（分钟，跨天块把中间整天算上；无 end 按 60 分钟兜底） */

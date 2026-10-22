@@ -172,6 +172,9 @@ export declare class ScheduleStore {
 }
 export declare function dtStrOf(d: Date, withSeconds?: boolean): string;
 export declare function rangeOf(scope: 'day' | 'week' | 'month', date: string): [string, string];
+/** 睡眠段的名目：睡眠是特殊计时（只记起止、不走全局计时），只上网格看一天怎么切，
+ *  不计入「总时长」——只认独立计时段；挂条目的段带的是备注，不按名目判 */
+export declare const SLEEP_NOTE = "\u7761\u7720";
 /** 区间内计时合计（按计时段 start 归属日；进行中的不计入；orphans=独立计时段） */
 export declare function timedMsInRange(events: ScheduleEvent[], from: string, to: string, orphans?: ScheduleTimeEntry[]): number;
 /**
