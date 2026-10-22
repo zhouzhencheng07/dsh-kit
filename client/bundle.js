@@ -2887,7 +2887,47 @@ ellipsis，窄列只截字不破版 */
       }
     }
 
-    /** 展开式目标选择条：点选物理根即执行（不存在的根由宿主按需创建） */
+    /** primitives 的浮层菜单在不在：移动目标选择与「在应用里打开」共用这条判据 */
+    function skHasMenu() {
+      return !!(dswPrim && typeof dswPrim.Menu === "function");
+    }
+
+    /** 「移动」的目标选择：与「在应用里打开」同款浮层（官方 primitives.Menu，贴右端、紧凑），
+     *  条目 = 除本行所在根之外的物理根，点一条即搬（沾池的搬动由调用方接去确认）。
+     *  primitives 取不到时退回行下那条 TargetPicker——功能不减，只是不浮。 */
+    function MoveButton({ targets, busy, open, setOpen, onPick, onFallback }) {
+      if (!skHasMenu()) {
+        return jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onFallback, children: t("skMove") });
+      }
+      const anchor = jsxRuntime.jsx("button", {
+        type: "button",
+        className: "dshk-sk-btn",
+        disabled: busy,
+        "aria-haspopup": "menu",
+        "aria-expanded": open && !busy,
+        onClick: () => setOpen(!open),
+        children: t("skMove"),
+      });
+      return jsxRuntime.jsx(dswPrim.Menu, {
+        open: open && !busy,
+        autoFocus: true,
+        portal: true,
+        dense: true,
+        align: "end",
+        onClose: () => setOpen(false),
+        items: targets.map((root) => ({
+          id: root.id,
+          label: root.id === "pool" ? t("skPool") : skRootShort(root.id),
+        })),
+        onSelect: (id) => {
+          setOpen(false);
+          onPick(id);
+        },
+        anchor,
+      });
+    }
+
+    /** 行下展开的目标选择条（只在浮层不可用时兜底）：点选物理根即执行 */
     function TargetPicker({ roots, onPick }) {
       return jsxRuntime.jsxs("div", {
         className: "dshk-sk-target",
@@ -2905,9 +2945,9 @@ ellipsis，窄列只截字不破版 */
     }
 
     /**
-     * 单个技能行（单行布局）：名称+徽标+描述截断+移动/禁用/删除。
-     * 池内技能没有禁用按钮（池不被扫描，禁用无意义）；移动展开目标选择条
-     * （picker 状态提升到页面级，同一时间只允许一行展开）。
+     * 单个技能行（单行布局）：名称+徽标+描述截断+打开/挂载/移动/禁用/删除。
+     * 池内技能没有禁用按钮（池不被扫描，禁用无意义）；移动在行右弹目标浮层
+     * （picker 状态提升到页面级，同一时间只允许一行的浮层开着）。
      * 技能只有移动、没有复制（副本与本体分叉），挂载关系上的连移动都不给；
      * 沾池的移动前要确认：出池等于把池里那份本体交出去，进池等于交给所有挂载方共用。
      */
@@ -3005,7 +3045,14 @@ ellipsis，窄列只截字不破版 */
                       })
                     : null,
                   canMove
-                    ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: startPicker, children: t("skMove") })
+                    ? jsxRuntime.jsx(MoveButton, {
+                        targets,
+                        busy,
+                        open: pickerOpen,
+                        setOpen: (v) => setPicker(v ? skill.path : null),
+                        onPick: pickDest,
+                        onFallback: startPicker,
+                      })
                     : null,
                   groupId !== "pool" && !isLink
                     ? jsxRuntime.jsx("button", { type: "button", className: "dshk-sk-btn", disabled: busy, onClick: onDisable, children: skill.disabled ? t("skEnable") : t("skDisable") })
@@ -3022,7 +3069,7 @@ ellipsis，窄列只截字不破版 */
               }),
             ],
           }),
-          pickerOpen ? jsxRuntime.jsx(TargetPicker, { roots: targets, onPick: pickDest }) : null,
+          pickerOpen && !skHasMenu() ? jsxRuntime.jsx(TargetPicker, { roots: targets, onPick: pickDest }) : null,
           moveAsk !== null
             ? jsxRuntime.jsxs("div", {
                 className: "dshk-sk-bar",
@@ -3595,6 +3642,7 @@ ellipsis，窄列只截字不破版 */
     exports.GroupRow = GroupRow;
     exports.GroupEditor = GroupEditor;
     exports.OpenDirButton = OpenDirButton;
+    exports.MoveButton = MoveButton;
     exports.poolRows = poolRows;
     exports.sortSkillRows = sortSkillRows;
     exports.OpenAppIcon = OpenAppIcon;

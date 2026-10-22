@@ -234,12 +234,14 @@ check(
   };
   const btn = (labels) => callLog.find((c) => c[0] === "jsx" && c[1] === "button" && labels.includes(c[2].children));
   const textOf = (re) => callLog.some((c) => typeof c[2]?.children === "string" && re.test(c[2].children));
+  // 移动按钮是 MoveButton（自己管浮层），行级断言看这个组件元素在不在
+  const moveBtn = () => callLog.some((c) => c[0] === "jsx" && c[1] === comps.MoveButton);
 
   const poolSkill = { name: "hello-kit", root: "pool", path: "C:/home/.dsh/skill-pool/hello-kit", mounts: 2, description: "共享技能" };
   const row = renderRow(poolSkill, "pool");
   check("池技能行渲染无异常", !!row && typeof row === "object");
   check("池技能行：没有复制（技能一律只移动）", !btn(["复制", "Copy"]));
-  check("池技能行：被工作区挂着时不给移动（要移出先让各挂载方卸载）", !btn(["移动", "Move"]));
+  check("池技能行：被工作区挂着时不给移动（要移出先让各挂载方卸载）", !moveBtn());
   check(
     "池技能行：不摆挂载数（工作区视角的面板不看别处挂了几份，挂没挂由按钮说）",
     !textOf(/^(挂载|Mounted in) \d+$/) && !callLog.some((c) => c[2]?.className === "dshk-sk-state"),
@@ -250,7 +252,62 @@ check(
   // （序号跟行内状态数走——详情展开退场后前移了一位，再加行内状态先改这里）
   const poolFree = { ...poolSkill, mounts: 0 };
   renderRow(poolFree, "pool");
-  check("没人挂的池技能：给移动", !!btn(["移动", "Move"]));
+  check("没人挂的池技能：给移动", moveBtn());
+
+  // 移动：目标选择是浮层（与「在应用里打开」同款 primitives.Menu），不再是行下那条选择条
+  {
+    let moved = null;
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    comps.SkillRow({
+      skill: { name: "local", root: "project-dsh", path: "C:/x/.dsh/skills/local" },
+      groupId: "workspace",
+      allRoots: ROOTS,
+      cwd: "C:/x",
+      busy: false,
+      runOp: (o) => {
+        moved = o;
+      },
+      picker: "C:/x/.dsh/skills/local",
+      setPicker: () => {},
+    });
+    const call = callLog.find((c) => c[0] === "jsx" && c[1] === comps.MoveButton);
+    check(
+      "移动：行把「除本行所在根之外的物理根」交给浮层，且浮层是开着的",
+      !!call && call[2].targets.map((r) => r.id).join(",") === "project-agents,user-dsh" && call[2].open === true,
+      JSON.stringify(call?.[2]?.targets),
+    );
+    check("移动：浮层开着时不再出行下那条选择条", !callLog.some((c) => c[2]?.className === "dshk-sk-target"));
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    comps.MoveButton({
+      targets: [{ id: "project-agents", dir: "C:/x/.agents/skills" }, { id: "user-dsh", dir: "C:/home/.dsh/skills" }],
+      busy: false,
+      open: true,
+      setOpen: () => {},
+      onPick: (id) => {
+        moved = id;
+      },
+      onFallback: () => {},
+    });
+    const menu = callLog.find((c) => c[0] === "jsx" && c[1] === primStub.Menu);
+    check(
+      "移动：目标选择走官方浮层菜单（贴右端、紧凑），锚在「移动」那枚按钮上",
+      !!menu &&
+        menu[2].portal === true &&
+        menu[2].align === "end" &&
+        menu[2].dense === true &&
+        menu[2].items.map((it) => it.id).join(",") === "project-agents,user-dsh" &&
+        menu[2].anchor &&
+        menu[2].anchor.props["aria-haspopup"] === "menu",
+      JSON.stringify(menu?.[2]?.items),
+    );
+    menu[2].onSelect("project-agents");
+    check("移动：菜单点一条即交回目标根 id", moved === "project-agents", String(moved));
+  }
+
   stateSeq = 0;
   stateStore.clear();
   callLog = [];
@@ -265,11 +322,11 @@ check(
   renderRow(linkSkill, "workspace");
   check(
     "池挂载链接行：不给移动（要动先卸载）、不给复制、不给禁用，另给卸载",
-    !btn(["移动", "Move"]) && !btn(["复制", "Copy"]) && !btn(["禁用", "Disable"]) && !!btn(["卸载", "Unmount"]),
+    !moveBtn() && !btn(["复制", "Copy"]) && !btn(["禁用", "Disable"]) && !!btn(["卸载", "Unmount"]),
   );
 
   renderRow({ name: "local", root: "project-dsh", path: "C:/x/.dsh/skills/local" }, "workspace");
-  check("非池实体行：给移动、没有复制（技能一律只移动）", !!btn(["移动", "Move"]) && !btn(["复制", "Copy"]));
+  check("非池实体行：给移动、没有复制（技能一律只移动）", moveBtn() && !btn(["复制", "Copy"]));
   check("非池实体行：也没有版本入口（只有池里的技能各自带仓库）", !btn(["版本", "Versions"]));
 
   // 进池方向同样先确认（本体交出去共用 / 用户级来源不再全局可见）
@@ -591,6 +648,10 @@ async function checkApply() {
       poolSrc.includes("name !== path.basename(name)") &&
       bundleSrc.includes("takenBy") &&
       bundleSrc.includes("dshk-sk-chip[data-taken]"),
+  );
+  check(
+    "移动的目标选择是浮层（行下那条选择条只在没有 primitives 时兜底）",
+    bundleSrc.includes("pickerOpen && !skHasMenu()") && bundleSrc.includes("function TargetPicker") && bundleSrc.includes("function MoveButton"),
   );
   check(
     "池列表不再按挂载状态筛选、行上不再摆挂载数（工作区视角的面板，挂载状态由行上按钮说）",
