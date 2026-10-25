@@ -289,6 +289,30 @@ callLog = [];
 out = comps.ScheduleView({});
 check("ScheduleView 初始态渲染无异常（周网格 + 表头统计）", !!out && typeof out === "object");
 check("timerMinsOfDT：取 HH:mm 折当日分钟", comps.timerMinsOfDT("2026-09-07T09:30:15") === 570);
+// 6.4a) 睡眠段按名目取紫：预置 ScheduleView 的 state 槽（0 = weekStart，1 = useScheduleData 的 data）
+{
+  const d = new Date();
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const monday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  stateSeq = 0;
+  stateStore.clear();
+  stateStore.set(0, monday);
+  stateStore.set(1, {
+    events: [],
+    occurrences: [],
+    orphans: [
+      { start: `${monday}T00:10`, end: `${monday}T06:40`, note: "睡眠" },
+      { start: `${monday}T09:00`, end: `${monday}T10:00`, note: "看文档" },
+    ],
+    runningTimer: null,
+  });
+  callLog = [];
+  comps.ScheduleView({});
+  const blockCls = (c) => (c[2] && typeof c[2].className === "string" && c[2].className.startsWith("dshk-sched-event") ? c[2].className : "");
+  const sleepBlock = callLog.map(blockCls).filter((s) => s.includes("is-sleep"));
+  const pastBlock = callLog.map(blockCls).filter((s) => s.includes("is-past"));
+  check("睡眠段按名目取紫（is-sleep），普通计时段照旧是已过去蓝", sleepBlock.length === 1 && pastBlock.length === 1 && !sleepBlock[0].includes("is-past"));
+}
 {
   const lanes = comps.schedAssignLanes([
     { baseId: "a", startMins: 540, endMins: 600 },

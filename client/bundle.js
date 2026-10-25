@@ -1698,12 +1698,15 @@ ellipsis，窄列只截字不破版 */
 .dshk-sched-nowline{position:absolute;left:0;right:0;height:2px;background:var(--dsw-alias-danger,#cd3131);z-index:2;pointer-events:none}
 .dshk-sched-nowline::before{content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:999px;background:var(--dsw-alias-danger,#cd3131)}
 /* 块颜色只表达状态（浅底深字）：还没到橙、进行中绿、已过去蓝、
-   逾期红——同一门课在时间线上下会换色；计时段停了按已过去蓝，跑着的段不上网格 */
+   逾期红——同一门课在时间线上下会换色；计时段停了按已过去蓝，跑着的段不上网格。
+   例外是睡眠段：按名目取紫，不跟已过去同色——它是一天里最长的一段，混在事件里
+   看不出"睡了多久" */
 .dshk-sched-event{position:absolute;z-index:1;overflow:hidden;border-radius:6px;padding:2px 6px;font-size:11px;line-height:1.35;cursor:pointer;background:var(--dsw-alias-fill-l2);color:var(--dsw-alias-label-primary);box-shadow:inset 0 0 0 1px color-mix(in srgb,currentColor 30%,transparent);box-sizing:border-box}
 .dshk-sched-event:hover{filter:brightness(.96)}
 .dshk-sched-event.is-todo{background:#ffe8cc;color:#d9480f}
 .dshk-sched-event.is-doing{background:#d3f9d8;color:#2b8a3e}
 .dshk-sched-event.is-past{background:#d0ebff;color:#1971c2}
+.dshk-sched-event.is-sleep{background:#e5dbff;color:#5f3dc4}
 .dshk-sched-event.is-overdue{background:#ffe3e3;color:#c92a2a}
 /* 短段（按比例高度不足 18px）：紧凑排版把下限压到 14px 仍容得下单行标题，
    高度尽量贴合真实时长比例（border-box 后渲染高度=style 高度，不再被 padding 抬高） */
@@ -5392,6 +5395,8 @@ ellipsis，窄列只截字不破版 */
     const SCHED_ALLDAY_VISIBLE = 1;
     // 宿主 occurrence.state → 状态色类（浅底深字）
     const SCHED_STATE_CLASS = { todo: "is-todo", doing: "is-doing", past: "is-past" };
+    // 睡眠段的名目（与宿主 SLEEP_NOTE 同一口径）：计时段按名目取色，不跟已过去同色
+    const SCHED_SLEEP_NOTE = "睡眠";
 
     const schedPad2 = (n) => String(n).padStart(2, "0");
     const schedDateOf = (d) => `${d.getFullYear()}-${schedPad2(d.getMonth() + 1)}-${schedPad2(d.getDate())}`;
@@ -6255,18 +6260,18 @@ ellipsis，窄列只截字不破版 */
       // 计时段上网格：事件 timeEntries 与独立计时段（orphans，
       // note=自由标题）合成显示块——只展示已闭合段（本端不做计时，进行中的
       // 段不会出现），按 start 日归属（与 timedMsInRange 统计口径一致）。
-      // 画法与事件块同一套状态色：停下的段=已过去蓝
+      // 画法与事件块同一套状态色：停下的段=已过去蓝；睡眠段（名目「睡眠」）单独紫
       const timedOcc = react.useMemo(() => {
         const segs = [];
         for (const ev of data.events) {
           (Array.isArray(ev.timeEntries) ? ev.timeEntries : []).forEach((t, i) => {
             if (t.end === undefined) return;
-            segs.push({ baseId: `${ev.id}#timed${i}`, date: t.start.slice(0, 10), endDate: t.end.slice(0, 10), startMins: timerMinsOfDT(t.start), endMins: timerMinsOfDT(t.end), title: t.note || ev.title, virtual: false, isTimed: true, entryOwner: ev.id, entryIndex: i, entry: t });
+            segs.push({ baseId: `${ev.id}#timed${i}`, date: t.start.slice(0, 10), endDate: t.end.slice(0, 10), startMins: timerMinsOfDT(t.start), endMins: timerMinsOfDT(t.end), title: t.note || ev.title, virtual: false, isTimed: true, sleep: t.note === SCHED_SLEEP_NOTE, entryOwner: ev.id, entryIndex: i, entry: t });
           });
         }
         (Array.isArray(data.orphans) ? data.orphans : []).forEach((o, i) => {
           if (o.end === undefined) return;
-          segs.push({ baseId: `orphan#timed${i}`, date: o.start.slice(0, 10), endDate: o.end.slice(0, 10), startMins: timerMinsOfDT(o.start), endMins: timerMinsOfDT(o.end), title: o.note || t("schedTimerStandalone"), virtual: false, isTimed: true, entryOwner: null, entryIndex: i, entry: o });
+          segs.push({ baseId: `orphan#timed${i}`, date: o.start.slice(0, 10), endDate: o.end.slice(0, 10), startMins: timerMinsOfDT(o.start), endMins: timerMinsOfDT(o.end), title: o.note || t("schedTimerStandalone"), virtual: false, isTimed: true, sleep: o.note === SCHED_SLEEP_NOTE, entryOwner: null, entryIndex: i, entry: o });
         });
         return segs;
       }, [data.events, data.orphans]);
@@ -6512,7 +6517,7 @@ ellipsis，窄列只截字不破版 */
                 const stateClass = o.isChore
                   ? o.overdue ? "is-overdue" : "is-todo"
                   : o.isTimed
-                    ? "is-past"
+                    ? o.sleep ? "is-sleep" : "is-past"
                     : SCHED_STATE_CLASS[o.state] ?? "is-todo";
                 // 矮到装不下两行的小条（截止小条/跨天尾巴）：标题与时刻挤一行
                 const squeeze = o.isChore && o.thin;
