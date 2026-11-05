@@ -151,9 +151,9 @@ async function checkApply() {
   check("patch 不再静态钉 web 行的 searchProvider（关行 = 不接管 seam）", !/^\s*searchProvider:/m.test(patchSrc) && !/^\s*- id: web\s*$/m.test(patchSrc));
   check("组件行声明 + exports 子路径 + locale 齐备", patchSrc.includes("name: dsh-kit/search") && !!pkg.exports["./search"] && !!pkg.exports["./search/locale/*.json"]);
   check(
-    "seam 接管在组件入口装配，且带「字段不可写/别家钉住就不注册」的降级",
+    "seam 接管在组件入口装配，且带「配置引用不可写/别家钉住就不注册」的降级",
     compSrc.includes("applyWebSearch") && compSrc.includes("searchMaxResults") && compSrc.includes("name = 'dsh-kit/search'") &&
-      seamSrc.includes("searchProviderId") && seamSrc.includes("WEB_PROVIDER_CONFIGURED_MISSING") && seamSrc.includes("function pinProvider"),
+      seamSrc.includes("config?.searchProvider") && !seamSrc.includes("searchProviderId") && seamSrc.includes("WEB_PROVIDER_CONFIGURED_MISSING") && seamSrc.includes("function pinProvider"),
   );
   // 字段表与宿主 Config schema 同源（改必须两处同改，漂移即红）
   const schemaKeys = [...compSrc.matchAll(/^ {8}(\w+): z\.(?:boolean|number|string)\(\)[^,\n]*\.default\(([^)]*)\)\.volatile\(\),?$/gm)].map((m) => m[1]);

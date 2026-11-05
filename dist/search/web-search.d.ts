@@ -17,12 +17,19 @@ interface SeamSearchProvider {
         truncated: boolean;
     }>;
 }
+/** volatile 配置引用：get 读当前快照；写入经 cosmokit 的全局符号键 */
+interface VolatileRef<T> {
+    get(): T;
+    [key: symbol]: unknown;
+}
 /** web 服务里本层触达的最小面（其余成员不声明） */
 interface SeamWebService {
     registerSearchProvider: (provider: SeamSearchProvider) => unknown;
     searchProviders?: Map<string, SeamSearchProvider>;
-    /** provider 选择：seam 每次 search() 现读；未配置时为 undefined */
-    searchProviderId?: string;
+    /** provider 选择：volatile 引用，seam 每次 search() 现读 */
+    config?: {
+        searchProvider?: VolatileRef<string | undefined>;
+    };
 }
 /** cordis ctx 里本层用到的最小面（effect 可缺：缺失时不做还原） */
 interface KitCtx {
