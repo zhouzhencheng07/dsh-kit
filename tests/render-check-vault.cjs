@@ -360,17 +360,28 @@ check(
     const homeStats = callLog.filter((c) => c[2] && c[2].className === "dshk-home-rowstat");
     const s0 = String((homeStats[0] && homeStats[0][2].children) || "");
     const s1 = String((homeStats[1] && homeStats[1][2].children) || "");
+    const quizBtns = callLog.filter((c) => c[2] && c[2].className === "dshk-home-quiz");
+    const q0 = String((quizBtns[0] && quizBtns[0][2].children) || "");
+    const q1 = String((quizBtns[1] && quizBtns[1][2].children) || "");
+    const quizTip = callLog.find((c) => c[1] === dockExports.KitTip && c[2] && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-home-quiz");
     check("首页知识集行渲染不崩（两集各一行）", homeErr === null && !!homeOut && homeRows.length === 2);
     check(
-      "首页知识集行统计：资料 · 题目 m/t + 在学 / 今日（学习取不到就退化，不连累题目数字）",
-      (s0.includes("题目 1/3") || s0.includes("Quiz 1/3")) &&
+      "首页知识集行统计：只写资料数与在学 / 今日（学习取不到就退化；题目数不在这段文字里）",
+      (s0.startsWith("资料 0") || s0.startsWith("Refs 0")) &&
         (s0.includes("在学 2") || s0.includes("studying 2")) &&
         (s0.includes("今日 1") || s0.includes("due today 1")) &&
-        (s1.includes("题目 0") || s1.includes("Quiz 0")) &&
+        !/\d+\/\d+/.test(s0) &&
+        (s1.startsWith("资料 0") || s1.startsWith("Refs 0")) &&
         !/在学|studying|今日|due today/.test(s1),
     );
+    check(
+      "题目数并进「测验」钮：有题写 已掌握/能答，0 题只写「测验」（悬停同一句）",
+      ["测验 1/3", "Quiz 1/3"].includes(q0) &&
+        ["测验", "Quiz"].includes(q1) &&
+        !!quizTip && ["测验 · 已掌握 1/3", "Quiz · Mastered 1/3"].includes(quizTip[2].label),
+    );
     const studyBtn = callLog.find((c) => c[2] && c[2].className === "dshk-home-study");
-    const quizBtn = callLog.find((c) => c[2] && c[2].className === "dshk-home-quiz");
+    const quizBtn = quizBtns[0];
     const studyTip = callLog.find((c) => c[1] === dockExports.KitTip && c[2] && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-home-study");
     check(
       "「学习计划」图标钮在「测验」钮之前（KsIcon + 官方气泡「学习计划」）",

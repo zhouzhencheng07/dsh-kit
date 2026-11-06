@@ -4015,7 +4015,6 @@ ellipsis，窄列只截字不破版 */
       homeSetsCount: "共 {n} 个",
       homeBack: "返回首页",
       homeRefs: "资料",
-      homeQuiz: "题目",
       homeSetsEmpty: "还没有知识集——在左侧目录树的目录行 ⋯ 里「设为知识集」",
       homeOpenVaultFirst: "先打开左侧知识库才能进入",
       qzEntry: "测验",
@@ -4409,7 +4408,6 @@ ellipsis，窄列只截字不破版 */
       homeSetsCount: "{n} in total",
       homeBack: "Back to home",
       homeRefs: "Refs",
-      homeQuiz: "Quiz",
       homeSetsEmpty: "No knowledge sets yet — mark a folder via ⋯ → Make knowledge set in the sidebar",
       homeOpenVaultFirst: "Open the vault panel first to enter a set",
       qzEntry: "Quiz",
@@ -10714,15 +10712,27 @@ ellipsis，窄列只截字不破版 */
         if (hit !== "") return hit;
         return idx !== null && idx.root !== "" ? joinRelPath(idx.root, String(rel) + ".md") : "";
       };
+      const setStatOf = (dir) => (stats === null ? null : stats.get(dir) ?? null);
+      // 统计行只留资料数与学习数：题目数并进「测验」钮，一个入口带数
       const statText = (dir, refs) => {
-        const s = stats === null ? null : stats.get(dir) ?? null;
-        const quiz = s === null ? "…" : t("homeQuiz") + " " + (s.quiz.total > 0 ? s.quiz.mastered + "/" + s.quiz.total : "0");
+        const s = setStatOf(dir);
         // 在学 / 今日到期只在有数时追加（0 不占地方）
         const study = s === null || s.study === null
           ? ""
           : (s.study.active > 0 ? " · " + t("homeStudyActive").replace("{n}", String(s.study.active)) : "") +
             (s.study.due > 0 ? " · " + t("homeStudyDue").replace("{n}", String(s.study.due)) : "");
-        return t("homeRefs") + " " + refs + " · " + quiz + study;
+        return t("homeRefs") + " " + refs + study;
+      };
+      // 测验钮文案：已掌握/能答（0 题只写「测验」——进去就是出题），与页条入口同口径
+      const quizText = (dir) => {
+        const s = setStatOf(dir);
+        return s === null || s.quiz.total === 0 ? t("qzEntry") : t("qzEntry") + " " + s.quiz.mastered + "/" + s.quiz.total;
+      };
+      const quizTip = (dir) => {
+        const s = setStatOf(dir);
+        return s === null || s.quiz.total === 0
+          ? t("qzEntryTip")
+          : t("qzEntry") + " · " + t("qzMastered") + " " + s.quiz.mastered + "/" + s.quiz.total;
       };
       const enterSet = (dir) => {
         const abs = idx !== null && idx.root !== "" ? absJoinUnder(idx.root, dir) : "";
@@ -10751,14 +10761,18 @@ ellipsis，窄列只截字不破版 */
                 children: jsxRuntime.jsx(KsIcon, { className: "dshk-home-studyicon" }),
               }),
             }),
-            jsxRuntime.jsx("button", {
-              type: "button",
-              className: "dshk-home-quiz",
-              onClick: (ev) => {
-                ev.stopPropagation();
-                if (idx !== null && idx.root !== "") qzOpen({ kind: "set", path: absJoinUnder(idx.root, f.dir), title: f.dir.split("/").pop() });
-              },
-              children: t("qzEntry"),
+            // 测验：题数长在按钮上，不再单列一段「题目 m/t」
+            jsxRuntime.jsx(KitTip, {
+              label: quizTip(f.dir),
+              children: jsxRuntime.jsx("button", {
+                type: "button",
+                className: "dshk-home-quiz",
+                onClick: (ev) => {
+                  ev.stopPropagation();
+                  if (idx !== null && idx.root !== "") qzOpen({ kind: "set", path: absJoinUnder(idx.root, f.dir), title: f.dir.split("/").pop() });
+                },
+                children: quizText(f.dir),
+              }),
             }),
           ],
         }, f.dir);
