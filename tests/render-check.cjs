@@ -514,6 +514,16 @@ check(
     return lines.length === 2 && lines[0].length === 602 && lines[1] === "> …（已截断）";
   })(),
 );
+check("vaultCiteQuote：首尾空行剥除且不转引用块（喂宿主引用节点）", comps.vaultCiteQuote("\n第一行\n第二行\n\n") === "第一行\n第二行");
+check("vaultCiteQuote：空选区 / 非字符串回空串", comps.vaultCiteQuote("") === "" && comps.vaultCiteQuote(null) === "");
+check(
+  "vaultCiteQuote：超 12 行截断标注",
+  (() => {
+    const many = Array.from({ length: 40 }, (_v, i) => "第" + (i + 1) + "行").join("\n");
+    const lines = comps.vaultCiteQuote(many).split("\n");
+    return lines.length === 13 && lines[0] === "第1行" && lines[12] === "…（已截断）";
+  })(),
+);
 check(
   "vaultCiteText：正好 12 行不标注",
   (() => {

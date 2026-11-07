@@ -659,6 +659,13 @@ async function checkApply() {
       /vaultSelectionText\(h\.editor\)/.test(bubCiteBody) &&
       /setBub\(null\)/.test(bubCiteBody),
   );
+  check(
+    "引用到对话的选区走宿主「引用文本」同一条动作（QuoteNode 小卡），字面引用块只作兜底",
+    bundleSrc.includes("shell.actions.insertQuote(vaultCiteQuote(selText))") === false &&
+      /shell\.actions\.insertQuote\(quoteText\)/.test(bundleSrc) &&
+      /const quoteText = vaultCiteQuote\(selText\)/.test(bundleSrc) &&
+      /shell\.actions\.setDraft\(vaultCiteText\(draft, selText\)\)/.test(bundleSrc),
+  );
   // 树行 @ 的选区镜像与泡泡同一条取文本口径：编辑器状态优先（DOM 文本在表格多格
   // 会多出一倍空行、原子节点整块丢），编辑器选区不可用才退回 DOM 文本
   check(

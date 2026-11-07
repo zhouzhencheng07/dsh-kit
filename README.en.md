@@ -66,8 +66,9 @@ from the page). It stays in the list: **do not turn it off**.
   auto-numbered on clashes, and each material row's `⋯` can rename / unmount / delete it);
   open page tabs follow renames/moves (the tab is reopened at the new address) and close
   on delete; chat integration (vault paths in chat open the page, "@" on a tree row cites
-  page/selection — a long selection is clipped to the first 12 lines / 600 characters and
-  marked as truncated, while the chip still points at the whole page); **page bodies are what-you-see-is-what-you-get editors** (TipTap rich
+  page/selection — the selection becomes the same quote card the chat's own "quote text" uses,
+  the page becomes an @ chip; a long selection is clipped to the first 12 lines / 600 characters and
+  marked as truncated, while the @ chip still points at the whole page); **page bodies are what-you-see-is-what-you-get editors** (TipTap rich
   text, no source/preview duality): `/` opens a two-level command menu (headings & text /
   special blocks / lists / math & code / charts / attachments),
   a selection floats an inline format bar (colour swatches and links included) and, inside a

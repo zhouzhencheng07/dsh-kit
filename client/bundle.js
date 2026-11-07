@@ -5002,11 +5002,11 @@ ellipsis，窄列只截字不破版 */
     const VAULT_CITE_MAX_LINES = 12;
     const VAULT_CITE_MAX_CHARS = 600;
 
-    /** M4 笔记→会话：「引用到对话」的选区文本转引用块续在草稿后（首尾空行剥掉，
-     *  超长截断并标注）。页面路径本体由 @ 引用芯片承载（与文件树
-     *  「@到对话」同一条路径，此函数只管引用块文本）。render-check 直调。 */
-    function vaultCiteText(draft, selText) {
-      const base = typeof draft === "string" ? draft : "";
+    /** 「引用到对话」的选区文本：首尾空行剥掉，超长按上限截断并标注（页面本体
+     *  由 @ 引用芯片指向，引用只是「指的是哪一段」的提示，不必把整页倒进对话）。
+     *  同一份文本喂宿主的引用节点（输入框里那枚小卡 / 悬停看全文），兜底的字面
+     *  引用块也由它拼。render-check 直调。 */
+    function vaultCiteQuote(selText) {
       const raw = typeof selText === "string" ? selText.replace(/\r\n?/g, "\n") : "";
       const lines = raw.split("\n");
       while (lines.length > 0 && lines[0].trim() === "") lines.shift();
@@ -5026,15 +5026,24 @@ ellipsis，窄列只截字不破版 */
         kept.push(lines[0].slice(0, VAULT_CITE_MAX_CHARS));
         clipped = true;
       }
-      const quoteLines = kept.map((l) => "> " + l);
-      if (clipped) quoteLines.push("> …（已截断）");
-      const quote = quoteLines.length > 0 ? quoteLines.join("\n") + "\n\n" : "";
+      if (clipped) kept.push("…（已截断）");
+      return kept.join("\n");
+    }
+
+    /** 兜底路径：宿主引用动作不可用时，把同一段引用写成字面引用块续在草稿后。
+     *  render-check 直调。 */
+    function vaultCiteText(draft, selText) {
+      const base = typeof draft === "string" ? draft : "";
+      const quote = vaultCiteQuote(selText);
+      const quoteLines = quote === "" ? [] : quote.split("\n").map((l) => "> " + l);
+      const text = quoteLines.length > 0 ? quoteLines.join("\n") + "\n\n" : "";
       const joiner = base !== "" && !base.endsWith("\n") ? "\n" : "";
-      return base + joiner + quote;
+      return base + joiner + text;
     }
 
     /** 一页 @ 进对话输入框（左侧树行按钮的唯一实现）：以官方 @ 引用芯片直插
-     *  （与文件树同一条路径），selText 非空时先落引用块。**成功不提示**——
+     *  （与文件树同一条路径），selText 非空时先落宿主的引用小卡（与聊天自己的
+     *  「引用文本」同一个动作）；动作不可用才退回字面引用块。**成功不提示**——
      *  插进去的引用就摆在输入框里，再弹一条是噪音；只有失败原因经 notify 回报
      *  （组件各自有自己的 toast 通道）。 */
     function citeVaultPageToChat(pagePath, selText, notify) {
@@ -5049,13 +5058,27 @@ ellipsis，窄列只截字不破版 */
         return;
       }
       if (typeof selText === "string" && selText !== "") {
-        const pre = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
-        const draft = pre && typeof pre.draft === "string" ? pre.draft : "";
-        try {
-          shell.actions.setDraft(vaultCiteText(draft, selText));
-        } catch {
-          notify("vaultCiteUnavailable");
-          return;
+        // 选区走宿主「引用文本」的同一条动作（输入框里落 QuoteNode 小卡，与手动
+        // 引用长得一样；发出后也由宿主的引用节点渲染成卡，不再塞字面 `> ` 行）
+        const quoteText = vaultCiteQuote(selText);
+        let quoted = false;
+        if (quoteText !== "" && typeof shell.actions?.insertQuote === "function") {
+          try {
+            quoted = shell.actions.insertQuote(quoteText) === true;
+          } catch {
+            quoted = false;
+          }
+        }
+        // 兜底：动作不可用（草稿处于 claim 阶段 / 宿主未开放）时退回字面引用块
+        if (!quoted) {
+          const pre = typeof shell.state?.getSnapshot === "function" ? shell.state.getSnapshot() : null;
+          const draft = pre && typeof pre.draft === "string" ? pre.draft : "";
+          try {
+            shell.actions.setDraft(vaultCiteText(draft, selText));
+          } catch {
+            notify("vaultCiteUnavailable");
+            return;
+          }
         }
       }
       const chipRef = { source: "reference", ref: mention, label: pageBasename(pagePath) || pagePath, appearance: "file", clipboardText: mention };
@@ -12681,6 +12704,7 @@ ellipsis，窄列只截字不破版 */
     exports.vaultTabsClose = vaultTabsClose;
     exports.vaultDirChoices = vaultDirChoices;
     exports.vaultCiteText = vaultCiteText;
+    exports.vaultCiteQuote = vaultCiteQuote;
     exports.vaultSelectionText = vaultSelectionText;
     // PDF 阅读器的版面算术：纯函数，render-check 直测（锚点 ↔ 滚动量往返）
     exports.pdfAnchorAt = pdfAnchorAt;
