@@ -156,8 +156,8 @@ await test('savePage：同内容去重；edit.keep 搬记录、不 keep 清零',
   mkpage('数学/2.1')
   const first = savePage(root, '数学/2.1', [SINGLE], null)
   const id = first.questions[0].id
-  record(root, '数学/2.1', id, true)
-  record(root, '数学/2.1', id, true)
+  record(root, '数学/2.1', id, true, '2026-01-01')
+  record(root, '数学/2.1', id, true, '2026-01-02')
   // 同题再交一遍：去重成一道，记录还在
   const dup = savePage(root, '数学/2.1', [SINGLE, SINGLE], null)
   assert.equal(dup.questions.length, 1)
@@ -190,20 +190,45 @@ await test('savePage：与标记同形的题干拒绝落盘', () => {
   )
 })
 
-await test('record/markMastered/forget：连击达阈值即掌握，答错归零', () => {
+await test('record/markMastered/forget：连击达阈值即掌握，同一天只涨一次，答错归零', () => {
   mkpage('数学/4.1')
   savePage(root, '数学/4.1', [SINGLE], null)
   const id = readPage(root, '数学/4.1').questions[0].id
   assert.equal(DEFAULT_THRESHOLD, 3)
-  let out = record(root, '数学/4.1', id, true)
-  assert.deepEqual(out, { streak: 1, mastered: false, newlyMastered: false })
-  out = record(root, '数学/4.1', id, true)
-  out = record(root, '数学/4.1', id, true)
-  assert.deepEqual(out, { streak: 3, mastered: true, newlyMastered: true })
-  assert.deepEqual(record(root, '数学/4.1', id, false), { streak: 0, mastered: false, newlyMastered: false })
-  assert.deepEqual(markMastered(root, '数学/4.1', id), { streak: 3, mastered: true, newlyMastered: true })
-  assert.deepEqual(markMastered(root, '数学/4.1', id), { streak: 3, mastered: true, newlyMastered: false })
-  assert.deepEqual(forget(root, '数学/4.1', id), { streak: 0, mastered: false, newlyMastered: false })
+  let out = record(root, '数学/4.1', id, true, '2026-01-01')
+  assert.deepEqual(out, { streak: 1, mastered: false, newlyMastered: false, capped: false })
+  // 同一天再答对：题照刷，连击不涨（不然一天点三次就算掌握）
+  assert.deepEqual(record(root, '数学/4.1', id, true, '2026-01-01'), { streak: 1, mastered: false, newlyMastered: false, capped: true })
+  out = record(root, '数学/4.1', id, true, '2026-01-02')
+  assert.deepEqual(out, { streak: 2, mastered: false, newlyMastered: false, capped: false })
+  out = record(root, '数学/4.1', id, true, '2026-01-03')
+  assert.deepEqual(out, { streak: 3, mastered: true, newlyMastered: true, capped: false })
+  assert.deepEqual(record(root, '数学/4.1', id, false), { streak: 0, mastered: false, newlyMastered: false, capped: false })
+  // 答错不清 lastDay：当天再答对仍不加分（与桌面端同口径）
+  assert.equal(record(root, '数学/4.1', id, true, '2026-01-03').capped, true)
+  assert.deepEqual(markMastered(root, '数学/4.1', id), { streak: 3, mastered: true, newlyMastered: true, capped: false })
+  assert.deepEqual(markMastered(root, '数学/4.1', id), { streak: 3, mastered: true, newlyMastered: false, capped: false })
+  assert.deepEqual(forget(root, '数学/4.1', id), { streak: 0, mastered: false, newlyMastered: false, capped: false })
+})
+
+await test('掌握度 lastDay：非空才落盘、读回保留；空串当缺字段、类型不对整份算坏', () => {
+  // 放到 数学 之外的目录：readScope 那条用例按 数学 的页面全集做定值断言
+  mkpage('附记/4.2')
+  savePage(root, '附记/4.2', [SINGLE], null)
+  const id = readPage(root, '附记/4.2').questions[0].id
+  record(root, '附记/4.2', id, true, '2026-01-05')
+  const file = progressPath(root, '附记/4.2')
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).progress[id].lastDay, '2026-01-05')
+  // 空串在桌面端 skip_serializing_if 下等于没有：读回不带字段，再写出去也不带
+  fs.writeFileSync(file, JSON.stringify({ version: 1, progress: { [id]: { streak: 1, mastered: false, updatedMs: 0, lastDay: '' } } }), 'utf8')
+  assert.equal(readProgress(root, '附记/4.2', null).progress[id].lastDay, undefined)
+  record(root, '附记/4.2', id, true, '2026-01-06')
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).progress[id].lastDay, '2026-01-06')
+  // 类型不对（桌面端 serde 会整份拒）：挪 .bak 当空表
+  setQuizWarn(() => {})
+  fs.writeFileSync(file, JSON.stringify({ version: 1, progress: { [id]: { streak: 1, mastered: false, updatedMs: 0, lastDay: 5 } } }), 'utf8')
+  assert.deepEqual(readProgress(root, '附记/4.2', null).progress, {})
+  fs.rmSync(`${file}.bak`, { force: true })
 })
 
 await test('setThreshold：1..20 夹取；已掌握但连击低于新阈值的刷回', () => {
@@ -416,13 +441,13 @@ await test('改阈值：某一页掌握度写不回去也不中断，阈值照�
   savePage(root, '数学/16.1', [SINGLE], null)
   savePage(root, '数学/16.2', [{ ...SINGLE, stem: '另一题' }], null)
   const id1 = readPage(root, '数学/16.1').questions[0].id
-  record(root, '数学/16.1', id1, true)
-  record(root, '数学/16.1', id1, true)
-  record(root, '数学/16.1', id1, true)
+  record(root, '数学/16.1', id1, true, '2026-01-01')
+  record(root, '数学/16.1', id1, true, '2026-01-02')
+  record(root, '数学/16.1', id1, true, '2026-01-03')
   const id2 = readPage(root, '数学/16.2').questions[0].id
-  record(root, '数学/16.2', id2, true)
-  record(root, '数学/16.2', id2, true)
-  record(root, '数学/16.2', id2, true)
+  record(root, '数学/16.2', id2, true, '2026-01-01')
+  record(root, '数学/16.2', id2, true, '2026-01-02')
+  record(root, '数学/16.2', id2, true, '2026-01-03')
   assert.equal(readProgress(root, '数学/16.1', null).progress[id1].mastered, true)
   // 让 16.1 的掌握度写不回去：把目标文件锁成只读（rename 覆盖只读文件在 Windows 上失败）
   const locked = progressPath(root, '数学/16.1')

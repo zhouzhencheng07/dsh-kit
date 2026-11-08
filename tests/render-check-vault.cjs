@@ -142,7 +142,7 @@ check(
         comps.qzJudge(blank, { choice: "", judge: null, blanks: ["上海"] }) === false,
     );
     check("qzNorm：全角转半角 + 去空白 + 小写（判题跨端口径）", comps.qzNorm("Ａ Bｃ１") === "abc1");
-    check("qzAnswerText/qzStoredAnswerText：展示串按打乱序、存储串按原序", comps.qzAnswerText(item) === "B. 二" && comps.qzStoredAnswerText(single) === "B");
+    check("qzAnswerText/qzStoredAnswerText：选择只给字母（内容就在选项里）、存储串按原序", comps.qzAnswerText(item) === "B" && comps.qzStoredAnswerText(single) === "B");
     const pages = [{ rel: "a", questions: [{ id: "1", type: "judge", stem: "x", options: [], answer: true }, { id: "2", type: "single", stem: "y", options: ["p", "q"], answer: "A" }, { id: "3", type: "single", stem: "z", options: [], answer: null }] }];
     const prog = { "1": { streak: 3, mastered: true, updatedMs: 0 } };
     check(
@@ -336,7 +336,8 @@ check(
     stateStore.clear();
   }
 
-  // ── 首页知识集行：学习统计 + 「学习计划」鈕（HomePagePane 直渲，state 槽序 0=idx 1=stats 2=showAll 3=studySet 4=nonce）──
+  // ── 首页知识集行：学习 / 测验两个统计入口 + 段头「题集」
+  //    （HomePagePane 直渲，state 槽序 0=idx 1=stats 2=showAll 3=qzSetsOpen 4=studySet 5=nonce）──
   {
     stateSeq = 0;
     stateStore.clear();
@@ -347,8 +348,9 @@ check(
       ["物理", { quiz: { total: 0, mastered: 0 }, study: null }],
     ]));
     stateStore.set(2, false);
-    stateStore.set(3, null);
-    stateStore.set(4, 0);
+    stateStore.set(3, false);
+    stateStore.set(4, null);
+    stateStore.set(5, 0);
     let homeErr = null;
     let homeOut = null;
     try {
@@ -357,22 +359,16 @@ check(
       homeErr = e;
     }
     const homeRows = callLog.filter((c) => c[2] && c[2].className === "dshk-home-row");
-    const homeStats = callLog.filter((c) => c[2] && c[2].className === "dshk-home-rowstat");
-    const s0 = String((homeStats[0] && homeStats[0][2].children) || "");
-    const s1 = String((homeStats[1] && homeStats[1][2].children) || "");
-    const quizBtns = callLog.filter((c) => c[2] && c[2].className === "dshk-home-quiz");
+    const quizBtns = callLog.filter((c) => c[2] && c[2].className === "dshk-home-statbtn dshk-home-quiz");
     const q0 = String((quizBtns[0] && quizBtns[0][2].children) || "");
     const q1 = String((quizBtns[1] && quizBtns[1][2].children) || "");
-    const quizTip = callLog.find((c) => c[1] === dockExports.KitTip && c[2] && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-home-quiz");
+    const quizTip = callLog.find((c) => c[1] === dockExports.KitTip && c[2] && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-home-statbtn dshk-home-quiz");
+    const studyBtns = callLog.filter((c) => c[2] && c[2].className === "dshk-home-statbtn dshk-home-study");
+    const st0 = String((studyBtns[0] && studyBtns[0][2].children) || "");
     check("首页知识集行渲染不崩（两集各一行）", homeErr === null && !!homeOut && homeRows.length === 2);
     check(
-      "首页知识集行统计：只写资料数与在学 / 今日（学习取不到就退化；题目数不在这段文字里）",
-      (s0.startsWith("资料 0") || s0.startsWith("Refs 0")) &&
-        (s0.includes("在学 2") || s0.includes("studying 2")) &&
-        (s0.includes("今日 1") || s0.includes("due today 1")) &&
-        !/\d+\/\d+/.test(s0) &&
-        (s1.startsWith("资料 0") || s1.startsWith("Refs 0")) &&
-        !/在学|studying|今日|due today/.test(s1),
+      "首页知识集行只留学习与测验两个入口：学习写待复习数（物理没有学习数据就不出），资料数退役",
+      studyBtns.length === 1 && ["待复习 1", "to review 1"].includes(st0),
     );
     check(
       "题目数并进「测验」钮：有题写 已掌握/能答，0 题只写「测验」（悬停同一句）",
@@ -380,15 +376,13 @@ check(
         ["测验", "Quiz"].includes(q1) &&
         !!quizTip && ["测验 · 已掌握 1/3", "Quiz · Mastered 1/3"].includes(quizTip[2].label),
     );
-    const studyBtn = callLog.find((c) => c[2] && c[2].className === "dshk-home-study");
-    const quizBtn = quizBtns[0];
-    const studyTip = callLog.find((c) => c[1] === dockExports.KitTip && c[2] && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-home-study");
+    const studyTip = callLog.find((c) => c[1] === dockExports.KitTip && c[2] && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-home-statbtn dshk-home-study");
     check(
-      "「学习计划」图标钮在「测验」钮之前（KsIcon + 官方气泡「学习计划」）",
-      !!studyBtn && !!quizBtn && callLog.indexOf(studyBtn) < callLog.indexOf(quizBtn) &&
-        !!studyTip && ["学习计划", "Study plan"].includes(studyTip[2].label),
+      "「学习计划」钮是文字统计（待复习 / 在学）+ 官方气泡（在学 2 · 待复习 1），排在测验钮之前",
+      !!studyBtns[0] && !!quizBtns[0] && callLog.indexOf(studyBtns[0]) < callLog.indexOf(quizBtns[0]) &&
+        !!studyTip && ["学习计划（在学 2 · 待复习 1）", "Study plan (studying 2 · to review 1)"].includes(studyTip[2].label),
     );
-    if (studyBtn) studyBtn[2].onClick({ stopPropagation: () => {} });
+    if (studyBtns[0]) studyBtns[0][2].onClick({ stopPropagation: () => {} });
     stateSeq = 0;
     callLog = [];
     let reopenErr = null;
@@ -400,6 +394,45 @@ check(
     check(
       "点「学习计划」= 挂该集总览浮层（VaultStudySetDialog，带 dir/name）",
       reopenErr === null && callLog.some((c) => c[1] === comps.VaultStudySetDialog && c[2].dir === "数学" && c[2].name === "数学"),
+    );
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+  }
+
+  // ── 首页段头「题集」：名单浮层 + 新建 / 编辑的面 ──
+  {
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    stateStore.set(3, true);
+    let setsErr = null;
+    try {
+      comps.HomePagePane({});
+    } catch (e) {
+      setsErr = e;
+    }
+    check("首页段头「题集」= 挂题集名单浮层（VaultQuizSetsDialog）", setsErr === null && callLog.some((c) => c[1] === comps.VaultQuizSetsDialog));
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    const listOut = comps.VaultQuizSetsDialog({ onClose: () => {} });
+    check(
+      "题集名单壳：标题「题集」+ 新建钮 + 空态提示",
+      !!listOut && listOut.type === comps.VaultDialog &&
+        ["题集", "Quiz sets"].includes(listOut.props.title) &&
+        callLog.some((c) => c[2] && c[2].className === "dshk-btn-save"),
+    );
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    const editOut = comps.VaultQuizSetEdit({ target: { id: "1", name: "期中考", pages: ["数学/1.1"] }, onBack: () => {}, onClose: () => {} });
+    check(
+      "题集编辑面：标题 + 名字回显 + 保存钮（名字与页都没选时保存不可用）",
+      !!editOut && editOut.type === comps.VaultDialog &&
+        ["编辑题集", "Edit set"].includes(editOut.props.title) &&
+        callLog.some((c) => c[2] && c[2].value === "期中考") &&
+        callLog.some((c) => c[2] && c[2].className === "dshk-btn-save"),
     );
     stateSeq = 0;
     stateStore.clear();
@@ -758,6 +791,32 @@ async function checkApply() {
       quizSrc.includes("createHash('sha256')") && quizSrc.includes("slice(0, 16)") &&
       quizSrc.includes("WS_RE") && quizSrc.includes("sortedProgress"),
   );
+  const quizSetSrc = read("src/vault/quiz-set.ts");
+  check(
+    "题集：独立文件（.quiz-state/sets/）+ 七件端点（列表 / 一个 / 有题的页 / 建改 / 删 / 清空 / 记作答）",
+    quizSetSrc.includes("SETS_DIR = 'sets'") && quizSetSrc.includes("export function keyOf") &&
+      quizSetSrc.includes("recordSetAnswer") &&
+      compSrc.includes("/dsh-kit/vault/quiz-sets") && compSrc.includes("/dsh-kit/vault/quiz-set-scope") &&
+      compSrc.includes("/dsh-kit/vault/quiz-pages") && compSrc.includes("/dsh-kit/vault/quiz-set-save") &&
+      compSrc.includes("/dsh-kit/vault/quiz-set-delete") && compSrc.includes("/dsh-kit/vault/quiz-set-clear") &&
+      compSrc.includes("/dsh-kit/vault/quiz-set-record"),
+  );
+  check(
+    "题集掌握度独立：作答走题集自己的记录口、不套「一天一次」，也不碰页面进度文件",
+    quizSetSrc.includes("Math.min(entry.streak + 1, 0xffffffff)") && !quizSetSrc.includes("lastDay === today") &&
+      bundleSrc.includes('"/dsh-kit/vault/quiz-set-record"') &&
+      bundleSrc.includes("isQSet ? it.rel + \"|\" + it.q.id : it.q.id"),
+  );
+  check(
+    "掌握度一天最多涨一次：宿主判 lastDay、回 capped，浮层说「今天已记过一次」",
+    quizSrc.includes("entry.lastDay === today") && quizSrc.includes("capped") &&
+      bundleSrc.includes('t("qzCapped")'),
+  );
+  check(
+    "答题不打乱选项、正确答案只给字母（与桌面端同口径）",
+    bundleSrc.includes("shuffleOptions === true && order.length >= 2") &&
+      bundleSrc.includes('if (q.type === "single" || q.type === "multi") return item.displayAnswer;'),
+  );
   check(
     "测验浮层挂常驻壳 + 页条/树菜单两个入口",
     bundleSrc.includes("jsxRuntime.jsx(VaultQuizOverlay, {})") &&
@@ -803,14 +862,21 @@ async function checkApply() {
       bundleSrc.includes("HOME_SETS_LIMIT = 8") && bundleSrc.includes("HOME_RECENT_LIMIT = 8"),
   );
   check(
-    "首页知识集行：学习统计（在学 / 今日）与「学习计划」钮（在测验钮之前）+ 总览浮层随开随挂",
+    "首页知识集行：学习统计（待复习 / 在学）与「学习计划」文字钮（在测验钮之前）+ 总览浮层随开随挂",
     homePaneSrc.includes('"/dsh-kit/vault/study-scope?"') &&
       homePaneSrc.includes("studyScopeCounts(") &&
       homePaneSrc.includes('t("homeStudyActive")') && homePaneSrc.includes('t("homeStudyDue")') &&
-      homePaneSrc.includes('className: "dshk-home-study"') &&
+      homePaneSrc.includes('t("homeStudyTip")') &&
+      homePaneSrc.includes('className: "dshk-home-statbtn dshk-home-study"') &&
       homePaneSrc.includes("setStudySet({ dir: f.dir") &&
       homePaneSrc.includes("jsxRuntime.jsx(VaultStudySetDialog, {") &&
       homePaneSrc.indexOf("dshk-home-study") < homePaneSrc.indexOf("dshk-home-quiz"),
+  );
+  check(
+    "首页段头「题集」入口：名单浮层挂首页签、点行开题集（kind=qset）",
+    homePaneSrc.includes('t("qzSets")') &&
+      homePaneSrc.includes("jsxRuntime.jsx(VaultQuizSetsDialog, {") &&
+      bundleSrc.includes('qzOpen({ kind: "qset", path: s.id, title: s.name })'),
   );
   check(
     "首页学习数字随手动作刷新（订阅日程总线；学习写动作最后是改复习待办）",

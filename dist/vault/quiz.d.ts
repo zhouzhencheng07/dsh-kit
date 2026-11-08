@@ -33,6 +33,8 @@ export interface QuizRecord {
     streak: number;
     mastered: boolean;
     updatedMs: number;
+    /** 最近一次算数的答对日（YYYY-MM-DD）：同一天重复答对不再涨连击（空 = 没记过） */
+    lastDay?: string;
 }
 export interface QuizSettings {
     version: number;
@@ -51,6 +53,8 @@ export interface QuizOutcome {
     streak: number;
     mastered: boolean;
     newlyMastered: boolean;
+    /** 今天这道题已经涨过连击：本次答对没加分（连击与掌握都不变） */
+    capped: boolean;
 }
 /** 题目与掌握度的指纹：范围内的文件数 + 最新 mtime */
 export interface QuizRevision {
@@ -102,8 +106,10 @@ export declare function revision(root: string, rel: string | null, dir: string |
 export declare function readSettings(root: string): QuizSettings;
 /** 回前端的掌握度：rel 给一页，否则 dir（"" = 整库）递归汇总 + 全局阈值 */
 export declare function readProgress(root: string, rel: string | null, dir: string | null): QuizProgressDto;
-/** 记一次作答：答对连击 +1（达阈值即掌握），答错连击归零并撤销掌握 */
-export declare function record(root: string, rel: string, id: string, correct: boolean): QuizOutcome;
+/** 记一次作答：答对连击 +1（达阈值即掌握），答错连击归零并撤销掌握。
+ *  **同一道题一天最多涨一次**——题还在池子里、想刷几遍都行，但当天再答对不加分，
+ *  这样「一天连点三次就算掌握」刷不出来，掌握至少得跨几天。today 只给单测注入。 */
+export declare function record(root: string, rel: string, id: string, correct: boolean, today?: string): QuizOutcome;
 /** 手动标记掌握：连击直接设成阈值（一步跳满） */
 export declare function markMastered(root: string, rel: string, id: string): QuizOutcome;
 /** 遗忘（答对后自觉没底也可用）：连击归零并撤销掌握 */

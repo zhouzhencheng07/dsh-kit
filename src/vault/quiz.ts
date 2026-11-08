@@ -82,6 +82,8 @@ export interface QuizRecord {
   streak: number
   mastered: boolean
   updatedMs: number
+  /** 最近一次算数的答对日（YYYY-MM-DD）：同一天重复答对不再涨连击（空 = 没记过） */
+  lastDay?: string
 }
 
 interface QuizProgress {
@@ -108,6 +110,8 @@ export interface QuizOutcome {
   streak: number
   mastered: boolean
   newlyMastered: boolean
+  /** 今天这道题已经涨过连击：本次答对没加分（连击与掌握都不变） */
+  capped: boolean
 }
 
 /** 题目与掌握度的指纹：范围内的文件数 + 最新 mtime */
@@ -905,15 +909,19 @@ function parseProgress(text: string): QuizProgress | null {
   if (obj.progress === null || typeof obj.progress !== 'object' || Array.isArray(obj.progress)) return null
   for (const [id, rec] of Object.entries(obj.progress as Record<string, unknown>)) {
     if (rec === null || typeof rec !== 'object' || Array.isArray(rec)) return null
-    const r = rec as { streak?: unknown; mastered?: unknown; updatedMs?: unknown }
+    const r = rec as { streak?: unknown; mastered?: unknown; updatedMs?: unknown; lastDay?: unknown }
     if (!isU32(r.streak)) return null
     if (r.mastered !== undefined && typeof r.mastered !== 'boolean') return null
     if (!isU64(r.updatedMs)) return null
-    out.progress[id] = {
+    if (r.lastDay !== undefined && typeof r.lastDay !== 'string') return null
+    const parsed: QuizRecord = {
       streak: typeof r.streak === 'number' ? r.streak : 0,
       mastered: r.mastered === true,
       updatedMs: typeof r.updatedMs === 'number' ? r.updatedMs : 0,
     }
+    // 空串与缺字段同形（桌面端 skip_serializing_if 不收空 lastDay）
+    if (typeof r.lastDay === 'string' && r.lastDay !== '') parsed.lastDay = r.lastDay
+    out.progress[id] = parsed
   }
   return out
 }
@@ -1029,6 +1037,11 @@ function allProgress(root: string): [string, QuizProgress][] {
 }
 
 const nowMs = (): number => Date.now()
+/** 本地日期串（YYYY-MM-DD）：与 schedule.todayStr 同一口径，掌握度的「一天」按本地日算 */
+function localToday(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 /** 界面编辑过的那道题的掌握记录怎么办：keep = 把旧 id 的记录搬到新 id（旧条目删掉）；
  *  不 keep = 清零（新、旧 id 的记录都删）。有改动才回 true */
@@ -1048,18 +1061,26 @@ function applyEdit(p: QuizProgress, oldId: string, newId: string, keep: boolean)
   return hadOld || hadNew
 }
 
-/** 记一次作答：答对连击 +1（达阈值即掌握），答错连击归零并撤销掌握 */
-export function record(root: string, rel: string, id: string, correct: boolean): QuizOutcome {
+/** 记一次作答：答对连击 +1（达阈值即掌握），答错连击归零并撤销掌握。
+ *  **同一道题一天最多涨一次**——题还在池子里、想刷几遍都行，但当天再答对不加分，
+ *  这样「一天连点三次就算掌握」刷不出来，掌握至少得跨几天。today 只给单测注入。 */
+export function record(root: string, rel: string, id: string, correct: boolean, today: string = localToday()): QuizOutcome {
   const r = safeQuizRel(rel)
   const threshold = readSettings(root).threshold
   const p = readProgressFile(root, r)
   let newly = false
-  const entry = p.progress[id] ?? { streak: 0, mastered: false, updatedMs: 0 }
+  let capped = false
+  const entry: QuizRecord = p.progress[id] ?? { streak: 0, mastered: false, updatedMs: 0 }
   if (correct) {
-    entry.streak = Math.min(entry.streak + 1, 0xffffffff)
-    if (entry.streak >= threshold && !entry.mastered) {
-      entry.mastered = true
-      newly = true
+    if (entry.lastDay === today) {
+      capped = true
+    } else {
+      entry.streak = Math.min(entry.streak + 1, 0xffffffff)
+      entry.lastDay = today
+      if (entry.streak >= threshold && !entry.mastered) {
+        entry.mastered = true
+        newly = true
+      }
     }
   } else {
     entry.streak = 0
@@ -1068,7 +1089,7 @@ export function record(root: string, rel: string, id: string, correct: boolean):
   entry.updatedMs = nowMs()
   p.progress[id] = entry
   writeProgressFile(root, r, p)
-  return { streak: entry.streak, mastered: entry.mastered, newlyMastered: newly }
+  return { streak: entry.streak, mastered: entry.mastered, newlyMastered: newly, capped }
 }
 
 /** 手动标记掌握：连击直接设成阈值（一步跳满） */
@@ -1080,10 +1101,11 @@ export function markMastered(root: string, rel: string, id: string): QuizOutcome
   const was = entry.mastered
   entry.streak = threshold
   entry.mastered = true
+  entry.lastDay = localToday()
   entry.updatedMs = nowMs()
   p.progress[id] = entry
   writeProgressFile(root, r, p)
-  return { streak: threshold, mastered: true, newlyMastered: !was }
+  return { streak: threshold, mastered: true, newlyMastered: !was, capped: false }
 }
 
 /** 遗忘（答对后自觉没底也可用）：连击归零并撤销掌握 */
@@ -1096,7 +1118,7 @@ export function forget(root: string, rel: string, id: string): QuizOutcome {
   entry.updatedMs = nowMs()
   p.progress[id] = entry
   writeProgressFile(root, r, p)
-  return { streak: 0, mastered: false, newlyMastered: false }
+  return { streak: 0, mastered: false, newlyMastered: false, capped: false }
 }
 
 /** 改阈值（1..20）：已经掌握但连击数低于新阈值的题刷回未掌握 */

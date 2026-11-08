@@ -25,6 +25,10 @@
 //                                     题目 / 范围汇总 / 掌握度 / 外部改动指纹
 //   POST /dsh-kit/vault/quiz-save|quiz-record|quiz-mark|quiz-forget|quiz-threshold
 //                              —— 出题写回 / 记作答 / 标掌握 / 遗忘 / 改阈值
+//   GET  /dsh-kit/vault/quiz-sets|quiz-set-scope|quiz-pages —— 题集列表 / 一个题集 /
+//                                     有题的页面（新建题集时勾选）
+//   POST /dsh-kit/vault/quiz-set-save|quiz-set-delete|quiz-set-clear|quiz-set-record
+//                              —— 题集的建改 / 删 / 清空进度 / 记作答（进度独立于页面）
 //   GET  /dsh-kit/vault/study|study-scope —— 学习/复习：一页记录 / 范围汇总
 //   POST /dsh-kit/vault/study-first|study-complete|study-adjust|study-finish|
 //                       study-restart|study-remove|study-sync
@@ -76,6 +80,15 @@ import {
   setQuizWarn,
   setThreshold,
 } from './quiz.ts'
+import {
+  clearSet,
+  deleteSet,
+  listSets,
+  pagesWithQuestions,
+  readSetScope,
+  recordSetAnswer,
+  saveSet,
+} from './quiz-set.ts'
 import {
   adjust as studyAdjust,
   complete as studyComplete,
@@ -641,6 +654,28 @@ export async function apply(ctx: KitCtx, config: KitSettings = {}): Promise<void
       vaultPost('/dsh-kit/vault/quiz-threshold', (body, root) => {
         if (typeof body.value !== 'number' || !Number.isFinite(body.value)) throw new Error('阈值必须是数字')
         return { threshold: setThreshold(root, body.value) }
+      })
+
+      // ── 题集端点（./quiz-set.ts）──
+      //   题集是独立文件（库根 .quiz-state/sets/<id>.json，跨端同一份），进度也在里面：
+      //   删题集不影响页面里的题与掌握度。id 直接当文件名，只认字母数字与 - _。
+      vaultRoute('/dsh-kit/vault/quiz-sets', quizRead((_url, root) => ({ sets: listSets(root) })))
+      vaultRoute(
+        '/dsh-kit/vault/quiz-set-scope',
+        quizRead((url, root) => readSetScope(root, url.searchParams.get('id') ?? '')),
+      )
+      vaultRoute('/dsh-kit/vault/quiz-pages', quizRead((_url, root) => ({ pages: pagesWithQuestions(root) })))
+      vaultPost('/dsh-kit/vault/quiz-set-save', (body, root) => ({
+        set: saveSet(root, typeof body.id === 'string' && body.id !== '' ? body.id : null, body.name, body.pages),
+      }))
+      vaultPost('/dsh-kit/vault/quiz-set-delete', (body, root) => {
+        deleteSet(root, String(body.id ?? ''))
+        return { deleted: true }
+      })
+      vaultPost('/dsh-kit/vault/quiz-set-clear', (body, root) => ({ set: clearSet(root, String(body.id ?? '')) }))
+      vaultPost('/dsh-kit/vault/quiz-set-record', (body, root) => {
+        if (typeof body.correct !== 'boolean') throw new Error('correct 必须是布尔')
+        return recordSetAnswer(root, String(body.id ?? ''), body.rel, body.qid, body.correct)
       })
 
       // ── 学习 / 复习端点（./study.ts + ./study-events.ts）──

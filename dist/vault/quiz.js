@@ -862,11 +862,17 @@ function parseProgress(text) {
             return null;
         if (!isU64(r.updatedMs))
             return null;
-        out.progress[id] = {
+        if (r.lastDay !== undefined && typeof r.lastDay !== 'string')
+            return null;
+        const parsed = {
             streak: typeof r.streak === 'number' ? r.streak : 0,
             mastered: r.mastered === true,
             updatedMs: typeof r.updatedMs === 'number' ? r.updatedMs : 0,
         };
+        // 空串与缺字段同形（桌面端 skip_serializing_if 不收空 lastDay）
+        if (typeof r.lastDay === 'string' && r.lastDay !== '')
+            parsed.lastDay = r.lastDay;
+        out.progress[id] = parsed;
     }
     return out;
 }
@@ -993,6 +999,11 @@ function allProgress(root) {
     return out;
 }
 const nowMs = () => Date.now();
+/** 本地日期串（YYYY-MM-DD）：与 schedule.todayStr 同一口径，掌握度的「一天」按本地日算 */
+function localToday() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 /** 界面编辑过的那道题的掌握记录怎么办：keep = 把旧 id 的记录搬到新 id（旧条目删掉）；
  *  不 keep = 清零（新、旧 id 的记录都删）。有改动才回 true */
 function applyEdit(p, oldId, newId, keep) {
@@ -1012,18 +1023,27 @@ function applyEdit(p, oldId, newId, keep) {
     delete p.progress[newId];
     return hadOld || hadNew;
 }
-/** 记一次作答：答对连击 +1（达阈值即掌握），答错连击归零并撤销掌握 */
-export function record(root, rel, id, correct) {
+/** 记一次作答：答对连击 +1（达阈值即掌握），答错连击归零并撤销掌握。
+ *  **同一道题一天最多涨一次**——题还在池子里、想刷几遍都行，但当天再答对不加分，
+ *  这样「一天连点三次就算掌握」刷不出来，掌握至少得跨几天。today 只给单测注入。 */
+export function record(root, rel, id, correct, today = localToday()) {
     const r = safeQuizRel(rel);
     const threshold = readSettings(root).threshold;
     const p = readProgressFile(root, r);
     let newly = false;
+    let capped = false;
     const entry = p.progress[id] ?? { streak: 0, mastered: false, updatedMs: 0 };
     if (correct) {
-        entry.streak = Math.min(entry.streak + 1, 0xffffffff);
-        if (entry.streak >= threshold && !entry.mastered) {
-            entry.mastered = true;
-            newly = true;
+        if (entry.lastDay === today) {
+            capped = true;
+        }
+        else {
+            entry.streak = Math.min(entry.streak + 1, 0xffffffff);
+            entry.lastDay = today;
+            if (entry.streak >= threshold && !entry.mastered) {
+                entry.mastered = true;
+                newly = true;
+            }
         }
     }
     else {
@@ -1033,7 +1053,7 @@ export function record(root, rel, id, correct) {
     entry.updatedMs = nowMs();
     p.progress[id] = entry;
     writeProgressFile(root, r, p);
-    return { streak: entry.streak, mastered: entry.mastered, newlyMastered: newly };
+    return { streak: entry.streak, mastered: entry.mastered, newlyMastered: newly, capped };
 }
 /** 手动标记掌握：连击直接设成阈值（一步跳满） */
 export function markMastered(root, rel, id) {
@@ -1044,10 +1064,11 @@ export function markMastered(root, rel, id) {
     const was = entry.mastered;
     entry.streak = threshold;
     entry.mastered = true;
+    entry.lastDay = localToday();
     entry.updatedMs = nowMs();
     p.progress[id] = entry;
     writeProgressFile(root, r, p);
-    return { streak: threshold, mastered: true, newlyMastered: !was };
+    return { streak: threshold, mastered: true, newlyMastered: !was, capped: false };
 }
 /** 遗忘（答对后自觉没底也可用）：连击归零并撤销掌握 */
 export function forget(root, rel, id) {
@@ -1059,7 +1080,7 @@ export function forget(root, rel, id) {
     entry.updatedMs = nowMs();
     p.progress[id] = entry;
     writeProgressFile(root, r, p);
-    return { streak: 0, mastered: false, newlyMastered: false };
+    return { streak: 0, mastered: false, newlyMastered: false, capped: false };
 }
 /** 改阈值（1..20）：已经掌握但连击数低于新阈值的题刷回未掌握 */
 export function setThreshold(root, value) {

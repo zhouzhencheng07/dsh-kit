@@ -90,10 +90,11 @@ from the page). It stays in the list: **do not turn it off**.
   overwrites silently and never touches git); external changes while the page is clean are
   still re-read silently; the plugin creates no skeleton directories and never touches git
   - **Home** (the third right-dock tab, opened by `⌂` in the panel toolbar): a knowledge-sets
-    section (first 8: book icon + name + "Materials N · Quiz mastered/total" + studying / due-today
-    counts + inline "Study plan" (opens this set's study overview) and "Quiz" buttons; more than 8
-    offers "All knowledge sets ›", an in-tab full view) and a
-    recently-updated section (the whole vault by mtime, first 8, folder shown on the right).
+    section (first 8: book icon + name + a "to review N" / "studying N" study button on the right
+    (opens this set's study overview) and a "Quiz mastered/total" button; both buttons have a
+    fixed width and right-aligned tabular numbers, and material counts stay out of the row; the
+    section header offers "Quiz sets", plus "All knowledge sets ›" when there are more than 8)
+    and a recently-updated section (the whole vault by mtime, first 8, folder shown on the right).
     Clicking a set re-roots the left tree to it (with a hint when the vault tree is not the
     active form); clicking a page row opens it
   - **Quiz** (shares one `.quiz` dataset with the desktop end): the page-bar "Quiz" button
@@ -103,18 +104,25 @@ from the page). It stays in the list: **do not turn it off**.
     then runs question by question with instant marking and a summary; a page entry also has
     "Edit questions" (add/change/delete written back wholesale, optionally keeping mastery).
     Mastery is consecutive correct answers ≥ a threshold stored in `.quiz-state/settings.json`
-    at the vault root (editable in the panel)
+    at the vault root (editable in the panel); **a question can raise its streak at most once per
+    day** (you may re-answer it any number of times — a repeat that day only says "already counted
+    today", so mastery takes several days). Options keep the author's order and the correct answer
+    is shown as letters only
+  - **Quiz sets** ("Quiz sets" in the home section header): gather questions from several pages
+    for a quick run; their mastery is independent of the pages. The questions stay on their pages,
+    and a question changed or a page deleted only marks the matching progress "invalid"; a set can
+    be renamed / re-paged, have its mastery cleared, or be deleted without touching any question
   - **Study / review** (shares one `.study` dataset with the desktop end; one record per page):
     the page bar's fixed right cluster (left to right) is `@` · Study · Quiz · Backlinks · Outline;
     the "Study" button turns into "Review · today / in N d / N d overdue" or "Done" — marking a
     page as learned schedules the first review for tomorrow; the study-record dialog shows the
-    current state, next date, owning knowledge set and history, with "Adjust next / Review now /
-    Finish / Restart review / Remove" (interval ladder 1/2/4/7/15/30/60/120 days, a single interval can be
-    set to 1–3650 days). Study records and quiz progress are two independent datasets: mastery
+    current state, next date, owning knowledge set and history, with "Adjust next / Finish this
+    review / End study / Restart review / Remove" (interval ladder 1/2/4/7/15/30/60/120 days, a single
+    interval can be set to 1–3650 days). Study records and quiz progress are two independent datasets: mastery
     never moves a review date, and completing reviews never changes quiz progress
   - **Schedule** (one shared entry — the bottom-left Knowledge base form toggle and **Ctrl+Alt+/** open the
   left sidebar cell, whose top tab strip switches between the two): the task
-   list (3-day / week / all scopes) fills that cell and
+   list (today / next 3 days / all scopes) fills that cell and
   the weekly grid fills the right dock tab; its header stats follow the week you are looking at
   (a failed fetch says so instead of quietly showing stale numbers); the all-day band holds
   date-only tasks, stacked one per row per day, with out-of-week ones on Monday; block colors
