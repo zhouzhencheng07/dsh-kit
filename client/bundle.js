@@ -7025,6 +7025,26 @@ ellipsis，窄列只截字不破版 */
       };
     }
 
+    /** 这次事务是不是「在光标处键入了一颗 /」：手机软键盘打 "/" 常常不派 keydown
+     *  （Gboard 之类走 beforeinput / 组合输入提交），只靠 keydown 武装的话手机永远
+     *  等不到开菜单的信号。判据从文档事务里认：最后一步是**纯插入**、内容只有一颗
+     *  文本 "/"。粘贴 / 拖放带 uiEvent 元信息，排除——那不算键入。挪光标没有事务，
+     *  天然不开。纯函数，render-check 直测。 */
+    function slashTypedIn(transaction) {
+      if (!transaction || transaction.docChanged !== true) return false;
+      const ui = typeof transaction.getMeta === "function" ? transaction.getMeta("uiEvent") : undefined;
+      if (ui === "paste" || ui === "drop") return false;
+      const steps = Array.isArray(transaction.steps) ? transaction.steps : [];
+      const last = steps.length > 0 ? steps[steps.length - 1] : null;
+      if (last === null || typeof last.toJSON !== "function") return false;
+      const json = last.toJSON();
+      if (json === null || json.stepType !== "replace" || json.from !== json.to) return false;
+      const content = json.slice && Array.isArray(json.slice.content) ? json.slice.content : [];
+      if (content.length !== 1) return false;
+      const node = content[0];
+      return node !== null && typeof node === "object" && node.type === "text" && node.text === "/";
+    }
+
     /** 泡泡菜单落位（纯函数，render-check 直测）：anchor = 选区框
      *  {left, right, top, bottom}，box = 菜单实测尺寸 {w, h}，view = 可视视口带
      *  {top, bottom, left, right}。默认浮在选区上方 8px，上方放不下换下方，两边都不够
@@ -7686,8 +7706,9 @@ ellipsis，窄列只截字不破版 */
           clearTimeout(saveTimer);
           saveTimer = setTimeout(flushSave, 2000);
         });
-        // 斜杠菜单同步：真实键入 "/"（keydown 置 slashArmed）才开菜单——挪光标
-        // 到已有 /xxx 上、粘贴进来的不开。刚键入时锚就是那颗 "/"（anchor 记进
+        // 斜杠菜单同步：真实键入 "/" 才开菜单——挪光标到已有 /xxx 上、粘贴进来的
+        // 不开。桌面键盘走 keydown 置 slashArmed；手机软键盘不派 keydown，另从
+        // 文档事务认（slashTypedIn，见下）。刚键入时锚就是那颗 "/"（anchor 记进
         // menu），空查询直开、不查前文；开着期间查询跟光标刷新，锚被删、
         // 光标挪出查询段、落进代码块即关。挂 selectionUpdate 覆盖全部输入
         // 路径（真实键入/IME/命令改写）
@@ -7747,6 +7768,17 @@ ellipsis，窄列只截字不破版 */
             setMenu(null);
           }
         };
+        // 手机软键盘（Gboard 等）打 "/" 常常没有 keydown：从文档事务里认「刚插入了
+        // 一颗 /」，补上那把开菜单的钥匙。写完直接同步一次，不指望随后的
+        // selectionUpdate（组合输入期间它可能被推迟到组合结束）
+        const onSlashTransaction = ({ transaction }) => {
+          if (!slashTypedIn(transaction)) return;
+          const ed = rteRef.current?.editor;
+          if (!ed || ed.isActive("codeBlock")) return;
+          slashArmed = true;
+          syncSlashMenu();
+        };
+        h.editor.on("transaction", onSlashTransaction);
         const offSelection = h.onSelectionUpdate(() => {
           bubbleSync();
           syncSlashMenu();
@@ -7964,6 +7996,7 @@ ellipsis，窄列只截字不破版 */
           }
           offUpdate();
           offSelection();
+          h.editor.off("transaction", onSlashTransaction);
           host.removeEventListener("keydown", onKeyDown, true);
           host.removeEventListener("scroll", onScrollOrResize, true);
           window.removeEventListener("resize", onScrollOrResize);
@@ -12989,6 +13022,7 @@ ellipsis，窄列只截字不破版 */
     exports.VaultIcon = VaultIcon;
     exports.SchedIcon = SchedIcon;
     exports.slashMenuBox = slashMenuBox;
+    exports.slashTypedIn = slashTypedIn;
     exports.bubbleBox = bubbleBox;
     exports.vaultSearchHits = vaultSearchHits;
     exports.vaultSplitFrontmatter = vaultSplitFrontmatter;

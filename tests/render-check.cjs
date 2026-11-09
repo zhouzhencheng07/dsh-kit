@@ -158,7 +158,7 @@ if (!baseOk) process.exitCode = 1;
 }
 
 if (!comps || typeof comps !== "object") { console.log("FATAL: no components returned"); process.exit(2); }
-const names = ["KitSurfaces", "TreeRowMenu", "RteEditor", "slashMenuBox", "bubbleBox", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksPanel", "SidebarVaultIndex", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "vaultSelectionText", "resolveMdLink", "isDocHref"];
+const names = ["KitSurfaces", "TreeRowMenu", "RteEditor", "slashMenuBox", "slashTypedIn", "bubbleBox", "VaultPagePane", "rightbarAddress", "rightbarItem", "rightbarQuery", "sidebarViewPatch", "toggleVaultEntry", "ScheduleView", "timerMinsOfDT", "schedAssignLanes", "VaultView", "VaultRootView", "vaultSplitFrontmatter", "resolveVaultLink", "vaultBacklinks", "vaultOutline", "vaultHeadingSlug", "vaultSearchHits", "relUnder", "pathUnder", "absParent", "vaultTabsRetarget", "vaultTabsClose", "vaultDirChoices", "VaultDialog", "recordReadPos", "VaultPaneBody", "SchedulePaneBody", "ScheduleTasksPanel", "SidebarVaultIndex", "openVaultPageAndDock", "closeRightbarTab", "isPathInsideVaultRoot", "vaultCiteText", "vaultSelectionText", "resolveMdLink", "isDocHref"];
 for (const n of names) {
   if (typeof comps[n] !== "function") { console.log("FAIL: missing/not function:", n); process.exitCode = 1; return; }
 }
@@ -1536,6 +1536,36 @@ let vaultFetchPrev = null;
   check("泡泡锚点只认编辑器内的 DOM 选区（别处选中一段字不会把格式条拉过去）", /const domInside = domSel !== null && domSel\.rangeCount > 0 &&\s*\n\s*ed\.view\.dom\.contains\(domSel\.anchorNode\) && ed\.view\.dom\.contains\(domSel\.focusNode\)/.test(src) && src.includes("const rects = domInside"));
   check("泡泡菜单封顶视口宽、条可折行（比视口还宽时不是被切掉）", /\.dshk-vault-bubble\{[^}]*max-width:calc\(100vw - 16px\)/.test(src) && /\.dshk-vault-bubblebar\{[^}]*flex-wrap:wrap/.test(src));
   check("斜杠菜单只在键入 / 时开（keydown 武装）：挪光标到已有 /xxx、粘贴不开", src.includes("const armed = slashArmed;") && src.includes('if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {') && src.includes("if (armed && menuRef.current === null) {"));
+
+// 手机软键盘打 "/" 常常不派 keydown（Gboard 等走 beforeinput / 组合输入提交）：
+// 只靠 keydown 武装的话手机永远开不了菜单。补一条文档事务判据，认「纯插入一颗 /」。
+{
+  const tx = (json, meta, docChanged = true) => ({
+    docChanged,
+    getMeta: (k) => (k === "uiEvent" ? meta : undefined),
+    steps: json === null ? [] : [{ toJSON: () => json }],
+  });
+  const typed = { stepType: "replace", from: 5, to: 5, slice: { content: [{ type: "text", text: "/" }] } };
+  check(
+    "斜杠键入判据：手机软键盘的纯插入一颗 / 认；粘贴 / 拖放 / 替换选区 / 多字符 / 无改动不认",
+    comps.slashTypedIn(tx(typed)) === true &&
+      comps.slashTypedIn(tx(typed, "paste")) === false &&
+      comps.slashTypedIn(tx(typed, "drop")) === false &&
+      comps.slashTypedIn(tx({ ...typed, from: 5, to: 6 })) === false &&
+      comps.slashTypedIn(tx({ ...typed, slice: { content: [{ type: "text", text: "//" }] } })) === false &&
+      comps.slashTypedIn(tx({ ...typed, slice: { content: [{ type: "text", text: "/a" }] } })) === false &&
+      comps.slashTypedIn(tx(null)) === false &&
+      comps.slashTypedIn(tx(typed, undefined, false)) === false &&
+      comps.slashTypedIn(null) === false,
+  );
+  check(
+    "斜杠菜单手机软键盘也能开：事务里认纯插入的一颗 /（keydown 之外的第二条路，随挂载注销）",
+    src.includes("function slashTypedIn(transaction)") &&
+      src.includes('h.editor.on("transaction", onSlashTransaction)') &&
+      src.includes('h.editor.off("transaction", onSlashTransaction)') &&
+      src.includes('ui === "paste" || ui === "drop"'),
+  );
+}
   check("斜杠菜单不给 URL / 路径当入口（https://… 与 src/main.rs 里的 / 不开，词中间的判定看前一字符）", /const prev = textBefore\.length >= 2[\s\S]*?if \(\/\[A-Za-z0-9:\/\\\\\]\/\.test\(prev\)\) return;/.test(src));
   check("斜杠菜单锚定那颗 /：光标挪出查询段即关、代码块不开，落地按锚删除（无前置边界集，多斜杠不误删）", src.includes("anchor !== menuRef.current.anchor") && src.includes(", anchor });") && /const armed = slashArmed;\s*slashArmed = false;\s*if \(ed\.isActive\("codeBlock"\)\)/.test(src) && src.includes("ed.view.state.tr.delete(anchor, $from.pos)") && (src.split("const m = /\\/(\\S*)$/.exec(textBefore);").length - 1) === 1 && !src.includes("\\u3000-\\u303F"));
   check("阅读位置重试可取消且宿主卸载即停", src.includes("const cancelRestore = restoreReadPos(") && src.includes("cancelRestore();") && src.includes("if (!el.isConnected) return;"));
