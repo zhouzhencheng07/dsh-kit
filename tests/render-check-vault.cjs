@@ -689,6 +689,13 @@ async function checkApply() {
     "代码盒正文块级排版（pre code{display:block}）",
     /\.dshk-codebox pre code\{display:block\}/.test(bundleSrc),
   );
+
+  // 外部改动轮询：文件被外部删除后 stat 回 gone，只重读一次把页切「已消失」；缺这道闸
+  // 就每 4 秒重读一次 → read 404 刷屏（dev 日志里刷过 5500 条）
+  check(
+    "外部改动轮询：gone 只重读一次（不每 4 秒重读已删页面）",
+    bundleSrc.includes("if (body.gone === true)") && bundleSrc.includes("if (goneRef.current) return;"),
+  );
   // 语法高亮装饰只落 .hljs-* 类名：色板归面板层（浅色 + 宿主深色主题两套）
   check(
     "语法高亮色板在面板层（.hljs-* 浅色一套 + 宿主深色主题一套）",

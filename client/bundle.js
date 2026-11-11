@@ -8522,6 +8522,9 @@ ellipsis，窄列只截字不破版 */
       const mtimeRef = react.useRef(0);
       const conflictRef = react.useRef(conflict);
       conflictRef.current = conflict;
+      const goneRef = react.useRef(false); // 本页已按「已消失」重读过（跨 effect 重跑保留）
+      const refreshRef = react.useRef(onIndexRefresh);
+      refreshRef.current = onIndexRefresh;
       const pagesRef = react.useRef(indexPages);
       pagesRef.current = indexPages;
       // 引用到对话：@ 在左侧树的行上（见 VaultRootView），
@@ -8559,17 +8562,20 @@ ellipsis，窄列只截字不破版 */
           const { fmText, rest } = body.binary ? { fmText: "", rest: "" } : vaultSplitFrontmatter(raw);
           fmRef.current = fmText;
           mtimeRef.current = body.mtimeMs ?? 0;
+          goneRef.current = false;
           setPage({ loading: false, body: rest.trimStart(), binary: body.binary === true, truncated: body.truncated === true, gone: false });
           setDocTick((t) => t + 1);
         } catch {
           fmRef.current = "";
           mtimeRef.current = 0;
+          goneRef.current = true;
           setPage({ loading: false, body: "", binary: false, truncated: false, gone: true });
           setDocTick((t) => t + 1);
         }
       }, [path]);
 
       react.useEffect(() => {
+        goneRef.current = false;
         setPage({ loading: true, body: "", binary: false, truncated: false, gone: false });
         void loadCurrent();
         return undefined;
@@ -8636,7 +8642,8 @@ ellipsis，窄列只截字不破版 */
 
       // 外部修改实时刷新：只轮询激活页（后台签别白烧请求）。盘上变了且本地无脏改、
       // 无冲突 → 静默重读整页 + 刷索引（agent/外部编辑器改文件零手动刷新）；有脏改
-      // 时不动，交给保存时的 CAS 冲突条。文件被外部删除也重读 → 显示已消失。
+      // 时不动，交给保存时的 CAS 冲突条。文件被外部删除 → 只重读一次把页切到「已消失」，
+      // 之后停下（否则每 4 秒一次 read 404，请求与日志都被刷满）；文件回来立刻恢复轮询。
       // fetch 失败静默（尽力而为）
       react.useEffect(() => {
         if (!active) return undefined;
@@ -8645,14 +8652,22 @@ ellipsis，窄列只截字不破版 */
           if (conflictRef.current !== null || (rteCtlRef.current && rteCtlRef.current.dirty())) return;
           void kitJson(`/dsh-kit/vault/stat?path=${encodeURIComponent(path)}`)
             .then((body) => {
+              if (body.gone === true) {
+                if (goneRef.current) return;
+                goneRef.current = true;
+                void loadCurrent();
+                refreshRef.current();
+                return;
+              }
+              goneRef.current = false;
               if (typeof body.mtimeMs === "number" && Math.abs(body.mtimeMs - mtimeRef.current) < 1) return;
               void loadCurrent();
-              onIndexRefresh();
+              refreshRef.current();
             })
             .catch(() => {});
         }, 4000);
         return () => clearInterval(timer);
-      }, [active, path, loadCurrent, onIndexRefresh]);
+      }, [active, path, loadCurrent]);
 
       /** 图片入库并插到光标处：浏览器侧先按阈值压缩 → POST /dsh-kit/vault/attach
        *  进 attachments/（内容寻址，同内容不重写）→ 光标处插图片节点。
