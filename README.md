@@ -134,13 +134,6 @@ DSH 原版形态；插件页里本插件**十行组件 + 列表最末一行载�
   插件里**悬停提示统一是官方气泡**
   （方向按官方口径：面板头/工具条朝下、底部 dock 与输入行朝上、行尾动作钮右对齐；有命令的带
   当前键位，改键后跟着变），纯文本截断提示仍走原生 title
-- **排查日志**（无开关，始终在写）：宿主半边与浏览器半边的日志合流到
-  `<DSH_HOME>/dsh-kit/logs/kit.log`（按 2MB × 5 轮转），一行一事——时间、级别、组件、
-  **正在做的操作**、消息与字段；报错那行自己就带着它发生在哪个操作里，它前面那几行就是
-  出错前在做什么。浏览器侧的未捕获异常与接口报错也进同一个文件（页面白屏、按钮没反应
-  这类只在页面侧的现象也留得下痕）。默认级别 info，环境变量 `DSH_KIT_LOG` 可调
-  （`off`/`error`/`warn`/`info`/`debug`）；查日志用仓库里的 `pnpm logs`（`--err` 只看失败
-  并带上文）。
 - **配置**：插件页（侧栏「插件」）里需要可调参数的组件行各带自己的「配置」页——
   **手机访问行**管对外端口、手机远程域名与网关常驻（行开关 = 总开关）；
   **知识库 · 日程行**管知识库根目录与「库内 PDF 走自带阅读器」（行开关 = 总开关）；
@@ -149,7 +142,7 @@ DSH 原版形态；插件页里本插件**十行组件 + 列表最末一行载�
   **内置浏览器行**管「对话链接改投内置浏览器」与「隐藏官方『浏览器』入口」（行开关 = 总开关）；
   **用量与监视行**管余额与用量芯片开关、桌面通知与 OpenCode Go 会话头注入；**文件树行**
   管文件树开关与「隐藏官方『工作区文件』入口」；**终端**行没有配置
-  字段（行开关 = 唯一开关，关掉即入口消失），**运行日志行**同样没有配置字段（写不写日志文件就是它的行开关，级别仍走 `DSH_KIT_LOG` 环境变量）；载体行没有配置字段也不该被关（关掉 = 本插件界面整体消失）；保存即写入 profile 并热生效（部分启动期门控在重启 dsh 后生效）
+  字段（行开关 = 唯一开关，关掉即入口消失）；载体行没有配置字段也不该被关（关掉 = 本插件界面整体消失）；保存即写入 profile 并热生效（部分启动期门控在重启 dsh 后生效）
 
 ## 安装与更新
 
@@ -188,12 +181,12 @@ dsh plugin --profile web update dsh-kit
   pdf.js → 知识库行）
 - `client/bundle.js`：浏览器半边（手写 ModuleLoader bundle，**零构建**）——根包只剩跨槽
   共享底座（kitUi 开合状态、配置页骨架、入口座、文件预览下载钮）；文件树、终端、
-  用量监视、网页搜索、内置浏览器、知识库·日程、手机访问、对话小窗、运行日志九个组件的 client 半边同住本 bundle
+  用量监视、网页搜索、内置浏览器、知识库·日程、手机访问、对话小窗八个组件的 client 半边同住本 bundle
   （各带 `module/exports` 隔离壳，右栏 pane 正文经 `sidebar.right.pane.tab` 提供、
   配置页经 `plugins.row.config`；终端坞引擎为官方 `webTerminals` 服务）
 - `src/core`、`src/files`、`src/chat`、`src/terminal`、`src/monitor`、`src/browser`、
   `src/vault`、`src/phone`：组件按目录分边界（0.5.3 单包组件化，组件 = patch 行而非独立包）——`core` 宿主共享库
-  （同源校验、回收站删除、文本解码、dsh-tools 加载、日志）；`files` 挂 tree/
+  （同源校验、回收站删除、文本解码、dsh-tools 加载）；`files` 挂 tree/
   read/raw/fs-op 端点 + 文件树面板；`chat` 只挂 `/dsh-kit-chat/config`
   探针（对话内核与外壳都在 client 半边，会话/工作区全走官方服务）；`terminal` 挂
   `/dsh-kit-terminal/config` 探针（终端入口与坞）；`monitor` 挂 `/dsh-kit/usage` + 用量
@@ -214,8 +207,8 @@ dsh plugin --profile web update dsh-kit
 - `src/search/`：网页搜索组件——`web-search.ts` 把 web seam 的 provider 指向 `free-search`
   并注册免 key 引擎链（`engine-chain.ts` + `engines/*`）；组件行关掉 = 不接管 seam =
   base 钉的官方搜索原样生效
-- `cordis.patch.yml`：九个组件行（files / chat / vault / terminal /
-  browser / phone / monitor / search / logs，行序即插件页显示顺序）insert 进 bundle 层（组件 = 本包的 exports 子路径，见
+- `cordis.patch.yml`：八个组件行（files / chat / vault / terminal /
+  browser / phone / monitor / search，行序即插件页显示顺序）insert 进 bundle 层（组件 = 本包的 exports 子路径，见
   `dsh-kit/terminal` 等），末尾跟一行**载体行**（`name: dsh-kit`，浏览器半边的挂载点，不伺服任何能力，故排在功能行之后）；
   不 patch 任何官方行（每行 id 显式且稳定：
   匿名行的随机 id 每次 profile 写入都会换 → 该行重挂 → 浏览器半边整包重载）

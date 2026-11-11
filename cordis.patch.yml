@@ -1,4 +1,4 @@
-# dsh-kit bundle patch：把一行载体行与九个组件行 insert 进 bundle 层。
+# dsh-kit bundle patch：把一行载体行与八个组件行 insert 进 bundle 层。
 # 组件行是同一个包（单包组件化）的 exports 子路径：行 name = dsh-kit/<行id>，exports 与
 # locale/<行id>/*.json 由 package.json 声明；行的中文显示名由宿主按行 name 解析 locale
 # meta（子路径名查不到包 → 回退显示 name 原文）。
@@ -26,10 +26,6 @@
       name: dsh-kit/monitor
     - id: search
       name: dsh-kit/search
-    # 日志行放最后：它是排障用的（关行 = 不写 kit.log、浏览器半边不上报），
-    # 不该排在页面能力前面抢视线
-    - id: logs
-      name: dsh-kit/logs
     # 载体行（name 恰好等于包名）：**不能删**，它不伺服任何能力，只是浏览器半边的挂载点。
     # 宿主把包的客户端半边挂在「name 等于包名」的那一行上——子路径行（dsh-kit/vault 之类）
     # 不带 client 半边（实测：改名成子路径、给子路径补 ./client 导出都不挂）。删掉这一行 =
@@ -44,6 +40,6 @@
     #     整包重载（知识库 / PDF / diff 等面板全部重开）。字面量 id 不会被换掉
     #     （写 0 不行：falsy 会被当匿名）。
     # 它不对应任何功能，故排在功能行之后。
-    # vendor 静态资源归用它的组件行（终端 / 手机访问 / 知识库），日志归 dsh-kit/logs 行。
+    # vendor 静态资源归用它的组件行（终端 / 手机访问 / 知识库）。
     - id: 1
       name: dsh-kit

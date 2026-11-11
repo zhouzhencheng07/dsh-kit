@@ -10,7 +10,7 @@
 import { registerUsageRoutes } from "./usage.js";
 import { applyOpenCodeSessionHeader } from "./opencode-session.js";
 import { loadDep, sameOrigin } from "../core/index.js";
-import { kitLogEmit } from "../core/log.js";
+import { kitLogger } from "../core/log.js";
 // ── 组件设置 schema（声明式模型）──
 // **字段必须 .volatile()**（SettingsForms 只投影 volatile 字段进表单）；volatile
 // 写入 = 热提交（fiber config 里的稳定 ref），readSettings 统一解引用。
@@ -51,7 +51,7 @@ export async function apply(ctx, config = {}) {
     // OpenCode Go 会话头按会话注入（实现见 ./opencode-session.ts）。本组件是它唯一的
     // 归属：开关走本行配置页，行关闭则模块不物化、等于不注入。
     applyOpenCodeSessionHeader(ctx, {
-        log: (m) => kitLogEmit('warn', 'session-header', '', m),
+        log: kitLogger('session-header').warn,
         enabled: () => readSettings().sessionHeaderEnabled !== false,
     });
     const disposers = [];

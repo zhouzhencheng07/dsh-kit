@@ -642,7 +642,7 @@ async function checkApply() {
   const read = (rel) => fs.readFileSync(__dirname + "/../" + rel, "utf8");
   const bundleSrc = read("client/bundle.js");
   // 套件没有根入口模块：查的是「知识库的装配没渗进别的组件行」
-  const hostSrc = ["browser", "chat", "files", "logs", "monitor", "phone", "search", "terminal"]
+  const hostSrc = ["browser", "chat", "files", "monitor", "phone", "search", "terminal"]
     .map((d) => read(`src/${d}/index.ts`)).join("\n");
   const compSrc = read("src/vault/index.ts");
   const patchSrc = read("cordis.patch.yml");
@@ -691,7 +691,7 @@ async function checkApply() {
   );
 
   // 外部改动轮询：文件被外部删除后 stat 回 gone，只重读一次把页切「已消失」；缺这道闸
-  // 就每 4 秒重读一次 → read 404 刷屏（dev 日志里刷过 5500 条）
+  // 就每 4 秒重读一次 → read 404 刷屏（此前一次删除就刷过 5500 条）
   check(
     "外部改动轮询：gone 只重读一次（不每 4 秒重读已删页面）",
     bundleSrc.includes("if (body.gone === true)") && bundleSrc.includes("if (goneRef.current) return;"),

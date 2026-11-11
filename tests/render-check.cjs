@@ -94,8 +94,7 @@ if (!global.document) {
   };
 }
 if (!global.window) {
-  // addEventListener：client 半边在 factory 里注册全局 error / unhandledrejection
-  // 兜底（把浏览器侧的异常回传宿主日志），桩缺它会直接抛。
+  // addEventListener：client 半边可能在 factory 里注册全局监听，桩缺它会直接抛。
   global.window = { innerWidth: 1600, requestAnimationFrame: () => 0, setTimeout: () => 0, clearTimeout: () => {}, addEventListener: () => {}, removeEventListener: () => {} };
 }
 if (!global.location) {
@@ -1693,14 +1692,14 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
 
 
 // 9) 插件配置（声明式模型）：载体行（name 等于包名，浏览器半边的挂载点）不导出 Config、
-//    也不物化任何端点——vendor 静态资源分给用它的组件行、日志归 dsh-kit/logs 行；每个组件
+//    也不物化任何端点——vendor 静态资源分给用它的组件行；每个组件
 //    行自己管自己的字段（手机访问在 dsh-kit/phone，字段与探针都在 src/phone/index.ts）。
 //    这里钉住「载体行没有能力、没有配置」与「root client 不持有配置表」。
 {
   const hostSrc = fs.readFileSync(__dirname + "/../src/index.ts", "utf8");
   const hostCode = hostSrc.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
   check(
-    "载体行不物化任何端点 / 无 Config（vendor 与日志都不再挂它）",
+    "载体行不物化任何端点 / 无 Config（vendor 不挂它）",
     !/export const Config/.test(hostCode) && !hostCode.includes("volatile") &&
       !hostCode.includes("webServer") && !hostCode.includes("register") &&
       !hostCode.includes("/dsh-kit/"),
@@ -1733,9 +1732,9 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
   const isComponent = (row) => typeof row.id === "string" && !/^-?\d+$/.test(row.id);
   const carrier = rows.filter((row) => !isComponent(row));
   const comps = rows.filter(isComponent);
-  const expected = ["files", "chat", "vault", "terminal", "browser", "phone", "monitor", "search", "logs"];
+  const expected = ["files", "chat", "vault", "terminal", "browser", "phone", "monitor", "search"];
   check(
-    "patch 形状：一行载体行（name = 包名、id 写数字字面量 → 不当作可管理组件：不进组件列表、没有行开关；浏览器半边挂在它上面，放行序末尾不跟功能行混在一起）+ 九个组件行 id/name 齐备且顺序 = 描述顺序（组件行 id 必须显式且稳定：匿名行的随机 id 每次 profile 写入都会换 → 该行重挂、整包客户端重载）",
+    "patch 形状：一行载体行（name = 包名、id 写数字字面量 → 不当作可管理组件：不进组件列表、没有行开关；浏览器半边挂在它上面，放行序末尾不跟功能行混在一起）+ 八个组件行 id/name 齐备且顺序 = 描述顺序（组件行 id 必须显式且稳定：匿名行的随机 id 每次 profile 写入都会换 → 该行重挂、整包客户端重载）",
     carrier.length === 1 && carrier[0].name === "dsh-kit" && /^-?\d+$/.test(carrier[0].id) &&
       rows[rows.length - 1] === carrier[0] &&
       rows.length === expected.length + 1 &&
@@ -1754,9 +1753,9 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
   const zhDesc = JSON.parse(fs.readFileSync(__dirname + "/../locale/zh.json", "utf8")).meta.description;
   const enDesc = JSON.parse(fs.readFileSync(__dirname + "/../locale/en.json", "utf8")).meta.description;
   check(
-    "卡片描述按同一顺序枚举九个组件（zh/en 同序）",
-    inOrder(zhDesc, ["文件树", "对话小窗", "知识库·日程", "终端", "浏览器", "手机访问", "用量与监视", "网页搜索", "运行日志"]) &&
-      inOrder(enDesc, ["File tree", "chat window", "vault & schedule", "terminal", "browser", "phone access", "usage & monitor", "web search", "runtime logs"]),
+    "卡片描述按同一顺序枚举八个组件（zh/en 同序）",
+    inOrder(zhDesc, ["文件树", "对话小窗", "知识库·日程", "终端", "浏览器", "手机访问", "用量与监视", "网页搜索"]) &&
+      inOrder(enDesc, ["File tree", "chat window", "vault & schedule", "terminal", "browser", "phone access", "usage & monitor", "web search"]),
   );
 }
 

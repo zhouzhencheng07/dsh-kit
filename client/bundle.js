@@ -25,7 +25,7 @@
 //     渲染器单槽分发。
 //     文件点击改投官方右栏文件签（sidebarRight.openResource，kit 不自建
 //     预览/编辑）；vault 内 md 页直达知识库编辑器。
-//   组件半边：files / monitor / terminal / search / browser / vault / phone / logs
+//   组件半边：files / monitor / terminal / search / browser / vault / phone
 //     各自一个 xModule 隔离壳（本 factory 尾部组装完成后执行），激活由根 apply 尾部
 //     循环触发——行禁用只摘宿主半边端点，探针 404 的组件整体不注册。
 // 第三方大库（xterm / pdf.js / TipTap / mermaid / KaTeX / 二维码）都不打进 bundle，
@@ -201,67 +201,18 @@ window.__ModuleLoader__.load({
     }
 
     // ── 浏览器半边日志 ──
-    // 与宿主半边合流到同一个文件（<DSH_HOME>/dsh-kit/logs/kit.log）：页面白屏、按钮
-    // 没反应这类只在浏览器侧的现象，宿主日志一个字都留不下。500ms 攒一批上报，
-    // 免得异常风暴把网络打满；上报失败静默——日志不该反过来影响页面。
-    // 组件半边用 kitLogger('<组件>')，与宿主半边同名同义，级别与格式都交给宿主统一排版。
-    // 攒批与全局钩子都归 logs 组件行开（探针 404 = 该行被关）：关行时条目只走控制台
-    // 镜像，不攒批也不发请求；钩子本身在 logsModule 里装。
-    const kitLogBatch = [];
-    let kitLogTimer = null;
-    let kitLogSinkOn = false;
-    /** 日志组件行的探针通过后才开；关 = 攒批作废，之后只留控制台镜像 */
-    function kitLogSink(on) {
-      kitLogSinkOn = on === true;
-      if (!kitLogSinkOn) kitLogBatch.length = 0;
-    }
-    function kitClientLog(entry) {
-      if (entry.level === "warn" || entry.level === "error") {
-        const line = "[dsh-kit] " + entry.msg;
-        if (entry.level === "error") console.error(line, entry.fields ?? "");
-        else console.warn(line, entry.fields ?? "");
-      }
-      if (!kitLogSinkOn) return;
-      kitLogBatch.push({
-        level: entry.level,
-        component: entry.component || "client",
-        msg: String(entry.msg ?? "").slice(0, 1000),
-        fields: entry.fields ?? undefined,
-        scope: entry.scope || undefined,
-      });
-      if (kitLogBatch.length >= 50) {
-        kitFlushLog();
-        return;
-      }
-      if (kitLogTimer === null) {
-        kitLogTimer = setTimeout(kitFlushLog, 500);
-      }
-    }
-    function kitFlushLog() {
-      if (kitLogTimer !== null) {
-        clearTimeout(kitLogTimer);
-        kitLogTimer = null;
-      }
-      if (kitLogBatch.length === 0) return;
-      const entries = kitLogBatch.splice(0, kitLogBatch.length);
-      void fetch("/dsh-kit/logs", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ entries }),
-      })
-        // 404/403 = 日志组件行被关（行关则端点不物化）：本页面剩下的报错不再白跑请求
-        .then((res) => {
-          if (res.status === 404 || res.status === 403) kitLogSink(false);
-        })
-        .catch(() => {});
-    }
+    // 只写控制台（不落盘、不上报）：组件经 kitLogger('<组件>') 打，与宿主同名同义；
+    // 页面白屏这类现象看控制台即可，不需要一条常驻的上报管线。
     /** 组件 logger：kitLogger('files').warn(msg, fields) */
     function kitLogger(component) {
-      const call = (level) => (msg, fields, scope) => kitClientLog({ level, component, msg, fields, scope });
+      const tag = "[dsh-kit/" + component + "]";
+      const call = (level) => (msg, fields) => {
+        if (fields === undefined) console[level](tag, msg);
+        else console[level](tag, msg, fields);
+      };
       return { debug: call("debug"), info: call("info"), warn: call("warn"), error: call("error") };
     }
-    // 未捕获异常 / 未处理的 Promise 拒绝 / 页面隐藏与关闭时的冲刷钩子随 logs 组件行走：
-    // 见 logsModule（行关 = 页面白屏这类现象没人收，这是关行的代价）。
+    const clientLog = kitLogger("client");
 
     /** GET /dsh-kit/*，按 validate 校验回包形状（形状不符 = 失败，不当半个成功）；
         （如写文件的 409 冲突） */
@@ -272,7 +223,7 @@ window.__ModuleLoader__.load({
         const error = new Error((body && body.error) || "HTTP " + res.status);
         error.status = res.status;
         error.body = body;
-        kitClientLog({ level: "warn", msg: "GET 失败：" + url, fields: { status: res.status, err: error.message } });
+        clientLog.warn("GET 失败：" + url, { status: res.status, err: error.message });
         throw error;
       }
       return body;
@@ -289,7 +240,7 @@ window.__ModuleLoader__.load({
         const error = new Error(body.error || "HTTP " + res.status);
         error.status = res.status;
         error.body = body;
-        kitClientLog({ level: "warn", msg: "POST 失败：" + url, fields: { status: res.status, err: error.message } });
+        clientLog.warn("POST 失败：" + url, { status: res.status, err: error.message });
         throw error;
       }
       return body;
@@ -303,7 +254,7 @@ window.__ModuleLoader__.load({
         const error = new Error((body && body.error) || "HTTP " + res.status);
         error.status = res.status;
         error.body = body;
-        kitClientLog({ level: "warn", msg: "请求失败：" + url, fields: { status: res.status, err: error.message } });
+        clientLog.warn("请求失败：" + url, { status: res.status, err: error.message });
         throw error;
       }
       return body;
@@ -836,10 +787,6 @@ window.__ModuleLoader__.load({
     exports.kitWsUrl = kitWsUrl;
     exports.kitPostJson = kitPostJson;
     exports.kitJson = kitJson;
-    exports.kitClientLog = kitClientLog;
-    exports.kitLogger = kitLogger;
-    exports.kitLogSink = kitLogSink;
-    exports.kitLogFlush = kitFlushLog;
     exports.resolveZh = resolveZh;
     exports.subscribeLocale = subscribeLocale;
     exports.getLocaleVersion = getLocaleVersion;
@@ -2315,7 +2262,7 @@ ellipsis，窄列只截字不破版 */
             return dock.vaultView.renderer ? dock.vaultView.renderer({ ui, cwd, owner }) : null;
           });
         } catch (error) {
-          kitClientLog({ level: "error", component: "root", msg: "注册 sidebar.workspaces 面板失败", fields: { err: String(error?.message ?? error) } });
+          clientLog.error("注册 sidebar.workspaces 面板失败", { err: String(error?.message ?? error) });
           setKitUi({ treeOpen: false, vaultSideOpen: false });
           return undefined;
         }
@@ -2459,12 +2406,12 @@ ellipsis，窄列只截字不破版 */
         });
         scanPreviewDownload();
       }
-      // 组件半边激活（九个组件行各一个：files/chat/monitor/terminal/search/
-      // browser/vault/phone/logs）。**清单必须与组件行一一对应**：漏一个，那个组件的
-      // apply 永不执行，探针再通也没人拉（日志行的浏览器半边就栽过这一处）。client
+      // 组件半边激活（八个组件行各一个：files/chat/monitor/terminal/search/
+      // browser/vault/phone）。**清单必须与组件行一一对应**：漏一个，那个组件的
+      // apply 永不执行，探针再通也没人拉。client
       // 入口注册总是发生，功能存在性由各组件自己的探针门控（行禁用只摘宿主半边端点，
       // 探针 404 的组件整体不注册）
-      for (const componentMod of [exports.files, exports.chat, exports.monitor, exports.terminal, exports.search, exports.browser, exports.vault, exports.phone, exports.logs]) {
+      for (const componentMod of [exports.files, exports.chat, exports.monitor, exports.terminal, exports.search, exports.browser, exports.vault, exports.phone]) {
         if (componentMod && typeof componentMod.apply === "function") componentMod.apply(ctx);
       }
     }
@@ -17720,55 +17667,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     return exports;
     };
 
-    // dsh-kit/logs 浏览器半边 —— 日志组件行的 client 面。
-    //
-    // 本组件不注册任何槽位与界面，只做两件事：把底座的攒批闸打开（关行 = 页面的 warn /
-    // error 只走控制台镜像，不发请求），以及装上「未捕获异常 / 未处理的 Promise 拒绝 /
-    // 页面隐藏与关闭时冲刷」这几个全局钩子。行禁用 → 宿主半边不物化 →
-    // /dsh-kit-logs/config 404 → 什么都不装：页面白屏这类只在页面里留不下的现象就没人收，
-    // 这就是关掉本行的代价。
-    const logsModule = (kit, require) => {
-      var exports = {};
-      Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
-
-      async function apply(ctx) {
-        let reachable = false;
-        try {
-          const res = await fetch("/dsh-kit-logs/config", { cache: "no-store" });
-          reachable = res.ok;
-        } catch {
-          reachable = false;
-        }
-        if (!reachable || typeof window === "undefined") return;
-
-        kit.kitLogSink(true);
-        const boot = kit.kitLogger("client");
-        kit.hookGlobal(window, "kitLogError", "error", (event) => {
-          boot.error(event.message || "未捕获异常", {
-            source: event.filename + ":" + event.lineno + ":" + event.colno,
-            stack: String(event.error?.stack ?? "").slice(0, 600),
-          });
-        });
-        kit.hookGlobal(window, "kitLogRejection", "unhandledrejection", (event) => {
-          const reason = event.reason;
-          boot.error("未处理的 Promise 拒绝", {
-            reason: String(reason?.message ?? reason ?? "").slice(0, 300),
-            stack: String(reason?.stack ?? "").slice(0, 600),
-          });
-        });
-        // 攒批靠 setTimeout，而后台标签页的定时器会被节流到分钟级、直接关页则永远发不出去，
-        // 所以页面隐藏/关闭时立刻冲刷
-        kit.hookGlobal(document, "kitLogVisibility", "visibilitychange", () => {
-          if (document.visibilityState === "hidden") kit.kitLogFlush();
-        });
-        kit.hookGlobal(window, "kitLogPagehide", "pagehide", kit.kitLogFlush);
-      }
-
-      exports.inject = ["slots"];
-      exports.apply = apply;
-      return exports;
-    };
-
     // 组件模块执行必须在 kitBase/root 设施组装完成之后（见下方 exports.files 赋值
     // 处）——组件体执行期会读 dock.createConfigPage 等成员
     // slots 是唯一依赖：配置走各组件自己的 Config schema + 原生设置页，client 拉
@@ -17802,7 +17700,7 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.OfficialIcon = OfficialIcon;
     exports.openTreeFile = openTreeFile;
     exports.registerNavIcon = registerNavIcon;
-    // 组件模块执行（files/monitor/terminal/search/browser/vault/phone/logs）：必须在
+    // 组件模块执行（files/monitor/terminal/search/browser/vault/phone）：必须在
     // kitBase 浅拷贝与 root 设施都挂上 exports 之后——组件体执行期会读 dock.createConfigPage 等成员
     exports.files = filesModule(exports, require);
     exports.chat = chatModule(exports, require);
@@ -17812,7 +17710,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.browser = browserModule(exports, require);
     exports.vault = vaultModule(exports, require);
     exports.phone = phoneModule(exports, require);
-    exports.logs = logsModule(exports, require);
     exports.inject = ["slots"];
     exports.apply = apply;
     return module.exports;

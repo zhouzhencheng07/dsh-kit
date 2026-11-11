@@ -20,7 +20,7 @@ which one that slot shows; the conversation
 column stays put. Every capability is a **component row** you can
 switch off independently on the Plugins page — turning a row off removes its endpoints,
 agent tools and UI entries together; with all rows off, dsh is stock again. The pack shows
-**nine component rows plus a carrier row at the very bottom of the list** — the carrier serves
+**eight component rows plus a carrier row at the very bottom of the list** — the carrier serves
 nothing, it is only the
 mount point for this package's browser half (the host attaches a package's client half to
 the row whose name equals the package name, so deleting it makes every capability vanish
@@ -194,14 +194,6 @@ from the page). It stays in the list: **do not turn it off**.
   and toolbars point down, the bottom dock and the composer row point up, row-end buttons align end;
   commands carry their current keys and follow rebinding) — plain truncation hints keep the native
   `title`
-- **Runtime log row** (its row switch decides whether anything is written at all): host-side and browser-side logs land in one file,
-  `<DSH_HOME>/dsh-kit/logs/kit.log` (rotating, 2MB × 5), one event per line — time, level,
-  component, **the operation in flight**, message and fields. The line carrying an error already
-  names the operation it happened in, and the lines before it are what the plugin was doing
-  just before. Uncaught exceptions and failed requests on the page side go into the same file,
-  so blank panes and dead buttons leave a trace too. Default level `info`; `DSH_KIT_LOG`
-  tunes it (`off`/`error`/`warn`/`info`/`debug`). Read it with `pnpm logs` in the repo
-  (`--err` shows only failures with the lines leading up to them).
 - **Config pages**: component rows that take settings each carry their own config page in the
   Plugins page — the **phone-access row** covers the outward port, remote domain and
   keep-gateway-on (row switch = master switch); the **knowledge base · schedule row**
@@ -213,9 +205,7 @@ from the page). It stays in the list: **do not turn it off**.
   switch, monitor parameters, desktop notifications and OpenCode session-header injection; the **file tree row**
   covers the file-tree switch plus hiding the official Workspace Files
   entry. The **terminal** row has no config field (the row switch is the only
-  switch — turning it off hides the entry); the **runtime log row** has no config field either
-  (its row switch is whether log files get written; the level still comes from the
-  `DSH_KIT_LOG` environment variable). The carrier row has no config field and must stay on
+  switch — turning it off hides the entry). The carrier row has no config field and must stay on
   (turning it off removes everything this plugin shows in the page). Saving writes to the profile and takes effect
   immediately (a few startup-time gates need a dsh restart)
 
@@ -270,7 +260,7 @@ the WebSocket base the host injects).
 - `src/core`, `src/files`, `src/terminal`, `src/monitor`, `src/browser`,
   `src/vault`, `src/phone`: component boundaries as directories (0.5.3 single-package components — a component is a patch
   row, not a package) — `core` is the host shared library (same-origin check, recycle-bin
-  delete, text decoding, dsh-tools loading, logging);
+  delete, text decoding, dsh-tools loading);
   `files` serves tree/read/raw/fs-op endpoints + the file tree panel;
   `terminal` serves the `/dsh-kit-terminal/config` probe (terminal toggle and dock);
   `monitor` serves `/dsh-kit/usage` + usage chip / session notifications and the
@@ -293,8 +283,8 @@ the WebSocket base the host injects).
   provider at `free-search` and registers the keyless engine chain (`engine-chain.ts` +
   `engines/*`); disabling the component row leaves the seam untouched, so the official
   provider pinned by the base layer keeps serving
-- `cordis.patch.yml`: inserts the nine dsh-kit component rows (files / chat / vault / terminal /
-  browser / phone / monitor / search / logs — row order is the Plugins-page order)
+- `cordis.patch.yml`: inserts the eight dsh-kit component rows (files / chat / vault / terminal /
+  browser / phone / monitor / search — row order is the Plugins-page order)
   into the bundle layer, followed by one **carrier row** (`name: dsh-kit` — the mount point for
   the browser half, serves nothing itself, hence last, after the functional rows); every row id
   is explicit and stable (the loader gives anonymous rows a fresh random id on every compose, so any profile

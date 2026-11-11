@@ -12,7 +12,7 @@
 import { registerUsageRoutes } from './usage.ts'
 import { applyOpenCodeSessionHeader } from './opencode-session.ts'
 import { loadDep, sameOrigin } from '../core/index.ts'
-import { kitLogEmit } from '../core/log.ts'
+import { kitLogger } from '../core/log.ts'
 
 /** 插件设置的运行时形状（loader 按 Config schema 解析后传入 apply 第二参） */
 type KitSettings = Record<string, unknown>
@@ -66,7 +66,7 @@ export async function apply(ctx: any, config: KitSettings = {}): Promise<void> {
   // OpenCode Go 会话头按会话注入（实现见 ./opencode-session.ts）。本组件是它唯一的
   // 归属：开关走本行配置页，行关闭则模块不物化、等于不注入。
   applyOpenCodeSessionHeader(ctx, {
-    log: (m) => kitLogEmit('warn', 'session-header', '', m),
+    log: kitLogger('session-header').warn,
     enabled: () => readSettings().sessionHeaderEnabled !== false,
   })
 
