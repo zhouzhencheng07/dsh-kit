@@ -30,6 +30,8 @@ await test('extractWikiLinks 跳过资料引用（页锚 / 文档扩展名），
   assert.equal(isMaterialLink('书', 'P18-20'), true)
   assert.equal(isMaterialLink('讲义.pdf', ''), true)
   assert.equal(isMaterialLink('讲义.PPTX', ''), true)
+  assert.equal(isMaterialLink('扫描版.djvu', ''), true)
+  assert.equal(isMaterialLink('帮助.CHM', ''), true)
   assert.equal(isMaterialLink('工具链', ''), false)
   assert.equal(isMaterialLink('页', '标题'), false)
   assert.equal(isMaterialLink('页', 'p'), false)

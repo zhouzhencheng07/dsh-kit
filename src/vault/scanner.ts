@@ -89,7 +89,7 @@ function escapeRegExp(s: string): string {
 }
 
 /** 资料目标带这些扩展名时一律当资料（不带页锚也能认：[[书.pdf]]） */
-const MATERIAL_EXTS = ['pdf', 'ppt', 'pptx', 'doc', 'docx', 'xls', 'xlsx', 'epub']
+const MATERIAL_EXTS = ['pdf', 'ppt', 'pptx', 'doc', 'docx', 'xls', 'xlsx', 'epub', 'djvu', 'chm']
 
 /** 资料引用判据：页锚 p18 / p18-20（PDF 物理页码，1 起），或目标带文档扩展名。
  *  资料引用与页面双链同一个 `[[..]]` 语法，但目标落在**知识集挂载的资料**上——

@@ -78,7 +78,7 @@ const wikiViews = new Set(); // {editor, refresh} — destroy 时按 editor 剔�
 /** 资料引用判据（与宿主 scanner.ts 的排除规则一致）：页锚 p18 / p18-20，或目标带
  *  文档扩展名。资料不是页面，芯片显示"资料短名 + P18-20" */
 const MATERIAL_ANCHOR_RE = /^p(\d+)(?:-(\d+))?$/i;
-const MATERIAL_EXTS = ["pdf", "ppt", "pptx", "doc", "docx", "xls", "xlsx", "epub"];
+const MATERIAL_EXTS = ["pdf", "ppt", "pptx", "doc", "docx", "xls", "xlsx", "epub", "djvu", "chm"];
 function isMaterialLink(target, anchor) {
   if (MATERIAL_ANCHOR_RE.test(String(anchor ?? "").trim())) return true;
   const t = String(target ?? "").trim().toLowerCase();

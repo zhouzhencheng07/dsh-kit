@@ -6932,7 +6932,7 @@ ellipsis，窄列只截字不破版 */
     /** 页锚：p18 / p18-20 */
     const MATERIAL_ANCHOR_RE = /^p(\d+)(?:-(\d+))?$/i;
     /** 带这些扩展名的目标一律当资料（不带页锚时靠它认：[[书.pdf]]） */
-    const MATERIAL_EXTS = ["pdf", "ppt", "pptx", "doc", "docx", "xls", "xlsx", "epub"];
+    const MATERIAL_EXTS = ["pdf", "ppt", "pptx", "doc", "docx", "xls", "xlsx", "epub", "djvu", "chm"];
     /** 这个 wikilink 是不是指向资料（页锚 / 文档扩展名两条判据） */
     function matIsMaterialLink(target, anchor) {
       if (MATERIAL_ANCHOR_RE.test(String(anchor ?? "").trim())) return true;

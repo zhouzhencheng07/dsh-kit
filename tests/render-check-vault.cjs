@@ -186,6 +186,7 @@ check(
     check(
       "matIsMaterialLink/matPageRange/matPageLabel：页锚与文档扩展名两条判据、显示串",
       comps.matIsMaterialLink("书", "p18") && comps.matIsMaterialLink("书", "P18-20") && comps.matIsMaterialLink("讲义.pdf", "") &&
+        comps.matIsMaterialLink("扫描版.djvu", "") && comps.matIsMaterialLink("帮助.CHM", "") &&
         !comps.matIsMaterialLink("工具链", "") && !comps.matIsMaterialLink("页", "标题") && !comps.matIsMaterialLink("页", "p18-20-30") &&
         comps.matPageRange("p18-20").start === 18 && comps.matPageRange("p18-20").end === 20 && comps.matPageRange("p3").end === 3 &&
         comps.matPageRange("标题") === null && comps.matPageLabel("p18") === "P18" && comps.matPageLabel("p18-20") === "P18-20" && comps.matPageLabel("x") === "",
