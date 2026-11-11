@@ -396,6 +396,60 @@ export function rewriteLibraryRefs(root, oldRel, newRel) {
         }
     }
 }
+/** 把 [[旧名 换成 [[新名：后面必须跟 # / | / ]（免得误伤「旧名xx」这种更长的目标）。
+ *  与另一端的资料改名改写同一判据。 */
+export function replaceLinkTarget(text, oldName, newName) {
+    if (oldName === '' || newName === '' || oldName === newName)
+        return text;
+    let out = '';
+    let i = 0;
+    while (i < text.length) {
+        if (text.startsWith('[[', i)) {
+            const after = text.slice(i + 2);
+            if (after.startsWith(oldName)) {
+                const tail = after.charAt(oldName.length);
+                if (tail === '#' || tail === '|' || tail === ']') {
+                    out += '[[' + newName;
+                    i += 2 + oldName.length;
+                    continue;
+                }
+            }
+        }
+        out += text.charAt(i);
+        i += 1;
+    }
+    return out;
+}
+/** 资料改名后，把正文里指向它的资料引用（[[旧名#p18]]）一起改写。只认**文件名全等**
+ *  （选择框插的就是文件名）；目录改名不跟——引用里不带目录段，按名字匹配本来就不受它
+ *  影响。改写失败静默：改名本身已成立，留旧名只是显示成碎链。 */
+export function rewriteMaterialLinks(pages, oldName, newName) {
+    if (oldName === '' || newName === '' || oldName === newName)
+        return 0;
+    let changed = 0;
+    for (const page of pages) {
+        if (page.path === undefined)
+            continue;
+        let text;
+        try {
+            text = fs.readFileSync(page.path, 'utf8');
+        }
+        catch {
+            continue;
+        }
+        const next = replaceLinkTarget(text, oldName, newName);
+        if (next === text)
+            continue;
+        try {
+            writeFileAtomic(page.path, next);
+            changed += 1;
+        }
+        catch {
+            /* 改写不了就留着旧名 */
+        }
+    }
+    return changed;
+}
 /** 链接目标 → 页 rel：rel 全等 > rel 尾段 > 文件名（均不分大小写）；同层并列优先同空间 */
 export function resolveWikiRel(pages, target, hostSpace) {
     const t = stripMd(String(target ?? '').trim().replace(/\\/g, '/')).toLowerCase();
@@ -679,11 +733,14 @@ export function renameEntry(root, targetAbs, rawName, pages = []) {
     const oldRel = relUnderRoot(root, target);
     const libOld = inLibrary(root, target) ? libraryRel(root, target) : null;
     fs.renameSync(target, next);
-    // 资料库：清单里旧名换新；库里的 md 是文献不是页面，不参与双链
+    // 资料库：清单里旧名换新；库里的 md 是文献不是页面，不参与双链。
+    // 正文里的资料引用（[[旧名#p18]]）按文件名跟着改，不然改完名全变碎链
     if (libOld !== null) {
         const libNew = libraryRel(root, next);
-        if (libNew !== null)
+        if (libNew !== null) {
             rewriteLibraryRefs(root, libOld, libNew);
+            rewriteMaterialLinks(pages, path.basename(libOld), path.basename(libNew));
+        }
         return { path: next, links: 0 };
     }
     // 页面改名：题目 / 掌握度与学习记录跟着走（同目录 .quiz/ 与 .study/ 下换的是文件名）

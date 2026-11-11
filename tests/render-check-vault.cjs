@@ -163,6 +163,68 @@ check(
         comps.qzFilterKinds(comps.qzQuestionsOf(pages), ["judge"]).length === 1,
     );
     check("qzIsAnswered/qzEmptyAnswer：提交钮的可用判据", comps.qzIsAnswered(single, comps.qzEmptyAnswer(single)) === false && comps.qzIsAnswered(single, { choice: "A", judge: null, blanks: [] }) === true);
+    // 刷题：会话内连对 / 过关（不落盘），纯逻辑直测
+    const pool = [
+      { id: "a", type: "judge", stem: "1", options: [], answer: true, rel: "数学/1" },
+      { id: "b", type: "judge", stem: "2", options: [], answer: true, rel: "数学/1" },
+    ];
+    const ds = comps.qzDrillStart(pool, 1, 2);
+    check("qzDrillStart：池子快照 + 阈值 / 每轮题数夹到 ≥1", ds.total === 2 && ds.pool.length === 2 && ds.threshold === 2 && ds.perRound === 1);
+    const r1 = comps.qzDrillAnswer(ds, pool[0], true);
+    check("qzDrillAnswer：答对连对 +1，未达阈值不过关", r1.streak === 1 && r1.retiredNow === false && r1.state.pool.length === 2);
+    const r2 = comps.qzDrillAnswer(r1.state, pool[0], true);
+    check("qzDrillAnswer：连对达阈值过关，题从剩余里去掉", r2.retiredNow === true && r2.state.retired === 1 && r2.state.pool.length === 1);
+    const r3 = comps.qzDrillAnswer(r2.state, pool[1], false);
+    check("qzDrillAnswer：答错连对归零、题留在剩余里", r3.streak === 0 && r3.retiredNow === false && r3.state.pool.length === 1 && r3.state.streak[comps.qzDrillKey(pool[1])] === 0);
+    const passed = comps.qzDrillPass(r2.state, pool[1]);
+    check("qzDrillPass：手动过关记满、去掉一题（已过关的不重复计数）", passed.retired === 2 && passed.pool.length === 0 && comps.qzDrillPass(passed, pool[1]).retired === 2);
+    const reset = comps.qzDrillReset(passed, pool[1]);
+    check("qzDrillReset：连对归零，已过关的题放回剩余", reset.retired === 1 && reset.pool.length === 1 && reset.streak[comps.qzDrillKey(pool[1])] === 0);
+    check("qzDrillKey：rel|id（不同页可能有同内容的题）", comps.qzDrillKey(pool[0]) === "数学/1|a");
+    check("qzDrillRound：从还没过关的题里抽，不重复", comps.qzDrillRound(r2.state).length === 1 && comps.qzDrillRound(r2.state)[0].id === "b");
+    // 资料引用：判据 / 页锚 / 解析池（与宿主 scanner.ts 同一口径）
+    check(
+      "matIsMaterialLink/matPageRange/matPageLabel：页锚与文档扩展名两条判据、显示串",
+      comps.matIsMaterialLink("书", "p18") && comps.matIsMaterialLink("书", "P18-20") && comps.matIsMaterialLink("讲义.pdf", "") &&
+        !comps.matIsMaterialLink("工具链", "") && !comps.matIsMaterialLink("页", "标题") && !comps.matIsMaterialLink("页", "p18-20-30") &&
+        comps.matPageRange("p18-20").start === 18 && comps.matPageRange("p18-20").end === 20 && comps.matPageRange("p3").end === 3 &&
+        comps.matPageRange("标题") === null && comps.matPageLabel("p18") === "P18" && comps.matPageLabel("p18-20") === "P18-20" && comps.matPageLabel("x") === "",
+    );
+    check(
+      "matAnchorOfPageInput：18 → p18、18-20 → p18-20；空 / 倒序认不出",
+      comps.matAnchorOfPageInput("18") === "p18" && comps.matAnchorOfPageInput(" 18 - 20 ") === "p18-20" && comps.matAnchorOfPageInput("") === null && comps.matAnchorOfPageInput("20-18") === null && comps.matAnchorOfPageInput("x") === null,
+    );
+    const libItems = [
+      { rel: "书.pdf", name: "书.pdf", path: "D:/v/library/书.pdf", dir: false },
+      { rel: "讲义.pdf", name: "讲义 (第2版).pdf", path: "D:/v/library/讲义 (第2版).pdf", dir: false },
+    ];
+    check(
+      "matResolve / matShortName：rel 全等 > 文件名 > 唯一前缀；短名去扩展名与括注",
+      comps.matResolve(libItems, "书.pdf") === libItems[0] &&
+        comps.matResolve(libItems, "书") === libItems[0] &&
+        comps.matResolve(libItems, "讲义 (第2版).pdf") === libItems[1] &&
+        comps.matResolve(libItems, "不存在.pdf") === null &&
+        comps.matShortName("讲义 (第2版).pdf") === "讲义" &&
+        comps.matShortName("书.pdf") === "书",
+    );
+    check(
+      "matSetDirOf / matItemsOfPage：只列本页所在知识集挂载的资料（最长前缀、不在集里为空）",
+      comps.matSetDirOf("数学/子/1.1", ["数学", "数学/子"]) === "数学/子" &&
+        comps.matSetDirOf("物理/1.1", ["数学"]) === null &&
+        comps.matItemsOfPage({ knowledgeSets: [{ dir: "数学", refs: ["书.pdf"] }], library: { items: libItems } }, "数学/1.1.md").length === 1 &&
+        comps.matItemsOfPage({ knowledgeSets: [], library: { items: libItems } }, "数学/1.1.md").length === 0,
+    );
+    // 资料引用的跳页请求：按路径挂起、取走即清（阅读器显形时消费）
+    comps.requestPdfJump("D:/v/library/书.pdf", 12);
+    check("requestPdfJump/pdfJumpTake：跳页请求按路径挂起，取走即清", comps.pdfJumpPeek("D:/v/library/书.pdf") === 12 && comps.pdfJumpTake("D:/v/library/书.pdf") === 12 && comps.pdfJumpPeek("D:/v/library/书.pdf") === null);
+    comps.requestPdfJump("D:/v/library/书.pdf", 0);
+    check("requestPdfJump：页码非法不挂", comps.pdfJumpPeek("D:/v/library/书.pdf") === null);
+    // 学习完成后的询问：入口只挂一条，浮层自己查有没有未掌握的题
+    comps.askStudyQuiz("数学/1.1", "1.1");
+    check("askStudyQuiz：挂起一条询问（rel + 标题）", comps.studyQuizAskGet() !== null && comps.studyQuizAskGet().rel === "数学/1.1" && comps.studyQuizAskGet().title === "1.1");
+    comps.dismissStudyQuiz();
+    check("dismissStudyQuiz：收掉询问", comps.studyQuizAskGet() === null);
+    check("StudyQuizPrompt：无询问时回 null", comps.StudyQuizPrompt() === null);
     callLog = [];
     check("VaultQuizOverlay：无请求回 null", comps.VaultQuizOverlay() === null);
     comps.qzOpen({ kind: "page", path: "D:/v/数学/1.1.md", title: "1.1" });
@@ -336,8 +398,8 @@ check(
     stateStore.clear();
   }
 
-  // ── 首页知识集行：学习 / 测验两个统计入口 + 段头「题集」
-  //    （HomePagePane 直渲，state 槽序 0=idx 1=stats 2=showAll 3=qzSetsOpen 4=studySet 5=nonce）──
+  // ── 首页知识集行：学习 / 题目两个统计入口
+  //    （HomePagePane 直渲，state 槽序 0=idx 1=stats 2=showAll 3=studySet 4=nonce）──
   {
     stateSeq = 0;
     stateStore.clear();
@@ -348,9 +410,8 @@ check(
       ["物理", { quiz: { total: 0, mastered: 0 }, study: null }],
     ]));
     stateStore.set(2, false);
-    stateStore.set(3, false);
-    stateStore.set(4, null);
-    stateStore.set(5, 0);
+    stateStore.set(3, null);
+    stateStore.set(4, 0);
     let homeErr = null;
     let homeOut = null;
     try {
@@ -371,10 +432,10 @@ check(
       studyBtns.length === 1 && ["待复习 1", "to review 1"].includes(st0),
     );
     check(
-      "题目数并进「测验」钮：有题写 已掌握/能答，0 题只写「测验」（悬停同一句）",
-      ["测验 1/3", "Quiz 1/3"].includes(q0) &&
-        ["测验", "Quiz"].includes(q1) &&
-        !!quizTip && ["测验 · 已掌握 1/3", "Quiz · Mastered 1/3"].includes(quizTip[2].label),
+      "题目数并进「题目」钮：有题写 已掌握/能答，0 题只写「题目」（悬停同一句）",
+      ["题目 1/3", "Questions 1/3"].includes(q0) &&
+        ["题目", "Questions"].includes(q1) &&
+        !!quizTip && ["题目 · 已掌握 1/3", "Questions · Mastered 1/3"].includes(quizTip[2].label),
     );
     const studyTip = callLog.find((c) => c[1] === dockExports.KitTip && c[2] && c[2].children && c[2].children.props && c[2].children.props.className === "dshk-home-statbtn dshk-home-study");
     check(
@@ -400,44 +461,11 @@ check(
     callLog = [];
   }
 
-  // ── 首页段头「题集」：名单浮层 + 新建 / 编辑的面 ──
-  {
-    stateSeq = 0;
-    stateStore.clear();
-    callLog = [];
-    stateStore.set(3, true);
-    let setsErr = null;
-    try {
-      comps.HomePagePane({});
-    } catch (e) {
-      setsErr = e;
-    }
-    check("首页段头「题集」= 挂题集名单浮层（VaultQuizSetsDialog）", setsErr === null && callLog.some((c) => c[1] === comps.VaultQuizSetsDialog));
-    stateSeq = 0;
-    stateStore.clear();
-    callLog = [];
-    const listOut = comps.VaultQuizSetsDialog({ onClose: () => {} });
-    check(
-      "题集名单壳：标题「题集」+ 新建钮 + 空态提示",
-      !!listOut && listOut.type === comps.VaultDialog &&
-        ["题集", "Quiz sets"].includes(listOut.props.title) &&
-        callLog.some((c) => c[2] && c[2].className === "dshk-btn-save"),
-    );
-    stateSeq = 0;
-    stateStore.clear();
-    callLog = [];
-    const editOut = comps.VaultQuizSetEdit({ target: { id: "1", name: "期中考", pages: ["数学/1.1"] }, onBack: () => {}, onClose: () => {} });
-    check(
-      "题集编辑面：标题 + 名字回显 + 保存钮（名字与页都没选时保存不可用）",
-      !!editOut && editOut.type === comps.VaultDialog &&
-        ["编辑题集", "Edit set"].includes(editOut.props.title) &&
-        callLog.some((c) => c[2] && c[2].value === "期中考") &&
-        callLog.some((c) => c[2] && c[2].className === "dshk-btn-save"),
-    );
-    stateSeq = 0;
-    stateStore.clear();
-    callLog = [];
-  }
+  // ── 收口：题集整套撤掉（后端模块 / 端点 / 前端浮层都不该再出现）──
+  check(
+    "题集退场：前端不再导出题集名单 / 编辑面",
+    comps.VaultQuizSetsDialog === undefined && comps.VaultQuizSetEdit === undefined,
+  );
 
 // 学习侧 rel → 可打开的绝对路径：索引优先（.markdown 页只有索引认得），索引缺了按
 // .md → .markdown 探 stat；stat 对不存在路径回 200 {gone:true}，gone 不能当命中
@@ -791,26 +819,40 @@ async function checkApply() {
       quizSrc.includes("createHash('sha256')") && quizSrc.includes("slice(0, 16)") &&
       quizSrc.includes("WS_RE") && quizSrc.includes("sortedProgress"),
   );
-  const quizSetSrc = read("src/vault/quiz-set.ts");
   check(
-    "题集：独立文件（.quiz-state/sets/）+ 七件端点（列表 / 一个 / 有题的页 / 建改 / 删 / 清空 / 记作答）",
-    quizSetSrc.includes("SETS_DIR = 'sets'") && quizSetSrc.includes("export function keyOf") &&
-      quizSetSrc.includes("recordSetAnswer") &&
-      compSrc.includes("/dsh-kit/vault/quiz-sets") && compSrc.includes("/dsh-kit/vault/quiz-set-scope") &&
-      compSrc.includes("/dsh-kit/vault/quiz-pages") && compSrc.includes("/dsh-kit/vault/quiz-set-save") &&
-      compSrc.includes("/dsh-kit/vault/quiz-set-delete") && compSrc.includes("/dsh-kit/vault/quiz-set-clear") &&
-      compSrc.includes("/dsh-kit/vault/quiz-set-record"),
+    "题集退场：宿主不再有题集模块与端点（题只在页面里）",
+    !fs.existsSync(__dirname + "/../src/vault/quiz-set.ts") &&
+      !compSrc.includes("quiz-set") && !compSrc.includes("quiz-sets") && !bundleSrc.includes("quiz-set"),
   );
   check(
-    "题集掌握度独立：作答走题集自己的记录口、不套「一天一次」，也不碰页面进度文件",
-    quizSetSrc.includes("Math.min(entry.streak + 1, 0xffffffff)") && !quizSetSrc.includes("lastDay === today") &&
-      bundleSrc.includes('"/dsh-kit/vault/quiz-set-record"') &&
-      bundleSrc.includes("isQSet ? it.rel + \"|\" + it.q.id : it.q.id"),
+    "掌握度不套「一天一次」：同一天答对照样涨连击，lastDay 只作记录",
+    quizSrc.includes("entry.streak = Math.min(entry.streak + 1, 0xffffffff)") &&
+      !quizSrc.includes("entry.lastDay === today") && !quizSrc.includes("capped") &&
+      !bundleSrc.includes('t("qzCapped")'),
   );
   check(
-    "掌握度一天最多涨一次：宿主判 lastDay、回 capped，浮层说「今天已记过一次」",
-    quizSrc.includes("entry.lastDay === today") && quizSrc.includes("capped") &&
-      bundleSrc.includes('t("qzCapped")'),
+    "刷题只记会话内连对：浮层有刷题逻辑与两个入口，不落盘",
+    bundleSrc.includes("function qzDrillAnswer(") && bundleSrc.includes("function qzDrillPass(") &&
+      bundleSrc.includes('t("qzDrill")') && bundleSrc.includes("onDrill: startDrill") &&
+      !bundleSrc.includes('/dsh-kit/vault/drill'),
+  );
+  const vaultScannerSrc = read("src/vault/scanner.ts");
+  check(
+    "资料引用不进页面链接图（宿主与前端同一判据），资料改名改写正文引用",
+    vaultScannerSrc.includes("export function isMaterialLink") &&
+      vaultScannerSrc.includes("if (isMaterialLink(target, (m[2] ?? '').trim())) continue") &&
+      quizFsSrc.includes("rewriteMaterialLinks") && quizFsSrc.includes("replaceLinkTarget") &&
+      bundleSrc.includes("function matIsMaterialLink(") && bundleSrc.includes("matItemsOfPage("),
+  );
+  check(
+    "资料引用跳页：请求按路径挂起、阅读器显形消费（不落盘记住读到哪）",
+    bundleSrc.includes("function requestPdfJump(") && bundleSrc.includes("pdfJumpSubscribe(") &&
+      bundleSrc.includes("pdfJumpTake(path)") && !bundleSrc.includes("dshk.pdf.pos"),
+  );
+  check(
+    "学习完成后问「要不要测验未掌握的题」：完成入口都挂 askStudyQuiz，浮层自己查未掌握",
+    (bundleSrc.match(/askStudyQuiz\(/g) || []).length >= 6 &&
+      bundleSrc.includes("function StudyQuizPrompt()") && bundleSrc.includes('auto: "unmastered"'),
   );
   check(
     "答题不打乱选项、正确答案只给字母（与桌面端同口径）",
@@ -873,10 +915,8 @@ async function checkApply() {
       homePaneSrc.indexOf("dshk-home-study") < homePaneSrc.indexOf("dshk-home-quiz"),
   );
   check(
-    "首页段头「题集」入口：名单浮层挂首页签、点行开题集（kind=qset）",
-    homePaneSrc.includes('t("qzSets")') &&
-      homePaneSrc.includes("jsxRuntime.jsx(VaultQuizSetsDialog, {") &&
-      bundleSrc.includes('qzOpen({ kind: "qset", path: s.id, title: s.name })'),
+    "首页段头不再挂「题集」：题集整套退场，行上只留学习与题目",
+    !homePaneSrc.includes("QuizSets") && !homePaneSrc.includes("qzSets"),
   );
   check(
     "首页学习数字随手动作刷新（订阅日程总线；学习写动作最后是改复习待办）",

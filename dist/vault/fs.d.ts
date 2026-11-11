@@ -59,6 +59,13 @@ export declare function libraryRel(root: string, target: string): string | null;
 /** 库内 rel 改名 / 移动后改写全部挂载清单：旧 rel（或旧目录前缀）整段换新名。
  *  改写失败静默——清单留旧名只是显示成「不在库里」，不该让改名这个主动作报错。 */
 export declare function rewriteLibraryRefs(root: string, oldRel: string, newRel: string): void;
+/** 把 [[旧名 换成 [[新名：后面必须跟 # / | / ]（免得误伤「旧名xx」这种更长的目标）。
+ *  与另一端的资料改名改写同一判据。 */
+export declare function replaceLinkTarget(text: string, oldName: string, newName: string): string;
+/** 资料改名后，把正文里指向它的资料引用（[[旧名#p18]]）一起改写。只认**文件名全等**
+ *  （选择框插的就是文件名）；目录改名不跟——引用里不带目录段，按名字匹配本来就不受它
+ *  影响。改写失败静默：改名本身已成立，留旧名只是显示成碎链。 */
+export declare function rewriteMaterialLinks(pages: WikiRef[], oldName: string, newName: string): number;
 export interface WikiRef {
     rel: string;
     space: string;

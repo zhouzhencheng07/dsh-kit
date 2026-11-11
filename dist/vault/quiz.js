@@ -1024,26 +1024,20 @@ function applyEdit(p, oldId, newId, keep) {
     return hadOld || hadNew;
 }
 /** 记一次作答：答对连击 +1（达阈值即掌握），答错连击归零并撤销掌握。
- *  **同一道题一天最多涨一次**——题还在池子里、想刷几遍都行，但当天再答对不加分，
- *  这样「一天连点三次就算掌握」刷不出来，掌握至少得跨几天。today 只给单测注入。 */
+ *  同一天再答对照样涨连击（题照刷、掌握跟手）；lastDay 只记最近一次答对日。
+ *  today 只给单测注入。 */
 export function record(root, rel, id, correct, today = localToday()) {
     const r = safeQuizRel(rel);
     const threshold = readSettings(root).threshold;
     const p = readProgressFile(root, r);
     let newly = false;
-    let capped = false;
     const entry = p.progress[id] ?? { streak: 0, mastered: false, updatedMs: 0 };
     if (correct) {
-        if (entry.lastDay === today) {
-            capped = true;
-        }
-        else {
-            entry.streak = Math.min(entry.streak + 1, 0xffffffff);
-            entry.lastDay = today;
-            if (entry.streak >= threshold && !entry.mastered) {
-                entry.mastered = true;
-                newly = true;
-            }
+        entry.streak = Math.min(entry.streak + 1, 0xffffffff);
+        entry.lastDay = today;
+        if (entry.streak >= threshold && !entry.mastered) {
+            entry.mastered = true;
+            newly = true;
         }
     }
     else {
@@ -1053,7 +1047,7 @@ export function record(root, rel, id, correct, today = localToday()) {
     entry.updatedMs = nowMs();
     p.progress[id] = entry;
     writeProgressFile(root, r, p);
-    return { streak: entry.streak, mastered: entry.mastered, newlyMastered: newly, capped };
+    return { streak: entry.streak, mastered: entry.mastered, newlyMastered: newly };
 }
 /** 手动标记掌握：连击直接设成阈值（一步跳满） */
 export function markMastered(root, rel, id) {
@@ -1068,7 +1062,7 @@ export function markMastered(root, rel, id) {
     entry.updatedMs = nowMs();
     p.progress[id] = entry;
     writeProgressFile(root, r, p);
-    return { streak: threshold, mastered: true, newlyMastered: !was, capped: false };
+    return { streak: threshold, mastered: true, newlyMastered: !was };
 }
 /** 遗忘（答对后自觉没底也可用）：连击归零并撤销掌握 */
 export function forget(root, rel, id) {
@@ -1080,7 +1074,7 @@ export function forget(root, rel, id) {
     entry.updatedMs = nowMs();
     p.progress[id] = entry;
     writeProgressFile(root, r, p);
-    return { streak: 0, mastered: false, newlyMastered: false, capped: false };
+    return { streak: 0, mastered: false, newlyMastered: false };
 }
 /** 改阈值（1..20）：已经掌握但连击数低于新阈值的题刷回未掌握 */
 export function setThreshold(root, value) {

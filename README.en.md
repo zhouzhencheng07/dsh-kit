@@ -42,7 +42,8 @@ from the page). It stays in the list: **do not turn it off**.
   config page) — a one-row search
   plus a tree on the left, each page reads in its own right-dock **Knowledge base** tab
   (title = page name, ✕ per tab); `[[wikilinks]]` jumping to sections
-  (`[[page#heading]]`), a sticky reading bar with outline & backlinks menus; one search
+  (`[[page#heading]]`) and `[[material#p18-20]]` opening a material mounted on the set at that page,
+  a sticky reading bar with outline & links menus; one search
   covers both sides (full-text notes + note folders + files under the root `library/`
   matched by name), and library files open in the official right-dock file tab (PDFs are
   not rendered inside the panel); a **knowledge set** mounts library documents onto any note
@@ -73,8 +74,9 @@ from the page). It stays in the list: **do not turn it off**.
   special blocks / lists / math & code / charts / attachments),
   a selection floats an inline format bar (colour swatches and links included) and, inside a
   table, a second bar with row/column insert & delete, left/center/right alignment, header
-  column and delete-table; the menu opens a picker for wiki links that searches pages and all
-  vault headings at once (a heading row inserts `[[page#heading]]`; type an alias after `|`),
+  column and delete-table; the menu opens a picker for wiki links that searches this set's materials plus pages and all
+  vault headings at once (a material row asks for a page first, then inserts `[[material#p18-20]]`;
+  a heading row inserts `[[page#heading]]`; type an alias after `|`),
   a rows/columns dialog for tables (3x3 with header by default) — cells hold inline text
   only, so pasted headings / quotes / lists / nested tables are flattened to text on the spot and
   the first row is always the header row — inserts mermaid blocks
@@ -83,37 +85,44 @@ from the page). It stays in the list: **do not turn it off**.
   `attachments/` and inserted; `Tab` sinks/lifts list items (jumps cells in tables, inserts two
   spaces in code blocks, and is swallowed elsewhere so focus never leaves the editor),
   `Ctrl+Enter` jumps out of a blockquote; the page bar carries undo/redo, an unsaved dot and
-  the sticky reading bar (outline & backlinks);
+  the sticky reading bar (outline & links: the panel recomputes material references and outgoing
+  links from the document and backlinks from the index, and a material row's `⋯` changes its page
+  or removes it);
   saving is a 2s-debounced autosave (`Ctrl+S` saves now, leaving a tab or unmounting flushes)
   over an mtime CAS — if the file changed underneath (agent or external editor), autosave
   pauses and a conflict bar asks you to choose overwrite-disk or load-disk (the plugin never
   overwrites silently and never touches git); external changes while the page is clean are
   still re-read silently; the plugin creates no skeleton directories and never touches git
+  - **In-vault PDF reader** (the row's config switch, off by default): with it on, PDFs under
+    `library/` open as knowledge-base tabs instead of the official file tab — a page box to jump
+    (a `[[book#p18]]` reference lands straight on that page), no “remember where you stopped”
+    (reading is not linear; the page belongs to the reference), and no official preview byte cap.
+    Only a fit-to-width layout: page width follows the dock width (dragging the split is the font
+    size knob) and there is no zoom step
   - **Home** (the third right-dock tab, opened by `⌂` in the panel toolbar): a knowledge-sets
     section (first 8: book icon + name + a "to review N" / "studying N" study button on the right
-    (opens this set's study overview) and a "Quiz mastered/total" button; both buttons have a
-    fixed width and right-aligned tabular numbers, and material counts stay out of the row; the
-    section header offers "Quiz sets", plus "All knowledge sets ›" when there are more than 8)
+    (opens this set's study overview) and a "Questions mastered/total" button; both buttons have a
+    fixed width and right-aligned tabular numbers, and material counts stay out of the row; plus
+    "All knowledge sets ›" when there are more than 8)
     and a recently-updated section (the whole vault by mtime, first 8, folder shown on the right).
     Clicking a set re-roots the left tree to it (with a hint when the vault tree is not the
     active form); clicking a page row opens it
-  - **Quiz** (shares one `.quiz` dataset with the desktop end): the page-bar "Quiz" button
-    (badge = mastered / answerable) and a tree row's `⋯` → "Quiz" (a page = single page, a
-    knowledge-set row = recursive scope, plain folders get no entry); the overlay picks
-    pages / mastery state / question types / count,
-    then runs question by question with instant marking and a summary; a page entry also has
-    "Edit questions" (add/change/delete written back wholesale, optionally keeping mastery).
-    Mastery is consecutive correct answers ≥ a threshold stored in `.quiz-state/settings.json`
-    at the vault root (editable in the panel); **a question can raise its streak at most once per
-    day** (you may re-answer it any number of times — a repeat that day only says "already counted
-    today", so mastery takes several days). Options keep the author's order and the correct answer
-    is shown as letters only
-  - **Quiz sets** ("Quiz sets" in the home section header): gather questions from several pages
-    for a quick run; their mastery is independent of the pages. The questions stay on their pages,
-    and a question changed or a page deleted only marks the matching progress "invalid"; a set can
-    be renamed / re-paged, have its mastery cleared, or be deleted without touching any question
+  - **Questions · quiz / drill** (shares one `.quiz` dataset with the desktop end): the page-bar
+    "Questions" button (badge = mastered / answerable) and a tree row's `⋯` → "Questions" (a page =
+    single page, a knowledge-set row = recursive scope, plain folders get no entry); the overlay
+    picks pages / mastery state / question types / questions per round, then starts a **quiz**
+    (the pool is split into rounds of that size, each round ends with a summary, correct answers
+    raise mastery) or a **drill** (only this session's correct streak counts; reaching the threshold
+    passes a question, and you can "Pass" / "Reset streak" by hand), answering question by question
+    with instant marking. A page entry also has "Edit questions" (add/change/delete written back
+    wholesale, optionally keeping mastery). Mastery is consecutive correct answers ≥ a threshold
+    stored in `.quiz-state/settings.json` at the vault root (editable in the panel; answering the
+    same question twice on one day still raises the streak). Options keep the author's order and the
+    correct answer is shown as letters only; after finishing a study or review, if the page still
+    has unmastered questions the panel asks whether to quiz them now (nothing is asked when the
+    page has no questions or is fully mastered)
   - **Study / review** (shares one `.study` dataset with the desktop end; one record per page):
-    the page bar's fixed right cluster (left to right) is `@` · Study · Quiz · Backlinks · Outline;
+    the page bar's fixed right cluster (left to right) is `@` · Study · Questions · Links · Outline;
     the "Study" button turns into "Review · today / in N d / N d overdue" or "Done" — marking a
     page as learned schedules the first review for tomorrow; the study-record dialog shows the
     current state, next date, owning knowledge set and history, with "Adjust next / Finish this

@@ -34,14 +34,33 @@ function isMdPath(p) {
 function escapeRegExp(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
-/** 正文 wikilink 提取：[[目标]] / [[目标|别名]]，目标剥 #锚点；去重保序 */
+/** 资料目标带这些扩展名时一律当资料（不带页锚也能认：[[书.pdf]]） */
+const MATERIAL_EXTS = ['pdf', 'ppt', 'pptx', 'doc', 'docx', 'xls', 'xlsx', 'epub'];
+/** 资料引用判据：页锚 p18 / p18-20（PDF 物理页码，1 起），或目标带文档扩展名。
+ *  资料引用与页面双链同一个 `[[..]]` 语法，但目标落在**知识集挂载的资料**上——
+ *  资料不是页面，所以它不进页面链接图（否则将来真有个同名页面就会冒出幽灵反链，
+ *  与另一端同一判据）。 */
+export function isMaterialLink(target, anchor) {
+    const a = String(anchor ?? '').trim().toLowerCase();
+    if (a.startsWith('p')) {
+        const segs = a.slice(1).split('-');
+        if (segs.length <= 2 && segs.every((s) => /^\d+$/.test(s)))
+            return true;
+    }
+    const t = String(target ?? '').trim().toLowerCase();
+    return MATERIAL_EXTS.some((ext) => t.endsWith(`.${ext}`));
+}
+/** 正文 wikilink 提取：[[目标]] / [[目标|别名]]，目标剥 #锚点；去重保序。
+ *  资料引用（[[书#p18]] / [[讲义.pdf]]）跳过：它不是页面链接。 */
 export function extractWikiLinks(content) {
     const out = [];
     const seen = new Set();
-    const re = /\[\[([^\[\]#|]+)(?:#[^\[\]|]*)?(?:\|[^\[\]]*)?\]\]/g;
+    const re = /\[\[([^\[\]#|]+)(?:#([^\[\]|]*))?(?:\|[^\[\]]*)?\]\]/g;
     for (const m of content.matchAll(re)) {
         const target = (m[1] ?? '').trim();
         if (target === '')
+            continue;
+        if (isMaterialLink(target, (m[2] ?? '').trim()))
             continue;
         const key = target.toLowerCase();
         if (seen.has(key))

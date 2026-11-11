@@ -190,25 +190,23 @@ await test('savePage：与标记同形的题干拒绝落盘', () => {
   )
 })
 
-await test('record/markMastered/forget：连击达阈值即掌握，同一天只涨一次，答错归零', () => {
+await test('record/markMastered/forget：连对达阈值即掌握，同一天答对照样涨，答错归零', () => {
   mkpage('数学/4.1')
   savePage(root, '数学/4.1', [SINGLE], null)
   const id = readPage(root, '数学/4.1').questions[0].id
   assert.equal(DEFAULT_THRESHOLD, 3)
   let out = record(root, '数学/4.1', id, true, '2026-01-01')
-  assert.deepEqual(out, { streak: 1, mastered: false, newlyMastered: false, capped: false })
-  // 同一天再答对：题照刷，连击不涨（不然一天点三次就算掌握）
-  assert.deepEqual(record(root, '数学/4.1', id, true, '2026-01-01'), { streak: 1, mastered: false, newlyMastered: false, capped: true })
+  assert.deepEqual(out, { streak: 1, mastered: false, newlyMastered: false })
+  // 同一天再答对：照样涨（题照刷、掌握跟手，与另一端同口径）
+  assert.deepEqual(record(root, '数学/4.1', id, true, '2026-01-01'), { streak: 2, mastered: false, newlyMastered: false })
   out = record(root, '数学/4.1', id, true, '2026-01-02')
-  assert.deepEqual(out, { streak: 2, mastered: false, newlyMastered: false, capped: false })
-  out = record(root, '数学/4.1', id, true, '2026-01-03')
-  assert.deepEqual(out, { streak: 3, mastered: true, newlyMastered: true, capped: false })
-  assert.deepEqual(record(root, '数学/4.1', id, false), { streak: 0, mastered: false, newlyMastered: false, capped: false })
-  // 答错不清 lastDay：当天再答对仍不加分（与桌面端同口径）
-  assert.equal(record(root, '数学/4.1', id, true, '2026-01-03').capped, true)
-  assert.deepEqual(markMastered(root, '数学/4.1', id), { streak: 3, mastered: true, newlyMastered: true, capped: false })
-  assert.deepEqual(markMastered(root, '数学/4.1', id), { streak: 3, mastered: true, newlyMastered: false, capped: false })
-  assert.deepEqual(forget(root, '数学/4.1', id), { streak: 0, mastered: false, newlyMastered: false, capped: false })
+  assert.deepEqual(out, { streak: 3, mastered: true, newlyMastered: true })
+  assert.deepEqual(record(root, '数学/4.1', id, false), { streak: 0, mastered: false, newlyMastered: false })
+  // 答错归零后从 1 涨起（同一天也一样）
+  assert.deepEqual(record(root, '数学/4.1', id, true, '2026-01-03'), { streak: 1, mastered: false, newlyMastered: false })
+  assert.deepEqual(markMastered(root, '数学/4.1', id), { streak: 3, mastered: true, newlyMastered: true })
+  assert.deepEqual(markMastered(root, '数学/4.1', id), { streak: 3, mastered: true, newlyMastered: false })
+  assert.deepEqual(forget(root, '数学/4.1', id), { streak: 0, mastered: false, newlyMastered: false })
 })
 
 await test('掌握度 lastDay：非空才落盘、读回保留；空串当缺字段、类型不对整份算坏', () => {

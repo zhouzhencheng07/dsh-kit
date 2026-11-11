@@ -71,9 +71,36 @@ function parseWikiInner(inner) {
 const INLINE_MATH_RE = /^\$(?!\s)((?:\\.|[^$\n])+?)(?<!\s)\$(?!\$|\w)/;
 
 // ─── WikiLink（[[页面#锚|别名]] 行内原子） ─────────────────────────────────
-// 视图回调（跳页/碎链建页/解析态着色）由工厂经 ctx 注入；broken 判定是纯视觉，
-// 索引更新后走 handle.wikiRefresh() 重刷。
+// 视图回调（跳页/碎链建页/资料解析/解析态着色）由工厂经 ctx 注入；broken 判定是纯
+// 视觉，索引或资料清单更新后走 handle.wikiRefresh() 重刷。
 const wikiViews = new Set(); // {editor, refresh} — destroy 时按 editor 剔除
+
+/** 资料引用判据（与宿主 scanner.ts 的排除规则一致）：页锚 p18 / p18-20，或目标带
+ *  文档扩展名。资料不是页面，芯片显示"资料短名 + P18-20" */
+const MATERIAL_ANCHOR_RE = /^p(\d+)(?:-(\d+))?$/i;
+const MATERIAL_EXTS = ["pdf", "ppt", "pptx", "doc", "docx", "xls", "xlsx", "epub"];
+function isMaterialLink(target, anchor) {
+  if (MATERIAL_ANCHOR_RE.test(String(anchor ?? "").trim())) return true;
+  const t = String(target ?? "").trim().toLowerCase();
+  return MATERIAL_EXTS.some((ext) => t.endsWith("." + ext));
+}
+/** 页锚的显示串：p18 → P18，p18-20 → P18-20；不是页锚给空串 */
+function pageLabelOf(anchor) {
+  const m = MATERIAL_ANCHOR_RE.exec(String(anchor ?? "").trim());
+  if (m === null) return "";
+  const start = Number(m[1]);
+  const end = m[2] === undefined ? start : Number(m[2]);
+  if (!(start > 0) || !(end >= start)) return "";
+  return start === end ? "P" + start : "P" + start + "-" + end;
+}
+/** 芯片上的资料短名：去扩展名、去掉括注，过长截断 */
+function materialShortName(name) {
+  let s = String(name ?? "").replace(/\.[^./\\]+$/, "");
+  const cut = s.search(/[（(]/);
+  if (cut > 0) s = s.slice(0, cut);
+  s = s.trim();
+  return s.length > 20 ? s.slice(0, 19) + "…" : s;
+}
 
 const WikiLink = Node.create({
   name: "wikiLink",
@@ -155,11 +182,22 @@ const WikiLink = Node.create({
       span.contentEditable = "false";
       const refresh = () => {
         const { target, anchor, alias } = props.node.attrs;
-        const label = alias || anchor || target || "[[?]]";
-        span.textContent = label;
-        span.title = `[[${target}${anchor ? `#${anchor}` : ""}${alias ? `|${alias}` : ""}]]`;
-      const resolved = target === "" || (ctx.resolveWiki ? ctx.resolveWiki(target) : true);
-      span.classList.toggle("dshk-vault-wl-broken", !resolved);
+        const targetS = String(target ?? "");
+        const anchorS = String(anchor ?? "");
+        // 资料引用（[[书#p18-20]]）：芯片显示"资料短名 + P18-20"，解析不到就着灰
+        if (isMaterialLink(targetS, anchorS)) {
+          const name = ctx.resolveMaterial ? ctx.resolveMaterial(targetS) : null;
+          const page = pageLabelOf(anchorS);
+          span.textContent = alias || `${name ?? materialShortName(targetS)}${page ? ` ${page}` : ""}`;
+          span.classList.add("dshk-vault-wl-material");
+          span.classList.toggle("dshk-vault-wl-broken", name === null);
+        } else {
+          span.textContent = alias || anchorS || targetS || "[[?]]";
+          span.classList.remove("dshk-vault-wl-material");
+          const resolved = targetS === "" || (ctx.resolveWiki ? ctx.resolveWiki(targetS) : true);
+          span.classList.toggle("dshk-vault-wl-broken", !resolved);
+        }
+        span.title = `[[${targetS}${anchorS ? `#${anchorS}` : ""}${alias ? `|${alias}` : ""}]]`;
       };
       refresh();
       span.addEventListener("click", (e) => {
@@ -1648,6 +1686,7 @@ function create(host, opts = {}) {
       codeCopied: opts.labels?.codeCopied,
       onWikiLink: opts.onWikiLink,
       resolveWiki: opts.resolveWiki,
+      resolveMaterial: opts.resolveMaterial,
       resolveSrc: opts.resolveSrc,
     }),
     content: opts.md ?? "",

@@ -732,7 +732,7 @@ let vaultFetchPrev = null;
   const rowMenuActs = rowMenuEl ? rowMenuEl[2].actions : null;
   const rowExtraLabels = rowMenuActs && Array.isArray(rowMenuActs.extraItems) ? rowMenuActs.extraItems.map((it) => it.label) : [];
   check(
-    "已标记知识集的目录行 ⋯：添加资料… + 取消知识集 + 测验 + 移动到… + 导入 md（+ 复制/改名/删除）",
+    "已标记知识集的目录行 ⋯：添加资料… + 取消知识集 + 题目 + 移动到… + 导入 md（+ 复制/改名/删除）",
     !!rowMenuActs &&
       rowMenuActs.copyMode === "abs" &&
       typeof rowMenuActs.onCopyPath === "function" &&
@@ -742,7 +742,7 @@ let vaultFetchPrev = null;
       rowExtraLabels.length === 5 &&
       ["添加资料…", "Add material…"].includes(rowExtraLabels[0]) &&
       ["取消知识集", "Remove knowledge set"].includes(rowExtraLabels[1]) &&
-      ["测验", "Quiz"].includes(rowExtraLabels[2]) &&
+      ["题目", "Questions"].includes(rowExtraLabels[2]) &&
       ["移动到…", "Move to…"].includes(rowExtraLabels[3]) &&
       ["导入 md 文件…", "Import markdown…"].includes(rowExtraLabels[4]),
   );
@@ -866,12 +866,12 @@ let vaultFetchPrev = null;
   const unmarkedMenu = callLog.find((c) => c[1] === comps.TreeRowMenu);
   const unmarkedItems = unmarkedMenu ? unmarkedMenu[2].actions.extraItems : [];
   check(
-    "未标记的目录行 ⋯ 给「设为知识集」（有内容才给；空目录置灰），不给测验（普通目录没有统计面）",
+    "未标记的目录行 ⋯ 给「设为知识集」（有内容才给；空目录置灰），不给题目（普通目录没有统计面）",
     unmarkedErr === null && unmarkedItems.length === 3 && ["设为知识集", "Make knowledge set"].includes(unmarkedItems[0].label) && unmarkedItems[0].disabled === false &&
-      unmarkedItems.every((it) => !["测验", "Quiz"].includes(it.label)) &&
+      unmarkedItems.every((it) => !["题目", "Questions"].includes(it.label)) &&
       src.includes("disabled: dirHasChildren(entry.path) !== true"),
   );
-  // 测验入口收成页面与知识集两处：页行 ⋯ 仍给「测验 + 移动到…」
+  // 题目入口收成页面与知识集两处：页行 ⋯ 仍给「题目 + 移动到…」
   const pageMenuErr = renderVault({
     0: { ...VAULT_INDEX, knowledgeSets: [] },
     1: "",
@@ -883,8 +883,8 @@ let vaultFetchPrev = null;
   const pageRowMenu = callLog.find((c) => c[1] === comps.TreeRowMenu);
   const pageRowItems = pageRowMenu ? pageRowMenu[2].actions.extraItems : [];
   check(
-    "页行 ⋯ 仍给「测验 + 移动到…」（页面入口不随知识集收窄；收口条件钉在源码哨兵上）",
-    pageMenuErr === null && pageRowItems.length === 2 && ["测验", "Quiz"].includes(pageRowItems[0].label) &&
+    "页行 ⋯ 仍给「题目 + 移动到…」（页面入口不随知识集收窄；收口条件钉在源码哨兵上）",
+    pageMenuErr === null && pageRowItems.length === 2 && ["题目", "Questions"].includes(pageRowItems[0].label) &&
       ["移动到…", "Move to…"].includes(pageRowItems[1].label) &&
       src.includes("entry.dir !== true || ksRefsOf(entry.path) !== null"),
   );
@@ -1163,7 +1163,7 @@ let vaultFetchPrev = null;
   );
 }
 // 6.9b) VaultPagePane 直渲（所见即所得编辑视图）：预置 state#0（页已加载）走完整
-// 编辑面——页条（撤销/重做 + 右端固定簇 @ · 学习 · 测验 · 反链 · 目录）+ RTE；
+// 编辑面——页条（撤销/重做 + 右端固定簇 @ · 学习 · 题目 · 双链 · 目录）+ RTE；
 // 删除只在左树行 ⋯ 菜单，冲突条只在盘上被抢写后出现（预置态不出）
 {
   stateSeq = 0;
@@ -1186,22 +1186,22 @@ let vaultFetchPrev = null;
   const undoBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].children === "↶");
   const redoBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && c[2].children === "↷");
   const rte = callLog.find((c) => c[1] === comps.RteEditor);
-  // 右端固定簇（左→右）：@ · 学习 · 测验 · 反链 · 目录——五枚紧挨着，@ 起头
+  // 右端固定簇（左→右）：@ · 学习 · 题目 · 双链 · 目录——五枚紧挨着，@ 起头
   const studyIdx = barIdxOf((n) => n && n.type === comps.VaultStudyEntry);
   const quizIdx = barIdxOf((n) => n && n.type === comps.VaultQuizEntry);
   const blIdx = barIdxOf((n) => {
     const txt = n && n.type === comps.KitTip && n.props && n.props.children && n.props.children.props ? n.props.children.props.children : null;
-    return typeof txt === "string" && (txt.startsWith("反链") || txt.startsWith("Backlinks"));
+    return typeof txt === "string" && (txt.startsWith("双链") || txt.startsWith("Links"));
   });
   const tocIdx = barIdxOf((n) => n && n.type === comps.KitTip && ["目录", "Outline"].includes(n.props.label));
   const tocBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && ["目录", "Outline"].includes(c[2].children));
-  const blBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("反链") || c[2].children.startsWith("Backlinks")));
+  const blBtn = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("双链") || c[2].children.startsWith("Links")));
   const conflictBar = callLog.find((c) => c[2] && c[2].className === "dshk-vault-conflict");
   check("VaultPagePane 渲染无异常（页条 + RTE 就位，@ 在页条右端）", paneErr === null && !!editbar && atIdx >= 0 && !!rte);
   check("页条不再带删除按钮（删除在左侧树的行 ⋯ 菜单）", !delBtn);
-  check("页条带撤销/重做 + 阅读条目录/反链，无冲突条（预置态盘上没被抢写）", !!undoBtn && !!redoBtn && !!tocBtn && !!blBtn && !conflictBar);
+  check("页条带撤销/重做 + 阅读条目录/双链，无冲突条（预置态盘上没被抢写）", !!undoBtn && !!redoBtn && !!tocBtn && !!blBtn && !conflictBar);
   check(
-    "页条右端顺序 = @ → 学习 → 测验 → 反链 → 目录（五枚紧挨着，撤销/重做留在左端）",
+    "页条右端顺序 = @ → 学习 → 题目 → 双链 → 目录（五枚紧挨着，撤销/重做留在左端）",
     atIdx >= 0 && studyIdx === atIdx + 1 && quizIdx === studyIdx + 1 && blIdx === quizIdx + 1 && tocIdx === blIdx + 1,
   );
   if (paneErr) console.log("  VaultPagePane error:", paneErr.message);
@@ -1407,7 +1407,7 @@ let vaultFetchPrev = null;
       /ctx\.drawImage\(buffer, 0, 0\)/.test(src) &&
       !/canvas\.width = Math\.max\(1, Math\.floor\(viewport\.width\)\)/.test(src),
   );
-  check("阅读位置只落页码（页内比例不出阅读器）", /pdfPosWrite\(ident, \{ page: a\.page \}\)/.test(src));
+  check("阅读位置不落盘（会话内只记页码，页码归资料引用管）", /pdfLastPosSet\(ident, a\.page\)/.test(src) && !/dshk\.pdf\.pos/.test(src));
   check("工具条只有页码与总页数（不做缩放档，栏宽是唯一版面旋钮）", !!bar && !callLog.some((c) => c[2] && c[2].className === "dshk-pdf-zooms"));
   check("工具条不再解释适宽口径（只剩「当前页 / 总页数」）", !src.includes("pdfFitOnly"));
   const pdfPageRule = (src.match(/\.dshk-pdf-page\{[^}]*\}/) || [""])[0];
@@ -1436,7 +1436,7 @@ let vaultFetchPrev = null;
   check("表格不再列 1×2~5×5 固定档（点开自己填行列，默认 3×3 带表头）", !src.includes("vmenuTable1") && !src.includes("vmenuTable5") && src.includes("setTDlg({ rows: 3, cols: 3 })") && src.includes("insertTable(rows, cols)"));
   check("H5/H6 不进菜单（正文里已有的照常渲染）", !src.includes('key: "h5"') && !src.includes('key: "h6"') && src.includes("/^h[1-6]$/.test(key)"));
   check("流程图真出图：编辑器懒加载钩子 + 知识库行的白名单放行 mermaid", src.includes("/dsh-kit/vendor/mermaid.min.js") && src.includes("window.__dshkMermaidLoad") && src.includes("window.DshRTE.mermaidReady()") && fs.readFileSync(__dirname + "/../src/vault/index.ts", "utf8").includes("['/dsh-kit/vendor/mermaid.min.js', 'mermaid.min.js']") && fs.existsSync(__dirname + "/../client/vendor/mermaid.min.js"));
-  check("双链选择框：一次搜出页面与标题（| 后写别名不进搜索）、键盘选、重名时插 rel（不静默指向别的页）", src.includes("const pickSplit") && src.includes("const pickRowsOf") && src.includes("pickInsert") && src.includes('pickSplit(pick?.query).alias') && src.includes('p.kind === "head" ? `§ ${p.heading}` : pageBasename(p.rel)') && src.includes("const dup = (pagesRef.current ?? []).some") && src.includes('h.insertWikiLink({ target: dup ? p.rel.replace(/\\.md$/i, "") : base, anchor: p.heading ?? null, alias: alias === "" ? null : alias })') && /insertContent\(" "\)/.test(src));
+  check("双链选择框：一次搜出本集资料 + 页面与标题、资料先问页码、重名时插 rel", src.includes("const pickSplit") && src.includes("const pickRowsOf") && src.includes("pickInsert") && src.includes("pickConfirmMaterial") && src.includes('pickSplit(pick?.query).alias') && src.includes('p.kind === "material" ?') && src.includes("const dup = (pagesRef.current ?? []).some") && src.includes("const pickConfirmMaterial = () => {"));
   check("双链不监听 [[ 输入（字面文本要打得出来），建链只走菜单", !/__dshkWikiTrigger|wiki-link-trigger/.test(src));
   check("图片入口走系统文件选择器，与粘贴同一条入库管线", src.includes("input.accept = \"image/*\"") && src.includes("void attachAndInsert(files)") && src.includes("void attachAndInsert(files);"));
   check("表格命令在选区浮条：行/列增删 + 左中右对齐 + 删表；「切换表头列」不挂（md 表格只认首行表头，列级表头存不下）", src.includes('children: "行↑"') && src.includes('children: "−列"') && src.includes('setCellAttribute("align", "center")') && !src.includes("toggleHeaderColumn()") && !src.includes("vtblHeadCol") && src.includes('children: "✕表"'));
@@ -1654,8 +1654,8 @@ let vaultFetchPrev = null;
     onIndexRefresh: () => {},
     toast: () => {},
   });
-  const blBtn2 = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("反链") || c[2].children.startsWith("Backlinks")));
-  check("反链入口按钮带计数（反链 1）", !!blBtn2 && (blBtn2[2].children === "反链 1" || blBtn2[2].children === "Backlinks 1"));
+  const blBtn2 = callLog.find((c) => (c[0] === "jsx") && c[2] && typeof c[2].children === "string" && (c[2].children.startsWith("双链") || c[2].children.startsWith("Links")));
+  check("双链入口按钮带计数（双链 1）", !!blBtn2 && (blBtn2[2].children === "双链 1" || blBtn2[2].children === "Links 1"));
   check("页尾反链小节已退役（CSS 不存在）", !/\.dshk-vault-backlinks\{/.test(src));
   stateSeq = 0;
   stateStore.clear();

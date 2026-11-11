@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { extractHeadings, extractWikiLinks, VaultScanner } from '../dist/vault/scanner.js'
+import { extractHeadings, extractWikiLinks, isMaterialLink, VaultScanner } from '../dist/vault/scanner.js'
 
 const test = (name, fn) =>
   Promise.resolve()
@@ -20,6 +20,20 @@ const test = (name, fn) =>
 await test('extractWikiLinks 提取目标/剥锚与别名/去重不分大小写', () => {
   const links = extractWikiLinks('[[A]] [[B|别名]] [[C#锚]] [[a]] [[D')
   assert.deepEqual(links, ['A', 'B', 'C'])
+})
+
+await test('extractWikiLinks 跳过资料引用（页锚 / 文档扩展名），isMaterialLink 判据', () => {
+  // 资料不是页面：[[书#p18]] / [[讲义.pdf]] 不该进链接图（否则同名页面会出现幽灵反链）
+  const links = extractWikiLinks('见 [[书#p18-20]] 与 [[讲义.pdf]]，页 [[工具链]]')
+  assert.deepEqual(links, ['工具链'])
+  assert.equal(isMaterialLink('书', 'p18'), true)
+  assert.equal(isMaterialLink('书', 'P18-20'), true)
+  assert.equal(isMaterialLink('讲义.pdf', ''), true)
+  assert.equal(isMaterialLink('讲义.PPTX', ''), true)
+  assert.equal(isMaterialLink('工具链', ''), false)
+  assert.equal(isMaterialLink('页', '标题'), false)
+  assert.equal(isMaterialLink('页', 'p'), false)
+  assert.equal(isMaterialLink('页', 'p18-20-30'), false)
 })
 
 await test('extractHeadings：frontmatter/围栏/#标签/缩进行/七个# 都不算，闭合#剥除，去重不分大小写保序', () => {

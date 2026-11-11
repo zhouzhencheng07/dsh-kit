@@ -131,16 +131,23 @@ await test('renameEntry：.markdown 页改名沿用原扩展名（写死 .md 会
   renameEntry(root, path.join(root, 'wiki', '新写法.markdown'), '旧写法')
 })
 
-await test('renameEntry：目录改名整棵搬走且不改双链；资料库文件保留扩展名', async () => {
+await test('renameEntry：目录改名整棵搬走且不改双链；资料库文件保留扩展名并改写正文引用', async () => {
   write('library/论文.pdf', '%PDF-1.4')
+  write('wiki/引用资料.md', '见 [[论文.pdf#p3]] 与 [[论文.pdf]]、[[论文.pdfx]] 和 [[别的]]')
   const scanner = new VaultScanner(() => root)
   const pages = (await scanner.scan()).pages
   const dir = renameEntry(root, path.join(root, 'wiki', '子目录'), '子目录2', pages)
   assert.equal(exists('wiki/子目录2/深页.md'), true)
   assert.match(read('wiki/子目录2/深页.md'), /\[\[wiki\/子目录\/深页2\]\]/) // 目录改名不碰双链
   renameEntry(root, path.join(root, 'wiki', '子目录2'), '子目录')
-  const file = renameEntry(root, path.join(root, 'library', '论文.pdf'), '论文v2')
+  const file = renameEntry(root, path.join(root, 'library', '论文.pdf'), '论文v2', (await scanner.scan()).pages)
   assert.equal(file.path, path.join(fs.realpathSync(root), 'library', '论文v2.pdf'))
+  // 资料引用按文件名跟着改：页锚 / 不带锚都认，更长的目标（论文.pdfx）不动
+  const text = read('wiki/引用资料.md')
+  assert.match(text, /\[\[论文v2\.pdf#p3\]\]/)
+  assert.match(text, /\[\[论文v2\.pdf\]\]/)
+  assert.match(text, /\[\[论文\.pdfx\]\]/)
+  assert.match(text, /\[\[别的\]\]/)
 })
 
 await test('moveEntry：页移动只改写路径形态的引用，短名引用原样', async () => {

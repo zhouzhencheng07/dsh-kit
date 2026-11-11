@@ -48,7 +48,13 @@ export declare const SKIP_DIRS: Set<string>;
 /** vault 默认根（vaultRoot 留空时即开即用）：数据目录下的 vault 子树（与模块同名），与
  *  browser-profile/screenshots 等运行产物不混居 */
 export declare function defaultVaultRoot(): string;
-/** 正文 wikilink 提取：[[目标]] / [[目标|别名]]，目标剥 #锚点；去重保序 */
+/** 资料引用判据：页锚 p18 / p18-20（PDF 物理页码，1 起），或目标带文档扩展名。
+ *  资料引用与页面双链同一个 `[[..]]` 语法，但目标落在**知识集挂载的资料**上——
+ *  资料不是页面，所以它不进页面链接图（否则将来真有个同名页面就会冒出幽灵反链，
+ *  与另一端同一判据）。 */
+export declare function isMaterialLink(target: string, anchor: string): boolean;
+/** 正文 wikilink 提取：[[目标]] / [[目标|别名]]，目标剥 #锚点；去重保序。
+ *  资料引用（[[书#p18]] / [[讲义.pdf]]）跳过：它不是页面链接。 */
 export declare function extractWikiLinks(content: string): string[];
 /** 正文标题提取（ATX，1~6 个 #，缩进 ≤3 空格）：跳过 frontmatter 与围栏代码块
  *  （``` 或 ~~~，闭合要求同字符且连数不短于开栏）；`#` 后必须跟空白（#标签 不是

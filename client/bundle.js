@@ -1517,8 +1517,16 @@ window.__ModuleLoader__.load({
 .dshk-vault-barmenu-item:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dshk-vault-barmenu-item.is-cur{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-brand-primary);font-weight:600}
 .dshk-vault-barmenu-empty{padding:8px 12px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-barmenu-sec{padding:6px 10px 2px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-barmenu-sub{flex:none;margin-left:8px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-barmenu-more{flex:none;margin-left:auto;padding:0 2px;cursor:pointer;color:var(--dsw-alias-label-secondary)}
+.dshk-vault-barmenu-missing{color:var(--dsw-alias-label-tertiary);text-decoration:line-through}
+.dshk-vault-barmenu-edit{display:flex;align-items:center;gap:4px;padding:4px 8px}
+.dshk-vault-barmenu-edit input{flex:1;min-width:0;font-size:12px;padding:2px 6px;border:1px solid var(--dsw-alias-border-l2);border-radius:5px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
+.dshk-vault-barmenu-edit button{flex:none;font-size:11px;padding:2px 6px;border-radius:5px;border:1px solid var(--dsw-alias-border-l2);background:none;color:var(--dsw-alias-label-primary);cursor:pointer}
 .dshk-vault-wl{color:var(--dsw-alias-brand-primary);text-decoration:underline dotted}
 .dshk-vault-wl-broken{color:var(--dsw-alias-label-tertiary);text-decoration:underline wavy}
+.dshk-vault-wl-material{color:var(--dsw-alias-brand-primary);text-decoration:underline dotted;opacity:.92}
 /* 代码盒：语言条 + 复制钮；pre 自身边距归零由盒子接管 */
 .dshk-codebox{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;overflow:hidden;margin:10px 0}
 .dshk-codebox pre{margin:0;border:0;border-radius:0}
@@ -1620,6 +1628,7 @@ body[data-ds-dark-theme] .dshk-codebox .hljs-deletion{color:#ffdcd7;background:r
 .dshk-vault-pickname{flex:1;min-width:0;font-size:13px;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshk-vault-pickrel{flex:none;max-width:44%;font-size:10px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl}
 .dshk-vault-pickempty{padding:12px 10px;text-align:center;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dshk-vault-pickhead{padding:8px 10px 2px;font-size:12px;color:var(--dsw-alias-label-secondary)}
 /* 插入表格弹窗：两个数字框 + 首行表头说明 + 取消/插入 */
 .dshk-vault-tabledlg{display:flex;flex-direction:column;gap:8px}
 .dshk-vault-tabledlg label{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dsw-alias-label-secondary)}
@@ -1932,14 +1941,6 @@ ellipsis，窄列只截字不破版 */
 .dshk-quiz-mini:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dshk-quiz-mini[disabled]{opacity:.45;cursor:default}
 .dshk-quiz-mini.is-danger:hover{color:var(--dsw-alias-danger,#cd3131)}
-/* 题集名单：一行 = 名字 + 统计（点行开刷）+ 改名 / 清空 / 删除 */
-.dshk-quiz-sets{max-height:min(56vh,420px);overflow:auto;margin-top:8px;display:flex;flex-direction:column;gap:2px}
-.dshk-quiz-setrow{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px}
-.dshk-quiz-setrow:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshk-quiz-setmain{flex:1;min-width:0;display:flex;align-items:center;gap:8px;appearance:none;border:0;background:none;font:inherit;color:var(--dsw-alias-label-primary);padding:4px;border-radius:6px;cursor:pointer;text-align:left}
-.dshk-quiz-setname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
-.dshk-quiz-setsum{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary)}
-.dshk-quiz-setacts{flex:none;display:flex;align-items:center;gap:2px}
 .dshk-quiz-box{border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:6px 10px;margin-top:4px;background:var(--dsw-alias-bg-layer-1)}
 .dshk-quiz-math .katex{font-size:1.05em}
 /* 学习 / 复习：页条状态钮 + 学习记录浮层 + 知识集学习总览（记录在页面目录的 .study/）。
@@ -3917,10 +3918,21 @@ ellipsis，窄列只截字不破版 */
       vaultTooLargeHint: "文件超过 1MB，为避免写回截断，库内不编辑（请用外部编辑器）",
       vaultCopy: "复制",
       vaultCopied: "已复制",
-      vaultBacklinks: "反链",
       vaultToc: "目录",
       vaultTocEmpty: "本文没有标题",
       vaultBlEmpty: "没有页面引用本页",
+      vaultDualLinks: "双链",
+      vaultDualEmpty: "这一页还没有资料引用或双链",
+      vaultMaterialSec: "资料（{n}）",
+      vaultMaterialEmpty: "这一页还没有引用资料",
+      vaultOutSec: "出链（{n}）",
+      vaultOutEmpty: "这一页还没有链接到别的页面",
+      vaultBlSec: "反链（{n}）",
+      vaultBlEditTip: "改页码 / 移除",
+      vaultBlOk: "确定",
+      vaultBlRemove: "移除",
+      vaultMaterialGone: "这份资料不在本集挂载里（可能已被移除或改名）",
+      vaultPageBad: "页码认不出（用 18 或 18-20）",
       vaultLibsFail: "渲染组件加载失败",
       vaultPickPage: "从左侧选择一页开始",
       pdfOpening: "正在打开 PDF…",
@@ -3982,8 +3994,12 @@ ellipsis，窄列只截字不破版 */
       vmenuGAttach: "附件",
       vmenuImage: "图片",
       vmenuImageDesc: "本地图片（大图自动压缩）",
-      vlinkSearch: "搜索页面或标题（| 后写别名）",
+      vlinkSearch: "搜索页面、标题或本集资料（| 后写别名）",
       vlinkEmpty: "未找到匹配的页面或标题（这里只列已有页）",
+      vlinkMaterialRow: "资料 · 引用后填页码",
+      vlinkMaterialAsk: "引用资料：{name}",
+      vlinkPagePh: "页码（可空，如 18 或 18-20）",
+      vlinkPageHint: "Enter 插入 · Esc 返回",
       vtableRows: "行",
       vtableCols: "列",
       vtableHint: "首行固定为表头",
@@ -4026,8 +4042,8 @@ ellipsis，窄列只截字不破版 */
       homeBack: "返回首页",
       homeSetsEmpty: "还没有知识集——在左侧目录树的目录行 ⋯ 里「设为知识集」",
       homeOpenVaultFirst: "先打开左侧知识库才能进入",
-      qzEntry: "测验",
-      qzEntryTip: "测验——还没有题目时进去就是出题",
+      qzEntry: "题目",
+      qzEntryTip: "题目——还没有题目时进去就是出题",
       qzEdit: "编辑题目",
       qzClose: "关闭",
       qzTrue: "对",
@@ -4046,17 +4062,15 @@ ellipsis，窄列只截字不破版 */
       qzEditPageTip: "编辑这一页的题目",
       qzMasteryState: "掌握状态",
       qzKinds: "题型",
-      qzCount: "数量",
-      qzCount20: "20 题",
-      qzCount50: "50 题",
-      qzCountAll: "全部",
-      qzThisMany: "本次 {n} 题",
-      qzThreshold: "掌握阈值",
+      qzPerRound: "每轮题数",
+      qzPoolInfo: "共 {n} 题 · 每轮 {m} 题",
+      qzThreshold: "阈值",
+      qzThresholdTip: "测验：连对几次算已掌握；刷题：连对几次过关",
       qzCancel: "取消",
-      qzStart: "开始",
+      qzDrill: "刷题",
+      qzQuiz: "测验",
       qzEmptyPage: "这页还没有题目——点「编辑题目」出题",
       qzEmptyScope: "这个范围里还没有题目",
-      qzNofN: "第 {i} / {n} 题",
       qzSubmit: "提交",
       qzNext: "下一题",
       qzSeeResult: "看小结",
@@ -4065,18 +4079,31 @@ ellipsis，窄列只截字不破版 */
       qzWrong: "答错了",
       qzAnswerIs: "答案：{a}",
       qzCorrectAnswerIs: "正确答案：{a}",
-      qzMastery: "掌握度 {s} / {t}",
-      qzCapped: "今天已记过一次 · 明天再答对继续涨",
+      qzStreakOf: "连对 {s} / {t}",
       qzMastered: "已掌握",
       qzShowExplain: "看解析",
       qzHideExplain: "收起解析",
-      qzMark: "标记掌握",
+      qzMark: "标记已掌握",
       qzForget: "遗忘",
+      qzDrillPass: "标记过关",
+      qzDrillReset: "重置",
+      qzDrillEnd: "结束刷题",
+      qzDrillProgress: "刷题 · 第 {r} 轮 · {i} / {n} 题",
+      qzDrillLeft: "剩余 {n} 题 · 过关 {m}",
+      qzDrillPassed: "过关 · 连对 {s} / {t}",
+      qzDrillAllDone: "全部过关 · 共 {t} 题",
+      qzDrillRest: "剩余 {n} 题 · 已过关 {r} / {t}",
+      qzQuizRound: "测验 · 第 {r} 轮 · {i} / {n} 题",
+      qzQuizPlain: "测验 · 第 {i} / {n} 题",
+      qzRoundTitle: "第 {r} 轮 · {n} 题",
+      qzAnswered: "已答 {d} / {n} 题",
+      qzNextRound: "下一轮",
+      qzStatPassed: "过关",
       qzBlankN: "第 {i} 空",
       qzResultN: "本次 {n} 题",
       qzStatRight: "对",
       qzStatWrong: "错",
-      qzStatNew: "新掌握",
+      qzStatMastered: "已掌握",
       qzAccuracy: "正确率 {p}%",
       qzAgain: "再来一组",
       qzDone: "完成",
@@ -4105,30 +4132,10 @@ ellipsis，窄列只截字不破版 */
       qzMultiNeed: "多选题至少两个答案",
       qzBlankEmpty: "每个空至少给一个答案",
       qzLoadFail: "测验数据读取失败",
-      qzSets: "题集",
-      qzSetsHint: "把各页的题临时攒到一起刷；掌握度独立于页面",
-      qzSetsEmpty: "还没有题集",
-      qzSetNew: "新建题集",
-      qzSetEdit: "编辑题集",
-      qzSetName: "名字",
-      qzSetNamePh: "期中考 / 单元三",
-      qzSetPages: "题目来源",
-      qzSetPagesHint: "勾有题的页面；题本身还在页面里，这里只是把它们攒到一起",
-      qzSetNoPages: "还没有页面出过题",
-      qzSetSave: "保存",
-      qzSetCancel: "取消",
-      qzSetOpenTip: "开始刷这个题集",
-      qzSetEditTip: "改名 / 换页",
-      qzSetClearTip: "清空掌握度（题集保留）",
-      qzSetDeleteTip: "删除题集（题还在页面里）",
-      qzSetDeleteAsk: "删除这个题集？页面里的题不受影响。",
-      qzSetSummary: "共 {t} 题 · 已掌握 {m}",
-      qzSetInvalid: "{n} 题已失效",
-      qzSetsLoadFail: "题集读取失败",
-      qzSetSaved: "题集已保存",
-      qzPageCount: "{n} 题",
-      qzSetDeleted: "题集已删除",
-      qzSetCleared: "掌握度已清空",
+      qzStudyAskTitle: "学习完成",
+      qzStudyAsk: "「{name}」还有 {n} 道未掌握的题，现在测验？",
+      qzStudySkip: "跳过",
+      qzStudyGo: "测验",
 
       // 学习 / 复习（页条入口、学习记录浮层、知识集学习总览）
       studyEntry: "学习",
@@ -4336,10 +4343,21 @@ ellipsis，窄列只截字不破版 */
       vaultTooLargeHint: "Larger than 1 MB — editing here is disabled to avoid truncating the file (use an external editor)",
       vaultCopy: "Copy",
       vaultCopied: "Copied",
-      vaultBacklinks: "Backlinks",
       vaultToc: "Outline",
       vaultTocEmpty: "No headings in this page",
       vaultBlEmpty: "No pages link here",
+      vaultDualLinks: "Links",
+      vaultDualEmpty: "No material references or links on this page yet",
+      vaultMaterialSec: "Materials ({n})",
+      vaultMaterialEmpty: "No materials referenced yet",
+      vaultOutSec: "Outgoing ({n})",
+      vaultOutEmpty: "No links to other pages yet",
+      vaultBlSec: "Backlinks ({n})",
+      vaultBlEditTip: "Change page / remove",
+      vaultBlOk: "OK",
+      vaultBlRemove: "Remove",
+      vaultMaterialGone: "This material is not mounted on this knowledge set (removed or renamed?)",
+      vaultPageBad: "Unrecognized page (use 18 or 18-20)",
       vaultLibsFail: "Failed to load renderer components",
       vaultPickPage: "Pick a page on the left to start",
       pdfOpening: "Opening PDF…",
@@ -4401,8 +4419,12 @@ ellipsis，窄列只截字不破版 */
       vmenuGAttach: "Attachment",
       vmenuImage: "Image",
       vmenuImageDesc: "Local image (large ones compressed)",
-      vlinkSearch: "Search pages or headings (alias after |)",
+      vlinkSearch: "Search pages, headings or this set's materials (alias after |)",
       vlinkEmpty: "No matching page or heading (only existing pages are listed)",
+      vlinkMaterialRow: "Material · page asked after picking",
+      vlinkMaterialAsk: "Reference material: {name}",
+      vlinkPagePh: "Page (optional, e.g. 18 or 18-20)",
+      vlinkPageHint: "Enter to insert · Esc to go back",
       vtableRows: "Rows",
       vtableCols: "Columns",
       vtableHint: "The first row is always the header",
@@ -4445,8 +4467,8 @@ ellipsis，窄列只截字不破版 */
       homeBack: "Back to home",
       homeSetsEmpty: "No knowledge sets yet — mark a folder via ⋯ → Make knowledge set in the sidebar",
       homeOpenVaultFirst: "Open the vault panel first to enter a set",
-      qzEntry: "Quiz",
-      qzEntryTip: "Quiz — opens the authoring view when a page has no questions yet",
+      qzEntry: "Questions",
+      qzEntryTip: "Questions — opens the authoring view when a page has no questions yet",
       qzEdit: "Edit questions",
       qzClose: "Close",
       qzTrue: "True",
@@ -4465,17 +4487,15 @@ ellipsis，窄列只截字不破版 */
       qzEditPageTip: "Edit this page's questions",
       qzMasteryState: "Mastery",
       qzKinds: "Types",
-      qzCount: "Count",
-      qzCount20: "20",
-      qzCount50: "50",
-      qzCountAll: "All",
-      qzThisMany: "{n} this round",
-      qzThreshold: "Mastery streak",
+      qzPerRound: "Questions per round",
+      qzPoolInfo: "{n} questions · {m} per round",
+      qzThreshold: "Threshold",
+      qzThresholdTip: "Quiz: correct streak that counts as mastered; Drill: streak that passes a question",
       qzCancel: "Cancel",
-      qzStart: "Start",
+      qzDrill: "Drill",
+      qzQuiz: "Quiz",
       qzEmptyPage: "No questions here yet — use “Edit questions” to add some",
       qzEmptyScope: "No questions in this scope yet",
-      qzNofN: "{i} / {n}",
       qzSubmit: "Submit",
       qzNext: "Next",
       qzSeeResult: "Summary",
@@ -4484,18 +4504,31 @@ ellipsis，窄列只截字不破版 */
       qzWrong: "Incorrect",
       qzAnswerIs: "Answer: {a}",
       qzCorrectAnswerIs: "Correct answer: {a}",
-      qzMastery: "Streak {s} / {t}",
-      qzCapped: "Already counted today · answer correctly tomorrow to keep it going",
+      qzStreakOf: "streak {s} / {t}",
       qzMastered: "Mastered",
       qzShowExplain: "Explanation",
       qzHideExplain: "Hide explanation",
       qzMark: "Mark mastered",
       qzForget: "Reset",
+      qzDrillPass: "Pass",
+      qzDrillReset: "Reset streak",
+      qzDrillEnd: "End drill",
+      qzDrillProgress: "Drill · round {r} · {i} / {n}",
+      qzDrillLeft: "{n} left · {m} passed",
+      qzDrillPassed: "Passed · streak {s} / {t}",
+      qzDrillAllDone: "All passed · {t} questions",
+      qzDrillRest: "{n} left · {r} / {t} passed",
+      qzQuizRound: "Quiz · round {r} · {i} / {n}",
+      qzQuizPlain: "Quiz · {i} / {n}",
+      qzRoundTitle: "Round {r} · {n} questions",
+      qzAnswered: "Done {d} / {n}",
+      qzNextRound: "Next round",
+      qzStatPassed: "Passed",
       qzBlankN: "Blank {i}",
       qzResultN: "{n} questions this round",
       qzStatRight: "Right",
       qzStatWrong: "Wrong",
-      qzStatNew: "Newly mastered",
+      qzStatMastered: "Mastered",
       qzAccuracy: "Accuracy {p}%",
       qzAgain: "Another round",
       qzDone: "Done",
@@ -4524,30 +4557,10 @@ ellipsis，窄列只截字不破版 */
       qzMultiNeed: "Multiple choice needs two or more answers",
       qzBlankEmpty: "Each blank needs at least one accepted answer",
       qzLoadFail: "Failed to load quiz data",
-      qzSets: "Quiz sets",
-      qzSetsHint: "Gather questions from several pages for a quick run; mastery is independent of the pages",
-      qzSetsEmpty: "No quiz sets yet",
-      qzSetNew: "New set",
-      qzSetEdit: "Edit set",
-      qzSetName: "Name",
-      qzSetNamePh: "Midterm / Unit 3",
-      qzSetPages: "Question sources",
-      qzSetPagesHint: "Pick pages that have questions; the questions stay on their pages",
-      qzSetNoPages: "No page has questions yet",
-      qzSetSave: "Save",
-      qzSetCancel: "Cancel",
-      qzSetOpenTip: "Start this set",
-      qzSetEditTip: "Rename / change pages",
-      qzSetClearTip: "Clear mastery (set stays)",
-      qzSetDeleteTip: "Delete set (questions stay on their pages)",
-      qzSetDeleteAsk: "Delete this set? Questions on the pages are unaffected.",
-      qzSetSummary: "{t} questions · {m} mastered",
-      qzSetInvalid: "{n} invalid",
-      qzSetsLoadFail: "Failed to load quiz sets",
-      qzSetSaved: "Set saved",
-      qzPageCount: "{n} q",
-      qzSetDeleted: "Set deleted",
-      qzSetCleared: "Mastery cleared",
+      qzStudyAskTitle: "Study complete",
+      qzStudyAsk: "“{name}” still has {n} unmastered questions. Quiz now?",
+      qzStudySkip: "Skip",
+      qzStudyGo: "Quiz",
 
       // Study / review
       studyEntry: "Study",
@@ -4690,7 +4703,7 @@ ellipsis，窄列只截字不破版 */
     // 页签正文渲染 VaultPagePane 需要库根 / 索引页表 / 开页入口 / 刷新 / toast，
     // 这些都住在常驻的索引视图里。发布走最小 store：索引侧**提交后** publish，
     // 页签侧订阅（索引刷新才会带着新对象过来）。
-    const vaultReader = { root: null, earlyBody: null, indexPages: null, openPath: null, refreshIndex: null, setToast: null, enterDir: null };
+    const vaultReader = { root: null, earlyBody: null, indexPages: null, indexMeta: null, openPath: null, refreshIndex: null, setToast: null, enterDir: null };
     let vaultReaderVersion = 0;
     const vaultReaderSubs = new Set();
     function publishVaultReader(patch) {
@@ -5693,6 +5706,7 @@ ellipsis，窄列只截字不破版 */
               flashToast(rec === null
                 ? t("studyCompleteThis")
                 : t("schedReviewNext").replace("{n}", String(rec.reps ?? 0)).replace("{date}", String(rec.dueAt ?? "")).replace("{label}", studyDueLabel(rec.dueAt)));
+              askStudyQuiz(rel, ev.title);
               onClose();
             })
             .catch((e) => flashToast(t("studyOpFail").replace("{error}", e && e.message ? e.message : "?")));
@@ -6094,6 +6108,7 @@ ellipsis，窄列只截字不破版 */
           .then((body) => {
             const rec = body && body.state && body.state.record ? body.state.record : null;
             if (rec === null) return;
+            askStudyQuiz(rel);
             setReviewToast({
               rel: String(body.state.rel ?? rel),
               reps: Number(rec.reps) || 0,
@@ -6450,6 +6465,7 @@ ellipsis，窄列只截字不破版 */
             flashToast(rec === null
               ? t("studyCompleteThis")
               : t("schedReviewNext").replace("{n}", String(rec.reps ?? 0)).replace("{date}", String(rec.dueAt ?? "")).replace("{label}", studyDueLabel(rec.dueAt)));
+            askStudyQuiz(rel, o.label);
           })
           .catch((e) => flashToast(t("studyOpFail").replace("{error}", e && e.message ? e.message : "?")));
       };
@@ -6908,6 +6924,94 @@ ellipsis，窄列只截字不破版 */
       });
     }
 
+    // ── 资料引用（[[资料#p18-20]]）的纯逻辑 ─────────────────────────────────
+    //    与页面双链同一个 [[..]] 语法，只是目标落在**知识集挂载的资料**上。资料不是
+    //    页面，所以它天然没有反链（"单向"是结果，不是新概念）。判据必须与宿主
+    //    scanner.ts 的排除规则一致（资料目标不进页面链接图），否则将来真有个同名
+    //    页面就会冒出幽灵反链。页锚是 **PDF 的物理页码**（1 起），不换算书上的页码。
+    /** 页锚：p18 / p18-20 */
+    const MATERIAL_ANCHOR_RE = /^p(\d+)(?:-(\d+))?$/i;
+    /** 带这些扩展名的目标一律当资料（不带页锚时靠它认：[[书.pdf]]） */
+    const MATERIAL_EXTS = ["pdf", "ppt", "pptx", "doc", "docx", "xls", "xlsx", "epub"];
+    /** 这个 wikilink 是不是指向资料（页锚 / 文档扩展名两条判据） */
+    function matIsMaterialLink(target, anchor) {
+      if (MATERIAL_ANCHOR_RE.test(String(anchor ?? "").trim())) return true;
+      const t = String(target ?? "").trim().toLowerCase();
+      return MATERIAL_EXTS.some((ext) => t.endsWith("." + ext));
+    }
+    /** 页锚 → 页码区间（end 缺省 = start）；认不出 / 区间不成立返回 null */
+    function matPageRange(anchor) {
+      const m = MATERIAL_ANCHOR_RE.exec(String(anchor ?? "").trim());
+      if (m === null) return null;
+      const start = Number(m[1]);
+      const end = m[2] === undefined ? start : Number(m[2]);
+      if (!(start > 0) || !(end >= start)) return null;
+      return { start, end };
+    }
+    /** 页锚的显示串：p18 → P18，p18-20 → P18-20；不是页锚给空串 */
+    function matPageLabel(anchor) {
+      const range = matPageRange(anchor);
+      if (range === null) return "";
+      return range.start === range.end ? "P" + range.start : "P" + range.start + "-" + range.end;
+    }
+    /** 页码输入 → 页锚（"18" → p18，"18-20" → p18-20）；空 / 认不出返回 null */
+    function matAnchorOfPageInput(raw) {
+      const m = /^\s*p?(\d+)(?:\s*-\s*(\d+))?\s*$/i.exec(String(raw ?? ""));
+      if (m === null) return null;
+      const start = Number(m[1]);
+      if (!(start > 0)) return null;
+      if (m[2] === undefined) return "p" + start;
+      const end = Number(m[2]);
+      if (!(end >= start)) return null;
+      return "p" + start + "-" + end;
+    }
+    /** 芯片上的资料短名：去扩展名、去掉括注（书名常带作者 / 译者），过长截断 */
+    function matShortName(name) {
+      let s = String(name ?? "").replace(/\.[^./\\]+$/, "");
+      const cut = s.search(/[（(]/);
+      if (cut > 0) s = s.slice(0, cut);
+      s = s.trim();
+      return s.length > 20 ? s.slice(0, 19) + "…" : s;
+    }
+    /** 资料条目上的文件名（索引清单只带 rel，name 是这里补的；两边都认） */
+    const matNameOf = (it) => String(it?.name ?? String(it?.rel ?? "").split("/").pop() ?? "");
+    /** 目标 → 资料：rel 全等 > 文件名全等 > 文件名唯一前缀（都不分大小写）。
+     *  选择框插的是文件名，前两条是常态；前缀是给手写短名留的口子，命中多份就当碎链 */
+    function matResolve(items, target) {
+      const t = String(target ?? "").trim().replace(/\\/g, "/").toLowerCase();
+      if (t === "") return null;
+      const exact = items.find((it) => String(it.rel).toLowerCase() === t) ?? items.find((it) => matNameOf(it).toLowerCase() === t);
+      if (exact !== undefined) return exact;
+      const base = t.split("/").pop() ?? t;
+      const prefixed = items.filter((it) => matNameOf(it).toLowerCase().startsWith(base));
+      return prefixed.length === 1 ? prefixed[0] : null;
+    }
+    /** 页 rel → 它所在的知识集目录（最长前缀命中；不在任何集里返回 null） */
+    function matSetDirOf(rel, setDirs) {
+      let hit = null;
+      for (const dir of setDirs) {
+        if (typeof dir !== "string" || dir === "") continue;
+        if (rel === dir || rel.startsWith(dir + "/")) {
+          if (hit === null || dir.length > hit.length) hit = dir;
+        }
+      }
+      return hit;
+    }
+    /** 某一页能引用到的资料 = 它所在知识集挂载的那些（页不在任何集里就没有） */
+    function matItemsOfPage(indexMeta, pageRel) {
+      if (indexMeta === null || typeof indexMeta !== "object" || typeof pageRel !== "string" || pageRel === "") return [];
+      const sets = Array.isArray(indexMeta.knowledgeSets) ? indexMeta.knowledgeSets : [];
+      const setDir = matSetDirOf(pageRel, sets.map((s) => s && s.dir));
+      if (setDir === null) return [];
+      const hit = sets.find((s) => s && s.dir === setDir);
+      const refs = hit !== undefined && Array.isArray(hit.refs) ? hit.refs : [];
+      const lib = indexMeta.library;
+      const items = lib !== null && typeof lib === "object" && Array.isArray(lib.items) ? lib.items : [];
+      return items
+        .filter((it) => it !== null && it.dir !== true && refs.includes(it.rel))
+        .map((it) => ({ ...it, name: matNameOf(it) }));
+    }
+
     /** 全篇大纲（页条「目录」用）：顶层标题一趟扫完，pos = 节点起点
      *  （scrollToPos 的口径）；空标题不进（没东西可点） */
     function vaultOutline(h) {
@@ -7085,7 +7189,7 @@ ellipsis，窄列只截字不破版 */
      *  返回 'ok'|'conflict'|'gone'|'fail'。conflict / gone 都暂停自动保存：
      *  直到父层重载（docTick bump 重挂）或 overwrite 成功。
      *  ctlRef 暴露 { dirty, flush, flushManual, overwrite } 供切签与冲突条用。 */
-    function RteEditor({ rteRef, ctlRef, docKey, docTick, initialMd, placeholder, labels, pages, onInsertImage, onReady, onWikiLink, resolveWiki, resolveSrc, onRelLink, onSave, onState, onPaste }) {
+    function RteEditor({ rteRef, ctlRef, docKey, docTick, initialMd, placeholder, labels, pages, materials, onInsertImage, onReady, onWikiLink, resolveWiki, resolveMaterial, resolveSrc, onRelLink, onSave, onState, onPaste }) {
       const [libsReady, setLibsReady] = react.useState(false);
       const [libsFailed, setLibsFailed] = react.useState(false);
       const [inTableState, setInTableState] = react.useState(false);
@@ -7139,8 +7243,11 @@ ellipsis，窄列只截字不破版 */
       onInsertImageRef.current = onInsertImage;
       const pagesRef = react.useRef(pages);
       pagesRef.current = pages;
-      const confRef = react.useRef({ onWikiLink, resolveWiki, resolveSrc, onRelLink, labels, placeholder });
-      confRef.current = { onWikiLink, resolveWiki, resolveSrc, onRelLink, labels, placeholder };
+      // 本页能引用到的资料（知识集挂载的文献）：选择框的「资料」组用
+      const materialsRef = react.useRef(materials);
+      materialsRef.current = materials;
+      const confRef = react.useRef({ onWikiLink, resolveWiki, resolveMaterial, resolveSrc, onRelLink, labels, placeholder });
+      confRef.current = { onWikiLink, resolveWiki, resolveMaterial, resolveSrc, onRelLink, labels, placeholder };
 
       // 光标所属标题链（面包屑）：heading 是顶层块互不嵌套，层级
       // 归属按「文档顺序」解释——从光标顶层块向前扫，遇到比链尾更高级（level
@@ -7370,7 +7477,12 @@ ellipsis，窄列只截字不破版 */
       const pickRowsOf = (query) => {
         const words = pickSplit(query).terms.trim().toLowerCase().split(/\s+/).filter(Boolean);
         const list = pagesRef.current ?? [];
-        if (words.length === 0) return list.map((p) => ({ kind: "page", path: p.path, rel: p.rel }));
+        // 本集挂载的资料排在最前（就那么几份，最常用）；空词 = 全列出来
+        const mats = (materialsRef.current ?? [])
+          .filter((it) => it !== null && it.dir !== true)
+          .filter((it) => words.length === 0 || words.every((w) => String(it.name).toLowerCase().includes(w)))
+          .map((it) => ({ kind: "material", rel: it.rel, name: it.name, path: it.path }));
+        if (words.length === 0) return mats.concat(list.map((p) => ({ kind: "page", path: p.path, rel: p.rel })));
         const rows = [];
         for (const p of list) {
           const relLower = String(p.rel).toLowerCase();
@@ -7391,7 +7503,7 @@ ellipsis，窄列只截字不破版 */
           }
         }
         rows.sort((a, b) => b.score - a.score || a.rel.localeCompare(b.rel) || String(a.heading ?? "").localeCompare(String(b.heading ?? "")));
-        return rows.slice(0, 40);
+        return mats.concat(rows.slice(0, 40));
       };
       const openPick = () => {
         const ed = rteRef.current?.editor;
@@ -7411,9 +7523,14 @@ ellipsis，窄列只截字不破版 */
         rteRef.current?.focus();
       };
       const pickInsert = (p) => {
-        setPick(null);
         const h = rteRef.current;
         if (!h || !p) return;
+        // 资料行要再问一句页码：芯片是原子节点，插进去之后正文里改不了
+        if (p.kind === "material") {
+          setPick((prev) => (prev === null ? prev : { ...prev, material: p, page: "" }));
+          return;
+        }
+        setPick(null);
         // 目标写 rel 还是页名：全库唯一时写页名（短、可读）；有重名就写 rel——
         // 解析同名优先，跨目录重名页照短名插会静默指向另一个页
         const base = pageBasename(p.rel);
@@ -7424,10 +7541,37 @@ ellipsis，窄列只截字不破版 */
         h.editor.commands.insertContent(" ");
         h.focus();
       };
+      /** 资料页码拍确认：页码非法就不插（把输入留在框里），免得"填了 18-20 结果插成没页码" */
+      const pickConfirmMaterial = () => {
+        const row = pick?.material;
+        const h = rteRef.current;
+        if (!row || !h) return;
+        const raw = String(pick?.page ?? "").trim();
+        const anchor = raw === "" ? null : matAnchorOfPageInput(raw);
+        if (raw !== "" && anchor === null) return;
+        const alias = pickSplit(pick?.query).alias;
+        setPick(null);
+        h.insertWikiLink({ target: row.name, anchor, alias: alias === "" ? null : alias });
+        h.editor.commands.insertContent(" ");
+        h.focus();
+      };
       // 选择框手势：↑↓ 选、Enter 落定、Esc 关；点框外即关（选区没动过，focus 即回原落点）
       react.useEffect(() => {
         if (pick === null) return undefined;
         const onKey = (e) => {
+          // 页码拍：Enter 插链，Esc 退回列表
+          if (pick.material !== null && pick.material !== undefined) {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.stopPropagation();
+              pickConfirmMaterial();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              setPick((prev) => (prev === null ? prev : { ...prev, material: null, page: "" }));
+            }
+            return;
+          }
           if (e.key === "ArrowDown" || e.key === "ArrowUp") {
             e.preventDefault();
             e.stopPropagation();
@@ -7564,6 +7708,7 @@ ellipsis，窄列只截字不破版 */
         };
         if (cf.onWikiLink) opts.onWikiLink = cf.onWikiLink;
         if (cf.resolveWiki) opts.resolveWiki = cf.resolveWiki;
+        if (cf.resolveMaterial) opts.resolveMaterial = cf.resolveMaterial;
         if (cf.resolveSrc) opts.resolveSrc = cf.resolveSrc;
         const h = window.DshRTE.create(host, opts);
         rteRef.current = h;
@@ -8212,38 +8357,51 @@ ellipsis，窄列只截字不破版 */
                   top: pick.y,
                   ...(pick.above ? { bottom: window.innerHeight - pick.y } : {}),
                 },
-                children: [
-                  jsxRuntime.jsx("input", {
-                    className: "dshk-vault-pickinput",
-                    value: pick.query,
-                    placeholder: t("vlinkSearch"),
-                    autoFocus: true,
-                    onChange: (e) => setPick((prev) => (prev === null ? prev : { ...prev, query: e.target.value, sel: 0 })),
-                  }),
-                  jsxRuntime.jsxs("div", { className: "dshk-vault-picklist", children: (() => {
-                    const rows = pickRowsOf(pick.query);
-                    if (rows.length === 0) return [jsxRuntime.jsx("div", { className: "dshk-vault-pickempty", children: t("vlinkEmpty") }, "empty")];
-                    return rows.map((p, i) =>
-                      jsxRuntime.jsxs(
-                        "div",
-                        {
-                          className: `dshk-vault-pickitem${i === pick.sel ? " is-cur" : ""}`,
-                          onMouseEnter: () => setPick((prev) => (prev === null ? prev : { ...prev, sel: i })),
-                          onMouseDown: (e) => {
-                            e.preventDefault();
-                            pickInsert(p);
-                          },
-                          children: [
-                            // 标题行名 = § + 标题（页行 = 页名）；副行都是 rel
-                            jsxRuntime.jsx("span", { className: "dshk-vault-pickname", children: p.kind === "head" ? `§ ${p.heading}` : pageBasename(p.rel) }),
-                            jsxRuntime.jsx("span", { className: "dshk-vault-pickrel", children: p.rel }),
-                          ],
-                        },
-                        p.kind === "head" ? `${p.path}#${p.heading}` : p.path,
-                      ),
-                    );
-                  })() }),
-                ],
+                children: pick.material !== null && pick.material !== undefined
+                  ? [
+                      // 页码拍：资料行先填页码再插（可空 = 不带页码）
+                      jsxRuntime.jsx("div", { className: "dshk-vault-pickhead", children: t("vlinkMaterialAsk").replace("{name}", pick.material.name) }),
+                      jsxRuntime.jsx("input", {
+                        className: "dshk-vault-pickinput",
+                        value: pick.page,
+                        placeholder: t("vlinkPagePh"),
+                        autoFocus: true,
+                        onChange: (e) => setPick((prev) => (prev === null ? prev : { ...prev, page: e.target.value })),
+                      }),
+                      jsxRuntime.jsx("div", { className: "dshk-vault-pickrel", style: { padding: "4px 8px" }, children: t("vlinkPageHint") }),
+                    ]
+                  : [
+                      jsxRuntime.jsx("input", {
+                        className: "dshk-vault-pickinput",
+                        value: pick.query,
+                        placeholder: t("vlinkSearch"),
+                        autoFocus: true,
+                        onChange: (e) => setPick((prev) => (prev === null ? prev : { ...prev, query: e.target.value, sel: 0 })),
+                      }),
+                      jsxRuntime.jsxs("div", { className: "dshk-vault-picklist", children: (() => {
+                        const rows = pickRowsOf(pick.query);
+                        if (rows.length === 0) return [jsxRuntime.jsx("div", { className: "dshk-vault-pickempty", children: t("vlinkEmpty") }, "empty")];
+                        return rows.map((p, i) =>
+                          jsxRuntime.jsxs(
+                            "div",
+                            {
+                              className: `dshk-vault-pickitem${i === pick.sel ? " is-cur" : ""}`,
+                              onMouseEnter: () => setPick((prev) => (prev === null ? prev : { ...prev, sel: i })),
+                              onMouseDown: (e) => {
+                                e.preventDefault();
+                                pickInsert(p);
+                              },
+                              children: [
+                                // 标题行名 = § + 标题（页行 = 页名、资料行 = 📎 + 文件名）
+                                jsxRuntime.jsx("span", { className: "dshk-vault-pickname", children: p.kind === "head" ? `§ ${p.heading}` : p.kind === "material" ? `📎 ${p.name ?? pageBasename(p.rel)}` : pageBasename(p.rel) }),
+                                jsxRuntime.jsx("span", { className: "dshk-vault-pickrel", children: p.kind === "material" ? t("vlinkMaterialRow") : p.rel }),
+                              ],
+                            },
+                            p.kind === "head" ? `${p.path}#${p.heading}` : p.kind === "material" ? `mat:${p.rel}` : p.path,
+                          ),
+                        );
+                      })() }),
+                    ],
               },
               "wikipick",
             )
@@ -9236,7 +9394,18 @@ ellipsis，窄列只截字不破版 */
       react.useEffect(() => {
         const refreshIndex = () => void loadIndex();
         if (root !== null) {
-          publishVaultReader({ root, earlyBody: null, indexPages, openPath, refreshIndex, setToast, enterDir: openHere });
+          // 索引里跟资料引用有关的两块（知识集挂载清单 + 资料库清单）一起发布：
+          // 页签侧的芯片解析与「双链」面板都从这里取，不为一页再扫一遍库
+          publishVaultReader({
+            root,
+            earlyBody: null,
+            indexPages,
+            indexMeta: { knowledgeSets, library: index !== null ? index.library ?? null : null },
+            openPath,
+            refreshIndex,
+            setToast,
+            enterDir: openHere,
+          });
           return;
         }
         let earlyBody;
@@ -9247,8 +9416,8 @@ ellipsis，窄列只截字不破版 */
             jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("vaultNotConfiguredHint") }),
           ] });
         } else earlyBody = jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: `${t("vaultIndexFail")} ${indexErr}` });
-        publishVaultReader({ root: null, earlyBody, indexPages: null, openPath, refreshIndex, setToast, enterDir: openHere });
-      }, [root, indexErr, indexPages, openPath, setToast, loadIndex]);
+        publishVaultReader({ root: null, earlyBody, indexPages: null, indexMeta: null, openPath, refreshIndex, setToast, enterDir: openHere });
+      }, [root, indexErr, indexPages, knowledgeSets, index, openPath, setToast, loadIndex]);
 
       // root 未就绪的整页态：加载中 / 未配置 / 索引失败（root 就绪后的瞬时错误
       // 走主界面内的错误条，不早退）。发布给页签侧（页签正文自己渲染），
@@ -9622,7 +9791,7 @@ ellipsis，窄列只截字不破版 */
      *  /CAS 冲突/外部修改跟随/粘贴图片入库都在这一层，页条给文档级命令与阅读条
      *  （目录・反链・面包屑）。active=false 的签仍挂载（保住滚动与草稿），只停掉
      *  stat 轮询，并在失活那一刻把防抖未落盘的改动写掉（「切走即存」）。 */
-    function VaultPagePane({ path, active, root, indexPages, onOpenPage, onIndexRefresh, toast }) {
+    function VaultPagePane({ path, active, root, indexPages, indexMeta, onOpenPage, onIndexRefresh, toast }) {
       // page: { loading, body(编辑器入参), binary, truncated, gone }——frontmatter 字节级原文
       // 存 ref（保存时原样拼回），不进 state（它不驱动渲染）
       const [page, setPage] = react.useState(null);
@@ -9635,6 +9804,10 @@ ellipsis，窄列只截字不破版 */
       // 阅读条：面包屑 + 页面级下拉（目录/反链，同时至多开一个）
       const [crumb, setCrumb] = react.useState("");
       const [barMenu, setBarMenu] = react.useState(null); // "toc" | "bl" | null
+      /** 正文里的资料引用与出链（「双链」面板用）：开层时现算，改页码 / 移除后重算 */
+      const [docLinks, setDocLinks] = react.useState([]);
+      /** 正在改页码的那条资料引用：{ pos, page } | null */
+      const [blEdit, setBlEdit] = react.useState(null);
       const barMenuAnchorRef = react.useRef(null);
       const rteRef = react.useRef(null);
       const rteCtlRef = react.useRef(null);
@@ -9839,6 +10012,13 @@ ellipsis，窄列只截字不破版 */
       }, [active]);
 
       const backlinks = react.useMemo(() => vaultBacklinks(indexPages ?? [], path), [indexPages, path]);
+      // 本页能引用到的资料（它所在知识集挂载的文献）：芯片解析、选择框与「双链」面板共用
+      const pageRel = root === null ? null : relUnder(root, path);
+      const materialItems = react.useMemo(() => matItemsOfPage(indexMeta, pageRel), [indexMeta, pageRel]);
+      // 资料清单晚到 / 变了（索引刷新）：让已有芯片重新解析一次，否则一直灰着
+      react.useEffect(() => {
+        rteRef.current?.wikiRefresh?.();
+      }, [materialItems]);
       // 「目录」浮层的数据开层时现算：大纲 + 光标所在那条（点过哪里高亮哪里）
       const outlineAt = () => {
         const items = vaultOutline(rteRef.current);
@@ -9853,8 +10033,86 @@ ellipsis，窄列只截字不破版 */
         }
         return { items, cur };
       };
+      /** 正文里所有 [[..]]：资料与出链两区都从文档现算（节点位置是改页码 / 移除的把手） */
+      const collectDocLinks = () => {
+        const ed = rteRef.current?.editor;
+        if (!ed) return [];
+        const out = [];
+        try {
+          ed.state.doc.descendants((node, pos) => {
+            if (node.type.name !== "wikiLink") return;
+            const target = String(node.attrs.target ?? "");
+            if (target === "") return; // 页内锚点 [[#标题]] 不是"关联"
+            const anchor = String(node.attrs.anchor ?? "");
+            out.push({ target, anchor, pos, material: matIsMaterialLink(target, anchor) });
+          });
+        } catch {
+          /* 文档替换瞬间 selection 可能短暂失效 */
+        }
+        return out;
+      };
+      /** 打开一份资料（芯片与「双链」面板同一条路）：PDF 带页码跳过去，其余走官方文件面 */
+      const openMaterialByTarget = (target, anchor) => {
+        const hit = matResolve(materialItems, target);
+        if (hit === null) {
+          toast(t("vaultMaterialGone"));
+          return;
+        }
+        const range = matPageRange(anchor);
+        if (isPdfPath(hit.path) && builtinPdfOn()) {
+          if (range !== null) requestPdfJump(hit.path, range.start);
+          openVaultPageAndDock(hit.path);
+        } else {
+          openVaultAsset(hit.path);
+        }
+      };
+      const openDocPage = (target, anchor) => {
+        const pages = pagesRef.current ?? [];
+        const ownerSpace = pages.find((p) => p.path === path)?.space ?? "";
+        const resolved = resolveVaultLink(pages, target, ownerSpace);
+        if (resolved) onOpenPage(resolved.path, anchor, true);
+        else toast(t("vaultPageGone"));
+      };
+      /** 改页码：直接改正文那个节点（芯片是原子节点，正文里点不进去） */
+      const applyDocLinkPage = (link, input) => {
+        const ed = rteRef.current?.editor;
+        if (!ed) return;
+        const raw = String(input ?? "").trim();
+        const anchor = raw === "" ? null : matAnchorOfPageInput(raw);
+        if (raw !== "" && anchor === null) {
+          toast(t("vaultPageBad"));
+          return;
+        }
+        const node = ed.state.doc.nodeAt(link.pos);
+        if (!node) return;
+        ed.view.dispatch(ed.state.tr.setNodeMarkup(link.pos, undefined, { ...node.attrs, anchor }));
+        setDocLinks(collectDocLinks());
+        setBlEdit(null);
+      };
+      const removeDocLink = (link) => {
+        const ed = rteRef.current?.editor;
+        if (!ed) return;
+        const node = ed.state.doc.nodeAt(link.pos);
+        if (!node) return;
+        ed.chain().deleteRange({ from: link.pos, to: link.pos + node.nodeSize }).run();
+        setDocLinks(collectDocLinks());
+        setBlEdit(null);
+      };
+      /** 内容签名守卫：空事务（浮条 / 扩展的 meta 事务）也会走到 onState，内容没变就不 setState */
+      const docLinksSigRef = react.useRef("");
+      const refreshDocLinks = () => {
+        const next = collectDocLinks();
+        const sig = next.map((l) => `${l.pos}:${l.material ? "m" : "p"}:${l.target}#${l.anchor}`).join("\u0001");
+        if (sig === docLinksSigRef.current) return;
+        docLinksSigRef.current = sig;
+        setDocLinks(next);
+      };
       const openBarMenu = (which, e) => {
         barMenuAnchorRef.current = e.currentTarget;
+        if (which === "bl") {
+          refreshDocLinks();
+          setBlEdit(null);
+        }
         setBarMenu((prev) => (prev === which ? null : which));
       };
       // 浮层关闭手势长在自己身上（与搜索浮层/TreeRowMenu 同约定）：点浮层与触发钮之外 / Esc 即关
@@ -9884,6 +10142,94 @@ ellipsis，窄列只截字不破版 */
 
       const barRect = barMenu !== null && barMenuAnchorRef.current !== null ? barMenuAnchorRef.current.getBoundingClientRect() : null;
       const outline = barMenu === "toc" ? outlineAt() : null;
+      /** 双链计数：正文里的资料引用与出链（实时）+ 反链（索引派生） */
+      const dualCount = docLinks.length + backlinks.length;
+      /** 「双链」面板：资料（带页码）/ 出链 / 反链三段；资料行右侧 ⋯ 改页码或移除 */
+      const dualMenu = () => {
+        const mats = docLinks.filter((l) => l.material === true);
+        const outgoing = docLinks.filter((l) => l.material !== true);
+        const sec = (label, n) => jsxRuntime.jsx("div", { className: "dshk-vault-barmenu-sec", children: label.replace("{n}", String(n)) });
+        return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+          sec(t("vaultMaterialSec"), mats.length),
+          mats.length === 0
+            ? jsxRuntime.jsx("div", { className: "dshk-vault-barmenu-empty", children: t("vaultMaterialEmpty") })
+            : mats.map((l) => {
+                const hit = matResolve(materialItems, l.target);
+                const range = matPageRange(l.anchor);
+                if (blEdit !== null && blEdit.pos === l.pos) {
+                  return jsxRuntime.jsxs("div", { className: "dshk-vault-barmenu-edit", children: [
+                    jsxRuntime.jsx("input", {
+                      value: blEdit.page,
+                      autoFocus: true,
+                      placeholder: t("vlinkPagePh"),
+                      onChange: (e) => setBlEdit((prev) => (prev === null ? prev : { ...prev, page: e.target.value })),
+                      onKeyDown: (e) => {
+                        if (e.key === "Enter") applyDocLinkPage(l, blEdit.page);
+                        else if (e.key === "Escape") setBlEdit(null);
+                      },
+                    }),
+                    jsxRuntime.jsx("button", { type: "button", onClick: () => applyDocLinkPage(l, blEdit.page), children: t("vaultBlOk") }),
+                    jsxRuntime.jsx("button", { type: "button", onClick: () => removeDocLink(l), children: t("vaultBlRemove") }),
+                  ] }, `e${l.pos}`);
+                }
+                return jsxRuntime.jsxs("div", {
+                  className: "dshk-vault-barmenu-item",
+                  title: `[[${l.target}${l.anchor ? "#" + l.anchor : ""}]]`,
+                  onClick: () => {
+                    openMaterialByTarget(l.target, l.anchor);
+                    setBarMenu(null);
+                  },
+                  children: [
+                    jsxRuntime.jsx("span", { className: hit === null ? "dshk-vault-barmenu-missing" : undefined, children: hit === null ? matShortName(l.target) : matShortName(matNameOf(hit)) }),
+                    matPageLabel(l.anchor) === "" ? null : jsxRuntime.jsx("span", { className: "dshk-vault-barmenu-sub", children: matPageLabel(l.anchor) }),
+                    jsxRuntime.jsx("span", {
+                      className: "dshk-vault-barmenu-more",
+                      title: t("vaultBlEditTip"),
+                      onMouseDown: (e) => e.preventDefault(),
+                      onClick: (e) => {
+                        e.stopPropagation();
+                        setBlEdit({ pos: l.pos, page: range === null ? "" : range.start === range.end ? String(range.start) : `${range.start}-${range.end}` });
+                      },
+                      children: "⋯",
+                    }),
+                  ],
+                }, `m${l.pos}`);
+              }),
+          sec(t("vaultOutSec"), outgoing.length),
+          outgoing.length === 0
+            ? jsxRuntime.jsx("div", { className: "dshk-vault-barmenu-empty", children: t("vaultOutEmpty") })
+            : outgoing.map((l) => jsxRuntime.jsxs("div", {
+                className: "dshk-vault-barmenu-item",
+                title: `[[${l.target}${l.anchor ? "#" + l.anchor : ""}]]`,
+                onClick: () => {
+                  openDocPage(l.target, l.anchor);
+                  setBarMenu(null);
+                },
+                children: [
+                  jsxRuntime.jsx("span", { children: l.target }),
+                  l.anchor === "" ? null : jsxRuntime.jsx("span", { className: "dshk-vault-barmenu-sub", children: l.anchor }),
+                ],
+              }, `o${l.pos}`)),
+          sec(t("vaultBlSec"), backlinks.length),
+          backlinks.length === 0
+            ? jsxRuntime.jsx("div", { className: "dshk-vault-barmenu-empty", children: t("vaultBlEmpty") })
+            : backlinks.map((p) =>
+                jsxRuntime.jsx(
+                  "div",
+                  {
+                    className: "dshk-vault-barmenu-item",
+                    title: p.rel,
+                    onClick: () => {
+                      onOpenPage(p.path, undefined, true);
+                      setBarMenu(null);
+                    },
+                    children: pageBasename(p.rel),
+                  },
+                  p.path,
+                ),
+              ),
+        ] });
+      };
       return jsxRuntime.jsxs("div", { className: "dshk-vault-reader", ref: paneRef, children: [
         !page || page.loading === true
           ? jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("contentLoading") })
@@ -9942,12 +10288,12 @@ ellipsis，窄列只截字不破版 */
                     // 测验入口：带题数徽标（0 题也进得去——进去就是出题）
                     jsxRuntime.jsx(VaultQuizEntry, { path, root, active }),
                     jsxRuntime.jsx(KitTip, {
-                      label: backlinks.length === 0 ? t("vaultBlEmpty") : t("vaultBacklinks"),
+                      label: dualCount === 0 ? t("vaultDualEmpty") : t("vaultDualLinks"),
                       children: jsxRuntime.jsx("button", {
                         type: "button",
-                        className: `dshk-vault-tbtn${backlinks.length === 0 ? " is-empty" : ""}`,
+                        className: `dshk-vault-tbtn${dualCount === 0 ? " is-empty" : ""}`,
                         onClick: (e) => openBarMenu("bl", e),
-                        children: `${t("vaultBacklinks")}${backlinks.length > 0 ? ` ${backlinks.length}` : ""}`,
+                        children: `${t("vaultDualLinks")}${dualCount > 0 ? ` ${dualCount}` : ""}`,
                       }),
                     }),
                     jsxRuntime.jsx(KitTip, {
@@ -9977,6 +10323,7 @@ ellipsis，窄列只截字不破版 */
                     placeholder: t("rtePlaceholder"),
                     labels: { codeCopy: t("vaultCopy"), codeCopied: t("vaultCopied") },
                     pages: indexPages,
+                    materials: materialItems,
                     onInsertImage: onPickImage,
                     onReady: onRteReady,
                     onWikiLink: (target, anchor) => {
@@ -9984,13 +10331,19 @@ ellipsis，窄列只截字不破版 */
                         if (anchor !== "") scrollAnchorRte(anchor);
                         return;
                       }
-                      const pages = pagesRef.current ?? [];
-                      const ownerSpace = pages.find((p) => p.path === path)?.space ?? "";
-                      const resolved = resolveVaultLink(pages, target, ownerSpace);
-                      if (resolved) onOpenPage(resolved.path, anchor, true);
-                      else toast(t("vaultPageGone"));
+                      // 资料引用（[[书#p18-20]]）：在本集挂载的资料里解析，解析不到就提示；
+                      // PDF 带页码跳过去，其余格式走官方文件面（与树上的资料行同一条去处）
+                      if (matIsMaterialLink(target, anchor)) {
+                        openMaterialByTarget(target, anchor);
+                        return;
+                      }
+                      openDocPage(target, anchor);
                     },
                     resolveWiki: (target) => resolveVaultLink(pagesRef.current ?? [], target) !== null,
+                    resolveMaterial: (target) => {
+                      const hit = matResolve(materialItems, target);
+                      return hit === null ? null : matShortName(matNameOf(hit));
+                    },
                     resolveSrc: (src) => {
                       const raw = String(src ?? "");
                       if (/^(https?:|data:|blob:)/i.test(raw)) return raw;
@@ -10018,6 +10371,7 @@ ellipsis，窄列只截字不破版 */
                     onState: (s) => {
                       setDirtyDot(s.dirty === true);
                       setCrumb(typeof s.crumb === "string" ? s.crumb : "");
+                      refreshDocLinks();
                     },
                     onSave: saveVaultPage,
                     onPaste: onEditPaste,
@@ -10047,23 +10401,7 @@ ellipsis，窄列只截字不破版 */
                                     `${it.pos}`,
                                   ),
                                 )
-                            : backlinks.length === 0
-                              ? jsxRuntime.jsx("div", { className: "dshk-vault-barmenu-empty", children: t("vaultBlEmpty") })
-                              : backlinks.map((p) =>
-                                  jsxRuntime.jsx(
-                                    "div",
-                                    {
-                                      className: "dshk-vault-barmenu-item",
-                                      title: p.rel,
-                                      onClick: () => {
-                                        onOpenPage(p.path, undefined, true);
-                                        setBarMenu(null);
-                                      },
-                                      children: pageBasename(p.rel),
-                                    },
-                                    p.path,
-                                  ),
-                                ),
+                            : dualMenu(),
                         },
                         "barmenu",
                       )
@@ -10145,7 +10483,6 @@ ellipsis，窄列只截字不破版 */
     const PDF_RASTER_SETTLE_MS = 140;
     /** 量不到尺寸的页（那一页自己坏了）先按 US Letter 铺，不让整篇排不出来 */
     const PDF_FALLBACK_BOX = { w: 612, h: 792 };
-    const PDF_POS_KEY = "dshk.pdf.pos";
 
     let pdfLibTask = null;
     /** pdf.js 懒加载：只有库里真开了 PDF 签才下这 1.7MB。
@@ -10205,33 +10542,45 @@ ellipsis，窄列只截字不破版 */
       return entry;
     }
 
-    /** 阅读位置：{[内容身份]: {page}}。**只落页码**，页内比例不出这个阅读器——
-     *  盘上那份比例是另一个口径的（旧算法记的是页顶相对视口顶），拿来当锚点会差
-     *  半个视口。同源共享（桌面端 dsh-app://app/ 也一样），刷新浏览器、切会话都还在 */
-    function pdfPosAll() {
-      try {
-        const raw = window.localStorage.getItem(PDF_POS_KEY);
-        const v = raw === null ? null : JSON.parse(raw);
-        return v !== null && typeof v === "object" && v !== null ? v : {};
-      } catch {
-        return {};
+    /** 会话内最后位置（内容身份 → 页码）：只给「分栏开关那类立刻重挂」接着读用。
+     *  **不落盘**：阅读不是线性的，页码归页面的资料引用管（[[书#p18]]）；进来落在
+     *  引用给的页码，没给就从头看。 */
+    const pdfLastPos = new Map();
+    function pdfLastPosGet(key) {
+      const page = pdfLastPos.get(key);
+      return typeof page === "number" && page > 0 ? page : null;
+    }
+    function pdfLastPosSet(key, page) {
+      if (key === "" || !(page > 0)) return;
+      pdfLastPos.delete(key);
+      pdfLastPos.set(key, page);
+      while (pdfLastPos.size > 200) {
+        const first = pdfLastPos.keys().next();
+        if (first.done === true) break;
+        pdfLastPos.delete(first.value);
       }
     }
-    function pdfPosGet(key) {
-      const v = pdfPosAll()[key];
-      return v !== null && typeof v === "object" ? v : null;
+    /** 资料引用的跳页请求：打开资料时先把页码挂上，阅读器排好版 / 显形时取走；
+     *  已经开着的那份靠订阅立刻跳。走模块级而不是页签参数——同一份资料不该因为
+     *  页码不同变成两张签 */
+    const pdfJumpPending = new Map();
+    const pdfJumpSubs = new Set();
+    function requestPdfJump(path, page) {
+      if (typeof path !== "string" || path === "" || page === undefined || !(page > 0)) return;
+      pdfJumpPending.set(path, Math.round(page));
+      for (const fn of pdfJumpSubs) fn();
     }
-    function pdfPosWrite(key, val) {
-      try {
-        const all = pdfPosAll();
-        all[key] = val;
-        const keys = Object.keys(all);
-        for (const k of keys.slice(0, Math.max(0, keys.length - 200))) delete all[k];
-        window.localStorage.setItem(PDF_POS_KEY, JSON.stringify(all));
-      } catch {
-        /* 隐私模式 / 配额满：位置丢了不影响读 */
-      }
-    }
+    const pdfJumpPeek = (path) => pdfJumpPending.get(path) ?? null;
+    const pdfJumpTake = (path) => {
+      const page = pdfJumpPending.get(path);
+      if (page === undefined) return null;
+      pdfJumpPending.delete(path);
+      return page;
+    };
+    const pdfJumpSubscribe = (fn) => {
+      pdfJumpSubs.add(fn);
+      return () => pdfJumpSubs.delete(fn);
+    };
 
     /** 适宽基准 = 版面上最常出现的页宽（多数 PDF 同宽；宽窄混排取"多数"不抖，
      *  撞个数时取宽的） */
@@ -10402,6 +10751,9 @@ ellipsis，窄列只截字不破版 */
       /** 当下在视口附近（上下各 1.5 屏）的页：只有这些页要光栅化 */
       const [visible, setVisible] = react.useState(() => new Set());
       const [attempt, setAttempt] = react.useState(0);
+      /** 跳页请求的计数：已经开着的那份靠它触发（见下面的跳页 effect） */
+      const [jumpTick, setJumpTick] = react.useState(0);
+      react.useEffect(() => pdfJumpSubscribe(() => setJumpTick((n) => n + 1)), []);
       const scrollRef = react.useRef(null);
       const hostRef = react.useRef(null);
       /** 「读到哪」= 视口中线落在哪一页的哪个比例。**只由用户滚动与页码跳转改写**；
@@ -10441,9 +10793,10 @@ ellipsis，窄列只截字不破版 */
           const key = path + "|" + stat.mtimeMs + "|" + stat.size;
           heldKey = key;
           pdfDocRefs.set(key, (pdfDocRefs.get(key) ?? 0) + 1);
-          const saved = pdfPosGet(key);
-          // 盘上只记页码：进来落在该页页顶。锚点等版面排出来由钉位那一步现算
-          bootRef.current = Math.max(1, Number(saved && saved.page) || 1);
+          // 进场页：挂起的跳页请求压过会话内的最后位置（那只是给立刻重挂续读的），
+          // 都没有就从头看。锚点等版面排出来由钉位那一步现算
+          const pending = pdfJumpPeek(path);
+          bootRef.current = Math.max(1, pending ?? pdfLastPosGet(key) ?? 1);
           let entry = pdfDocGet(key);
           if (entry === null) {
             const resp = await fetch("/dsh-kit/vault/file?path=" + encodeURIComponent(path), {
@@ -10583,7 +10936,7 @@ ellipsis，窄列只截字不破版 */
           setCurPage((cur) => (cur === a.page ? cur : a.page));
           if (!fromScroll || ident === "") return;
           if (timer !== 0) window.clearTimeout(timer);
-          timer = window.setTimeout(() => pdfPosWrite(ident, { page: a.page }), 400);
+          timer = window.setTimeout(() => pdfLastPosSet(ident, a.page), 400);
         };
         const onScroll = () => {
           if (frame === 0) frame = requestAnimationFrame(() => measure(true));
@@ -10628,18 +10981,48 @@ ellipsis，窄列只截字不破版 */
         return () => io.disconnect();
       }, [count]);
 
+      /** 滚到某页（页顶对齐视口顶）：没排出来 / 没真落到位返回 false，调用方下次再试 */
       const jumpTo = (page) => {
         const root = scrollRef.current;
-        if (root === null || count === 0) return;
+        if (root === null || count === 0) return false;
         const p = Math.min(Math.max(1, Math.round(page)), count);
         const el = root.querySelector('.dshk-pdf-page[data-pdf-page="' + p + '"]');
-        if (el === null) return;
+        if (el === null) return false;
         const a = { page: p, ratio: pdfTopRatio(root, el) };
-        anchorRef.current = a;
         const want = pdfScrollFor(root, a);
-        if (want !== null) root.scrollTop = want;
+        if (want === null) return false;
+        anchorRef.current = a;
+        root.scrollTop = want;
         setCurPage(p);
+        // 版面还没排好时 scrollTop 会被夹住：量一眼目标页有没有真顶到视口顶
+        const frame = root.getBoundingClientRect();
+        const box = el.getBoundingClientRect();
+        return box.top - frame.top <= 2 && box.bottom > frame.top + 1;
       };
+      // 资料引用点进来：显形且版面排好时跳，失败短重试（页表刚出来、阅读器刚挂上
+      // 这几种都在头一两秒里自愈）
+      react.useEffect(() => {
+        if (!active || doc === null || count === 0) return undefined;
+        if (pdfJumpPeek(path) === null) return undefined;
+        let cancelled = false;
+        let tries = 0;
+        let timer = 0;
+        const attempt = () => {
+          if (cancelled) return;
+          const page = pdfJumpPeek(path);
+          if (page === null) return;
+          if (jumpTo(page)) {
+            pdfJumpTake(path);
+            return;
+          }
+          if (tries++ < 20) timer = window.setTimeout(attempt, 100);
+        };
+        attempt();
+        return () => {
+          cancelled = true;
+          if (timer !== 0) window.clearTimeout(timer);
+        };
+      }, [active, doc, count, path, jumpTick]);
 
       if (error !== null) {
         return jsxRuntime.jsx("div", { className: "dshk-vault-reader", children: jsxRuntime.jsx("div", { className: "dshk-vault-hint", children: t("pdfFailed") + "：" + error }) });
@@ -10708,10 +11091,17 @@ ellipsis，窄列只截字不破版 */
         kitJson("/dsh-kit/vault/index", undefined, (b) => !!b)
           .then((body) => {
             if (!alive) return;
-            setOwn({ root: typeof body?.root === "string" ? body.root : "", indexPages: Array.isArray(body?.pages) ? body.pages : [] });
+            setOwn({
+              root: typeof body?.root === "string" ? body.root : "",
+              indexPages: Array.isArray(body?.pages) ? body.pages : [],
+              indexMeta: {
+                knowledgeSets: Array.isArray(body?.knowledgeSets) ? body.knowledgeSets : [],
+                library: body !== null && typeof body === "object" ? body.library ?? null : null,
+              },
+            });
           })
           .catch(() => {
-            if (alive) setOwn({ root: "", indexPages: [] });
+            if (alive) setOwn({ root: "", indexPages: [], indexMeta: null });
           });
         return () => {
           alive = false;
@@ -10719,6 +11109,7 @@ ellipsis，窄列只截字不破版 */
       }, [path, reader.root, own]);
       const root = reader.root ?? own?.root ?? null;
       const indexPages = reader.indexPages ?? own?.indexPages ?? null;
+      const indexMeta = reader.indexMeta ?? own?.indexMeta ?? null;
       return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
         reader.earlyBody != null
           ? jsxRuntime.jsx("div", { className: "dshk-vault", children: reader.earlyBody })
@@ -10733,6 +11124,7 @@ ellipsis，窄列只截字不破版 */
                     active,
                     root,
                     indexPages,
+                    indexMeta,
                     // 索引侧不在时：开页退回本模块的入口、刷新无回调可调（页签本组件开）
                     onOpenPage: (p, anchor, newPane) => {
                       if (typeof reader.openPath === "function") reader.openPath(p, anchor, newPane);
@@ -10764,7 +11156,6 @@ ellipsis，窄列只截字不破版 */
       const [idx, setIdx] = react.useState(null); // { root, pages, knowledgeSets }
       const [stats, setStats] = react.useState(null); // Map<dir, { quiz: {total,mastered}, study: {active,due,over,done} }>
       const [showAll, setShowAll] = react.useState(false);
-      const [qzSetsOpen, setQzSetsOpen] = react.useState(false);
       const [studySet, setStudySet] = react.useState(null); // { dir, name } | null
       const [nonce, setNonce] = react.useState(0);
       react.useEffect(() => {
@@ -10900,11 +11291,10 @@ ellipsis，窄列只截字不破版 */
         }, f.dir);
       };
       const recent = idx === null ? [] : [...idx.pages].sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, HOME_RECENT_LIMIT);
-      const secHead = (label, more, actions) =>
+      const secHead = (label, more) =>
         jsxRuntime.jsxs("div", { className: "dshk-home-sechead", children: [
           jsxRuntime.jsx("span", { children: label }),
           jsxRuntime.jsx("span", { className: "dshk-home-secgap" }),
-          (actions ?? []).map((a) => jsxRuntime.jsx("button", { type: "button", className: "dshk-home-more", onClick: a.run, children: a.label }, a.label)),
           more !== undefined ? jsxRuntime.jsx("button", { type: "button", className: "dshk-home-more", onClick: more.run, children: more.label }) : null,
         ] });
       return jsxRuntime.jsxs("div", { className: "dshk-rbpane", children: [
@@ -10918,7 +11308,6 @@ ellipsis，窄列只截字不破版 */
               secHead(
                 t("homeKsSection"),
                 sets.length > HOME_SETS_LIMIT ? { label: t("homeAllSets") + " ›", run: () => setShowAll(true) } : undefined,
-                [{ label: t("qzSets"), run: () => setQzSetsOpen(true) }],
               ),
               sets.length === 0 ? jsxRuntime.jsx("div", { className: "dshk-home-hint", children: t("homeSetsEmpty") }) : sets.slice(0, HOME_SETS_LIMIT).map(ksRow),
               secHead(t("homeRecentSection")),
@@ -10940,8 +11329,6 @@ ellipsis，窄列只截字不破版 */
                   ),
             ] }),
         }),
-        // 题集名单：从首页知识集段头开（题集的题各在页面里，这里只是攒起来刷）
-        qzSetsOpen ? jsxRuntime.jsx(VaultQuizSetsDialog, { onClose: () => setQzSetsOpen(false) }) : null,
         // 知识集学习总览：每次打开重挂（取一次 study-scope），关掉即卸
         studySet === null ? null : jsxRuntime.jsx(VaultStudySetDialog, {
           dir: studySet.dir,
@@ -11132,6 +11519,7 @@ ellipsis，窄列只截字不破版 */
       return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
         jsxRuntime.jsx("div", { style: { display: "none" }, children: jsxRuntime.jsx(VaultView, {}) }),
         jsxRuntime.jsx(VaultQuizOverlay, {}),
+        jsxRuntime.jsx(StudyQuizPrompt, {}),
       ] });
     }
 
@@ -11144,18 +11532,19 @@ ellipsis，窄列只截字不破版 */
 
     const QZ_KINDS = ["single", "multi", "judge", "blank"];
     const QZ_LETTERS = "ABCDEFGHIJ";
-    // 页面入口不抽题（一页的题本来就不多）：限题数只对范围入口有效
-    const QZ_ALL = Number.MAX_SAFE_INTEGER;
     const qzLetterAt = (i) => QZ_LETTERS[i] ?? "?";
     const qzKindLabel = (kind) =>
       kind === "single" ? t("qzKind_single") : kind === "multi" ? t("qzKind_multi") : kind === "judge" ? t("qzKind_judge") : t("qzKind_blank");
 
     let qzReqState = null;
+    let qzSeq = 0;
     const qzSubs = new Set();
-    /** 打开测验：kind:"page" = 单页、kind:"set" = 目录范围（path 是绝对路径）、
-     *  kind:"qset" = 题集（path 是题集 id，掌握度走题集自己那份） */
+    /** 打开题目浮层：kind:"page" = 单页、kind:"set" = 目录范围（path 是绝对路径）；
+     *  auto:"unmastered" = 学习完成后直接开这页未掌握的题。**每次打开换一个会话键**：
+     *  同一页再点一次也重挂，不沿用上一次的模式与进度 */
     function qzOpen(request) {
-      qzReqState = request;
+      qzSeq += 1;
+      qzReqState = { ...request, id: qzSeq };
       for (const fn of qzSubs) fn();
     }
     function qzClose() {
@@ -11171,7 +11560,7 @@ ellipsis，窄列只截字不破版 */
         () => qzReqState,
       );
     // 换一页 / 换一个范围就是重开一份新的会话状态（overlay 按 key 重挂）
-    const qzKeyOf = (req) => req.kind === "page" ? "p:" + req.path : req.kind === "qset" ? "q:" + req.path : "s:" + req.path;
+    const qzKeyOf = (req) => `${req.id ?? 0}:` + (req.kind === "page" ? "p:" + req.path + (req.auto ? ":auto" : "") : "s:" + req.path);
     /** 页面绝对路径 → 题目用的 rel（去 .md；不在库内回 null） */
     const qzPageRel = (root, path) => {
       if (typeof root !== "string" || root === "") return null;
@@ -11279,34 +11668,86 @@ ellipsis，窄列只截字不破版 */
       if (q.type === "judge") return typeof q.answer === "boolean";
       return qzBlankCount(q) > 0;
     };
-    /** 池子来源：各页题目摊平并带上来源页；口径 = 能答的题（入口徽标、范围统计同此）。
-     *  keyed = 题集：进度键是 "rel|题目 id"（不同页可能有同内容的题，id 会撞） */
-    const qzQuestionsOf = (pages, keyed) => {
+    /** 池子来源：各页题目摊平并带上来源页；口径 = 能答的题（入口徽标、范围统计同此） */
+    const qzQuestionsOf = (pages) => {
       const out = [];
       for (const p of pages) {
         for (const q of p.questions ?? []) {
           if (!qzAnswerable(q)) continue;
-          out.push(keyed === true ? { ...q, rel: p.rel, key: p.rel + "|" + q.id } : { ...q, rel: p.rel });
+          out.push({ ...q, rel: p.rel });
         }
       }
       return out;
     };
-    /** 掌握度的键：题集里用 "rel|id"，页面 / 知识集里就是 id */
-    const qzRecKey = (q) => q.key ?? q.id;
     function qzStatOf(questions, progress) {
       let mastered = 0;
       for (const q of questions) {
-        if (qzIsMastered(progress, qzRecKey(q))) mastered += 1;
+        if (qzIsMastered(progress, q.id)) mastered += 1;
       }
       return { total: questions.length, mastered, unmastered: questions.length - mastered };
     }
     const qzFilterStatus = (questions, status, progress) => {
       if (status === "all") return questions;
       const want = status === "mastered";
-      return questions.filter((q) => qzIsMastered(progress, qzRecKey(q)) === want);
+      return questions.filter((q) => qzIsMastered(progress, q.id) === want);
     };
     const qzFilterKinds = (questions, kinds) =>
       kinds.length === 0 ? questions : questions.filter((q) => kinds.includes(q.type));
+
+    // ── 刷题的纯逻辑（会话内连对与过关，**不落盘**；render-check 直测）──
+    //    与测验的区别：测验记已掌握（跨会话、跟题走）；刷题只记这一次会话的连对，
+    //    连对到阈值就过关，剩余题空了或主动结束为止。
+    /** 会话内的题键：rel|id（不同页可能有同内容的题，id 会撞） */
+    const qzDrillKey = (q) => (q.rel ?? "") + "|" + q.id;
+    function qzDrillStart(pool, perRound, threshold) {
+      return {
+        pool: pool.slice(),
+        streak: {},
+        retired: 0,
+        total: pool.length,
+        threshold: Math.max(1, threshold),
+        perRound: Math.max(1, perRound),
+      };
+    }
+    /** 下一轮：从还没过关的题里随机抽，不重复 */
+    const qzDrillRound = (state) => qzPick(state.pool, state.perRound);
+    /** 一次作答：连对 +1，达阈值过关；答错归零。retiredNow = 这道题刚过关 */
+    function qzDrillAnswer(state, q, correct) {
+      const key = qzDrillKey(q);
+      const streak = correct ? (state.streak[key] ?? 0) + 1 : 0;
+      const retiredNow = correct && streak >= state.threshold;
+      if (retiredNow === false) {
+        return { state: { ...state, streak: { ...state.streak, [key]: streak } }, retiredNow: false, streak };
+      }
+      return {
+        state: {
+          ...state,
+          streak: { ...state.streak, [key]: streak },
+          pool: state.pool.filter((x) => qzDrillKey(x) !== key),
+          retired: state.retired + 1,
+        },
+        retiredNow: true,
+        streak,
+      };
+    }
+    /** 手动过关：连对直接记满，题从剩余里去掉（已经过关的不重复计数） */
+    function qzDrillPass(state, q) {
+      const key = qzDrillKey(q);
+      const streak = { ...state.streak, [key]: state.threshold };
+      if (state.pool.some((x) => qzDrillKey(x) === key) === false) return { ...state, streak };
+      return { ...state, streak, pool: state.pool.filter((x) => qzDrillKey(x) !== key), retired: state.retired + 1 };
+    }
+    /** 重置：连对归零；已经过关的题放回剩余，下一次重新抽到 */
+    function qzDrillReset(state, q) {
+      const key = qzDrillKey(q);
+      const inPool = state.pool.some((x) => qzDrillKey(x) === key);
+      return {
+        ...state,
+        streak: { ...state.streak, [key]: 0 },
+        pool: inPool ? state.pool : [...state.pool, q],
+        retired: inPool ? state.retired : Math.max(0, state.retired - 1),
+      };
+    }
 
     // ── 行内公式（选项/答案行用）：定界规则与桌面端同一份（"$5 和 $6" 不误配）──
     const QZ_MATH_RE = /^\$(?!\s)((?:\\.|[^$\n])+?)(?<!\s)\$(?!\$|\w)/;
@@ -11456,6 +11897,85 @@ ellipsis，窄列只截字不破版 */
       return reactDom.createPortal(jsxRuntime.jsx(VaultQuizModal, { req }, qzKeyOf(req)), document.body, "dshk-quiz");
     }
 
+    // ── 学习完成后的询问：这页还有未掌握的题才问，点「测验」直接开这页未掌握的题 ──
+    //    入口（页条学习记录 / 日程待办 / 复习待办弹窗 / 标记已学）只负责 askStudyQuiz(rel)；
+    //    有没有题、剩几道由这一份全局浮层现取——没题或全掌握就静默收掉，不打扰。
+    let studyQuizAsk = null;
+    const studyQuizSubs = new Set();
+    const useStudyQuizAsk = () =>
+      react.useSyncExternalStore(
+        (fn) => {
+          studyQuizSubs.add(fn);
+          return () => studyQuizSubs.delete(fn);
+        },
+        () => studyQuizAsk,
+      );
+    const askStudyQuiz = (rel, title) => {
+      if (typeof rel !== "string" || rel === "") return;
+      studyQuizAsk = { rel, title: typeof title === "string" && title !== "" ? title : rel.split("/").pop() ?? rel };
+      for (const fn of studyQuizSubs) fn();
+    };
+    const dismissStudyQuiz = () => {
+      studyQuizAsk = null;
+      for (const fn of studyQuizSubs) fn();
+    };
+    function StudyQuizPrompt() {
+      const ask = useStudyQuizAsk();
+      const reader = useVaultReader();
+      // null = 还没取到；{ unmastered } = 这页能答的题里还没掌握的数目
+      const [data, setData] = react.useState(null);
+      react.useEffect(() => {
+        if (ask === null) {
+          setData(null);
+          return undefined;
+        }
+        let alive = true;
+        const query = `rel=${encodeURIComponent(ask.rel)}`;
+        Promise.all([
+          kitJson(`/dsh-kit/vault/quiz?${query}`, undefined, (b) => !!b),
+          kitJson(`/dsh-kit/vault/quiz-progress?${query}`, undefined, (b) => !!b),
+        ])
+          .then(([body, pg]) => {
+            if (!alive) return;
+            const qs = Array.isArray(body.questions) ? body.questions.filter(qzAnswerable) : [];
+            const prog = pg?.progress ?? {};
+            setData({ unmastered: qs.filter((q) => qzIsMastered(prog, q.id) === false).length });
+          })
+          .catch(() => {
+            if (alive) setData(null);
+          });
+        return () => {
+          alive = false;
+        };
+      }, [ask]);
+      react.useEffect(() => {
+        if (ask !== null && data !== null && data.unmastered === 0) dismissStudyQuiz();
+      }, [ask, data]);
+      if (ask === null || data === null || data.unmastered === 0) return null;
+      const root = typeof reader.root === "string" ? reader.root : "";
+      if (root === "") return null;
+      return jsxRuntime.jsx(StudyDialog, {
+        title: t("qzStudyAskTitle"),
+        onClose: dismissStudyQuiz,
+        children: jsxRuntime.jsxs(react.Fragment, { children: [
+          jsxRuntime.jsx("div", { className: "dshk-study-status", children: t("qzStudyAsk").replace("{name}", ask.title).replace("{n}", String(data.unmastered)) }),
+          jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: dismissStudyQuiz, children: t("qzStudySkip") }),
+            jsxRuntime.jsx("button", {
+              type: "button",
+              className: "dshk-btn-save",
+              onClick: () => {
+                const target = ask;
+                dismissStudyQuiz();
+                qzOpen({ kind: "page", path: joinRelPath(root, target.rel), title: target.title, auto: "unmastered" });
+              },
+              children: t("qzStudyGo"),
+            }),
+          ] }),
+        ] }),
+      });
+    }
+
     // 题干/解析里图片的 src 解析：相对引用按**来源页**目录解（attachments/ 直挂库根），
     // 越界不接管回空串——与页面编辑面同一条规则
     const qzSrcResolver = (root, relRef) => (src) => {
@@ -11469,30 +11989,38 @@ ellipsis，窄列只截字不破版 */
       if (isPathInsideVaultRoot(root, abs) === false) return "";
       return `/dsh-kit/raw?path=${encodeURIComponent(abs)}`;
     };
-    // ── 浮层主体：范围设置 → 逐题作答 → 小结；页面入口再给「编辑题目」──
+    // ── 浮层主体：范围设置（测验 / 刷题）→ 逐题作答 → 小结；页面入口再给「编辑题目」──
+    //    测验把整池按「每轮题数」切轮（每轮完了给一次小结），答对记掌握度；
+    //    刷题只记这一次会话的连对（连对到阈值过关、不落盘），剩余题空了或主动结束为止。
     function VaultQuizModal({ req }) {
       const reader = useVaultReader();
       // 索引侧不在（右栏签直开 / 刷新后直进）时自己兜一次库根
       const [ownRoot, setOwnRoot] = react.useState(null);
       const [pages, setPages] = react.useState(null);
       const [progress, setProgress] = react.useState(null);
-      // 题集：一份请求回 { set, pages, progress, threshold }（进度独立于页面，不另取）
-      const [setScope, setSetScope] = react.useState(null);
       const [stage, setStage] = react.useState("scope");
       const [session, setSession] = react.useState([]);
       const [cursor, setCursor] = react.useState(0);
       const [answer, setAnswer] = react.useState(() => ({ choice: "", judge: null, blanks: [] }));
       const [checked, setChecked] = react.useState(null);
       const [tally, setTally] = react.useState(() => ({ right: 0, wrong: 0, mastered: 0 }));
+      const [roundTally, setRoundTally] = react.useState(() => ({ right: 0, wrong: 0, mastered: 0 }));
       const [explainOn, setExplainOn] = react.useState(false);
-      // 开卷时已掌握的题：小结「新掌握」只认「开卷未掌握 → 此刻已掌握」（本轮内遗忘会退回，
-      // 手动标记掌握同样记账——只累加作答的 newlyMastered 会虚报）
-      const startMasteredRef = react.useRef(new Set());
+      /** 测验：整池按每轮切好的全部题；quizAt = 下一轮从哪开始 */
+      const [quizItems, setQuizItems] = react.useState([]);
+      const [quizAt, setQuizAt] = react.useState(0);
+      const [quizPerRound, setQuizPerRound] = react.useState(0);
+      /** 刷题：会话内的池子与连对；null = 这次是测验 */
+      const [drill, setDrill] = react.useState(null);
+      const [round, setRound] = react.useState(1);
+      /** 本轮过关几道（刷题小结用） */
+      const [roundRetired, setRoundRetired] = react.useState(0);
+      /** 本次测验新掌握的题；roundNew 是其中本轮新掌握的（本轮内遗忘会退回） */
       const newMasteredRef = react.useRef(new Set());
+      const roundNewRef = react.useRef(new Set());
       const root = reader.root ?? ownRoot;
       const isPage = req.kind === "page";
-      const isQSet = req.kind === "qset";
-      const rel = root === null || root === "" ? null : isPage ? qzPageRel(root, req.path) : isQSet ? null : relUnder(root, req.path);
+      const rel = root === null || root === "" ? null : isPage ? qzPageRel(root, req.path) : relUnder(root, req.path);
       // 题干/解析里的图片按**来源页**解析：rel 随题走，走 ref（resolver 闭包只造一次）
       const srcRelRef = react.useRef("");
       const item = session[cursor];
@@ -11515,32 +12043,9 @@ ellipsis，窄列只截字不破版 */
         };
       }, [reader.root, ownRoot]);
 
-      // 题集：一份范围数据（题目 / 进度 / 阈值同来），作答后由 loader 重取
-      react.useEffect(() => {
-        if (!isQSet || root === null || root === "") return undefined;
-        let alive = true;
-        const load = () => {
-          kitJson(`/dsh-kit/vault/quiz-set-scope?id=${encodeURIComponent(req.path)}`, undefined, (b) => !!b)
-            .then((body) => {
-              if (alive) setSetScope(body);
-            })
-            .catch((error) => {
-              if (!alive) return;
-              setSetScope(null);
-              flashToast(`${t("qzSetsLoadFail")}：${error?.message ?? error}`);
-            });
-        };
-        loaderRef.current = load;
-        load();
-        return () => {
-          alive = false;
-          loaderRef.current = null;
-        };
-      }, [isQSet, req.path, root]);
-
       // 拉范围数据 + 5s 指纹轮询：agent 改了题 / 另一端改了阈值都跟着重读
       react.useEffect(() => {
-        if (isQSet || rel === null) return undefined;
+        if (rel === null) return undefined;
         let alive = true;
         let revKey = "";
         const query = isPage === true ? `rel=${encodeURIComponent(rel)}` : `dir=${encodeURIComponent(rel)}`;
@@ -11580,90 +12085,192 @@ ellipsis，窄列只截字不破版 */
           clearInterval(timer);
           loaderRef.current = null;
         };
-      }, [rel, isPage, isQSet]);
+      }, [rel, isPage]);
 
-      // 页面 / 范围用页面那份掌握度，题集用题集自己那份；渲染统一成一份
-      const progressData = isQSet ? { threshold: setScope?.threshold ?? 3, progress: setScope?.progress ?? {} } : progress;
-      const progressMap = progressData?.progress ?? {};
-      const threshold = progressData?.threshold ?? 3;
-      const list = isQSet ? (setScope === null ? [] : setScope.pages ?? []) : pages ?? [];
-      const loading = isQSet ? setScope === null : pages === null || progress === null;
-      /** 掌握度键：题集里是 "rel|id"（不同页可能有同内容的题） */
-      const recKeyOf = (it) => (isQSet ? it.rel + "|" + it.q.id : it.q.id);
+      const progressMap = progress?.progress ?? {};
+      const threshold = progress?.threshold ?? 3;
+      const list = pages ?? [];
+      const loading = pages === null || progress === null;
 
-      const start = (pool, limit) => {
-        const pickedQs = qzPick(pool, limit);
-        if (pickedQs.length === 0) return;
-        // 题序随机（qzPick 已经打乱），选项顺序照作者写的来（不打乱选项）
-        const items = pickedQs.map((q) => qzMakeItem(q, q.rel ?? ""));
+      /** 测验：整池打乱后按每轮题数切开——要把池子里的题都过一遍，不丢剩下的 */
+      const startQuiz = (pool, perRound) => {
+        if (pool.length === 0) return;
+        const items = qzPick(pool, pool.length).map((q) => qzMakeItem(q, q.rel ?? ""));
+        const size = Math.max(1, Math.min(perRound, items.length));
+        setDrill(null);
+        setQuizItems(items);
+        setQuizAt(size);
+        setQuizPerRound(size);
+        setRound(1);
+        setSession(items.slice(0, size));
+        setCursor(0);
+        setAnswer(qzEmptyAnswer(items[0].q));
+        setChecked(null);
+        setExplainOn(false);
+        setTally({ right: 0, wrong: 0, mastered: 0 });
+        setRoundTally({ right: 0, wrong: 0, mastered: 0 });
+        newMasteredRef.current = new Set();
+        roundNewRef.current = new Set();
+        setStage("session");
+      };
+      /** 刷题：开局快照池子与阈值，每轮从还没过关的题里抽 */
+      const startDrill = (pool, perRound) => {
+        if (pool.length === 0) return;
+        const state = qzDrillStart(pool, perRound, threshold);
+        const items = qzDrillRound(state).map((q) => qzMakeItem(q, q.rel ?? ""));
+        setDrill(state);
+        setRound(1);
+        setRoundRetired(0);
         setSession(items);
         setCursor(0);
         setAnswer(qzEmptyAnswer(items[0].q));
         setChecked(null);
         setExplainOn(false);
         setTally({ right: 0, wrong: 0, mastered: 0 });
-        startMasteredRef.current = new Set(pickedQs.filter((q) => qzIsMastered(progressMap, qzRecKey(q))).map((q) => qzRecKey(q)));
+        setRoundTally({ right: 0, wrong: 0, mastered: 0 });
         newMasteredRef.current = new Set();
+        roundNewRef.current = new Set();
         setStage("session");
       };
-      /** 记一笔「新掌握」：作答、标记掌握、遗忘都走这里（同一题标记后又遗忘会退回） */
-      const qzAccount = (id, mastered) => {
-        if (mastered === true && startMasteredRef.current.has(id) === false) newMasteredRef.current.add(id);
-        else newMasteredRef.current.delete(id);
-        setTally((t) => ({ ...t, mastered: newMasteredRef.current.size }));
+      // 学习完成后直接开这页未掌握的题（入口传 auto）：等题目与进度都到了再开，只开一次
+      const autoDone = react.useRef(false);
+      react.useEffect(() => {
+        if (req.kind !== "page" || req.auto !== "unmastered" || autoDone.current === true || loading) return;
+        autoDone.current = true;
+        const pool = qzFilterStatus(qzQuestionsOf(list), "unmastered", progressMap);
+        if (pool.length === 0) {
+          qzClose();
+          return;
+        }
+        startQuiz(pool, pool.length);
+      });
+
+      /** 记一笔「新掌握」：作答、标记已掌握、遗忘都走这里（同一题标记后又遗忘会退回） */
+      const account = (id, outcome) => {
+        if (outcome.newlyMastered === true) {
+          newMasteredRef.current.add(id);
+          roundNewRef.current.add(id);
+        } else if (outcome.mastered !== true) {
+          newMasteredRef.current.delete(id);
+          roundNewRef.current.delete(id);
+        }
+        setTally((t0) => ({ ...t0, mastered: newMasteredRef.current.size }));
+        setRoundTally((t0) => ({ ...t0, mastered: roundNewRef.current.size }));
+      };
+      const backToScope = () => {
+        setDrill(null);
+        setStage("scope");
+        setSession([]);
+        setCursor(0);
+        setChecked(null);
       };
       const submit = () => {
         if (item === undefined || checked !== null || qzIsAnswered(item.q, answer) === false) return;
         const correct = qzJudge(item, answer);
+        setTally((t0) => ({ ...t0, right: t0.right + (correct ? 1 : 0), wrong: t0.wrong + (correct ? 0 : 1) }));
+        // 本轮计数两种模式都要：测验的轮次小结与刷题的小结读的是同一份
+        setRoundTally((t0) => ({ ...t0, right: t0.right + (correct ? 1 : 0), wrong: t0.wrong + (correct ? 0 : 1) }));
+        if (drill !== null) {
+          // 刷题不落盘：连对只在这一次会话里算，到阈值就过关
+          const res = qzDrillAnswer(drill, { ...item.q, rel: item.rel }, correct);
+          setDrill(res.state);
+          if (res.retiredNow === true) setRoundRetired((n) => n + 1);
+          setChecked({ correct, outcome: { streak: res.streak, mastered: res.retiredNow, newlyMastered: res.retiredNow } });
+          return;
+        }
         setChecked({ correct, outcome: null });
-        setTally((tl) => ({ right: tl.right + (correct ? 1 : 0), wrong: tl.wrong + (correct ? 0 : 1), mastered: tl.mastered }));
-        const call = isQSet
-          ? vaultOp("/dsh-kit/vault/quiz-set-record", { id: req.path, rel: item.rel, qid: item.q.id, correct })
-          : vaultOp("/dsh-kit/vault/quiz-record", { rel: item.rel, id: item.q.id, correct });
-        void call
+        void vaultOp("/dsh-kit/vault/quiz-record", { rel: item.rel, id: item.q.id, correct })
           .then((outcome) => {
             setChecked((c) => (c !== null ? { ...c, outcome } : c));
-            qzAccount(recKeyOf(item), outcome.mastered === true);
+            account(item.q.id, outcome);
           })
           .catch(() => {});
       };
       const next = () => {
         const at = cursor + 1;
         if (at >= session.length) {
-          setStage("result");
-          // 一轮答完：题集的摘要 / 掌握度重取一次（「再来一组」回范围页时数字是新的）
-          if (isQSet) void loaderRef.current?.();
+          if (drill !== null) {
+            setStage("result");
+            return;
+          }
+          // 测验：这一轮答完还有下一轮就先给小结，最后一轮才出总的小结
+          setStage(quizAt < quizItems.length ? "round" : "result");
           return;
         }
         setCursor(at);
         setChecked(null);
         setExplainOn(false);
-        const q = session[at].q;
-        setAnswer(qzEmptyAnswer(q));
+        setAnswer(qzEmptyAnswer(session[at].q));
+      };
+      /** 测验的下一轮：从切好的题里接着取 */
+      const nextQuizRound = () => {
+        const chunk = quizItems.slice(quizAt, quizAt + quizPerRound);
+        if (chunk.length === 0) return;
+        setQuizAt(quizAt + chunk.length);
+        setSession(chunk);
+        setCursor(0);
+        setChecked(null);
+        setExplainOn(false);
+        setAnswer(qzEmptyAnswer(chunk[0].q));
+        setRound((n) => n + 1);
+        setRoundTally({ right: 0, wrong: 0, mastered: 0 });
+        roundNewRef.current = new Set();
+        setStage("session");
+      };
+      const nextRound = () => {
+        if (drill === null || drill.pool.length === 0) return;
+        const items = qzDrillRound(drill).map((q) => qzMakeItem(q, q.rel ?? ""));
+        setRound((n) => n + 1);
+        setRoundRetired(0);
+        setSession(items);
+        setCursor(0);
+        setChecked(null);
+        setExplainOn(false);
+        setAnswer(qzEmptyAnswer(items[0].q));
+        setTally({ right: 0, wrong: 0, mastered: 0 });
+        setStage("session");
       };
       const markMastered = () => {
-        if (item === undefined) return;
+        if (item === undefined || drill !== null) return;
         void vaultOp("/dsh-kit/vault/quiz-mark", { rel: item.rel, id: item.q.id })
           .then((outcome) => {
             setChecked((c) => (c !== null ? { ...c, outcome } : c));
-            qzAccount(item.q.id, outcome.mastered === true);
+            account(item.q.id, outcome);
           })
           .catch(() => {});
       };
       const forget = () => {
-        if (item === undefined) return;
+        if (item === undefined || drill !== null) return;
         void vaultOp("/dsh-kit/vault/quiz-forget", { rel: item.rel, id: item.q.id })
           .then((outcome) => {
             setChecked((c) => (c !== null ? { ...c, outcome } : c));
-            qzAccount(item.q.id, outcome.mastered === true);
+            account(item.q.id, outcome);
           })
           .catch(() => {});
+      };
+      /** 刷题手动过关：不用再连对，直接记满并从剩余里去掉 */
+      const passNow = () => {
+        if (item === undefined || drill === null) return;
+        const q = { ...item.q, rel: item.rel };
+        const after = qzDrillPass(drill, q);
+        if (after.retired > drill.retired) setRoundRetired((n) => n + 1);
+        setDrill(after);
+        setChecked((c) => (c !== null ? { ...c, outcome: { streak: after.threshold, mastered: true, newlyMastered: true } } : c));
+      };
+      /** 刷题重置：连对归零；刚过关的题放回剩余，下一轮重新抽到 */
+      const resetNow = () => {
+        if (item === undefined || drill === null) return;
+        const q = { ...item.q, rel: item.rel };
+        const wasRetired = drill.pool.some((x) => qzDrillKey(x) === qzDrillKey(q)) === false;
+        const after = qzDrillReset(drill, q);
+        if (wasRetired) setRoundRetired((n) => Math.max(0, n - 1));
+        setDrill(after);
+        setChecked((c) => (c !== null ? { ...c, outcome: { streak: 0, mastered: false, newlyMastered: false } } : c));
       };
 
       // 键盘：回车 = 提交/下一题，数字键 = 勾选项，Esc = 关浮层。不写依赖表 =
       // 每渲染重挂，读的永远是本次渲染的题与作答。Esc 在**任何非编辑阶段**都关
-      //（设置 / 作答 / 小结）；「编辑题目」是带未保存内容的输入面，Esc 不关整层
-      //（先改完或用 ✕）
+      //（设置 / 作答 / 轮次小结 / 总小结）；「编辑题目」是带未保存内容的输入面，Esc 不关整层
       react.useEffect(() => {
         const onKey = (e) => {
           if (e.key === "Escape") {
@@ -11698,7 +12305,7 @@ ellipsis，窄列只截字不破版 */
       });
 
       if (root === null) return jsxRuntime.jsx("div", { className: "dshk-quiz", children: jsxRuntime.jsx("div", { className: "dshk-quiz-body", children: jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: t("contentLoading") }) }) });
-      if (root === "" || (!isQSet && rel === null)) {
+      if (root === "" || rel === null) {
         return jsxRuntime.jsx("div", { className: "dshk-quiz", children: jsxRuntime.jsx("div", { className: "dshk-quiz-body", children: jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: t("vaultNotConfigured") }) }) });
       }
       let node = null;
@@ -11707,11 +12314,11 @@ ellipsis，窄列只截字不破版 */
       } else if (stage === "scope") {
         node = jsxRuntime.jsx(VaultQuizScope, {
           isPage,
-          keyed: isQSet,
-          canEdit: !isQSet,
+          canEdit: true,
           pages: list,
-          progress: progressData,
-          onStart: start,
+          progress: progress,
+          onStart: startQuiz,
+          onDrill: startDrill,
           onEdit: (pageRel) => qzOpen({ kind: "page", path: joinRelPath(root, pageRel), title: pageRel.split("/").pop() ?? pageRel }),
           onClose: qzClose,
           onThreshold: (value) => {
@@ -11733,10 +12340,16 @@ ellipsis，窄列只截字不破版 */
         const q = item.q;
         const opts = qzDisplayOptions(item);
         const letterOn = (L) => answer.choice.includes(L);
+        const head = drill !== null
+          ? t("qzDrillProgress").replace("{r}", String(round)).replace("{i}", String(cursor + 1)).replace("{n}", String(session.length))
+          : quizItems.length > quizPerRound
+            ? t("qzQuizRound").replace("{r}", String(round)).replace("{i}", String(cursor + 1)).replace("{n}", String(session.length))
+            : t("qzQuizPlain").replace("{i}", String(cursor + 1)).replace("{n}", String(session.length));
         node = jsxRuntime.jsxs("div", { children: [
           jsxRuntime.jsxs("div", { className: "dshk-quiz-row", children: [
-            jsxRuntime.jsx("span", { className: "dshk-quiz-sub", children: t("qzNofN").replace("{i}", String(cursor + 1)).replace("{n}", String(session.length)) }),
+            jsxRuntime.jsx("span", { className: "dshk-quiz-sub", children: head }),
             jsxRuntime.jsx("span", { className: "dshk-quiz-gap" }),
+            drill !== null ? jsxRuntime.jsx("span", { className: "dshk-quiz-sub", children: t("qzDrillLeft").replace("{n}", String(drill.pool.length)).replace("{m}", String(drill.retired)) }) : null,
             jsxRuntime.jsx("span", { className: "dshk-quiz-kind", children: qzKindLabel(q.type) }),
           ] }),
           jsxRuntime.jsx("div", { className: "dshk-quiz-prog", children: jsxRuntime.jsx("i", { style: { width: `${Math.round(((cursor + (checked !== null ? 1 : 0)) / session.length) * 100)}%` } }) }),
@@ -11805,11 +12418,13 @@ ellipsis，窄列只截字不破版 */
                     checked.outcome !== null && checked.outcome !== undefined
                       ? jsxRuntime.jsx("span", {
                           className: "dshk-quiz-sub",
-                          children: checked.outcome.mastered === true
-                            ? t("qzMastered")
-                            : checked.outcome.capped === true
-                              ? t("qzCapped")
-                              : t("qzMastery").replace("{s}", String(checked.outcome.streak)).replace("{t}", String(threshold)),
+                          children: drill !== null
+                            ? checked.outcome.mastered === true
+                              ? t("qzDrillPassed").replace("{s}", String(checked.outcome.streak)).replace("{t}", String(drill.threshold))
+                              : t("qzStreakOf").replace("{s}", String(checked.outcome.streak)).replace("{t}", String(drill.threshold))
+                            : checked.outcome.mastered === true
+                              ? t("qzMastered")
+                              : t("qzStreakOf").replace("{s}", String(checked.outcome.streak)).replace("{t}", String(threshold)),
                         })
                       : null,
                     q.explain ? jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini", onClick: () => setExplainOn((v) => !v), children: explainOn ? t("qzHideExplain") : t("qzShowExplain") }) : null,
@@ -11821,40 +12436,75 @@ ellipsis，窄列只截字不破版 */
                   : null,
               ] })
             : null,
-          // 题集不给「标记掌握 / 遗忘」：它是临时刷题的进度，长期掌握回页面入口管
-          checked !== null && !isQSet
-            ? jsxRuntime.jsxs("div", { className: "dshk-quiz-act", children: [
-                jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", disabled: qzIsMastered(progressMap, q.id) === true, onClick: markMastered, children: t("qzMark") }),
-                jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: forget, children: t("qzForget") }),
-              ] })
+          // 刷题：过关 / 重置只动这一次会话；测验：标记已掌握 / 遗忘改写页面掌握度
+          checked !== null
+            ? drill !== null
+              ? jsxRuntime.jsxs("div", { className: "dshk-quiz-act", children: [
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", disabled: checked.outcome?.mastered === true, onClick: passNow, children: t("qzDrillPass") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: resetNow, children: t("qzDrillReset") }),
+                ] })
+              : jsxRuntime.jsxs("div", { className: "dshk-quiz-act", children: [
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", disabled: qzIsMastered(progressMap, q.id) === true, onClick: markMastered, children: t("qzMark") }),
+                  jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: forget, children: t("qzForget") }),
+                ] })
             : null,
           jsxRuntime.jsxs("div", { className: "dshk-quiz-foot", children: [
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setStage("scope"), children: t("qzEnd") }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: backToScope, children: drill !== null ? t("qzDrillEnd") : t("qzEnd") }),
             checked !== null
               ? jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", onClick: next, children: cursor + 1 >= session.length ? t("qzSeeResult") : t("qzNext") })
               : jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", disabled: qzIsAnswered(q, answer) === false, onClick: submit, children: t("qzSubmit") }),
           ] }),
         ] });
-      } else if (stage === "result") {
-        const pct = session.length > 0 ? Math.round((tally.right / session.length) * 100) : 0;
+      } else if (stage === "round" && drill === null) {
         node = jsxRuntime.jsxs("div", { className: "dshk-quiz-result", children: [
-          jsxRuntime.jsx("div", { className: "dshk-quiz-resulttitle", children: t("qzResultN").replace("{n}", String(session.length)) }),
+          jsxRuntime.jsx("div", { className: "dshk-quiz-resulttitle", children: t("qzRoundTitle").replace("{r}", String(round)).replace("{n}", String(session.length)) }),
+          jsxRuntime.jsxs("div", { className: "dshk-quiz-statnums", children: [
+            jsxRuntime.jsxs("div", { className: "dshk-quiz-stat", children: [jsxRuntime.jsx("span", { className: "dshk-quiz-statnum", style: { color: "#2f9e44" }, children: roundTally.right }), t("qzStatRight")] }),
+            jsxRuntime.jsxs("div", { className: "dshk-quiz-stat", children: [jsxRuntime.jsx("span", { className: "dshk-quiz-statnum", style: { color: "var(--dsw-alias-danger,#cd3131)" }, children: roundTally.wrong }), t("qzStatWrong")] }),
+            jsxRuntime.jsxs("div", { className: "dshk-quiz-stat", children: [jsxRuntime.jsx("span", { className: "dshk-quiz-statnum", children: roundTally.mastered }), t("qzStatMastered")] }),
+          ] }),
+          jsxRuntime.jsx("div", { className: "dshk-quiz-sub", children: t("qzAnswered").replace("{d}", String(quizAt)).replace("{n}", String(quizItems.length)) }),
+          jsxRuntime.jsxs("div", { className: "dshk-quiz-row", children: [
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: backToScope, children: t("qzEnd") }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", onClick: nextQuizRound, children: t("qzNextRound") }),
+          ] }),
+        ] });
+      } else if (stage === "result" && drill === null) {
+        const pct = quizItems.length > 0 ? Math.round((tally.right / quizItems.length) * 100) : 0;
+        node = jsxRuntime.jsxs("div", { className: "dshk-quiz-result", children: [
+          jsxRuntime.jsx("div", { className: "dshk-quiz-resulttitle", children: t("qzResultN").replace("{n}", String(quizItems.length)) }),
           jsxRuntime.jsxs("div", { className: "dshk-quiz-statnums", children: [
             jsxRuntime.jsxs("div", { className: "dshk-quiz-stat", children: [jsxRuntime.jsx("span", { className: "dshk-quiz-statnum", style: { color: "#2f9e44" }, children: tally.right }), t("qzStatRight")] }),
             jsxRuntime.jsxs("div", { className: "dshk-quiz-stat", children: [jsxRuntime.jsx("span", { className: "dshk-quiz-statnum", style: { color: "var(--dsw-alias-danger,#cd3131)" }, children: tally.wrong }), t("qzStatWrong")] }),
-            jsxRuntime.jsxs("div", { className: "dshk-quiz-stat", children: [jsxRuntime.jsx("span", { className: "dshk-quiz-statnum", children: tally.mastered }), t("qzStatNew")] }),
+            jsxRuntime.jsxs("div", { className: "dshk-quiz-stat", children: [jsxRuntime.jsx("span", { className: "dshk-quiz-statnum", children: tally.mastered }), t("qzStatMastered")] }),
           ] }),
           jsxRuntime.jsx("div", { className: "dshk-quiz-sub", children: t("qzAccuracy").replace("{p}", String(pct)) }),
           jsxRuntime.jsxs("div", { className: "dshk-quiz-row", children: [
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setStage("scope"), children: t("qzAgain") }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: backToScope, children: t("qzAgain") }),
             jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", onClick: qzClose, children: t("qzDone") }),
+          ] }),
+        ] });
+      } else if (stage === "result" && drill !== null) {
+        node = jsxRuntime.jsxs("div", { className: "dshk-quiz-result", children: [
+          jsxRuntime.jsx("div", { className: "dshk-quiz-resulttitle", children: t("qzRoundTitle").replace("{r}", String(round)).replace("{n}", String(session.length)) }),
+          jsxRuntime.jsxs("div", { className: "dshk-quiz-statnums", children: [
+            jsxRuntime.jsxs("div", { className: "dshk-quiz-stat", children: [jsxRuntime.jsx("span", { className: "dshk-quiz-statnum", style: { color: "#2f9e44" }, children: tally.right }), t("qzStatRight")] }),
+            jsxRuntime.jsxs("div", { className: "dshk-quiz-stat", children: [jsxRuntime.jsx("span", { className: "dshk-quiz-statnum", style: { color: "var(--dsw-alias-danger,#cd3131)" }, children: tally.wrong }), t("qzStatWrong")] }),
+            jsxRuntime.jsxs("div", { className: "dshk-quiz-stat", children: [jsxRuntime.jsx("span", { className: "dshk-quiz-statnum", children: roundRetired }), t("qzStatPassed")] }),
+          ] }),
+          jsxRuntime.jsx("div", { className: "dshk-quiz-sub", children: drill.pool.length === 0
+            ? t("qzDrillAllDone").replace("{t}", String(drill.total))
+            : t("qzDrillRest").replace("{n}", String(drill.pool.length)).replace("{r}", String(drill.retired)).replace("{t}", String(drill.total)) }),
+          jsxRuntime.jsxs("div", { className: "dshk-quiz-row", children: [
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: qzClose, children: t("qzDone") }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", disabled: drill.pool.length === 0, onClick: nextRound, children: t("qzNextRound") }),
           ] }),
         ] });
       }
       return jsxRuntime.jsxs("div", { className: "dshk-quiz", children: [
         jsxRuntime.jsxs("div", { className: "dshk-quiz-bar", children: [
           jsxRuntime.jsx("span", { className: "dshk-quiz-title", children: req.title }),
-          isPage === true && stage !== "edit"
+          isPage === true && stage !== "edit" && drill === null
             ? jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setStage("edit"), children: t("qzEdit") })
             : null,
           jsxRuntime.jsx("span", { className: "dshk-quiz-gap" }),
@@ -11863,9 +12513,9 @@ ellipsis，窄列只截字不破版 */
         jsxRuntime.jsx("div", { className: "dshk-quiz-body", children: jsxRuntime.jsx("div", { className: "dshk-quiz-inner", children: node }) }),
       ] });
     }
-    // ── 范围设置：页面入口锁一页、题型 + 掌握状态、数量；范围入口多一层页面勾选。
-    //   题集（keyed）的进度键是 rel|id、页面不给改题（canEdit=false）──
-    function VaultQuizScope({ isPage, keyed, canEdit, pages, progress, onStart, onEdit, onClose, onThreshold }) {
+    // ── 范围设置（测验 / 刷题两个入口）：页面入口锁一页；范围入口多一层页面勾选。
+    //   每轮题数就是切轮 / 每轮抽几道；阈值同时管测验的「已掌握」与刷题的「过关」──
+    function VaultQuizScope({ isPage, canEdit, pages, progress, onStart, onDrill, onEdit, onClose, onThreshold }) {
       const [status, setStatus] = react.useState("unmastered");
       const [kinds, setKinds] = react.useState(QZ_KINDS.slice());
       // null = 跟着页面清单走（新页立刻参与出题）；动过就以此为准
@@ -11876,9 +12526,11 @@ ellipsis，窄列只截字不破版 */
       const progressMap = progress?.progress ?? {};
       const threshold = progress?.threshold ?? 3;
       const chosen = isPage === true || picked === null ? list : list.filter((p) => picked.includes(p.rel));
-      const pool = qzFilterKinds(qzFilterStatus(qzQuestionsOf(chosen, keyed), status, progressMap), kinds);
-      const total = qzStatOf(qzQuestionsOf(list, keyed), progressMap);
-      const effectiveLimit = isPage === true ? QZ_ALL : limit;
+      const pool = qzFilterKinds(qzFilterStatus(qzQuestionsOf(chosen), status, progressMap), kinds);
+      const total = qzStatOf(qzQuestionsOf(list), progressMap);
+      // 每轮题数的上限跟着筛选走：池子里只剩 2 道就显示 2（填过的数留着，池子变大再露出来）
+      const cap = Math.max(1, pool.length);
+      const perRound = Math.min(limit, pool.length);
       const thr = thrDraft ?? threshold;
       const allPicked = picked !== null && picked.length === list.length;
       const seg = (options, value, onChange) =>
@@ -11904,7 +12556,7 @@ ellipsis，窄列只截字不破版 */
                 jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini", onClick: () => setPicked(allPicked ? [] : list.map((p) => p.rel)), children: allPicked ? t("qzNone") : t("qzAll") }),
               ] }),
               jsxRuntime.jsx("div", { className: "dshk-quiz-pages", children: list.map((p) => {
-                const s = qzStatOf(qzQuestionsOf([p], keyed), progressMap);
+                const s = qzStatOf(qzQuestionsOf([p]), progressMap);
                 return jsxRuntime.jsxs("div", { className: "dshk-quiz-prow", children: [
                   chk(picked === null || picked.includes(p.rel), (on) => {
                     const cur = picked === null ? list.map((x) => x.rel) : picked.slice();
@@ -11930,22 +12582,24 @@ ellipsis，窄列只截字不破版 */
         jsxRuntime.jsx("div", { className: "dshk-quiz-row", children: QZ_KINDS.map((k) =>
           chk(kinds.includes(k), (on) => setKinds((ks) => (on === true ? (ks.includes(k) ? ks : ks.concat([k])) : ks.filter((x) => x !== k))), qzKindLabel(k)),
         ) }),
-        isPage === false
-          ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-              jsxRuntime.jsx("div", { className: "dshk-quiz-label", children: t("qzCount") }),
-              seg([
-                { value: "20", label: t("qzCount20") },
-                { value: "50", label: t("qzCount50") },
-                { value: "all", label: t("qzCountAll") },
-              ], limit === QZ_ALL ? "all" : String(limit), (v) => setLimit(v === "all" ? QZ_ALL : Number(v))),
-            ] })
-          : null,
+        // 总题数由勾选与筛选决定；这里只决定一轮切几道、刷题每轮抽几道
+        jsxRuntime.jsxs("div", { children: [
+          jsxRuntime.jsx("div", { className: "dshk-quiz-label", children: t("qzPerRound") }),
+          jsxRuntime.jsx("input", {
+            className: "dshk-quiz-input dshk-quiz-num",
+            type: "number",
+            min: 1,
+            max: cap,
+            value: Math.min(limit, cap),
+            onChange: (e) => setLimit(Math.max(1, Number(e.target.value) || 1)),
+          }),
+        ] }),
         total.total === 0 ? jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: isPage === true ? t("qzEmptyPage") : t("qzEmptyScope") }) : null,
         jsxRuntime.jsxs("div", { className: "dshk-quiz-foot", children: [
-          jsxRuntime.jsx("span", { className: "dshk-quiz-sub", children: t("qzThisMany").replace("{n}", String(Math.min(pool.length, effectiveLimit))) }),
+          jsxRuntime.jsx("span", { className: "dshk-quiz-sub", children: t("qzPoolInfo").replace("{n}", String(pool.length)).replace("{m}", String(perRound)) }),
           jsxRuntime.jsxs("div", { className: "dshk-quiz-foctr", children: [
             jsxRuntime.jsxs("label", { className: "dshk-quiz-row", style: { margin: 0 }, children: [
-              jsxRuntime.jsx("span", { className: "dshk-quiz-sub", children: t("qzThreshold") }),
+              jsxRuntime.jsx("span", { className: "dshk-quiz-sub", title: t("qzThresholdTip"), children: t("qzThreshold") }),
               jsxRuntime.jsx("input", {
                 className: "dshk-quiz-input dshk-quiz-num",
                 type: "number",
@@ -11961,177 +12615,11 @@ ellipsis，窄列只截字不破版 */
               }),
             ] }),
             jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: onClose, children: t("qzCancel") }),
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", disabled: pool.length === 0, onClick: () => onStart(pool, effectiveLimit), children: t("qzStart") }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", disabled: pool.length === 0, onClick: () => onDrill(pool, perRound), children: t("qzDrill") }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", disabled: pool.length === 0, onClick: () => onStart(pool, perRound), children: t("qzQuiz") }),
           ] }),
         ] }),
       ] });
-    }
-
-    // ── 题集名单 + 新建 / 编辑（首页知识集段头的「题集」入口）──
-    //    名单一行：名字 + 共 N 题 · 已掌握 M（＋失效数）；点行开刷，
-    //    右边改名 / 换页、清空掌握度、删除（两步：点一次亮成「删除」）。
-    //    题集里的题还在页面里，改题 / 删页后进度会变成「失效」——摘要里报数，不静默丢。
-    function VaultQuizSetsDialog({ onClose }) {
-      const [sets, setSets] = react.useState(null);
-      const [editing, setEditing] = react.useState(null); // null | "new" | summary
-      const [askDel, setAskDel] = react.useState(null);
-      const reload = () => {
-        kitJson("/dsh-kit/vault/quiz-sets", undefined, (b) => !!b)
-          .then((body) => setSets(Array.isArray(body?.sets) ? body.sets : []))
-          .catch((error) => {
-            setSets([]);
-            flashToast(`${t("qzSetsLoadFail")}：${error?.message ?? error}`);
-          });
-      };
-      react.useEffect(reload, []);
-      const fail = (error) => flashToast(String(error?.message ?? error));
-      const del = (id) => {
-        void vaultOp("/dsh-kit/vault/quiz-set-delete", { id })
-          .then(() => {
-            setAskDel(null);
-            reload();
-            flashToast(t("qzSetDeleted"));
-          })
-          .catch(fail);
-      };
-      const clear = (id) => {
-        void vaultOp("/dsh-kit/vault/quiz-set-clear", { id })
-          .then(() => {
-            reload();
-            flashToast(t("qzSetCleared"));
-          })
-          .catch(fail);
-      };
-      const summary = (s) =>
-        t("qzSetSummary").replace("{t}", String(s.total)).replace("{m}", String(s.mastered)) +
-        (s.invalid > 0 ? " · " + t("qzSetInvalid").replace("{n}", String(s.invalid)) : "");
-      const openSet = (s) => {
-        onClose();
-        qzOpen({ kind: "qset", path: s.id, title: s.name });
-      };
-      if (editing !== null) {
-        return jsxRuntime.jsx(VaultQuizSetEdit, {
-          target: editing === "new" ? null : editing,
-          onBack: () => {
-            setEditing(null);
-            reload();
-          },
-          onClose,
-        });
-      }
-      const body = sets === null
-        ? jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: t("contentLoading") })
-        : sets.length === 0
-          ? jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: t("qzSetsEmpty") })
-          : jsxRuntime.jsx("div", { className: "dshk-quiz-sets", children: sets.map((s) =>
-              jsxRuntime.jsxs("div", { className: "dshk-quiz-setrow", children: [
-                jsxRuntime.jsx("button", {
-                  type: "button",
-                  className: "dshk-quiz-setmain",
-                  title: t("qzSetOpenTip"),
-                  onClick: () => openSet(s),
-                  children: [
-                    jsxRuntime.jsx("span", { className: "dshk-quiz-setname", children: s.name }),
-                    jsxRuntime.jsx("span", { className: "dshk-quiz-setsum", children: summary(s) }),
-                  ],
-                }),
-                jsxRuntime.jsxs("span", { className: "dshk-quiz-setacts", children: [
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini", title: t("qzSetEditTip"), onClick: () => setEditing(s), children: "✎" }),
-                  jsxRuntime.jsx("button", {
-                    type: "button",
-                    className: "dshk-quiz-mini",
-                    title: t("qzSetClearTip"),
-                    disabled: s.mastered === 0,
-                    onClick: () => clear(s.id),
-                    children: "↻",
-                  }),
-                  askDel === s.id
-                    ? jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini is-danger", title: t("qzSetDeleteAsk"), onClick: () => del(s.id), children: t("qzDeleteGo") })
-                    : jsxRuntime.jsx("button", { type: "button", className: "dshk-quiz-mini is-danger", title: t("qzSetDeleteTip"), onClick: () => setAskDel(s.id), children: "🗑" }),
-                ] }),
-              ] }, s.id),
-            ) });
-      return jsxRuntime.jsx(VaultDialog, {
-        title: t("qzSets"),
-        wide: true,
-        onClose,
-        children: jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-          jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("qzSetsHint") }),
-          jsxRuntime.jsx("div", { className: "dshk-quiz-row", style: { justifyContent: "flex-end" }, children:
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-save", onClick: () => setEditing("new"), children: t("qzSetNew") }),
-          }),
-          body,
-        ] }),
-      });
-    }
-
-    /** 新建 / 编辑：名字 + 勾页面（只列有题的页）。题本身还在页面里，这里只是攒到一起。 */
-    function VaultQuizSetEdit({ target, onBack, onClose }) {
-      const isNew = target === null;
-      const [name, setName] = react.useState(isNew ? "" : target.name);
-      const [picked, setPicked] = react.useState(isNew ? [] : target.pages.slice());
-      const [pages, setPages] = react.useState(null);
-      const [saving, setSaving] = react.useState(false);
-      react.useEffect(() => {
-        kitJson("/dsh-kit/vault/quiz-pages", undefined, (b) => !!b)
-          .then((body) => setPages(Array.isArray(body?.pages) ? body.pages : []))
-          .catch(() => setPages([]));
-      }, []);
-      const toggle = (rel) => {
-        setPicked((prev) => (prev.includes(rel) ? prev.filter((r) => r !== rel) : prev.concat([rel])));
-      };
-      const save = () => {
-        if (saving || name.trim() === "" || picked.length === 0) return;
-        setSaving(true);
-        void vaultOp("/dsh-kit/vault/quiz-set-save", { id: isNew ? null : target.id, name, pages: picked })
-          .then(() => {
-            flashToast(t("qzSetSaved"));
-            onBack();
-          })
-          .catch((error) => {
-            flashToast(String(error?.message ?? error));
-            setSaving(false);
-          });
-      };
-      const list = pages === null
-        ? jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: t("contentLoading") })
-        : pages.length === 0
-          ? jsxRuntime.jsx("div", { className: "dshk-quiz-hint", children: t("qzSetNoPages") })
-          : jsxRuntime.jsx("div", { className: "dshk-quiz-pages", children: pages.map((p) =>
-              jsxRuntime.jsxs("label", { className: "dshk-quiz-prow", children: [
-                jsxRuntime.jsx("input", { type: "checkbox", checked: picked.includes(p.rel), onChange: () => toggle(p.rel) }),
-                jsxRuntime.jsx("span", { className: "dshk-quiz-grow", style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: p.rel }),
-                jsxRuntime.jsx("span", { className: "dshk-quiz-sub", style: { flex: "none" }, children: t("qzPageCount").replace("{n}", String(p.count)) }),
-              ] }, p.rel),
-            ) });
-      return jsxRuntime.jsx(VaultDialog, {
-        title: isNew ? t("qzSetNew") : t("qzSetEdit"),
-        wide: true,
-        onClose,
-        children: jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
-          jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("qzSetName") }),
-          jsxRuntime.jsx("input", {
-            className: "dshk-quiz-input",
-            value: name,
-            maxLength: 40,
-            placeholder: t("qzSetNamePh"),
-            onChange: (e) => setName(e.target.value),
-          }),
-          jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("qzSetPages") }),
-          jsxRuntime.jsx("div", { className: "dshk-quiz-hint", style: { padding: "0" }, children: t("qzSetPagesHint") }),
-          list,
-          jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: onBack, children: t("qzSetCancel") }),
-            jsxRuntime.jsx("button", {
-              type: "button",
-              className: "dshk-btn-save",
-              disabled: saving || name.trim() === "" || picked.length === 0,
-              onClick: save,
-              children: t("qzSetSave"),
-            }),
-          ] }),
-        ] }),
-      });
     }
 
     // ── 出题：题目列表 + 表单。增删改都是**全量写回**这一页的题目文件（宿主按内容
@@ -12702,7 +13190,10 @@ ellipsis，窄列只截字不破版 */
                     type: "button",
                     className: "dshk-btn-cancel",
                     title: t("studyCompleteTip"),
-                    onClick: () => run("/dsh-kit/vault/study-complete", { rel }, (next) => say(t("studyCompleteDone").replace("{n}", String(next?.record?.reps ?? 0)).replace("{date}", String(next?.record?.dueAt ?? "")))),
+                    onClick: () => run("/dsh-kit/vault/study-complete", { rel }, (next) => {
+                      say(t("studyCompleteDone").replace("{n}", String(next?.record?.reps ?? 0)).replace("{date}", String(next?.record?.dueAt ?? "")));
+                      askStudyQuiz(rel, name);
+                    }),
                     children: t("studyComplete"),
                   }, "complete"),
                   jsxRuntime.jsx("button", {
@@ -12778,6 +13269,7 @@ ellipsis，窄列只截字不破版 */
                         setDialog(null);
                         setState(body && body.state ? body.state : null);
                         say(t("studyFirstDone"));
+                        askStudyQuiz(rel, pageBasename(path));
                       })
                       .catch((error) => say(t("studyOpFail").replace("{error}", String(error?.message ?? error))));
                   },
@@ -12913,8 +13405,27 @@ ellipsis，窄列只截字不破版 */
     exports.VaultQuizModal = VaultQuizModal;
     exports.VaultQuizEntry = VaultQuizEntry;
     exports.VaultQuizScope = VaultQuizScope;
-    exports.VaultQuizSetsDialog = VaultQuizSetsDialog;
-    exports.VaultQuizSetEdit = VaultQuizSetEdit;
+    exports.qzDrillKey = qzDrillKey;
+    exports.matIsMaterialLink = matIsMaterialLink;
+    exports.matPageRange = matPageRange;
+    exports.matPageLabel = matPageLabel;
+    exports.matAnchorOfPageInput = matAnchorOfPageInput;
+    exports.matShortName = matShortName;
+    exports.matResolve = matResolve;
+    exports.matSetDirOf = matSetDirOf;
+    exports.matItemsOfPage = matItemsOfPage;
+    exports.requestPdfJump = requestPdfJump;
+    exports.pdfJumpPeek = pdfJumpPeek;
+    exports.pdfJumpTake = pdfJumpTake;
+    exports.qzDrillStart = qzDrillStart;
+    exports.qzDrillRound = qzDrillRound;
+    exports.qzDrillAnswer = qzDrillAnswer;
+    exports.qzDrillPass = qzDrillPass;
+    exports.qzDrillReset = qzDrillReset;
+    exports.StudyQuizPrompt = StudyQuizPrompt;
+    exports.askStudyQuiz = askStudyQuiz;
+    exports.dismissStudyQuiz = dismissStudyQuiz;
+    exports.studyQuizAskGet = () => studyQuizAsk;
     exports.VaultQuizQuestions = VaultQuizQuestions;
     exports.VaultQuizForm = VaultQuizForm;
     exports.QuizMdView = QuizMdView;

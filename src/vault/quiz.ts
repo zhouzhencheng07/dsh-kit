@@ -82,7 +82,7 @@ export interface QuizRecord {
   streak: number
   mastered: boolean
   updatedMs: number
-  /** 最近一次算数的答对日（YYYY-MM-DD）：同一天重复答对不再涨连击（空 = 没记过） */
+  /** 最近一次答对的日期（YYYY-MM-DD，空 = 没记过）：只作记录，不再限制同一天涨几次 */
   lastDay?: string
 }
 
@@ -110,8 +110,6 @@ export interface QuizOutcome {
   streak: number
   mastered: boolean
   newlyMastered: boolean
-  /** 今天这道题已经涨过连击：本次答对没加分（连击与掌握都不变） */
-  capped: boolean
 }
 
 /** 题目与掌握度的指纹：范围内的文件数 + 最新 mtime */
@@ -1062,25 +1060,20 @@ function applyEdit(p: QuizProgress, oldId: string, newId: string, keep: boolean)
 }
 
 /** 记一次作答：答对连击 +1（达阈值即掌握），答错连击归零并撤销掌握。
- *  **同一道题一天最多涨一次**——题还在池子里、想刷几遍都行，但当天再答对不加分，
- *  这样「一天连点三次就算掌握」刷不出来，掌握至少得跨几天。today 只给单测注入。 */
+ *  同一天再答对照样涨连击（题照刷、掌握跟手）；lastDay 只记最近一次答对日。
+ *  today 只给单测注入。 */
 export function record(root: string, rel: string, id: string, correct: boolean, today: string = localToday()): QuizOutcome {
   const r = safeQuizRel(rel)
   const threshold = readSettings(root).threshold
   const p = readProgressFile(root, r)
   let newly = false
-  let capped = false
   const entry: QuizRecord = p.progress[id] ?? { streak: 0, mastered: false, updatedMs: 0 }
   if (correct) {
-    if (entry.lastDay === today) {
-      capped = true
-    } else {
-      entry.streak = Math.min(entry.streak + 1, 0xffffffff)
-      entry.lastDay = today
-      if (entry.streak >= threshold && !entry.mastered) {
-        entry.mastered = true
-        newly = true
-      }
+    entry.streak = Math.min(entry.streak + 1, 0xffffffff)
+    entry.lastDay = today
+    if (entry.streak >= threshold && !entry.mastered) {
+      entry.mastered = true
+      newly = true
     }
   } else {
     entry.streak = 0
@@ -1089,7 +1082,7 @@ export function record(root: string, rel: string, id: string, correct: boolean, 
   entry.updatedMs = nowMs()
   p.progress[id] = entry
   writeProgressFile(root, r, p)
-  return { streak: entry.streak, mastered: entry.mastered, newlyMastered: newly, capped }
+  return { streak: entry.streak, mastered: entry.mastered, newlyMastered: newly }
 }
 
 /** 手动标记掌握：连击直接设成阈值（一步跳满） */
@@ -1105,7 +1098,7 @@ export function markMastered(root: string, rel: string, id: string): QuizOutcome
   entry.updatedMs = nowMs()
   p.progress[id] = entry
   writeProgressFile(root, r, p)
-  return { streak: threshold, mastered: true, newlyMastered: !was, capped: false }
+  return { streak: threshold, mastered: true, newlyMastered: !was }
 }
 
 /** 遗忘（答对后自觉没底也可用）：连击归零并撤销掌握 */
@@ -1118,7 +1111,7 @@ export function forget(root: string, rel: string, id: string): QuizOutcome {
   entry.updatedMs = nowMs()
   p.progress[id] = entry
   writeProgressFile(root, r, p)
-  return { streak: 0, mastered: false, newlyMastered: false, capped: false }
+  return { streak: 0, mastered: false, newlyMastered: false }
 }
 
 /** 改阈值（1..20）：已经掌握但连击数低于新阈值的题刷回未掌握 */
