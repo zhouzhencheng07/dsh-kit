@@ -1,4 +1,4 @@
-// 项目根定位：自起点向上找 .git（目录或文件都算）。技能池分组与 git 端点共用。
+// 项目根定位：自起点向上找 .git（目录或文件都算）。与 git 端点共用。
 import fs from 'node:fs';
 import path from 'node:path';
 /** 自 start 向上找 .git（目录或文件都算），找不到退回 start 本身。

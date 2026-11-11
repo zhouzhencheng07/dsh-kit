@@ -4,5 +4,5 @@ release/
 # 本地开发约定
 AGENTS.md
 
-# dsh-kit 技能池挂载点
+# 工作区技能（各自独立仓库，不进本仓库）
 /.agents/skills/

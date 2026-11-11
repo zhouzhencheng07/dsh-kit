@@ -266,7 +266,7 @@ async function checkAdopt() {
   const read = (rel) => fs.readFileSync(__dirname + "/../" + rel, "utf8");
   const bundleSrc = read("client/bundle.js");
   // 套件没有根入口模块：查的是「浏览器的装配没渗进别的组件行」
-  const hostSrc = ["chat", "files", "logs", "monitor", "phone", "search", "skills", "terminal"]
+  const hostSrc = ["chat", "files", "logs", "monitor", "phone", "search", "terminal"]
     .map((d) => read(`src/${d}/index.ts`)).join("\n");
   const compSrc = read("src/browser/index.ts");
   const coreSrc = read("src/core/tools.ts");

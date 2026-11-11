@@ -18,8 +18,8 @@ const read = (rel) => fs.readFileSync(__dirname + "/../" + rel, "utf8");
   const pkg = JSON.parse(read("package.json"));
   const ids = [...patchSrc.matchAll(/^ {4}- id: (.+)$/gm)].map((m) => m[1].trim());
   check(
-    "日志行排在功能行之后、载体行之前（两个都不是页面能力：日志是排障用的，载体不对应功能，都不跟功能行抢位置）；行数 = 十个组件行 + 载体行，载体行 id 是数字字面量（宿主据此把它排除在组件列表外）",
-    ids[ids.length - 2] === "logs" && /^\d+$/.test(ids[ids.length - 1]) && ids.length === 11 &&
+    "日志行排在功能行之后、载体行之前（两个都不是页面能力：日志是排障用的，载体不对应功能，都不跟功能行抢位置）；行数 = 九个组件行 + 载体行，载体行 id 是数字字面量（宿主据此把它排除在组件列表外）",
+    ids[ids.length - 2] === "logs" && /^\d+$/.test(ids[ids.length - 1]) && ids.length === 10 &&
       patchSrc.includes("      name: dsh-kit/logs"),
   );
   check("exports 子路径与 locale 子路径齐备", !!pkg.exports["./logs"] && !!pkg.exports["./logs/locale/*.json"]);
@@ -67,9 +67,9 @@ const read = (rel) => fs.readFileSync(__dirname + "/../" + rel, "utf8");
       activation.includes("exports.logs"),
   );
   check(
-    "激活表与十个组件行一一对应（少一个 = 那个组件的 apply 永不执行）",
-    ["files", "chat", "monitor", "terminal", "skills", "search", "browser", "vault", "phone", "logs"]
-      .every((k) => activation.includes("exports." + k)) && activation.length === 10,
+    "激活表与九个组件行一一对应（少一个 = 那个组件的 apply 永不执行）",
+    ["files", "chat", "monitor", "terminal", "search", "browser", "vault", "phone", "logs"]
+      .every((k) => activation.includes("exports." + k)) && activation.length === 9,
   );
   check(
     "上报口改名 /dsh-kit/logs：旧口不再出现",

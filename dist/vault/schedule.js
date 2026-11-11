@@ -4,7 +4,7 @@
 // $DSH_HOME/dsh-kit/schedule/，与知识库 vaultRoot 互不相干），以及派生层：
 // 区间重复展开、统计。UI 组件（可编辑面板）在 client/bundle.js 的 vaultModule；
 // HTTP 端点（读写，UI 的写路径）在 src/vault/index.ts。agent 侧不注册工具——
-// 日程编辑走技能池的技能，直接改 events/<id>.json（格式与校验见该技能）。
+// 日程编辑由 agent 直接改 events/<id>.json（格式与校验见本文件）。
 //
 // 设计要点：
 // - 日程是强结构数据（起止/重复/位置），以 JSON 存 $DSH_HOME，不进知识库目录；

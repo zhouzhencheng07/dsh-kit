@@ -95,7 +95,7 @@ DSH 原版形态；插件页里本插件**十行组件 + 列表最末一行载�
   各存一套真源；启动时自动补齐在学页的复习待办。
   **计时是全局一只表**：侧栏日程 tab 顶部「开始计时」可挂一条未完成待办或填标题起独立计时，
   右下角悬浮球走秒、展开后停表（面板全关也在）；停了的那段上网格、进统计。
-  **agent 侧没有日程工具**：编辑走技能池的技能，按同一份结构直接读写
+  **agent 侧没有日程工具**：编辑由 agent 按同一份结构直接读写
   `$DSH_HOME/dsh-kit/schedule/`（一条一文件：`events/` + `entries/` + `timer.json`），
   与面板写同一处——别处写进来的条目与计时一样进面板，两边都不覆盖对方的改动
 - **对话小窗**（本组件行开关 = 总开关）：屏幕边缘常驻一枚把手，可贴左或贴右、纵向停在哪都行（拖到哪边就贴哪边，刷新后还在原处），点开是一扇**浮窗对话**——内核是官方对话工厂的 embedded 变体（消息流、工具调用、附件都走官方），小窗自己保留一条会话，与主面各看各的（两边永不同一条：宿主一条会话只有一个输入框，同一条会互相抢）；标题条的 **⇄** 把两边互换——主面接手小窗这条、小窗接手主面那条。快捷键 **Ctrl+Alt+;** 开关小窗（收起态按它展开，展开时按它收起）。本行配置页两个开关：记不记住浮窗的位置与尺寸、记不记住上次用的工作区与会话
@@ -105,17 +105,6 @@ DSH 原版形态；插件页里本插件**十行组件 + 列表最末一行载�
   截图（多模态模型直看，否则落盘）；面板显示 agent 浏览器的实时画面
   （画面按面板尺寸取像素密度，帧率封顶 30fps，拖动面板即时跟上），
   点击/滚轮/键入直接作用于这一签对应的页面（人机共驾）；工具栏「＋」新开一页即新开一张签，关签即关页；agent 每次导航自动把那一页的签拽到眼前
-- **技能管理**（设置面板新页）：工作区/用户级/技能池三组展示，支持移动、删除、
-  禁用/启用；被同名技能覆盖者打虚线徽标；技能只有移动、没有复制（副本与本体分叉），
-  且挂了钩的就不给移动——挂载点要动先卸载，池里被工作区挂着的要移出先让各挂载方卸载；
-  技能池里的技能可挂载到工作区共用（池那一份是本体，平铺 `.md` 搬进池会包成同名目录；
-  池组只列还没挂到本工作区的，已挂的那条在「工作区」组里、行上给「卸载」；实体技能排在上面、
-  挂载链接排在下面；池技能可编成**组合**（如 word/excel/ppt 编成「办公」，清单存插件数据）
-  整组挂载/卸载——批量按钮按状态翻转（挂满只有「卸载全部」，没挂满只有「挂载全部」并只补齐缺的那些），
-  一个技能只属于一个组合——归属只在「技能组合」里改：编辑器里点选成员，选中已在别组的即从原组摘出来；
-  组合行还标「已挂载 x/y」（被单独卸载一个也看得出来））；
-  技能自带的仓库与历史归技能自己（插件不动池里的 git），每个技能行
-  一枚「在应用里打开」把这一份交给本机应用——看历史、写提交、回滚都在那儿做
 - **手机访问**（设置面板新页；本组件行开关 = 总开关，关掉即网关与页面整体退场）：
   手机扫码连上本机 dsh web——令牌鉴权网关（端口可改），默认每次启动关闭；局域网与远程
   双通道，HTTP/WS 全量透传；远程视图下把只能在电脑上生效的入口（在应用中打开、添加
@@ -159,7 +148,7 @@ DSH 原版形态；插件页里本插件**十行组件 + 列表最末一行载�
   **网页搜索行**只有搜索结果条数（行开关 = 总开关，关掉即回官方搜索）；
   **内置浏览器行**管「对话链接改投内置浏览器」与「隐藏官方『浏览器』入口」（行开关 = 总开关）；
   **用量与监视行**管余额与用量芯片开关、桌面通知与 OpenCode Go 会话头注入；**文件树行**
-  管文件树开关与「隐藏官方『工作区文件』入口」；**终端**与**技能**两行没有配置
+  管文件树开关与「隐藏官方『工作区文件』入口」；**终端**行没有配置
   字段（行开关 = 唯一开关，关掉即入口消失），**运行日志行**同样没有配置字段（写不写日志文件就是它的行开关，级别仍走 `DSH_KIT_LOG` 环境变量）；载体行没有配置字段也不该被关（关掉 = 本插件界面整体消失）；保存即写入 profile 并热生效（部分启动期门控在重启 dsh 后生效）
 
 ## 安装与更新
@@ -193,21 +182,20 @@ dsh plugin --profile web update dsh-kit
 ## 工作原理
 
 - `src/*.ts` → `dist/`（tsc 构建产物入库）：宿主半边——文件树
-  （`/tree`、`/read`、`/raw`、`/fs/op`、`/upload`）、技能池、知识库
+  （`/tree`、`/read`、`/raw`、`/fs/op`、`/upload`）、知识库
   （`/vault/*`）、日程（`/schedule/*`）、浏览器等端点各归组件；`/vendor/*` 静态资源也按
   用它的组件行走（xterm → 终端行，二维码 → 手机访问行，TipTap / KaTeX / mermaid /
   pdf.js → 知识库行）
 - `client/bundle.js`：浏览器半边（手写 ModuleLoader bundle，**零构建**）——根包只剩跨槽
   共享底座（kitUi 开合状态、配置页骨架、入口座、文件预览下载钮）；文件树、终端、
-  技能、用量监视、网页搜索、内置浏览器、知识库·日程、手机访问、对话小窗、运行日志十个组件的 client 半边同住本 bundle
+  用量监视、网页搜索、内置浏览器、知识库·日程、手机访问、对话小窗、运行日志九个组件的 client 半边同住本 bundle
   （各带 `module/exports` 隔离壳，右栏 pane 正文经 `sidebar.right.pane.tab` 提供、
   配置页经 `plugins.row.config`；终端坞引擎为官方 `webTerminals` 服务）
-- `src/core`、`src/files`、`src/chat`、`src/skills`、`src/terminal`、`src/monitor`、`src/browser`、
+- `src/core`、`src/files`、`src/chat`、`src/terminal`、`src/monitor`、`src/browser`、
   `src/vault`、`src/phone`：组件按目录分边界（0.5.3 单包组件化，组件 = patch 行而非独立包）——`core` 宿主共享库
   （同源校验、回收站删除、文本解码、dsh-tools 加载、日志）；`files` 挂 tree/
   read/raw/fs-op 端点 + 文件树面板；`chat` 只挂 `/dsh-kit-chat/config`
-  探针（对话内核与外壳都在 client 半边，会话/工作区全走官方服务）；`skills` 挂 `/dsh-kit/skills` 与
-  `/dsh-kit/skills/op` + `/dsh-kit-skills/config` 探针（技能池管理页）；`terminal` 挂
+  探针（对话内核与外壳都在 client 半边，会话/工作区全走官方服务）；`terminal` 挂
   `/dsh-kit-terminal/config` 探针（终端入口与坞）；`monitor` 挂 `/dsh-kit/usage` + 用量
   芯片 / 会话通知 + OpenCode Go 会话头按会话注入（配置页「模型请求」页签可关）；
   `browser` 挂 7 个 `browser_*` 工具 +
@@ -215,7 +203,7 @@ dsh plugin --profile web update dsh-kit
   探针（右栏浏览器签、人机共驾、链接改投）；`vault` 挂 `/dsh-kit/vault/*`（索引 / 搜索 /
   单页 mtime / 目录级文件管理 / 正文写回 mtime CAS / 粘贴图片入库 / `/dsh-kit/vault/file`
   库内 PDF 字节通道）、`/dsh-kit/schedule/*`（数据、统计与面板写路径）与
-  `/dsh-kit-vault/config` 探针（知识库·日程行；日程编辑走技能池的 `schedule-editing` 技能）；
+  `/dsh-kit-vault/config` 探针（知识库·日程行；日程编辑由 agent 按同一份结构直接读写）；
   `phone` 挂 `/dsh-kit/phone/*`（状态 / 链接 / 轮换 / 启停）与 `/dsh-kit-phone/config`
   探针，并起对外网关（手机访问行）。
   行经根包 `exports` 子路径（`dsh-kit/files` 等）由 `cordis.patch.yml` 物化
@@ -226,8 +214,8 @@ dsh plugin --profile web update dsh-kit
 - `src/search/`：网页搜索组件——`web-search.ts` 把 web seam 的 provider 指向 `free-search`
   并注册免 key 引擎链（`engine-chain.ts` + `engines/*`）；组件行关掉 = 不接管 seam =
   base 钉的官方搜索原样生效
-- `cordis.patch.yml`：十个组件行（files / chat / vault / terminal /
-  browser / skills / phone / monitor / search / logs，行序即插件页显示顺序）insert 进 bundle 层（组件 = 本包的 exports 子路径，见
+- `cordis.patch.yml`：九个组件行（files / chat / vault / terminal /
+  browser / phone / monitor / search / logs，行序即插件页显示顺序）insert 进 bundle 层（组件 = 本包的 exports 子路径，见
   `dsh-kit/terminal` 等），末尾跟一行**载体行**（`name: dsh-kit`，浏览器半边的挂载点，不伺服任何能力，故排在功能行之后）；
   不 patch 任何官方行（每行 id 显式且稳定：
   匿名行的随机 id 每次 profile 写入都会换 → 该行重挂 → 浏览器半边整包重载）

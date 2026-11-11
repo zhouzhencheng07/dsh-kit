@@ -3,7 +3,7 @@
 // 能力本体在 ./scanner.ts（VaultScanner：md 目录扫描索引 / wikilink 提取 / 全文
 // 搜索，只读）、./fs.ts（树上的新建 / 重命名 / 移动 / 导入 / 删除，删除走回收站）
 // 与 ./schedule.ts（日程结构化存储与查询派生）；本文件是组件的装配面：端点、
-// 配置与 client 可达性探针。agent 侧不注册工具——日程编辑走技能池的技能。
+// 配置与 client 可达性探针。agent 侧不注册工具——日程编辑由 agent 直接读写文件。
 // 组件行关闭 = 本模块不物化 = 端点全 404，client 半边探到 404 后整体不注册（侧栏
 // 索引、右栏知识库/日程签、左栏底部入口钮、对话路径改投全不出现）——行开关就是
 // 这块能力的总开关。
@@ -83,7 +83,7 @@ export async function apply(ctx, config = {}) {
         return out;
     };
     // ── 日程模块（./schedule.ts）：结构化日程 / 待办 ──
-    //   agent 侧不注册工具——日程编辑走技能池的技能（直接改 events/<id>.json）；
+    //   agent 侧不注册工具——日程编辑由 agent 直接改 events/<id>.json；
     //   面板在 client/bundle.js 的 vaultModule，读写经下面的 /dsh-kit/schedule/* 端点。
     const scheduleStore = syncScheduleStore();
     // ── 知识库扫描器（./scanner.ts）：提到 apply 级——webServer 注入可能重进，

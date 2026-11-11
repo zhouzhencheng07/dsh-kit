@@ -642,7 +642,7 @@ async function checkApply() {
   const read = (rel) => fs.readFileSync(__dirname + "/../" + rel, "utf8");
   const bundleSrc = read("client/bundle.js");
   // 套件没有根入口模块：查的是「知识库的装配没渗进别的组件行」
-  const hostSrc = ["browser", "chat", "files", "logs", "monitor", "phone", "search", "skills", "terminal"]
+  const hostSrc = ["browser", "chat", "files", "logs", "monitor", "phone", "search", "terminal"]
     .map((d) => read(`src/${d}/index.ts`)).join("\n");
   const compSrc = read("src/vault/index.ts");
   const patchSrc = read("cordis.patch.yml");
@@ -789,7 +789,7 @@ async function checkApply() {
     "组件行中文名与描述在 locale/vault（宿主按行 name 全串解析）",
     read("locale/vault/zh.json").includes("知识库 · 日程") && read("locale/vault/en.json").includes("Knowledge base · Schedule"),
   );
-  // 卡片文案是给用户看的承诺：退役的能力不能再挂在上面（日程工具已改成技能池技能）
+  // 卡片文案是给用户看的承诺：退役的能力不能再挂在上面（日程编辑走 agent 直接改文件）
   check(
     "行卡片文案不承诺已退役的日程 agent 工具（卡片里不出现 schedule_*）",
     !read("locale/vault/zh.json").includes("schedule_") && !read("locale/vault/en.json").includes("schedule_"),

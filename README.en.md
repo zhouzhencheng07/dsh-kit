@@ -20,7 +20,7 @@ which one that slot shows; the conversation
 column stays put. Every capability is a **component row** you can
 switch off independently on the Plugins page — turning a row off removes its endpoints,
 agent tools and UI entries together; with all rows off, dsh is stock again. The pack shows
-**ten component rows plus a carrier row at the very bottom of the list** — the carrier serves
+**nine component rows plus a carrier row at the very bottom of the list** — the carrier serves
 nothing, it is only the
 mount point for this package's browser half (the host attaches a package's client half to
 the row whose name equals the package name, so deleting it makes every capability vanish
@@ -148,8 +148,7 @@ from the page). It stays in the list: **do not turn it off**.
   global timer**: "Start timer" in the schedule cell attaches an unfinished task or takes a title for
   a standalone run, the floating ball at the bottom right keeps the seconds and stops it (it stays
   up with every panel closed), and closed segments land on the grid and in the stats; **there are
-  no schedule tools on the agent side** — editing goes through a skill-pool skill that reads and
-  writes the same files under `$DSH_HOME/dsh-kit/schedule/`
+  no schedule tools on the agent side** — editing reads and writes the same files under `$DSH_HOME/dsh-kit/schedule/`
   (`events/` + `entries/` + `timer.json`, one entry per file) exactly like the panel does:
   entries written by other programs show up in the panel, and neither side overwrites
   what the other changed
@@ -163,14 +162,6 @@ from the page). It stays in the list: **do not turn it off**.
   the agent's browser live — your clicks/wheel/keys act on the page behind that very tab
   (shared control); the toolbar's ＋ opens a page as a new tab and closing a tab closes its
   page; every agent navigation brings that page's tab to the front
-- **Skill management** (new Settings page): workspace / user-level / skill-pool groups with
-  move, delete, disable/enable (move only — no copy, otherwise copies drift (anything under a mount is not movable: a link must be unmounted first, and a pool skill other workspaces mount must have those mounts released first); a flat `.md`
-  dropped into the pool is wrapped into a same-named directory, and the row shows how many
-  workspaces mount it (one marker tells how many and whether this workspace is one of them); pool skills can be bundled into a **group** (e.g. word/excel/ppt as "Office", stored in the plugin data) and mounted or unmounted as a set — one button flips with the state (fully mounted = "Unmount all", otherwise "Mount all", which only fills the gaps); a skill belongs to one group only, chosen from a dropdown on its pool row ("No group" clears it), and skills already in another group are not offered in the group editor; a group row also shows "Mounted x/y" (unmounting one member individually shows up there); the pool header filters by mounted/not-mounted,
-  and a skill mounted in this workspace is badged with its button switched to "Unmount"); a pool skill's own repository and history stay with the skill (the plugin does not
-  touch git in the pool), and a control in the pool header hands the pool directory to an installed
-  application — history, commits and rollbacks happen there; same-name skills shadowed by
-  another root get a dashed badge
 - **Phone access** (new Settings page; the component row switch is the master switch —
   turn it off and both the gateway and the page are gone): scan a QR code to reach the
   local dsh web — token-gated gateway (editable port), off on every startup by default;
@@ -221,7 +212,7 @@ from the page). It stays in the list: **do not turn it off**.
   the **usage & monitoring row** covers the balance chip
   switch, monitor parameters, desktop notifications and OpenCode session-header injection; the **file tree row**
   covers the file-tree switch plus hiding the official Workspace Files
-  entry. The **terminal** and **skills** rows have no config field (the row switch is the only
+  entry. The **terminal** row has no config field (the row switch is the only
   switch — turning it off hides the entry); the **runtime log row** has no config field either
   (its row switch is whether log files get written; the level still comes from the
   `DSH_KIT_LOG` environment variable). The carrier row has no config field and must stay on
@@ -264,24 +255,23 @@ the WebSocket base the host injects).
 
 - `src/*.ts` → `dist/` (committed tsc output): host side — file-tree
   (`/tree`, `/read`, `/raw`, `/fs/op`,
-  `/upload`), skill-pool, vault (`/vault/*`), schedule (`/schedule/*`) and
+  `/upload`), vault (`/vault/*`), schedule (`/schedule/*`) and
   browser endpoints belong to their components; the `/vendor/*` static assets are
   registered by the component that uses them (xterm → terminal, qrcode → phone access,
   TipTap / KaTeX / mermaid / pdf.js → vault)
 - `client/bundle.js`: browser side (hand-written ModuleLoader bundle, **no build**) —
   the root package keeps only the cross-slot base (kitUi open/close state, the config-page
   skeleton, entry seats, the preview download button); the client halves of the file-tree /
-  terminal, skills, usage-monitor, web-search, built-in-browser,
+  terminal, usage-monitor, web-search, built-in-browser,
   knowledge-base · schedule and phone-access components live in this same bundle as isolated component
   modules (right-bar pane bodies are served through `sidebar.right.pane.tab`, config pages
   through `plugins.row.config`; the terminal dock renders over the official
   `webTerminals` engine)
-- `src/core`, `src/files`, `src/skills`, `src/terminal`, `src/monitor`, `src/browser`,
+- `src/core`, `src/files`, `src/terminal`, `src/monitor`, `src/browser`,
   `src/vault`, `src/phone`: component boundaries as directories (0.5.3 single-package components — a component is a patch
   row, not a package) — `core` is the host shared library (same-origin check, recycle-bin
   delete, text decoding, dsh-tools loading, logging);
-  `files` serves tree/read/raw/fs-op endpoints + the file tree panel; `skills` serves `/dsh-kit/skills` and
-  `/dsh-kit/skills/op` plus the `/dsh-kit-skills/config` probe (skill-pool manager page);
+  `files` serves tree/read/raw/fs-op endpoints + the file tree panel;
   `terminal` serves the `/dsh-kit-terminal/config` probe (terminal toggle and dock);
   `monitor` serves `/dsh-kit/usage` + usage chip / session notifications and the
   per-session OpenCode session-header injection (switchable on its
@@ -291,7 +281,7 @@ the WebSocket base the host injects).
   (index / search / per-page mtime / directory-level file management / body write-back with
   mtime CAS / pasted-image upload), `/dsh-kit/schedule/*`
   (data, stats and the panel write path) and the `/dsh-kit-vault/config` probe (knowledge
-  base · schedule row; schedule editing goes through the `schedule-editing` skill); `phone` serves
+  base · schedule row; schedule editing reads and writes the same files); `phone` serves
   `/dsh-kit/phone/*` (status / links / rotation / start-stop) plus the
   `/dsh-kit-phone/config` probe and starts the outward gateway (phone-access row).
   Rows are materialized by the root
@@ -303,8 +293,8 @@ the WebSocket base the host injects).
   provider at `free-search` and registers the keyless engine chain (`engine-chain.ts` +
   `engines/*`); disabling the component row leaves the seam untouched, so the official
   provider pinned by the base layer keeps serving
-- `cordis.patch.yml`: inserts the ten dsh-kit component rows (files / chat / vault / terminal /
-  browser / skills / phone / monitor / search / logs — row order is the Plugins-page order)
+- `cordis.patch.yml`: inserts the nine dsh-kit component rows (files / chat / vault / terminal /
+  browser / phone / monitor / search / logs — row order is the Plugins-page order)
   into the bundle layer, followed by one **carrier row** (`name: dsh-kit` — the mount point for
   the browser half, serves nothing itself, hence last, after the functional rows); every row id
   is explicit and stable (the loader gives anonymous rows a fresh random id on every compose, so any profile

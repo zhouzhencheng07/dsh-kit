@@ -1451,7 +1451,6 @@ let vaultFetchPrev = null;
   const hostFiles = fs.readFileSync(__dirname + "/../src/files/index.ts", "utf8");
   const hostCore = fs.readFileSync(__dirname + "/../src/core/readable-roots.ts", "utf8");
   const hostVault = fs.readFileSync(__dirname + "/../src/vault/index.ts", "utf8");
-  const hostSkills = fs.readFileSync(__dirname + "/../src/skills/index.ts", "utf8");
   check("编辑器就绪真的回调 onReady（跨页锚点落位的唯一时机）", src.includes("onReadyRef.current?.()") && src.includes("onReady: onRteReady"));
   check("保存按编辑代数清脏（在途时的改动另有一次保存，不被无条件清零）", src.includes("editGenRef.current += 1") && src.includes("if (gen === editGenRef.current) dirtyRef.current = false;"));
   check("Ctrl+S 先撤防抖定时器（同内容不必再存一遍）", /clearTimeout\(saveTimer\);\s*saveTimer = null;/.test(src));
@@ -1459,7 +1458,7 @@ let vaultFetchPrev = null;
   check("读端点带工作区根（tree / diff 读 / 预览下载钮三处都带 cwd）", /function fetchTree\(path, signal, cwd\)/.test(src) && src.includes("fetchTree(dirPath, controller.signal, cwd)") && (src.match(/&cwd=\$\{encodeURIComponent/g) ?? []).length >= 2);
   check("服务端：tree/read/raw 三处都过根闸（readGate）", (hostFiles.match(/readGate\(url, /g) ?? []).length === 3 && hostFiles.includes("不在可读根内"));
   check("根集合来自注册表 + 请求 cwd，根自身不算内", hostCore.includes("export function registerReadableRoot") && hostCore.includes("export function withinReadable") && hostCore.includes("realpathSync") && hostCore.includes("trimmed === ''"));
-  check("知识库与技能各自注册自己的可读根（根归属方才知道自己的根是谁）", hostVault.includes("registerReadableRoot('vault'") && hostSkills.includes("registerReadableRoot('skills'") && hostSkills.includes("resolveRoots(cwd)"));
+  check("知识库注册自己的可读根（根归属方才知道自己的根是谁）", hostVault.includes("registerReadableRoot('vault'"));
 }
 // 6.9f) 共享目录一致性 + 保存串行化 + Esc 归属
 {
@@ -1664,7 +1663,6 @@ comps.setKitUi({ terminals: [], activeTermId: null, termDockOpen: false });
 callLog = [];
 out = comps.KitSurfaces({});
 check("KitSurfaces 无hooks渲染无异常（根壳不渲染面板本体）", out === null);
-// 技能管理页直测在 tests\render-check-skills.cjs
 callLog = [];
 const fakeHooks = {
   useSessions: (sel) => sel({ byId: { s1: { id: "s1", cwd: "C:/x", retainedBy: { mainView: 1 } } } }),
@@ -1714,7 +1712,7 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
   );
 }
 // 10) 插件页行形状：一行载体行（name 恰好等于包名——浏览器半边挂在它上面，删不得）
-//     + 十个组件行，全部带稳定 id（匿名行由 loader 现配随机 id，任何一次 profile 写入都会
+//     + 九个组件行，全部带稳定 id（匿名行由 loader 现配随机 id，任何一次 profile 写入都会
 //     把它换掉 → 该行重挂 → 本包浏览器半边整包重载），行序 = 卡片描述的枚举顺序
 //     （宿主按 patch insert 原样渲染、不排序）。载体行的 id 是数字字面量：宿主只把 id / name
 //     都是字符串的 patch 行当可管理组件（declaredRows 跳过非字符串 id），所以它不进组件列表、
@@ -1735,9 +1733,9 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
   const isComponent = (row) => typeof row.id === "string" && !/^-?\d+$/.test(row.id);
   const carrier = rows.filter((row) => !isComponent(row));
   const comps = rows.filter(isComponent);
-  const expected = ["files", "chat", "vault", "terminal", "browser", "skills", "phone", "monitor", "search", "logs"];
+  const expected = ["files", "chat", "vault", "terminal", "browser", "phone", "monitor", "search", "logs"];
   check(
-    "patch 形状：一行载体行（name = 包名、id 写数字字面量 → 不当作可管理组件：不进组件列表、没有行开关；浏览器半边挂在它上面，放行序末尾不跟功能行混在一起）+ 十个组件行 id/name 齐备且顺序 = 描述顺序（组件行 id 必须显式且稳定：匿名行的随机 id 每次 profile 写入都会换 → 该行重挂、整包客户端重载）",
+    "patch 形状：一行载体行（name = 包名、id 写数字字面量 → 不当作可管理组件：不进组件列表、没有行开关；浏览器半边挂在它上面，放行序末尾不跟功能行混在一起）+ 九个组件行 id/name 齐备且顺序 = 描述顺序（组件行 id 必须显式且稳定：匿名行的随机 id 每次 profile 写入都会换 → 该行重挂、整包客户端重载）",
     carrier.length === 1 && carrier[0].name === "dsh-kit" && /^-?\d+$/.test(carrier[0].id) &&
       rows[rows.length - 1] === carrier[0] &&
       rows.length === expected.length + 1 &&
@@ -1756,9 +1754,9 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
   const zhDesc = JSON.parse(fs.readFileSync(__dirname + "/../locale/zh.json", "utf8")).meta.description;
   const enDesc = JSON.parse(fs.readFileSync(__dirname + "/../locale/en.json", "utf8")).meta.description;
   check(
-    "卡片描述按同一顺序枚举十个组件（zh/en 同序）",
-    inOrder(zhDesc, ["文件树", "对话小窗", "知识库·日程", "终端", "浏览器", "技能", "手机访问", "用量与监视", "网页搜索", "运行日志"]) &&
-      inOrder(enDesc, ["File tree", "chat window", "vault & schedule", "terminal", "browser", "skills", "phone access", "usage & monitor", "web search", "runtime logs"]),
+    "卡片描述按同一顺序枚举九个组件（zh/en 同序）",
+    inOrder(zhDesc, ["文件树", "对话小窗", "知识库·日程", "终端", "浏览器", "手机访问", "用量与监视", "网页搜索", "运行日志"]) &&
+      inOrder(enDesc, ["File tree", "chat window", "vault & schedule", "terminal", "browser", "phone access", "usage & monitor", "web search", "runtime logs"]),
   );
 }
 

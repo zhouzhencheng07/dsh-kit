@@ -233,7 +233,7 @@ async function checkApply() {
   const read = (rel) => fs.readFileSync(__dirname + "/../" + rel, "utf8");
   const bundleSrc = read("client/bundle.js");
   // 套件没有根入口模块：查的是「手机访问的装配没渗进别的组件行」
-  const hostSrc = ["browser", "chat", "files", "logs", "monitor", "search", "skills", "terminal"]
+  const hostSrc = ["browser", "chat", "files", "logs", "monitor", "search", "terminal"]
     .map((d) => read(`src/${d}/index.ts`)).join("\n");
   const compSrc = read("src/phone/index.ts");
   const gwSrc = read("src/phone/gateway.ts");

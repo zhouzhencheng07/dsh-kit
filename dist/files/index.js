@@ -10,7 +10,7 @@
 //
 // **读端点限根**（tree/read/raw）：同源调用方不得读根集合之外的文件。根 = 请求
 // 带的 `cwd`（工作区，client 半边三个调用点都带）+ 各组件注册的根（知识库
-// vaultRoot、技能池根，见 core/readable-roots.ts）。知识库在工作区之外、其图与
+// vaultRoot，见 core/readable-roots.ts）。知识库在工作区之外、其图与
 // 页读都走这三个端点，所以边界必须是「根集合」而不是「工作区子树」——写端点
 // /fs/op 是另一个口径（只管工作区子树），别拿它当读端点的模板。
 import fs from 'node:fs';
