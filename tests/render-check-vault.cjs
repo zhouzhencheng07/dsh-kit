@@ -764,12 +764,13 @@ async function checkApply() {
       /score: score \+ 6/.test(pickBody) &&
       bundleSrc.includes("pickSplit(pick?.query).alias"),
   );
-  // 资料行（实物在库的挂载项）与页行同形：hover = @ + ⋯；悬挂条目没有真实路径
+  // 资料面板行：点行开文件面并关面板；hover = @ + ⋯；悬挂条目没有真实路径
   // 可引，条件展开不给 @（渲染桩会把 null 记进 children 数组，别留空位）
-  const refRowBody = sliceBetween("const refRow = (rel, dirPath, depth) => {", "const dirRow =");
+  const refRowBody = sliceBetween("const refRow = (rel, dirPath) => {", "const dirRow =");
   check(
-    "资料行 hover = @ + ⋯（复用 citeFromTree；悬挂条目不给 @）",
-    /citeFromTree\(item\.path\)/.test(refRowBody) &&
+    "资料面板行：点行开文件面并关面板，hover = @ + ⋯（复用 citeFromTree；悬挂条目不给 @）",
+    /openVaultAsset\(item\.path\);\s*\n\s*closeMaterials\(\);/.test(refRowBody) &&
+      /citeFromTree\(item\.path\)/.test(refRowBody) &&
       refRowBody.includes("...(!missing ? [") &&
       refRowBody.indexOf("citeFromTree") < refRowBody.indexOf('label: t("treeMenu")'),
   );
@@ -950,18 +951,20 @@ async function checkApply() {
       (bundleSrc.match(/followTyping\(\);/g) ?? []).length === 2,
   );
 
-  // ── 树头动作平铺 + 资料段／添加资料同归属（只看树根）──
+  // ── 树头动作平铺 + 资料入口（只看树根）──
   check(
-    "树头三钮平铺（新建/添加资料/导入）：添加资料跟树根认集、导入直开，单项 ⋯ 菜单退役",
+    "树头三钮平铺（新建/资料/导入）：资料面板跟树根认集、导入直开，单项 ⋯ 菜单退役",
     bundleSrc.includes("const headKs = ksRefsOf(treeRoot) !== null ? treeRoot : ksAncestorOf(treeRoot);") &&
-      bundleSrc.includes("startAdding(headKs)") &&
+      bundleSrc.includes("onClick: () => openMaterials(headKs)") &&
       bundleSrc.includes("openImport(treeRoot, isLibPath(treeRoot))") &&
       !bundleSrc.includes("openHeadMenu"),
   );
   check(
-    "树顶资料段与添加资料同一归属（headKs，只看树根；读笔记不再浮别处的资料）",
-    bundleSrc.includes("const ksCurrentAbs = headKs;") &&
-      bundleSrc.includes("const ksCurrentRefs = headKs === null ? null : ksRefsOf(headKs) ?? [];") &&
+    "侧栏树不铺资料行：资料清单 / 添加都在面板里（headKs 只看树根，不吃别处的资料）",
+    !bundleSrc.includes("ksGroupRow") &&
+      !bundleSrc.includes("ksCurrentRefs") &&
+      !bundleSrc.includes("openRefGroups") &&
+      bundleSrc.includes("const materialsRefs = materialsDir === null ? [] : ksRefsOf(materialsDir) ?? [];") &&
       !bundleSrc.includes("ksStartRels"),
   );
   // ── 学习/复习：宿主契约钉在 study.ts / study-events.ts；端点与伴生文件钉在 index/fs ──

@@ -2520,25 +2520,28 @@ ellipsis，窄列只截字不破版 */
       vaultSearchFail: "搜索失败：{error}",
       vaultHitNote: "笔记",
       vaultLibrary: "资料库",
-      vaultKsGroup: "资料",
       vaultKsSet: "设为知识集",
-      vaultKsAdd: "添加资料…",
+      vaultKsMaterials: "资料…",
+      vaultMatTitle: "资料 · {name}（{n}）",
+      vaultMatTip: "资料 · {name}",
+      vaultMatEmpty: "还没有资料",
+      vaultMatAdd: "添加资料",
+      vaultMatBack: "返回清单",
+      vaultMatClose: "关闭",
       vaultKsUnmark: "取消知识集",
       vaultKsEmptyDir: "空目录不能设为知识集",
       vaultKsMissing: "这份资料不在资料库里（可能已被删除）",
       vaultKsRemove: "从本文件夹移除",
       vaultKsDelete: "删除资料（所有知识集）",
       vaultKsUnmarkAsk: "取消「{name}」的知识集？挂载清单一并删除，资料实物不动",
-      vaultKsAddTitle: "添加资料 · {name}",
       vaultKsSearchPh: "搜索资料库里已有的资料",
       vaultKsNoCandidate: "库里没有匹配的资料——点下面导入新文件",
       vaultKsImportNew: "导入新文件…",
-      vaultKsSetDone: "已设为知识集——用「添加资料…」把资料挂进来",
+      vaultKsSetDone: "已设为知识集——用「资料…」把资料挂进来",
       vaultKsUnmarked: "已取消知识集",
       vaultKsMounted: "已添加资料",
       vaultKsRemoved: "已从本文件夹移除（资料还在资料库里）",
       vaultKsAdded: "已添加 {n} 份资料",
-      vaultKsDone: "完成",
       vaultParentRoot: "根目录",
       vaultBackRoot: "返回知识库",
       vaultBackParent: "上一级",
@@ -2945,25 +2948,28 @@ ellipsis，窄列只截字不破版 */
       vaultSearchFail: "Search failed: {error}",
       vaultHitNote: "Note",
       vaultLibrary: "Library",
-      vaultKsGroup: "Materials",
       vaultKsSet: "Make knowledge set",
-      vaultKsAdd: "Add material…",
+      vaultKsMaterials: "Materials…",
+      vaultMatTitle: "Materials · {name} ({n})",
+      vaultMatTip: "Materials · {name}",
+      vaultMatEmpty: "No materials yet",
+      vaultMatAdd: "Add material",
+      vaultMatBack: "Back to list",
+      vaultMatClose: "Close",
       vaultKsUnmark: "Remove knowledge set",
       vaultKsEmptyDir: "An empty folder cannot become a knowledge set",
       vaultKsMissing: "This material is no longer in the library",
       vaultKsRemove: "Remove from this folder",
       vaultKsDelete: "Delete material (all knowledge sets)",
       vaultKsUnmarkAsk: "Remove the knowledge set “{name}”? Its mounted list is deleted; the files stay.",
-      vaultKsAddTitle: "Add material · {name}",
       vaultKsSearchPh: "Search materials already in the library",
       vaultKsNoCandidate: "No matching material — import a new file below",
       vaultKsImportNew: "Import new file…",
-      vaultKsSetDone: "Knowledge set created — use “Add material…” to mount files",
+      vaultKsSetDone: "Knowledge set created — use “Materials…” to mount files",
       vaultKsUnmarked: "Knowledge set removed",
       vaultKsMounted: "Material added",
       vaultKsRemoved: "Removed from this folder (the file stays in the library)",
       vaultKsAdded: "Added {n} material(s)",
-      vaultKsDone: "Done",
       vaultParentRoot: "root",
       vaultBackRoot: "Back to knowledge base",
       vaultBackParent: "Up one level",
@@ -7266,31 +7272,14 @@ ellipsis，窄列只截字不破版 */
       // 后续槽位整体挪位（槽位号写死在 tests/render-check.cjs 里）
       // 有盘上操作在跑（对话框按钮置灰防连点）
       const [busy, setBusy] = react.useState(false);
-      // 知识集交互态：资料子组展开（会话内）/ 树顶「资料」段展开（localStorage 记偏好）
-      // / 添加资料弹层（目标目录 + 库内检索词）/ 资料行内改名 / 资料行 ⋯ 菜单
-      const [openRefGroups, setOpenRefGroups] = react.useState({});
-      const [ctxRefsOpen, setCtxRefsOpen] = react.useState(() => {
-        try {
-          return window.localStorage.getItem("dshk-vault.ctxrefs") === "1";
-        } catch {
-          return false;
-        }
-      });
-      const [addingDir, setAddingDir] = react.useState(null);
+      // 知识集交互态：资料面板的当前集（null = 关着）/ 添加屏检索词
+      // / 资料行内改名 / 资料行 ⋯ 菜单
+      const [materialsDir, setMaterialsDir] = react.useState(null);
       const [refQuery, setRefQuery] = react.useState("");
       const [renamingRef, setRenamingRef] = react.useState(null);
       const [refMenu, setRefMenu] = react.useState(null);
-      const toggleCtxRefs = () => {
-        setCtxRefsOpen((open) => {
-          const next = open !== true;
-          try {
-            window.localStorage.setItem("dshk-vault.ctxrefs", next ? "1" : "0");
-          } catch {
-            /* 存不了偏好不影响这次展开 */
-          }
-          return next;
-        });
-      };
+      // 资料面板的第二屏（添加）：与清单同在一个弹层里切，见 openMaterials
+      const [materialsAdd, setMaterialsAdd] = react.useState(false);
       const railRef = react.useRef(null);
       const manualRefresh = react.useCallback(async () => {
         setRefreshing(true);
@@ -7439,9 +7428,6 @@ ellipsis，窄列只截字不破版 */
         const lib = libRootRef.current;
         const libRel = lib === null ? null : relUnder(lib, dirPath);
         if (libRel !== null) return libItems.some((it) => it.rel.startsWith(libRel === "" ? "" : `${libRel}/`) && it.rel !== libRel);
-        // 知识集挂了资料：即使目录里没有页 / 子目录，也得能展开（资料就在那行下面）
-        const ksRefs = ksRefsOf(dirPath);
-        if (ksRefs !== null && ksRefs.length > 0) return true;
         const rel = root === null ? null : relUnder(root, dirPath);
         if (rel === null || rel === "") return false;
         const prefix = `${rel}/`;
@@ -7463,14 +7449,11 @@ ellipsis，窄列只截字不破版 */
         const i = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
         return i < 0 ? s : s.slice(i + 1);
       };
-      // 树顶「资料」段与树头「添加资料」同一归属（headKs，只看树根）：读笔记不再
-      // 把别处的资料浮上来，树根在知识库时整段不出现 */
-      const ksCurrentAbs = headKs;
-      const ksCurrentRefs = headKs === null ? null : ksRefsOf(headKs) ?? [];
-      /** 添加资料弹层的候选：库里已有、本知识集还没挂、名字匹配的（最多 50 条） */
-      const ksAddMounted = addingDir === null ? [] : ksRefsOf(addingDir) ?? [];
-      const ksAddQuery = refQuery.trim().toLowerCase();
-      const ksAddCandidates = addingDir === null ? [] : libItems.filter((it) => it.dir !== true && !ksAddMounted.includes(it.rel) && (ksAddQuery === "" || it.rel.toLowerCase().includes(ksAddQuery))).slice(0, 50);
+      /** 资料面板的清单 = 这个集挂载的资料（悬挂项也在，行上灰显） */
+      const materialsRefs = materialsDir === null ? [] : ksRefsOf(materialsDir) ?? [];
+      /** 添加屏的候选：库里已有、本知识集还没挂、名字匹配的（最多 50 条） */
+      const refQueryLower = refQuery.trim().toLowerCase();
+      const materialsCandidates = materialsDir === null ? [] : libItems.filter((it) => it.dir !== true && !materialsRefs.includes(it.rel) && (refQueryLower === "" || it.rel.toLowerCase().includes(refQueryLower))).slice(0, 50);
       /** 写挂载清单（全量回写）：成功后重拉索引与已展开目录，树上立刻反映 */
       const writeKsRefs = async (dirPath, refs, describe) => {
         const res = await runVaultOp(() => vaultOp("/dsh-kit/vault/refs", { op: "set", dir: dirPath, refs }), describe);
@@ -7499,10 +7482,33 @@ ellipsis，窄列只截字不破版 */
         setDialog(null);
         await reloadData();
       };
-      const startAdding = (dirPath) => {
+      /** 打开资料面板：清单屏起步，清掉上一次的检索词 / 行内改名 / 行菜单 */
+      const openMaterials = (dirPath) => {
         setRowMenu(null);
-        setAddingDir(dirPath);
+        setRefMenu(null);
+        setRenamingRef(null);
         setRefQuery("");
+        setMaterialsAdd(false);
+        setMaterialsDir(dirPath);
+      };
+      const closeMaterials = () => {
+        setMaterialsDir(null);
+        setMaterialsAdd(false);
+        setRefQuery("");
+        setRenamingRef(null);
+        setRefMenu(null);
+      };
+      /** 面板上的 Esc / 点遮罩：行菜单与行内改名各自先收，最后才关面板 */
+      const dismissMaterials = () => {
+        if (refMenu !== null) {
+          setRefMenu(null);
+          return;
+        }
+        if (renamingRef !== null) {
+          setRenamingRef(null);
+          return;
+        }
+        closeMaterials();
       };
       /** 添加资料弹层里导入盘上的新文件并挂载：库扁平，一律落库根；library/ 还没建时
        *  也拿它当落点（宿主按需建目录），别把 null 发出去。同内容后端按哈希复用同一份。 */
@@ -7763,7 +7769,7 @@ ellipsis，窄列只截字不破版 */
         if (!lib && entry.dir === true) {
           const ksRefs = ksRefsOf(entry.path);
           if (ksRefs !== null) {
-            extraItems.push({ key: "ksadd", label: t("vaultKsAdd"), run: () => startAdding(entry.path) });
+            extraItems.push({ key: "ksmat", label: t("vaultKsMaterials"), run: () => openMaterials(entry.path) });
             extraItems.push({ key: "ksunmark", label: t("vaultKsUnmark"), run: () => setDialog({ kind: "unmark", entry }) });
           } else {
             extraItems.push({ key: "ksset", label: t("vaultKsSet"), disabled: dirHasChildren(entry.path) !== true, title: t("vaultKsEmptyDir"), run: () => markFolderKs(entry.path) });
@@ -7888,33 +7894,20 @@ ellipsis，窄列只截字不破版 */
             },
           }),
         ] });
-      /** 知识集行下的「资料 (N)」子行：默认收起，点开才铺开挂载的资料 */
-      const ksGroupRow = (dirPath, refs, depth) =>
-        jsxRuntime.jsxs("div", {
-          className: "dshk-vault-treerow",
-          style: { paddingLeft: 10 + depth * 14 },
-          title: t("vaultKsGroup"),
-          onClick: () => setOpenRefGroups((s) => ({ ...s, [dirPath]: s[dirPath] !== true })),
-          children: [
-            jsxRuntime.jsx("span", { className: "dshk-vault-twist", children: jsxRuntime.jsx(ChevronIcon, { open: openRefGroups[dirPath] === true }) }),
-            jsxRuntime.jsx(RefIcon, {}),
-            jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: `${t("vaultKsGroup")} (${refs.length})` }),
-          ],
-        }, `${dirPath}#ksgroup`);
-      /** 挂载的一份资料行：点开进官方文件面（PDF 且开自带阅读器 → 知识库签）；实物不在
-       *  库里 = 悬挂（灰显划线，⋯ 里可移除）；重命名 / 删除收在这行 ⋯ 里 */
-      const refRow = (rel, dirPath, depth) => {
+      /** 资料面板里的清单行：点行开文件面并关面板（PDF 且开自带阅读器 → 知识库签）；
+       *  实物不在库里 = 悬挂（灰显划线，⋯ 里只留移除）；重命名 / 删除收在这行 ⋯ 里 */
+      const refRow = (rel, dirPath) => {
         const item = libItemsByRel.get(rel);
         const missing = item === undefined;
         const label = missing ? libLabel(rel) : libLabel(item.rel);
         const renaming = renamingRef === rel;
         return jsxRuntime.jsxs("div", {
           className: "dshk-vault-treerow",
-          style: { paddingLeft: 10 + depth * 14 },
           title: missing ? t("vaultKsMissing") : item.path,
           onClick: () => {
             if (missing || renaming) return;
             openVaultAsset(item.path);
+            closeMaterials();
           },
           children: [
             jsxRuntime.jsx(FileTypeIcon16, { name: label }),
@@ -7947,13 +7940,12 @@ ellipsis，窄列只截字不破版 */
               }, "menu"),
             ] }),
           ],
-        }, `ks:${dirPath}:${rel}`);
+        }, `mat:${dirPath}:${rel}`);
       };
       /** 目录行：点击折叠/展开；笔记目录另给 Ctrl（⌘）+点击 = 进入该目录（树头 ← 上一级）。
-       *  知识集用「一摞书」图标，展开先出「资料 (N)」子行（默认收起），再是目录结构 */
+       *  知识集用「一摞书」图标；挂载的资料不在树上铺行，走「资料…」面板 */
       const dirRow = (e, depth, hasChildren, lib) => {
-        const ksRefs = lib ? null : ksRefsOf(e.path);
-        const ksOpen = openRefGroups[e.path] === true;
+        const ks = lib ? false : ksRefsOf(e.path) !== null;
         return jsxRuntime.jsxs(
           "div",
           {
@@ -7973,7 +7965,7 @@ ellipsis，窄列只截字不破版 */
                 children: [
                   // 展开箭头与文件树同一枚（官方 IconTriangleRightFill14）
                   jsxRuntime.jsx("span", { className: "dshk-vault-twist", children: hasChildren ? jsxRuntime.jsx(ChevronIcon, { open: expanded[e.path] === true }) : null }),
-                  ksRefs !== null
+                  ks
                     ? jsxRuntime.jsx(KsIcon, {})
                     : jsxRuntime.jsx(TreeFolderIcon, {}),
                   renamingPath === e.path ? renameInput(e, e.name, false) : jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: e.name }),
@@ -7996,13 +7988,6 @@ ellipsis，窄列只截字不破版 */
                 ],
               }),
               createAt === e.path ? createRow() : null,
-              // 知识集的资料：先一行「资料 (N)」（默认收起），点开才铺开挂载项
-              ksRefs !== null && ksRefs.length > 0 && expanded[e.path] === true
-                ? ksGroupRow(e.path, ksRefs, depth + 1)
-                : null,
-              ksRefs !== null && ksOpen && expanded[e.path] === true
-                ? ksRefs.map((rel) => refRow(rel, e.path, depth + 2))
-                : null,
               renderDir(e.path, depth + 1),
             ],
           },
@@ -8191,13 +8176,13 @@ ellipsis，窄列只截字不破版 */
             }),
             headKs !== null
               ? jsxRuntime.jsx(KitTip, {
-                  label: t("vaultKsAddTitle").replace("{name}", libLabel(headKs)),
+                  label: t("vaultMatTip").replace("{name}", libLabel(headKs)),
                   align: "end",
                   children: jsxRuntime.jsx("button", {
                     type: "button",
                     className: "dshk-vault-treeplus",
-                    onClick: () => startAdding(headKs),
-                    children: jsxRuntime.jsx(KsIcon, {}),
+                    onClick: () => openMaterials(headKs),
+                    children: jsxRuntime.jsx(RefIcon, {}),
                   }),
                 })
               : null,
@@ -8213,24 +8198,6 @@ ellipsis，窄列只截字不破版 */
             }),
           ] }),
           createAt === treeRoot ? createRow() : null,
-          // 树顶「资料」段：当前树根所属知识集的挂载（与树头「添加资料」同一归属），
-          // 默认收起，点段头展开/收起（偏好记 localStorage，跟设备走）
-          ksCurrentRefs !== null && ksCurrentRefs.length > 0
-            ? jsxRuntime.jsxs("div", { children: [
-                jsxRuntime.jsxs("div", {
-                  className: "dshk-vault-treerow",
-                  style: { paddingLeft: 10 },
-                  title: ksCurrentAbs ?? "",
-                  onClick: () => toggleCtxRefs(),
-                  children: [
-                    jsxRuntime.jsx("span", { className: "dshk-vault-twist", children: jsxRuntime.jsx(ChevronIcon, { open: ctxRefsOpen === true }) }),
-                    jsxRuntime.jsx(RefIcon, {}),
-                    jsxRuntime.jsx("span", { className: "dshk-vault-treename", children: `${t("vaultKsGroup")} (${ksCurrentRefs.length})` }),
-                  ],
-                }),
-                ctxRefsOpen === true ? ksCurrentRefs.map((rel) => refRow(rel, ksCurrentAbs, 1)) : null,
-              ] }, "ks-top")
-            : null,
           renderDir(treeRoot, 0),
           // 上限截断时说一声：搜索与反链只覆盖已索引的部分
           index !== null && index.truncated === true
@@ -8251,20 +8218,77 @@ ellipsis，窄列只截字不破版 */
               onClose: () => setRowMenu(null),
             })
           : null,
-        refMenu
-          ? jsxRuntime.jsx(TreeRowMenu, {
-              entry: { dir: false, name: libLabel(refMenu.rel), path: (libItemsByRel.get(refMenu.rel) || {}).path },
-              rect: refMenu.rect,
-              anchor: refMenu.anchor,
-              // 资料行 ⋯：重命名 / 从本文件夹移除 / 删除资料（悬挂的只留「移除」）
-              actions: {
-                extraItems: [
-                  ...(libItemsByRel.get(refMenu.rel) === undefined ? [] : [{ key: "rrn", label: t("treeRename"), run: () => setRenamingRef(refMenu.rel) }]),
-                  { key: "krm", label: t("vaultKsRemove"), run: () => removeRef(refMenu.dirPath, refMenu.rel) },
-                  ...(libItemsByRel.get(refMenu.rel) === undefined ? [] : [{ key: "kdl", label: t("vaultKsDelete"), run: () => deleteRefItem(refMenu.rel) }]),
-                ],
-              },
-              onClose: () => setRefMenu(null),
+        // 资料面板：知识集资料的唯一入口（侧栏树不铺资料行）。清单屏点行 → 开文件面
+        // 并关面板；添加屏在同一个弹层里切（不叠第二个弹层）
+        materialsDir !== null
+          ? jsxRuntime.jsxs(VaultDialog, {
+              title: t("vaultMatTitle").replace("{name}", libLabel(materialsDir) || t("vaultTitle")).replace("{n}", String(materialsRefs.length)),
+              onClose: dismissMaterials,
+              children: [
+                materialsAdd
+                  ? jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                      jsxRuntime.jsx("input", {
+                        className: "dshk-vault-modalinput",
+                        value: refQuery,
+                        spellCheck: false,
+                        placeholder: t("vaultKsSearchPh"),
+                        onChange: (ev) => setRefQuery(ev.target.value),
+                      }),
+                      jsxRuntime.jsx("div", { className: "dshk-vault-dirlist", children:
+                        materialsCandidates.map((it) =>
+                          jsxRuntime.jsx("button", {
+                            type: "button",
+                            className: "dshk-vault-diritem",
+                            title: it.path,
+                            onClick: () => addRef(materialsDir, it.rel),
+                            children: libLabel(it.rel),
+                          }, it.rel),
+                        ),
+                      }),
+                      materialsCandidates.length === 0
+                        ? jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("vaultKsNoCandidate") })
+                        : null,
+                      jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
+                        jsxRuntime.jsx("label", { className: "dshk-btn-cancel", children: [
+                          t("vaultKsImportNew"),
+                          jsxRuntime.jsx("input", {
+                            type: "file",
+                            multiple: true,
+                            style: { display: "none" },
+                            onChange: (ev) => void addRefFiles(materialsDir, Array.from(ev.target.files ?? [])),
+                          }),
+                        ] }),
+                        jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => { setMaterialsAdd(false); setRefQuery(""); }, children: t("vaultMatBack") }),
+                      ] }),
+                    ] })
+                  : jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
+                      jsxRuntime.jsx("div", { className: "dshk-vault-dirlist", children:
+                        materialsRefs.length === 0
+                          ? jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("vaultMatEmpty") })
+                          : materialsRefs.map((rel) => refRow(rel, materialsDir)),
+                      }),
+                      jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
+                        jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: closeMaterials, children: t("vaultMatClose") }),
+                        jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-save", onClick: () => { setMaterialsAdd(true); setRefQuery(""); }, children: t("vaultMatAdd") }),
+                      ] }),
+                    ] }),
+                refMenu
+                  ? jsxRuntime.jsx(TreeRowMenu, {
+                      entry: { dir: false, name: libLabel(refMenu.rel), path: (libItemsByRel.get(refMenu.rel) || {}).path },
+                      rect: refMenu.rect,
+                      anchor: refMenu.anchor,
+                      // 资料行 ⋯：重命名 / 从本文件夹移除 / 删除资料（悬挂的只留「移除」）
+                      actions: {
+                        extraItems: [
+                          ...(libItemsByRel.get(refMenu.rel) === undefined ? [] : [{ key: "rrn", label: t("treeRename"), run: () => setRenamingRef(refMenu.rel) }]),
+                          { key: "krm", label: t("vaultKsRemove"), run: () => removeRef(refMenu.dirPath, refMenu.rel) },
+                          ...(libItemsByRel.get(refMenu.rel) === undefined ? [] : [{ key: "kdl", label: t("vaultKsDelete"), run: () => deleteRefItem(refMenu.rel) }]),
+                        ],
+                      },
+                      onClose: () => setRefMenu(null),
+                    })
+                  : null,
+              ],
             })
           : null,
         dialog !== null && dialog.kind === "move"
@@ -8383,47 +8407,6 @@ ellipsis，窄列只截字不破版 */
                 jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
                   jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setDialog(null), children: t("cancel") }),
                   jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-save", disabled: busy, onClick: () => void unmarkFolderKs(dialog.entry), children: t("vaultKsUnmark") }),
-                ] }),
-              ],
-            })
-          : null,
-        addingDir !== null
-          ? jsxRuntime.jsxs(VaultDialog, {
-              title: t("vaultKsAddTitle").replace("{name}", libLabel(addingDir) || t("vaultTitle")),
-              onClose: () => setAddingDir(null),
-              children: [
-                jsxRuntime.jsx("input", {
-                  className: "dshk-vault-modalinput",
-                  value: refQuery,
-                  spellCheck: false,
-                  placeholder: t("vaultKsSearchPh"),
-                  onChange: (ev) => setRefQuery(ev.target.value),
-                }),
-                jsxRuntime.jsx("div", { className: "dshk-vault-dirlist", children:
-                  ksAddCandidates.map((it) =>
-                    jsxRuntime.jsx("button", {
-                      type: "button",
-                      className: "dshk-vault-diritem",
-                      title: it.path,
-                      onClick: () => addRef(addingDir, it.rel),
-                      children: libLabel(it.rel),
-                    }, it.rel),
-                  ),
-                }),
-                ksAddCandidates.length === 0
-                  ? jsxRuntime.jsx("div", { className: "dshk-vault-modalline", children: t("vaultKsNoCandidate") })
-                  : null,
-                jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
-                  jsxRuntime.jsx("label", { className: "dshk-btn-cancel", children: [
-                    t("vaultKsImportNew"),
-                    jsxRuntime.jsx("input", {
-                      type: "file",
-                      multiple: true,
-                      style: { display: "none" },
-                      onChange: (ev) => void addRefFiles(addingDir, Array.from(ev.target.files ?? [])),
-                    }),
-                  ] }),
-                  jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-save", onClick: () => setAddingDir(null), children: t("vaultKsDone") }),
                 ] }),
               ],
             })
