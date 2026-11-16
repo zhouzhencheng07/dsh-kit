@@ -39,8 +39,6 @@ interface KitCtx {
     effect?(fn: () => void | (() => void), label?: string): void;
 }
 export interface ApplyWebSearchOptions {
-    /** 单次搜索的条数上限，每次现读；给不出 1-8 整数时回落默认值 */
-    getMaxResults?: () => unknown;
     log?: (message: string) => void;
 }
 /** 接管 web seam 的选择并注册免费链 provider。挂 ctx.effect：行卸载时两者一起还回去。 */

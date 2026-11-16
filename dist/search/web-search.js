@@ -30,14 +30,10 @@ export const SEARCH_PROVIDER_ID = 'free-search';
 function isHostSearchProvider(id) {
     return id.startsWith('deepseek-');
 }
-/** 条数上限的 schema 默认值（配置给不出合法值时兜底） */
-const DEFAULT_MAX_RESULTS = 2;
+/** seam 未给上限时的条数（引擎链自己的默认，见 engine-chain 的 searchChain） */
+const DEFAULT_MAX_RESULTS = 5;
 /** cordis volatile 配置引用的写入口：cosmokit 用 Symbol.for 发布，跨 ESM/CJS 副本通用 */
 const VOLATILE_WRITE = Symbol.for('cosmokit.volatile.write');
-function resultCapOf(getMaxResults) {
-    const n = getMaxResults();
-    return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 8 ? n : DEFAULT_MAX_RESULTS;
-}
 /** 经 cosmokit 写符号提交新值；读不回来（只读引用）算失败 */
 function writeRef(ref, value) {
     const write = ref[VOLATILE_WRITE];
@@ -72,7 +68,7 @@ function pinProvider(web) {
 }
 /** 接管 web seam 的选择并注册免费链 provider。挂 ctx.effect：行卸载时两者一起还回去。 */
 export function applyWebSearch(ctx, options = {}) {
-    const { getMaxResults = () => DEFAULT_MAX_RESULTS, log } = options;
+    const { log } = options;
     const disposers = [];
     ctx.inject(['web'], (webCtx) => {
         const web = webCtx.web;
@@ -92,10 +88,10 @@ export function applyWebSearch(ctx, options = {}) {
                 id: SEARCH_PROVIDER_ID,
                 available: () => true,
                 async search(request, signal) {
-                    // 条数取「seam 请求量与设置上限的较小值」：seam 要得少就少给（省上下文），
-                    // 要得多也不超过设置上限（条数多 = 无谓的 token 消耗）
-                    const cap = resultCapOf(getMaxResults);
-                    const maxResults = Math.min(request.maxResults ?? cap, cap);
+                    // 条数只认 seam 请求（宿主 web_search 的 searchMaxResults）：要多少给多少，
+                    // 没给上限才用引擎链默认；不另设插件侧上限
+                    const asked = request.maxResults;
+                    const maxResults = typeof asked === 'number' && Number.isInteger(asked) && asked > 0 ? asked : DEFAULT_MAX_RESULTS;
                     const { items, summary } = await searchChain(request.query, { maxResults, signal });
                     return {
                         ...(summary ? { content: summary } : {}),

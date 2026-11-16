@@ -2406,12 +2406,12 @@ ellipsis，窄列只截字不破版 */
         });
         scanPreviewDownload();
       }
-      // 组件半边激活（八个组件行各一个：files/chat/monitor/terminal/search/
-      // browser/vault/phone）。**清单必须与组件行一一对应**：漏一个，那个组件的
-      // apply 永不执行，探针再通也没人拉。client
+      // 组件半边激活（有浏览器半边的组件各一个：files/chat/monitor/terminal/
+      // browser/vault/phone；search 只有宿主半边，不在这里）。**清单必须与组件行
+      // 一一对应**：漏一个，那个组件的 apply 永不执行，探针再通也没人拉。client
       // 入口注册总是发生，功能存在性由各组件自己的探针门控（行禁用只摘宿主半边端点，
       // 探针 404 的组件整体不注册）
-      for (const componentMod of [exports.files, exports.chat, exports.monitor, exports.terminal, exports.search, exports.browser, exports.vault, exports.phone]) {
+      for (const componentMod of [exports.files, exports.chat, exports.monitor, exports.terminal, exports.browser, exports.vault, exports.phone]) {
         if (componentMod && typeof componentMod.apply === "function") componentMod.apply(ctx);
       }
     }
@@ -14862,54 +14862,8 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 };
 
     // ── dsh-kit/search 组件（网页搜索）──
-// dsh-kit/search 浏览器半边 —— 网页搜索组件的 client 面。
-// 搜索本体全在宿主半边（web seam 接管 + 引擎链，src/search/），client 面只有本组件行
-// 的「配置」页（搜索结果条数）。行开关即总开关：关行 = 宿主模块不物化 = 不接管 seam，
-// base 钉的官方搜索原样生效。
-    const searchModule = (kit, require) => {
-    var module = { exports: {} };
-    var exports = module.exports;
-    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
-    const dock = kit;
-
-    // 组件私有文案（配置页骨架文案在 dock）
-    const zh = {
-      kcfgGroupSearch: "网页搜索",
-      kcfgSearchMaxResults: "搜索结果条数（1–8）",
-      kcfgSearchMaxResultsHint: "每次搜索保留的条数。",
-    };
-    const en = {
-      kcfgGroupSearch: "Web search",
-      kcfgSearchMaxResults: "Search results (1–8)",
-      kcfgSearchMaxResultsHint: "How many results each search keeps.",
-    };
-    const lang = () => (dock.resolveZh() ? zh : en);
-    const t = (key) => lang()[key] ?? key;
-
-    // 本组件配置页（插件页本组件行「配置」）：骨架在 dock，这里只喂字段表与词条
-    const SEARCH_CFG_FIELDS = [
-      { key: "searchMaxResults", type: "number", min: 1, max: 8, group: "kcfgGroupSearch", labelKey: "kcfgSearchMaxResults", hintKey: "kcfgSearchMaxResultsHint" },
-    ];
-    const SEARCH_CFG_GROUPS = ["kcfgGroupSearch"];
-    const SearchConfigPage = dock.createConfigPage({
-      fields: SEARCH_CFG_FIELDS,
-      groups: SEARCH_CFG_GROUPS,
-      t,
-    });
-
-    exports.inject = ["slots"];
-    exports.apply = async (ctx) => {
-      // 配置页挂在插件页本组件行上：槽位 key = <包名>#<行id>（宿主按精确 key 匹配本行）
-      ctx.slots.inject("plugins.row.config", () =>
-        ctx.slots.register({ name: "plugins.row.config", key: "dsh-kit#search" }, SearchConfigPage),
-      );
-    };
-
-    // 渲染级检查取用
-    exports.SearchConfigPage = SearchConfigPage;
-    exports.SEARCH_CFG_FIELDS = SEARCH_CFG_FIELDS;
-    return exports;
-};
+// 网页搜索没有浏览器半边：搜索本体全在宿主半边（web seam 接管 + 引擎链，src/search/），
+// 组件行只有开关、没有配置页——返回条数由宿主 web_search 的 searchMaxResults 决定。
 
     // ── dsh-kit/browser 组件（内置浏览器）──
 // dsh-kit/browser 浏览器半边 —— 内置浏览器组件的 client 面。
@@ -17714,7 +17668,6 @@ body.dshk-open [class*="_centerCol"]{padding-bottom:var(--dshk-dock-h,${DOCK_H})
     exports.chat = chatModule(exports, require);
     exports.monitor = monitorModule(exports, require);
     exports.terminal = terminalModule(exports, require);
-    exports.search = searchModule(exports, require);
     exports.browser = browserModule(exports, require);
     exports.vault = vaultModule(exports, require);
     exports.phone = phoneModule(exports, require);

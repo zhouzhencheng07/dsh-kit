@@ -55,7 +55,7 @@ const silent = () => {}
   const web = makeWeb()
   const { ctx, unload } = makeCtx(web)
   const logs = []
-  applyWebSearch(ctx, { getMaxResults: () => 3, log: (m) => logs.push(m) })
+  applyWebSearch(ctx, { log: (m) => logs.push(m) })
   assert.equal(web.config.searchProvider.get(), SEARCH_PROVIDER_ID)
   assert.ok(web.searchProviders.has(SEARCH_PROVIDER_ID))
   assert.equal(web.searchProviders.get(SEARCH_PROVIDER_ID).available(), true)
@@ -71,7 +71,7 @@ const silent = () => {}
 {
   const web = makeWeb({ provider: OFFICIAL_LEGACY })
   const { ctx, unload } = makeCtx(web)
-  applyWebSearch(ctx, { getMaxResults: () => 3, log: silent })
+  applyWebSearch(ctx, { log: silent })
   assert.equal(web.config.searchProvider.get(), SEARCH_PROVIDER_ID)
   assert.ok(web.searchProviders.has(SEARCH_PROVIDER_ID))
   unload()
@@ -83,7 +83,7 @@ const silent = () => {}
 {
   const web = makeWeb({ unset: true })
   const { ctx, unload } = makeCtx(web)
-  applyWebSearch(ctx, { getMaxResults: () => 3, log: silent })
+  applyWebSearch(ctx, { log: silent })
   assert.equal(web.config.searchProvider.get(), SEARCH_PROVIDER_ID)
   assert.ok(web.searchProviders.has(SEARCH_PROVIDER_ID))
   unload()
@@ -95,7 +95,7 @@ const silent = () => {}
 {
   const web = makeWeb({ provider: 'my-search' })
   const { ctx } = makeCtx(web)
-  applyWebSearch(ctx, { getMaxResults: () => 3, log: silent })
+  applyWebSearch(ctx, { log: silent })
   assert.equal(web.config.searchProvider.get(), 'my-search')
   assert.equal(web.searchProviders.size, 0)
   console.log('PASS  显式钉别家 → 不接管不注册（用户选择优先）')
@@ -106,7 +106,7 @@ const silent = () => {}
   const web = makeWeb({ hasConfig: false })
   const { ctx } = makeCtx(web)
   const logs = []
-  applyWebSearch(ctx, { getMaxResults: () => 3, log: (m) => logs.push(m) })
+  applyWebSearch(ctx, { log: (m) => logs.push(m) })
   assert.equal(web.searchProviders.size, 0)
   assert.ok(logs.some((m) => m.includes('不接受')), '应告警：' + logs.join(' | '))
   console.log('PASS  宿主无 config.searchProvider → 不钉不注册 + 告警（降级为官方搜索）')
@@ -116,7 +116,7 @@ const silent = () => {}
 {
   const web = makeWeb({ writable: false })
   const { ctx } = makeCtx(web)
-  applyWebSearch(ctx, { getMaxResults: () => 3, log: silent })
+  applyWebSearch(ctx, { log: silent })
   assert.equal(web.config.searchProvider.get(), OFFICIAL)
   assert.equal(web.searchProviders.size, 0)
   console.log('PASS  只读配置引用 → 不注册（不留下无人选择的 provider）')
@@ -138,13 +138,14 @@ const silent = () => {}
     },
   }
   const { ctx } = makeCtx(web)
-  applyWebSearch(ctx, { getMaxResults: () => 3, log: silent })
+  applyWebSearch(ctx, { log: silent })
   assert.equal(ref.get(), OFFICIAL)
   assert.equal(searchProviders.size, 0)
   console.log('PASS  写入不生效 → 不注册（配置保持原值）')
 }
 
-// 7) provider 契约与条数上限：桩 fetch 喂 Tavily 结果，条数取「请求量与设置上限的较小值」
+// 7) provider 契约与条数：只认 seam 请求的 maxResults（宿主 web_search 的 searchMaxResults），
+//    未给上限时用引擎链默认 5；插件侧没有别的上限
 {
   const originalFetch = globalThis.fetch
   const results = Array.from({ length: 6 }, (_, i) => ({ url: `https://example.com/${i}`, title: `t${i}`, content: `c${i}` }))
@@ -152,26 +153,23 @@ const silent = () => {}
   try {
     const web = makeWeb()
     const { ctx } = makeCtx(web)
-    applyWebSearch(ctx, { getMaxResults: () => 3, log: silent })
+    applyWebSearch(ctx, { log: silent })
     const provider = web.searchProviders.get(SEARCH_PROVIDER_ID)
     const wide = await provider.search({ query: 'zzz ordinary phrase qqq', maxResults: 8 })
-    assert.equal(wide.sources.length, 3, '设置上限 3：请求 8 也只给 3')
+    assert.equal(wide.sources.length, 6, 'seam 要 8、引擎只有 6 条 → 全给（插件不截）')
     assert.equal(wide.content, '摘要')
     assert.equal(wide.truncated, false)
     assert.deepEqual(Object.keys(wide.sources[0]).sort(), ['snippet', 'title', 'url'])
     const narrow = await provider.search({ query: 'zzz ordinary phrase qqq', maxResults: 1 })
     assert.equal(narrow.sources.length, 1, 'seam 要得少就少给')
-    // 配置给不出合法值 → 回落默认 2
-    const web2 = makeWeb()
-    const ctx2 = makeCtx(web2)
-    applyWebSearch(ctx2.ctx, { getMaxResults: () => 'oops', log: silent })
-    const provider2 = web2.searchProviders.get(SEARCH_PROVIDER_ID)
-    const fallback = await provider2.search({ query: 'zzz ordinary phrase qqq' })
-    assert.equal(fallback.sources.length, 2, '非法配置回落默认 2')
+    const unbounded = await provider.search({ query: 'zzz ordinary phrase qqq' })
+    assert.equal(unbounded.sources.length, 5, '没给上限 → 引擎链默认 5')
+    const odd = await provider.search({ query: 'zzz ordinary phrase qqq', maxResults: 0 })
+    assert.equal(odd.sources.length, 5, '非法上限（0）→ 引擎链默认 5')
   } finally {
     globalThis.fetch = originalFetch
   }
-  console.log('PASS  provider 契约与条数上限（设置上限 / seam 请求量 / 非法值回落）')
+  console.log('PASS  provider 契约与条数（seam 请求量 / 无上限默认 5 / 非法值回落）')
 }
 
 console.log('ALL PASS (search provider)')

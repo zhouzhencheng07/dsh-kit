@@ -34,8 +34,8 @@ function isHostSearchProvider(id: string): boolean {
   return id.startsWith('deepseek-')
 }
 
-/** 条数上限的 schema 默认值（配置给不出合法值时兜底） */
-const DEFAULT_MAX_RESULTS = 2
+/** seam 未给上限时的条数（引擎链自己的默认，见 engine-chain 的 searchChain） */
+const DEFAULT_MAX_RESULTS = 5
 
 /** web seam 的 provider 契约（我们注册的那一个） */
 interface SeamSearchProvider {
@@ -72,14 +72,7 @@ interface KitCtx {
 }
 
 export interface ApplyWebSearchOptions {
-  /** 单次搜索的条数上限，每次现读；给不出 1-8 整数时回落默认值 */
-  getMaxResults?: () => unknown
   log?: (message: string) => void
-}
-
-function resultCapOf(getMaxResults: () => unknown): number {
-  const n = getMaxResults()
-  return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 8 ? n : DEFAULT_MAX_RESULTS
 }
 
 /** 经 cosmokit 写符号提交新值；读不回来（只读引用）算失败 */
@@ -111,7 +104,7 @@ function pinProvider(web: SeamWebService): (() => void) | null {
 
 /** 接管 web seam 的选择并注册免费链 provider。挂 ctx.effect：行卸载时两者一起还回去。 */
 export function applyWebSearch(ctx: KitCtx, options: ApplyWebSearchOptions = {}): void {
-  const { getMaxResults = () => DEFAULT_MAX_RESULTS, log } = options
+  const { log } = options
   const disposers: Array<() => void> = []
   ctx.inject(['web'], (webCtx) => {
     const web = webCtx.web
@@ -131,10 +124,10 @@ export function applyWebSearch(ctx: KitCtx, options: ApplyWebSearchOptions = {})
         id: SEARCH_PROVIDER_ID,
         available: () => true,
         async search(request, signal) {
-          // 条数取「seam 请求量与设置上限的较小值」：seam 要得少就少给（省上下文），
-          // 要得多也不超过设置上限（条数多 = 无谓的 token 消耗）
-          const cap = resultCapOf(getMaxResults)
-          const maxResults = Math.min(request.maxResults ?? cap, cap)
+          // 条数只认 seam 请求（宿主 web_search 的 searchMaxResults）：要多少给多少，
+          // 没给上限才用引擎链默认；不另设插件侧上限
+          const asked = request.maxResults
+          const maxResults = typeof asked === 'number' && Number.isInteger(asked) && asked > 0 ? asked : DEFAULT_MAX_RESULTS
           const { items, summary } = await searchChain(request.query, { maxResults, signal })
           return {
             ...(summary ? { content: summary } : {}),
