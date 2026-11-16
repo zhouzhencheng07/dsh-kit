@@ -4,25 +4,32 @@
 // GitHub / arXiv / StackExchange / HN 自动故障转移；原生引用卡片照常渲染（seam 直接
 // 消费 sources[]）。
 //
-// provider 选择：seam 的 searchProvider 配置在 base 层钉成 deepseek-official
-// （付费模型调用，dsh-base/cordis.patch.yml）。本组件加载时才把它改指到 free-search。
+// provider 选择：seam 的 searchProvider 在 base 层钉成宿主自带的 DeepSeek 搜索
+// provider（付费模型调用，dsh-base/cordis.patch.yml；id 随宿主改版换名，按 deepseek-
+// 前缀认）。本组件加载时才把它改指到 free-search。
 // **不要在 bundle patch 里静态钉**：行禁用 = 本模块不物化 = 没有 provider 顶
 // free-search 这个 id，seam 每次搜索抛 WEB_PROVIDER_CONFIGURED_MISSING；加载时接管
 // 才有「关行 = base 钉的官方 provider 原样服务」。
 //
-// 宿主断言（0.2.2-rc.1 代码级，见知识库「DSH 插件开发坑」）：WebRuntime 的 provider
+// 宿主断言（0.2.2-rc.3 代码级 + dev 实测，见知识库「DSH 插件开发坑」）：WebRuntime 的 provider
 // 选择是 volatile 配置引用 web.config.searchProvider（schemastery .volatile() 的产物，
 // {get} + cosmokit 全局写符号），selectSearchProvider 每次 search() 现读
 // get() ?? $DSH_WEB_SEARCH_PROVIDER。本组件加载时经该引用改指到 free-search。
 //
 // 引用缺失 / 不带写符号 / 写了读不回 = 不钉不注册，仅「免费链不生效」，官方搜索照常。
 //
-// 显式钉了别的 provider（profile 补丁层把 id 指回别的）就让路：只在当前值是 undefined
-// 或 base 默认值时才接管。
+// 显式钉了别的 provider（profile 补丁层把 id 指回别的第三方）就让路：只在当前值是
+// undefined 或宿主自带的 DeepSeek 搜索 provider 时才接管。
 import { searchChain } from "./engine-chain.js";
 export const SEARCH_PROVIDER_ID = 'free-search';
-/** base 层钉的官方 provider id（= 无人显式选择时的值，也是我们只在此值上接管的原因） */
-const BASE_PROVIDER_ID = 'deepseek-official';
+/**
+ * 宿主自带的搜索 provider（base 包的 web 行把 `searchProvider` 默认钉着它，也是我们
+ * 只在此值上接管的原因）。宿主换版本会换 id（deepseek-official → deepseek-search-api），
+ * 按前缀认：钉到别家（第三方 provider）才算用户显式选择。
+ */
+function isHostSearchProvider(id) {
+    return id.startsWith('deepseek-');
+}
 /** 条数上限的 schema 默认值（配置给不出合法值时兜底） */
 const DEFAULT_MAX_RESULTS = 2;
 /** cordis volatile 配置引用的写入口：cosmokit 用 Symbol.for 发布，跨 ESM/CJS 副本通用 */
@@ -54,7 +61,7 @@ function pinProvider(web) {
     if (!ref || typeof ref.get !== 'function')
         return null;
     const prev = ref.get();
-    if (prev !== undefined && prev !== BASE_PROVIDER_ID)
+    if (prev !== undefined && !isHostSearchProvider(prev))
         return null;
     if (!writeRef(ref, SEARCH_PROVIDER_ID))
         return null;

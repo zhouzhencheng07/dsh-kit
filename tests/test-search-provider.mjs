@@ -4,7 +4,9 @@
 import assert from 'node:assert/strict'
 import { applyWebSearch, SEARCH_PROVIDER_ID } from '../src/search/web-search.ts'
 
-const OFFICIAL = 'deepseek-official'
+// 宿主自带的 DeepSeek 搜索 provider：base 包在不同版本钉不同 id，两者都该被接管
+const OFFICIAL = 'deepseek-search-api'
+const OFFICIAL_LEGACY = 'deepseek-official'
 /** cosmokit 的 volatile 写协议（宿主配置引用上的写入口） */
 const VOLATILE_WRITE = Symbol.for('cosmokit.volatile.write')
 
@@ -48,7 +50,7 @@ function makeCtx(web) {
 
 const silent = () => {}
 
-// 1) base 默认（deepseek-official）→ 接管：配置引用改指 + provider 注册
+// 1) base 默认（deepseek-search-api）→ 接管：配置引用改指 + provider 注册
 {
   const web = makeWeb()
   const { ctx, unload } = makeCtx(web)
@@ -62,7 +64,19 @@ const silent = () => {}
   unload()
   assert.equal(web.searchProviders.has(SEARCH_PROVIDER_ID), false)
   assert.equal(web.config.searchProvider.get(), OFFICIAL)
-  console.log('PASS  默认钉在官方 provider → 接管 seam 并注册，卸载后还原')
+  console.log('PASS  默认钉在官方 provider（deepseek-search-api）→ 接管 seam 并注册，卸载后还原')
+}
+
+// 1b) 旧版宿主钉的 deepseek-official → 同样接管（id 随宿主改版换名）
+{
+  const web = makeWeb({ provider: OFFICIAL_LEGACY })
+  const { ctx, unload } = makeCtx(web)
+  applyWebSearch(ctx, { getMaxResults: () => 3, log: silent })
+  assert.equal(web.config.searchProvider.get(), SEARCH_PROVIDER_ID)
+  assert.ok(web.searchProviders.has(SEARCH_PROVIDER_ID))
+  unload()
+  assert.equal(web.config.searchProvider.get(), OFFICIAL_LEGACY)
+  console.log('PASS  旧版官方 id（deepseek-official）→ 同样接管，卸载还原')
 }
 
 // 2) 没人钉（引用存在但 undefined）→ 同样接管，卸载还原成 undefined

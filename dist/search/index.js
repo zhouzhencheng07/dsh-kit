@@ -1,6 +1,6 @@
 // dsh-kit 网页搜索组件（宿主半边入口）
 //
-// 免费引擎链替换 base 层钉的付费 deepseek-official：seam 接管与 provider 注册见
+// 免费引擎链替换 base 层默认钉的官方搜索 provider：seam 接管与 provider 注册见
 // ./web-search.ts，引擎实现在 ./engines/。组件行关闭 = 本模块不物化 = 不接管 seam，
 // base 钉的官方搜索原样生效——行开关就是这块能力的总开关，切行即时生效。
 // 唯一配置项 searchMaxResults 是本组件自己的 Config，编辑面在插件页本组件行的
