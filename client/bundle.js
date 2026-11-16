@@ -13650,11 +13650,11 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
 // sessionId 给的共享目录 store，composer 模型座同源）归类出 deepseek/opencode
 // 卡位，端点没配对应 provider 或识别不出（如 sensenova）= 不出。芯片只放
 // 数值（¥余额 / 5h 窗口百分比），全名在悬停提示；点芯片浮层贴正上方只出该家
-// 明细——定位与关闭复用官方 primitives 的 useAnchoredPosition /
-// useDismissOnOutsidePointer / Tooltip，面板样式复刻官方 ContextMeter 浮层
-// （哈希类名复用不了，CSS 原样抄）；primitives 缺位时降级为右下角
-// 固定浮层、无 Tooltip。modelDirectories 是懒就绪服务：就绪时 version++ 通知
-// 订阅者重跑 effect，否则「服务后到」的挂载永远拿不到数据源。
+// 明细——关闭复用官方 primitives 的 useDismissOnOutsidePointer / Tooltip，面板
+// 样式复刻官方 ContextMeter 浮层（哈希类名复用不了，CSS 原样抄）；定位自己量
+// 芯片与面板的 DOM 矩形算，不依赖宿主的定位钩子（各版本不一定有）。Tooltip
+// 缺位时芯片退成带 title 的按钮。modelDirectories 是懒就绪服务：就绪时
+// version++ 通知订阅者重跑 effect，否则「服务后到」的挂载永远拿不到数据源。
 //
 // 开关 = 本组件自己的 Config（usageEnabled，默认开），经 /dsh-kit-monitor/config
 // 拉取：关 = 端点 403 + 芯片不出，两者由同一份配置驱动。
@@ -14306,7 +14306,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         ".dshk-usage-trigger:hover,.dshk-usage-trigger[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}",
         ".dshk-usage-trigger.dshk-usage-hot{color:var(--dsw-alias-danger)}",
         ".dshk-usage-trigger.dshk-usage-hot:hover,.dshk-usage-trigger.dshk-usage-hot[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover)}",
-        // 面板（定位经 primitives useAnchoredPosition，portal 到 body）；背景是半透明色，磨砂 backdrop-filter 缺了背后的界面会整个透出来
+        // 面板（位置由自己量算后写 left/top，portal 到 body）；背景是半透明色，磨砂 backdrop-filter 缺了背后的界面会整个透出来
         ".dshk-usage-pop{z-index:1100;box-sizing:border-box;background:var(--dsw-specific-menu);backdrop-filter:var(--dsw-menu-backdrop-filter);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);width:min(264px,100vw - 24px);box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-secondary);cursor:default;border:0;border-radius:12px;padding:12px;font-size:12px;line-height:20px;position:fixed}",
         ".dshk-usage-header{align-items:center;gap:6px;display:flex}",
         ".dshk-usage-headline{color:var(--dsw-alias-label-tertiary);min-width:0}",
@@ -14361,8 +14361,6 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       deepseek: "https://platform.deepseek.com/usage",
       opencode: "https://opencode.ai/zh/go",
     };
-    const usageUseAnchoredPosition =
-      dswPrimIcons && typeof dswPrimIcons.useAnchoredPosition === "function" ? dswPrimIcons.useAnchoredPosition : null;
     const usageUseDismiss =
       dswPrimIcons && typeof dswPrimIcons.useDismissOnOutsidePointer === "function" ? dswPrimIcons.useDismissOnOutsidePointer : null;
     const usageTooltip = dswIcon("Tooltip");
@@ -14510,6 +14508,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       }, [sessionId, dirsVersion]);
       const [data, setData] = react.useState(() => usageData.body);
       const [open, setOpen] = react.useState(false);
+      const [pos, setPos] = react.useState(null); // 浮层 left/top（量 DOM 算）
       const anchorRef = react.useRef(null); // 芯片按钮（浮层锚点）
       const panelRef = react.useRef(null);
       const load = react.useCallback(async (fresh) => {
@@ -14552,28 +14551,54 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
         document.addEventListener("keydown", onKey);
         return () => document.removeEventListener("keydown", onKey);
       }, [open]);
-      // 官方 primitives 钩子：模块级判定可用性（运行期恒定），条件调用不违反 hooks 规则
-      const position = usageUseAnchoredPosition
-        ? usageUseAnchoredPosition({ open, anchorRef, panelRef, side: "top", gap: 8, margin: 12 })
-        : null;
+      // 关闭钩子：点芯片与面板之外即关（primitives 缺位时不关，靠 Esc / 再点芯片）
       if (usageUseDismiss) usageUseDismiss(anchorRef, open, setOpen, panelRef);
-      // 官方定位会把 top 钳进视口（Math.max(top, margin)）——composer 偏上时上方空间
-      // 不足，面板就被压到锚点下方（「向下展开」）。把面板 max-height 限到锚点上方
-      // 空间，钳制条件永不触发，面板恒贴芯片正上方，放不下就内部滚动
+      // 定位自己算：面板固定贴芯片正上方；上方放不下先限高让面板内部滚动，
+      // 而不是把面板压到芯片下方。开着时每帧只读一次芯片矩形，位置变了
+      // （composer 随输入长高、窗口 resize）才重新摆
       react.useLayoutEffect(() => {
-        if (!open) return undefined;
-        const cap = () => {
-          const rect = anchorRef.current ? anchorRef.current.getBoundingClientRect() : null;
+        if (!open) {
+          setPos(null);
+          return undefined;
+        }
+        let alive = true;
+        let raf = 0;
+        let lastAnchor = "";
+        const place = () => {
+          const anchor = anchorRef.current;
           const panel = panelRef.current;
-          if (!rect || !panel) return;
-          panel.style.maxHeight = `${Math.max(rect.top - 20, 160)}px`;
+          if (!anchor || !panel) return;
+          const rect = anchor.getBoundingClientRect();
+          const cap = `${Math.max(rect.top - 20, 160)}px`;
+          if (panel.style.maxHeight !== cap) panel.style.maxHeight = cap;
+          const width = panel.offsetWidth;
+          const height = panel.offsetHeight;
+          const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+          const top = Math.max(12, rect.top - height - 8);
+          setPos((prev) => (prev && prev.left === left && prev.top === top ? prev : { left, top }));
         };
-        cap();
-        window.addEventListener("scroll", cap, true);
-        window.addEventListener("resize", cap);
+        const tick = () => {
+          if (!alive) return;
+          const anchor = anchorRef.current;
+          if (anchor) {
+            const rect = anchor.getBoundingClientRect();
+            const key = `${rect.left}:${rect.top}:${rect.width}:${rect.height}`;
+            if (key !== lastAnchor) {
+              lastAnchor = key;
+              place();
+            }
+          }
+          raf = requestAnimationFrame(tick);
+        };
+        place();
+        raf = requestAnimationFrame(tick);
+        window.addEventListener("resize", place);
+        window.addEventListener("scroll", place, true);
         return () => {
-          window.removeEventListener("scroll", cap, true);
-          window.removeEventListener("resize", cap);
+          alive = false;
+          cancelAnimationFrame(raf);
+          window.removeEventListener("resize", place);
+          window.removeEventListener("scroll", place, true);
         };
       }, [open]);
 
@@ -14653,7 +14678,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
           jsxRuntime.jsxs("div", {
             ref: panelRef,
             className: "dshk-usage-pop",
-            style: position ?? { visibility: "hidden", left: 0, top: 0 },
+            style: pos ? { left: pos.left, top: pos.top } : { visibility: "hidden", left: 0, top: 0 },
             role: "dialog",
             "aria-label": kindTitle(),
             children: [
@@ -14703,7 +14728,7 @@ body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:n
       });
       return jsxRuntime.jsxs("div", { className: "dshk-usage", children: [
         usageTooltip
-          ? jsxRuntime.jsx(usageTooltip, { label: tooltipLabel, side: "top", delayMs: 500, disabled: open, children: trigger })
+          ? jsxRuntime.jsx(usageTooltip, { label: tooltipLabel, side: "top", delayMs: 500, disabled: open, portal: true, children: trigger })
           : jsxRuntime.jsx("span", { title: tooltipLabel, children: trigger }),
         panel,
       ] });

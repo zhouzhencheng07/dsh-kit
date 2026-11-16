@@ -89,7 +89,6 @@ const reactDomStub = { createPortal: (children) => ({ type: "portal", props: { c
 const jsxPrim = (tag) => (props) => jsxRuntimeStub.jsxs(tag, props);
 const primStub = {
   Tooltip: jsxPrim("dsw-tooltip"),
-  useAnchoredPosition: () => null,
   useDismissOnOutsidePointer: () => {},
   SettingsForm: jsxPrim("dsw-settings-form"),
   SettingsValueField: jsxPrim("dsw-settings-field"),
