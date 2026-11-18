@@ -2721,8 +2721,13 @@ ellipsis，窄列只截字不破版 */
       qzKinds: "题型",
       qzPerRound: "每轮题数",
       qzPoolInfo: "共 {n} 题 · 每轮 {m} 题",
-      qzThreshold: "阈值",
-      qzThresholdTip: "测验：连对几次算已掌握；刷题：连对几次过关",
+      qzMasteryHint: "连对 {t} 次算掌握",
+      qzThreshold: "掌握阈值",
+      qzThresholdMenu: "掌握阈值…",
+      qzThresholdNote: "改动会按新阈值重判已掌握的题",
+      qzDrillPassStreak: "连对几次过关",
+      qzStart: "开始",
+      qzOk: "确定",
       qzCancel: "取消",
       qzDrill: "刷题",
       qzQuiz: "测验",
@@ -3145,8 +3150,13 @@ ellipsis，窄列只截字不破版 */
       qzKinds: "Types",
       qzPerRound: "Questions per round",
       qzPoolInfo: "{n} questions · {m} per round",
-      qzThreshold: "Threshold",
-      qzThresholdTip: "Quiz: correct streak that counts as mastered; Drill: streak that passes a question",
+      qzMasteryHint: "{t} in a row counts as mastered",
+      qzThreshold: "Mastery threshold",
+      qzThresholdMenu: "Mastery threshold…",
+      qzThresholdNote: "Mastery is re-judged with the new threshold",
+      qzDrillPassStreak: "Streak to pass",
+      qzStart: "Start",
+      qzOk: "OK",
       qzCancel: "Cancel",
       qzDrill: "Drill",
       qzQuiz: "Quiz",
@@ -7269,6 +7279,10 @@ ellipsis，窄列只截字不破版 */
       const [refMenu, setRefMenu] = react.useState(null);
       // 资料面板的第二屏（添加）：与清单同在一个弹层里切，见 openMaterials
       const [materialsAdd, setMaterialsAdd] = react.useState(false);
+      // 工具条 ⋯ 菜单（目前只有「掌握阈值…」）+ 阈值对话框：新 state 追加在末尾
+      const [toolMenuRect, setToolMenuRect] = react.useState(null);
+      const [thrOpen, setThrOpen] = react.useState(false);
+      const toolMenuAnchorRef = react.useRef(null);
       const railRef = react.useRef(null);
       const manualRefresh = react.useCallback(async () => {
         setRefreshing(true);
@@ -7322,6 +7336,13 @@ ellipsis，窄列只截字不破版 */
           if (ok) flashToast(t("treeCopied"));
         });
       };
+      /** 工具条 ⋯：同一颗钮再点一次关（菜单自己的关闭手势会跳过落在它上面的点击） */
+      const openToolMenu = (e) => {
+        const btn = e.currentTarget;
+        toolMenuAnchorRef.current = btn;
+        const rect = btn.getBoundingClientRect();
+        setToolMenuRect((prev) => (prev === null ? { top: rect.bottom + 6, right: Math.max(8, (window.innerWidth || 1200) - rect.right) } : null));
+      };
 
       // 搜索结果是锚在搜索框下的临时浮层（不挤目录树）：随输入实时更新（去抖），
       // 点浮层外 / Esc / 选中 / 清空即关。seq 守卫：连打时只认最后一次查询的回包
@@ -7367,6 +7388,31 @@ ellipsis，窄列只截字不破版 */
         document.addEventListener("pointerdown", onDown, true);
         return () => document.removeEventListener("pointerdown", onDown, true);
       }, [searchRes]);
+
+      // 工具条 ⋯ 菜单同一条关闭契约（点菜单与触发钮之外 / Esc）
+      react.useEffect(() => {
+        if (toolMenuRect === null) return undefined;
+        const onDown = (e) => {
+          if (!(e.target instanceof Element)) {
+            setToolMenuRect(null);
+            return;
+          }
+          if (e.target.closest(".dshk-vault-barmenu") !== null) return;
+          if (toolMenuAnchorRef.current !== null && toolMenuAnchorRef.current.contains(e.target)) return;
+          setToolMenuRect(null);
+        };
+        const onKey = (e) => {
+          if (e.key !== "Escape") return;
+          e.stopPropagation();
+          setToolMenuRect(null);
+        };
+        document.addEventListener("pointerdown", onDown, true);
+        window.addEventListener("keydown", onKey, true);
+        return () => {
+          document.removeEventListener("pointerdown", onDown, true);
+          window.removeEventListener("keydown", onKey, true);
+        };
+      }, [toolMenuRect]);
 
       // toast 自动消隐
       react.useEffect(() => {
@@ -8105,8 +8151,29 @@ ellipsis，窄列只截字不破版 */
             }),
             jsxRuntime.jsx(KitTip, { label: t("homeTab"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("homeTab"), onClick: () => openRightbarTab("home"), children: jsxRuntime.jsx(OfficialIcon, { names: ["HomeOutline16", "IconHomeOutline16"], glyph: "⌂" }) }) }),
             jsxRuntime.jsx(KitTip, { label: t("vaultRefresh"), children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("vaultRefresh"), disabled: refreshing, onClick: () => void manualRefresh(), children: jsxRuntime.jsx(OfficialIcon, { names: ["IconRefreshOutline16", "IconRefreshOutline14"], glyph: "↻" }) }) }),
+            // 面板级设置收在 ⋯ 里（掌握阈值是整库一份，不跟某一次测验走）
+            jsxRuntime.jsx(KitTip, {
+              label: t("treeMenu"),
+              children: jsxRuntime.jsx("button", { type: "button", className: "dshk-sched-navbtn", "aria-label": t("treeMenu"), onClick: openToolMenu, children: "⋯" }),
+            }),
           ] }),
         ] }),
+        toolMenuRect === null
+          ? null
+          : jsxRuntime.jsxs("div", {
+              className: "dshk-vault-barmenu",
+              style: { top: toolMenuRect.top, right: toolMenuRect.right },
+              children: [
+                jsxRuntime.jsx("div", {
+                  className: "dshk-vault-barmenu-item",
+                  onClick: () => {
+                    setToolMenuRect(null);
+                    setThrOpen(true);
+                  },
+                  children: t("qzThresholdMenu"),
+                }),
+              ],
+            }, "toolmenu"),
         searchRes !== null && searchRect
           ? jsxRuntime.jsxs("div", {
               className: "dshk-vault-vsearch",
@@ -8400,6 +8467,7 @@ ellipsis，窄列只截字不破版 */
               ],
             })
           : null,
+        thrOpen === true ? jsxRuntime.jsx(VaultQuizThresholdDialog, { onClose: () => setThrOpen(false) }, "thr") : null,
         toast !== "" ? jsxRuntime.jsx("div", { className: "dshk-vault-toast", role: "status", children: toast }) : null,
       ] });
 
@@ -9799,6 +9867,8 @@ ellipsis，窄列只截字不破版 */
       const [showAll, setShowAll] = react.useState(false);
       const [studySet, setStudySet] = react.useState(null); // { dir, name } | null
       const [nonce, setNonce] = react.useState(0);
+      // 阈值改过（按新阈值重判了掌握度）：每集的「已掌握/能答」跟着重取
+      const progressRev = useQzProgressRev();
       react.useEffect(() => {
         if (req === null) setNonce((n) => n + 1);
       }, [req]);
@@ -9855,7 +9925,7 @@ ellipsis，窄列只截字不破版 */
         return () => {
           alive = false;
         };
-      }, [nonce, setsKey]);
+      }, [nonce, setsKey, progressRev]);
       // 学习总览行里的 rel（去扩展名）→ 绝对页路径：优先索引里的真实路径（.markdown
       // 也认），索引里没有（刚加的页 / 索引没刷新）再按 .md 兜底拼
       const studyPageAbsOf = (rel) => {
@@ -10169,6 +10239,8 @@ ellipsis，窄列只截字不破版 */
     // 读写全走宿主半边 /dsh-kit/vault/quiz*。入口：页条「测验」钮 + 树行 ⋯ 菜单
     // 「测验」（目录 = 范围、页 = 单页）；浮层只在 VaultShell 挂一份，模块级请求状态。
     // 会话不落盘：范围设置 → 逐题作答（即时判题）→ 小结；页面入口再给「编辑题目」。
+    // 阈值是整库一份（改动按新阈值重判已掌握），设置入口收在面板工具条 ⋯；
+    // 刷题只在会话内算连对，过关连对开局现填、不写 quiz-threshold。
 
     const QZ_KINDS = ["single", "multi", "judge", "blank"];
     const QZ_LETTERS = "ABCDEFGHIJ";
@@ -10388,6 +10460,82 @@ ellipsis，窄列只截字不破版 */
       };
     }
 
+    // ── 阈值改动后的掌握度重取（阈值整库一份，改它会按新阈值重判已掌握）──
+    //    没有单独的设置读端点：现值跟掌握度一起从 quiz-progress 拿；改完 bump 一次，
+    //    页条徽标与测验范围面板各自重跑自己那份取数（同一条 quiz-progress 路径）。
+    let qzProgressRev = 0;
+    const qzProgressSubs = new Set();
+    function qzProgressBump() {
+      qzProgressRev += 1;
+      for (const fn of qzProgressSubs) fn();
+    }
+    /** 订阅阈值改动：返回值挂进退订数 effect 的依赖表 */
+    function useQzProgressRev() {
+      const [rev, setRev] = react.useState(qzProgressRev);
+      react.useEffect(() => {
+        const fn = () => setRev(qzProgressRev);
+        qzProgressSubs.add(fn);
+        return () => {
+          qzProgressSubs.delete(fn);
+        };
+      }, []);
+      return rev;
+    }
+
+    /** 掌握阈值对话框：工具条 ⋯ 菜单里开，1–20 落库根 .quiz-state/settings.json（与望舒同一份） */
+    function VaultQuizThresholdDialog({ onClose }) {
+      const [value, setValue] = react.useState(null);
+      const [busy, setBusy] = react.useState(false);
+      react.useEffect(() => {
+        let alive = true;
+        kitJson("/dsh-kit/vault/quiz-progress?dir=", undefined, (b) => !!b)
+          .then((body) => {
+            const v = Math.min(Math.max(Math.round(Number(body?.threshold) || 3), 1), 20);
+            if (alive) setValue(v);
+          })
+          .catch(() => {
+            if (alive) setValue(3);
+          });
+        return () => {
+          alive = false;
+        };
+      }, []);
+      const submit = () => {
+        if (busy === true) return;
+        const next = Math.min(Math.max(Math.round(Number(value) || 1), 1), 20);
+        setBusy(true);
+        vaultOp("/dsh-kit/vault/quiz-threshold", { value: next })
+          .then(() => {
+            qzProgressBump();
+            onClose();
+          })
+          .catch((error) => {
+            setBusy(false);
+            flashToast(String(error?.message ?? error));
+          });
+      };
+      return jsxRuntime.jsxs(VaultDialog, {
+        title: t("qzThreshold"),
+        onClose,
+        children: [
+          jsxRuntime.jsx("input", {
+            className: "dshk-quiz-input dshk-quiz-num",
+            type: "number",
+            min: 1,
+            max: 20,
+            value: value ?? "",
+            disabled: value === null,
+            onChange: (e) => setValue(e.target.value === "" ? null : Number(e.target.value)),
+          }),
+          jsxRuntime.jsx("div", { className: "dshk-quiz-sub", style: { marginTop: 6 }, children: t("qzThresholdNote") }),
+          jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: onClose, children: t("qzCancel") }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-save", disabled: busy === true, onClick: submit, children: t("qzOk") }),
+          ] }),
+        ],
+      });
+    }
+
     // ── 行内公式（选项/答案行用）：定界规则与桌面端同一份（"$5 和 $6" 不误配）──
     const QZ_MATH_RE = /^\$(?!\s)((?:\\.|[^$\n])+?)(?<!\s)\$(?!\$|\w)/;
     const qzEscapeHtml = (s) =>
@@ -10476,6 +10624,8 @@ ellipsis，窄列只截字不破版 */
     // ── 页条「测验」钮：徽标 = 已掌握/能答题数，全掌握标绿；5s 轮询指纹（agent 改题也看得见）──
     function VaultQuizEntry({ path, root, active }) {
       const rel = qzPageRel(root, path);
+      // 阈值改过（按新阈值重判完掌握度）就重取一次徽标
+      const progressRev = useQzProgressRev();
       // null = 还没读到；{ count, mastered } = 能答题数与其中已掌握数（全部掌握时入口标绿）
       const [stat, setStat] = react.useState(null);
       react.useEffect(() => {
@@ -10514,7 +10664,7 @@ ellipsis，窄列只截字不破版 */
           alive = false;
           clearInterval(timer);
         };
-      }, [rel, active]);
+      }, [rel, active, progressRev]);
       if (rel === null) return null;
       const done = stat !== null && stat.count > 0 && stat.mastered === stat.count;
       return jsxRuntime.jsx(KitTip, {
@@ -10572,6 +10722,10 @@ ellipsis，窄列只截字不破版 */
       const [quizPerRound, setQuizPerRound] = react.useState(0);
       /** 刷题：会话内的池子与连对；null = 这次是测验 */
       const [drill, setDrill] = react.useState(null);
+      /** 刷题开局小对话框：{perRound, threshold}；null = 没开 */
+      const [drillAsk, setDrillAsk] = react.useState(null);
+      // 阈值改过就重取范围数据（进展里的已掌握会按新阈值变化）
+      const progressRev = useQzProgressRev();
       const [round, setRound] = react.useState(1);
       /** 本轮过关几道（刷题小结用） */
       const [roundRetired, setRoundRetired] = react.useState(0);
@@ -10645,7 +10799,7 @@ ellipsis，窄列只截字不破版 */
           clearInterval(timer);
           loaderRef.current = null;
         };
-      }, [rel, isPage]);
+      }, [rel, isPage, progressRev]);
 
       const progressMap = progress?.progress ?? {};
       const threshold = progress?.threshold ?? 3;
@@ -10673,10 +10827,10 @@ ellipsis，窄列只截字不破版 */
         roundNewRef.current = new Set();
         setStage("session");
       };
-      /** 刷题：开局快照池子与阈值，每轮从还没过关的题里抽 */
-      const startDrill = (pool, perRound) => {
+      /** 刷题：开局快照池子与阈值（阈值由开局对话框给，只这一次会话用），每轮从还没过关的题里抽 */
+      const startDrill = (pool, perRound, thr) => {
         if (pool.length === 0) return;
-        const state = qzDrillStart(pool, perRound, threshold);
+        const state = qzDrillStart(pool, perRound, thr);
         const items = qzDrillRound(state).map((q) => qzMakeItem(q, q.rel ?? ""));
         setDrill(state);
         setRound(1);
@@ -10822,7 +10976,8 @@ ellipsis，窄列只截字不破版 */
       react.useEffect(() => {
         const onKey = (e) => {
           if (e.key === "Escape") {
-            if (stage === "edit") return;
+            // 浮层里还叠着对话框（刷题开局）时 Esc 归它，「编辑题目」是带未保存内容的输入面：都不整层关
+            if (stage === "edit" || drillAsk !== null) return;
             e.preventDefault();
             e.stopPropagation();
             qzClose();
@@ -10865,15 +11020,12 @@ ellipsis，窄列只截字不破版 */
           canEdit: true,
           pages: list,
           progress: progress,
+          drillAsk,
+          setDrillAsk,
           onStart: startQuiz,
           onDrill: startDrill,
           onEdit: (pageRel) => qzOpen({ kind: "page", path: joinRelPath(root, pageRel), title: pageRel.split("/").pop() ?? pageRel }),
           onClose: qzClose,
-          onThreshold: (value) => {
-            void vaultOp("/dsh-kit/vault/quiz-threshold", { value })
-              .then(() => loaderRef.current?.())
-              .catch(() => {});
-          },
         });
       } else if (stage === "edit" && isPage === true) {
         node = jsxRuntime.jsx(VaultQuizQuestions, {
@@ -11062,14 +11214,14 @@ ellipsis，窄列只截字不破版 */
       ] });
     }
     // ── 范围设置（测验 / 刷题两个入口）：页面入口锁一页；范围入口多一层页面勾选。
-    //   每轮题数就是切轮 / 每轮抽几道；阈值同时管测验的「已掌握」与刷题的「过关」──
-    function VaultQuizScope({ isPage, canEdit, pages, progress, onStart, onDrill, onEdit, onClose, onThreshold }) {
+    //   每轮题数就是切轮 / 每轮抽几道；掌握阈值只读（整库一份，改它按新阈值重判已掌握），
+    //   刷题的过关连对在开局对话框里现填、只这一次会话有效──
+    function VaultQuizScope({ isPage, canEdit, pages, progress, onStart, onDrill, onEdit, onClose, drillAsk, setDrillAsk }) {
       const [status, setStatus] = react.useState("unmastered");
       const [kinds, setKinds] = react.useState(QZ_KINDS.slice());
       // null = 跟着页面清单走（新页立刻参与出题）；动过就以此为准
       const [picked, setPicked] = react.useState(null);
       const [limit, setLimit] = react.useState(20);
-      const [thrDraft, setThrDraft] = react.useState(null);
       const list = pages ?? [];
       const progressMap = progress?.progress ?? {};
       const threshold = progress?.threshold ?? 3;
@@ -11079,7 +11231,6 @@ ellipsis，窄列只截字不破版 */
       // 每轮题数的上限跟着筛选走：池子里只剩 2 道就显示 2（填过的数留着，池子变大再露出来）
       const cap = Math.max(1, pool.length);
       const perRound = Math.min(limit, pool.length);
-      const thr = thrDraft ?? threshold;
       const allPicked = picked !== null && picked.length === list.length;
       const seg = (options, value, onChange) =>
         jsxRuntime.jsx("span", { className: "dshk-quiz-seg", children: options.map((o) =>
@@ -11146,27 +11297,47 @@ ellipsis，窄列只截字不破版 */
         jsxRuntime.jsxs("div", { className: "dshk-quiz-foot", children: [
           jsxRuntime.jsx("span", { className: "dshk-quiz-sub", children: t("qzPoolInfo").replace("{n}", String(pool.length)).replace("{m}", String(perRound)) }),
           jsxRuntime.jsxs("div", { className: "dshk-quiz-foctr", children: [
-            jsxRuntime.jsxs("label", { className: "dshk-quiz-row", style: { margin: 0 }, children: [
-              jsxRuntime.jsx("span", { className: "dshk-quiz-sub", title: t("qzThresholdTip"), children: t("qzThreshold") }),
-              jsxRuntime.jsx("input", {
-                className: "dshk-quiz-input dshk-quiz-num",
-                type: "number",
-                min: 1,
-                max: 20,
-                value: thr,
-                onChange: (e) => setThrDraft(e.target.value === "" ? null : Number(e.target.value)),
-                onBlur: () => {
-                  const v = Math.min(Math.max(Math.round(Number(thr) || 1), 1), 20);
-                  if (v !== threshold) onThreshold(v);
-                  else setThrDraft(null);
-                },
-              }),
-            ] }),
             jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: onClose, children: t("qzCancel") }),
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", disabled: pool.length === 0, onClick: () => onDrill(pool, perRound), children: t("qzDrill") }),
+            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", disabled: pool.length === 0, onClick: () => setDrillAsk({ perRound: Math.max(1, perRound), threshold }), children: t("qzDrill") }),
             jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", disabled: pool.length === 0, onClick: () => onStart(pool, perRound), children: t("qzQuiz") }),
+            // 掌握阈值只读：整库一份，改它要按新阈值重判已掌握，入口收在面板工具条 ⋯
+            jsxRuntime.jsx("span", { className: "dshk-quiz-sub", style: { flex: "none", whiteSpace: "nowrap" }, children: t("qzMasteryHint").replace("{t}", String(threshold)) }),
           ] }),
         ] }),
+        // 刷题的阈值只对这一次会话生效（不落盘）：开局先问每轮题数与过关连对
+        drillAsk === null ? null : jsxRuntime.jsxs(VaultDialog, {
+          title: t("qzDrill"),
+          onClose: () => setDrillAsk(null),
+          children: [
+            jsxRuntime.jsx("div", { className: "dshk-quiz-label", children: t("qzPerRound") }),
+            jsxRuntime.jsx("input", {
+              className: "dshk-quiz-input dshk-quiz-num",
+              type: "number",
+              min: 1,
+              max: cap,
+              value: drillAsk.perRound,
+              onChange: (e) => setDrillAsk((d) => ({ ...d, perRound: e.target.value === "" ? 1 : Number(e.target.value) })),
+            }),
+            jsxRuntime.jsx("div", { className: "dshk-quiz-label", children: t("qzDrillPassStreak") }),
+            jsxRuntime.jsx("input", {
+              className: "dshk-quiz-input dshk-quiz-num",
+              type: "number",
+              min: 1,
+              max: 20,
+              value: drillAsk.threshold,
+              onChange: (e) => setDrillAsk((d) => ({ ...d, threshold: e.target.value === "" ? 1 : Number(e.target.value) })),
+            }),
+            jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: () => setDrillAsk(null), children: t("qzCancel") }),
+              jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-primary", onClick: () => {
+                const per = Math.min(Math.max(Math.round(Number(drillAsk.perRound) || 1), 1), cap);
+                const thr = Math.min(Math.max(Math.round(Number(drillAsk.threshold) || 1), 1), 20);
+                setDrillAsk(null);
+                onDrill(pool, per, thr);
+              }, children: t("qzStart") }),
+            ] }),
+          ],
+        }),
       ] });
     }
 
@@ -11951,6 +12122,7 @@ ellipsis，窄列只截字不破版 */
     exports.VaultQuizModal = VaultQuizModal;
     exports.VaultQuizEntry = VaultQuizEntry;
     exports.VaultQuizScope = VaultQuizScope;
+    exports.VaultQuizThresholdDialog = VaultQuizThresholdDialog;
     exports.qzDrillKey = qzDrillKey;
     exports.matIsMaterialLink = matIsMaterialLink;
     exports.matPageRange = matPageRange;

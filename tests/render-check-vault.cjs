@@ -182,6 +182,75 @@ check(
     check("qzDrillReset：连对归零，已过关的题放回剩余", reset.retired === 1 && reset.pool.length === 1 && reset.streak[comps.qzDrillKey(pool[1])] === 0);
     check("qzDrillKey：rel|id（不同页可能有同内容的题）", comps.qzDrillKey(pool[0]) === "数学/1|a");
     check("qzDrillRound：从还没过关的题里抽，不重复", comps.qzDrillRound(r2.state).length === 1 && comps.qzDrillRound(r2.state)[0].id === "b");
+    // 范围面板：掌握阈值输入退役（整库一份、改了要重判已掌握，不跟一次测验走），只留只读小字；
+    // 刷题开局先弹小对话框（每轮题数 / 过关连对都只这一次有效）
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    const scopePages = [{ rel: "数学/1", questions: [
+      { id: "1", type: "judge", stem: "x", options: [], answer: true },
+      { id: "2", type: "judge", stem: "y", options: [], answer: true },
+    ] }];
+    let drillAsked = null;
+    const scopeBase = {
+      isPage: true,
+      canEdit: true,
+      pages: scopePages,
+      progress: { version: 1, threshold: 4, progress: {} },
+      drillAsk: null,
+      setDrillAsk: (v) => { drillAsked = v; },
+      onStart: () => {},
+      onDrill: () => {},
+      onEdit: () => {},
+      onClose: () => {},
+    };
+    comps.VaultQuizScope(scopeBase);
+    const hintLine = callLog.find((c) => c[2] && c[2].className === "dshk-quiz-sub" && ["连对 4 次算掌握", "4 in a row counts as mastered"].includes(String(c[2].children)));
+    const scopeNums = callLog.filter((c) => c[2] && c[2].className === "dshk-quiz-input dshk-quiz-num" && c[2].type === "number");
+    const drillBtn = callLog.find((c) => c[0] === "jsx" && c[1] === "button" && ["刷题", "Drill"].includes(c[2].children));
+    check(
+      "范围面板：阈值只剩只读小字「连对 N 次算掌握」，阈值输入框不再出现在面板里",
+      !!hintLine && scopeNums.length === 1 && scopeNums[0][2].max === 2 && !!drillBtn,
+    );
+    if (drillBtn) drillBtn[2].onClick();
+    check(
+      "点「刷题」只弹开局对话框：默认每轮 = 面板当前值（池子封顶）、过关连对 = 全局阈值",
+      JSON.stringify(drillAsked) === JSON.stringify({ perRound: 2, threshold: 4 }),
+    );
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    let drillStart = null;
+    let drillClose = "untouched";
+    comps.VaultQuizScope({
+      ...scopeBase,
+      drillAsk: { perRound: 2, threshold: 5 },
+      setDrillAsk: (v) => { drillClose = v; },
+      onDrill: (drillPool, per, thr) => { drillStart = { n: drillPool.length, per, thr }; },
+    });
+    const drillDialog = callLog.find((c) => c[1] === comps.VaultDialog);
+    const dialogNums = callLog.filter((c) => c[2] && c[2].className === "dshk-quiz-input dshk-quiz-num" && c[2].type === "number");
+    const startBtn = callLog.find((c) => c[0] === "jsx" && c[1] === "button" && ["开始", "Start"].includes(c[2].children));
+    check(
+      "刷题对话框：每轮题数 + 连对几次过关两个输入（回显传入值），取消 / 开始",
+      !!drillDialog && dialogNums.length === 3 && dialogNums[1][2].value === 2 && dialogNums[2][2].value === 5 &&
+        !!startBtn && !!callLog.find((c) => c[0] === "jsx" && c[1] === "button" && ["取消", "Cancel"].includes(c[2].children)),
+    );
+    if (startBtn) startBtn[2].onClick();
+    check(
+      "「开始」才开局：beginDrill(pool, 每轮, 过关连对) 用对话框的值并关掉对话框",
+      drillClose === null && JSON.stringify(drillStart) === JSON.stringify({ n: 2, per: 2, thr: 5 }),
+    );
+    stateSeq = 0;
+    stateStore.clear();
+    callLog = [];
+    const thrShell = comps.VaultQuizThresholdDialog({ onClose: () => {} });
+    const thrNum = callLog.find((c) => c[2] && c[2].className === "dshk-quiz-input dshk-quiz-num" && c[2].min === 1 && c[2].max === 20);
+    const thrNote = callLog.find((c) => c[2] && c[2].className === "dshk-quiz-sub" && ["改动会按新阈值重判已掌握的题", "Mastery is re-judged with the new threshold"].includes(String(c[2].children)));
+    check(
+      "掌握阈值对话框：1–20 数字输入 + 一句重判说明（现值等 quiz-progress 到了才可编辑）",
+      !!thrShell && thrShell.type === comps.VaultDialog && !!thrNum && thrNum[2].disabled === true && !!thrNote,
+    );
     // 资料引用：判据 / 页锚 / 解析池（与宿主 scanner.ts 同一口径）
     check(
       "matIsMaterialLink/matPageRange/matPageLabel：页锚与文档扩展名两条判据、显示串",
@@ -841,6 +910,42 @@ async function checkApply() {
       bundleSrc.includes('t("qzDrill")') && bundleSrc.includes("onDrill: startDrill") &&
       !bundleSrc.includes('/dsh-kit/vault/drill'),
   );
+  // 范围面板：掌握阈值输入退役（改它要按新阈值重判整库掌握度，不跟一次测验走），
+  // 只留只读小字；刷题开局先问每轮题数与过关连对，阈值只这一次会话有效
+  const scopeBody = sliceBetween("function VaultQuizScope(", "// ── 出题：题目列表");
+  const drillBody = sliceBetween("const startDrill = (pool, perRound, thr) => {", "/** 记一笔「新掌握」");
+  check(
+    "范围面板不带掌握阈值输入：只读小字「连对 {t} 次算掌握」，值取 progress.threshold",
+    scopeBody.includes('t("qzMasteryHint")') && scopeBody.includes("progress?.threshold") &&
+      !scopeBody.includes("onThreshold") && !scopeBody.includes("thrDraft") && !scopeBody.includes("quiz-threshold"),
+  );
+  check(
+    "刷题先弹开局对话框：每轮题数（默认面板值）+ 连对几次过关（默认全局阈值），开始才 beginDrill",
+    scopeBody.includes("drillAsk === null ? null : jsxRuntime.jsxs(VaultDialog") &&
+      scopeBody.includes('t("qzDrillPassStreak")') && scopeBody.includes('t("qzStart")') &&
+      scopeBody.includes("setDrillAsk({ perRound: Math.max(1, perRound), threshold })") &&
+      scopeBody.includes("onDrill(pool, per, thr)") &&
+      bundleSrc.includes("const startDrill = (pool, perRound, thr)") &&
+      bundleSrc.includes("qzDrillStart(pool, perRound, thr)") &&
+      !drillBody.includes("quiz-threshold"),
+  );
+  // 阈值设置收在面板工具条 ⋯：没有单独的读端点，现值跟掌握度一起从 quiz-progress 拿
+  const thrDlgBody = sliceBetween("function VaultQuizThresholdDialog({ onClose }) {", "// ── 行内公式");
+  check(
+    "掌握阈值收在面板工具条 ⋯ 菜单：1–20 输入 + 重判说明，确定后 POST quiz-threshold 再重取掌握度",
+    bundleSrc.includes('t("qzThresholdMenu")') &&
+      bundleSrc.includes("VaultQuizThresholdDialog, { onClose: () => setThrOpen(false) }") &&
+      thrDlgBody.includes('"/dsh-kit/vault/quiz-progress?dir="') &&
+      thrDlgBody.includes('"/dsh-kit/vault/quiz-threshold"') &&
+      thrDlgBody.includes("min: 1") && thrDlgBody.includes("max: 20") &&
+      thrDlgBody.includes('t("qzThresholdNote")') && thrDlgBody.includes("qzProgressBump()"),
+  );
+  check(
+    "阈值改完掌握度立刻重取：页条徽标与测验范围面板订阅同一条 quiz-progress 取数路径",
+    bundleSrc.includes("const progressRev = useQzProgressRev();") &&
+      bundleSrc.includes("}, [rel, active, progressRev]);") &&
+      bundleSrc.includes("}, [rel, isPage, progressRev]);"),
+  );
   const vaultScannerSrc = read("src/vault/scanner.ts");
   check(
     "资料引用不进页面链接图（宿主与前端同一判据），资料改名改写正文引用",
@@ -874,8 +979,8 @@ async function checkApply() {
   // 测验浮层自己认 Esc：设置 / 作答 / 小结三个阶段都关（不整层关的那一层是「编辑题目」，
   // 那是带未保存内容的输入面，退出走 ✕）
   check(
-    "测验浮层 Esc：设置 / 作答 / 小结都关，编辑题目那层不整层关",
-    /if \(e\.key === "Escape"\) \{\s*\n\s*if \(stage === "edit"\) return;/.test(bundleSrc) &&
+    "测验浮层 Esc：设置 / 作答 / 小结都关；编辑题目与刷题开局对话框叠着时不整层关",
+    /if \(e\.key === "Escape"\) \{\s*\n\s*\/\/[^\n]*\n\s*if \(stage === "edit" \|\| drillAsk !== null\) return;/.test(bundleSrc) &&
       /if \(stage !== "session"\) return;/.test(bundleSrc),
   );
   const quizEntryBody = sliceBetween("function VaultQuizEntry({ path, root, active }) {", "function VaultQuizOverlay() {");

@@ -648,8 +648,40 @@ let vaultFetchPrev = null;
   const barRow = rows[0] ? rows[0][2].children : [];
   const refreshWrap = barRow.find((ch) => ch && ch.props && ["刷新索引与目录树", "Refresh index and tree"].includes(ch.props.label));
   const homeWrap = barRow.find((ch) => ch && ch.props && ["首页", "Home"].includes(ch.props.label));
+  const moreWrap = barRow.find((ch) => ch && ch.props && ["更多操作", "More actions"].includes(ch.props.label));
   const searchBox = barRow.find((ch) => ch && ch.props && ch.props.className === "dshk-vault-search");
-  check("一行 = 搜索框 + 首页钮 + 刷新钮（前进/后退与文件夹筛选框都退役；刷新钮走官方气泡）", barRow.length === 3 && !!searchBox && !!homeWrap && !!refreshWrap && refreshWrap.props.children.props.className === "dshk-sched-navbtn");
+  check(
+    "一行 = 搜索框 + 首页钮 + 刷新钮 + ⋯（前进/后退与文件夹筛选框都退役；刷新钮走官方气泡）",
+    barRow.length === 4 && !!searchBox && !!homeWrap && !!refreshWrap && !!moreWrap &&
+      refreshWrap.props.children.props.className === "dshk-sched-navbtn" && moreWrap.props.children.props.className === "dshk-sched-navbtn",
+  );
+  // 工具条 ⋯：面板级设置入口（掌握阈值整库一份，不跟某一次测验走）；菜单项开对话框。
+  // 这一段自己另起渲染，跑完把 callLog / stateStore 放回去——后面的检查还吃着上面那一拍
+  {
+    const keptLog = callLog;
+    const keptStates = new Map(stateStore);
+    const toolMenuErr = renderVault({
+      0: VAULT_INDEX,
+      1: "",
+      2: null,
+      3: TREE,
+      4: { "D:/v": true },
+      22: { top: 40, right: 20 },
+    });
+    const toolMenuItem = callLog.find((c) => c[2] && c[2].className === "dshk-vault-barmenu-item");
+    check(
+      "工具条 ⋯ 菜单只有「掌握阈值…」一项",
+      toolMenuErr === null && !!toolMenuItem && ["掌握阈值…", "Mastery threshold…"].includes(String(toolMenuItem[2].children)),
+    );
+    const thrErr = renderVault({ 0: VAULT_INDEX, 1: "", 2: null, 3: TREE, 4: { "D:/v": true }, 23: true });
+    check(
+      "「掌握阈值…」开对话框（面板里挂 VaultQuizThresholdDialog，关掉即卸）",
+      thrErr === null && !!callLog.find((c) => c[1] === comps.VaultQuizThresholdDialog),
+    );
+    callLog = keptLog;
+    stateStore.clear();
+    for (const [k, v] of keptStates) stateStore.set(k, v);
+  }
   check(
     "搜索占位「搜索笔记 / 资料库」",
     ["搜索笔记 / 资料库", "Search notes / library"].includes(searchBox && searchBox.props.placeholder),
