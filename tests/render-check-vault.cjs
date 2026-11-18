@@ -220,12 +220,8 @@ check(
     check("requestPdfJump/pdfJumpTake：跳页请求按路径挂起，取走即清", comps.pdfJumpPeek("D:/v/library/书.pdf") === 12 && comps.pdfJumpTake("D:/v/library/书.pdf") === 12 && comps.pdfJumpPeek("D:/v/library/书.pdf") === null);
     comps.requestPdfJump("D:/v/library/书.pdf", 0);
     check("requestPdfJump：页码非法不挂", comps.pdfJumpPeek("D:/v/library/书.pdf") === null);
-    // 学习完成后的询问：入口只挂一条，浮层自己查有没有未掌握的题
-    comps.askStudyQuiz("数学/1.1", "1.1");
-    check("askStudyQuiz：挂起一条询问（rel + 标题）", comps.studyQuizAskGet() !== null && comps.studyQuizAskGet().rel === "数学/1.1" && comps.studyQuizAskGet().title === "1.1");
-    comps.dismissStudyQuiz();
-    check("dismissStudyQuiz：收掉询问", comps.studyQuizAskGet() === null);
-    check("StudyQuizPrompt：无询问时回 null", comps.StudyQuizPrompt() === null);
+    // 学习完成后的询问已撤：完成入口只推进记录，不再挂弹层
+    check("学习完成不再弹询问（相关导出已撤）", comps.askStudyQuiz === undefined && comps.StudyQuizPrompt === undefined && comps.studyQuizAskGet === undefined);
     callLog = [];
     check("VaultQuizOverlay：无请求回 null", comps.VaultQuizOverlay() === null);
     comps.qzOpen({ kind: "page", path: "D:/v/数学/1.1.md", title: "1.1" });
@@ -859,9 +855,9 @@ async function checkApply() {
       bundleSrc.includes("pdfJumpTake(path)") && !bundleSrc.includes("dshk.pdf.pos"),
   );
   check(
-    "学习完成后问「要不要测验未掌握的题」：完成入口都挂 askStudyQuiz，浮层自己查未掌握",
-    (bundleSrc.match(/askStudyQuiz\(/g) || []).length >= 6 &&
-      bundleSrc.includes("function StudyQuizPrompt()") && bundleSrc.includes('auto: "unmastered"'),
+    "学习完成不再问「要不要测验」：没有询问浮层、入口调用与自动开卷",
+    !bundleSrc.includes("StudyQuizPrompt") && !bundleSrc.includes("askStudyQuiz(") &&
+      !bundleSrc.includes("qzStudyAsk") && !bundleSrc.includes('auto: "unmastered"'),
   );
   check(
     "答题不打乱选项、正确答案只给字母（与桌面端同口径）",

@@ -2789,10 +2789,6 @@ ellipsis，窄列只截字不破版 */
       qzMultiNeed: "多选题至少两个答案",
       qzBlankEmpty: "每个空至少给一个答案",
       qzLoadFail: "测验数据读取失败",
-      qzStudyAskTitle: "学习完成",
-      qzStudyAsk: "「{name}」还有 {n} 道未掌握的题，现在测验？",
-      qzStudySkip: "跳过",
-      qzStudyGo: "测验",
 
       // 学习 / 复习（页条入口、学习记录浮层、知识集学习总览）
       studyEntry: "学习",
@@ -3217,10 +3213,6 @@ ellipsis，窄列只截字不破版 */
       qzMultiNeed: "Multiple choice needs two or more answers",
       qzBlankEmpty: "Each blank needs at least one accepted answer",
       qzLoadFail: "Failed to load quiz data",
-      qzStudyAskTitle: "Study complete",
-      qzStudyAsk: "“{name}” still has {n} unmastered questions. Quiz now?",
-      qzStudySkip: "Skip",
-      qzStudyGo: "Quiz",
 
       // Study / review
       studyEntry: "Study",
@@ -4366,7 +4358,6 @@ ellipsis，窄列只截字不破版 */
               flashToast(rec === null
                 ? t("studyCompleteThis")
                 : t("schedReviewNext").replace("{n}", String(rec.reps ?? 0)).replace("{date}", String(rec.dueAt ?? "")).replace("{label}", studyDueLabel(rec.dueAt)));
-              askStudyQuiz(rel, ev.title);
               onClose();
             })
             .catch((e) => flashToast(t("studyOpFail").replace("{error}", e && e.message ? e.message : "?")));
@@ -4768,7 +4759,6 @@ ellipsis，窄列只截字不破版 */
           .then((body) => {
             const rec = body && body.state && body.state.record ? body.state.record : null;
             if (rec === null) return;
-            askStudyQuiz(rel);
             setReviewToast({
               rel: String(body.state.rel ?? rel),
               reps: Number(rec.reps) || 0,
@@ -5125,7 +5115,6 @@ ellipsis，窄列只截字不破版 */
             flashToast(rec === null
               ? t("studyCompleteThis")
               : t("schedReviewNext").replace("{n}", String(rec.reps ?? 0)).replace("{date}", String(rec.dueAt ?? "")).replace("{label}", studyDueLabel(rec.dueAt)));
-            askStudyQuiz(rel, o.label);
           })
           .catch((e) => flashToast(t("studyOpFail").replace("{error}", e && e.message ? e.message : "?")));
       };
@@ -10171,7 +10160,6 @@ ellipsis，窄列只截字不破版 */
       return jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [
         jsxRuntime.jsx("div", { style: { display: "none" }, children: jsxRuntime.jsx(VaultView, {}) }),
         jsxRuntime.jsx(VaultQuizOverlay, {}),
-        jsxRuntime.jsx(StudyQuizPrompt, {}),
       ] });
     }
 
@@ -10191,9 +10179,8 @@ ellipsis，窄列只截字不破版 */
     let qzReqState = null;
     let qzSeq = 0;
     const qzSubs = new Set();
-    /** 打开题目浮层：kind:"page" = 单页、kind:"set" = 目录范围（path 是绝对路径）；
-     *  auto:"unmastered" = 学习完成后直接开这页未掌握的题。**每次打开换一个会话键**：
-     *  同一页再点一次也重挂，不沿用上一次的模式与进度 */
+    /** 打开题目浮层：kind:"page" = 单页、kind:"set" = 目录范围（path 是绝对路径）。
+     *  **每次打开换一个会话键**：同一页再点一次也重挂，不沿用上一次的模式与进度 */
     function qzOpen(request) {
       qzSeq += 1;
       qzReqState = { ...request, id: qzSeq };
@@ -10212,7 +10199,7 @@ ellipsis，窄列只截字不破版 */
         () => qzReqState,
       );
     // 换一页 / 换一个范围就是重开一份新的会话状态（overlay 按 key 重挂）
-    const qzKeyOf = (req) => `${req.id ?? 0}:` + (req.kind === "page" ? "p:" + req.path + (req.auto ? ":auto" : "") : "s:" + req.path);
+    const qzKeyOf = (req) => `${req.id ?? 0}:` + (req.kind === "page" ? "p:" + req.path : "s:" + req.path);
     /** 页面绝对路径 → 题目用的 rel（去 .md；不在库内回 null） */
     const qzPageRel = (root, path) => {
       if (typeof root !== "string" || root === "") return null;
@@ -10549,85 +10536,6 @@ ellipsis，窄列只截字不破版 */
       return reactDom.createPortal(jsxRuntime.jsx(VaultQuizModal, { req }, qzKeyOf(req)), document.body, "dshk-quiz");
     }
 
-    // ── 学习完成后的询问：这页还有未掌握的题才问，点「测验」直接开这页未掌握的题 ──
-    //    入口（页条学习记录 / 日程待办 / 复习待办弹窗 / 标记已学）只负责 askStudyQuiz(rel)；
-    //    有没有题、剩几道由这一份全局浮层现取——没题或全掌握就静默收掉，不打扰。
-    let studyQuizAsk = null;
-    const studyQuizSubs = new Set();
-    const useStudyQuizAsk = () =>
-      react.useSyncExternalStore(
-        (fn) => {
-          studyQuizSubs.add(fn);
-          return () => studyQuizSubs.delete(fn);
-        },
-        () => studyQuizAsk,
-      );
-    const askStudyQuiz = (rel, title) => {
-      if (typeof rel !== "string" || rel === "") return;
-      studyQuizAsk = { rel, title: typeof title === "string" && title !== "" ? title : rel.split("/").pop() ?? rel };
-      for (const fn of studyQuizSubs) fn();
-    };
-    const dismissStudyQuiz = () => {
-      studyQuizAsk = null;
-      for (const fn of studyQuizSubs) fn();
-    };
-    function StudyQuizPrompt() {
-      const ask = useStudyQuizAsk();
-      const reader = useVaultReader();
-      // null = 还没取到；{ unmastered } = 这页能答的题里还没掌握的数目
-      const [data, setData] = react.useState(null);
-      react.useEffect(() => {
-        if (ask === null) {
-          setData(null);
-          return undefined;
-        }
-        let alive = true;
-        const query = `rel=${encodeURIComponent(ask.rel)}`;
-        Promise.all([
-          kitJson(`/dsh-kit/vault/quiz?${query}`, undefined, (b) => !!b),
-          kitJson(`/dsh-kit/vault/quiz-progress?${query}`, undefined, (b) => !!b),
-        ])
-          .then(([body, pg]) => {
-            if (!alive) return;
-            const qs = Array.isArray(body.questions) ? body.questions.filter(qzAnswerable) : [];
-            const prog = pg?.progress ?? {};
-            setData({ unmastered: qs.filter((q) => qzIsMastered(prog, q.id) === false).length });
-          })
-          .catch(() => {
-            if (alive) setData(null);
-          });
-        return () => {
-          alive = false;
-        };
-      }, [ask]);
-      react.useEffect(() => {
-        if (ask !== null && data !== null && data.unmastered === 0) dismissStudyQuiz();
-      }, [ask, data]);
-      if (ask === null || data === null || data.unmastered === 0) return null;
-      const root = typeof reader.root === "string" ? reader.root : "";
-      if (root === "") return null;
-      return jsxRuntime.jsx(StudyDialog, {
-        title: t("qzStudyAskTitle"),
-        onClose: dismissStudyQuiz,
-        children: jsxRuntime.jsxs(react.Fragment, { children: [
-          jsxRuntime.jsx("div", { className: "dshk-study-status", children: t("qzStudyAsk").replace("{name}", ask.title).replace("{n}", String(data.unmastered)) }),
-          jsxRuntime.jsxs("div", { className: "dshk-vault-modalfoot", children: [
-            jsxRuntime.jsx("button", { type: "button", className: "dshk-btn-cancel", onClick: dismissStudyQuiz, children: t("qzStudySkip") }),
-            jsxRuntime.jsx("button", {
-              type: "button",
-              className: "dshk-btn-save",
-              onClick: () => {
-                const target = ask;
-                dismissStudyQuiz();
-                qzOpen({ kind: "page", path: joinRelPath(root, target.rel), title: target.title, auto: "unmastered" });
-              },
-              children: t("qzStudyGo"),
-            }),
-          ] }),
-        ] }),
-      });
-    }
-
     // 题干/解析里图片的 src 解析：相对引用按**来源页**目录解（attachments/ 直挂库根），
     // 越界不接管回空串——与页面编辑面同一条规则
     const qzSrcResolver = (root, relRef) => (src) => {
@@ -10784,18 +10692,6 @@ ellipsis，窄列只截字不破版 */
         roundNewRef.current = new Set();
         setStage("session");
       };
-      // 学习完成后直接开这页未掌握的题（入口传 auto）：等题目与进度都到了再开，只开一次
-      const autoDone = react.useRef(false);
-      react.useEffect(() => {
-        if (req.kind !== "page" || req.auto !== "unmastered" || autoDone.current === true || loading) return;
-        autoDone.current = true;
-        const pool = qzFilterStatus(qzQuestionsOf(list), "unmastered", progressMap);
-        if (pool.length === 0) {
-          qzClose();
-          return;
-        }
-        startQuiz(pool, pool.length);
-      });
 
       /** 记一笔「新掌握」：作答、标记已掌握、遗忘都走这里（同一题标记后又遗忘会退回） */
       const account = (id, outcome) => {
@@ -11844,7 +11740,6 @@ ellipsis，窄列只截字不破版 */
                     title: t("studyCompleteTip"),
                     onClick: () => run("/dsh-kit/vault/study-complete", { rel }, (next) => {
                       say(t("studyCompleteDone").replace("{n}", String(next?.record?.reps ?? 0)).replace("{date}", String(next?.record?.dueAt ?? "")));
-                      askStudyQuiz(rel, name);
                     }),
                     children: t("studyComplete"),
                   }, "complete"),
@@ -11921,7 +11816,6 @@ ellipsis，窄列只截字不破版 */
                         setDialog(null);
                         setState(body && body.state ? body.state : null);
                         say(t("studyFirstDone"));
-                        askStudyQuiz(rel, pageBasename(path));
                       })
                       .catch((error) => say(t("studyOpFail").replace("{error}", String(error?.message ?? error))));
                   },
@@ -12074,10 +11968,6 @@ ellipsis，窄列只截字不破版 */
     exports.qzDrillAnswer = qzDrillAnswer;
     exports.qzDrillPass = qzDrillPass;
     exports.qzDrillReset = qzDrillReset;
-    exports.StudyQuizPrompt = StudyQuizPrompt;
-    exports.askStudyQuiz = askStudyQuiz;
-    exports.dismissStudyQuiz = dismissStudyQuiz;
-    exports.studyQuizAskGet = () => studyQuizAsk;
     exports.VaultQuizQuestions = VaultQuizQuestions;
     exports.VaultQuizForm = VaultQuizForm;
     exports.QuizMdView = QuizMdView;
