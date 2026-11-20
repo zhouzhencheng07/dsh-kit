@@ -662,7 +662,7 @@ window.__ModuleLoader__.load({
       return at < 0 ? "" : address.slice(at + 1);
     }
     /** 开一个条目（官方 openResource：认领地址 → 落一张签并激活；同址已开则复用）。
-     *  options 直通宿主（replaceTab：让新页接管指定那张签，见 maybeAutoOpenBrowser） */
+     *  options 直通宿主（replaceTab：让新页接管指定那张签） */
     function openRightbarItem(feature, item, query, options) {
       const address = rightbarAddress(feature, item, query);
       const sr = rightbarSr;

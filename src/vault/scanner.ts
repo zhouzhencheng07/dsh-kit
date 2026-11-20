@@ -73,8 +73,7 @@ const SCAN_MAX_DEPTH = 32
 const LIBRARY_DIR = 'library'
 const LIBRARY_LIMIT = 2000
 
-/** vault 默认根（vaultRoot 留空时即开即用）：数据目录下的 vault 子树（与模块同名），与
- *  browser-profile/screenshots 等运行产物不混居 */
+/** vault 默认根（vaultRoot 留空时即开即用）：数据目录下的 vault 子树，与模块同名，各组件运行产物互不混居 */
 export function defaultVaultRoot(): string {
   return kitPath('vault')
 }

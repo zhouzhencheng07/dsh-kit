@@ -45,8 +45,7 @@ export interface VaultIndex {
 }
 /** 不进索引与树的目录名（attachments 约定放二进制，由外部工具维护；点前缀一律隐藏） */
 export declare const SKIP_DIRS: Set<string>;
-/** vault 默认根（vaultRoot 留空时即开即用）：数据目录下的 vault 子树（与模块同名），与
- *  browser-profile/screenshots 等运行产物不混居 */
+/** vault 默认根（vaultRoot 留空时即开即用）：数据目录下的 vault 子树，与模块同名，各组件运行产物互不混居 */
 export declare function defaultVaultRoot(): string;
 /** 资料引用判据：页锚 p18 / p18-20（PDF 物理页码，1 起），或目标带文档扩展名。
  *  资料引用与页面双链同一个 `[[..]]` 语法，但目标落在**知识集挂载的资料**上——

@@ -170,17 +170,16 @@ check(
   dockExports.setKitUi(sidebarResetPatch);
 }
 
-// —— 官方「工作区文件」入口掩码：规则与字段都住本组件（root 只留浏览器入口的同类规则）——
+// —— 官方「工作区文件」入口掩码：规则与字段都住本组件 ——
 {
   const bundleSrc = fs.readFileSync(__dirname + "/../client/bundle.js", "utf8");
   const uiCssStart = bundleSrc.indexOf("const UI_CSS = `");
   const uiCss = bundleSrc.slice(uiCssStart, bundleSrc.indexOf("`;", uiCssStart));
   const hostSrc = fs.readFileSync(__dirname + "/../src/files/index.ts", "utf8");
   check(
-    "掩码 CSS 随字段搬进各组件（根 UI_CSS 不再持有；浏览器掩码随组件退役）",
+    "掩码 CSS 随字段搬进各组件（根 UI_CSS 不再持有）",
     !uiCss.includes("dshk-hide-official-") &&
-      bundleSrc.includes('body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:none}') &&
-      !bundleSrc.includes("dshk-hide-official-browser"),
+      bundleSrc.includes('body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:none}'),
   );
   check(
     "掩码跟着配置快照活切（apply 订阅 + 标记类按快照 toggle）",

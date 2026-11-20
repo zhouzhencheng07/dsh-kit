@@ -1882,8 +1882,8 @@ check(
 );
 // 右栏开始页不再给日程条目：入口 = 左栏 tab 条与快捷键，guide 与那条词条都退场
 check(
-  "右栏开始页条目已全部退场（日程与浏览器都不给 guide，词条一并消失）",
-  !src.includes("rbGuideSchedDesc") && !src.includes("rbGuideBrowserDesc") && !src.includes("const guideOf ="),
+  "右栏开始页条目已退场（日程不给 guide，词条一并消失）",
+  !src.includes("rbGuideSchedDesc") && !src.includes("const guideOf ="),
 );
 // 键位整体改由宿主 shortcuts 服务持有（官方「快捷键」页）：自带快捷键
 // 配置项/全局 keydown 匹配/左栏键都不该再出现，注册面在 client 半边（见下方 apply 钉子）

@@ -1,6 +1,5 @@
 // 插件数据根：宿主只保证 DSH_HOME，自家的东西一律落 <DSH_HOME>/dsh-kit/ 下——
-// 浏览器 profile、手机网关状态、知识库默认根与日程数据都在那儿，
-// 备份与清理只看一个目录。
+// 手机网关状态、知识库默认根与日程数据都在那儿，备份与清理只看一个目录。
 import os from 'node:os';
 import path from 'node:path';
 /** DSH_HOME（没设或空白时回落用户目录下的 .dsh，与宿主同一口径） */
