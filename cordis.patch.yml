@@ -18,8 +18,6 @@
       name: dsh-kit/vault
     - id: terminal
       name: dsh-kit/terminal
-    - id: browser
-      name: dsh-kit/browser
     - id: phone
       name: dsh-kit/phone
     - id: monitor

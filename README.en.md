@@ -10,7 +10,6 @@ A page-capability kit plugin for DeepSeek Harness (dsh): optional add-ons for th
 - **Floating chat**: a handle pinned to the screen edge opens a floating conversation with its own session, swappable with the main view; Ctrl+Alt+; toggles it.
 - **Knowledge base · Schedule**: markdown vault editing (slash menu, wiki links and backlinks, outline, full-text search, quiz and study review), schedule week grid + to-dos + timer, writable from the panel.
 - **Terminal**: multi-tab terminal bound to the session workspace, over the official webTerminals engine.
-- **Built-in browser**: the agent drives system Edge via `browser_*` tools; the panel shows the live page and lets you take over; chat links can be routed here.
 - **Phone access**: scan a QR code to reach the local dsh from your phone — token-gated gateway, LAN and remote channels.
 - **Usage & monitoring**: balance / quota chip, desktop notifications for turn end, compaction completion and agent questions.
 - **Web search**: keyless multi-source search replacing the official paid search.
@@ -20,7 +19,7 @@ A page-capability kit plugin for DeepSeek Harness (dsh): optional add-ons for th
 - Each component row has its own switch (Plugins page): turning a row off removes that capability entirely (host endpoints 404, UI entry gone).
 - Rows that take settings carry their own config page; saving writes to the profile and takes effect immediately.
 - Shortcuts for the file tree, knowledge base · schedule, terminal and floating chat are registered on the host's Shortcuts page (Ctrl+/).
-- Runtime data lives in `<DSH_HOME>/dsh-kit/` (default vault root, schedule, browser profile, …); the vault root can be changed on its config page.
+- Runtime data lives in `<DSH_HOME>/dsh-kit/` (default vault root, schedule, …); the vault root can be changed on its config page.
 
 ## Requirements
 

@@ -1,7 +1,7 @@
 {
   "name": "dsh-kit",
   "version": "0.5.8-rc.3",
-  "description": "Page capability kit for DeepSeek Harness (dsh): one row per component — file tree, floating chat window, terminal, knowledge base & schedule, built-in browser, usage monitor, free multi-source web search, phone access",
+  "description": "Page capability kit for DeepSeek Harness (dsh): one row per component — file tree, floating chat window, terminal, knowledge base & schedule, usage monitor, free multi-source web search, phone access",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -27,11 +27,6 @@
       "default": "./dist/monitor/index.js"
     },
     "./monitor/locale/*.json": "./locale/monitor/*.json",
-    "./browser": {
-      "types": "./dist/browser/index.d.ts",
-      "default": "./dist/browser/index.js"
-    },
-    "./browser/locale/*.json": "./locale/browser/*.json",
     "./search": {
       "types": "./dist/search/index.d.ts",
       "default": "./dist/search/index.js"

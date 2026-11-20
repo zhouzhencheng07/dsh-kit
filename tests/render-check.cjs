@@ -1711,7 +1711,7 @@ let vaultFetchPrev = null;
     !!moreHead && /10\/21/.test(String(moreHead[2].children)) && moreRows.length === 3 && morePick.join(",") === "m1,m2,m3",
   );
   check("文档内链接走解析、带协议的外链走 openExternalUrl（openOnClick:false 下不接管就是死点击）", src.includes("onRelLink: (href) => {") && src.includes('if (!isDocHref(href)) {') && src.includes("openExternalUrl(href);") && src.includes('if (href === "" || href.startsWith("#")) return;'));
-  check("外链打开只有一份实现：对话改投与编辑器点击共用 openExternalUrl", src.includes("function openExternalUrl(href) {") && (src.match(/openExternalUrl\(href\);/g) ?? []).length === 2 && (src.match(/kitJson\("\/dsh-kit\/browser\/open"/g) ?? []).length === 1);
+  check("外链打开只有一份实现：编辑器点击走 openExternalUrl", src.includes("function openExternalUrl(href) {") && (src.match(/openExternalUrl\(href\);/g) ?? []).length === 1);
   check("拖选后松手不触发外链跳转（click 时选区非折叠是在选字）", src.includes("if (sel && !sel.isCollapsed) return;"));
   check("代码块语言下拉有盒子样式（挂 body 的 fixed 浮层，缺样式就掉出视口）", /\.dshk-langdrop\{position:fixed/.test(src) && /\.dshk-langopt\{flex:none/.test(src) && /\.dshk-langempty\{/.test(src) && /\.dshk-langdrop\[hidden\]\{display:none\}/.test(src));
   check("mermaid 图块编辑态与公式块同副面孔（藏图 + 一个等宽源码框，不是提示行摞默认 textarea）", /\.dshk-mermaid\.is-editing \.dshk-mermaid-body\{display:none\}/.test(src) && /\.dshk-mermaid-input\{display:block/.test(src) && /\.dshk-mermaid\.is-editing\{background/.test(src) && /\.dshk-mermaid\.as-code \.dshk-mermaid-body\{/.test(src));
@@ -1818,9 +1818,9 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
   const isComponent = (row) => typeof row.id === "string" && !/^-?\d+$/.test(row.id);
   const carrier = rows.filter((row) => !isComponent(row));
   const comps = rows.filter(isComponent);
-  const expected = ["files", "chat", "vault", "terminal", "browser", "phone", "monitor", "search"];
+  const expected = ["files", "chat", "vault", "terminal", "phone", "monitor", "search"];
   check(
-    "patch 形状：一行载体行（name = 包名、id 写数字字面量 → 不当作可管理组件：不进组件列表、没有行开关；浏览器半边挂在它上面，放行序末尾不跟功能行混在一起）+ 八个组件行 id/name 齐备且顺序 = 描述顺序（组件行 id 必须显式且稳定：匿名行的随机 id 每次 profile 写入都会换 → 该行重挂、整包客户端重载）",
+    "patch 形状：一行载体行（name = 包名、id 写数字字面量 → 不当作可管理组件：不进组件列表、没有行开关；浏览器半边挂在它上面，放行序末尾不跟功能行混在一起）+ 七个组件行 id/name 齐备且顺序 = 描述顺序（组件行 id 必须显式且稳定：匿名行的随机 id 每次 profile 写入都会换 → 该行重挂、整包客户端重载）",
     carrier.length === 1 && carrier[0].name === "dsh-kit" && /^-?\d+$/.test(carrier[0].id) &&
       rows[rows.length - 1] === carrier[0] &&
       rows.length === expected.length + 1 &&
@@ -1839,9 +1839,9 @@ check("KitSurfaces 带cwd渲染无异常（根壳不渲染面板本体）", out 
   const zhDesc = JSON.parse(fs.readFileSync(__dirname + "/../locale/zh.json", "utf8")).meta.description;
   const enDesc = JSON.parse(fs.readFileSync(__dirname + "/../locale/en.json", "utf8")).meta.description;
   check(
-    "卡片描述按同一顺序枚举八个组件（zh/en 同序）",
-    inOrder(zhDesc, ["文件树", "对话小窗", "知识库·日程", "终端", "浏览器", "手机访问", "用量与监视", "网页搜索"]) &&
-      inOrder(enDesc, ["File tree", "chat window", "vault & schedule", "terminal", "browser", "phone access", "usage & monitor", "web search"]),
+    "卡片描述按同一顺序枚举七个组件（zh/en 同序）",
+    inOrder(zhDesc, ["文件树", "对话小窗", "知识库·日程", "终端", "手机访问", "用量与监视", "网页搜索"]) &&
+      inOrder(enDesc, ["File tree", "chat window", "vault & schedule", "terminal", "phone access", "usage & monitor", "web search"]),
   );
 }
 
@@ -1882,8 +1882,8 @@ check(
 );
 // 右栏开始页不再给日程条目：入口 = 左栏 tab 条与快捷键，guide 与那条词条都退场
 check(
-  "右栏日程签不再给开始页条目（知识库·日程两张都不给 guide，词条一并退场）",
-  !src.includes("rbGuideSchedDesc") && !src.includes("const guideOf =") && src.includes("rbGuideBrowserDesc"),
+  "右栏开始页条目已全部退场（日程与浏览器都不给 guide，词条一并消失）",
+  !src.includes("rbGuideSchedDesc") && !src.includes("rbGuideBrowserDesc") && !src.includes("const guideOf ="),
 );
 // 键位整体改由宿主 shortcuts 服务持有（官方「快捷键」页）：自带快捷键
 // 配置项/全局 keydown 匹配/左栏键都不该再出现，注册面在 client 半边（见下方 apply 钉子）

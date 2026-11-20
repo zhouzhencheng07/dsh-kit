@@ -707,7 +707,7 @@ async function checkApply() {
   const read = (rel) => fs.readFileSync(__dirname + "/../" + rel, "utf8");
   const bundleSrc = read("client/bundle.js");
   // 套件没有根入口模块：查的是「知识库的装配没渗进别的组件行」
-  const hostSrc = ["browser", "chat", "files", "monitor", "phone", "search", "terminal"]
+  const hostSrc = ["chat", "files", "monitor", "phone", "search", "terminal"]
     .map((d) => read(`src/${d}/index.ts`)).join("\n");
   const compSrc = read("src/vault/index.ts");
   const patchSrc = read("cordis.patch.yml");

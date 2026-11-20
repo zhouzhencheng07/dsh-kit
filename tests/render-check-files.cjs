@@ -177,10 +177,10 @@ check(
   const uiCss = bundleSrc.slice(uiCssStart, bundleSrc.indexOf("`;", uiCssStart));
   const hostSrc = fs.readFileSync(__dirname + "/../src/files/index.ts", "utf8");
   check(
-    "掩码 CSS 随字段搬进各组件（根 UI_CSS 两类掩码都不再持有）",
+    "掩码 CSS 随字段搬进各组件（根 UI_CSS 不再持有；浏览器掩码随组件退役）",
     !uiCss.includes("dshk-hide-official-") &&
       bundleSrc.includes('body.dshk-hide-official-files [data-sidebar-right-guide-entry="files"]{display:none}') &&
-      bundleSrc.includes('body.dshk-hide-official-browser [data-sidebar-right-guide-entry="browser"]{display:none}'),
+      !bundleSrc.includes("dshk-hide-official-browser"),
   );
   check(
     "掩码跟着配置快照活切（apply 订阅 + 标记类按快照 toggle）",
